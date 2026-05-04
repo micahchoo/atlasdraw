@@ -33,6 +33,10 @@ logs/
 # Ephemeral runtime logs
 .claude/.skill-invocation-log
 
+# Auto-generated diagnostics (regenerable)
+.claude/SUGGESTED_SKILLS.md
+anti-pattern-report.txt
+
 # Firebase build artifacts
 firebase/
 .vercel/
