@@ -85,6 +85,89 @@ The context is constructed by `apps/atlas-app/components/MapEditor` and passed t
 
 ---
 
+## Preview pattern
+
+**When to use it.** Any tool with a drag-preview phase (down → move → up) — e.g., `ArrowTool`, `RectangleTool`, `CircleTool`, `PolylineTool`, `FreehandTool`, `PolygonTool`. The element appears at `onPointerDown`, mutates in place during `onPointerMove`, and finalizes at `onPointerUp`. **Do NOT use** for fire-and-forget tools like `PinTool` or `TextLabelTool` — those single-shot at `onPointerDown` and never call `updateElement`. See `code/packages/tools/src/PinTool.ts` for the contrast.
+
+```ts
+// Example: a drag-preview tool
+export const RectangleTool: AtlasdrawTool = {
+  id: "rectangle",
+  // ... other AtlasdrawTool fields (label, icon, cursor) ...
+  defaultScaleMode: "geographic",
+
+  // Tool-local state for the in-flight preview. Cleared on commit.
+  // (In real impl, may live in module scope or via a closure factory; the
+  // important contract is that an id from addElement is held until updateElement
+  // calls finalize it.)
+  _previewId: null as string | null,
+  _anchor: null as { lng: number; lat: number; zRef: number } | null,
+
+  onPointerDown(e, ctx) {
+    const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
+    const zRef = ctx.map.getZoom();
+    this._anchor = { lng, lat, zRef };
+    this._previewId = ctx.excalidraw.addElement({
+      type: "rectangle",
+      geo: { kind: "bbox", west: lng, south: lat, east: lng, north: lat, zRef },
+      scaleMode: "geographic",
+    });
+  },
+
+  onPointerMove(e, ctx) {
+    if (!this._previewId || !this._anchor) return;
+    const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
+    // Patch only the geo field; the host re-projects to new scene coords.
+    ctx.excalidraw.updateElement(this._previewId, {
+      geo: {
+        kind: "bbox",
+        west: Math.min(this._anchor.lng, lng),
+        south: Math.min(this._anchor.lat, lat),
+        east: Math.max(this._anchor.lng, lng),
+        north: Math.max(this._anchor.lat, lat),
+        zRef: this._anchor.zRef,
+      },
+    });
+  },
+
+  onPointerUp(e, ctx) {
+    if (!this._previewId || !this._anchor) return;
+    // Final commit: same patch shape as move, just the last frame.
+    const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
+    ctx.excalidraw.updateElement(this._previewId, {
+      geo: {
+        kind: "bbox",
+        west: Math.min(this._anchor.lng, lng),
+        south: Math.min(this._anchor.lat, lat),
+        east: Math.max(this._anchor.lng, lng),
+        north: Math.max(this._anchor.lat, lat),
+        zRef: this._anchor.zRef,
+      },
+    });
+    this._previewId = null;
+    this._anchor = null;
+  },
+};
+```
+
+**Contract guarantees.**
+- `addElement` returns the new element's id synchronously — safe to capture for later `updateElement` calls in the same gesture.
+- `updateElement(id, patch)` is fire-and-forget; if `id` doesn't exist (e.g., element was deleted mid-drag, or a stale id from a previous gesture), the host warns and no-ops. Tools never need to null-check the result.
+- When `patch.geo` is set, the host re-projects to scene coords automatically before splicing back. Tools never project directly — they emit lng/lat and let `useCoordinateSync` own the screen-space transform.
+- When `patch.geo` is omitted, only the named fields update (`scaleMode`, `style`, `data`) — geo coords stay put.
+
+**Anti-patterns.**
+- **Don't call `excalidrawAPI.updateScene` from a tool** — not exposed on `ToolContext.excalidraw`. Q11 boundary: tools must be postMessage-safe for the Phase 7 plugin worker isolation. Direct scene mutation reverts that boundary.
+- **Don't call `setActiveTool` from a tool** — also not exposed; tool-system independence per mulch convention `mx-682f8a` (atlasdraw tools dispatch independently of Excalidraw's tool system via the overlay in `apps/atlas-app/src/hooks/useAtlasdrawTool.ts`). Tool deactivation is a host concern.
+- **Don't reach into the DOM directly** — use `ToolPointerEvent` fields (`clientX`, `clientY`, modifier keys) only. Raw `PointerEvent` would break the postMessage boundary.
+- **Don't project coordinates inside the tool** — emit `geo` in lng/lat; the host owns projection. Tools that pre-project are fragile across camera moves and break the geographic scale-mode contract.
+
+**Testing the pattern.** Mock `ctx.excalidraw.addElement` to return a stub id (e.g., `"test-elem-1"`). Mock `ctx.excalidraw.updateElement` to capture `(id, patch)` tuples in an array. Drive the tool with synthetic `ToolPointerEvent` objects (down → move → move → up) and assert the captured sequence: one `addElement` call with the down-frame seed, then one `updateElement(id, patch)` per move/up frame, with each `patch.geo` reflecting the cumulative gesture geometry. The id captured from `addElement`'s return must be the id passed to every subsequent `updateElement` call in the gesture.
+
+**See also:** `.claude/rules/excalidraw-api.md` (grep-before-trust gate for Excalidraw API literals); mulch convention `mx-682f8a` (atlasdraw tool-system independence via overlay dispatch).
+
+---
+
 ### Built-in Tool Objects — **stable**
 
 All exported as named constants:
