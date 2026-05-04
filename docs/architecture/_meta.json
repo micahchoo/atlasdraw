@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "last_full_run": "2026-05-03T00:00:00Z",
+  "project_shape": "monorepo",
+  "speculative": true,
+  "_note": "SPECULATIVE — derived from PRD/spec/plans, not verified against code. git_hash is null because no code exists. source_glob points at predicted code paths post-Phase-7.",
+  "docs": {
+    "architecture/overview.md": {
+      "git_hash": null,
+      "source_glob": ["**/*"],
+      "zoom_level": "domain",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/domain.md": {
+      "git_hash": null,
+      "source_glob": [
+        "PRD.md",
+        "docs/**/*.md",
+        "decisions/**/*.md"
+      ],
+      "zoom_level": "domain",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/ecosystem.md": {
+      "git_hash": null,
+      "source_glob": [
+        "package.json",
+        "packages/*/package.json",
+        "apps/*/package.json",
+        "infra/**/*"
+      ],
+      "zoom_level": "ecosystem",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/infrastructure.md": {
+      "git_hash": null,
+      "source_glob": [
+        "infra/**/*",
+        ".github/workflows/**/*",
+        "apps/storage/src/**/*",
+        "apps/realtime/src/**/*"
+      ],
+      "zoom_level": "infrastructure",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/subsystems.md": {
+      "git_hash": null,
+      "source_glob": [
+        "packages/**/*",
+        "apps/**/*",
+        "decisions/**/*"
+      ],
+      "zoom_level": "subsystem",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/risk-map.md": {
+      "git_hash": null,
+      "source_glob": [
+        "docs/decisions/**/*",
+        "docs/superpowers/plans/**/*"
+      ],
+      "zoom_level": "domain",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    },
+    "architecture/evolution.md": {
+      "git_hash": null,
+      "source_glob": [
+        "docs/PHASES.md",
+        "docs/decisions/**/*",
+        "docs/superpowers/plans/**/*"
+      ],
+      "zoom_level": "domain",
+      "subsystem": null,
+      "last_updated": "2026-05-03T00:00:00Z"
+    }
+  }
+}

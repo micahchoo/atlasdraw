@@ -1,0 +1,23 @@
+{
+  "name": "@atlasdraw/basemap",
+  "version": "0.0.0",
+  "description": "MapLibre wrapper: MapCanvas, BasemapRegistry, pmtiles protocol, style compiler",
+  "license": "MPL-2.0",
+  "private": false,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src", "README.md"],
+  "scripts": {
+    "build": "echo 'TODO: build (target: Phase 1+)' && exit 0",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "maplibre-gl": "^4.7.1"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

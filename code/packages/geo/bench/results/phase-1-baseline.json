@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-05-04T07:02:22.239Z",
+  "nodeVersion": "v20.19.4",
+  "platform": "linux",
+  "elementCount": 5000,
+  "budget": {
+    "p99_total": 8
+  },
+  "project": {
+    "p50ms": 1.6241829999935362,
+    "p95ms": 1.8360010000045577,
+    "p99ms": 1.9683309999982157
+  },
+  "updateScene": {
+    "p50ms": 1.7941220000039948,
+    "p95ms": 2.655581999997935,
+    "p99ms": 2.831537999996499
+  },
+  "total": {
+    "p50ms": 3.410634000000016,
+    "p95ms": 4.387069999999994,
+    "p99ms": 4.582197999999977
+  },
+  "dominantSegment": "updateScene",
+  "pass": true,
+  "notes": "jsdom mock map.project (pure Web-Mercator math); no real WebGL; no real Excalidraw updateScene cost (mocked as no-op) — real diff/render unmeasured; samples: warmup=5, measure=50"
+}

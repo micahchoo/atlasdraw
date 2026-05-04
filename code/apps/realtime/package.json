@@ -1,0 +1,17 @@
+{
+  "name": "@atlasdraw/realtime",
+  "version": "0.0.0",
+  "description": "Atlasdraw realtime relay — Socket.IO scene/camera/cursor + y-websocket Yjs CRDT for data layers",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "scripts": {
+    "build": "echo 'TODO: tsc build (Phase 5)' && exit 0",
+    "start": "echo 'TODO: relay server (Phase 5)' && exit 0",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "*",
+    "@types/node": "*"
+  }
+}

@@ -11,6 +11,8 @@ domains:
   - sdk
   - phase-0-bootstrap
   - infrastructure
+  - excalidraw-integration
+  - failure
 governance:
   max_entries: 100
   warn_entries: 150

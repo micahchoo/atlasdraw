@@ -1,0 +1,87 @@
+/* MapEditor layout — three stacked layers inside a relative container.
+ *
+ * .root            — sizing root; fills whatever container App.tsx provides.
+ * .mapLayer        — MapLibre GL canvas; bottom of stack.
+ * .excalidrawLayer — Excalidraw canvas; sits on top, pointer-events disabled
+ *                    by default. Task 13 applies .excalidrawLayerActive to
+ *                    re-enable pointer-events when drawing mode is active.
+ * .fullSize        — utility; applied to <MapCanvas> so it fills .mapLayer.
+ */
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mapLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.excalidrawLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Applied by Task 13's isDrawingMode toggle — defined here so the class
+ * exists in the module before the hook that references it is written. */
+.excalidrawLayerActive {
+  pointer-events: auto;
+}
+
+.fullSize {
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Atlas-tool overlay & toolbar (Phase 1 Wave 3b Task 14) ----------------
+ *
+ * .atlasToolOverlay  — full-bleed div mounted only when an atlas-tool is active.
+ *                      Sits above .excalidrawLayer (z-index 5) so its pointerdown
+ *                      handler runs first; cursor is set inline from tool.cursor.
+ * .pinButton         — manual toolbar entry. z-index 10 — above the overlay so it
+ *                      remains clickable even while Pin is active (toggle off).
+ * .pinButtonActive   — visual confirmation that Pin is engaged.
+ */
+
+.atlasToolOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: auto;
+  /* No background — the map and Excalidraw show through. */
+}
+
+.pinButton {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  padding: 6px 12px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.pinButton:hover {
+  background: #f8f9fa;
+}
+
+.pinButtonActive {
+  background: #1971c2;
+  color: #ffffff;
+  border-color: #1971c2;
+}
+
+.pinButtonActive:hover {
+  background: #1864ab;
+}

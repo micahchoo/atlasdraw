@@ -1,0 +1,15 @@
+# stripped Excalidraw deploy in Phase 0
+# Original: CI Docker build smoke-test for excalidraw.com image.
+# Re-enable when Atlasdraw has a Dockerfile targeting the new monorepo layout.
+#
+# name: Build Docker image
+# on:
+#   push:
+#     branches:
+#       - release
+# jobs:
+#   build-docker:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v2
+#       - run: docker build -t excalidraw .

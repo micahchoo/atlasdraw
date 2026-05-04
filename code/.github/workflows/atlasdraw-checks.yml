@@ -1,0 +1,35 @@
+name: Atlasdraw checks
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  atlasdraw-checks:
+    name: License, patch-guard, telemetry
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history required for check-patches.sh to compute the PR diff
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Check license fields (ADR 0002)
+        run: bash scripts/check-license.sh
+
+      - name: Check upstream-patches doc (ADR 0004)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/check-patches.sh
+
+      - name: Check telemetry imports (ADR 0006)
+        run: bash scripts/check-telemetry.sh

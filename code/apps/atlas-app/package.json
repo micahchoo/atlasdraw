@@ -1,0 +1,37 @@
+{
+  "name": "@atlasdraw/atlas-app",
+  "version": "0.0.0",
+  "description": "Atlasdraw editor SPA — stacked MapLibre + Excalidraw, hosted at app.atlasdraw.org",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test:typecheck": "tsc --noEmit",
+    "e2e": "playwright test --project=chromium",
+    "e2e:all": "playwright test",
+    "e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@atlasdraw/basemap": "0.0.0",
+    "@atlasdraw/data": "0.0.0",
+    "@atlasdraw/geo": "0.1.0",
+    "@atlasdraw/tools": "0.1.0",
+    "@excalidraw/excalidraw": "0.18.0",
+    "lodash.throttle": "^4.1.1",
+    "maplibre-gl": "^4.7.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^3.1.0",
+    "sass": "^1.77.0",
+    "typescript": "*",
+    "vite": "^5.0.12"
+  }
+}

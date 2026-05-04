@@ -1,0 +1,33 @@
+{
+  "name": "@atlasdraw/tools",
+  "version": "0.1.0",
+  "description": "Atlasdraw geo-aware drawing tools — registered as Excalidraw customType tools",
+  "license": "MPL-2.0",
+  "private": false,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "build": "echo 'TODO: build (target: Phase 1+)' && exit 0",
+    "test": "vitest run",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atlasdraw/geo": "0.1.0"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "*",
+    "typescript": "*",
+    "vitest": "*"
+  }
+}

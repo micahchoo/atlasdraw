@@ -1,0 +1,18 @@
+{
+  "name": "@atlasdraw/data",
+  "version": "0.0.0",
+  "description": "File format I/O: geojson/kml/gpx/csv/shapefile/atlasdraw + Yjs layer wrapper",
+  "license": "MIT",
+  "private": false,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src", "README.md"],
+  "scripts": {
+    "build": "echo 'TODO: build (target: Phase 2+)' && exit 0",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

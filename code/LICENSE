@@ -1,0 +1,6 @@
+This project is licensed under multiple licenses by package.
+See LICENSING.md for the per-package breakdown.
+The application code (apps/*) is AGPL-3.0; see LICENSE-AGPL.
+The SDK and integration libraries (packages/sdk, packages/cli, packages/geo, packages/data) are MIT; see LICENSE-MIT.
+The basemap and tools wrappers (packages/basemap, packages/tools) are MPL-2.0; see LICENSE-MPL.
+The vendored Excalidraw packages remain MIT; see LICENSE-EXCALIDRAW-UPSTREAM.
