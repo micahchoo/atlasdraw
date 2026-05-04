@@ -1,155 +1,164 @@
 # Handoff
 
 ## Goal
-> Prior session: Wave 3a/3b/4 closure + first GitHub push landed. This session (user-stated, in order): "Read HANDOFF.md and HANDOFF-expertise.md, then start with Opus audit (foreground, scoped sub-questions). Phase 2 Wave 0 dispatch follows once audit clears." Post-audit, user challenged recommendation (option 1: drop T02) → flipped to option 2-surgical (adopt `defaultScaleMode` only); T01 inlined; Wave 0 closed via audit housekeeping. No commits yet — 12 files dirty.
+> Prior session: Phase 2 Wave 0 close (T01 layerRegistry types + T02 surgical defaultScaleMode), opus audit, 12 dirty files no commits. **This session** (user-stated, in order): yarn install → /triage queue → commit working tree → Phase 2 Wave 1 pre-dispatch scrub → decide Wave 1 dispatch. Concluded at scrub: Wave 1 dispatch is **blocked** on 3 user OQs and 4 setup tasks (Wave 1a) — recommended fresh session for the implementation work.
 
 ## Progress
 
-### Opus audit (foreground, scoped sub-questions) — COMPLETE
+### Commits landed (3)
 
-- ✅ Audit doc: `docs/decisions/opus-audit-2026-05-04-post-wave4.md` (5 scoped sub-questions answered: typecheck/build/E2E/plan-adherence/post-Wave-4-risks).
-- ✅ (a) **typecheck**: pre-fix FAIL on tsconfig deprecation (TS 6.0.3 needs `"6.0"` not `"5.0"`); fix bumped `code/packages/tsconfig.base.json:13` `5.0→6.0`. Post-fix: 5 upstream errors in vendored `code/packages/excalidraw/wysiwyg/textWysiwyg.tsx` lines 587, 654, 663, 824, 965 + 2 atlasdraw tsconfig issues (atlas-app paths={}, tools rootDir narrow) — all pre-existing, masked by halt. Filed atlasdraw-8a21.
-- ✅ (b) **build**: PASS in 12.33s via vite. Bundle warnings are upstream Excalidraw chunks.
-- ✅ (c) **E2E**: 12/12 chromium+firefox per HANDOFF (prior session). Webkit blocked sudo (atlasdraw-f31f).
-- ✅ (d) **Phase 1 plan adherence**: compliant.
-- ✅ (e) **post-Wave-4 risks**: CRITICAL T02 plan-vs-impl drift on 4 settled Phase 1 decisions — surfaced before dispatch.
+- ✅ `939e380` — feat(phase-2): T01 layerRegistry + T02 surgical defaultScaleMode + Phase 1 typecheck unblock (8 files)
+- ✅ `dc66a21` — chore(state): handoff + mulch + seeds for Phase 2 Wave 0 close (7 files)
+- ✅ `649e9b2` — docs(decisions): Phase 2 Wave 1 pre-dispatch scrub (1 new file, 244 lines)
 
-### Phase 2 Wave 0 — COMPLETE (collapsed via audit housekeeping)
+Working tree clean post-commit. No GitHub push attempted (per `mx-8afd1a`: keep local until atlasdraw-6e33 resolved — still unresolved).
 
-- ✅ T02 disposition: option (2)-surgical (user choice, after challenging initial drop recommendation).
-  - `code/packages/tools/src/types.ts:115-120` — added `readonly defaultScaleMode: ScaleMode`.
-  - `code/packages/tools/src/PinTool.ts:40` — set `defaultScaleMode: "screen"`.
-  - `code/packages/tools/src/types.test.ts:11,25` — both fixtures updated.
-  - `docs/architecture/subsystems/tools/contracts.md:14-44` — full `AtlasdrawTool` interface block aligned with canonical impl: closes prior audit's outstanding D-TOOLS-1 (`icon: string`), D-TOOLS-2 (`label`), D-TOOLS-3 (`onActivate?`/`onDeactivate?`), bonus drifts (`readonly`, `ToolPointerEvent`), drops `onDoubleClick?` (impl-canonical), adds `defaultScaleMode`.
-  - The other T02 "extensions" (`icon: React.FC`, raw `PointerEvent`, `maplibregl.Map`+`ExcalidrawImperativeAPI` ctx) explicitly REJECTED — they were regressions on settled Phase 1 decisions.
-- ✅ T01: types-only `code/apps/atlas-app/src/state/layerRegistry.ts` (was `state/` — moved to `src/state/` to match atlas-app `tsconfig.include`).
-  - `LayerStyle` inlined (placeholder; basemap export missing per Phase 1 Wave 1 silent reduction — atlasdraw-fc04 tracks restore).
-  - `AnnotationLayerEntry` + `DataLayerEntry` discriminated union; `ILayerRegistry` interface (8 methods).
-  - `code/apps/atlas-app/package.json:30` — `+@types/geojson: "^7946.0.14"` (devDep). NOT yet `yarn install`'d — deferred to next session per CLAUDE.md serialize-deps rule.
+### `yarn install` — `@types/geojson` landed; husky [SNAG]
 
-### Seeds maintenance
+- ✅ `cd code && yarn install` ran. `@types/geojson` is in `code/node_modules/@types/geojson/` (verified ls).
+- ⚠️ Husky postinstall failed (exit-1) because `code/.git` no longer exists (git was hoisted to repo root when `code/.git` backup was retired). Deps installed before postinstall, so non-blocking. Filed `atlasdraw-0c97`.
+- ✅ `yarn build` PASS in 13.39s post-install. No regressions.
 
-- Closed: atlasdraw-9689, atlasdraw-b8e7 (stale Phase 1 in-progress markers; both shipped in Wave 3b).
-- Created: atlasdraw-8a21 (typecheck debt triple), atlasdraw-fc04 (LayerStyle restore).
-- needs-triage queue grew via auto-detection: atlasdraw-5233, atlasdraw-47a6, atlasdraw-b0c7, atlasdraw-795f, atlasdraw-665d, atlasdraw-22a9, atlasdraw-8171 (anti-pattern scan; new untracked file `anti-pattern-report.txt` is the source). Plus atlasdraw-4f26, atlasdraw-fef0, atlasdraw-f31f from prior session.
+### `/triage` — queue cleared (13 → 0)
+
+- 6 label-only approved (`needs-triage` removed): atlasdraw-4f26, atlasdraw-fef0, atlasdraw-f31f (all keep blocker:* labels — resurface on unblock); atlasdraw-8a21, atlasdraw-fc04, atlasdraw-0c97 (open without triage gate).
+- 7 discarded as scope-mismatch: atlasdraw-5233/47a6/b0c7/795f/665d/22a9/8171 — anti-pattern detector swept vendored Excalidraw v0.18 (797 findings on code we don't own).
+- 1 new meta-seed: `atlasdraw-d592` — "Configure anti-pattern detector to scope only atlasdraw-owned paths" (apps/atlas-app + packages/{tools,basemap,geo,atlasdraw-overlay}).
+- `sd ready` now shows 30 items, 0 needs-triage.
+
+### Phase 2 Wave 1 pre-dispatch scrub — COMPLETE; revealed Wave 1 is BLOCKED
+
+**Scrub doc:** `docs/decisions/wave1-pre-dispatch-scrub-2026-05-04.md` (main body + addendum after advisor review).
+
+**Drifts caught (fixable in worker briefs):**
+- T03/T07/T09: plan calls `excalidrawAPI.updateScene` — not on `ToolContext.excalidraw` (Q11 boundary regression). Use `addElement`/`updateElement` per PinTool pattern.
+- T06: plan calls `excalidrawAPI.setActiveTool` — not on ctx + violates tool-system independence (`mx-682f8a`). Drop call; host concern.
+- T03–T10 (all 8): file paths omit `src/` segment (same class as T01 SNAG; `tools/tsconfig.json` has `rootDir:"./src"`, `include:["src/**/*"]`).
+
+**Integration-seam gaps (NOT in plan; need real implementation work — Wave 1a):**
+- `seedToElement.ts:40` is hardcoded `customType==="pin"` — throws on every non-Pin seed. **All 7 new tools fail at runtime without bridge extension.**
+- `useAtlasdrawTool.ts:91` `updateElement` is a noisy stub. **Preview tools T07/T08/T09 cannot ship.**
+
+**Resolved by canonical-source grep (no user input needed):**
+- OQ-W1-1: T03 polygon uses `freedraw` element (only v0.18 option for closed filled regions; `simulatePressure:false` field confirmed).
+- OQ-W1-3-element: T04 polyline uses `line` element type.
+- ScaleMode values `"geographic"|"screen"|"hybrid"` all valid (per `code/packages/geo/src/types.ts:25`).
+- GeoAnchor.kind values `"point"|"bbox"|"polyline"` only — NO `polygon` kind. Plan correctly uses `polyline` for closed rings.
+- @turf/circle install in T09: keep both (circle→polygon conversion in T14 likely needs it).
 
 ## What Worked
 
-- **Foreground synchronous audit** — prior session's background subagent stalled at 600s during ctx_execute typecheck. This session ran typecheck/build in `run_in_background:true` Bash with log redirect; completion notifications fired in <30s for typecheck and ~14s for build. No watchdog stall.
-- **Pre-dispatch plan-vs-impl scrub** — caught T02's 4-way regression before any worker brief. Concrete impact: prevented a worker from silently reverting Q11 postMessage-safe boundary, D-TOOLS-1 icon decision, ToolPointerEvent boundary, and PinTool's per-seed scaleMode pattern. Per `mx-e9dc63` and `.claude/rules/excalidraw-api.md` — the rule paid off.
-- **User-challenged recommendation flip (1→2)** — initial recommendation cited "per-seed flexibility" that wasn't actually exercised; user pushed back; cost analysis revealed (2)-surgical was ~10 minutes for declarative tool intent vs scattered constants. Honest reconsideration without retreat.
-- **Audit-housekeeping piggyback on contracts.md** — single contracts.md edit closed both the new `defaultScaleMode` need AND the prior audit's 5 outstanding D-TOOLS drifts. One coherent update vs N separate ones.
-- **Wave 0 collapse** — T01 was atomic ~40 lines + 1 dep; dispatching a worker for that would be coordination overhead. Inline execution avoided the unnecessary dispatch round-trip.
+- **Triage by bucket, not item-by-item** — 13 items in 3 buckets, single round of `sd` calls, queue empty in ~5 minutes. Anti-pattern bucket B (7 items) discarded with a single rationale once the source pattern (vendored upstream sweep) was identified.
+- **`ctx_execute_file` for plan analysis** — 64KB Phase 2 plan, extracted T03–T10 task bodies + targeted regex sweep for API literals, only ~10KB landed in context. Wrote intermediate `/tmp/wave1-tasks.md` for Read pass when full bodies were needed.
+- **Advisor catch on T05/T08 underread** — first scrub draft claimed T05/T08 were "clean" based on regex token extract; advisor flagged that absence of patterns ≠ confirmation of cleanliness. Reading bodies revealed the implicit `updateElement` dependency. Same lesson applies to "the plan doesn't say X" claims generally.
+- **Commit-the-scrub-before-dispatch** — durable artifact lives in git, audit trail tight, fresh session can pick up from `649e9b2` without re-deriving.
+- **Two pre-dispatch artifacts in HANDOFF queue** (per `mx-7ef9cf`) — opus audit + scrub doc both committed; fresh session has the full pre-dispatch picture.
 
 ## What Didn't Work / [SNAG]
 
-- **[SNAG] tsconfig deprecation halt was masking real debt.** `"5.0"` worked silently for prior sessions (TS was 5.x then) but TS bumped to 6.0.3 between sessions. The halt-on-config-load behavior meant typecheck had been NEVER reaching real source for some indeterminate period. Fix exposes ~30 errors that are mostly pre-existing.
-- **[SNAG] LSP TS vs yarn TS version drift.** Editor LSP keeps flagging `Invalid value for '--ignoreDeprecations'` after the bump. yarn-invoked tsc 6.0.3 explicitly recommended `"6.0"` in its own error message. Editor noise; not blocking. If next session sees this in diagnostics, ignore unless `yarn test:typecheck` agrees.
-- **[SNAG] T01 plan path was outside `src/`.** Phase 2 plan literal `apps/atlas-app/state/layerRegistry.ts` is outside atlas-app's `tsconfig.include: ["src/**/*"]`. Caught after first write; mv'd to `src/state/`. Plan literals diverging from existing tsconfig include-path is a class of error worth a mulch convention.
-- **[SNAG] `LayerStyle` is not exported from `@atlasdraw/basemap`** — confirmed via grep. Phase 1 Wave 1 silent reduction (per `opus-audit-2026-05-04-followup.md` Top-Finding-2). T01 worked around with inline placeholder.
+- **[SNAG] Husky postinstall expects `code/.git`** — pre-existing structural mismatch; deps install before postinstall, so non-blocking. Filed `atlasdraw-0c97`. Fix options: (a) move husky config to repo root, (b) symlink `code/.git → ../.git`, (c) `--ignore-scripts`. Decide when convenient.
+- **[SNAG] Anti-pattern detector unscoped** — generated 797 findings on vendored Excalidraw, all auto-blocked seeds. 7 issues consumed triage time; correct fix is detector scoping (`atlasdraw-d592`), not per-finding triage. Scoping should run before next anti-pattern sweep.
+- **[SNAG] First scrub draft underread T05+T08** — advisor caught it. Lesson: regex sweeps confirm presence of suspect patterns, never absence. Always pair regex sweep with full-body read for sampled tasks.
+- **[SNAG] Wave 1a scope ballooned from "5min DEPS" to "~2hr"** — initial scrub thought only the @turf install needed serial setup. Deeper grep revealed seedToElement bridge + updateElement stub are also Wave 1 prerequisites. Lesson: when plan describes new tools that produce non-trivial element shapes, grep the host integration seam, not just the tool-side API surface.
 
 ## Key Decisions
 
-- **Option (2)-surgical for T02**: adopt `defaultScaleMode` as required field; reject the other 3 T02 "extensions" as regressions. Rationale: per-tool declarative scale mode > scattered per-seed constants; cost ~10 min; payforward for Phase 2 PolygonTool/LineTool/Phase 6 toolbar UI.
-- **Wave 0 collapsed to 1 inline task** (not 2 parallel workers): T01 atomic, T02 audit-housekeeping. No dispatch.
-- **Keep `ignoreDeprecations: "6.0"` (don't revert)**: surfacing real debt is more honest than restoring the masking. Even though it makes typecheck look broken, the Phase 1 baseline was always broken — just invisible.
-- **`code/.git` backup retained one more session as margin**: per prior handoff. Push has been verified for ~10 min; deletion safe but wait for one more clean session.
-- **textWysiwyg.tsx upstream debt: file as seeds, don't exclude.** Excluding masks future regressions; filing tracks remediation. Same for atlas-app paths={} and tools rootDir.
+- **Wave 1 dispatch deferred to fresh session** — Wave 1a setup is real implementation work touching load-bearing host code (the integration seam for all future tools). Tail-end of this session is the wrong context for it. User chose this option.
+- **Wave 1a split into 4 tasks** (one serial DEPS + three parallel: BRIDGE/UPDATEEL/PREVIEW-DOC). Original Phase 2 plan had no setup wave; the integration seam was assumed to exist.
+- **Anti-pattern bucket discarded wholesale, not per-item** — single rationale (vendored-upstream scope) covers all 7. Per-item triage would have wasted ~30 min on the same answer.
+- **`@types/geojson` install + husky failure: deps verified directly via `ls`** — chose to trust `ls node_modules/@types/geojson` over yarn's exit code. Confirmed correct call after build PASSed.
+- **OQ-W1-1 (freedraw vs polygon) resolved by grep, not user question** — per advisor: brief-author responsibility to grep before quoting. Recommendation > menu.
 
 ## Trajectory
 
-**How we got here**: User said `read HANDOFF.md and HANDOFF-expertise.md, then start with Opus audit (foreground, scoped sub-questions). Phase 2 Wave 0 dispatch follows once audit clears.` Audit kicked off — typecheck and build went to background; reading prior audit doc + Phase 2 plan via ctx_execute_file in foreground. Typecheck failed on a deprecation; bumped `5.0→6.0` to fix; that revealed deeper debt. Phase 2 plan T02's literal compared against current canonical types.ts surfaced 4 regressions on settled Phase 1 decisions. Wrote audit doc and surfaced a 1/2/3 disposition decision before dispatching any worker. User asked "why not recommend 2" — re-examined the per-seed-flexibility rationale, found it fictional (every tool sets a constant), conceded (2)-surgical was the correct call. Applied (2)-surgical inline (4-file edit including a contracts.md alignment pass that piggybacked on the prior audit's outstanding D-TOOLS drifts). T01 also inlined (small enough not to warrant worker dispatch); caught and fixed plan-vs-tsconfig path mismatch (state/ → src/state/). Filed seeds for typecheck debt and LayerStyle restore; closed two stale in-progress markers.
+**How we got here:** User said "yes" to the proposed session plan from `/check-handoff`. Steps 1–4 (yarn install / build verify / triage / commit) executed cleanly with one [SNAG] (husky). Step 5 (pre-dispatch scrub) revealed three layers of issues: (1) plan literal drifts on Q11 boundary (fixable in briefs), (2) plan path drifts (T01 class), (3) host integration-seam absence (needs implementation work). Advisor review caught T05/T08 underread + freedraw-grep skip + preview-pattern unverified — added an addendum that escalated Wave 1a from 5min to ~2hr. Recommended (b) fresh session, user agreed.
 
-**Hard calls**:
-- **Recommending (1) initially, then flipping to (2)** under user pressure: the flip was the right call. Initial reasoning leaned on "future flexibility" that wasn't evidenced. Honest admission > defending bad call.
-- **Bumping tsconfig deprecation without reverting after seeing the cascade**: tempting to revert `6.0→5.0` to "make tests green" but that re-masks the debt. Surface > hide.
-- **Collapsing Wave 0 from "2 parallel workers" to 1-inline**: Plan template said parallel; reality was one task became audit-housekeeping. Adapted dispatch shape rather than ceremonially dispatching a no-op T02.
+**Hard calls:**
+- **Discard 7 anti-pattern items as a bucket** rather than triage each. Risk: missing a real finding on atlasdraw-owned code. Mitigation: detector scoping seed (atlasdraw-d592) will surface real findings on next sweep, with proper scope.
+- **Commit scrub doc before user OQ resolution** (advisor process note). Risk: doc says "user decision needed" but is committed; could read as "decided." Mitigation: doc explicitly says "still user" on the 3 OQs; future-self/agent reads "still user" verbatim.
+- **Wrote scrub doc as durable artifact instead of inline summary** — scrub is decision-grade (drives Wave 1 dispatch); 244 lines justified. Risk: future-self reads outdated doc. Mitigation: addendum supersedes earlier sections explicitly; "Final user decisions needed (3, not 5)" is the canonical OQ list.
+- **Did not fix the seedToElement bridge or updateElement stub this session** — even though the gaps are now clearly identified. Reasoning: doing it tail-end of a 30%-context session risks half-baked seam code that becomes load-bearing for all subsequent tools. Better fresh.
 
-**Shaky ground**:
-- **`@types/geojson` not yet installed.** layerRegistry.ts imports `FeatureCollection from "geojson"` — typecheck against this file will fail until `yarn install` runs. Build (vite) likely also fails until then. Next session must `yarn install` before typecheck/build sanity.
-- **atlas-app cross-workspace typecheck remains broken** even after this session's fix. Three separate tsconfig issues need tackling before Wave 1 implementation work pulls in cross-package types frequently.
-- **Auto-mode took the (2)-surgical action without explicit re-confirmation after user said "yes"**. The "yes" was clearly to the proposal but the contracts.md alignment piggyback was a self-expanded scope decision that should have been called out.
+**Shaky ground:**
+- **The 3 OQs are still open.** Recommended answers in scrub doc, but the user hasn't said yes/no. Fresh session needs to surface them at the top of conversation.
+- **Wave 1a estimates assume canonical patterns** — `seedToElement` has only the Pin branch; extending it for 7 new shapes may surface element-factory drift (the existing branch uses `newElement` from `@excalidraw/element`, plan literals reference `newTextElement`/`newLinearElement` etc which `.claude/rules/excalidraw-api.md` warns are easy to misuse). Pre-extension grep mandatory.
+- **Background record-extractor agent dispatched at handoff close** (id `ab714cf0ee4aec9a2`) — will land mulch records autonomously; not yet returned at writing time. Mulch state may shift between handoff write and next session start.
 
-**Invisible context**:
-- **`code/packages/excalidraw/wysiwyg/textWysiwyg.tsx` upstream debt has been there since the inline-fork was vendored** (commit `06ba306`). Not a regression — the deprecation halt was hiding it. If we re-sync from upstream, those errors may or may not still exist (upstream Excalidraw v0.18 has them; later versions may have fixed).
-- **Anti-pattern blocked seeds appeared between sessions** — there's a hook somewhere that scans for these (catch-all 53, console-only-error 87, fire-and-forget 142, silent-catch 55, todo-density 9, untested-churn 11, impact-scope 440). Untracked file `anti-pattern-report.txt` is at repo root. Not auto-triaged — needs `/triage` next session if priorities allow.
-- **The advisor was NOT called this session** despite being available. Audit findings were synthesized in main thread (Opus 4.7) given the user's explicit "synchronous foreground" directive. If next session has architectural ambiguity, advisor remains the right call.
+**Invisible context:**
+- The Phase 2 plan was authored 2026-05-03 (before T02's `defaultScaleMode` decision). The scrub doc is now THE authoritative source for Wave 1 dispatch shape; the plan body is stale on file paths, ctx surface, and wave structure.
+- `code/.git` backup at `/mnt/Ghar/2TA/DevStuff/atlasdraw-code-git-backup` is still pending deletion (per prior handoff). Push verified 2 sessions ago; safe to delete. Husky [SNAG] is downstream of this same retirement.
+- The advisor was called once this session (during scrub). Caught 3 real gaps. If Wave 1a implementation hits architectural ambiguity, advisor remains the right call.
 
 ## Active Skills & Routing
 
-- `check-handoff` (session entry — validated files, git state, seeds; surfaced 3 needs-triage non-blocking).
-- audit-synthesis (in-thread, no dispatched subagent — per user "foreground").
-- `seeds` (3 close + 2 create).
-- `record-extractor` — dispatched in background at handoff close (agent id af2147cc16fa6a0ab) for retro mulch capture; not yet returned at writing time.
-- `handoff` — current.
+- `check-handoff` (session entry — validated files, git, seeds, surfaced 12 needs-triage at start).
+- `triage` (cleared 13 items in one bucket pass).
+- pre-dispatch scrub (in-thread analysis, foreground; `ctx_execute_file` for plan reads).
+- `advisor` (single call during scrub; 3 gaps caught).
+- `record-extractor` (dispatched in background at handoff close; agentId `ab714cf0ee4aec9a2`).
+- `handoff` (current).
 
-**Skills NOT invoked this session that should be:**
-- `/triage` — 10 needs-triage items pending; queue too long to ignore much longer.
-- `/dream detect-gaps` — 1050 uncategorized failures (was 1029 last session; growing).
-- `/dream integrate` — 88 cross-project memories (untouched).
+**Skills NOT invoked this session that should be next:**
+- `/dream detect-gaps` — 1092 uncategorized failures (was 1050; growing).
+- `/dream integrate` — 88 cross-project memories (still untouched).
+- `executing-plans` — applies to Wave 1a/1b dispatch (next session's work).
+- `dispatching-parallel-agents` — Wave 1a's 3 parallel tasks + Wave 1b's 8 parallel workers.
 
-**Pending routing for next session**:
-1. `yarn install` (workspace-wide or in atlas-app) to pick up `@types/geojson`.
-2. Verify build still PASS after install.
-3. `/triage` to clear at least the 7 anti-pattern blocked items + `atlasdraw-8a21` typecheck-debt + `atlasdraw-fc04` LayerStyle-restore.
-4. Decide Phase 2 Wave 1 dispatch shape (the plan has T03–T09 tools + T10 layers + T11–T14 registry impl/UI/import/convert). Likely staggered — tools (T03–T09) parallel-dispatchable; T11+ depend on T01 (now done).
-5. Commit working tree (12 files: audit, code, mulch, seeds, handoff). Suggested split: (a) audit + (2)-surgical + T01, (b) seeds + handoff + mulch.
+## Pending routing for next session
+
+1. **Surface 3 OQs** to the user at conversation top:
+   - OQ-W1-3-naming: PolylineTool *(recommended)* vs LineTool?
+   - OQ-W1-2 text UX: defer-and-emit *(recommended)* vs solve text entry now in T06?
+   - OQ-W1-4 test location: colocated *(recommended, matches PinTool)* vs `__tests__/` subdir?
+2. **Execute T-W1a-DEPS** (serial, lockfile mutex): `cd code && yarn add @turf/distance @turf/circle -W`. Verify build PASS. Commit.
+3. **Dispatch T-W1a-{BRIDGE, UPDATEEL, PREVIEW-DOC} in parallel** (3 workers). Each commits separately or bundle into one commit.
+4. **Pre-dispatch grep for Wave 1a-BRIDGE worker brief** — `.claude/rules/excalidraw-api.md` mandate: grep `code/packages/element/` for the actual factory functions before quoting plan literals (`newTextElement`/`newLinearElement`/`newRectangleElement`).
+5. **Dispatch Wave 1b** (T03–T10, 8 parallel workers) per scrub doc's per-task drift table. Each worker brief MUST include the 10-point checklist from the scrub doc.
+6. **Optional**: `/dream detect-gaps` if context allows (1092 uncategorized failures growing).
+7. **Optional**: delete `code/.git` backup (push verified 2 sessions ago).
 
 ## Infrastructure Delta
 
-- **MODIFIED**: `code/packages/tsconfig.base.json` — `ignoreDeprecations: "5.0" → "6.0"` (TS 6.0.3 alignment).
-- **MODIFIED**: `code/packages/tools/src/types.ts` (+`defaultScaleMode: ScaleMode` required field).
-- **MODIFIED**: `code/packages/tools/src/PinTool.ts` (+`defaultScaleMode: "screen"`).
-- **MODIFIED**: `code/packages/tools/src/types.test.ts` (+field on both fixtures).
-- **MODIFIED**: `docs/architecture/subsystems/tools/contracts.md` (`AtlasdrawTool` block fully aligned + new field; resolves prior audit's 5 outstanding D-TOOLS drifts).
-- **NEW**: `code/apps/atlas-app/src/state/layerRegistry.ts` (T01 types module).
-- **MODIFIED**: `code/apps/atlas-app/package.json` (+`@types/geojson` devDep, NOT yet installed).
-- **NEW**: `docs/decisions/opus-audit-2026-05-04-post-wave4.md` (audit + resolution).
-- **MODIFIED**: `.mulch/expertise/{excalidraw-integration,infrastructure,meta}.jsonl` (record-extractor pending; foreground edits during session likely already there).
-- **MODIFIED**: `.seeds/issues.jsonl` (2 close, 2 create + auto-pattern entries from between sessions).
+- **MODIFIED**: `.gitignore` — exclude `.claude/SUGGESTED_SKILLS.md` and `anti-pattern-report.txt` (auto-regenerable diagnostics).
+- **NEW**: `docs/decisions/wave1-pre-dispatch-scrub-2026-05-04.md` (244 lines, scrub doc with addendum).
+- **MODIFIED**: `.seeds/issues.jsonl` (2 new this session: atlasdraw-0c97, atlasdraw-d592; 7 closed; 6 label-only updated).
+- **MODIFIED**: `.mulch/expertise/*` — pending record-extractor return (agentId `ab714cf0ee4aec9a2`).
+- **MODIFIED**: `code/yarn.lock` — possible drift from yarn install. Not committed (was already up-to-date per yarn output, despite husky postinstall halt). Verify on next session.
 - **NO**: hooks, plugin overrides, settings.json edits.
 
 ## Knowledge State
 
-- **Indexed**: foxhound has Phase 1 Waves 1.5/2/3a/3b. Wave 4 outputs from prior session may not be reindexed yet. This session's outputs (audit doc, layerRegistry.ts, contracts.md update, types.ts updates) — not reindexed.
-- **Productive tiers this session**: Read+Edit+Write absolute paths, ctx_execute_file (analysis-only reads of large plan files), ctx_execute (shell with output redirection for typecheck/build), Bash with `run_in_background:true` for long ops, ml prime (HANDOFF-expertise.md), sd close/create.
+- **Indexed**: foxhound has Phase 1 + Wave 0; this session's scrub doc + commits not yet reindexed.
+- **Productive tiers this session**: Read+Edit+Write absolute paths, `ctx_execute_file` for large-file analysis (Phase 2 plan, 64KB), Bash for git/grep, sd CLI for triage, advisor for scrub validation. Background Agent for record-extractor.
 - **Gaps**:
-  - Cross-workspace tsc on this monorepo. Atlasdraw's per-package types are clean in isolation but cross-package + cross-app typecheck has 3 distinct tsconfig issues + 5 upstream errors. Tracked as atlasdraw-8a21.
-  - `@atlasdraw/basemap`'s LayerStyle export missing — Phase 1 Wave 1 silent reduction. atlasdraw-fc04.
-  - Anti-pattern detection signal exists (sees catch-all/console-only-error/fire-and-forget/etc) but is auto-blocking seeds without triage routing.
-
-## Next Steps
-
-User-stated work for next session (priorities inferred from current state):
-
-1. **`yarn install`** at workspace root or atlas-app to pick up `@types/geojson`. Verify build still PASS.
-2. **`/triage`** for the 10 needs-triage items: atlasdraw-8a21 (typecheck-debt — high value if Wave 1 will need cross-workspace tsc), atlasdraw-fc04 (LayerStyle — medium; T01 placeholder is sufficient near-term), atlasdraw-4f26/fef0/f31f (deferred Phase-5/7/sudo blockers — likely keep deferred), 7 anti-pattern auto-detections (mass triage via `/triage` interactive).
-3. **Commit** the dirty working tree. 12 files. Suggested split:
-   - Commit A: code + audit + (2)-surgical + T01 (mostly atlasdraw's own source under `code/` and `docs/decisions/` and `docs/architecture/`).
-   - Commit B: seeds + mulch + handoff.
-4. **Phase 2 Wave 1 dispatch decision**. Plan defines T03–T09 (per-tool implementations), T10 (data layers), T11–T14 (registry impl/UI/import/convert). T03–T09 likely parallel-dispatchable; T11 depends on T01 (now done). Pre-dispatch scrub recommended (see mulch convention `mx-e9dc63`) — Phase 2 plan was authored 2026-05-03 and may have more drift like T02 had.
-5. **Pre-Wave-1 typecheck-debt decision**: triage atlasdraw-8a21 to "fix-now" or "defer to post-Phase-2." If "fix-now," dedicate a small task to the 3 tsconfig fixes; runs in <30 min.
-6. **Background tasks still pending** (from prior session, untouched again):
-   - Backup deletion: `/mnt/Ghar/2TA/DevStuff/atlasdraw-code-git-backup` is safe to delete (push verified two sessions ago). Recommend now.
-   - `/dream detect-gaps` (1050 uncategorized failures).
-   - `/dream integrate` (88 cross-project memories).
+  - Cross-workspace tsc still broken (atlasdraw-8a21 unchanged this session).
+  - `@atlasdraw/basemap` LayerStyle export still missing (atlasdraw-fc04 unchanged).
+  - Anti-pattern detector unscoped (atlasdraw-d592 NEW this session).
+  - Husky postinstall (atlasdraw-0c97 NEW this session).
+  - Host integration seam for non-Pin tools (seedToElement bridge + updateElement stub) — NOT a seed yet, captured in scrub doc as Wave 1a BRIDGE/UPDATEEL tasks. **Decide whether to seed-track these or treat as inline next-session work.**
 
 ## Context Files
 
 Read these first if you're a fresh agent:
 
 1. `HANDOFF.md` (this file) — current state.
-2. `HANDOFF-expertise.md` — structured mulch records for excalidraw-integration domain + session deltas (`ml prime` + `ml diff`).
-3. `docs/decisions/opus-audit-2026-05-04-post-wave4.md` — full audit, the (2)-surgical decision, and the resolution log.
-4. `docs/decisions/opus-audit-2026-05-04-followup.md` — prior audit (the template + Wave 1 silent reductions still relevant for atlasdraw-fc04).
-5. `code/packages/tools/src/types.ts` — canonical `AtlasdrawTool` interface (now with `defaultScaleMode`).
-6. `code/apps/atlas-app/src/state/layerRegistry.ts` — Phase 2 T01 types module; pattern for future contract-stability tasks.
-7. `docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md` — Phase 2 plan; Wave 1 (T03–T09 tools, T10–T14 registry/UI/import/convert) is next.
+2. `HANDOFF-expertise.md` — mulch deltas (may be updated by background record-extractor; check freshness).
+3. **`docs/decisions/wave1-pre-dispatch-scrub-2026-05-04.md`** — THE authoritative source for Wave 1 dispatch. Read main body + addendum together; addendum supersedes earlier wave-shape sections.
+4. `docs/decisions/opus-audit-2026-05-04-post-wave4.md` — prior session audit, now committed.
+5. `code/packages/tools/src/types.ts` — canonical AtlasdrawTool (post Wave 0).
+6. `code/packages/tools/src/PinTool.ts` — canonical impl pattern (single-shot; preview pattern NOT demonstrated, needs Wave 1a-PREVIEW-DOC).
+7. `code/packages/geo/src/types.ts` — ScaleMode + GeoAnchor.
+8. `code/apps/atlas-app/src/tools/seedToElement.ts` — bridge to extend (Wave 1a-BRIDGE).
+9. `code/apps/atlas-app/src/hooks/useAtlasdrawTool.ts` — ctx wiring; updateElement stub at line 91 (Wave 1a-UPDATEEL).
+10. `docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md` — Phase 2 plan; **stale** on file paths and ctx surface, defer to scrub doc for Wave 1.
 
 ## ⚠️ Critical reminders for next session
 
-- **Plan literals are stale.** Phase 2 plan was authored 2026-05-03; PinTool + canonical types shipped 2026-05-04. T02 had 4 regressions on settled decisions. Pre-dispatch scrub before any T03+ worker brief — grep `code/packages/tools/src/types.ts` and `code/apps/atlas-app/src/components/MapEditor.tsx` for the actual API surface before quoting plan literals.
-- **`yarn install` BEFORE any typecheck.** `@types/geojson` was added to package.json this session but not installed. T01's `import type { FeatureCollection } from "geojson"` will fail until install.
-- **Cross-workspace typecheck is broken (pre-existing).** atlasdraw-8a21 tracks. If Wave 1 implementation work needs cross-package types, address tsconfig issues first.
-- **Audit agents in background = stall risk** (prior session evidence). Foreground or scoped sub-questions only — this session ran the audit synthesis in main thread successfully.
-- **(2)-surgical scope was self-expanded** to include the contracts.md alignment piggyback. Worth flagging if user wanted only the literal `defaultScaleMode` change. The piggyback resolves prior-audit-flagged debt so net positive, but transparency.
+- **Wave 1 dispatch is BLOCKED** on 3 OQs + 4 Wave 1a setup tasks. Do NOT skip to Wave 1b without Wave 1a commits landing first.
+- **Plan literal stale list**: file paths (omit `src/`), `excalidrawAPI.updateScene` (T03/T07/T09), `excalidrawAPI.setActiveTool` (T06). Pre-dispatch scrub doc is the correction source.
+- **Host integration seam doesn't exist for non-Pin tools** — seedToElement.ts:40 throws, useAtlasdrawTool.ts:91 stubs. Wave 1a BRIDGE + UPDATEEL is real implementation work, not just config.
+- **`.claude/rules/excalidraw-api.md` rule paid off again** in T02 (Wave 0) and Wave 1 scrub. Always grep canonical source before quoting plan literals naming Excalidraw APIs.
+- **Anti-pattern detector should be scoped first** (atlasdraw-d592) before next sweep, otherwise will refloat 797 vendored-upstream findings.
+- **Husky postinstall failure on yarn install is expected** until atlasdraw-0c97 resolves. Verify deps installed via `ls node_modules/...` rather than trusting yarn exit code.
+- **Background record-extractor (agentId `ab714cf0ee4aec9a2`) may still be running** when next session starts — check `HANDOFF-expertise.md` mtime + grep `.mulch/expertise/*.jsonl` for fresh entries before dispatching another extractor.
+- **The `_data` field naming in seedToElement (line 87)** is load-bearing — uses `_data` to avoid colliding with reserved `GeoCustomData` keys. New BRIDGE branches must follow the same convention.
