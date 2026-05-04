@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Build outputs
+build/
+dist/
+*.tgz
+
+# Environment
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Logs
+*.log
+logs/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+.history/
+.eslintcache
+
+# Search index (rebuilt from source)
+.foxhound/
+
+# Ephemeral runtime logs
+.claude/.skill-invocation-log
+
+# Firebase build artifacts
+firebase/
+.vercel/
