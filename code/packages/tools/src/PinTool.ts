@@ -37,6 +37,7 @@ export const PinTool: AtlasdrawTool = {
   label: "Pin",
   icon: "pin",
   cursor: "crosshair",
+  defaultScaleMode: "screen",
 
   onPointerDown(e, ctx) {
     // Container-relative pixel → geographic. ctx.map.unproject is the only map

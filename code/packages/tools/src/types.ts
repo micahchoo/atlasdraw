@@ -112,6 +112,12 @@ export interface AtlasdrawTool {
   readonly icon: string;
   /** CSS cursor when this tool is active. */
   readonly cursor: string;
+  /**
+   * Default scale-mode for elements this tool produces.
+   * Tools may override per-element via the seed's `scaleMode`, but this declares
+   * the tool's intent at definition site (queryable for toolbar UI / Phase 6 mode-toggle).
+   */
+  readonly defaultScaleMode: ScaleMode;
 
   /** Optional: lifecycle hooks. */
   onActivate?(ctx: ToolContext): void;

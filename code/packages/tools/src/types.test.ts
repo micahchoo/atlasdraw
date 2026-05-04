@@ -8,6 +8,7 @@ describe("AtlasdrawTool interface shape", () => {
       label: "Test",
       icon: "test-icon",
       cursor: "crosshair",
+      defaultScaleMode: "screen",
       onPointerDown(_e: ToolPointerEvent, _ctx: ToolContext) {
         // no-op
       },
@@ -21,6 +22,7 @@ describe("AtlasdrawTool interface shape", () => {
       label: "M",
       icon: "i",
       cursor: "default",
+      defaultScaleMode: "geographic",
       onPointerDown: () => {},
     };
     expect(minimal.onPointerMove).toBeUndefined();

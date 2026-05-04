@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
+    "@types/geojson": "^7946.0.14",
     "@types/lodash.throttle": "^4.1.9",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

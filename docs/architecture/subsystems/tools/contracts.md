@@ -1,6 +1,7 @@
 # `packages/tools` — Contracts
 
 <!-- updated 2026-05-04: aligned with Wave 0 implementation; see decisions/phase0-ci-evidence.md drifts D-GEO-1 (geo), D-TOOLS-4/6 (tools). Implementation is canonical. -->
+<!-- updated 2026-05-04 (post-wave4 audit): full impl alignment — D-TOOLS-1/2/3 + ToolPointerEvent + readonly + onDoubleClick (drop from contract; impl canonical) + defaultScaleMode (NEW required field for Phase 2). See docs/decisions/opus-audit-2026-05-04-post-wave4.md. -->
 
 **Status: Wave 0 implementation-aligned.** Speculative pre-code contracts updated against real code.
 
@@ -16,22 +17,36 @@
 
 ```ts
 export interface AtlasdrawTool {
-  /** Unique string identifier for setActiveTool({ type: "custom", customType: id }) */
-  id: string;
-  /** SVG icon React component displayed in the toolbar */
-  icon: React.FC;
-  /** CSS cursor string while this tool is active */
-  cursor: string;
+  /** Stable id, registered into Excalidraw via customType. */
+  readonly id: string;
+  /** User-facing label. */
+  readonly label: string;
+  /** Toolbar icon identifier (Phase 1: string). React.FC scheduled for Phase 6 UI work. */
+  readonly icon: string;
+  /** CSS cursor while this tool is active. */
+  readonly cursor: string;
+  /**
+   * Default scale-mode for elements this tool produces. Per-element seeds may override,
+   * but this declares the tool's intent at definition site (queryable for toolbar UI).
+   */
+  readonly defaultScaleMode: ScaleMode;
 
-  onPointerDown?(e: PointerEvent, ctx: ToolContext): void;
-  onPointerMove?(e: PointerEvent, ctx: ToolContext): void;
-  onPointerUp?(e: PointerEvent, ctx: ToolContext): void;
-  onDoubleClick?(e: MouseEvent, ctx: ToolContext): void;
+  /** Optional: lifecycle hooks. */
+  onActivate?(ctx: ToolContext): void;
+  onDeactivate?(ctx: ToolContext): void;
+
+  /** Required: pointer-down committed event. */
+  onPointerDown(e: ToolPointerEvent, ctx: ToolContext): void;
+  /** Optional: pointer-move while down (drag tools). */
+  onPointerMove?(e: ToolPointerEvent, ctx: ToolContext): void;
+  /** Optional: pointer-up (commit point for drag tools). */
+  onPointerUp?(e: ToolPointerEvent, ctx: ToolContext): void;
+  /** Optional: keyboard (Escape, Enter) while tool is active. */
   onKeyDown?(e: KeyboardEvent, ctx: ToolContext): void;
 }
 ```
 
-**Backward-compat:** All handler methods are optional. New optional methods may be added in minors. `id`, `icon`, `cursor` are required and frozen.
+**Backward-compat:** `id`, `label`, `icon`, `cursor`, `defaultScaleMode`, and `onPointerDown` are required and frozen. New optional handlers may be added in minors. `ToolPointerEvent` (subset of DOM `PointerEvent`) is the postMessage-safe boundary for Q11 (Phase 7 plugin Worker boundary) — tools must not accept raw `PointerEvent`.
 
 ---
 
