@@ -495,6 +495,7 @@ import type {
   GenerateDiagramToCode,
   NullableGridSize,
   Offsets,
+  ProjectContextMenuItem,
 } from "../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Action, ActionResult } from "../actions/types";
@@ -664,6 +665,17 @@ class App extends React.Component<AppProps, AppState> {
 
   private _initialized = false;
 
+  /**
+   * Atlasdraw fork extension — host-app-registered context-menu items
+   * appended to the right-click element menu. Mutated only via
+   * {@link App.registerContextMenuItem} / its returned unregister fn.
+   * Order is preserved (first registered → first visible). Re-registering
+   * an item with the same `name` replaces in place (last-write wins) so
+   * a re-render that re-runs the registration effect doesn't multiply
+   * entries.
+   */
+  private projectContextMenuItems: ProjectContextMenuItem[] = [];
+
   private readonly editorLifecycleEvents = new AppEventBus<
     ExcalidrawImperativeAPIEventMap,
     typeof editorLifecycleEventBehavior
@@ -765,6 +777,9 @@ class App extends React.Component<AppProps, AppState> {
       getName: this.getName,
       registerAction: (action: Action) => {
         this.actionManager.registerAction(action);
+      },
+      registerContextMenuItem: (item: ProjectContextMenuItem) => {
+        return this.registerProjectContextMenuItem(item);
       },
       refresh: this.refresh,
       setToast: this.setToast,
@@ -12485,6 +12500,71 @@ class App extends React.Component<AppProps, AppState> {
     return false;
   };
 
+  /**
+   * Atlasdraw fork — register a project-defined item to splice into the
+   * right-click element context menu. Returns an unregister function that
+   * removes the exact item by reference (safe to call multiple times).
+   *
+   * Re-registering an item with the same `name` replaces in place
+   * (last-write wins), so a React effect that re-runs on dep change
+   * doesn't multiply entries.
+   */
+  private registerProjectContextMenuItem = (
+    item: ProjectContextMenuItem,
+  ): (() => void) => {
+    const existingIdx = this.projectContextMenuItems.findIndex(
+      (x) => x.name === item.name,
+    );
+    if (existingIdx >= 0) {
+      this.projectContextMenuItems[existingIdx] = item;
+    } else {
+      this.projectContextMenuItems.push(item);
+    }
+    return () => {
+      const idx = this.projectContextMenuItems.indexOf(item);
+      if (idx >= 0) {
+        this.projectContextMenuItems.splice(idx, 1);
+      }
+    };
+  };
+
+  /**
+   * Atlasdraw fork — convert a project-registered item into the
+   * `Action`-shaped object that `ContextMenu.tsx` and
+   * `actionManager.executeAction` consume directly. ContextMenu calls
+   * `actionManager.executeAction(item, "contextMenu")` which invokes
+   * `item.perform(...)` on the passed object — so we never touch the
+   * action registry. `name` is closed-string-typed as `ActionName` on
+   * `Action`; cast through unknown is the minimal patch.
+   */
+  private getProjectContextMenuActions = (): ContextMenuItems => {
+    if (this.projectContextMenuItems.length === 0) {
+      return [];
+    }
+    return this.projectContextMenuItems.map((item) => {
+      const action: Action = {
+        name: item.name as Action["name"],
+        label: item.label,
+        icon: item.icon,
+        // Action.predicate signature: (elements, appState, appProps, app)
+        predicate: (elements, appState) => item.predicate(elements, appState),
+        // Action.perform signature: (elements, appState, formData, app) =>
+        // ActionResult | Promise<ActionResult>. Project items return
+        // `void | false | {elements?, appState?, captureUpdate}` — coerce
+        // void to a no-mutation result so the updater pipeline doesn't crash.
+        perform: (elements, appState) => {
+          const result = item.perform(elements, appState);
+          if (!result) {
+            return false;
+          }
+          return result;
+        },
+        trackEvent: false,
+      };
+      return action;
+    });
+  };
+
   private getContextMenuItems = (
     type: "canvas" | "element",
   ): ContextMenuItems => {
@@ -12585,6 +12665,13 @@ class App extends React.Component<AppProps, AppState> {
       actionToggleElementLock,
       CONTEXT_MENU_SEPARATOR,
       actionDeleteSelected,
+      // Atlasdraw fork — project-registered items appear at the tail of
+      // the element menu, behind a separator. Predicate is run inside
+      // ContextMenu.tsx's filteredItems reduce; items not matching the
+      // current selection are filtered out (and the leading separator is
+      // dropped automatically when no items follow).
+      CONTEXT_MENU_SEPARATOR,
+      ...this.getProjectContextMenuActions(),
     ];
   };
 

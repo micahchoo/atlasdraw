@@ -23,7 +23,7 @@ import { MapCanvas } from "@atlasdraw/basemap";
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
 import { parse, GeoJSONParseError } from "@atlasdraw/data";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
@@ -43,6 +43,7 @@ import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
+import { exportPNG } from "../lib/export";
 import styles from "../styles/MapEditor.module.css";
 
 /**
@@ -145,12 +146,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
-  // T22 — Layers sidebar open/close. Local state mirrors Excalidraw's
-  // appState.openSidebar.name === "layers"; we drive it via the imperative
-  // toggleSidebar API and track our own bool for aria-pressed. Avoids
-  // threading a tracked-store subscription through for a single toggle.
-  const [isLayersOpen, setIsLayersOpen] = useState(false);
-
   // T13 — GeoJSON drag-and-drop import.
   //
   // Drop must run in CAPTURE phase on the root div — Excalidraw's own
@@ -223,14 +218,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
   }, [processGeoJsonDrop]);
 
-  // T14 — Convert annotation → data layer via right-click context menu.
+  // W-B — Convert annotation → data layer via MainMenu.Item.
   //
-  // Single-selection only: shows "Convert to data layer" when the selected
-  // Excalidraw element carries valid GeoCustomData. text/arrow elements still
-  // surface the menu but with a disabled button (per scrub §7 — explain why
-  // not all annotations are convertible). On click: build the FC via
-  // annotationToFeatureCollection, register it as a data layer, render via
-  // MapLibre, and remove the original element from the Excalidraw scene.
+  // Rule-0 retrofit: original surface (Wave 3b T14) was a custom <div role="menu">
+  // hung off the root container's onContextMenu. v0.18 ships no public way to
+  // splice items into Excalidraw's element context menu (App.tsx:12488
+  // getContextMenuItems is hardcoded; Action interface has no contextItemLabel).
+  // So we surface Convert in the MainMenu hamburger instead — same Rule-0
+  // category (existing slot, no fork), with predicate-driven enabled state.
+  //
+  // `currentConvertibleSelection()` is read at click time (not at render time)
+  // so we don't re-render the whole tree on every selection change just to
+  // recompute the menu's enabled state.
   //
   // Why we don't call registry.convertAnnotationToDataLayer here: that method
   // mints its own dl:<uuid> internally and uses DEFAULT_CONVERTED_STYLE, but
@@ -238,80 +237,132 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // addLayer. Instead we mirror T13's drop pattern: generate the id at the
   // call site, registerDataLayer with the fc/style we built, then remove the
   // annotation entry. Same end state, with id ownership at the call site.
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    element: ConvertibleElement;
-  } | null>(null);
-
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!excalidrawAPI) return;
+  const currentConvertibleSelection =
+    useCallback((): ConvertibleElement | null => {
+      if (!excalidrawAPI) return null;
       const appState = excalidrawAPI.getAppState();
       const ids = Object.keys(appState.selectedElementIds ?? {});
-      if (ids.length !== 1) return;
-      const elements = excalidrawAPI.getSceneElements();
-      const el = elements.find((x) => x.id === ids[0]);
-      if (!el || !isGeoCustomData(el.customData)) return;
-      e.preventDefault();
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        element: {
-          id: el.id,
-          type: el.type,
-          customData: el.customData as ConvertibleElement["customData"],
-        },
-      });
+      if (ids.length !== 1) return null;
+      const el = excalidrawAPI.getSceneElements().find((x) => x.id === ids[0]);
+      if (!el || !isGeoCustomData(el.customData)) return null;
+      // text/arrow elements carry geo but aren't convertible (Wave 3b T14
+      // scrub §7). annotationToFeatureCollection throws
+      // UnsupportedConvertElementError for them; we filter at the gate so
+      // the menu item shows enabled only when the conversion will actually
+      // succeed.
+      if (el.type === "text" || el.type === "arrow") return null;
+      return {
+        id: el.id,
+        type: el.type,
+        customData: el.customData as ConvertibleElement["customData"],
+      };
+    }, [excalidrawAPI]);
+
+  const handleConvert = useCallback(
+    (el: ConvertibleElement) => {
+      if (!map || !excalidrawAPI) return;
+      try {
+        // Step 1 — pure computation, no side effects.
+        const fc = annotationToFeatureCollection(el);
+        const id = `dl:${crypto.randomUUID()}`;
+        const style = defaultLayerStyle(fc);
+        const geometryType = inferGeometryType(fc);
+        // Step 2 — map mutations first; rollback the orphan source if addLayer throws.
+        map.addSource(id, { type: "geojson", data: fc });
+        try {
+          map.addLayer(compileLayer(id, style, geometryType));
+        } catch (layerErr) {
+          try {
+            map.removeSource(id);
+          } catch {
+            /* swallow secondary failure */
+          }
+          throw layerErr;
+        }
+        // Step 3 — registry mutations (won't throw).
+        registry.registerDataLayer({ id, fc, label: el.id, style });
+        registry.remove(el.id); // drop the old annotation entry (if any)
+        // Step 4 — destructive scene mutation last.
+        const remaining = excalidrawAPI
+          .getSceneElements()
+          .filter((x) => x.id !== el.id);
+        excalidrawAPI.updateScene({ elements: remaining });
+      } catch (err) {
+        if (err instanceof UnsupportedConvertElementError) {
+          window.alert(err.message);
+          return;
+        }
+        throw err;
+      }
     },
-    [excalidrawAPI],
+    [map, registry, excalidrawAPI],
   );
 
-  const handleConvert = useCallback(() => {
-    if (!contextMenu || !map || !excalidrawAPI) return;
-    const el = contextMenu.element;
-    setContextMenu(null);
-    try {
-      // Step 1 — pure computation, no side effects.
-      const fc = annotationToFeatureCollection(el);
-      const id = `dl:${crypto.randomUUID()}`;
-      const style = defaultLayerStyle(fc);
-      const geometryType = inferGeometryType(fc);
-      // Step 2 — map mutations first; rollback the orphan source if addLayer throws.
-      map.addSource(id, { type: "geojson", data: fc });
+  // W-C — Surface Convert as a right-click context-menu item via the
+  // atlasdraw fork's `excalidrawAPI.registerContextMenuItem` (added to
+  // packages/excalidraw/components/App.tsx). Item appears at the tail
+  // of the element menu, gated by the same predicate the W-B MainMenu
+  // gate used (single geo selection, not text/arrow). Re-runs on
+  // handleConvert identity change; the unregister fn returned by the
+  // API removes the prior closure so we don't accumulate stale items.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    const unregister = excalidrawAPI.registerContextMenuItem({
+      name: "atlasConvertToDataLayer",
+      label: "Convert selection to data layer",
+      // Same gate as currentConvertibleSelection, but evaluated against the
+      // (elements, appState) Excalidraw passes us — independent of the API
+      // getters so the menu's enabled state tracks the live selection
+      // without us subscribing to onChange.
+      predicate: (elements, appState) => {
+        const ids = Object.keys(appState.selectedElementIds ?? {});
+        if (ids.length !== 1) return false;
+        const el = elements.find((x) => x.id === ids[0]);
+        if (!el || !isGeoCustomData(el.customData)) return false;
+        if (el.type === "text" || el.type === "arrow") return false;
+        return true;
+      },
+      perform: () => {
+        // Defensive: predicate already passed, but recompute the
+        // ConvertibleElement view (typed shape) at click time so we
+        // reuse currentConvertibleSelection's exact ConvertibleElement
+        // contract without duplicating the type narrowing.
+        const el = currentConvertibleSelection();
+        if (el) handleConvert(el);
+        // handleConvert performs the scene mutation directly via
+        // excalidrawAPI.updateScene; return false so the
+        // ContextMenu/actionManager updater doesn't try to re-apply
+        // anything on top.
+        return false;
+      },
+    });
+    return unregister;
+  }, [excalidrawAPI, handleConvert, currentConvertibleSelection]);
+
+  // W-B — Composite PNG export, surfaced in MainMenu. Async work fires-and-
+  // forgets; MainMenu.Item.onSelect is sync (event handler signature) and
+  // the menu closes synchronously after handler returns.
+  const handleExportPNG = useCallback(() => {
+    if (!map || !excalidrawAPI) return;
+    void (async () => {
       try {
-        map.addLayer(compileLayer(id, style, geometryType));
-      } catch (layerErr) {
-        try {
-          map.removeSource(id);
-        } catch {
-          /* swallow secondary failure */
-        }
-        throw layerErr;
+        const blob = await exportPNG(map, excalidrawAPI);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `atlasdraw-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        window.alert(
+          `PNG export failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
-      // Step 3 — registry mutations (won't throw).
-      registry.registerDataLayer({ id, fc, label: el.id, style });
-      registry.remove(el.id); // drop the old annotation entry (if any)
-      // Step 4 — destructive scene mutation last.
-      const remaining = excalidrawAPI
-        .getSceneElements()
-        .filter((x) => x.id !== el.id);
-      excalidrawAPI.updateScene({ elements: remaining });
-    } catch (err) {
-      if (err instanceof UnsupportedConvertElementError) {
-        window.alert(err.message);
-        return;
-      }
-      throw err;
-    }
-  }, [contextMenu, map, registry, excalidrawAPI]);
+    })();
+  }, [map, excalidrawAPI]);
 
   return (
-    <div
-      ref={rootRef}
-      className={styles.root}
-      onContextMenu={handleContextMenu}
-    >
+    <div ref={rootRef} className={styles.root}>
       {/* Bottom layer: MapLibre GL map */}
       <div className={styles.mapLayer}>
         <MapCanvas
@@ -340,8 +391,42 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           {/* T22 — Layers sidebar slot. LayerPanel internally renders
               <Sidebar name="layers">. Excalidraw surfaces it only when
               appState.openSidebar?.name === "layers" — toggled via the
-              Layers button below calling excalidrawAPI.toggleSidebar. */}
+              MainMenu "Layers panel" item below. */}
           <LayerPanel />
+
+          {/* W-B — Atlasdraw MainMenu items. Replaces 3 free-floating
+              surfaces (Pin button, Layers toggle, Export PNG button) with
+              proper Excalidraw v0.18 slots. (Convert moved to the right-
+              click element context menu via excalidrawAPI.registerContext-
+              MenuItem — see useEffect below.) MainMenu.Item is
+              DropdownMenuItem under the hood
+              (packages/excalidraw/components/dropdownMenu/DropdownMenuItem.tsx)
+              — props: onSelect (event: Event) => void, icon, shortcut,
+              data-testid. The hamburger trigger lives in the default
+              Excalidraw UI (top-left); these items render inside it. */}
+          <MainMenu>
+            <MainMenu.Item
+              onSelect={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
+              data-testid="main-menu-pin"
+              aria-pressed={isPinActive}
+            >
+              {isPinActive ? "✓ Pin to map" : "Pin to map"}
+            </MainMenu.Item>
+            <MainMenu.Item
+              onSelect={() =>
+                excalidrawAPI?.toggleSidebar({ name: "layers" })
+              }
+              data-testid="main-menu-layers"
+            >
+              Layers panel
+            </MainMenu.Item>
+            <MainMenu.Item
+              onSelect={handleExportPNG}
+              data-testid="main-menu-export-png"
+            >
+              Export composite PNG
+            </MainMenu.Item>
+          </MainMenu>
         </Excalidraw>
       </div>
 
@@ -370,87 +455,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           }}
           style={{ cursor: activeAtlasTool.cursor }}
         />
-      )}
-
-      {/* Pin button — fixed top-left, above all layers. Toggle activates
-          PinTool (next click on map places one pin, then deactivates). */}
-      <button
-        type="button"
-        className={[
-          styles.pinButton,
-          isPinActive ? styles.pinButtonActive : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
-        aria-pressed={isPinActive}
-        data-testid="pin-tool-button"
-      >
-        Pin
-      </button>
-
-      {/* T22 — Layers toggle, fixed top-left beside pin button. Toggles
-          Excalidraw's <Sidebar name="layers"> via the imperative API and
-          tracks open state locally for aria-pressed / styling. */}
-      <button
-        type="button"
-        className={[
-          styles.layersToggleButton,
-          isLayersOpen ? styles.layersToggleButtonActive : "",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-        onClick={() => {
-          excalidrawAPI?.toggleSidebar({ name: "layers" });
-          setIsLayersOpen((v) => !v);
-        }}
-        aria-pressed={isLayersOpen}
-        aria-label="Toggle layers panel"
-        data-testid="layers-toggle-button"
-      >
-        Layers
-      </button>
-
-      {/* T14 — Right-click convert-to-data-layer context menu. Position is
-          fixed to the click viewport coordinates. onMouseLeave dismisses
-          (matches OS-native context-menu behavior). text/arrow elements
-          surface the menu but disable the action with an explanatory title
-          tooltip. */}
-      {contextMenu && (
-        <div
-          role="menu"
-          data-testid="convert-context-menu"
-          style={{
-            position: "fixed",
-            left: contextMenu.x,
-            top: contextMenu.y,
-            zIndex: 100,
-            background: "#fff",
-            border: "1px solid #ccc",
-            padding: 4,
-          }}
-          onMouseLeave={() => setContextMenu(null)}
-        >
-          {contextMenu.element.type === "text" ||
-          contextMenu.element.type === "arrow" ? (
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              title="Text and arrow annotations cannot be converted to data layers"
-            >
-              Convert to data layer (unavailable)
-            </button>
-          ) : (
-            <button
-              type="button"
-              data-testid="convert-action-button"
-              onClick={handleConvert}
-            >
-              Convert to data layer
-            </button>
-          )}
-        </div>
       )}
     </div>
   );

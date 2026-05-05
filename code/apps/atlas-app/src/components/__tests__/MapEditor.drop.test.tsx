@@ -46,11 +46,59 @@ vi.mock("@atlasdraw/basemap", () => ({
   })),
 }));
 
-// Stub <Excalidraw> — renders a placeholder div, never wires the imperative API.
-// MapEditor's drop handler doesn't touch excalidrawAPI, so leaving it null is fine.
+// Stub <Excalidraw> — renders children (LayerPanel + MainMenu items) but
+// never wires the imperative API. MapEditor's drop handler doesn't touch
+// excalidrawAPI, so leaving it null is fine. We must export MainMenu and
+// Sidebar (consumed by W-B's MainMenu items + LayerPanel) as passthrough
+// stubs or React throws "type is invalid" at mount.
 vi.mock("@excalidraw/excalidraw", () => ({
-  Excalidraw: ({ onExcalidrawAPI: _ }: { onExcalidrawAPI?: unknown }) =>
-    React.createElement("div", { "data-testid": "excalidraw-stub" }),
+  Excalidraw: ({
+    onExcalidrawAPI: _,
+    children,
+  }: {
+    onExcalidrawAPI?: unknown;
+    children?: React.ReactNode;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "excalidraw-stub" },
+      children,
+    ),
+  MainMenu: Object.assign(
+    ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(
+        "div",
+        { "data-testid": "main-menu-stub" },
+        children,
+      ),
+    {
+      Item: ({
+        children,
+        onSelect: _onSelect,
+        ...rest
+      }: {
+        children?: React.ReactNode;
+        onSelect?: (e: Event) => void;
+      } & Record<string, unknown>) =>
+        React.createElement("button", { type: "button", ...rest }, children),
+    },
+  ),
+  Sidebar: Object.assign(
+    ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(
+        "div",
+        { "data-testid": "sidebar-stub" },
+        children,
+      ),
+    {
+      Header: ({ children }: { children?: React.ReactNode }) =>
+        React.createElement(
+          "div",
+          { "data-testid": "sidebar-header-stub" },
+          children,
+        ),
+    },
+  ),
 }));
 
 // Synthetic map instance shared by useMapRef stub + assertions.

@@ -930,6 +930,49 @@ export type ExcalidrawImperativeAPIEventMap = {
   "editor:unmount": [];
 };
 
+/**
+ * Atlasdraw fork extension — host-app-defined item spliced into the
+ * right-click element context menu (App.tsx `getContextMenuItems`).
+ *
+ * Not an Excalidraw `Action`: project items skip the action registry
+ * (no keyboard / command-palette surface) and run their `perform`
+ * synchronously on click. Returned `ActionResult`-shaped object flows
+ * through Excalidraw's standard `syncActionResult` updater.
+ *
+ * Multiple registrations with the same `name` are deduped (last-write
+ * wins); the unregister function only removes the specific item it
+ * created (referential equality).
+ */
+export type ProjectContextMenuItem = {
+  /** Unique id within the project. Also used as DOM `data-testid`. */
+  name: string;
+  /** Visible label. */
+  label: string;
+  /** When false, the item is hidden for the current selection. */
+  predicate: (
+    elements: readonly ExcalidrawElement[],
+    appState: Readonly<AppState>,
+  ) => boolean;
+  /**
+   * Click handler. Return an `ActionResult`-shaped object to mutate
+   * scene/appState/files via Excalidraw's standard updater path; return
+   * `false` (or `undefined`) to no-op.
+   */
+  perform: (
+    elements: readonly ExcalidrawElement[],
+    appState: Readonly<AppState>,
+  ) =>
+    | {
+        elements?: readonly ExcalidrawElement[] | null;
+        appState?: Partial<AppState> | null;
+        captureUpdate: CaptureUpdateActionType;
+      }
+    | false
+    | void;
+  /** Optional leading icon. */
+  icon?: React.ReactNode;
+};
+
 export interface ExcalidrawImperativeAPI {
   /** Whether the editor has been unmounted and the API is no longer usable. */
   isDestroyed: boolean;
@@ -953,6 +996,17 @@ export interface ExcalidrawImperativeAPI {
   getName: InstanceType<typeof App>["getName"];
   scrollToContent: InstanceType<typeof App>["scrollToContent"];
   registerAction: (action: Action) => void;
+  /**
+   * Atlasdraw fork extension — register a project-defined item that
+   * appears at the end of the right-click element context menu, gated by
+   * the supplied `predicate`. Returns an unregister function.
+   *
+   * Item shape: see {@link ProjectContextMenuItem}. Items are appended
+   * after Excalidraw's default `actionDeleteSelected` (preceded by a
+   * separator). Not surfaced in the canvas (no-selection) menu or in
+   * viewMode.
+   */
+  registerContextMenuItem: (item: ProjectContextMenuItem) => () => void;
   refresh: InstanceType<typeof App>["refresh"];
   setToast: InstanceType<typeof App>["setToast"];
   addFiles: (data: BinaryFileData[]) => void;

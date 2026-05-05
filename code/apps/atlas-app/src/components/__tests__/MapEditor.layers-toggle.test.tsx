@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// T22 — LayerPanel SidebarTrigger wiring test for MapEditor.
+// W-B — MainMenu "Layers panel" item wiring test for MapEditor.
 //
-// Verifies the Layers toggle button:
-//   1. Renders with aria-pressed="false" initially.
-//   2. On click, calls excalidrawAPI.toggleSidebar({ name: "layers" }) and
-//      flips aria-pressed to "true".
-//   3. On second click, re-toggles and aria-pressed returns to "false".
-//
-// Mocking strategy mirrors MapEditor.contextmenu.test.tsx — extends the
-// fakeExcalidrawAPI with a toggleSidebar spy. Excalidraw is stubbed so its
-// internal Sidebar render path is irrelevant; we only assert on the API
-// invocation and our local aria-pressed reflection.
+// Replaces the T22 free-floating Layers button test. The button is now a
+// MainMenu.Item rendered inside <Excalidraw> via the MainMenu slot. The
+// real MainMenu mounts via tunnels and DropdownMenu — too heavy for jsdom
+// — so we stub it as a passthrough that renders Item children directly,
+// exposing onSelect as the click handler. We then assert
+// excalidrawAPI.toggleSidebar({name:"layers"}) fires on click.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks rather
 // than mutating the contextmenu/drop test fixtures.
@@ -31,55 +27,95 @@ vi.mock("@atlasdraw/basemap", () => ({
   defaultLayerStyle: vi.fn(),
 }));
 
-const toggleSidebarSpy = vi.fn();
+const mockToggleSidebarSpy = vi.fn();
 
-const fakeExcalidrawAPI = {
+const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
-  toggleSidebar: toggleSidebarSpy,
+  toggleSidebar: mockToggleSidebarSpy,
+  // W-C — MapEditor calls excalidrawAPI.registerContextMenuItem in a
+  // useEffect to wire the Convert action. Stub returns an unregister fn.
+  registerContextMenuItem: vi.fn(() => vi.fn()),
 };
 
-vi.mock("@excalidraw/excalidraw", () => ({
-  Excalidraw: ({
-    onExcalidrawAPI,
-    children,
-  }: {
-    onExcalidrawAPI?: (api: unknown) => void;
-    children?: React.ReactNode;
-  }) => {
-    React.useEffect(() => {
-      onExcalidrawAPI?.(fakeExcalidrawAPI);
-    }, [onExcalidrawAPI]);
-    // Render children so LayerPanel mounts (uses <Sidebar>, mocked below).
-    return React.createElement(
-      "div",
-      { "data-testid": "excalidraw-stub" },
-      children,
-    );
-  },
-  // LayerPanel imports Sidebar from @excalidraw/excalidraw — stub it as a
-  // passthrough so the component mounts without exploding in jsdom.
-  // LayerPanel uses <Sidebar.Header> too, so the stub needs the static
-  // member or React throws "type is invalid: undefined".
-  Sidebar: Object.assign(
+// MainMenu / MainMenu.Item passthrough is defined INSIDE the vi.mock factory
+// because vi.mock is hoisted to module top — referencing module-top consts
+// from inside the factory throws "Cannot access X before initialization".
+// Same applies to mockFakeExcalidrawAPI usage: we capture it via dynamic ref
+// (Vitest spec exception: prefixing with `mock` lets module-top consts
+// survive hoisting).
+
+vi.mock("@excalidraw/excalidraw", () => {
+  // Local React import — the hoisted factory runs before the file's top
+  // import binding is initialized.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ReactInner = require("react") as typeof import("react");
+  const MainMenuStub = Object.assign(
     ({ children }: { children?: React.ReactNode }) =>
-      React.createElement(
+      ReactInner.createElement(
+        "div",
+        { "data-testid": "main-menu-stub" },
+        children,
+      ),
+    {
+      Item: ({
+        children,
+        onSelect,
+        ...rest
+      }: {
+        children?: React.ReactNode;
+        onSelect?: (e: Event) => void;
+      } & Record<string, unknown>) =>
+        ReactInner.createElement(
+          "button",
+          {
+            type: "button",
+            ...rest,
+            onClick: () => onSelect?.(new Event("select")),
+          },
+          children,
+        ),
+    },
+  );
+  const SidebarStub = Object.assign(
+    ({ children }: { children?: React.ReactNode }) =>
+      ReactInner.createElement(
         "div",
         { "data-testid": "sidebar-stub" },
         children,
       ),
     {
       Header: ({ children }: { children?: React.ReactNode }) =>
-        React.createElement(
+        ReactInner.createElement(
           "div",
           { "data-testid": "sidebar-header-stub" },
           children,
         ),
     },
-  ),
-}));
+  );
+  return {
+    Excalidraw: ({
+      onExcalidrawAPI,
+      children,
+    }: {
+      onExcalidrawAPI?: (api: unknown) => void;
+      children?: React.ReactNode;
+    }) => {
+      ReactInner.useEffect(() => {
+        onExcalidrawAPI?.(mockFakeExcalidrawAPI);
+      }, [onExcalidrawAPI]);
+      return ReactInner.createElement(
+        "div",
+        { "data-testid": "excalidraw-stub" },
+        children,
+      );
+    },
+    MainMenu: MainMenuStub,
+    Sidebar: SidebarStub,
+  };
+});
 
 const mockMap = {
   addSource: vi.fn(),
@@ -144,54 +180,43 @@ afterEach(() => {
   cleanup();
 });
 
-describe("MapEditor — Layers toggle button (T22)", () => {
-  it("renders with aria-pressed='false' initially", async () => {
+describe("MapEditor — MainMenu Layers item (W-B)", () => {
+  it("renders the Layers panel MainMenu item", async () => {
     const { getByTestId } = render(<MapEditor />);
-    const btn = getByTestId("layers-toggle-button");
-    expect(btn.getAttribute("aria-pressed")).toBe("false");
-    expect(btn.getAttribute("aria-label")).toBe("Toggle layers panel");
+    await waitFor(() => {
+      expect(getByTestId("main-menu-layers")).toBeTruthy();
+    });
   });
 
-  it("clicking the toggle calls excalidrawAPI.toggleSidebar({name:'layers'}) and flips aria-pressed", async () => {
+  it("clicking the Layers item calls excalidrawAPI.toggleSidebar({name:'layers'})", async () => {
     const { getByTestId } = render(<MapEditor />);
-    const btn = getByTestId("layers-toggle-button");
+    const item = await waitFor(() => getByTestId("main-menu-layers"));
 
-    // Wait for the Excalidraw stub's useEffect to wire setExcalidrawAPI so
-    // the onClick handler has a non-null api reference.
+    // Wait for the Excalidraw stub's useEffect to fire setExcalidrawAPI so
+    // the onSelect handler has a non-null api reference.
     await waitFor(() => {
-      // After the effect fires, MapEditor re-renders — give it a tick.
-      expect(btn).toBeTruthy();
+      expect(mockFakeExcalidrawAPI.toggleSidebar).toBeDefined();
     });
 
-    fireEvent.click(btn);
+    fireEvent.click(item);
 
     await waitFor(() => {
-      expect(toggleSidebarSpy).toHaveBeenCalledTimes(1);
+      expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(1);
     });
-    expect(toggleSidebarSpy).toHaveBeenCalledWith({ name: "layers" });
-    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(mockToggleSidebarSpy).toHaveBeenCalledWith({ name: "layers" });
   });
 
-  it("clicking a second time toggles back to aria-pressed='false'", async () => {
+  it("clicking a second time fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
     const { getByTestId } = render(<MapEditor />);
-    const btn = getByTestId("layers-toggle-button");
+    const item = await waitFor(() => getByTestId("main-menu-layers"));
+
+    fireEvent.click(item);
+    fireEvent.click(item);
 
     await waitFor(() => {
-      expect(btn).toBeTruthy();
+      expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(2);
     });
-
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(btn.getAttribute("aria-pressed")).toBe("true");
-    });
-
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(btn.getAttribute("aria-pressed")).toBe("false");
-    });
-
-    expect(toggleSidebarSpy).toHaveBeenCalledTimes(2);
-    expect(toggleSidebarSpy).toHaveBeenNthCalledWith(1, { name: "layers" });
-    expect(toggleSidebarSpy).toHaveBeenNthCalledWith(2, { name: "layers" });
+    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(1, { name: "layers" });
+    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(2, { name: "layers" });
   });
 });

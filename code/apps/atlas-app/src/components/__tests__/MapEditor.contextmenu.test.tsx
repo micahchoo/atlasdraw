@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// T14 — Convert-annotation-to-data-layer integration test for MapEditor.
+// W-C — Convert-to-data-layer right-click context-menu integration test.
 //
-// Verifies: right-click on the root container, given a single selected
-// Excalidraw element with valid GeoCustomData, opens the context menu and
-// the "Convert to data layer" button triggers the full convert pipeline:
-//   1. annotationToFeatureCollection builds a FeatureCollection
-//   2. registry.registerDataLayer is called with a `dl:` id
-//   3. map.addSource + map.addLayer are called with that id
-//   4. excalidrawAPI.updateScene is called to remove the original element
+// History: T14 surfaced Convert via a custom <div role="menu">; W-B
+// pivoted it to a MainMenu.Item; W-C moves it to its proper home —
+// the right-click element context menu — via the atlasdraw fork's
+// new `excalidrawAPI.registerContextMenuItem` API
+// (packages/excalidraw/components/App.tsx).
 //
-// Mocking strategy mirrors MapEditor.drop.test.tsx (basemap stub, useMapRef
-// stub, side-effect hook stubs) but extends the <Excalidraw> stub to invoke
-// onExcalidrawAPI synchronously with a fake imperative API. The fake API
-// returns a scripted single-selection rectangle with bbox geo so the convert
-// path picks it up.
+// We can't drive the real Excalidraw context-menu DOM in unit tests
+// (the `<Excalidraw>` here is a stub). Instead we capture the item
+// MapEditor passes to `registerContextMenuItem` and exercise it
+// directly:
+//   - assert the item registered with name === "atlasConvertToDataLayer".
+//   - invoke `predicate(elements, appState)` with selection fixtures:
+//       single geo polygon  → true
+//       text selection      → false
+//       multi-selection     → false
+//   - invoke `perform(elements, appState)` with the polygon fixture and
+//     assert the same downstream pipeline (registerDataLayer →
+//     map.addSource/addLayer → updateScene) the W-B test exercised.
+//   - assert the unregister fn returned by the API is invoked on unmount.
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, waitFor, cleanup } from "@testing-library/react";
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -41,8 +47,7 @@ vi.mock("@atlasdraw/basemap", () => ({
   })),
 }));
 
-// Fake selected element — a rectangle with valid bbox geo. Mutated per-test
-// when needed (e.g. the text/arrow disabled-state test).
+// Fake selected element — a rectangle with valid bbox geo. Mutated per-test.
 const fakeRectangleEl = {
   id: "anno-1",
   type: "rectangle",
@@ -70,27 +75,104 @@ const updateSceneSpy = vi.fn((opts: { elements?: unknown[] }) => {
   }
 });
 
-const fakeExcalidrawAPI = {
+// Captures the unregister fn the registerContextMenuItem call returns;
+// also captures the registered item itself so tests can drive its
+// predicate/perform directly without rendering the real ContextMenu.
+const registerContextMenuItemUnregister = vi.fn();
+const capturedContextMenuItems: Array<{
+  name: string;
+  label: string;
+  predicate: (elements: unknown, appState: unknown) => boolean;
+  perform: (elements: unknown, appState: unknown) => unknown;
+}> = [];
+
+const registerContextMenuItemSpy = vi.fn((item: {
+  name: string;
+  label: string;
+  predicate: (elements: unknown, appState: unknown) => boolean;
+  perform: (elements: unknown, appState: unknown) => unknown;
+}) => {
+  capturedContextMenuItems.push(item);
+  return registerContextMenuItemUnregister;
+});
+
+// `mock` prefix lets these top-level consts survive Vitest's vi.mock hoisting.
+const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => currentScene,
   getAppState: () => ({ selectedElementIds: currentSelectedIds }),
   updateScene: updateSceneSpy,
+  toggleSidebar: vi.fn(),
+  registerContextMenuItem: registerContextMenuItemSpy,
 };
 
-vi.mock("@excalidraw/excalidraw", () => ({
-  Excalidraw: ({
-    onExcalidrawAPI,
-  }: {
-    onExcalidrawAPI?: (api: unknown) => void;
-  }) => {
-    // Fire the API callback once the component mounts so MapEditor's
-    // setExcalidrawAPI runs and the context menu logic has an API to read.
-    React.useEffect(() => {
-      onExcalidrawAPI?.(fakeExcalidrawAPI);
-    }, [onExcalidrawAPI]);
-    return React.createElement("div", { "data-testid": "excalidraw-stub" });
-  },
-}));
+vi.mock("@excalidraw/excalidraw", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const ReactInner = require("react") as typeof import("react");
+  const MainMenuStub = Object.assign(
+    ({ children }: { children?: React.ReactNode }) =>
+      ReactInner.createElement(
+        "div",
+        { "data-testid": "main-menu-stub" },
+        children,
+      ),
+    {
+      Item: ({
+        children,
+        onSelect,
+        ...rest
+      }: {
+        children?: React.ReactNode;
+        onSelect?: (e: Event) => void;
+      } & Record<string, unknown>) =>
+        ReactInner.createElement(
+          "button",
+          {
+            type: "button",
+            ...rest,
+            onClick: () => onSelect?.(new Event("select")),
+          },
+          children,
+        ),
+    },
+  );
+  const SidebarStub = Object.assign(
+    ({ children }: { children?: React.ReactNode }) =>
+      ReactInner.createElement(
+        "div",
+        { "data-testid": "sidebar-stub" },
+        children,
+      ),
+    {
+      Header: ({ children }: { children?: React.ReactNode }) =>
+        ReactInner.createElement(
+          "div",
+          { "data-testid": "sidebar-header-stub" },
+          children,
+        ),
+    },
+  );
+  return {
+    Excalidraw: ({
+      onExcalidrawAPI,
+      children,
+    }: {
+      onExcalidrawAPI?: (api: unknown) => void;
+      children?: React.ReactNode;
+    }) => {
+      ReactInner.useEffect(() => {
+        onExcalidrawAPI?.(mockFakeExcalidrawAPI);
+      }, [onExcalidrawAPI]);
+      return ReactInner.createElement(
+        "div",
+        { "data-testid": "excalidraw-stub" },
+        children,
+      );
+    },
+    MainMenu: MainMenuStub,
+    Sidebar: SidebarStub,
+  };
+});
 
 const mockMap = {
   addSource: vi.fn(),
@@ -151,46 +233,93 @@ beforeEach(() => {
   useLayerRegistryStore.setState({ entries: [] });
   currentScene = [fakeRectangleEl];
   currentSelectedIds = { "anno-1": true };
+  capturedContextMenuItems.length = 0;
 });
 
-// RTL render() does not auto-cleanup between tests in vitest by default —
-// previous-test DOM stays in document.body and getByTestId throws on
-// "multiple elements found". Manual cleanup() drops it.
 afterEach(() => {
   cleanup();
 });
 
-describe("MapEditor — convert-to-data-layer context menu (T14)", () => {
-  it("right-click on root with single-selected geo element opens the menu", async () => {
-    const { container, queryByTestId } = render(<MapEditor />);
-    const root = container.firstChild as HTMLElement;
+// Helper — wait for MapEditor's registration effect to fire and return
+// the captured item. Throws (via waitFor) if not registered.
+const awaitConvertItem = async () => {
+  await waitFor(() => {
+    expect(
+      capturedContextMenuItems.find(
+        (i) => i.name === "atlasConvertToDataLayer",
+      ),
+    ).toBeTruthy();
+  });
+  const item = capturedContextMenuItems.find(
+    (i) => i.name === "atlasConvertToDataLayer",
+  );
+  if (!item) throw new Error("convert item not registered");
+  return item;
+};
 
-    // contextmenu via fireEvent — provide clientX/Y so the menu position is
-    // well-defined. The handler reads selectedElementIds (1 entry, valid geo)
-    // → menu opens.
-    fireEvent.contextMenu(root, { clientX: 50, clientY: 60 });
-
-    await waitFor(() => {
-      expect(queryByTestId("convert-context-menu")).toBeTruthy();
-    });
+describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)", () => {
+  it("registers the convert item with the expected name + label", async () => {
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
+    expect(item.name).toBe("atlasConvertToDataLayer");
+    expect(item.label).toBe("Convert selection to data layer");
+    expect(typeof item.predicate).toBe("function");
+    expect(typeof item.perform).toBe("function");
   });
 
-  it("clicking 'Convert to data layer' registers + adds map source/layer + removes element", async () => {
+  it("predicate returns true for a single geo polygon selection", async () => {
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
+    const result = item.predicate([fakeRectangleEl], {
+      selectedElementIds: { "anno-1": true },
+    });
+    expect(result).toBe(true);
+  });
+
+  it("predicate returns false for a text selection (non-convertible type)", async () => {
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
+    const textEl = { ...fakeRectangleEl, id: "anno-text", type: "text" };
+    const result = item.predicate([textEl], {
+      selectedElementIds: { "anno-text": true },
+    });
+    expect(result).toBe(false);
+  });
+
+  it("predicate returns false for multi-selection", async () => {
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
+    const result = item.predicate(
+      [fakeRectangleEl, { ...fakeRectangleEl, id: "anno-2" }],
+      { selectedElementIds: { "anno-1": true, "anno-2": true } },
+    );
+    expect(result).toBe(false);
+  });
+
+  it("perform with polygon selection runs the full convert pipeline", async () => {
     const registerSpy = vi.spyOn(
       useLayerRegistryStore.getState(),
       "registerDataLayer",
     );
 
-    const { container, getByTestId } = render(<MapEditor />);
-    const root = container.firstChild as HTMLElement;
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
 
-    fireEvent.contextMenu(root, { clientX: 50, clientY: 60 });
-
+    // Wait for excalidrawAPI wiring to complete (handleConvert reads it).
     await waitFor(() => {
-      expect(getByTestId("convert-context-menu")).toBeTruthy();
+      expect(mockFakeExcalidrawAPI.getSceneElements()).toContain(
+        fakeRectangleEl,
+      );
     });
 
-    fireEvent.click(getByTestId("convert-action-button"));
+    // perform reads selection from currentConvertibleSelection, which
+    // pulls from excalidrawAPI.getAppState/getSceneElements — so module-
+    // level `currentSelectedIds` / `currentScene` drive the gate.
+    const result = item.perform([fakeRectangleEl], {
+      selectedElementIds: { "anno-1": true },
+    });
+    // perform returns false (handleConvert mutates the scene directly).
+    expect(result).toBe(false);
 
     await waitFor(() => {
       expect(registerSpy).toHaveBeenCalledTimes(1);
@@ -204,20 +333,16 @@ describe("MapEditor — convert-to-data-layer context menu (T14)", () => {
     expect(mockMap.addSource).toHaveBeenCalledTimes(1);
     expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
 
-    // updateScene called to drop the original element.
     expect(updateSceneSpy).toHaveBeenCalledTimes(1);
     const sceneArg = updateSceneSpy.mock.calls[0][0];
-    expect(sceneArg.elements).toEqual([]); // we dropped the only one
+    expect(sceneArg.elements).toEqual([]);
   });
 
-  it("multi-selection or no-selection → no menu opens", async () => {
-    currentSelectedIds = { "anno-1": true, "anno-2": true };
-    const { container, queryByTestId } = render(<MapEditor />);
-    const root = container.firstChild as HTMLElement;
-
-    fireEvent.contextMenu(root, { clientX: 10, clientY: 20 });
-
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queryByTestId("convert-context-menu")).toBeNull();
+  it("unmount invokes the unregister fn returned by registerContextMenuItem", async () => {
+    const { unmount } = render(<MapEditor />);
+    await awaitConvertItem();
+    expect(registerContextMenuItemUnregister).not.toHaveBeenCalled();
+    unmount();
+    expect(registerContextMenuItemUnregister).toHaveBeenCalled();
   });
 });
