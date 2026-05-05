@@ -125,6 +125,9 @@ vi.mock("../../hooks/useMapWheelRouter", () => ({
 vi.mock("../../hooks/useGeoAnchor", () => ({
   useGeoAnchor: vi.fn(),
 }));
+vi.mock("../../hooks/useLayerRegistrySync", () => ({
+  useLayerRegistrySync: vi.fn(),
+}));
 vi.mock("../../hooks/useToolState", () => ({
   useToolState: () => ({ isDrawingMode: false }),
 }));

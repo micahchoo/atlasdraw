@@ -37,6 +37,7 @@ import { isGeoCustomData } from "@atlasdraw/geo";
 import { useMapRef } from "../hooks/useMapRef";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
+import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
@@ -126,6 +127,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
   useGeoAnchor(map, excalidrawAPI);
+
+  // W-A — wire LayerRegistry to actual rendering:
+  //   Excalidraw scene-element IDs → registry annotation entries (Bug A)
+  //   registry visibility flips → opacity rewrite (annotation) / setLayoutProperty (data) (Bug B)
+  useLayerRegistrySync(map, excalidrawAPI);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
