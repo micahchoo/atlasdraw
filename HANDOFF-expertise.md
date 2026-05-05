@@ -1,6 +1,6 @@
 # Project Expertise (via Mulch)
 
-## architecture (9 records, updated 58m ago)
+## architecture (9 records, updated 1h ago)
 - [decision] Single-player mode is first-class deployment: WebSocket opt-in via [realtime] enabled=true in config.toml. (mx-a6b4d4)
 - [decision] Hosted flagship by v1.0, no open-core split: Plausible-model: all features in OSS under AGPL. (mx-21c19d)
 - [decision] Phase 1 extended to 4 weeks; all subsequent phases shifted +1: Event routing across stacked canvases (MapLibre + Excalidraw pointerEvents) is a high-churn Excalidr... (mx-9fc72d)
@@ -11,13 +11,13 @@
 - [decision] Zustand+immer for cross-component reactive state; module-singleton for tool-internal state: Wave 2 LayerRegistry decision (user-confirmed Option A): Zustand+immer for LayerRegistry because it ... (mx-5ac6f6)
 - [convention] Data layer IDs use dl:${crypto.randomUUID()} format; mint at call site, NOT inside registry — T11, T... (mx-417b33)
 
-## infrastructure (4 records, updated 58m ago)
+## infrastructure (4 records, updated 1h ago)
 - [convention] vendored fork .git backup: when inlining an upstream fork (option C), move embedded .git via mv to a... (mx-87637c)
 - [convention] GitHub repo creation one-shot: rename master→main BEFORE gh repo create (still local, no remote, ful... (mx-52935c)
 - [convention] anti-pattern detector must be scoped to atlasdraw-owned paths only — running detector across all of ... (mx-3cfa41)
 - [convention] LSP diagnostic noise during background worker writes is ignorable: LSP shows phantom syntax errors a... (mx-04231d)
 
-## meta (20 records, updated 57m ago)
+## meta (20 records, updated 1h ago)
 - [convention] Cross-worker dep additions must serialize, not parallelize — when two parallel workers both add depe... (mx-372bdb)
 - [convention] Serialize auditor after actor — when an actor (builder/demo agent) modifies install state, the audit... (mx-537ae1)
 - [convention] File triage seeds mid-session as findings surface, not deferred to handoff prose — each blocker gets... (mx-a174c9)

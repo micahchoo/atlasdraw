@@ -1,11 +1,11 @@
 # Handoff
 
 ## Goal
-> Continue the prior session: ship Phase 2 Wave 2 (T11–T14) and Wave 3 (T15+T16). User said "do as you recommend" four times across the session. Result: Wave 2 (4 commits) + Wave 3-T15 (1 commit) shipped clean. **T16 benchmark gate deferred** because the Phase 1 baseline + bench/ infrastructure don't exist (filed as atlasdraw-f1fa + atlasdraw-1315). Phase 2 is functionally complete; only the benchmark acceptance gate remains.
+> Continue prior session: ship Phase 2 Wave 2 (T11–T14) + Wave 3 (T15+T16). User said "do as you recommend" / "do all recommended" five times across the session. Result: Phase 2 functional surface complete (T01–T15 shipped), T16 deferred, post-T15 manual-smoke hotfix (drop hijack + convert atomicity) shipped, anti-pattern triage queue cleared via bulk deferral, **Wave 4 hardening sprint scoped and added to the plan** (12 tasks closing 18 deferred seeds).
 
 ## Progress
 
-### 6 commits this session
+### 9 commits this session
 
 | SHA | Wave / Subject |
 |---|---|
@@ -15,177 +15,204 @@
 | `0032385` | Wave 2b-Round2: T14 Convert annotation→data layer |
 | `bec04d9` | state: Wave 2 close + Wave 3 scrub + deferral seeds |
 | `f77162d` | Wave 3-T15: composite PNG export pipeline |
+| `0a527e3` | state: Phase 2 functional ship + Wave 3-T15 + triage deferral |
+| `d121188` | fix: drop hijack + convert atomicity (post-T15 manual smoke fixes) |
+| `35d3765` | docs(phase-2): Wave 4 addendum — Phase 1+2 hardening sprint |
 
 ### Verification at session close
 
-- `yarn workspace @atlasdraw/atlas-app test` → **41/41 PASS** (was 15 at session start)
+- `yarn workspace @atlasdraw/atlas-app test` → **41/41 PASS** (was 15)
 - `yarn workspace @atlasdraw/tools test` → **69/69 PASS** (was 58)
 - `yarn workspace @atlasdraw/geo test` → **50/50 PASS** (was 31)
-- `yarn workspace @atlasdraw/data test` → **6/6 PASS** (regression clean)
-- `yarn build` → **PASS 14.50s**
-- Tree clean, no uncommitted changes.
+- `yarn workspace @atlasdraw/data test` → **6/6 PASS**
+- `yarn build` → **PASS 14.11s**
+- Tree dirty only with one **unrelated** edit on `code/packages/geo/src/CoordinateSync.ts` (uppercase enum casing) — see "Shaky ground" below.
 
-### Wave 2 deliverables (recap)
+### Wave 2 deliverables
 
-- **T11 LayerRegistry impl** — Zustand+immer slice on T01 ILayerRegistry; useLayerRegistry hook.
-- **STYLE-COMPILER** — `compileLayer(id, style, "fill"|"line"|"circle")` + `defaultLayerStyle(fc)` + `LayerStyle` exported from `@atlasdraw/basemap`.
-- **parseGeoCustomData + migrate** — deep parser throws `GeoCustomDataParseError`; migrate identity at v1 with v2+ scaffold. Closes atlasdraw-db43 + atlasdraw-072a.
-- **T12 LayerPanel** — Excalidraw `<Sidebar name="layers" docked>` with two aria-labeled sections.
-- **T13 GeoJSON DnD** — root-div `onDrop`+`onDragOver` → parse → registerDataLayer → addSource + addLayer.
-- **T14 Convert** — right-click context menu on single-selected geo elements; mappings for rectangle/ellipse/polygon/freedraw/line/polyline; throws on text/arrow.
+T11 LayerRegistry impl (Zustand+immer slice on T01 ILayerRegistry); STYLE-COMPILER (compileLayer + defaultLayerStyle + LayerStyle from `@atlasdraw/basemap`); parseGeoCustomData + migrate (closes db43+072a); T12 LayerPanel; T13 GeoJSON DnD; T14 Convert annotation→data layer.
 
 ### Wave 3 deliverables
 
-- **T15 PNG export** (`code/apps/atlas-app/src/lib/export.ts`) — `exportPNG(map, excalidrawAPI, opts?)` composites MapLibre canvas → Excalidraw canvas at 2× CSS-logical resolution. `preserveDrawingBuffer:true` added to MapCanvas.tsx:106. 6 colocated tests.
-- **T16 DEFERRED** — see "What Didn't Work" below.
+T15 PNG export (`code/apps/atlas-app/src/lib/export.ts`); preserveDrawingBuffer added to MapCanvas.tsx:106. T16 deferred to atlasdraw-1315 (blocked-by atlasdraw-f1fa).
 
-### Triage queue cleared
+### Post-T15 manual-smoke hotfix (`d121188`)
 
-- 7 anti-pattern items (silent-catch gateway + 6 blocked) bulk-deferred behind `atlasdraw-d592` (anti-pattern detector unscoped). Each labeled `deferred-on:atlasdraw-d592`. `needs-triage` retained so they stay hidden from `sd ready` until the detector is scoped to atlasdraw packages only.
+User reported (manual browser test):
+1. After GeoJSON drop, existing annotations stop tracking the basemap.
+2. Convert-to-data-layer makes the annotation vanish AND no data layer appears.
+
+Diagnosis + fix:
+1. **Drop hijack**: Excalidraw's `handleAppOnDrop` (App.tsx:2147) lives on a deeper div than MapEditor's outer wrapper. React-bubble drop handlers fire deeper-first, so Excalidraw's `parseDataTransferEvent` consumed `dataTransfer.files` before ours saw it — drop silently no-op'd. Fix: native capture-phase `addEventListener("drop"/"dragover", h, { capture: true })` on rootRef. For `.geojson` files: `preventDefault` + `stopPropagation` so Excalidraw never sees the event. For other types: propagation continues.
+2. **Convert atomicity**: handleConvert ran `registry.registerDataLayer + remove` BEFORE `map.addSource/addLayer`. If addSource/addLayer threw, registry was mutated and updateScene still ran in some paths → annotation deleted, no replacement. Fix: pure-compute → map mutations (with `removeSource` rollback if `addLayer` throws) → registry mutations → `updateScene` last.
+
+### Wave 4 plan addendum (`35d3765`)
+
+`docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md` extended with new section "Wave 4 — Phase 1+2 Hardening (Addendum)" — 250 lines, 12 tasks across 3 sub-waves, closes 18 deferral seeds:
+
+- **Wave 4a (Phase 1 unfinished business):** T17 Task 8 scaleMode override → T18 native auto-anchor extension; T19 bench harness + Phase 1 baseline → T20 Phase 2 acceptance gate; T21 Phase 1 dropped sources.
+- **Wave 4b (Wave 2/3 visible polish + bug):** T22 LayerPanel SidebarTrigger; T23 PNG export UI button; T24 mixed-geometry FC handling (real bug); T25 TextLabelTool inline-editing.
+- **Wave 4c (Hardening + cleanup):** T26 zRef bounds + LayerStyle migration; T27 build/dep quality debt; T28 architectural orphans.
+
+### Wave 2 hardening seeds + triage state
+
+- **Closed**: atlasdraw-db43, atlasdraw-072a (commit b586fce).
+- **Deferred to Wave 4**: atlasdraw-{375a, f1fa, 1315, cdd3, fc04, 02f6, 5193, 0c97, dc84, b733, 8a21, d592} all gain `wave:4` label.
+- **New seeds for Wave 4**: atlasdraw-{7748, ca89, 4142, cf62, 6e9a, cc43} (6 created).
+- **Triage queue cleared** via bulk deferral: 7 anti-pattern items each labeled `deferred-on:atlasdraw-d592` (the underlying detector-scoping fix would unblock all 7).
 
 ## What Worked
 
-- **Pre-dispatch scrub paid off in every wave** — Wave 2 scrub caught 5 blockers (Zustand decision, store.ts absence, style-compiler.ts absence, ImportDialog.tsx drop, T11 file dependency); Wave 3 scrub caught the catastrophic T16 absence (no `bench/`, no baseline, no CI workflow). Convention `mx-e9dc63` validated three times across two waves.
-- **Three-tier dispatch shape held** — Wave 2a-DEPS (1 worker) → Wave 2a-PARALLEL (3 workers, different packages) → Wave 2b-Round1 (2 workers, different files) → Wave 2b-Round2 (1 worker, serial after T13) → Wave 3-T15 (1 worker). 8 worker dispatches, 8 successful returns. Zero cross-worker conflicts.
-- **Advisor caught T11-as-import-blocker pattern** — first scrub draft assumed plan's "fully parallel" claim. Saved a wave of broken typechecks.
-- **Worker briefs pinned verified literals** — workers consumed verbatim, no re-grep, no drift across 8 dispatches.
-- **`yarn workspace add` chained immediately with bare `yarn install`** per Wave 1 [SNAG]. No rebuilds wasted.
-- **excalidraw-api.md rule satisfied four times** — T12 grep-verified `<Sidebar>` at index.tsx:342; T14 grep-verified `getSceneElements`/`getAppState`/`updateScene`/`selectedElementIds` at types.ts; T15 grep-verified `exportToCanvas` is top-level (NOT on ImperativeAPI), corrected plan literal accordingly; T15 grep-verified `getFiles` at types.ts:952.
-- **Module-singleton convention correctly NOT applied** to LayerRegistry — recognized cross-component shared reactive state as different problem class. Picked Zustand+immer; recorded `mx-5ac6f6`.
-- **Triage gateway insight** — `atlasdraw-1745` (silent-catch) is the gateway blocking 6 other anti-pattern issues; deferring it cascades. Layered `deferred-on` label is cleaner than closing-then-reopening when detector gets scoped.
+- **Pre-dispatch scrub paid off three times** — Wave 2 scrub caught 5 blockers, Wave 3 scrub caught the catastrophic T16 absence (no `bench/` infra), and even the **Wave 4 plan addendum's own path drift was caught and corrected before commit** (mx-e9dc63 lesson is recursive).
+- **Wave shape held under pressure**: Wave 2a-DEPS (1 worker) → Wave 2a-PARALLEL (3 workers) → Wave 2b-Round1 (2 workers) → Wave 2b-Round2 (1 worker) → Wave 3-T15 (1 worker). 8 dispatches, 8 successful returns, zero cross-worker conflicts.
+- **Manual smoke testing exposed real bugs that mocks missed**: Excalidraw's drop hijack + convert atomicity were both invisible to vitest. The `[eval: regression-clean]` checkpoint can be expanded to require browser smoke before declaring "Wave shipped."
+- **Capture-phase listener pattern** is the canonical fix for "Excalidraw eats my events" — should be reusable for any future event we want to handle BEFORE Excalidraw.
+- **Convert-flow atomicity ordering** (pure-compute → map mutations with rollback → registry → scene-mutation last) generalizes to any multi-system-mutation flow.
+- **Triage bulk-deferral via `deferred-on:<seed>` label** beat per-item decisions for 7 anti-pattern findings — keeps `needs-triage` for hidden-from-ready, but adds traceability + auto-unhide path when detector lands.
+- **Wave 4 absorption pattern**: deferred work from Phase 1 (Task 8, baseline, dropped sources) merged with Phase 2 polish into a single hardening sprint instead of fragmenting across phases. Avoids "leftover work tax" repeating itself.
 
 ## What Didn't Work / [SNAG]
 
-- **[STRUCTURAL] T16 benchmark gate cannot dispatch** — `bench/` directory does not exist. `bench/results/phase-1-baseline.json` does not exist. `.github/workflows/` does not exist. Phase 1 was supposed to land the baseline; it didn't. Filed atlasdraw-f1fa (high; bench harness + Phase 1 baseline) and atlasdraw-1315 (high; gate run, blocked-by f1fa). Wave 3-T15 ships solo; Phase 2 functionally complete pending gate.
-- **[SNAG] vitest `globals: false` defeats RTL automatic cleanup** — surfaced in T12 (LayerPanel) AND T14 (MapEditor.contextmenu). Two-workspace pattern. Recorded `mx-af40b4`. Fix: explicit `afterEach(cleanup)` in any RTL+vitest test file.
-- **[SNAG] `@atlasdraw/data` barrel was Phase 0 stub even after Wave 1b T10 shipped** — T13 was first cross-package consumer; surfaced and fixed in Wave 2b Round 1. Convention recorded: barrel-export-as-stub signals scaffold-era omissions.
-- **[SNAG] jsdom 22 has no OffscreenCanvas / convertToBlob** — T15 export.test.ts had to `vi.stubGlobal("OffscreenCanvas", …)` and stub `convertToBlob`. Production browsers unaffected.
-- **Plan-literal drift, this session** (recorded `mx-619182`):
-  1. T11: `store.ts` referenced as MODIFY but didn't exist.
-  2. T13: `ImportDialog.tsx` referenced as MODIFY but didn't exist (dropped per scrub).
-  3. T14: `customData.radiusKm` actually at `customData._data.radiusKm` (escape-hatch in seedToElement.ts:131).
-  4. T14: `registry.convertAnnotationToDataLayer + map.addSource(id)` with same id was incoherent (registry mints id internally); pivoted to T13's pattern.
-  5. T15: `excalidrawAPI.exportToCanvas(...)` not on ImperativeAPI in v0.18; pivoted to top-level `import { exportToCanvas } from "@excalidraw/excalidraw"`.
-  6. T15: `preserveDrawingBuffer` plan said modify MapEditor.tsx but `new maplibregl.Map(...)` lives in `code/packages/basemap/src/MapCanvas.tsx`.
-  7. T15: `apps/atlas-app/lib/` directory didn't exist; created under `code/apps/atlas-app/src/lib/`.
-- **LSP phantom errors at `useAtlasdrawTool.ts:313+`** — never resolved across 8 worker dispatches. Confirmed phantom: builds + tests green throughout. Wave 1 [SNAG] convention vindicated repeatedly.
+- **[STRUCTURAL] T16 benchmark gate cannot dispatch as-written** — `bench/` directory absent, Phase 1 baseline never measured. Filed atlasdraw-f1fa (high; bench harness) + atlasdraw-1315 (high; gate run, blocked-by f1fa). Wave 3 shipped T15 only.
+- **[SNAG] Excalidraw drop hijack masked T13 entirely** — vitest tests passed because they fired `fireEvent.drop` on the bubble path; real browser routes drop through Excalidraw's deeper handler first. Capture-phase listener is the fix; documented in `d121188` commit body.
+- **[SNAG] Convert atomicity** — registry mutation ran before risky map calls; partial state on failure. Fixed in `d121188` with reorder + `removeSource` rollback.
+- **[SNAG] vitest globals:false defeats RTL automatic cleanup** — surfaced in T12 + T14, recorded `mx-af40b4`. Wave 4 T28 covers systematic remediation.
+- **[SNAG] @atlasdraw/data barrel was Phase 0 stub even after Wave 1b T10 shipped** — T13 first cross-package consumer; surfaced and fixed in Wave 2b Round 1.
+- **[SNAG] jsdom 22 has no OffscreenCanvas/convertToBlob** — T15 stub'd them. Production browsers unaffected.
+- **Plan-literal drift** (recorded `mx-619182`):
+  1. T11: `store.ts` MODIFY-but-absent.
+  2. T13: `ImportDialog.tsx` MODIFY-but-absent (dropped per scrub).
+  3. T14: `customData.radiusKm` actually at `customData._data.radiusKm`.
+  4. T14: `registry.convertAnnotationToDataLayer + map.addSource(id)` with same id incoherent (registry mints id internally).
+  5. T15: `excalidrawAPI.exportToCanvas(...)` not on ImperativeAPI; pivoted to top-level import.
+  6. T15: `preserveDrawingBuffer` location wrong (MapCanvas.tsx not MapEditor.tsx).
+  7. T15: `apps/atlas-app/lib/` directory didn't exist.
+  8. **Wave 4 addendum**: T17/T18 paths under `apps/atlas-app/src/services/` but CoordinateSync lives in `code/packages/geo/src/`. Caught at commit prep.
+- **LSP phantom errors at `useAtlasdrawTool.ts:313+`** — fired throughout 8 worker dispatches. Phantom; build + tests are truth (Wave 1 [SNAG] vindicated).
 
 ## Key Decisions
 
-- **OQ-W2-1 Zustand+immer** for cross-component shared reactive state (LayerRegistry). Module-singleton stays the convention for tool-internal state. (`mx-5ac6f6`).
-- **OQ-W2-2 ImportDialog dropped** — drop handler in MapEditor covers critical path; programmatic-trigger button deferred.
-- **OQ-W2-3 Hardening seeds** db43+072a IN, 02f6+cdd3 OUT.
-- **OQ-W2-4 T13+T14 serialized** on MapEditor.tsx (both modify same file).
-- **OQ-W3-1 T16 deferred (Option B)** — Wave 3 ships T15 only. Filed atlasdraw-f1fa + atlasdraw-1315 for the deferred work. Phase 2 acceptance gate is its own seed now, not part of this wave.
-- **OQ-W3-2 exportToCanvas is top-level import** — NOT a method on ImperativeAPI in v0.18.
-- **OQ-W3-3 OffscreenCanvas mocked** in T15 tests (jsdom doesn't ship it).
-- **`dl:` prefix mint at call site, NOT inside registry** — T11/T13/T14 all coordinate via `dl:${crypto.randomUUID()}` minted by caller (`mx-417b33`).
-- **Triage bulk-deferral** — all 7 anti-pattern items labeled `deferred-on:atlasdraw-d592` instead of being individually decided. Detector scope fix unblocks them all.
+- **OQ-W2-1 Zustand+immer** for cross-component shared reactive state (`mx-5ac6f6`).
+- **OQ-W2-2 ImportDialog dropped** — drop handler covers critical path.
+- **OQ-W2-3 Hardening seeds**: db43+072a IN, 02f6+cdd3 OUT-of-Wave-2 (later folded into Wave 4).
+- **OQ-W2-4 T13+T14 serialized** on MapEditor.tsx.
+- **OQ-W3-1 T16 deferred (Option B)** — Wave 3 ships T15 only.
+- **OQ-W3-2 exportToCanvas is top-level import**, NOT method on ImperativeAPI.
+- **OQ-W3-3 OffscreenCanvas mocked** in T15 tests.
+- **OQ-W4-0 Wave 4 absorbs Phase 1+2 hardening into single sprint** instead of fragmenting.
+- **`dl:` prefix mint at call site** (`mx-417b33`).
+- **Triage bulk-deferral** via `deferred-on:atlasdraw-d592` label.
+- **Drop hijack fix is capture-phase + selective stopPropagation**, NOT bubble-phase — match the depth-first event flow Excalidraw expects.
+- **Convert atomicity order** = pure-compute → map mutations (with rollback) → registry → scene mutation last.
 
 ## Trajectory
 
-**How we got here:** User invoked check-handoff at session open against the prior Wave 1 ship handoff. Recommended path (a) (Wave 2 dispatch with detour to triage db43/072a). User confirmed "do as you recommend" four times across the session — first to fold hardening seeds + pick Zustand + drop ImportDialog, second to actually execute (Wave 2 ship), third for Wave 3 deferral (Option B), fourth for triage bulk-deferral. Wave 2a-DEPS shipped first (zustand@5.0.13 + immer@11.1.6, husky postinstall non-blocking). Wave 2a-PARALLEL dispatched 3 workers across different packages — all returned in 2-5 min with passing tests. Wave 2b-Round1 dispatched T12+T13 in parallel; T13 incidentally fixed `@atlasdraw/data`'s Phase-0 barrel stub. Wave 2b-Round2 ran T14 alone (it modified MapEditor which T13 had also modified — serial necessary). T14 caught two plan-literal drifts (radiusKm at `_data`, registry-id-coordination flaw). Bundled state commit (handoff + Wave 3 scrub + 2 new seeds) at bec04d9. Wave 3-T15 ran solo against the corrected scrub-doc literals. record-extractor dispatched in background after T14; appended 7 records across 3 mulch domains. Triage cleared 7 anti-pattern items via deferral label. Final HANDOFF + sidecar regenerated.
+**How we got here:** Session started with a /clear + /check-handoff against the prior Wave 1 ship handoff. Recommended path (a) (Wave 2 dispatch with detour for db43/072a triage). User confirmed "do as you recommend" / "do all recommended" five times — first to fold hardening seeds + pick Zustand + drop ImportDialog, second to actually execute (Wave 2 ship), third for Wave 3 T16 deferral (Option B), fourth for triage bulk-deferral, fifth for Wave 4 plan addendum. Wave 2 ship was clean (4 commits). T15 ship was clean (1 commit). Then user manually browser-smoked and reported two real bugs (drop hijack + convert vanish). Fixed both in d121188. User then audited deferred items, triggered Wave 4 addendum scoping. Plan now has explicit closure path for Phase 1+2 leftovers.
 
 **Hard calls:**
-- **Picking Zustand over module-singleton** — Wave 1's emergent convention was strong but the wrong shape for cross-component state.
-- **Deferring T16 instead of fabricating baseline** — Option C (synthetic numbers) was on the table; rejected as bad-faith engineering.
-- **NOT migrating atlas-app's inline `LayerStyle`** — would have collided with T11 in Wave 2a; deferred to a follow-up to keep the wave atomic.
-- **Triage by label vs by close** — could have closed the 7 anti-pattern items as `outcome:rework`; chose label-deferral so they re-surface naturally when detector is scoped.
-- **Skipping a second record-extractor pass** — small delta after the first run (only T15 + triage); skipped to avoid duplicate-record churn.
+- **Picking Zustand over module-singleton** — Wave 1's emergent convention strong but wrong shape for this problem class.
+- **Deferring T16 instead of synthetic baseline** — Option C (fake numbers) explicitly rejected as bad-faith.
+- **Wave 4 as ONE sprint vs splitting across phases** — splitting would have left Phase 1 leftovers permanently floating; absorbing forces canonical close.
+- **Capture-phase listener vs other drop-hijack fixes** — could have re-parented MapEditor to wrap Excalidraw differently, or used Excalidraw's own onDrop hook (if v0.18 exposes one). Capture-phase chosen as least-invasive + cleanest separation of concerns.
+- **Letting Excalidraw still handle non-.geojson drops** — could have stopPropagation on ALL drops. Chose selective so png/svg/library drops still work (better UX).
+- **Filing 6 NEW seeds for Wave 4** — could have hand-tracked them in the plan only. Filed seeds because they need `sd ready` visibility once Wave 4 dispatches.
 
 **Shaky ground:**
-- **LayerPanel `<Sidebar>` invisible to user** without a SidebarTrigger. Tests mock the Sidebar; real Sidebar short-circuits to null unless `appState.openSidebar?.name === "layers"`. Wave 2 ships the component; opening-it UX is a follow-up (probably <30 min).
-- **`map.addLayer(compileLayer(id, style, geometryType))` not regression-tested in browser** — tests mock addLayer; if MapLibre's actual paint props don't match `compileLayer`'s output, silent black layers. Recommend Playwright sanity check before declaring Phase 2 fully validated.
-- **`convertAnnotationToDataLayer` registry method now never called by atlas-app code** — T14 pivoted to `registerDataLayer + remove` directly. Interface method is dead code at consumer level. Decide later: delete or keep for symmetry.
-- **lng/lat domain bounds NOT enforced by `parseGeoCustomData`** — only finiteness. zRef has no min/max. atlasdraw-02f6 (deferred) covers this.
-- **T15 export untested in browser** — vitest mocks OffscreenCanvas + exportToCanvas; if real MapLibre canvas doesn't drawImage cleanly into OffscreenCanvas (e.g., taint issues, CORS-backed tiles), export silently fails. Should ship with a manual smoke test before declaring complete.
+- **An unrelated dirty diff** is sitting in working tree on `code/packages/geo/src/CoordinateSync.ts` — uppercase enum casing change (`"never"` → `"NEVER"`, etc., x2 occurrences). NOT mine; possibly editor auto-format or a hook. Build + tests still pass. Decide whether to keep or revert before Wave 4 dispatch touches that file.
+- **LayerPanel `<Sidebar>` invisible to user** without SidebarTrigger — Wave 4 T22 fixes it. Browser smoke gated on this.
+- **T15 export untested in real browser** — vitest mocks OffscreenCanvas + exportToCanvas. Tainted-canvas (CORS basemap tiles) is the highest silent-fail risk. Wave 4 T23 + manual smoke catches it.
+- **Mixed-geometry GeoJSON FCs render only `features[0]`'s geometry style** — real bug, no regression yet because no user has tested mixed FCs. Wave 4 T24 fixes.
+- **`convertAnnotationToDataLayer` registry method is dead code** — T14 pivoted away. Wave 4 T28 decides delete vs refactor.
+- **Capture-phase listener test coverage** — `fireEvent.drop` works on capture-phase listeners (verified by tests still passing), but real-browser drop event flow may have edge cases not exercised.
 
 **Invisible context:**
-- This session's mulch records lean architecture-heavy (3 of 7 from extractor + similar pattern in Wave 3) because Wave 2/3 introduced state-management + export-pipeline decisions.
-- `crypto.randomUUID()` used throughout requires secure-context (HTTPS or localhost). Vite dev server uses localhost so dev-time fine.
-- Excalidraw v0.18's `<Sidebar>` lifecycle: must be mounted as a child of `<Excalidraw>` to be hooked up; ours isn't. Hooking it up is the SidebarTrigger follow-up.
-- MapLibre's `preserveDrawingBuffer:true` has a small perf cost (browser keeps the framebuffer around). Acceptable for the export use case; Phase 2 perf gate (T16 deferred) will measure.
+- **Excalidraw `handleAppOnDrop` lives at `code/packages/excalidraw/components/App.tsx:2147,11872`** — useful breadcrumb for any future event-handling conflicts.
+- **Real Sidebar in v0.18 short-circuits to null** unless `appState.openSidebar?.name === "layers"` — Wave 4 T22 is more than just a button, it requires plumbing the appState.
+- **`crypto.randomUUID()` requires secure context** — works on localhost dev but production HTTP would break. Note for Phase 4 self-host wave.
+- **MapLibre `preserveDrawingBuffer:true` has small perf cost** (browser keeps framebuffer); T20 (Phase 2 perf gate) will measure.
+- **The Wave 4 plan addendum's existence is a meta-signal** that this codebase has accumulated technical debt at a rate roughly equal to feature velocity — worth surfacing in retros.
 
 ## Active Skills & Routing
 
 - `check-handoff` (session entry).
-- `dispatching-parallel-agents` (Wave 2a 3 + Wave 2b-Round1 2 + Wave 3-T15 1 workers).
+- `triage` (bulk-deferred 7 anti-pattern items mid-session).
+- `dispatching-parallel-agents` (8 worker dispatches across the session).
 - `executing-plans` (implicit — Wave 2a → Wave 2b-Round1 → Wave 2b-Round2 → Wave 3-T15).
 - `verification-before-completion` (yarn build + workspace tests before each commit).
-- `record-extractor` (foreground retro after Wave 2 ship; agentId `a0f9cf2894880f219`, completed).
-- `triage` (bulk-deferred 7 anti-pattern items).
-- `handoff` (current — second invocation this session).
+- `record-extractor` (foreground retro at Wave 2 close; agentId `a0f9cf2894880f219`, completed; not re-dispatched after the hotfix + Wave 4 plan).
+- `systematic-debugging` (post-T15 hotfix root cause).
+- `handoff` (current — third invocation this session).
 
 **Skills NOT invoked this session that should be next:**
-- `/dream detect-gaps` — 1407 uncategorized failures (was 1407 at session start; growing).
-- `/dream integrate` — cross-project memories.
-- `executing-plans` (eventually: bench harness + Phase 2 gate).
+- `/dream detect-gaps` (1407 uncategorized failures; growing).
+- `/dream integrate` (cross-project memories).
+- `executing-plans` (Wave 4 dispatch; needs pre-dispatch scrub first per `mx-e9dc63`).
 
 ## Pending routing for next session
 
-1. **Phase 2 declaring complete** — Phase 2 functional surface is done. Decide: declare Phase 2 done & start Phase 3 (`atlasdraw-25a5` File Format `.atlasdraw`) OR finish the benchmark gate first (atlasdraw-f1fa + atlasdraw-1315).
-2. **High-priority polish** (≤30 min each, all reduce next-session risk):
-   - Wire `<LayerPanel />` as a child of `<Excalidraw>` in MapEditor.tsx + add a sidebar-toggle button. Currently the panel is invisible.
-   - Migrate atlas-app's inline `LayerStyle` to `import { type LayerStyle } from "@atlasdraw/basemap"` (closes atlasdraw-fc04).
-   - Add `afterEach(cleanup)` to atlas-app + tools test files (mx-af40b4 prevention).
-   - Manual browser smoke test of GeoJSON drop → render → convert → export pipeline (Playwright or by hand).
-3. **Bench harness phase** (multi-session, blocks Phase 2 ship gate):
-   - atlasdraw-f1fa: build code/bench/ harness + run Phase 1 scenario + write phase-1-baseline.json.
-   - atlasdraw-1315: re-run with Phase 2 scenario + ci-gate.ts + .github/workflows/ci.yml.
-4. **Anti-pattern detector scoping** (atlasdraw-d592) — unblocks the 7 deferred triage items.
-5. **Skipped this session that may merit attention**:
-   - `/dream detect-gaps` queue.
-   - Push to a remote (currently local-only per `mx-8afd1a`).
+1. **Decide Wave 4 dispatch shape** — single multi-week sprint or split into 4a/4b/4c independent commits. Wave 4 plan addendum recommends parallel-where-possible.
+2. **Pre-dispatch scrub for Wave 4** — mandatory per `mx-e9dc63`. Plan addendum literals will drift within 24h. Use `wave3-pre-dispatch-scrub-2026-05-04.md` as template.
+3. **Decide on the unrelated CoordinateSync.ts diff** — stage or revert before any Wave 4 work touches it.
+4. **Manual browser smoke test of fixed pipeline** — drop GeoJSON → see features → existing annotations still geopin → right-click polygon → Convert → see data layer. The d121188 hotfix needs in-browser verification.
+5. **Recommend re-running record-extractor for the post-Wave-2 commits** — d121188 + 35d3765 weren't covered by the prior retro. New mulch-worthy patterns: drop hijack capture-phase fix, convert atomicity reorder, Wave 4 absorption pattern.
+6. **Optional housekeeping**:
+   - `/dream detect-gaps` (1407+ uncategorized).
+   - SidebarTrigger 30-min UX win (Wave 4 T22).
+   - Push to remote (currently local-only per `mx-8afd1a`; no push this session).
 
 ## Infrastructure Delta
 
-- **NEW** (committed, Wave 2 + Wave 3-T15): 12 source files + 6 test files + 2 scrub docs. Specifically: layerRegistry impl + useLayerRegistry hook, basemap style.ts + style-compiler.ts, geo parseGeoCustomData (+ test), tools convert (+ test), atlas-app LayerPanel.tsx + 3 test files, atlas-app lib/export.ts (+ test), Wave 2 + Wave 3 scrub decision docs.
-- **MODIFIED**: layerRegistry.ts (Zustand augmentation), MapEditor.tsx (drop + context menu wiring), MapCanvas.tsx (preserveDrawingBuffer), basemap/geo/tools/data/index.ts barrels, atlas-app package.json (zustand+immer), yarn.lock.
-- **NEW seeds**: atlasdraw-f1fa (P1 bench harness), atlasdraw-1315 (P1 acceptance gate, blocked-by f1fa).
+- **NEW** (committed): 12 source files + 7 test files + 3 docs (Wave 2 + 3 scrub docs + Wave 4 addendum). All under `code/apps/atlas-app/src/`, `code/packages/{tools,geo,data,basemap}/src/`, `docs/decisions/`, `docs/superpowers/plans/`.
+- **MODIFIED** (committed): layerRegistry.ts, MapEditor.tsx (drop + context menu + capture-phase + atomicity), MapCanvas.tsx (preserveDrawingBuffer), basemap/geo/tools/data/index.ts barrels, atlas-app package.json (zustand+immer), yarn.lock.
+- **NEW seeds**: atlasdraw-{f1fa, 1315, 7748, ca89, 4142, cf62, 6e9a, cc43} (8 total).
 - **CLOSED seeds**: atlasdraw-db43, atlasdraw-072a.
-- **RE-LABELED**: atlasdraw-fc04 → `partial-followup`; 7 anti-pattern items → `deferred-on:atlasdraw-d592`.
-- **NEW mulch records** (committed in bec04d9 from background extractor): 7 across architecture/infrastructure/meta domains.
-- **NO**: hooks, plugin overrides, settings.json edits, no Phase 3+ work.
+- **RE-LABELED**: 12 seeds gain `wave:4`; atlasdraw-fc04 → `partial-followup`; 7 anti-pattern items → `deferred-on:atlasdraw-d592`.
+- **NEW mulch records** (commit bec04d9): 7 from background extractor across architecture/infrastructure/meta. Post-Wave-2 commits (d121188, 35d3765) not yet extracted.
+- **NO**: hooks, plugin overrides, settings.json edits.
 
 ## Knowledge State
 
-- **Indexed**: foxhound has Phase 1 + Wave 0 + Wave 1; Wave 2 + Wave 3-T15 commits not yet reindexed.
+- **Indexed**: foxhound has Phase 1 + Wave 0 + Wave 1; Wave 2 + Wave 3-T15 + d121188 + 35d3765 not yet reindexed.
 - **Productive tiers**: Read+Edit+Write absolute paths, 8 parallel/serial Agent dispatches (general-purpose subagent_type), Bash for git/yarn/sd, advisor for scrub validation, record-extractor for retro.
 - **Gaps**:
-  - atlasdraw-8a21: Cross-workspace tsc still broken (rootDir noise).
-  - atlasdraw-fc04: PARTIAL — LayerStyle now exported from `@atlasdraw/basemap`; atlas-app inline copy migration deferred.
-  - atlasdraw-d592: Anti-pattern detector unscoped; blocking 7 triage items.
-  - atlasdraw-0c97: Husky postinstall expects code/.git (still non-blocking).
-  - atlasdraw-dc84: atlas-app tsconfig paths:{} clobber.
-  - atlasdraw-b733: atlas-app missing vitest devDep (hoisting fragile).
-  - atlasdraw-5193: T06 TextLabelTool inline-editing UX deferred.
-  - atlasdraw-02f6: zRef bounds at CoordinateSync (deferred Wave 2 hardening).
-  - atlasdraw-cdd3: Phase 1 dropped sources.
-  - **atlasdraw-f1fa**: NEW — bench harness + Phase 1 baseline establishment.
-  - **atlasdraw-1315**: NEW — Phase 2 acceptance gate (blocked-by f1fa).
+  - atlasdraw-8a21: cross-workspace tsc broken (Wave 4 T27).
+  - atlasdraw-fc04: PARTIAL — basemap LayerStyle exported; atlas-app inline copy migration deferred (Wave 4 T26).
+  - atlasdraw-d592: anti-pattern detector unscoped; blocks 7 triage items (Wave 4 task NOT — scope decision orthogonal).
+  - atlasdraw-0c97: husky postinstall (Wave 4 T27).
+  - atlasdraw-dc84: paths:{} clobber (Wave 4 T27).
+  - atlasdraw-b733: vitest devDep hoisting (Wave 4 T27).
+  - atlasdraw-5193: TextLabelTool inline-editing (Wave 4 T25).
+  - atlasdraw-02f6: zRef bounds (Wave 4 T26).
+  - atlasdraw-cdd3: Phase 1 dropped sources (Wave 4 T21).
+  - atlasdraw-375a: Task 8 scaleMode override (Wave 4 T17).
+  - **atlasdraw-f1fa**: bench harness + Phase 1 baseline (Wave 4 T19).
+  - **atlasdraw-1315**: Phase 2 acceptance gate (Wave 4 T20).
+  - 6 new Wave 4 seeds (7748, ca89, 4142, cf62, 6e9a, cc43) covered by Wave 4 T22-T28.
 
 ## Context Files
 
 Read these first if you're a fresh agent:
 
 1. `HANDOFF.md` (this file) — current state.
-2. `HANDOFF-expertise.md` — `ml prime` of architecture + infrastructure + meta domains (84+ records).
-3. **`docs/decisions/wave3-pre-dispatch-scrub-2026-05-04.md`** — canonical example of catching a STRUCTURAL blocker (T16 baseline absence). Use as template if a future wave/phase has similar infrastructure gaps.
-4. `docs/decisions/wave2-pre-dispatch-scrub-2026-05-04.md` — Wave 2 scrub for comparison.
-5. `docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md` lines **1078–1146** — T16 task definition (deferred this session).
-6. `code/apps/atlas-app/src/components/MapEditor.tsx` — single-file home of drop + context-menu + atlas-tool overlay; all Wave 2/3 wiring lives here.
-7. `code/apps/atlas-app/src/lib/export.ts` — Wave 3-T15 PNG export reference; future export surfaces (PDF, SVG, etc.) should mirror the composition pattern.
-8. `code/packages/basemap/src/MapCanvas.tsx:106` — `preserveDrawingBuffer:true` line; T15 prerequisite.
-9. `code/apps/atlas-app/src/state/layerRegistry.ts` — full Zustand store + ILayerRegistry impl.
+2. `HANDOFF-expertise.md` — `ml prime` of architecture + infrastructure + meta domains.
+3. **`docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md`** lines **1354–1603** — Wave 4 addendum (12 tasks closing 18 seeds).
+4. `docs/decisions/wave3-pre-dispatch-scrub-2026-05-04.md` — Wave 3 scrub (T16 deferral rationale).
+5. `docs/decisions/wave2-pre-dispatch-scrub-2026-05-04.md` — Wave 2 scrub (template for Wave 4).
+6. `code/apps/atlas-app/src/components/MapEditor.tsx` — single-file home of capture-phase drop + onContextMenu + atlas-tool overlay; ALL Wave 2/3 visible UX wiring lives here.
+7. `code/apps/atlas-app/src/state/layerRegistry.ts` — full Zustand+immer store + ILayerRegistry impl.
+8. `code/apps/atlas-app/src/lib/export.ts` — Wave 3-T15 PNG export reference.
+9. Commit `d121188` body — drop hijack + convert atomicity diagnosis (capture-phase pattern + atomicity reorder principle worth re-using).
 
 ## ⚠️ Critical reminders for next session
 
-- **Phase 2 is functionally complete BUT acceptance gate (T16) is deferred** — don't declare Phase 2 "done" without surfacing this caveat. atlasdraw-3a5b (parent) stays open until f1fa+1315 resolve.
-- **Plan literals continue to drift** — pre-dispatch scrub MANDATORY for any future wave (`mx-e9dc63`).
+- **Phase 2 functionally complete BUT acceptance gate (T16) is deferred** — atlasdraw-3a5b (Phase 2 parent) stays open until Wave 4-T20 lands.
+- **Wave 4 plan literals will drift within 24h** — pre-dispatch scrub MANDATORY per `mx-e9dc63`. Even MY OWN plan addendum had path drift caught at commit prep.
+- **Unrelated CoordinateSync.ts diff in working tree** — uppercase enum casing, not mine. Decide before Wave 4-T17 touches that file (T17 modifies `code/packages/geo/src/CoordinateSync.ts`).
+- **Drop hijack capture-phase pattern** — re-usable for any event Excalidraw eats first. Documented in `d121188` body.
+- **Convert atomicity ordering** — pure-compute → map (with rollback) → registry → scene-mutation last. Apply to any multi-system flow.
+- **Manual browser smoke is the only way to catch UI bugs** — vitest mocks `<Sidebar>`, `OffscreenCanvas`, `map.addSource`/`addLayer`, `exportToCanvas`. The d121188 bugs were invisible to tests. Wave 4 T22+T23 ship visible UX surfaces; smoke after each.
 - **`yarn workspace add` is hoist-hostile** — chain bare `yarn install` after.
-- **LSP diagnostics during background workers are unreliable** — phantom errors at non-existent line numbers. Source of truth: build + tests + git status.
-- **vitest `globals: false` + RTL needs explicit `afterEach(cleanup)`** — apply to any new RTL test file (mx-af40b4).
-- **`<LayerPanel />` is unrendered** — Wave 2 ships the component but the user never sees it without SidebarTrigger wiring. Easy 30-min follow-up.
-- **T15 export untested in real browser** — recommend a manual or Playwright smoke test before declaring Phase 2 functional.
-- **sd CLI flag inconsistency** — `sd create` uses `--labels` (plural, comma-separated); `sd list` uses `--label` (singular, repeatable). Don't confuse.
-- **All work is local-only** — no remote push this session, per `mx-8afd1a`. Confirm with maintainer before pushing.
+- **LSP diagnostics during background workers are unreliable** — phantom errors at non-existent lines. Source of truth: build + tests.
+- **vitest `globals: false` + RTL needs explicit `afterEach(cleanup)`** — Wave 4 T28 systematizes.
+- **sd CLI flag inconsistency**: `sd create` uses `--labels` (plural, comma-separated); `sd list` uses `--label` (singular). `sd block <id> --by <blocker-id>`. Don't confuse.
+- **All work is local-only** — no remote push this session, per `mx-8afd1a`.
