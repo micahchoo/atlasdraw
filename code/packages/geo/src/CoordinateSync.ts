@@ -47,7 +47,7 @@ export interface ExcalidrawAPI {
   getSceneElements(): ReadonlyArray<ExcalidrawElementLike>;
   updateScene(opts: {
     elements: ReadonlyArray<ExcalidrawElementLike>;
-    captureUpdate: "never" | "immediately" | "eventually";
+    captureUpdate: "NEVER" | "IMMEDIATELY" | "EVENTUALLY";
   }): void;
 }
 
@@ -126,7 +126,7 @@ export class CoordinateSync {
     );
     this._excalidrawAPI.updateScene({
       elements: projected,
-      captureUpdate: "never",
+      captureUpdate: "NEVER",
     });
   }
 
