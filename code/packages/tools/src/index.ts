@@ -10,3 +10,9 @@ export { TextLabelTool } from "./TextLabelTool.js"; // T06
 export { ArrowTool } from "./ArrowTool.js";       // T07
 export { RectangleTool } from "./RectangleTool.js"; // T08
 export { CircleTool } from "./CircleTool.js";     // T09
+// Phase 2 Wave 2b additions:
+export {
+  annotationToFeatureCollection,
+  UnsupportedConvertElementError,
+  type ConvertibleElement,
+} from "./convert.js"; // T14

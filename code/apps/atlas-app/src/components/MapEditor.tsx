@@ -27,7 +27,13 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
-import { PinTool } from "@atlasdraw/tools";
+import {
+  PinTool,
+  annotationToFeatureCollection,
+  UnsupportedConvertElementError,
+  type ConvertibleElement,
+} from "@atlasdraw/tools";
+import { isGeoCustomData } from "@atlasdraw/geo";
 import { useMapRef } from "../hooks/useMapRef";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
@@ -172,12 +178,85 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [map, registry],
   );
 
+  // T14 — Convert annotation → data layer via right-click context menu.
+  //
+  // Single-selection only: shows "Convert to data layer" when the selected
+  // Excalidraw element carries valid GeoCustomData. text/arrow elements still
+  // surface the menu but with a disabled button (per scrub §7 — explain why
+  // not all annotations are convertible). On click: build the FC via
+  // annotationToFeatureCollection, register it as a data layer, render via
+  // MapLibre, and remove the original element from the Excalidraw scene.
+  //
+  // Why we don't call registry.convertAnnotationToDataLayer here: that method
+  // mints its own dl:<uuid> internally and uses DEFAULT_CONVERTED_STYLE, but
+  // returns nothing — we'd have no id to coordinate with map.addSource/
+  // addLayer. Instead we mirror T13's drop pattern: generate the id at the
+  // call site, registerDataLayer with the fc/style we built, then remove the
+  // annotation entry. Same end state, with id ownership at the call site.
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    element: ConvertibleElement;
+  } | null>(null);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!excalidrawAPI) return;
+      const appState = excalidrawAPI.getAppState();
+      const ids = Object.keys(appState.selectedElementIds ?? {});
+      if (ids.length !== 1) return;
+      const elements = excalidrawAPI.getSceneElements();
+      const el = elements.find((x) => x.id === ids[0]);
+      if (!el || !isGeoCustomData(el.customData)) return;
+      e.preventDefault();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        element: {
+          id: el.id,
+          type: el.type,
+          customData: el.customData as ConvertibleElement["customData"],
+        },
+      });
+    },
+    [excalidrawAPI],
+  );
+
+  const handleConvert = useCallback(() => {
+    if (!contextMenu || !map || !excalidrawAPI) return;
+    const el = contextMenu.element;
+    setContextMenu(null);
+    try {
+      const fc = annotationToFeatureCollection(el);
+      const id = `dl:${crypto.randomUUID()}`;
+      const style = defaultLayerStyle(fc);
+      const geometryType = inferGeometryType(fc);
+      // Mirror T13 drop flow: registry + MapLibre source/layer with shared id.
+      registry.registerDataLayer({ id, fc, label: el.id, style });
+      registry.remove(el.id); // drop the old annotation entry (if any)
+      map.addSource(id, { type: "geojson", data: fc });
+      map.addLayer(compileLayer(id, style, geometryType));
+      // Remove the original element from the Excalidraw scene.
+      const remaining = excalidrawAPI
+        .getSceneElements()
+        .filter((x) => x.id !== el.id);
+      excalidrawAPI.updateScene({ elements: remaining });
+    } catch (err) {
+      if (err instanceof UnsupportedConvertElementError) {
+        window.alert(err.message);
+        return;
+      }
+      throw err;
+    }
+  }, [contextMenu, map, registry, excalidrawAPI]);
+
   return (
     <div
       ref={rootRef}
       className={styles.root}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
+      onContextMenu={handleContextMenu}
     >
       {/* Bottom layer: MapLibre GL map */}
       <div className={styles.mapLayer}>
@@ -249,6 +328,48 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       >
         Pin
       </button>
+
+      {/* T14 — Right-click convert-to-data-layer context menu. Position is
+          fixed to the click viewport coordinates. onMouseLeave dismisses
+          (matches OS-native context-menu behavior). text/arrow elements
+          surface the menu but disable the action with an explanatory title
+          tooltip. */}
+      {contextMenu && (
+        <div
+          role="menu"
+          data-testid="convert-context-menu"
+          style={{
+            position: "fixed",
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 100,
+            background: "#fff",
+            border: "1px solid #ccc",
+            padding: 4,
+          }}
+          onMouseLeave={() => setContextMenu(null)}
+        >
+          {contextMenu.element.type === "text" ||
+          contextMenu.element.type === "arrow" ? (
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              title="Text and arrow annotations cannot be converted to data layers"
+            >
+              Convert to data layer (unavailable)
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="convert-action-button"
+              onClick={handleConvert}
+            >
+              Convert to data layer
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
