@@ -400,7 +400,7 @@ qgis-plugin/                    # sibling project, outside monorepo root
 
 **Orient:** Builds the `/submit/:layerToken` React route — a mobile-first form for non-editors to drop a point with photo, title, and notes.
 **Flow position:** Step 3 of K in Field Collection flow (submit handler → **SubmitView** → offline queue)
-**Skill:** `test-driven-development`
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing SubmitForm. This is a standalone mobile route (correct new surface — not the main editor). Use atlas color tokens and button patterns. Mobile-first: touch targets ≥ 44px, no hover-only states. Check data-testid on all inputs and submit button.
 **Codebooks:** `Codebooks: input-device-adaptation`, `Codebooks: optimistic-ui-vs-data-consistency`
 
 **Files:**
@@ -544,7 +544,7 @@ qgis-plugin/                    # sibling project, outside monorepo root
 
 **Orient:** Implements install/uninstall/enable/disable lifecycle — including SHA-256 integrity verification of the plugin Worker bundle at install time — and the editor-side UI so users can manage plugins from within the app.
 **Flow position:** Step 2 of K in Plugin API flow (SDK surface → **registry + integrity + UI** → permission dialog)
-**Skill:** `test-driven-development`
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing PluginManagerPanel. This is a Sidebar tab (existing surface). The "Install from folder" button and enable/disable toggles follow atlas button pattern. Permission dialog is a modal (correct — distinct confirmation flow). Check aria-pressed on toggles, data-testid on all interactive elements, color tokens.
 **Tech:** Uses `@stablelib/sha256` (declared in tech stack header) for bundle integrity hashing. Hash is computed over the Worker entry `Uint8Array` at install time and stored in IndexedDB alongside the manifest. At enable time the bundle is re-hashed and compared; mismatch aborts startup with `PluginIntegrityError`.
 
 <contracts>
@@ -1043,7 +1043,7 @@ qgis-plugin/                    # sibling project, outside monorepo root
 
 **Orient:** Builds the horizontal timeline slider and named-snapshot save dialog that let users navigate version history from within the editor. The timeline is the primary entry point to all versioning features; a user who never opens it should experience zero performance impact (it mounts lazily and loads snapshot metadata only when opened).
 **Flow position:** Step 1 of K in Versioning UI flow (snapshot store → **timeline UI** → diff viewer)
-**Skill:** `test-driven-development`
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing VersionTimeline and SnapshotNameDialog. Timeline bar wires into the editor's bottom panel slot (existing surface — not a new floating strip). SnapshotNameDialog is a modal (correct — distinct confirmation flow). Check color tokens, aria-current on active dot, data-testid on all interactive elements, button pattern for "Save snapshot".
 **Codebooks:** `Codebooks: undo-under-distributed-state`
 
 <contracts>

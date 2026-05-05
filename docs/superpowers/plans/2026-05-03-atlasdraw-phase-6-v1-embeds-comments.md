@@ -676,7 +676,7 @@ Note: Task 5 is in Wave 1 but serially depends on Task 4b. Start Task 5 only aft
 **Flow position:** Step 2 of 2 in comments flow (yjs-doc → **UI**)
 **Upstream contract:** `useComments.ts` hook subscribing to the comments Y.Doc from Task 6
 **Downstream contract:** `CommentThread[]` displayed in panel + `CommentAnchor` pins rendered via MapLibre markers
-**Skill:** `test-driven-development`
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing CommentsPanel, CommentAnchor, CommentComposer. CommentsPanel is a Sidebar tab (existing surface — do not create a new floating panel). CommentAnchor is a MapLibre marker overlay at z-index 5. CommentComposer input must use the isolation wrapper pattern. Check button pattern, data-testid, aria labels.
 
 `Codebooks: text-editing-mode-isolation` — space/enter keys in `CommentComposer` must not trigger map tool actions. Mount the composer in a `<div onKeyDown={e => e.stopPropagation()}>` wrapper.
 `Codebooks: focus-management-across-boundaries` — opening the comment panel must move focus to the first unresolved thread; closing must return focus to the annotation that was clicked.
@@ -722,7 +722,7 @@ Note: Task 5 is in Wave 1 but serially depends on Task 4b. Start Task 5 only aft
 **Flow position:** Step 1 of 1 in maputnik flow (**iframe-bridge**)
 **Upstream contract:** MapLibre style object from `packages/basemap`
 **Downstream contract:** Updated style committed to `.atlasdraw` `style.json` file
-**Skill:** `adversarial-api-testing`
+**Skill:** `adversarial-api-testing` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing MaputnikModal. This is a modal (correct — distinct embedded-app workflow). The trigger button slots into the existing toolbar (not a new floating element). Modal must be transparent to atlas layer stack; z-index above context menus (>100). Check button pattern, focus trap, data-testid.
 
 `Codebooks: focus-management-across-boundaries` — the Maputnik iframe is a full separate document. Tab must be trapped inside the modal while it is open. Escape key must close the modal and return focus to the map canvas.
 
@@ -1072,7 +1072,7 @@ Wave 2 tasks start once Wave 1 completes. They depend on LayerStyle (Task 2), ge
 **Flow position:** Step 2 of 2 in asset-library flow (library-reader → **fixtures + UI**)
 **Upstream contract:** `parseLibraryFile()` and `getBuiltInLibraries()` from Task 14a; `AtlasdrawAPI.addAnnotation()` from Task 1
 **Downstream contract:** User can browse libraries in sidebar and click to insert an annotation element
-**Skill:** `test-driven-development`
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing AssetLibraryPanel. This is a Sidebar tab (existing surface). Library item tiles follow icon button pattern (square, 2rem, inline SVG). Check color tokens, data-testid on items and insert buttons, aria labels on icon-only tiles.
 
 **Files:**
 - Create: `packages/data/fixtures/libraries/wildfire-icons.excalidrawlib`

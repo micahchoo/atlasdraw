@@ -446,7 +446,7 @@ packages/cli/
 
 **Orient:** Wire `PersistenceStore` into the Zustand store so the editor auto-saves on state change and the "Save" / "Open" toolbar buttons call the FSA paths — this is the last step that makes persistence visible to the user.
 **Flow position:** Step 2 of 2 in Persistence flow (persistence.ts → **store.ts wiring** → toolbar buttons)
-**Skill:** `none`
+**Skill:** `atlasdraw-ui-conventions` — invoke before adding Save/Open buttons and the isDirty indicator to `Toolbar.tsx`. Buttons slot into the existing toolbar surface (not a new panel). Check button pattern, text size, aria labels, data-testid.
 **Codebooks:** `optimistic-ui-vs-data-consistency`
 **Files:**
 - Modify: `apps/atlas-app/state/store.ts`

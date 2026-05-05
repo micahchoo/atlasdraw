@@ -497,7 +497,7 @@ docs/
 
 **Codebooks: cache-coherence** — The Share button must check `useAutosave().isDraining` before snapshotting. If draining, show a "Saving…" spinner and retry after drain completes. Publishing a stale in-flight buffer is the primary failure mode.
 
-**Skill:** `none`
+**Skill:** `atlasdraw-ui-conventions` — invoke before building `ShareDialog.tsx`. This is a modal (new standalone surface) — correct because it's a distinct multi-step flow. Check color tokens, button pattern (primary filled for "Copy link", default for cancel), text sizing, aria labels, data-testid on all interactive elements.
 **Files:**
 - Create: `apps/atlas-app/hooks/useShareLink.ts`
 - Create: `apps/atlas-app/components/ShareDialog.tsx`
@@ -738,7 +738,7 @@ docs/
 **Flow position:** Standalone UI task, no data flow dependency.
 **Upstream contract:** Reads `app version` from `package.json` (injected via Vite define). Links to `ADR-0006-telemetry.md`.
 **Downstream contract:** Displayed via Help menu or `?` button in toolbar.
-**Skill:** `none`
+**Skill:** `atlasdraw-ui-conventions` — invoke before building `AboutDialog.tsx`. Modal is correct (distinct informational surface). The trigger "?" button slots into the existing toolbar (not a new floating element). Check button pattern, color tokens, data-testid.
 **Files:**
 - Create: `apps/atlas-app/components/AboutDialog.tsx`
 - Create: `apps/atlas-app/components/AboutDialog.test.tsx`
