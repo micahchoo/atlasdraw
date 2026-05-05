@@ -81,6 +81,18 @@ vi.mock("@excalidraw/excalidraw", () => ({
         onSelect?: (e: Event) => void;
       } & Record<string, unknown>) =>
         React.createElement("button", { type: "button", ...rest }, children),
+      Separator: () => null,
+      DefaultItems: {
+        LoadScene: () => null,
+        SaveToActiveFile: () => null,
+        Export: () => null,
+        SaveAsImage: () => null,
+        SearchMenu: () => null,
+        Help: () => null,
+        ClearCanvas: () => null,
+        ChangeCanvasBackground: () => null,
+        ToggleTheme: () => null,
+      },
     },
   ),
   Sidebar: Object.assign(

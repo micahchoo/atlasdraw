@@ -394,17 +394,24 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               MainMenu "Layers panel" item below. */}
           <LayerPanel />
 
-          {/* W-B — Atlasdraw MainMenu items. Replaces 3 free-floating
-              surfaces (Pin button, Layers toggle, Export PNG button) with
-              proper Excalidraw v0.18 slots. (Convert moved to the right-
-              click element context menu via excalidrawAPI.registerContext-
-              MenuItem — see useEffect below.) MainMenu.Item is
-              DropdownMenuItem under the hood
-              (packages/excalidraw/components/dropdownMenu/DropdownMenuItem.tsx)
-              — props: onSelect (event: Event) => void, icon, shortcut,
-              data-testid. The hamburger trigger lives in the default
-              Excalidraw UI (top-left); these items render inside it. */}
+          {/* MainMenu — passing <MainMenu> as a child of <Excalidraw>
+              REPLACES the default menu via tunnel (MainMenu.tsx:30 +
+              LayerUI.tsx:109-126). To preserve Excalidraw's hardwon
+              menu, we render its DefaultItems alongside our atlas
+              additions. Order mirrors LayerUI's default with atlas
+              items inserted into logical groups. */}
           <MainMenu>
+            <MainMenu.DefaultItems.LoadScene />
+            <MainMenu.DefaultItems.SaveToActiveFile />
+            <MainMenu.DefaultItems.Export />
+            <MainMenu.DefaultItems.SaveAsImage />
+            <MainMenu.Item
+              onSelect={handleExportPNG}
+              data-testid="main-menu-export-png"
+            >
+              Export composite PNG (with basemap)
+            </MainMenu.Item>
+            <MainMenu.Separator />
             <MainMenu.Item
               onSelect={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
               data-testid="main-menu-pin"
@@ -420,12 +427,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               Layers panel
             </MainMenu.Item>
-            <MainMenu.Item
-              onSelect={handleExportPNG}
-              data-testid="main-menu-export-png"
-            >
-              Export composite PNG
-            </MainMenu.Item>
+            <MainMenu.Separator />
+            <MainMenu.DefaultItems.SearchMenu />
+            <MainMenu.DefaultItems.Help />
+            <MainMenu.DefaultItems.ClearCanvas />
+            <MainMenu.DefaultItems.ChangeCanvasBackground />
+            <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
         </Excalidraw>
       </div>

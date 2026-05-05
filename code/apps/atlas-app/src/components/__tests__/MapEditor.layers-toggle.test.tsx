@@ -77,6 +77,18 @@ vi.mock("@excalidraw/excalidraw", () => {
           },
           children,
         ),
+      Separator: () => null,
+      DefaultItems: {
+        LoadScene: () => null,
+        SaveToActiveFile: () => null,
+        Export: () => null,
+        SaveAsImage: () => null,
+        SearchMenu: () => null,
+        Help: () => null,
+        ClearCanvas: () => null,
+        ChangeCanvasBackground: () => null,
+        ToggleTheme: () => null,
+      },
     },
   );
   const SidebarStub = Object.assign(
