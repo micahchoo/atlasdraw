@@ -18,11 +18,14 @@
  *                builds the DOM stack; tasks 12+13 wire the dynamic behaviour.
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MapCanvas } from "@atlasdraw/basemap";
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
+import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
+import { parse, GeoJSONParseError } from "@atlasdraw/data";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
 import { PinTool } from "@atlasdraw/tools";
 import { useMapRef } from "../hooks/useMapRef";
@@ -31,7 +34,22 @@ import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
+import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import styles from "../styles/MapEditor.module.css";
+
+/**
+ * Pick a MapLibre layer kind for the FeatureCollection's first feature.
+ * Wave 2b stays simple: one geometry kind per dropped file. Mixed-geometry
+ * collections (Phase 5) will need split-by-type rendering. Points fall back
+ * to "circle"; unknown/empty falls back to "circle" too (renders nothing
+ * harmlessly).
+ */
+function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
+  const t = fc.features[0]?.geometry?.type;
+  if (t === "Polygon" || t === "MultiPolygon") return "fill";
+  if (t === "LineString" || t === "MultiLineString") return "line";
+  return "circle";
+}
 
 // Module-scoped so the Excalidraw mount sees a stable identity. Excalidraw
 // reads initialData once on mount; passing a fresh literal each render is
@@ -114,8 +132,53 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
+  // T13 — GeoJSON drag-and-drop import. Drop handler attaches to the root
+  // div (NOT the Excalidraw layer; Excalidraw owns its own pointer/drop
+  // events). dragover.preventDefault() is mandatory — without it the browser
+  // refuses to fire `drop`.
+  const registry = useLayerRegistry();
+  const handleDragOver = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+    },
+    [],
+  );
+  const handleDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const file = e.dataTransfer?.files?.[0];
+      if (!file || !file.name.endsWith(".geojson")) return;
+      if (!map) return;
+      try {
+        // parse() accepts a Blob; File extends Blob, so we pass it directly.
+        const fc = await parse(file);
+        const id = `dl:${crypto.randomUUID()}`;
+        const style = defaultLayerStyle(fc);
+        const geometryType = inferGeometryType(fc);
+        registry.registerDataLayer({ id, fc, label: file.name, style });
+        map.addSource(id, { type: "geojson", data: fc });
+        map.addLayer(compileLayer(id, style, geometryType));
+      } catch (err) {
+        if (err instanceof GeoJSONParseError) {
+          // v1 UX — console + alert. Toast/dialog deferred (scrub §3.3).
+          // eslint-disable-next-line no-console
+          console.error("[MapEditor] GeoJSON parse failed:", err.message);
+          window.alert(`GeoJSON parse failed: ${err.message}`);
+          return;
+        }
+        throw err;
+      }
+    },
+    [map, registry],
+  );
+
   return (
-    <div ref={rootRef} className={styles.root}>
+    <div
+      ref={rootRef}
+      className={styles.root}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* Bottom layer: MapLibre GL map */}
       <div className={styles.mapLayer}>
         <MapCanvas

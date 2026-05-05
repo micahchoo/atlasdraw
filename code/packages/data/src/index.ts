@@ -1,5 +1,9 @@
-// @atlasdraw/data — Phase 0 stub.
-// Real exports land in Phase 2 per docs/superpowers/plans/.
-// See ../../docs/architecture/subsystems/data/ for the predicted shape.
+// @atlasdraw/data — barrel.
+//
+// Phase 2 Wave 1b T10 implemented the GeoJSON parser in ./geojson; Wave 2b
+// T13 (MapEditor drop import) is the first consumer that imports from the
+// package root, so the barrel re-export is added here. Future format
+// adapters (KML/GPX/CSV) will follow the same pattern — re-export their
+// parser entry point through this file rather than from a deep path.
 
-export const __PHASE_0_STUB__ = true;
+export { parse, GeoJSONParseError } from "./geojson";
