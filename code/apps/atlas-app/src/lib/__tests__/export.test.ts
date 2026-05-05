@@ -73,18 +73,28 @@ function makeMap(opts: {
   };
 }
 
-function makeExcalidrawAPI() {
+function makeExcalidrawAPI(
+  appStateOverrides: Record<string, unknown> = {},
+) {
   // exportToCanvas mock returns this; tests use it to identify the
   // second drawImage argument.
   const fakeExcalidrawCanvas = { __isExcalidrawCanvas: true };
   exportToCanvasMock.mockResolvedValue(fakeExcalidrawCanvas);
+  const appState = {
+    viewBackgroundColor: "#fff",
+    scrollX: 0,
+    scrollY: 0,
+    zoom: { value: 1 as const },
+    ...appStateOverrides,
+  };
   return {
     api: {
       getSceneElements: () => [{ id: "el-1" }],
-      getAppState: () => ({ viewBackgroundColor: "#fff" }),
+      getAppState: () => appState,
       getFiles: () => ({}),
     } as unknown as import("@excalidraw/excalidraw").ExcalidrawImperativeAPI,
     fakeExcalidrawCanvas,
+    appState,
   };
 }
 
@@ -187,6 +197,34 @@ describe("exportPNG", () => {
     // be physical * scale, a 4x logical-resolution bug).
     expect(lastOffscreen!.width).toBe(1600);
     expect(lastOffscreen!.height).toBe(1200);
+  });
+
+  it("passes live viewport (scroll + zoom) to exportToCanvas", async () => {
+    const { exportPNG } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api, appState } = makeExcalidrawAPI({
+      scrollX: 123,
+      scrollY: -45,
+      zoom: { value: 1.5 as const },
+    });
+
+    await exportPNG(map, api);
+
+    const opts = exportToCanvasMock.mock.calls[0][0] as {
+      viewport?: { scrollX: number; scrollY: number; zoom: { value: number }; width: number; height: number };
+    };
+    expect(opts.viewport).toMatchObject({
+      width: 800,
+      height: 600,
+      scrollX: appState.scrollX,
+      scrollY: appState.scrollY,
+      zoom: appState.zoom,
+    });
   });
 
   it("throws a clear error when the 2D context is unavailable", async () => {

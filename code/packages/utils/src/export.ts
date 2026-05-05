@@ -35,6 +35,13 @@ type ExportOpts = {
     width: number,
     height: number,
   ) => { width: number; height: number; scale?: number };
+  viewport?: {
+    width: number;
+    height: number;
+    scrollX: number;
+    scrollY: number;
+    zoom: AppState["zoom"];
+  };
 };
 
 export const exportToCanvas = ({
@@ -45,6 +52,7 @@ export const exportToCanvas = ({
   getDimensions,
   exportPadding,
   exportingFrame,
+  viewport,
 }: ExportOpts & {
   exportPadding?: number;
 }) => {
@@ -58,7 +66,7 @@ export const exportToCanvas = ({
     restoredElements,
     { ...restoredAppState, offsetTop: 0, offsetLeft: 0, width: 0, height: 0 },
     files || {},
-    { exportBackground, exportPadding, viewBackgroundColor, exportingFrame },
+    { exportBackground, exportPadding, viewBackgroundColor, exportingFrame, viewport },
     (width: number, height: number) => {
       const canvas = document.createElement("canvas");
 

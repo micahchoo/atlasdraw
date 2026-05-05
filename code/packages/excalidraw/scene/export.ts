@@ -182,11 +182,21 @@ export const exportToCanvas = async (
     exportPadding = DEFAULT_EXPORT_PADDING,
     viewBackgroundColor,
     exportingFrame,
+    viewport,
   }: {
     exportBackground: boolean;
     exportPadding?: number;
     viewBackgroundColor: string;
     exportingFrame?: ExcalidrawFrameLikeElement | null;
+    // When provided, render the live viewport instead of the element bounding
+    // box. Fixes composite-export scale mismatch (atlas-app exportPNG).
+    viewport?: {
+      width: number;
+      height: number;
+      scrollX: number;
+      scrollY: number;
+      zoom: AppState["zoom"];
+    };
   },
   createCanvas: (
     width: number,
@@ -225,14 +235,31 @@ export const exportToCanvas = async (
     exportPadding = 0;
   }
 
-  const [minX, minY, width, height] = getCanvasSize(
-    exportingFrame ? [exportingFrame] : getRootElements(elementsForRender),
-    exportPadding,
-  );
+  let canvasWidth: number;
+  let canvasHeight: number;
+  let exportScrollX: number;
+  let exportScrollY: number;
+  let exportZoom: AppState["zoom"];
 
-  const { canvas, scale = 1 } = createCanvas(width, height);
+  if (viewport) {
+    canvasWidth = viewport.width;
+    canvasHeight = viewport.height;
+    exportScrollX = viewport.scrollX;
+    exportScrollY = viewport.scrollY;
+    exportZoom = viewport.zoom;
+  } else {
+    const [minX, minY, w, h] = getCanvasSize(
+      exportingFrame ? [exportingFrame] : getRootElements(elementsForRender),
+      exportPadding,
+    );
+    canvasWidth = w;
+    canvasHeight = h;
+    exportScrollX = -minX + exportPadding;
+    exportScrollY = -minY + exportPadding;
+    exportZoom = getDefaultAppState().zoom;
+  }
 
-  const defaultAppState = getDefaultAppState();
+  const { canvas, scale = 1 } = createCanvas(canvasWidth, canvasHeight);
 
   const { imageCache } = await updateImageCache({
     imageCache: new Map(),
@@ -257,9 +284,9 @@ export const exportToCanvas = async (
       ...appState,
       frameRendering,
       viewBackgroundColor: exportBackground ? viewBackgroundColor : null,
-      scrollX: -minX + exportPadding,
-      scrollY: -minY + exportPadding,
-      zoom: defaultAppState.zoom,
+      scrollX: exportScrollX,
+      scrollY: exportScrollY,
+      zoom: exportZoom,
       shouldCacheIgnoreZoom: false,
       theme: appState.exportWithDarkMode ? THEME.DARK : THEME.LIGHT,
     },

@@ -35,13 +35,20 @@ export async function exportPNG(
   // Layer 1: MapLibre (basemap + data layers).
   ctx.drawImage(mapCanvas, 0, 0, width, height);
 
-  // Layer 2: Excalidraw annotations (transparent background so layer 1
-  // shows through). `exportBackground: false` is read off the merged
-  // appState by the package-level exportToCanvas wrapper.
+  // Layer 2: Excalidraw annotations rendered at the live viewport so
+  // zoom/scroll match the map layer exactly.
+  const appState = excalidrawAPI.getAppState();
   const excalidrawCanvas = await exportToCanvas({
     elements: excalidrawAPI.getSceneElements(),
-    appState: { ...excalidrawAPI.getAppState(), exportBackground: false },
+    appState: { ...appState, exportBackground: false },
     files: excalidrawAPI.getFiles(),
+    viewport: {
+      width,
+      height,
+      scrollX: appState.scrollX,
+      scrollY: appState.scrollY,
+      zoom: appState.zoom,
+    },
   });
   ctx.drawImage(excalidrawCanvas, 0, 0, width, height);
 
