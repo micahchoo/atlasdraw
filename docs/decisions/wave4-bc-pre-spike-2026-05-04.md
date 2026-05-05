@@ -166,6 +166,24 @@ Acceptance: each fix verified by running the relevant command (typecheck, instal
 
 ---
 
+### T29/T30/T31 — Rule-0 retrofit [NEW; tracks atlasdraw-4ad2]
+
+**Closes:** `atlasdraw-4ad2` (UI conventions retrofit; filed during 4b/4c prep audit). **Three independent migrations.**
+
+The atlasdraw-ui-conventions skill audit (post-609896f) caught 3 Rule-0 ("Slot First, Create Never") violations in pre-conventions code. v0.18 already exposes the right slots; existing code created custom surfaces instead.
+
+| Task | Migration | Slot API | Files |
+|---|---|---|---|
+| **T29** | Pin button → Excalidraw toolbar | `<Excalidraw renderTopLeftUI={() => <PinButton/>}>` (verified `code/packages/excalidraw/index.tsx:73,183`). Caveat: button placement vs event dispatch are SEPARATE seams per `mx-682f8a` — button can render via renderTopLeftUI while click logic still toggles `activeAtlasTool` and useAtlasdrawTool overlay still owns pointer dispatch. Also: add `font-weight: 600` per conventions. | MapEditor.tsx, MapEditor.module.css |
+| **T30** | Convert action → Excalidraw element-context-menu | `excalidrawAPI.registerAction(action)` (verified `types.ts:955`; `ContextMenuItems` shape at `types.ts:57,276`). Eliminates ~30 lines of custom menu div + the `onContextMenu` root handler (smaller surface for drop-hijack-style bugs like d121188). | MapEditor.tsx (DELETE custom menu + onContextMenu) |
+| **T31** | LayerPanel.tsx CSS-module migration | Create `code/apps/atlas-app/src/styles/LayerPanel.module.css`. Migrate 15+ inline `style={{}}` instances. Resolve 6 invented color tokens (#eee, #dbeafe/#1e3a8a, #888, #fef3c7/#92400e) against conventions table — likely needs to extend the table with documented data-layer + annotation badge color pairs. Add `data-testid` to 4 missing buttons. | LayerPanel.tsx, LayerPanel.module.css (NEW) |
+
+**Sequencing:** T29 + T30 both modify MapEditor.tsx — **serialize** per Wave 2 OQ-W2-4 lesson. T31 independent.
+
+**Acceptance:** `atlasdraw-ui-conventions` skill audit produces zero findings on Pin, Convert, LayerPanel. Atlas-app tests still pass. Manual browser smoke confirms visual integration (Pin in toolbar, Convert in native context menu, LayerPanel visually unchanged).
+
+---
+
 ### T28 — Architectural orphans [CLEANUP, three decisions]
 
 **Closes:** `atlasdraw-6e9a`, `atlasdraw-cc43`, `atlasdraw-cf62`. **Wait until after T24** if T24 reshapes `compileLayer` (resolves `cc43` indirectly).
