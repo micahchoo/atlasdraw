@@ -280,3 +280,243 @@ describe("CoordinateSync.syncMapToScene — polyline anchor (Task 7)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// atlasdraw-76b2 — polyline width/height projection (was: stale at create-zoom
+// → Excalidraw clipped/misplaced rendered shape when zoomed in past zRef).
+//
+// Hypothesis A fix: `_projectElement` polyline branch now derives width/height
+// from the projected-points bbox on every projection, in all 3 scaleMode arms.
+// ---------------------------------------------------------------------------
+describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)", () => {
+  it("polyline + geographic — width/height computed from projected points bbox at creation zoom", () => {
+    // 3-point line at zoom 12 (== zRef). Projected: x=20, 50, 80 → relative
+    // offsets 0, 30, -30. width = max-min = 60. All ys equal → height clamps to 1.
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 50, y: 50 }],
+      [[1, 0], { x: 80, y: 50 }],
+      [[-1, 0], { x: 20, y: 50 }],
+    ]);
+    const map = makeMap(project);
+    map.getZoom.mockReturnValue(12); // == zRef → factor = 1
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-create",
+      x: 0,
+      y: 0,
+      width: 999, // stale value to prove we OVERWROTE it
+      height: 999,
+      points: [],
+      customData: polylineThreePoint,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0].width).toBe(60);
+    expect(passed[0].height).toBe(1); // clamped from 0
+  });
+
+  it("polyline + geographic — width/height grow ~4× when zoomed in 2 levels (factor = 4)", () => {
+    // At zoom 14 (delta +2), Mercator projects same lng/lat ~4× farther apart
+    // in pixels. We model the post-projection coords directly: 0→200, 1→320,
+    // -1→80 (4× creation span). Width = 320-80 = 240 = 4× the 60 at creation.
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 200, y: 200 }],
+      [[1, 0], { x: 320, y: 200 }],
+      [[-1, 0], { x: 80, y: 200 }],
+    ]);
+    const map = makeMap(project);
+    map.getZoom.mockReturnValue(14); // delta +2 → factor = 4
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-zin",
+      x: 0,
+      y: 0,
+      points: [],
+      customData: polylineThreePoint,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0].width).toBe(240); // 4× the 60 from creation zoom
+    expect(passed[0].height).toBe(1);
+    // Sanity: x/y match the projected first coord.
+    expect(passed[0]).toMatchObject({ x: 200, y: 200 });
+  });
+
+  it("polyline + geographic — width/height shrink ~1/4× when zoomed out 2 levels", () => {
+    // At zoom 10 (delta -2), Mercator projects same lng/lat ~1/4× as far apart.
+    // Modeled: 0→50, 1→57.5, -1→42.5. Width = 15 = 1/4× the 60 at creation.
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 50, y: 50 }],
+      [[1, 0], { x: 57.5, y: 50 }],
+      [[-1, 0], { x: 42.5, y: 50 }],
+    ]);
+    const map = makeMap(project);
+    map.getZoom.mockReturnValue(10); // delta -2 → factor = 0.25
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-zout",
+      x: 0,
+      y: 0,
+      points: [],
+      customData: polylineThreePoint,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0].width).toBe(15); // 1/4× the 60 from creation zoom
+    expect(passed[0].height).toBe(1);
+  });
+
+  it("polyline + hybrid — width/height plateau at 4× creation past +2 zoom delta (clamp holds)", () => {
+    // zRef=12, currentZoom=16 → factor = 16. Hybrid clamps to MAX=4.
+    // Polyline impl scales offsets by `clamp(factor)/factor = 4/16 = 0.25`.
+    // Projected pixel span at zoom 16 is 16× creation (= 16 * 60 = 960).
+    // After multiplying offsets by 0.25, on-screen width = 960 * 0.25 = 240.
+    // That's exactly 4× the creation width of 60 — the clamp ceiling.
+    const polylineHybrid: GeoCustomData = {
+      geo: { kind: "polyline", coordinates: [[0, 0], [1, 0], [-1, 0]], zRef: 12 },
+      scaleMode: "hybrid",
+      projection: "mercator",
+      schemaVersion: 1,
+    };
+    // At zoom 16, 1deg-of-lng projects 16× the creation pixel span.
+    // Origin at 1000; +1deg → +480px (16 * 30); -1deg → -480px.
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 1000, y: 1000 }],
+      [[1, 0], { x: 1480, y: 1000 }],
+      [[-1, 0], { x: 520, y: 1000 }],
+    ]);
+    const map = makeMap(project);
+    map.getZoom.mockReturnValue(16); // delta +4 → factor=16, clamps to 4
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-hclamp",
+      x: 0,
+      y: 0,
+      points: [],
+      customData: polylineHybrid,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    // Plateaued at 4× the creation width of 60 = 240, regardless of zoom delta.
+    expect(passed[0].width).toBeCloseTo(240, 5);
+    expect(passed[0].height).toBe(1);
+  });
+
+  it("polyline + screen — width/height match the stored screen-space points bbox", () => {
+    // screen mode preserves stored el.points unchanged. Width/height derive
+    // from THAT bbox, not from re-projected coordinates.
+    const polylineScreen: GeoCustomData = {
+      geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
+      scaleMode: "screen",
+      projection: "mercator",
+      schemaVersion: 1,
+    };
+    // First coord is the only one projected (for x/y origin). Stored points
+    // describe the screen-space shape: 0..40 wide, 0..25 tall.
+    const project = makeProjectByLngLat([[[0, 0], { x: 200, y: 300 }]]);
+    const map = makeMap(project);
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-screen",
+      x: 0,
+      y: 0,
+      width: 999,
+      height: 999,
+      points: [
+        [0, 0],
+        [40, 25],
+      ],
+      customData: polylineScreen,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0]).toMatchObject({
+      id: "l-screen",
+      x: 200,
+      y: 300,
+      width: 40, // stored-points bbox width
+      height: 25, // stored-points bbox height
+    });
+  });
+
+  it("polyline + screen — width/height clamped to >= 1 for zero-extent stored points", () => {
+    // Single-point polyline (or all-coincident points) → degenerate bbox.
+    // Must not return width/height = 0; clamp to 1 so Excalidraw's hit-test
+    // and selection rect remain non-degenerate.
+    const polylineScreen: GeoCustomData = {
+      geo: { kind: "polyline", coordinates: [[0, 0]], zRef: 12 },
+      scaleMode: "screen",
+      projection: "mercator",
+      schemaVersion: 1,
+    };
+    const project = makeProjectByLngLat([[[0, 0], { x: 100, y: 100 }]]);
+    const map = makeMap(project);
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-degen",
+      x: 0,
+      y: 0,
+      points: [[0, 0]], // single point — bbox extent = 0
+      customData: polylineScreen,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0].width).toBeGreaterThanOrEqual(1);
+    expect(passed[0].height).toBeGreaterThanOrEqual(1);
+  });
+
+  it("polyline + geographic — width/height clamped to >= 1 for zero-extent projected points", () => {
+    // Two coords projecting to the same pixel (degenerate / extreme zoom-out).
+    const polylineGeo: GeoCustomData = {
+      geo: { kind: "polyline", coordinates: [[0, 0], [0.0001, 0.0001]], zRef: 12 },
+      scaleMode: "geographic",
+      projection: "mercator",
+      schemaVersion: 1,
+    };
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 500, y: 500 }],
+      [[0.0001, 0.0001], { x: 500, y: 500 }], // collapsed to same pixel
+    ]);
+    const map = makeMap(project);
+    const lineEl: ExcalidrawElementLike = {
+      id: "l-geo-degen",
+      x: 0,
+      y: 0,
+      points: [],
+      customData: polylineGeo,
+    };
+    const { api, updateScene } = makeApi([lineEl]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sync = new CoordinateSync({ map: map as any, excalidrawAPI: api });
+
+    sync.syncMapToScene();
+
+    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    expect(passed[0].width).toBe(1);
+    expect(passed[0].height).toBe(1);
+  });
+});

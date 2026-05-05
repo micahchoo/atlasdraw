@@ -143,7 +143,11 @@ export class CoordinateSync {
    *   to >= 1 (guards rotated/pitched cameras that would invert the span).
    * - polyline: all coordinates projected; first projected point is the origin
    *   (x, y) and points are stored relative to it (Excalidraw convention —
-   *   later points may have negative offsets).
+   *   later points may have negative offsets). Width/height are derived from
+   *   the projected-points bbox and written on every projection — Excalidraw
+   *   uses width/height for hit-testing/selection-rect/internal normalization;
+   *   without this the stale creation-zoom bbox clips the rendered shape when
+   *   zoomed in past zRef (atlasdraw-76b2).
    *
    * NOTE — `customData.scaleMode` is **wired** as of Phase 2 Wave 4 Task T17
    * (closes seed atlasdraw-375a). Behavior matrix per spec §3.4:
@@ -226,7 +230,19 @@ export class CoordinateSync {
           const [first] = anchor.coordinates;
           if (!first) return { ...el };
           const origin = projectPoint(this._map, first[0], first[1]);
-          return { ...el, x: origin.x, y: origin.y };
+          // Derive width/height from stored screen-space points bbox so
+          // Excalidraw's hit-test/selection-rect bounds match the rendered
+          // geometry. Without this, the bbox is whatever was stamped at
+          // create time and never refreshes on re-projection.
+          const screenPoints = el.points;
+          if (!screenPoints || screenPoints.length === 0) {
+            return { ...el, x: origin.x, y: origin.y, width: 1, height: 1 };
+          }
+          const sxs = screenPoints.map((p) => p[0]);
+          const sys = screenPoints.map((p) => p[1]);
+          const sw = Math.max(1, Math.max(...sxs) - Math.min(...sxs));
+          const sh = Math.max(1, Math.max(...sys) - Math.min(...sys));
+          return { ...el, x: origin.x, y: origin.y, width: sw, height: sh };
         }
         const projected = anchor.coordinates.map(([lng, lat]) =>
           projectPoint(this._map, lng, lat),
@@ -238,7 +254,15 @@ export class CoordinateSync {
           (p) =>
             [(p.x - origin.x) * f, (p.y - origin.y) * f] as [number, number],
         );
-        return { ...el, x: origin.x, y: origin.y, points };
+        // Derive width/height from the projected points bbox. Excalidraw uses
+        // these for hit-testing, selection rect, and internal bounds
+        // normalization — leaving them stale at the creation-zoom values
+        // clips the rendered shape when zoomed in past zRef (atlasdraw-76b2).
+        const xs = points.map((p) => p[0]);
+        const ys = points.map((p) => p[1]);
+        const width = Math.max(1, Math.max(...xs) - Math.min(...xs));
+        const height = Math.max(1, Math.max(...ys) - Math.min(...ys));
+        return { ...el, x: origin.x, y: origin.y, points, width, height };
       }
     }
   }
