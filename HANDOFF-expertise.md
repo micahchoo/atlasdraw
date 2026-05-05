@@ -1,14 +1,43 @@
 # Project Expertise (via Mulch)
 
-## excalidraw-integration (8 records, updated 6h ago)
-- [convention] Before any worker brief, plan section, or implementation code names an Excalidraw API (prop, hook, f... (mx-145cd3)
-- [failure] Excalidraw v0.18: viewBackgroundColor is NOT a top-level <Excalidraw> prop — it lives in AppState (d... → Pass via initialData.appState: <Excalidraw initialData={{ appState: { viewBackgroundColor: 'transpar... (mx-52992e)
-- [failure] Excalidraw v0.18 has NO customTools prop on <Excalidraw>. → Atlasdraw tools dispatch independently of Excalidraw's tool system: AtlasdrawTool interface (code/pa... (mx-00e024)
-- [failure] Plan said 'use newElementWith or newTextElement' for creating fresh Excalidraw elements. → Use the factory functions from @excalidraw/element (vendored at code/packages/element/src/newElement... (mx-5d3554)
-- [pattern] appstate-newElement-signals-actively-drafting: Excalidraw's AppState exposes a 'newElement' field (NonDeleted<ExcalidrawNonSelectionElement> | null... (mx-ff1394)
-- [pattern] atlasdraw-tools-dispatch-via-overlay: Atlasdraw's geo-aware tools (PinTool, future PolygonTool/LineTool) cannot register with Excalidraw v... (mx-dce08c)
-- [failure] Excalidraw layer with pointer-events:auto (drawing-mode default in any tool except hand) captures WH... → Install a capture-phase wheel listener on the editor root that intercepts wheel and forwards delta d... (mx-13a1b4) [relates to: mx-52992e, mx-145cd3]
-- [decision] wheel-event routing: capture-phase listener on root container → map.easeTo, not synthetic WheelEvent: Root cause of atlasdraw-5afc: Excalidraw layer pointer-events:auto in drawing mode captures wheel be... (mx-a45744)
+## architecture (9 records, updated 20m ago)
+- [decision] Single-player mode is first-class deployment: WebSocket opt-in via [realtime] enabled=true in config.toml. (mx-a6b4d4)
+- [decision] Hosted flagship by v1.0, no open-core split: Plausible-model: all features in OSS under AGPL. (mx-21c19d)
+- [decision] Phase 1 extended to 4 weeks; all subsequent phases shifted +1: Event routing across stacked canvases (MapLibre + Excalidraw pointerEvents) is a high-churn Excalidr... (mx-9fc72d)
+- [decision] firebase-project/ KEEP through Phase 2 boundary: 4 files, 34 lines total, zero monorepo references, pristine upstream Excalidraw firestore deployment... (mx-136917)
+- [decision] keep local — no GitHub push or commit until atlasdraw-6e33 resolved: User explicit instruction: no gh repo create, no git push, no commit this session. (mx-8afd1a)
+- [convention] New app workspace consuming @excalidraw/excalidraw source requires three setup steps: (1) declare @e... (mx-f72985)
+- [decision] atlasdraw tools dispatch independently of Excalidraw tool system via overlay: Excalidraw v0.18 has no customTools prop (confirmed by vendored source grep). (mx-682f8a)
+- [decision] Zustand+immer for cross-component reactive state; module-singleton for tool-internal state: Wave 2 LayerRegistry decision (user-confirmed Option A): Zustand+immer for LayerRegistry because it ... (mx-5ac6f6)
+- [convention] Data layer IDs use dl:${crypto.randomUUID()} format; mint at call site, NOT inside registry — T11, T... (mx-417b33)
+
+## infrastructure (4 records, updated 21m ago)
+- [convention] vendored fork .git backup: when inlining an upstream fork (option C), move embedded .git via mv to a... (mx-87637c)
+- [convention] GitHub repo creation one-shot: rename master→main BEFORE gh repo create (still local, no remote, ful... (mx-52935c)
+- [convention] anti-pattern detector must be scoped to atlasdraw-owned paths only — running detector across all of ... (mx-3cfa41)
+- [convention] LSP diagnostic noise during background worker writes is ignorable: LSP shows phantom syntax errors a... (mx-04231d)
+
+## meta (20 records, updated 19m ago)
+- [convention] Cross-worker dep additions must serialize, not parallelize — when two parallel workers both add depe... (mx-372bdb)
+- [convention] Serialize auditor after actor — when an actor (builder/demo agent) modifies install state, the audit... (mx-537ae1)
+- [convention] File triage seeds mid-session as findings surface, not deferred to handoff prose — each blocker gets... (mx-a174c9)
+- [convention] correction: first handoff attempt was incomplete — did not dispatch record-extractor and skipped som... (mx-391d6f)
+- [convention] Always use absolute paths in Bash tool calls — shell cwd persists across Bash calls in agent threads... (mx-0d9feb)
+- [convention] Peer-vs-parent discriminator for wave task assignment: when deferring missing work into an existing ... (mx-537417)
+- [decision] Stage transition in brainstorm-to-ship: plan → execute: Advanced from plan to execute (mx-06df3c)
+- [convention] correction: plan literals diverge from codebase — pre-state divergences in subagent briefs before di... (mx-e9dc63)
+- [convention] Subagent workers reliably hand-wave verification failures as 'out of scope' or 'pre-existing baselin... (mx-2ad5f6)
+- [convention] Two pre-dispatch artifacts cut Worker brief failure rate sharply: (1) PRE-SPIKE — when the plan name... (mx-7ef9cf) [relates to: mx-372bdb, mx-537ae1]
+- [convention] Plan literals go stale within 24h of authoring when a parallel wave ships — Phase 2 plan was authore... (mx-d9ab91)
+- [convention] When plan claims to 'extend interface with X+Y', grep current types.ts first — X or Y may already be... (mx-ce5d92)
+- [convention] Types-only files land before any consumer task — T01 pattern: when multiple downstream tasks (T11/T1... (mx-364d3c)
+- [convention] opus-audit-post-wave4 document is the canonical Phase 2 pre-dispatch audit, following the same templ... (mx-6eac5e)
+- [convention] correction: plan literals omit src/ path segment — every atlasdraw package (tools, data, geo, basema... (mx-8ec7b9)
+- [convention] pre-dispatch scrub catches integration-seam absence, not just plan-literal drift — Wave 1 scrub foun... (mx-d4f376)
+- [convention] clarification: triage skill verdict shape for bucket-A holds — removing needs-triage label without c... (mx-3422c1)
+- [convention] advisor catches what regex extracts miss — first scrub draft called T05 and T08 clean based on regex... (mx-d3616b)
+- [convention] Barrel export as stub signal — when a package's barrel (index.ts) has not been touched by any consum... (mx-9caad1)
+- [convention] correction: plan literals reference phantom files — beyond src/ path segment omission (mx-8ec7b9), W... (mx-619182)
 
 ## Quick Reference
 
@@ -19,6 +48,8 @@
   - Types: `convention`, `pattern`, `failure`, `decision`, `reference`, `guide`
   - Evidence: `--evidence-commit <sha>`, `--evidence-bead <id>`
 - `mulch doctor` — check record health
+
+... and 63 more records across 3 domains (use --budget <n> to show more)
 
 # 🚨 SESSION CLOSE PROTOCOL 🚨
 
@@ -31,7 +62,3 @@
 ```
 
 **NEVER skip this.** Unrecorded learnings are lost for the next session.
-
-## Recent deltas (this session)
-
-error: too many arguments for 'diff'. Expected 0 arguments but got 1.
