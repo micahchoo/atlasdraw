@@ -85,3 +85,39 @@
 .pinButtonActive:hover {
   background: #1864ab;
 }
+
+/* --- Layers toggle (T22) --------------------------------------------------
+ *
+ * Mirrors .pinButton styling but positioned at left: 72px so the two buttons
+ * sit side-by-side (12px left edge + 48px button width + 12px gap = 72px).
+ * Same z-index 10 so it remains clickable above the atlas-tool overlay.
+ */
+
+.layersToggleButton {
+  position: absolute;
+  top: 12px;
+  left: 72px;
+  z-index: 10;
+  padding: 6px 12px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.layersToggleButton:hover {
+  background: #f8f9fa;
+}
+
+.layersToggleButtonActive {
+  background: #1971c2;
+  color: #ffffff;
+  border-color: #1971c2;
+}
+
+.layersToggleButtonActive:hover {
+  background: #1864ab;
+}

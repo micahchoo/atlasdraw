@@ -41,6 +41,7 @@ import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+import { LayerPanel } from "./LayerPanel";
 import styles from "../styles/MapEditor.module.css";
 
 /**
@@ -137,6 +138,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { activeAtlasTool, setActiveAtlasTool, dispatchPointerDown } =
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
+
+  // T22 — Layers sidebar open/close. Local state mirrors Excalidraw's
+  // appState.openSidebar.name === "layers"; we drive it via the imperative
+  // toggleSidebar API and track our own bool for aria-pressed. Avoids
+  // threading a tracked-store subscription through for a single toggle.
+  const [isLayersOpen, setIsLayersOpen] = useState(false);
 
   // T13 — GeoJSON drag-and-drop import.
   //
@@ -323,7 +330,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           initialData={EXCALIDRAW_INITIAL_DATA}
           gridModeEnabled={false}
           onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
-        />
+        >
+          {/* T22 — Layers sidebar slot. LayerPanel internally renders
+              <Sidebar name="layers">. Excalidraw surfaces it only when
+              appState.openSidebar?.name === "layers" — toggled via the
+              Layers button below calling excalidrawAPI.toggleSidebar. */}
+          <LayerPanel />
+        </Excalidraw>
       </div>
 
       {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
@@ -368,6 +381,28 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         data-testid="pin-tool-button"
       >
         Pin
+      </button>
+
+      {/* T22 — Layers toggle, fixed top-left beside pin button. Toggles
+          Excalidraw's <Sidebar name="layers"> via the imperative API and
+          tracks open state locally for aria-pressed / styling. */}
+      <button
+        type="button"
+        className={[
+          styles.layersToggleButton,
+          isLayersOpen ? styles.layersToggleButtonActive : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onClick={() => {
+          excalidrawAPI?.toggleSidebar({ name: "layers" });
+          setIsLayersOpen((v) => !v);
+        }}
+        aria-pressed={isLayersOpen}
+        aria-label="Toggle layers panel"
+        data-testid="layers-toggle-button"
+      >
+        Layers
       </button>
 
       {/* T14 — Right-click convert-to-data-layer context menu. Position is
