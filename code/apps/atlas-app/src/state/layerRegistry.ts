@@ -77,3 +77,116 @@ export interface ILayerRegistry {
   updateStyle(id: string, patch: Partial<LayerStyle>): void;
   remove(id: string): void;
 }
+
+// ---------------------------------------------------------------------------
+// T11 — LayerRegistry Zustand store implementation.
+//
+// Phase 2 Wave 2a. Backs LayerPanel (T12), ImportDialog (T13), Convert (T14).
+// Single source of truth for all layer state. Mutations route through the
+// store actions; consumers must not mutate `entries` directly.
+//
+// immer middleware: each action receives a draft and mutates in place. Zustand
+// produces an immutable next state. This keeps action bodies imperative and
+// readable while preserving referential equality where nothing changed.
+// ---------------------------------------------------------------------------
+
+import { create } from "zustand";
+import { immer } from "zustand/middleware/immer";
+
+/**
+ * Default style applied when an annotation is converted to a data layer (T14).
+ * Distinct from any user-chosen import style so converted layers are visually
+ * recognizable until the user customizes them via LayerPanel.
+ */
+const DEFAULT_CONVERTED_STYLE: LayerStyle = {
+  fillColor: "#0aa",
+  strokeColor: "#077",
+  strokeWidth: 1,
+  opacity: 0.5,
+};
+
+export type LayerRegistryState = {
+  entries: LayerRegistryEntry[];
+} & Omit<ILayerRegistry, "entries">;
+
+export const useLayerRegistryStore = create<LayerRegistryState>()(
+  immer((set) => ({
+    entries: [],
+
+    registerAnnotation: (elementId, label) =>
+      set((s) => {
+        s.entries.push({
+          kind: "annotation",
+          id: elementId,
+          label: label ?? elementId,
+          visible: true,
+          order: s.entries.length,
+        });
+      }),
+
+    registerDataLayer: ({ id, fc, label, style }) => {
+      if (!id.startsWith("dl:")) {
+        throw new Error(
+          `data layer id must start with dl: prefix (received "${id}")`,
+        );
+      }
+      set((s) => {
+        s.entries.push({
+          kind: "data",
+          id,
+          label,
+          visible: true,
+          order: s.entries.length,
+          featureCount: fc.features.length,
+          style,
+        });
+      });
+    },
+
+    convertAnnotationToDataLayer: (elementId, fc) =>
+      set((s) => {
+        const idx = s.entries.findIndex(
+          (e) => e.kind === "annotation" && e.id === elementId,
+        );
+        if (idx === -1) return;
+        const annotation = s.entries[idx] as AnnotationLayerEntry;
+        const label = annotation.label;
+        s.entries.splice(idx, 1);
+        s.entries.push({
+          kind: "data",
+          id: `dl:${crypto.randomUUID()}`,
+          label,
+          visible: true,
+          order: s.entries.length,
+          featureCount: fc.features.length,
+          style: { ...DEFAULT_CONVERTED_STYLE },
+        });
+      }),
+
+    setVisibility: (id, visible) =>
+      set((s) => {
+        const e = s.entries.find((x) => x.id === id);
+        if (e) e.visible = visible;
+      }),
+
+    reorder: (id, newOrder) =>
+      set((s) => {
+        const e = s.entries.find((x) => x.id === id);
+        if (e) e.order = newOrder;
+      }),
+
+    updateStyle: (id, patch) =>
+      set((s) => {
+        const e = s.entries.find((x) => x.id === id);
+        if (e?.kind === "data") {
+          Object.assign(e.style, patch);
+        }
+        // annotations: no-op (no style field on AnnotationLayerEntry).
+      }),
+
+    remove: (id) =>
+      set((s) => {
+        s.entries = s.entries.filter((e) => e.id !== id);
+      }),
+  })),
+);

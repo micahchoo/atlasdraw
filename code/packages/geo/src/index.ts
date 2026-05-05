@@ -13,3 +13,9 @@ export { geoToExcalidraw } from "./geoToExcalidraw.js";
 export { excalidrawToGeo } from "./excalidrawToGeo.js";
 export { computeSceneBounds } from "./bounds.js";
 export type { LngLatBox } from "./bounds.js";
+// Wave 2a hardening: deep parser + migration shim for untrusted GeoCustomData input.
+export {
+  parseGeoCustomData,
+  migrate,
+  GeoCustomDataParseError,
+} from "./parseGeoCustomData.js";
