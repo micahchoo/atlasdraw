@@ -808,7 +808,7 @@ Expected: no errors on these files
 
 **Visual distinction requirement:** Annotation entries render with an "A" badge (or pencil icon). Data layer entries render with a "D" badge (or layers icon). The distinction must be visually unambiguous without color as the sole differentiator (accessibility constraint).
 
-**Skill:** `none`
+**Skill:** `atlasdraw-ui-conventions` — invoke before writing any component or CSS. Check the surface decision tree (LayerPanel is a Sidebar tab, not a new floating panel), CSS module pattern, color tokens, icon/button/text conventions, and accessibility checklist.
 **Codebooks:** `virtualization-vs-interaction-fidelity`
 **Files:**
 - Create: `apps/atlas-app/components/LayerPanel.tsx`
@@ -998,7 +998,7 @@ Expected: PASS all 3 tests
 
 **Resolution (amended per OQ-P2-2):** Export at CSS logical pixels × `scale` where `scale` defaults to 2. Read `mapCanvas.clientWidth`/`clientHeight` (CSS pixels) — NOT `mapCanvas.width`/`height` (physical pixels). On retina devices, `mapCanvas.width` is already `cssWidth * devicePixelRatio`; using it with `scale=2` would produce 4× logical resolution. Using `clientWidth * 2` always produces exactly 2× CSS pixels regardless of DPR, fulfilling PRD §7.1 "2× PNG for print." Source: OQ-P2-2.
 
-**Skill:** `none`
+**Skill:** `atlasdraw-ui-conventions` — invoke before writing the export button UI in T23. T15 itself is logic-only (no new DOM); the UI note applies to T23 which wires the button.
 **Files:**
 - Create: `apps/atlas-app/lib/export.ts`
 - Modify: `apps/atlas-app/components/MapEditor.tsx` — verify/add `preserveDrawingBuffer: true` in MapLibre `Map` constructor options
@@ -1475,6 +1475,7 @@ Arrow has bound endpoints — confirm whether bound arrows derive position from 
 
 **Orient:** T12 shipped `LayerPanel.tsx` but Excalidraw's `<Sidebar>` short-circuits to null without `appState.openSidebar?.name === "layers"`. Render `<LayerPanel />` as a child of `<Excalidraw>` and add a toggle button. Visible UX for the entire Wave 2 layer-management surface depends on this.
 **Flow position:** Visible-UX polish (parallel with T23/T24/T25).
+**Skill:** `atlasdraw-ui-conventions` — invoke before writing the toggle button. The toggle button slots into the top-left button group (z-index 10, alongside pinButton) — do NOT create a new floating surface. Check surface decision tree, button/icon patterns, conditional class pattern, aria-pressed, and data-testid requirements.
 **Files:**
 - Modify: `code/apps/atlas-app/src/components/MapEditor.tsx` — wrap `<Excalidraw>{children}</Excalidraw>` with `<LayerPanel />`; add toggle button (CSS-positioned similar to existing pin button) calling either `excalidrawAPI.toggleSidebar({name:"layers"})` (verify v0.18 API) or direct `appState` mutation.
 - Test: render MapEditor, click button, assert `<aside>` (or whatever Sidebar renders to) appears in DOM with the LayerPanel content.
@@ -1486,6 +1487,7 @@ Arrow has bound endpoints — confirm whether bound arrows derive position from 
 
 **Orient:** T15 shipped `exportPNG()` but no UI surface. Add a button (toolbar or floating) that calls `exportPNG`, generates a filename (`atlasdraw-${Date.now()}.png`), and triggers download via `URL.createObjectURL` + an invisible `<a download>`. Browser smoke test for tainted-canvas (CORS-blocked basemap tiles) — most likely silent-fail surface in T15.
 **Flow position:** Visible-UX polish; serialize after T22 if both modify MapEditor.tsx.
+**Skill:** `atlasdraw-ui-conventions` — invoke before writing this button. The export button slots into the top-left button group alongside pinButton — do NOT create a new floating panel. Check surface decision tree, button pattern, color tokens, aria-pressed (this is a trigger not a toggle, so no aria-pressed), data-testid requirement.
 **Files:**
 - Modify: `code/apps/atlas-app/src/components/MapEditor.tsx` — export button + download flow.
 - Test: render, click export, assert `URL.createObjectURL` called (mock createObjectURL); click flow doesn't throw.
