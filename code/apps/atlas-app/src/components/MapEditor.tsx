@@ -138,22 +138,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
-  // T13 — GeoJSON drag-and-drop import. Drop handler attaches to the root
-  // div (NOT the Excalidraw layer; Excalidraw owns its own pointer/drop
-  // events). dragover.preventDefault() is mandatory — without it the browser
-  // refuses to fire `drop`.
+  // T13 — GeoJSON drag-and-drop import.
+  //
+  // Drop must run in CAPTURE phase on the root div — Excalidraw's own
+  // handleAppOnDrop (App.tsx:2147) lives on a deeper div and would fire first
+  // in the bubble path, calling parseDataTransferEvent which consumes
+  // dataTransfer.files before our React-bubble handler ever sees it. For
+  // .geojson files we stopPropagation so Excalidraw never sees the event;
+  // for other file types we let propagation continue so Excalidraw still
+  // handles png/svg/library drops normally.
   const registry = useLayerRegistry();
-  const handleDragOver = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-    },
-    [],
-  );
-  const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const file = e.dataTransfer?.files?.[0];
-      if (!file || !file.name.endsWith(".geojson")) return;
+  const processGeoJsonDrop = useCallback(
+    async (file: File) => {
       if (!map) return;
       try {
         // parse() accepts a Blob; File extends Blob, so we pass it directly.
@@ -161,9 +157,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         const id = `dl:${crypto.randomUUID()}`;
         const style = defaultLayerStyle(fc);
         const geometryType = inferGeometryType(fc);
-        registry.registerDataLayer({ id, fc, label: file.name, style });
+        // Map mutations first (most likely to throw); registry last.
         map.addSource(id, { type: "geojson", data: fc });
-        map.addLayer(compileLayer(id, style, geometryType));
+        try {
+          map.addLayer(compileLayer(id, style, geometryType));
+        } catch (layerErr) {
+          // Rollback the orphan source so a retry can reuse the id space.
+          try {
+            map.removeSource(id);
+          } catch {
+            /* swallow secondary failure */
+          }
+          throw layerErr;
+        }
+        registry.registerDataLayer({ id, fc, label: file.name, style });
       } catch (err) {
         if (err instanceof GeoJSONParseError) {
           // v1 UX — console + alert. Toast/dialog deferred (scrub §3.3).
@@ -177,6 +184,31 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     },
     [map, registry],
   );
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onDropCapture = (e: DragEvent) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (!file || !file.name.endsWith(".geojson")) return;
+      // Block Excalidraw's bubble-phase handler from also processing this.
+      e.preventDefault();
+      e.stopPropagation();
+      void processGeoJsonDrop(file);
+    };
+    const onDragOverCapture = (e: DragEvent) => {
+      // preventDefault is needed for drop to fire. Don't stopPropagation —
+      // Excalidraw's dragover sets visual cues (cursor) for image drops we
+      // still want it to handle.
+      e.preventDefault();
+    };
+    root.addEventListener("drop", onDropCapture, { capture: true });
+    root.addEventListener("dragover", onDragOverCapture, { capture: true });
+    return () => {
+      root.removeEventListener("drop", onDropCapture, { capture: true });
+      root.removeEventListener("dragover", onDragOverCapture, { capture: true });
+    };
+  }, [processGeoJsonDrop]);
 
   // T14 — Convert annotation → data layer via right-click context menu.
   //
@@ -227,16 +259,27 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     const el = contextMenu.element;
     setContextMenu(null);
     try {
+      // Step 1 — pure computation, no side effects.
       const fc = annotationToFeatureCollection(el);
       const id = `dl:${crypto.randomUUID()}`;
       const style = defaultLayerStyle(fc);
       const geometryType = inferGeometryType(fc);
-      // Mirror T13 drop flow: registry + MapLibre source/layer with shared id.
+      // Step 2 — map mutations first; rollback the orphan source if addLayer throws.
+      map.addSource(id, { type: "geojson", data: fc });
+      try {
+        map.addLayer(compileLayer(id, style, geometryType));
+      } catch (layerErr) {
+        try {
+          map.removeSource(id);
+        } catch {
+          /* swallow secondary failure */
+        }
+        throw layerErr;
+      }
+      // Step 3 — registry mutations (won't throw).
       registry.registerDataLayer({ id, fc, label: el.id, style });
       registry.remove(el.id); // drop the old annotation entry (if any)
-      map.addSource(id, { type: "geojson", data: fc });
-      map.addLayer(compileLayer(id, style, geometryType));
-      // Remove the original element from the Excalidraw scene.
+      // Step 4 — destructive scene mutation last.
       const remaining = excalidrawAPI
         .getSceneElements()
         .filter((x) => x.id !== el.id);
@@ -254,8 +297,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     <div
       ref={rootRef}
       className={styles.root}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
       onContextMenu={handleContextMenu}
     >
       {/* Bottom layer: MapLibre GL map */}
