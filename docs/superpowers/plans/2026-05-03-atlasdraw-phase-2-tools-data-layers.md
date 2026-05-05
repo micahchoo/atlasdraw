@@ -1351,3 +1351,253 @@ license_constraints:
 - **Wave order:** OQ-P2-3 confirmation that `moveLayer` is cheap (one WebGL repaint, no re-tile) does not change task dependencies. T12 remains Wave 2, parallel with T11/T13/T14.
 - **Tech Stack:** `@placemarkio/check-geojson` deferred (not added) — "NOT added this phase" block requires no update since the library was never proposed as an addition.
 - **Skill annotations:** no task grew complex enough to warrant a different skill annotation.
+
+---
+
+# Wave 4 — Phase 1+2 Hardening (Addendum)
+
+**Authored:** 2026-05-04 (post-Wave-3-T15 ship). **Why:** Audit of deferred items surfaced that Phase 1 was declared done with two gating leftovers (Task 8 scaleMode, Phase 1 baseline) and Wave 2/3 left visible UX gaps (LayerPanel unrendered, PNG export buttonless) plus one real bug (mixed-geometry FCs render wrong style). Wave 4 absorbs Phase 1 unfinished business + Phase 2 polish into a single hardening sprint that closes both phases canonically before Phase 3 (`atlasdraw-25a5` File Format) begins.
+
+**Wave 4 is NOT in the original 2026-05-03 plan.** It exists because Phase 2 acceptance was always going to require Phase 1 baseline (T16) and that gate cannot fire without Phase 1 completing. Rather than ship Phase 2 as "functional but ungated," Wave 4 closes both at once.
+
+**Scope summary:** 12 tasks across 3 sub-waves. All work either had a deferral seed already filed or got a new seed during the audit (see "Seed cross-reference" below). All work is Phase 2 path-suffixed (`code/apps/atlas-app/src`, `code/packages/{tools,geo,data,basemap}/src`); plan-literal scrub mandatory per `mx-e9dc63`.
+
+## Wave 4 sub-wave structure
+
+```
+Wave 4a (Phase 1 unfinished business)         Wave 4b (Wave 2/3 visible polish)
+─────────────────────────────────────         ──────────────────────────────────
+  T17 — Task 8 scaleMode override              T22 — LayerPanel SidebarTrigger
+        ↓                                      T23 — PNG export UI button
+  T18 — auto-anchor native tools               T24 — Mixed-geometry FC handling
+                                               T25 — TextLabelTool inline-editing
+  T19 — Bench harness + Phase 1 baseline
+        ↓
+  T20 — Phase 2 acceptance gate run
+
+  T21 — Phase 1 dropped sources restored
+
+Wave 4c (Hardening & cleanup; optional pre-ship)
+────────────────────────────────────────────────
+  T26 — zRef bounds + LayerStyle migration
+  T27 — Build/dep quality debt
+  T28 — Architectural orphans
+```
+
+**Dispatch shape:** Wave 4a + 4b dispatch in parallel where deps allow. Wave 4a-T17 must precede T18; T19 must precede T20; T21 stands alone. Wave 4b tasks all stand alone except T22+T23 both modify `MapEditor.tsx` (serialize per Wave 2 lesson). Wave 4c is a single post-Wave-4a/b cleanup commit.
+
+---
+
+## Tasks
+
+### Task T17: Wave 4a — Task 8 scaleMode override + hybrid clamp [CHANGE SITE]
+
+**Orient:** Implement the deferred `scaleMode.ts` helper + wire into `CoordinateSync._projectElement` so non-default GeoAnchor.kind × ScaleMode combos render correctly. Spec §3.4 defaults arrow/freedraw to `scaleMode:"hybrid"`; without override branches those tools render wrong on first zoom — which is why Wave 1 useGeoAnchor only auto-anchored bbox tools.
+**Flow position:** Phase 1 Wave 3b unblocker.
+**Upstream contract:** `GeoCustomData` from `@atlasdraw/geo`; existing `_projectElement` in `code/packages/geo/src/CoordinateSync.ts` (verify path).
+**Downstream contract:** Six combos covered: `point+geographic|hybrid` (scale el.width/height by computeScaleFactor), `bbox+screen` (override projected span with stored), `bbox+hybrid` (clamp span 2⁻²..2⁺²), `polyline+screen|hybrid` (similar).
+**Skill:** `none`
+**Files:**
+- Create: `code/packages/geo/src/scaleMode.ts` — helper functions per spec §3.4.
+- Modify: `code/packages/geo/src/CoordinateSync.ts` — wire helper into `_projectElement`.
+- Test: `code/packages/geo/src/__tests__/scaleMode.test.ts` — exhaustive combo coverage.
+**Closes seed:** `atlasdraw-375a`.
+
+---
+
+### Task T18: Wave 4a — Native auto-anchor extension [CHANGE SITE]
+
+**Orient:** Extend `useGeoAnchor` (currently `BBOX_TOOL_TYPES = {rectangle, ellipse, diamond}`) to all native Excalidraw tools so users can draw with stock toolbar buttons and have the result geo-pin like atlas-side tools do.
+**Flow position:** Depends on T17 (arrow/freedraw need hybrid clamp).
+**Upstream contract:** `useGeoAnchor.ts` watches scene changes; T17's `scaleMode.ts` helpers are now wired into `_projectElement`.
+**Downstream contract:** All 8 native tools auto-attach `customData.geo`:
+- `rectangle | ellipse | diamond | image` → `bbox` GeoAnchor, `scaleMode:"geographic"` (image already-supported, just add to set).
+- `line | arrow` → `polyline` GeoAnchor (project `points[]` to lng/lat array), `scaleMode:"hybrid"` per spec §3.4.
+- `freedraw` → `polyline` GeoAnchor (many points), `scaleMode:"hybrid"`.
+- `text` → `point` GeoAnchor (project `x,y`), `scaleMode:"screen"`.
+
+Arrow has bound endpoints — confirm whether bound arrows derive position from their endpoints (no own anchor needed) or need their own.
+**Skill:** `none`
+**Files:**
+- Modify: `code/apps/atlas-app/src/hooks/useGeoAnchor.ts` — extend type-switch.
+- Test: `code/apps/atlas-app/src/hooks/__tests__/useGeoAnchor.test.ts` — one case per native tool type.
+- Browser smoke: each native tool draws → pan/zoom → position holds (manual or Playwright).
+
+---
+
+### Task T19: Wave 4a — Phase 1 benchmark harness + baseline [CHANGE SITE]
+
+**Orient:** Build `code/bench/` from scratch: harness runner, scenarios, fixtures. Run Phase 1 scenario (5,000 annotations + camera-pan loop) and write `bench/results/phase-1-baseline.json` with `p50_frame_ms`, `p95_frame_ms`, `p99_frame_ms`. This is what Phase 1 was supposed to ship and didn't.
+**Flow position:** Phase 1 close gate; T20 depends on this.
+**Upstream contract:** Real MapLibre + Excalidraw stack via headless browser (Playwright) or vitest + jsdom + synthetic.
+**Downstream contract:** `bench/results/phase-1-baseline.json` exists with numeric p50/p95/p99 fields.
+**Skill:** `perf-investigation`
+**Files:**
+- Create: `code/bench/run.ts` — runner with `--scenario` flag.
+- Create: `code/bench/scenarios/phase-1.ts` — 5k annotations + 120-frame pan.
+- Create: `code/bench/fixtures/synthetic-annotations.json` (or generator).
+- Create: `code/bench/results/phase-1-baseline.json` (output).
+**Closes seed:** `atlasdraw-f1fa`.
+
+---
+
+### Task T20: Wave 4a — Phase 2 acceptance gate run [CHANGE SITE]
+
+**Orient:** Re-run benchmark with Wave 2 data layers added (50k features + 5k annotations). Compare p95 against Phase 1 baseline. Q8 budget: +20% regression maximum. CI gate enforced.
+**Flow position:** Depends on T19. Phase 2 ship gate.
+**Files:**
+- Create: `code/bench/scenarios/phase-2-with-data-layers.ts` — extends Phase 1 with 50k-feature GeoJSON source.
+- Create: `code/bench/fixtures/large-us-roads.geojson` (or synthetic 50k features).
+- Create: `code/bench/results/phase-2-with-data-layers.json` (output).
+- Create: `code/bench/ci-gate.ts` — assert phase2.p95 ≤ baseline.p95 × 1.20.
+- Create: `.github/workflows/ci.yml` (or modify if exists) — add gate step.
+**Closes seed:** `atlasdraw-1315` (which is blocked-by `atlasdraw-f1fa`).
+
+**If gate fails:** stop. Invoke `Skill: perf-investigation`. Likely suspects: `CoordinateSync.syncMapToScene` re-running on data-layer updates (it should not — data layers are MapLibre-only), large GeoJSON FC held in Zustand causing unnecessary React re-renders, `style-compiler.ts` called on every frame.
+
+---
+
+### Task T21: Wave 4a — Phase 1 dropped sources restored or scoped [CHANGE SITE]
+
+**Orient:** Phase 1 silently dropped four sources: `BasemapRegistry`, `pmtiles-protocol`, `style-builder`, `MapCanvas.test.tsx`. Decide per-file: restore (write code), defer with explicit phase tag (e.g. "Phase 4 self-host requirement"), or close as out-of-scope.
+**Flow position:** Phase 1 close gate.
+**Skill:** `none` (decision-only) → `none` per file (implementation-light)
+**Files (decision tree):**
+- `BasemapRegistry`: Phase 4 self-host needs this for swappable basemap providers. Defer with phase:4 label.
+- `pmtiles-protocol`: ditto. Defer with phase:4 label.
+- `style-builder`: was a code/packages/basemap helper for declarative style construction. Wave 2's `style-compiler.ts` partially shadows it; decide: merge intent into style-compiler, or restore.
+- `MapCanvas.test.tsx`: basemap pkg has zero test coverage. **Restore this one** — basemap tests are needed for confidence in compileLayer's MapLibre paint props.
+**Closes seed:** `atlasdraw-cdd3` (with sub-decisions per source).
+
+---
+
+### Task T22: Wave 4b — LayerPanel SidebarTrigger wiring [CHANGE SITE]
+
+**Orient:** T12 shipped `LayerPanel.tsx` but Excalidraw's `<Sidebar>` short-circuits to null without `appState.openSidebar?.name === "layers"`. Render `<LayerPanel />` as a child of `<Excalidraw>` and add a toggle button. Visible UX for the entire Wave 2 layer-management surface depends on this.
+**Flow position:** Visible-UX polish (parallel with T23/T24/T25).
+**Files:**
+- Modify: `code/apps/atlas-app/src/components/MapEditor.tsx` — wrap `<Excalidraw>{children}</Excalidraw>` with `<LayerPanel />`; add toggle button (CSS-positioned similar to existing pin button) calling either `excalidrawAPI.toggleSidebar({name:"layers"})` (verify v0.18 API) or direct `appState` mutation.
+- Test: render MapEditor, click button, assert `<aside>` (or whatever Sidebar renders to) appears in DOM with the LayerPanel content.
+**Closes seed:** `atlasdraw-7748`.
+
+---
+
+### Task T23: Wave 4b — PNG export UI button + auto-download [CHANGE SITE]
+
+**Orient:** T15 shipped `exportPNG()` but no UI surface. Add a button (toolbar or floating) that calls `exportPNG`, generates a filename (`atlasdraw-${Date.now()}.png`), and triggers download via `URL.createObjectURL` + an invisible `<a download>`. Browser smoke test for tainted-canvas (CORS-blocked basemap tiles) — most likely silent-fail surface in T15.
+**Flow position:** Visible-UX polish; serialize after T22 if both modify MapEditor.tsx.
+**Files:**
+- Modify: `code/apps/atlas-app/src/components/MapEditor.tsx` — export button + download flow.
+- Test: render, click export, assert `URL.createObjectURL` called (mock createObjectURL); click flow doesn't throw.
+**Closes seed:** `atlasdraw-ca89`.
+
+---
+
+### Task T24: Wave 4b — Mixed-geometry GeoJSON FC handling [BUG FIX]
+
+**Orient:** `MapEditor.inferGeometryType(fc)` reads `features[0]?.geometry?.type` only. A FC mixing Polygon + LineString + Point renders all features through one MapLibre layer style chosen by `features[0]`, silently dropping the others. Either emit one MapLibre layer per geometry kind (sub-layers under one source, with style-compiler producing 1-3 specs) or reject mixed FCs at parse with a clear error.
+**Flow position:** Visible-UX bug fix (parallel).
+**Decision required:** sub-layers (more correct, more code) vs reject-mixed-fcs (simpler, breaks legitimate use cases). Recommend sub-layers.
+**Files:**
+- Modify: `code/packages/basemap/src/style-compiler.ts` — `compileLayer` branches per geometry, OR new `compileLayersForFC(id, style, fc): LayerSpecification[]` returning 1-3 layers.
+- Modify: `code/apps/atlas-app/src/components/MapEditor.tsx` — `processGeoJsonDrop` calls compileLayersForFC, iterates `map.addLayer` over each.
+- Modify: same for T14 `handleConvert` (single-geometry FC always; less critical).
+- Test: drop a mixed-geometry FC; assert all 3 geometry types render.
+**Closes seed:** `atlasdraw-4142`.
+
+---
+
+### Task T25: Wave 4b — TextLabelTool inline-editing UX [CHANGE SITE]
+
+**Orient:** T06 (Wave 1b) ships TextLabelTool that emits an empty text element on click. User typing flow is missing — they see an empty box with no cursor and no way to enter text. Wire inline editing using Excalidraw's text-element editing API (verify which method: `setActiveTool({type:"text"})` then dispatch character keystrokes? Or use the imperative API to set element selected + activate text-edit mode?).
+**Flow position:** Visible-UX polish (independent file: `code/packages/tools/src/TextLabelTool.ts`).
+**Files:**
+- Modify: `code/packages/tools/src/TextLabelTool.ts` — post-emit, focus/edit the element.
+- Test: existing TextLabelTool test + new case verifying text-edit-mode entered after emit.
+**Closes seed:** `atlasdraw-5193`.
+
+---
+
+### Task T26: Wave 4c — zRef domain bounds + LayerStyle migration [CLEANUP]
+
+**Orient:** Two small Wave 2 hardening items batched into one commit:
+1. `parseGeoCustomData`: enforce `0 ≤ zRef ≤ maxZoom` and `lng ∈ [-180,180]`, `lat ∈ [-90,90]` domain bounds (currently only finiteness checked).
+2. `LayerStyle` migration: atlas-app's inline `LayerStyle` (`code/apps/atlas-app/src/state/layerRegistry.ts:19-24`) replaced by `import { type LayerStyle } from "@atlasdraw/basemap"`.
+**Files:**
+- Modify: `code/packages/geo/src/parseGeoCustomData.ts` — add bounds checks + tests.
+- Modify: `code/apps/atlas-app/src/state/layerRegistry.ts` — drop inline copy, import from basemap.
+- Test: parseGeoCustomData test suite + check no atlas-app test regresses.
+**Closes seeds:** `atlasdraw-02f6`, `atlasdraw-fc04`.
+
+---
+
+### Task T27: Wave 4c — Build/dep quality debt batch [CLEANUP]
+
+**Orient:** Four environment/tooling items that work today but accumulate risk:
+1. `atlasdraw-0c97`: husky postinstall expects `code/.git`. Either skip postinstall when running from monorepo root, or relocate `.husky/` to root.
+2. `atlasdraw-dc84`: atlas-app `tsconfig.json` has `paths: {}` clobbering parent paths. Inherit parent paths or remove the empty override.
+3. `atlasdraw-b733`: atlas-app missing vitest devDep — currently hoisted from root by accident. Make it explicit.
+4. `atlasdraw-8a21`: cross-workspace `tsc --noEmit` fails with TS6059 rootDir. Build masks it; bare tsc fails. Either fix `rootDir` config or document why bare tsc isn't run.
+**Files:**
+- `code/package.json` (husky scripts)
+- `code/apps/atlas-app/tsconfig.json` (paths)
+- `code/apps/atlas-app/package.json` (vitest devDep)
+- `code/packages/tools/tsconfig.json` (rootDir)
+**Closes seeds:** `atlasdraw-0c97`, `atlasdraw-dc84`, `atlasdraw-b733`, `atlasdraw-8a21`.
+
+---
+
+### Task T28: Wave 4c — Architectural orphans cleanup [CLEANUP]
+
+**Orient:** Two small architectural decisions surfaced post-Wave-2:
+1. `atlasdraw-6e9a` — `convertAnnotationToDataLayer` registry method is dead code (T14 pivoted to manual `registerDataLayer + remove`). Decide: delete from `ILayerRegistry` interface OR refactor to take id as parameter so it's actually usable.
+2. `atlasdraw-cc43` — `compileLayer(id, style, geometryType)` requires caller to compute geometryType. After T24 (mixed-geometry handling) lands, this API may change shape entirely (one-layer-per-geometry from FC). Decide post-T24.
+3. `atlasdraw-cf62` — RTL+vitest cleanup pattern: apply `afterEach(cleanup)` to all RTL test files, OR flip vitest `globals: true` and remove explicit calls (cheaper, scope to atlas-app + tools).
+**Files:**
+- `code/apps/atlas-app/src/state/layerRegistry.ts` (registry method decision)
+- `code/packages/basemap/src/style-compiler.ts` (compileLayer API decision; post-T24)
+- vitest configs (RTL cleanup decision)
+**Closes seeds:** `atlasdraw-6e9a`, `atlasdraw-cc43`, `atlasdraw-cf62`.
+
+---
+
+## Wave 4 acceptance gate
+
+Wave 4 is "complete" when:
+- T20 gate runs green (Phase 2 acceptance officially passes).
+- T18 covers all native Excalidraw tools (auto-anchor verified for line/arrow/freedraw/text/image in addition to bbox).
+- T22+T23 ship visible UX (LayerPanel toggle button + PNG export button).
+- T24 mixed-geometry bug fix verified in browser.
+- All Wave 4 seeds (18 total) closed with `outcome:success` OR re-deferred with explicit phase-tag and rationale.
+
+After Wave 4 ships: Phase 2 declared complete, atlasdraw-3a5b closed, Phase 3 (`atlasdraw-25a5` File Format `.atlasdraw`) becomes the next active phase.
+
+## Seed cross-reference
+
+**Already-filed seeds gaining `wave:4` label this addendum:**
+- `atlasdraw-375a` (Task 8 scaleMode override) → T17
+- `atlasdraw-f1fa` (Phase 1 baseline + bench harness) → T19
+- `atlasdraw-1315` (Phase 2 acceptance gate, blocked-by f1fa) → T20
+- `atlasdraw-cdd3` (Phase 1 dropped sources) → T21
+- `atlasdraw-5193` (TextLabelTool inline-editing) → T25
+- `atlasdraw-fc04` (LayerStyle migration; partial) → T26
+- `atlasdraw-02f6` (zRef bounds) → T26
+- `atlasdraw-0c97` (husky postinstall) → T27
+- `atlasdraw-dc84` (atlas-app tsconfig paths) → T27
+- `atlasdraw-b733` (atlas-app vitest devDep) → T27
+- `atlasdraw-8a21` (cross-workspace tsc rootDir) → T27
+- `atlasdraw-d592` (anti-pattern detector unscoped) → blocks 7 deferred-on triage items; covered indirectly by Wave 4 via the deferred-on chain. NOT a Wave 4 task itself.
+
+**New seeds filed for this addendum:**
+- `atlasdraw-7748` (LayerPanel SidebarTrigger wiring) → T22
+- `atlasdraw-ca89` (PNG export UI button) → T23
+- `atlasdraw-4142` (Mixed-geometry FC bug) → T24
+- `atlasdraw-cf62` (RTL+vitest cleanup pattern) → T28
+- `atlasdraw-6e9a` (convertAnnotationToDataLayer dead-code) → T28
+- `atlasdraw-cc43` (compileLayer geometryType API) → T28
+
+**Total Wave 4 work:** 12 tasks closing 18 seeds.
+
+## Pre-dispatch scrub mandate
+
+Plan literals in this addendum will drift within 24h of authoring (per `mx-d9ab91`). Pre-dispatch scrub mandatory before Wave 4 worker dispatch (per `mx-e9dc63`). Use `docs/decisions/wave3-pre-dispatch-scrub-2026-05-04.md` as a template — Wave 4 is structurally similar (multiple deferred items being consolidated; verify each plan-literal path against current HEAD before brief authoring).
