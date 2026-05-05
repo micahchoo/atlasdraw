@@ -13,6 +13,7 @@ domains:
   - infrastructure
   - excalidraw-integration
   - failure
+  - excalidraw-api
 governance:
   max_entries: 100
   warn_entries: 150
