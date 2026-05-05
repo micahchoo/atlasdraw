@@ -1,0 +1,49 @@
+import type maplibregl from "maplibre-gl";
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import { exportToCanvas } from "@excalidraw/excalidraw";
+
+export type ExportOpts = { scale?: number };
+
+/**
+ * Composite PNG export: MapLibre basemap (+ data layers) under, Excalidraw
+ * annotations on top. Resolution: CSS-logical pixels x scale (default 2),
+ * NOT physical pixels — see Plan §T15 OQ-P2-2 amendment.
+ *
+ * Requires the MapLibre Map to have been constructed with
+ * `preserveDrawingBuffer: true` (set in MapCanvas.tsx). Without it, the map
+ * canvas may be cleared between draws and drawImage will yield a blank layer.
+ */
+export async function exportPNG(
+  map: maplibregl.Map,
+  excalidrawAPI: ExcalidrawImperativeAPI,
+  opts: ExportOpts = {},
+): Promise<Blob> {
+  const scale = opts.scale ?? 2;
+  const mapCanvas = map.getCanvas();
+  // CSS logical px (NOT physical px). On retina (DPR=2) mapCanvas.width is
+  // already cssWidth*DPR; using it would yield 4x logical resolution.
+  const width = mapCanvas.clientWidth;
+  const height = mapCanvas.clientHeight;
+
+  const offscreen = new OffscreenCanvas(width * scale, height * scale);
+  const ctx = offscreen.getContext("2d");
+  if (!ctx) {
+    throw new Error("exportPNG: 2D context unavailable on OffscreenCanvas");
+  }
+  ctx.scale(scale, scale);
+
+  // Layer 1: MapLibre (basemap + data layers).
+  ctx.drawImage(mapCanvas, 0, 0, width, height);
+
+  // Layer 2: Excalidraw annotations (transparent background so layer 1
+  // shows through). `exportBackground: false` is read off the merged
+  // appState by the package-level exportToCanvas wrapper.
+  const excalidrawCanvas = await exportToCanvas({
+    elements: excalidrawAPI.getSceneElements(),
+    appState: { ...excalidrawAPI.getAppState(), exportBackground: false },
+    files: excalidrawAPI.getFiles(),
+  });
+  ctx.drawImage(excalidrawCanvas, 0, 0, width, height);
+
+  return offscreen.convertToBlob({ type: "image/png" });
+}

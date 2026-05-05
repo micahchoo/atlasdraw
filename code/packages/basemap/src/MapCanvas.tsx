@@ -100,6 +100,10 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // can use simple Mercator math without perspective correction (OQ-2).
       maxPitch: 0,
       pitchWithRotate: false,
+      // T15: required so map canvas can be sampled via drawImage in PNG
+      // export. Without this WebGL clears the drawing buffer between frames
+      // and the export reads a blank layer.
+      preserveDrawingBuffer: true,
     });
 
     mapRef.current = map;
