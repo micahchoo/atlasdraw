@@ -14,6 +14,7 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { isGeoCustomData, type GeoCustomData } from "./types.js";
 import { projectPoint } from "./projection.js";
+import { computeScaleFactor, clampHybridFactor } from "./scaleMode.js";
 
 // ---------------------------------------------------------------------------
 // Excalidraw API surface (structural, decoupled from @excalidraw types)
@@ -144,14 +145,25 @@ export class CoordinateSync {
    *   (x, y) and points are stored relative to it (Excalidraw convention —
    *   later points may have negative offsets).
    *
-   * NOTE — `customData.scaleMode` is **currently unread** by `_projectElement`.
-   * Per spec §3.4 the natural projection produces: point → `screen` (width/height
-   * untouched), bbox/polyline → `geographic` (span scales with zoom via the
-   * projection itself). Those happen to be the §3.4 defaults for Phase 1 demo
-   * elements (Pin = point+screen ✓, Rectangle/Polygon = bbox+geographic ✓).
-   * Non-default combinations — point+geographic, bbox+screen, polyline+screen,
-   * and `hybrid` for any kind (the §3.4 default for arrow/freehand) — require
-   * Task 8 (`computeScaleFactor` + per-kind override logic) before shipping.
+   * NOTE — `customData.scaleMode` is **wired** as of Phase 2 Wave 4 Task T17
+   * (closes seed atlasdraw-375a). Behavior matrix per spec §3.4:
+   *
+   *   point      + screen      x,y projected; el.width/el.height untouched.
+   *   point      + geographic  x,y projected; width/height scaled by `factor`
+   *                            where `factor = 2^(currentZoom - zRef)`.
+   *   point      + hybrid      same as geographic, factor clamped to [0.25, 4.0].
+   *   bbox       + geographic  x,y from NW; width/height = projected span (>=1).
+   *   bbox       + screen      x,y from NW; width/height = el.width/el.height
+   *                            (stored screen-space override).
+   *   bbox       + hybrid      x,y from NW; width/height = projected span scaled
+   *                            by `clamp(factor, 0.25, 4.0)`.
+   *   polyline   + geographic  all coords projected, points relative to first.
+   *   polyline   + screen      x,y from projected first coord; points = el.points.
+   *   polyline   + hybrid      all coords projected, points relative to first,
+   *                            each offset multiplied by `clamp(factor, 0.25, 4.0)`.
+   *
+   * `factor = 2^(currentZoom - zRef)` reflects MapLibre's per-zoom-level 2× scale.
+   * At currentZoom == zRef, factor == 1 (identity).
    *
    * Invariant: input element's `customData` is never mutated; the returned
    * element is a shallow clone with overwritten `x/y/width/height/points`.
@@ -159,26 +171,72 @@ export class CoordinateSync {
   private _projectElement(el: ExcalidrawElementLike): ExcalidrawElementLike {
     const customData = el.customData as GeoCustomData;
     const anchor = customData.geo;
+    const scaleMode = customData.scaleMode;
+    // Precompute factor once; cheap and used by 6 of 9 (kind × mode) cells.
+    const factor = computeScaleFactor(this._map.getZoom(), anchor.zRef);
     switch (anchor.kind) {
       case "point": {
         const { x, y } = projectPoint(this._map, anchor.lng, anchor.lat);
-        return { ...el, x, y };
+        if (scaleMode === "screen") {
+          // Position-only update; width/height passed through untouched.
+          return { ...el, x, y };
+        }
+        // geographic | hybrid — scale stored screen-size by factor.
+        const f = scaleMode === "hybrid" ? clampHybridFactor(factor) : factor;
+        const width = el.width !== undefined ? el.width * f : el.width;
+        const height = el.height !== undefined ? el.height * f : el.height;
+        return { ...el, x, y, width, height };
       }
       case "bbox": {
         const nw = projectPoint(this._map, anchor.west, anchor.north);
+        if (scaleMode === "screen") {
+          // Stored screen-space size overrides the projected span entirely;
+          // only x/y track the geographic anchor.
+          return { ...el, x: nw.x, y: nw.y };
+        }
         const se = projectPoint(this._map, anchor.east, anchor.south);
-        const width = Math.max(1, se.x - nw.x);
-        const height = Math.max(1, se.y - nw.y);
-        return { ...el, x: nw.x, y: nw.y, width, height };
+        const projectedWidth = Math.max(1, se.x - nw.x);
+        const projectedHeight = Math.max(1, se.y - nw.y);
+        if (scaleMode === "hybrid") {
+          const f = clampHybridFactor(factor);
+          // Hybrid intent: projected span IS the geographic size. To bound
+          // the apparent screen size at extreme zoom deltas, counter-scale
+          // by f/factor (keeps geo behavior in-band, freezes outside it).
+          const adj = f / factor;
+          return {
+            ...el,
+            x: nw.x,
+            y: nw.y,
+            width: Math.max(1, projectedWidth * adj),
+            height: Math.max(1, projectedHeight * adj),
+          };
+        }
+        // geographic — current behavior, projected span as-is.
+        return {
+          ...el,
+          x: nw.x,
+          y: nw.y,
+          width: projectedWidth,
+          height: projectedHeight,
+        };
       }
       case "polyline": {
+        if (scaleMode === "screen") {
+          // Project only the first coord; preserve stored screen-space points.
+          const [first] = anchor.coordinates;
+          if (!first) return { ...el };
+          const origin = projectPoint(this._map, first[0], first[1]);
+          return { ...el, x: origin.x, y: origin.y };
+        }
         const projected = anchor.coordinates.map(([lng, lat]) =>
           projectPoint(this._map, lng, lat),
         );
         const origin = projected[0];
         if (!origin) return { ...el };
+        const f = scaleMode === "hybrid" ? clampHybridFactor(factor) / factor : 1;
         const points = projected.map(
-          (p) => [p.x - origin.x, p.y - origin.y] as [number, number],
+          (p) =>
+            [(p.x - origin.x) * f, (p.y - origin.y) * f] as [number, number],
         );
         return { ...el, x: origin.x, y: origin.y, points };
       }

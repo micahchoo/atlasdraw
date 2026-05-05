@@ -55,16 +55,20 @@ const bboxCustomData: GeoCustomData = {
   schemaVersion: 1,
 };
 
+// scaleMode: "geographic" — these fixtures exercise the geographic-projection
+// arm (points relative to projected first coord). Updated from "screen" in
+// T17 (was an arbitrary placeholder when scaleMode was unread; now load-bearing
+// because polyline+screen preserves el.points instead of projecting).
 const polylineTwoPoint: GeoCustomData = {
   geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
-  scaleMode: "screen",
+  scaleMode: "geographic",
   projection: "mercator",
   schemaVersion: 1,
 };
 
 const polylineThreePoint: GeoCustomData = {
   geo: { kind: "polyline", coordinates: [[0, 0], [1, 0], [-1, 0]], zRef: 12 },
-  scaleMode: "screen",
+  scaleMode: "geographic",
   projection: "mercator",
   schemaVersion: 1,
 };
@@ -119,7 +123,7 @@ describe("CoordinateSync.syncMapToScene", () => {
     expect((passed[0].customData as GeoCustomData).geo).toEqual(pointCustomData.geo);
   });
 
-  it("Test C: captureUpdate: 'never' is passed to updateScene", () => {
+  it("Test C: captureUpdate: 'NEVER' is passed to updateScene", () => {
     const map = makeMap();
     const { api, updateScene } = makeApi([]);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +133,7 @@ describe("CoordinateSync.syncMapToScene", () => {
 
     expect(updateScene).toHaveBeenCalledOnce();
     const opts = updateScene.mock.calls[0][0];
-    expect(opts.captureUpdate).toBe("never");
+    expect(opts.captureUpdate).toBe("NEVER");
   });
 
   it("Test D (Task 5 addendum): subsequent sync calls re-read map.project — element x/y track camera", () => {
