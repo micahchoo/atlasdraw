@@ -28,9 +28,23 @@
   pointer-events: none;
 }
 
+/* pointer-events is NOT inherited — Excalidraw's canvas elements default to
+ * `auto` and would still intercept pointer events even though the container
+ * has `none`. Target canvas elements specifically so map drag/pan events
+ * reach MapLibre when drawing mode is off, while keeping the Excalidraw
+ * toolbar and UI always clickable (so the user can switch away from hand mode). */
+.excalidrawLayer canvas {
+  pointer-events: none;
+}
+
 /* Applied by Task 13's isDrawingMode toggle — defined here so the class
  * exists in the module before the hook that references it is written. */
 .excalidrawLayerActive {
+  pointer-events: auto;
+}
+
+/* Restore canvas pointer events in drawing mode. */
+.excalidrawLayerActive canvas {
   pointer-events: auto;
 }
 
