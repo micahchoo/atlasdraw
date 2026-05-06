@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build": "vite build",
+    "build:docker": "vite build",
     "dev": "vite",
     "preview": "vite preview",
     "test:typecheck": "tsc --noEmit",

@@ -11,10 +11,11 @@ RUN --mount=type=cache,target=/root/.cache/yarn \
 
 ARG NODE_ENV=production
 
-RUN npm_config_target_arch=${TARGETARCH} yarn build:app:docker
+RUN npm_config_target_arch=${TARGETARCH} yarn build:packages && \
+    npm_config_target_arch=${TARGETARCH} yarn workspace @atlasdraw/atlas-app build
 
 FROM nginx:1.27-alpine
 
-COPY --from=build /opt/node_app/excalidraw-app/build /usr/share/nginx/html
+COPY --from=build /opt/node_app/apps/atlas-app/dist /usr/share/nginx/html
 
 HEALTHCHECK CMD wget -q -O /dev/null http://localhost || exit 1
