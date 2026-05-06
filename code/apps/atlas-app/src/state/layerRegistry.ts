@@ -86,6 +86,8 @@ export interface ILayerRegistry {
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import { useDataLayerFCStore } from "./useDataLayerFCStore";
+
 /**
  * Default style applied when an annotation is converted to a data layer (T14).
  * Distinct from any user-chosen import style so converted layers are visually
@@ -134,9 +136,18 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           style,
         });
       });
+      // Phase 4 W0 (atlasdraw-ad27): mirror the FC into the FC registry so
+      // selectDocument can populate AtlasdrawDocument.layers without ever
+      // round-tripping through MapLibre's opaque source storage.
+      useDataLayerFCStore.getState().set(id, fc);
     },
 
-    convertAnnotationToDataLayer: (elementId, fc) =>
+    convertAnnotationToDataLayer: (elementId, fc) => {
+      // Mint the new dl: id outside `set()` so we can mirror it into the FC
+      // registry with the exact same id that lands on the entry. Doing it
+      // inside immer would force us to capture the id from a draft, which
+      // the freeze semantics make awkward.
+      const newId = `dl:${crypto.randomUUID()}`;
       set((s) => {
         const idx = s.entries.findIndex(
           (e) => e.kind === "annotation" && e.id === elementId,
@@ -147,14 +158,22 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         s.entries.splice(idx, 1);
         s.entries.push({
           kind: "data",
-          id: `dl:${crypto.randomUUID()}`,
+          id: newId,
           label,
           visible: true,
           order: s.entries.length,
           featureCount: fc.features.length,
           style: { ...DEFAULT_CONVERTED_STYLE },
         });
-      }),
+      });
+      // Mirror into FC registry (Phase 4 W0). Deleting the old elementId is a
+      // no-op in the FC store (annotation ids never had an FC), but kept for
+      // symmetry with `remove` — the call site shouldn't have to know which
+      // ids carry FCs.
+      const fcStore = useDataLayerFCStore.getState();
+      fcStore.delete(elementId);
+      fcStore.set(newId, fc);
+    },
 
     setVisibility: (id, visible) =>
       set((s) => {
@@ -177,9 +196,14 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         // annotations: no-op (no style field on AnnotationLayerEntry).
       }),
 
-    remove: (id) =>
+    remove: (id) => {
       set((s) => {
         s.entries = s.entries.filter((e) => e.id !== id);
-      }),
+      });
+      // Phase 4 W0: drop the FC if any. Unconditional delete — annotation ids
+      // never had an FC, so the call is a cheap no-op for them and keeps
+      // `remove` kind-agnostic at the call site (mx-91343d).
+      useDataLayerFCStore.getState().delete(id);
+    },
   })),
 );

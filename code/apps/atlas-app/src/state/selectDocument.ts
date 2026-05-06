@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 3 Wave 2 Task T9 — AtlasdrawDocument selector.
+// Phase 4 Wave 0 prereq (atlasdraw-ad27): wired to useDataLayerFCStore so the
+// AtlasdrawDocument.layers Map is populated non-destructively every tick.
 //
 // Pure synthesis function: assembles an `AtlasdrawDocument` from the live
-// runtime sources (Excalidraw imperative API + LayerRegistry Zustand state).
-// Called every auto-save tick by `startAutoSave(store, () => selectDocument(...))`.
+// runtime sources (Excalidraw imperative API + LayerRegistry Zustand state +
+// DataLayerFCStore). Called every auto-save tick by
+// `startAutoSave(store, () => selectDocument(...))`.
 //
-// Open question for Phase 4 — data-layer FeatureCollection storage:
-//   The LayerRegistry only persists metadata + featureCount; it does NOT keep
-//   the underlying GeoJSON FeatureCollection in memory beyond the MapLibre
-//   source. To round-trip a .atlasdraw zip we need the FCs. For Phase 3 we
-//   ship `layers: new Map()` and document the gap. Phase 4 introduces a
-//   FeatureCollection registry (likely keyed by `dl:` id) keyed off the same
-//   layer registry so this selector can populate `layers` non-destructively.
+// FC storage (Phase 4 W0 — closes the gap mx-91343d):
+//   The LayerRegistry stores metadata + featureCount only; the FCs themselves
+//   live in useDataLayerFCStore (state/useDataLayerFCStore.ts), populated by
+//   the registry actions (registerDataLayer / convertAnnotationToDataLayer)
+//   the moment a data layer is added. We read a snapshot via getAll() and
+//   intersect with the registry's `data`-kind entries so the resulting
+//   `layers` Map is consistent with the manifest layer list.
 
 import { ulid } from "ulid";
 
@@ -23,6 +26,7 @@ import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
+import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
 export type SelectDocumentOptions = {
   /**
@@ -33,6 +37,12 @@ export type SelectDocumentOptions = {
   baseManifest?: Manifest | null;
   /** Override `new Date().toISOString()` for deterministic tests. */
   now?: () => string;
+  /**
+   * Override the FC source. Defaults to `useDataLayerFCStore.getState().getAll()`.
+   * Tests inject a fixed map for determinism (and to avoid module-singleton
+   * bleed across the suite). Production callers leave this unset.
+   */
+  fcMap?: Record<string, FeatureCollection>;
 };
 
 const DEFAULT_TITLE = "Untitled atlasdraw";
@@ -107,8 +117,20 @@ export function selectDocument(
           permissions: { publicView: false },
         };
 
-  // Phase 4: replace empty Map with real FCs once the registry tracks them.
+  // Phase 4 W0 (atlasdraw-ad27): pull FCs from the FC registry, intersected
+  // with `data`-kind entries from the LayerRegistry. Annotation entries don't
+  // have FCs and are skipped. If the FC store is missing an entry the registry
+  // claims is a data layer (race / load-in-flight), we omit it from the Map
+  // rather than insert a stub — the manifest layer list still records it, and
+  // a future tick will pick it up.
+  const fcSource =
+    options.fcMap ?? useDataLayerFCStore.getState().getAll();
   const layers: Map<string, FeatureCollection> = new Map();
+  for (const entry of layerRegistryState.entries) {
+    if (entry.kind !== "data") continue;
+    const fc = fcSource[entry.id];
+    if (fc) layers.set(entry.id, fc);
+  }
 
   // Excalidraw's embedded files (images). API surface returns BinaryFiles
   // (id → { mimeType, dataURL, ... }); we convert dataURLs to Blobs so the

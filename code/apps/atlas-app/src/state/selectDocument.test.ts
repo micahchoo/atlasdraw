@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 3 Wave 2 Task T9 — selectDocument unit tests.
+// Phase 4 W0 update (atlasdraw-ad27): adds an FC-store integration test.
 
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FeatureCollection } from "geojson";
 
 import { selectDocument } from "./selectDocument";
 import type { LayerRegistryState } from "./layerRegistry";
+import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import type { Manifest } from "@atlasdraw/data";
 
@@ -42,6 +45,12 @@ const makeRegistry = (
     updateStyle: vi.fn(),
     remove: vi.fn(),
   }) as unknown as LayerRegistryState;
+
+// FC store is a module-singleton — reset per test so we can't accidentally
+// inherit fcs registered by another test file in the same vitest worker.
+beforeEach(() => {
+  useDataLayerFCStore.getState().clear();
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -134,10 +143,106 @@ describe("selectDocument", () => {
     });
   });
 
-  it("layers Map is empty for v1 (FC storage gap documented)", () => {
-    const doc = selectDocument(makeAPI(), makeRegistry(), { now: () => NOW });
+  it("layers Map is empty when no data layers exist (annotation-only registry)", () => {
+    const reg = makeRegistry([
+      { kind: "annotation", id: "el-1", label: "p", visible: true, order: 0 },
+    ]);
+    const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
     expect(doc.layers).toBeInstanceOf(Map);
     expect(doc.layers.size).toBe(0);
+  });
+
+  it("populates layers Map from FC store for matching data-layer entries (Phase 4 W0)", () => {
+    // The data layer is in BOTH the registry AND the FC store. selectDocument
+    // intersects them and emits a Map keyed by `dl:` id with the FC payload.
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { name: "Trail A" },
+          geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+        },
+      ],
+    };
+    const reg = makeRegistry([
+      {
+        kind: "annotation",
+        id: "el-skip",
+        label: "skipped",
+        visible: true,
+        order: 0,
+      },
+      {
+        kind: "data",
+        id: "dl:trails-1",
+        label: "Trails",
+        visible: true,
+        order: 1,
+        featureCount: 1,
+        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+      },
+    ]);
+
+    const doc = selectDocument(makeAPI(), reg, {
+      now: () => NOW,
+      fcMap: { "dl:trails-1": fc },
+    });
+
+    // Annotation entries are excluded from the layers Map; only data entries
+    // present in the FC source land in the result.
+    expect(doc.layers.size).toBe(1);
+    expect(doc.layers.get("dl:trails-1")).toBe(fc);
+    expect(doc.layers.has("el-skip")).toBe(false);
+  });
+
+  it("defaults to reading from the live FC store when fcMap is not provided", () => {
+    // Demonstrates the production wiring path: registry actions push to the
+    // FC store; selectDocument reads the singleton implicitly.
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [],
+    };
+    useDataLayerFCStore.getState().set("dl:from-store", fc);
+
+    const reg = makeRegistry([
+      {
+        kind: "data",
+        id: "dl:from-store",
+        label: "Live",
+        visible: true,
+        order: 0,
+        featureCount: 0,
+        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+      },
+    ]);
+
+    const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
+    expect(doc.layers.get("dl:from-store")).toBe(fc);
+  });
+
+  it("omits a data-layer from the layers Map when its FC is missing (load-in-flight tolerance)", () => {
+    // Registry has the entry but FC store does not (e.g. mid-load). selectDocument
+    // omits it from layers rather than inserting a stub; the manifest layer
+    // list still records the metadata, so the next tick can pick it up.
+    const reg = makeRegistry([
+      {
+        kind: "data",
+        id: "dl:not-yet-loaded",
+        label: "pending",
+        visible: true,
+        order: 0,
+        featureCount: 5,
+        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+      },
+    ]);
+
+    const doc = selectDocument(makeAPI(), reg, {
+      now: () => NOW,
+      fcMap: {},
+    });
+    expect(doc.layers.size).toBe(0);
+    expect(doc.manifest.layers).toHaveLength(1); // metadata still present
   });
 
   it("converts Excalidraw binary files (dataURL) into Blob entries", () => {

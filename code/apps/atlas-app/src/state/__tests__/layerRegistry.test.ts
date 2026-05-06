@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { FeatureCollection } from "geojson";
 
 import { useLayerRegistryStore } from "../layerRegistry";
+import { useDataLayerFCStore } from "../useDataLayerFCStore";
 
 const emptyFc = (count: number): FeatureCollection => ({
   type: "FeatureCollection",
@@ -21,6 +22,10 @@ const emptyFc = (count: number): FeatureCollection => ({
 
 beforeEach(() => {
   useLayerRegistryStore.setState({ entries: [] });
+  // Phase 4 W0 (atlasdraw-ad27): registry actions now mirror into the FC
+  // store. Reset the singleton between tests so FC bleed-over can't mask a
+  // regression in the mirror logic.
+  useDataLayerFCStore.getState().clear();
 });
 
 describe("layerRegistry", () => {
@@ -192,6 +197,64 @@ describe("layerRegistry", () => {
       const { entries } = useLayerRegistryStore.getState();
       expect(entries).toHaveLength(2);
       expect(entries.map((e) => e.id)).toEqual(["el-1", "el-3"]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Phase 4 W0 (atlasdraw-ad27): FC-store mirror side effects.
+  // The LayerRegistry's data-layer actions push the FC into useDataLayerFCStore
+  // so selectDocument can populate AtlasdrawDocument.layers without re-reading
+  // the MapLibre source. We assert the side effect at the action boundary —
+  // in production both stores are wired through registry actions only.
+  // -------------------------------------------------------------------------
+  describe("FC store mirror (atlasdraw-ad27)", () => {
+    it("registerDataLayer mirrors the FC into the FC store under the same id", () => {
+      const store = useLayerRegistryStore.getState();
+      const fc = emptyFc(4);
+      store.registerDataLayer({
+        id: "dl:mirror-1",
+        fc,
+        label: "Mirror",
+        style: {},
+      });
+
+      expect(useDataLayerFCStore.getState().get("dl:mirror-1")).toBe(fc);
+    });
+
+    it("remove drops the FC from the FC store", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerDataLayer({
+        id: "dl:gone",
+        fc: emptyFc(1),
+        label: "Bye",
+        style: {},
+      });
+      expect(useDataLayerFCStore.getState().get("dl:gone")).toBeDefined();
+
+      store.remove("dl:gone");
+      expect(useDataLayerFCStore.getState().get("dl:gone")).toBeUndefined();
+    });
+
+    it("remove on an annotation id does not throw (FC store delete is a no-op)", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-only");
+      expect(() => store.remove("el-only")).not.toThrow();
+      expect(useDataLayerFCStore.getState().getAll()).toEqual({});
+    });
+
+    it("convertAnnotationToDataLayer mirrors the FC under the new dl: id", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1", "Polygon");
+      const fc = emptyFc(2);
+      store.convertAnnotationToDataLayer("el-1", fc);
+
+      const dataEntry = useLayerRegistryStore
+        .getState()
+        .entries.find((e) => e.kind === "data");
+      expect(dataEntry).toBeDefined();
+      expect(useDataLayerFCStore.getState().get(dataEntry!.id)).toBe(fc);
+      // Old annotation id never had an FC entry — confirm.
+      expect(useDataLayerFCStore.getState().get("el-1")).toBeUndefined();
     });
   });
 
