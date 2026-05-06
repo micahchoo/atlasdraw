@@ -1,0 +1,45 @@
+# Atlasdraw anti-pattern detector scope (atlasdraw-d592)
+#
+# Lines starting with "#" are comments. Each non-comment line is an extended
+# regex (ERE) anchored to a path *relative to the repo root*. The detector
+# should keep findings whose path matches ANY of the include patterns AND
+# does NOT match any of the exclude patterns.
+#
+# Currently the global detector (~/.claude/scripts/anti-pattern-scan.sh) does
+# NOT consume this file — this is an intent declaration. A global tooling
+# change is required so the detector reads $PROJECT_DIR/.claude/anti-pattern-scope.txt
+# and filters its file list before applying rules.
+#
+# Until that lands, this file documents what the scope SHOULD be so that:
+#   1. Vendored Excalidraw v0.18 noise (>90% of findings) stops generating
+#      needs-triage seeds for atlasdraw maintainers.
+#   2. Future detector improvements have a target spec.
+#
+# Latest scan partition (anti-pattern-report.txt @ 2026-05-05):
+#   total findings: 356
+#   atlas-owned   : 5  (1.4%)   -- triageable signal
+#   vendored      : 325 (91.3%) -- upstream noise, not our responsibility
+#   other         : 26  (7.3%)  -- root configs, scripts, docs
+
+# --- include (atlasdraw-owned source) ---
++code/apps/atlas-app/
++code/packages/tools/
++code/packages/basemap/
++code/packages/geo/
++code/packages/data/
++code/packages/atlasdraw-overlay/
++code/bench/
+
+# --- exclude (vendored Excalidraw v0.18; not maintained here) ---
+-code/excalidraw-app/
+-code/packages/common/
+-code/packages/element/
+-code/packages/excalidraw/
+-code/packages/math/
+-code/packages/utils/
+
+# --- exclude (per-package node_modules, build outputs already covered by
+#     the global EXCLUDES; listed here for explicitness) ---
+-node_modules/
+-dist/
+-build/
