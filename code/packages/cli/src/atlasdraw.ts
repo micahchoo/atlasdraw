@@ -9,6 +9,7 @@
 
 import { Command } from "commander";
 import { lintCommand } from "./commands/lint.js";
+import { convertCommand } from "./commands/convert.js";
 
 const program = new Command();
 
@@ -18,6 +19,7 @@ program
   .version("0.0.0");
 
 program.addCommand(lintCommand);
+program.addCommand(convertCommand);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   // Commander's parseAsync rejects only on programmer error or an action
