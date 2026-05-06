@@ -2,137 +2,133 @@
 
 ## Goal
 
-> "start with the commit" → "yes [dispatch Wave 2]" → "yes but check what from excalidraw has prior art" → "continue" → "with record extractors and record the learnings"
+> "/check-handoff then do a scrub for phase 3" → "do all 4" → "scrub the plans for phase 4" → "look at older phase plans and see what was not implemented in time for phase 4" → "do as you recommend" → "start the prereqs" → "9078: unify export menu via Excalidraw's existing place; e9db: A composite-tsconfig"
 
-Continue Phase 3 (`.atlasdraw` file format & local persistence) from
-`docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md`. Wave 2
-(persistence + CLI) and Wave 3 (round-trip acceptance) had to land this session.
-Phase 3 acceptance gate is the round-trip test (T12).
+Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and expose the 1585 latent tsc errors via composite-project tsconfig refactor.
 
 ## Progress
 
-**This session — 8 commits, Phase 3 closure:**
+**This session — 11 commits, 5/6 Wave 0 prereqs closed + Phase 3 closure scrub.**
 
-- ✅ `a00d653` — chore(state): seeds + mulch churn from Phase 3 W0+W1 + stale-seed sweep
-- ✅ `ffbeeee` — chore(data): Phase 3 Wave 2 setup — add commander/idb/vitest; cli scripts (`code/packages/cli/package.json`, `code/packages/cli/tsconfig.json`, `code/apps/atlas-app/package.json`, `code/yarn.lock`)
-- ✅ `bf08c00` — feat(atlas-app): T8 persistence layer — IndexedDB autosave + FSA opt-in (`code/apps/atlas-app/src/state/persistence.ts:1-475`, `persistence.test.ts:1-240`, 9 tests)
-- ✅ `b754a96` — feat(cli): T10 lint subcommand (`code/packages/cli/src/atlasdraw.ts`, `commands/lint.ts:1-125`, `__tests__/lint.test.ts:1-140`, `vitest.config.ts`, 4 tests)
-- ✅ `7be032e` — feat(atlas-app): T9 persistence wiring — store, doc selector, MainMenu (`code/apps/atlas-app/src/state/usePersistenceStore.ts:1-62`, `selectDocument.ts:1-149`, +99 lines in `components/MapEditor.tsx`, +13 tests)
-- ✅ `91ac6b0` — feat(cli): T11 convert subcommand (`code/packages/cli/src/commands/convert.ts:1-258`, `__tests__/convert.test.ts:1-235`, +1 line in `atlasdraw.ts`, 7 new tests)
-- ✅ `0ec3980` — feat(data): T12 round-trip acceptance tests (`code/packages/data/src/round-trip.test.ts:1-370`, 6 cases — Phase 3 acceptance gate closed)
-- ✅ `b93680c` — chore(state): seeds + mulch churn from Phase 3 W2 + W3
+- ✅ `05fdea0` — fix(tsconfig): `ignoreDeprecations 6.0 → 5.0` + Phase 3 closure scrub (filed atlasdraw-ad27/3601/9078/0403, closed 25a5)
+- ✅ `7270c2a` — docs(phase-4): wave0 pre-dispatch scrub + plan amendments + seed DAG wiring (filed e9db; blocked 4579 by 6 prereqs)
+- ✅ `d038fe2` — feat(excalidraw): T-50c0 barrel-export Dialog + DialogProps + DialogSize
+- ✅ `d06ce90` — feat(basemap): T-2428 scaffold BasemapRegistry + pmtiles-protocol + style-builder (+12 tests)
+- ✅ `9b734e0` — docs(spec): T-5cba update §4.2 + §10 to reflect hybrid-default basemap (Q3)
+- ✅ `73642c2` — feat(state): T-ad27 data-layer FC registry — useDataLayerFCStore (+14 tests)
+- ✅ `2f2d496` — feat(state): T-3601 hydrate scene + layers + FCs from persistence load() (+8 tests)
+- ✅ `e2e99e8` — feat(state): T-9078 unify atlasdraw export menu via renderCustomUI (+4 tests)
+- ⏳ **`atlasdraw-e9db`** composite-tsconfig refactor — worker IN FLIGHT at handoff write time. Auto-notifies on completion.
 
-**Phase 3 status (13 tasks):** 12 SHIPPED (T1-T12). T13 (KML/GPX stretch) PUNTED to Phase 6.
+**Wave 0 status (6 prereqs):** 5 SHIPPED, 1 IN-FLIGHT.
 
-**Test counts at gate:**
-- `@atlasdraw/data`: 83 (was 77; +6 round-trip cases). tsc clean.
-- `@atlasdraw/cli`: 11 (4 lint + 7 convert). tsc clean. Cross-subcommand smoke verified (`convert .geojson → .atlasdraw` then `lint` exits 0 with valid OK message).
-- `@atlasdraw/atlas-app`: 113 (was 100; +13 from T9). Vite build green (11.9s).
+| Seed | Status | Commit |
+|---|---|---|
+| `atlasdraw-50c0` Dialog barrel | ✅ closed | `d038fe2` |
+| `atlasdraw-2428` BasemapRegistry | ✅ closed | `d06ce90` (+12 tests) |
+| `atlasdraw-5cba` tech-spec doc-debt | ✅ closed | `9b734e0` |
+| `atlasdraw-ad27` FC registry | ✅ closed | `73642c2` (+14 tests) |
+| `atlasdraw-3601` scene hydration | ✅ closed | `2f2d496` (+8 tests) |
+| `atlasdraw-9078` MainMenu unification | ✅ closed | `e2e99e8` (+4 tests) |
+| `atlasdraw-e9db` composite-tsconfig | ⏳ in-flight | TBD |
 
-**Mulch records added this session (14 total via record-extractor):**
-- 2 decisions: `mx-2e17ca` (idb typed vs idb-keyval), `mx-e2deba` (retro)
-- 1 correction: `mx-744b7e` (plan-literal drift includes API-shape drift, not just paths)
-- 9 conventions: `mx-025e8a` (MainMenu kebab path), `mx-30002e` (DefaultItems closure-bound), `mx-01984d` (per-concern Zustand stores), `mx-3342d8` (App.tsx passthrough), `mx-91343d` (FC registry gap), `mx-3c2203` (CLI shpjs.d.ts include), `mx-de40e2` (CLI types:[node]), `mx-48b101` (vitest --reporter=basic dropped)
-- 2 failures: `mx-d16fa9` (Blob.type dropped through zip), `mx-ed9854` (styleRef:null divergence)
+**Test counts at handoff:**
+- `@atlasdraw/data`: 83 (unchanged contract; SceneElement structural alias added).
+- `@atlasdraw/cli`: 11.
+- `@atlasdraw/basemap`: 0 → **12** (BasemapRegistry + pmtiles-protocol + style-builder).
+- `@atlasdraw/atlas-app`: 113 → **139** (+26 from ad27 + 3601 + 9078).
 
-Branch is **27 ahead** of `origin/main`. Working tree clean (only `.claude/scheduled_tasks.lock` untracked — runtime, leave alone).
+**Branch:** main, **36 ahead** of origin/main. Working tree dirty: `code/packages/cli/src/atlasdraw.ts` (chmod 644→755 mode-only — benign, CLI bin file with shebang). Untracked: `.claude/scheduled_tasks.lock` (runtime).
 
 ## What Worked
 
-- **Wave 2 split into two parallel streams via Delegation Protocol.** Setup commit (`ffbeeee`) materialized the lockfile mutex; Round 1 dispatched T8 (atlas-app persistence) and T10 (CLI lint) in parallel — zero file overlap, both green on first return. Round 2 dispatched T9 (atlas-app wiring) and T11 (CLI convert) in parallel — same pattern. 4 workers × 3-9 min each = 4 commits inside ~18 min wall. Subagent type: `general-purpose`.
-- **Pre-dispatch grep against vendored Excalidraw source.** Per `.claude/rules/excalidraw-api.md`: I greped `code/packages/excalidraw/components/main-menu/DefaultItems.tsx` BEFORE writing the T9 brief, caught the `mainMenu/` → `main-menu/` plan-literal drift, and pinned the corrected path + line numbers (LoadScene:66, SaveToActiveFile:109) into the worker brief. Worker copied verbatim — zero post-render footguns.
-- **Verified-literals-first worker briefs.** Each brief opened with a `## VERIFIED LITERALS (don't re-grep these)` block — paths, line numbers, exact named exports from `@atlasdraw/data`. Workers consumed the envelope; no parallel re-greping; cache stayed warm.
-- **`runX(args, { stdout, stderr }): Promise<number>` shape established by T10**, reused by T11. Tests call directly with mock streams — no `process.exit` mocking needed. Pure functions all the way down.
-- **T12 as standalone acceptance gate.** Single-file dispatch (`code/packages/data/src/round-trip.test.ts`) caught two real serialization contracts that plan reviews missed: Blob.type drop + styleRef divergence. Both pinned into test assertions so a future writer-side fix breaks the assertion loudly.
+- **Pre-dispatch scrub before Wave 0.** `wave0-pre-dispatch-scrub-2026-05-06.md` consolidated 12 plan-literal drifts + 5 missing prereq gates BEFORE any worker dispatch. Workers consumed verified literals from the scrub doc, not the raw plan; zero plan-literal drift in 4 worker outputs.
+- **Seed DAG via `sd block`.** Wired `atlasdraw-4579` (Phase 4 epic) blocked by all 6 prereqs. `sd ready` immediately surfaced the right next-up issues without needing prose interpretation. Survives handoff loss.
+- **Parallel worker dispatch with explicit non-overlap matrix.** Wave A: 2428 (basemap) + ad27 (atlas-app state) ran concurrent, zero file overlap, both green on first return. Wave B: 9078 + e9db ran concurrent (different surfaces — atlas-app components vs tsconfig). 4 workers total, 4 commits.
+- **Worker pivots when given context.** 9078 worker discovered `UIOptions.canvasActions.export.renderCustomUI` (Excalidraw's official extension point) AFTER seeing the brief's "build a parallel dialog" suggestion — pivoted to extending the existing dialog. Strictly better outcome. 3601 worker chose structural `SceneElement` alias instead of importing `OrderedExcalidrawElement` to avoid polluting CLI deps.
+- **Closure-loop discipline.** Each closed seed has a per-commit `outcome:success` rationale recorded; HANDOFF prose isn't load-bearing.
 
 ## What Didn't Work
 
-- **Plan §T9 referenced `apps/atlas-app/state/store.ts`** — the file doesn't exist. atlas-app uses per-concern Zustand stores (e.g., `state/layerRegistry.ts:105` exporting `useLayerRegistryStore`). Resolved by creating `state/usePersistenceStore.ts` as a peer. Recorded as `mx-01984d`.
-- **Plan §T9 referenced `App.tsx`** — that file is `<MapEditor />` and nothing else. Real change-site is `components/MapEditor.tsx` (~480 lines, Excalidraw mounted there). Recorded as `mx-3342d8`.
-- **`<MainMenu.DefaultItems.LoadScene>` and `<SaveToActiveFile>` are NOT composable.** Closure-bound to internal `actionLoadScene`/`actionSaveToActiveFile`; no `onSelect` prop. T9 worker fell back to adjacent `<MainMenu.Item>` entries (`Save .atlasdraw…` / `Open .atlasdraw…`). v1 ergonomic gap: dual entry points (Excalidraw `.excalidraw` vs atlasdraw `.atlasdraw`). Recorded as `mx-30002e`.
-- **CLI tsconfig pulled `shpjs` ambient types through the data barrel.** `tsc --noEmit` failed with TS7016 until T10 worker added `../data/src/shpjs.d.ts` to `code/packages/cli/tsconfig.json` `include`. Will reappear in any package consuming `@atlasdraw/data`. Recorded as `mx-3c2203`.
-- **CLI Phase 0 stub used `process.exit()`** but the base tsconfig has no `types` field — auto-discovery of `@types/node` via node_modules walk didn't fire from yarn-hoisted layout. Fix: `"types": ["node"]` in `code/packages/cli/tsconfig.json` (mirrors `code/bench/tsconfig.json`). Recorded as `mx-de40e2`.
-- **`--reporter=basic` was dropped in vitest 3.** Initial verification ran with that flag and emitted a confusing startup error. Default reporter just works. Recorded as `mx-48b101`.
+- **`code/packages/cli/src/atlasdraw.ts` chmod drift** appears in `git status` after every worker that touches the workspace. Mode-only 644→755 (correct for shebang CLI entry). Tried `git checkout --` to discard; auth denial blocked it. Left dirty across all 5 commits — harmless but ugly.
+- **`paths:{}` clobber root-cause TBD.** e9db worker's first task is to investigate `dd418c2`'s "intentional" annotation. If the intent invalidates composite-project, the worker will surface back rather than force.
+- **Phase 4 plan path drift NOT bulk-fixed.** All `apps/…` references in the plan still miss `code/` prefix; atlas-app paths still miss `src/`. Workers consult the scrub doc instead. A future bulk sed-replace is low-leverage (banner caught everything that needed catching this session) but should happen before any non-AI human reads the plan.
 
 ## Key Decisions
 
-- **Use `idb` (typed wrapper) NOT `idb-keyval`** for the persistence store. Excalidraw's `excalidraw-app/data/LocalData.ts:20-27` uses `idb-keyval`; we deliberately diverged for typed schema control. Recorded as `mx-2e17ca`.
-- **Trailing-edge debounce + 30s ceiling timer** per Plan Q3 — NOT lodash's leading+trailing pattern. T8 worker implemented snapshot-guard via sequence counter (per advisor) instead of `manifest.updatedAt` identity for cleaner in-`save()` race semantics.
-- **`StoredBlob` wrapper in IDB** (T8 deviation): IDB stores `{ bytes: Uint8Array, type: string }` instead of raw Blob — fake-indexeddb's structured-clone path uses `XMLHttpRequest` over `URL.createObjectURL` which jsdom can't service. Round-trips byte-identical zip data; transparent to callers.
-- **CLI `bin` points to `src/atlasdraw.ts`** (T10), not `src/index.ts`. Shebang lives in `atlasdraw.ts`; `index.ts` is just barrel re-exports. Followed plan literal here even though CLI is greenfield.
-- **selectDocument ships `layers: new Map()` for v1** (T9). Data-layer FCs live in MapLibre sources at runtime, not in any registry. Phase 4 needs a parallel FC registry keyed by `dl:` id. Recorded as `mx-91343d`.
-- **Excalidraw scene hydration stubbed** (T9). `AtlasdrawDocument.scene: ReadonlyArray<unknown>` — calling `excalidrawAPI.updateScene({ elements: doc.scene })` would be unsound. T9 logs `[INFO]` and leaves a `[NOTE]` for Phase 4 to pick a typed scene shape.
+- **`SceneElement` structural alias** (3601) — `{ id, type, version, [key:string]: unknown }`. Excalidraw's `OrderedExcalidrawElement` is structurally assignable to it. Avoids circular dep between `@atlasdraw/data` (currently excalidraw-free) and the vendored Excalidraw.
+- **FC store wiring via LayerRegistry actions, not `useLayerRegistrySync`** (ad27) — the hook never sees FC payloads (MapEditor.tsx does, but brief forbade touching it). Registry actions already receive FC as a parameter. Cleanest seam.
+- **`hydrate.ts` factored as pure function** (3601, advisor recommendation) — `hydrate(loaded, excalidrawAPI)` callable from both load-on-mount and MainMenu Open. Tests use it directly without React mount.
+- **`queueMicrotask` for `isDirty=false` after hydration** (3601) — handles the autosave race where `markDirty` could fire mid-hydration. Tested explicitly.
+- **`renderCustomUI` extension point** (9078) — Excalidraw's `UIOptions.canvasActions.export.renderCustomUI` injects React into JSONExportDialog Card grid. atlas-app already wired it for GeoJSON. Extended with 2 cards for `.atlasdraw` save/open. Zero vendored-fork changes needed.
+- **Composite-project for ALL packages including vendored** (e9db brief) — partial composite is messier than full composite. Vendored Excalidraw packages get `composite: true` even though they don't publish d.ts independently.
 
 ## Trajectory
 
-**How we got here.** Session opened on the prior handoff (Phase 3 W0+W1 done, Wave 2 unblocked). User said "start with the commit" — I committed the dirty `.seeds/issues.jsonl` + `.mulch/expertise/meta.jsonl` as `chore(state)`. Then "yes" → setup wave: added commander/idb/vitest/@types/node to CLI, idb to atlas-app, fixed pre-existing CLI typecheck breakage (`process.exit` was untyped because base tsconfig had no `types: ["node"]`), ran `yarn install`, verified all three workspaces clean, committed `ffbeeee`. Then "yes but check what from excalidraw has prior art" — greped vendored Excalidraw, caught the `mainMenu/` → `main-menu/` plan-literal drift, pinned line numbers, and dispatched T8+T10 in parallel via `general-purpose` agents. Both returned green; committed individually. Round 2: scouted MapEditor.tsx and discovered `state/store.ts` and `App.tsx` were both phantom plan literals — atlas-app uses per-concern Zustand stores; real Excalidraw mount is in MapEditor.tsx. Dispatched T9+T11 in parallel with corrected briefs; both returned green. Then T12 as a single-worker acceptance gate, surfacing two real serialization contracts (Blob.type drop, styleRef:null divergence). Final state commit (`b93680c`). User invoked `/handoff` with record-extractor — 14 mulch records emitted, this handoff captures the rest.
+**How we got here.** Session opened on `26cdbc9` (Phase 3 W2+W3 closure handoff). User asked for /check-handoff + Phase 3 scrub. Scrub found tsc broken in data + cli (`tsconfig.base.json:3 "ignoreDeprecations": "6.0"` invalid for TS 5.9.3 — but handoff claimed "tsc clean") + atlasdraw-25a5 still open + 3 Phase 4 prereqs stranded as `[NOTE]` markers in MapEditor.tsx. Fixed all 4 in `05fdea0`. User said "scrub the plans for phase 4" — found 12 drifts; "look at older phase plans" — found 5 inherited prereqs. User said "do as you recommend" → `7270c2a` consolidated everything as durable artifact + plan amendments + seed DAG wiring. User said "start the prereqs" — dispatched workers in waves: Dialog barrel (direct), 2428 + ad27 parallel, 3601 sequential after ad27 closed (consumes FC store), then 9078 + e9db parallel after maintainer decisions. e9db still in flight at handoff write.
 
 **Hard calls.**
-- **Sequence-counter snapshot guard vs manifest.updatedAt identity** (T8). Plan said use `manifest.updatedAt` identity; T8 worker (per advisor) chose a `dirtySeq` counter captured synchronously at `save()` entry. Cleaner for the in-`save()` race; the `updatedAt` identity check is the right shape for `startAutoSave`'s OUTER guard if Zustand wiring needs it. T9 didn't layer on the outer guard because the inner guard already handles the race. Tradeoff: if a future writer mutates `manifest.updatedAt` mid-write, the inner guard catches it but external observers won't see "save committed for this version" without the identity check.
-- **Adjacent MainMenu items vs wrapping DefaultItems** (T9). Wrapping was invasive (closure-bound actions); adjacent items meant dual entry points — confusing UX but clean code. Chose adjacent + filed a Phase 4 unification ergonomic gap.
-- **Skip T13 (KML/GPX)** entirely. Plan called it stretch; punted to Phase 6 to keep Wave 3 acceptance the gate.
+- **Sequential vs parallel for 3601.** ad27 created the FC store; 3601 hydrates from it. Parallel would have left 3601 worker guessing the API shape. Cost: ~8 minutes serial; benefit: zero rework.
+- **Defer GeoJSON export card to follow-up seed?** Brief allowed deferring if scope ballooned. 9078 worker found the card was already in atlas-app (T15 wired GeoJSON renderCustomUI before this session). Just added 2 more cards next to it. No deferral.
+- **`renderCustomUI` over parallel dialog.** Brief's first option was vendored-fork in-place; second was atlas-app-owned dialog mimicking the visual pattern. Worker found a third (and best) option after orienting. Surface the lesson: brief should mention `renderCustomUI` if it exists; advisor caught it on second look.
 
 **Shaky ground.**
-- **Atlas-app `paths:{}` debt is now larger.** Baseline 1886 → 1892 (+6 from T9: 4 implicit-any in MapEditor's new callbacks, 2 ExcalidrawImperativeAPI re-export errors in selectDocument). Vite build green; tsc-only noise. The composite-tsconfig refactor (separate initiative; `atlasdraw-dc84` closed `rework` last session) needs to land before Phase 4 hardens its types.
-- **selectDocument doesn't read FCs from MapLibre sources.** v1 ships `layers: new Map()`. The first user who saves with data layers loaded loses them on round-trip. This is the single biggest gap heading into Phase 4.
-- **Excalidraw scene hydration is silently stubbed.** Persistence saves the scene successfully; load reads the doc and logs `[INFO]` without calling `updateScene`. A user who refreshes loses their visible scene even though the doc is in IDB. Phase 4 priority.
+- **e9db result unknown at handoff time.** If composite-project surfaces 100+ NEW errors (vs. the existing 1585), the migration broke something subtle. Re-investigate before merging.
+- **`addFiles()` deferred** in 3601 hydration. `loaded.files` is `Map<string,Blob>` but `addFiles` wants `BinaryFileData[]` with `dataURL`. Inverse-of-`dataUrlToBlob` conversion untested. Tracked as known-deferred. First user with binary scene assets (images pasted into the canvas) hits a hydration miss.
+- **Phase 2 `dd418c2` intent.** If `paths:{}` was intentional for a vendored package quirk that composite-project doesn't address, the e9db migration may need a partial revert. Watch the worker's commit body for the intent finding.
 
 **Invisible context.**
-- **`ulid` is a transitive dep available everywhere `@atlasdraw/data` is hoisted.** T11 worker added it to CLI's direct deps for clarity, but it was already resolvable. Atlas-app imports it in selectDocument via the same hoist. If `@atlasdraw/data` ever drops it, three packages break silently.
-- **The `runX(args, streams): Promise<number>` shape is the CLI testability convention.** Established by T10, mirrored by T11. T12 worker noticed it via a glance at lint.ts. Future CLI subcommands (e.g., `render` from package description) MUST follow.
-- **Excalidraw `MainMenu` is already imported at MapEditor.tsx:30.** T9 worker didn't need to add the import. Future surfaces inside `<Excalidraw>` can use it directly.
-- **`StoredBlob` wrapper in IDB is a fake-indexeddb workaround**, not a real-browser concern. Production browsers handle Blob structured cloning natively. If we ever swap test runtime, the wrapper can revert.
-- **Plan-literal drift rate this session: 4 confirmed instances** (`mainMenu/` path, `state/store.ts` phantom, `App.tsx` phantom, `writeJSON: Promise<string>` API-shape vs actual `Promise<Blob>`). Recorded as `mx-744b7e` — the lesson is recursive (refines mx-04ac8d which refines mx-619182 which refines mx-8ec7b9).
+- **`code/apps/realtime/` is a Phase 5 stub** (commit `2026-05-03` per file mtime) with `package.json` declaring `@atlasdraw/realtime` AGPL-3.0. Plan T11 references `docker-compose.realtime.yml` but never acknowledges the prior scaffold. Don't re-scaffold.
+- **Excalidraw `UIOptions.canvasActions.export.renderCustomUI`** is the ONLY extension point that injects into a vendored dialog without a vendored-fork patch. atlas-app's MapEditor.tsx wires it via `buildExportOpts` (added by 9078 worker). Future Phase 4 dialog work should route through this seam, not build parallel dialogs.
+- **`SceneElement` structural alias** in `@atlasdraw/data/manifest-schema.ts` — Excalidraw type changes that break this contract will only surface as `tsc -b` errors AFTER e9db lands composite-project.
+- **Test count baselines after this session:** data 83, cli 11, basemap 12 (NEW), atlas-app 139 (was 113 before session). Phase 4 T1+ baselines off these counts.
 
 ## Active Skills & Routing
 
-- **handoff** (this skill) — invoked at user request with `/handoff with record extractors and record the learnings`.
-- **record-extractor** agent — dispatched once at session-end; emitted 14 mulch records, no new seeds.
-- **Delegation Protocol (CLAUDE.md)** — drove 4 worker dispatches in two parallel rounds + 1 final acceptance worker. Single setup commit served as the lockfile-mutex wave.
-- **`.claude/rules/excalidraw-api.md` (rule injection)** — fired during T9 brief drafting; led to the proactive grep that caught `mainMenu/` → `main-menu/` drift.
-- **atlasdraw-ui-conventions** skill — invoked by T9 worker before adding MainMenu items; dictated `data-testid` + `aria-label` patterns. Slot-first rule respected (zero new surfaces).
-
-No `[eval:]` checkpoints fired explicitly. Verification gate ("test + tsc must pass before commit") applied as personal discipline at every wave boundary.
+- **check-handoff** (this session, opening) — invoked at `/check-handoff` user request.
+- **handoff** (this skill) — invoked proactively at 82% context per CLAUDE.md PROACTIVE rule.
+- **Delegation Protocol (CLAUDE.md)** — drove 4 worker dispatches across 2 parallel waves. Shared prefix discipline: each worker brief opened with `## SHARED_CONTEXT` block of verified literals so workers didn't re-grep.
+- **`docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md`** — durable artifact workers consume INSTEAD of raw plan. Same convention as `wave1/2/3-pre-dispatch-scrub-2026-05-04.md`. Phase 5+ should follow this pattern.
+- **`.claude/rules/excalidraw-api.md`** — fired during 9078 brief drafting, drove the `renderCustomUI` discovery.
+- **`atlasdraw-ui-conventions`** skill — invoked by 9078 worker before adding cards to JSONExportDialog.
 
 ## Infrastructure Delta
 
 - **Plugins/Hooks/Pipelines:** unchanged.
 - **Skills:** unchanged.
-- **Global tooling:** unchanged.
-- **Mulch domains:** populated. `data` domain grew (was 1, +2 failures). Other affected domains: `meta` (+2), `architecture` (+3), `excalidraw-api` (+2), `infrastructure` (+3). Ran `record-extractor` once.
+- **Mulch domains:** unchanged this session (no new records). Suggest record-extractor at next pipeline close to capture: `renderCustomUI` extension point (would have saved 9078 worker's pivot time); composite-project topology decision (e9db); SceneElement structural-alias pattern (3601); FC store mirror via registry actions not sync hook (ad27).
 - **Project files (non-`.claude/`):**
-  - NEW: `code/apps/atlas-app/src/state/persistence.ts`, `persistence.test.ts`, `usePersistenceStore.ts`, `usePersistenceStore.test.ts`, `selectDocument.ts`, `selectDocument.test.ts`.
-  - NEW: `code/packages/cli/src/atlasdraw.ts`, `commands/lint.ts`, `commands/convert.ts`, `__tests__/lint.test.ts`, `__tests__/convert.test.ts`, `vitest.config.ts`.
-  - NEW: `code/packages/data/src/round-trip.test.ts`.
-  - MODIFIED: `code/packages/cli/package.json` (commander, @atlasdraw/data, vitest, @types/node, type:module, bin → atlasdraw.ts, ulid, scripts), `code/packages/cli/tsconfig.json` (types:[node], include shpjs.d.ts), `code/packages/cli/src/index.ts` (re-exports, no longer a stub), `code/apps/atlas-app/package.json` (idb), `code/apps/atlas-app/src/components/MapEditor.tsx` (+99 lines: persistence useEffect, markDirty in handleExcalidrawChange, MainMenu items), `code/yarn.lock`.
+  - NEW: `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md`.
+  - NEW: `code/packages/basemap/src/{BasemapRegistry,pmtiles-protocol,style-builder}.ts` + `src/__tests__/*` + `vitest.config.ts`.
+  - NEW: `code/apps/atlas-app/src/state/{useDataLayerFCStore,hydrate}.ts` + matching `__tests__`/.test files.
+  - NEW: `code/apps/atlas-app/src/components/__tests__/MapEditor.atlasdraw-export.test.tsx` (and `MapEditor.hydration.test.tsx`).
+  - MODIFIED: `code/packages/tsconfig.base.json` (ignoreDeprecations 6.0→5.0); `code/packages/excalidraw/index.tsx` (Dialog barrel); `code/apps/atlas-app/src/components/MapEditor.tsx` (hydration wiring + atlasdraw export cards + removed adjacent MainMenu items); `code/apps/atlas-app/src/state/{layerRegistry,selectDocument}.ts` (FC mirror); `atlasdraw-tech-spec.md` (§4.2 + §10); `code/packages/data/src/manifest-schema.ts` (SceneElement) + dependent test fixtures + barrel re-export.
+  - MODIFIED: `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` (top banner; Pre-Work Checklist rewrite; T5 wording; T13 re-scope).
+  - DIRTY (intentional, do not commit): `code/packages/cli/src/atlasdraw.ts` chmod 644→755.
 
 ## Knowledge State
 
 - **Indexed:** no `context add` packages this session.
-- **Productive tiers:** mulch (14 records cited inline), seeds (state churn only), git log + git diff, plan addendum at `docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md`, vendored Excalidraw source under `code/packages/excalidraw/`, `code/excalidraw-app/data/LocalData.ts` (decision evidence). Default routing was sufficient throughout.
-- **Gaps:** none encountered that needed external indexing. Phase 4 will likely need indexing for any new persistence-layer libraries (e.g., FSA polyfills if Firefox/Safari coverage grows).
+- **Productive tiers:** scrub doc + plan + seeds + mulch records (cited inline). `mulch-prime-cache.sh` not run; meta domain stayed warm.
+- **Gaps:** none encountered that needed external indexing.
 
 ## Next Steps
 
-1. **Phase 4 prerequisite: data-layer FC registry.** `selectDocument` ships `layers: new Map()` because runtime FCs live in MapLibre sources (`mx-91343d`). Build a parallel Zustand store `useDataLayerFCStore` keyed by `dl:` id; wire `useLayerRegistrySync` to also push FCs into it; update `selectDocument` to read from both. Without this, save/restore loses all data layers — the highest-priority Phase 4 ticket.
-
-2. **Phase 4 prerequisite: Excalidraw scene hydration.** T9 stubbed `load()` success path with a `[NOTE]` log. Pick a typed scene shape (probably `{ elements: NonDeletedExcalidrawElement[], appState: Partial<AppState>, files: BinaryFiles }`) — grep `code/packages/excalidraw/types.ts` for the canonical aggregator. Wire `excalidrawAPI.updateScene(...)` and `addFiles(...)` in the load path.
-
-3. **MainMenu surface unification (Phase 4 ergonomic).** Currently dual entry points: Excalidraw's `.excalidraw` save/open + atlasdraw's `.atlasdraw` save/open as separate MainMenu items. Decide: replace Excalidraw items via `<MainMenu>` slot override, or keep both and accept the dual-format ergonomic. Plan §T9 audit-amended note assumed wrapping would work; closure-binding made it impossible. Likely: replace Excalidraw items entirely since `.excalidraw` is no longer the canonical format.
-
-4. **Composite-tsconfig refactor (`atlasdraw-dc84` follow-up).** Atlas-app `paths:{}` clobber adds 1892 tsc errors that vite hides. Phase 4 type hardening will collide with this. Separate session-scope project; coordinate with `atlasdraw-947d` (shapefile fixture).
-
-5. **`atlasdraw-947d` shapefile happy-path fixture.** Filed last session, still open. T12 only exercises shapefile error paths. A real `.zip` fixture (generate via `ogr2ogr` outside the project, commit base64, decode in test) would close the gap. Recommended before Phase 4 self-host work.
-
-6. **Push to origin.** Branch is 27 ahead. `git push origin main` is the trivial next step if you're done iterating in this branch.
-
-7. **Stretch: T13 KML/GPX parsers.** Punted to Phase 6 per plan. Plan §T13 has the spec; `@mapbox/togeojson ^0.16.2` is the recommended dep. Skip unless time-pressured-not.
+1. **Wait for `e9db` worker completion notification.** Auto-notifies. If commit lands cleanly, close `atlasdraw-e9db`, verify `atlasdraw-4579` (Phase 4 epic) is no longer blocked. If worker reports `dd418c2` intent invalidates composite-project, surface to user.
+2. **Verify Phase 4 epic unblocks.** `sd ready | grep atlasdraw-4579` should now show it. T1 (Storage Contract Types) is the first dispatch target.
+3. **Visible-UX bug triage** (`atlasdraw-4142` mixed-geometry GeoJSON, `atlasdraw-76b2` polyline geo-anchor zoom break). Both flagged demo-blocking severity. Decide P4 inclusion or "Known Limitations" README entry.
+4. **Address binary scene asset hydration** — file a follow-up seed (or extend `atlasdraw-3601`'s closure note) for `excalidrawAPI.addFiles(loaded.files)` with blob→BinaryFileData conversion. Required before any user pastes an image into the canvas.
+5. **Re-file mulch records** — record-extractor pass to capture this session's 4 lessons (renderCustomUI, composite-project, SceneElement, FC mirror seam).
+6. **Phase 4 T1 dispatch** — once e9db closes, `code/apps/storage/` scaffold + `StorageMode`/`StorageClient` types is the first task. Plan §T1 lines 202-236. Verify against scrub doc Section A path-mapping table BEFORE briefing.
+7. **Push to origin.** Branch is 36 ahead at handoff write (will be 37 when e9db lands). `git push origin main` is the trivial next step.
 
 ## Context Files
 
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md` — Phase 3 plan; Wave 3 spec at line 558+ (T12 done; T13 stretch).
-- `code/packages/data/src/round-trip.test.ts` — the Phase 3 trust boundary. Phase 4 changes that break round-trip break this.
-- `code/apps/atlas-app/src/state/persistence.ts` + `selectDocument.ts` + `usePersistenceStore.ts` — the persistence trio. Phase 4 FC registry plugs into selectDocument.
-- `code/apps/atlas-app/src/components/MapEditor.tsx:470+` — the persistence useEffect + MainMenu wiring. Future scene hydration goes here.
-- `code/packages/cli/src/atlasdraw.ts` — commander entry; future subcommands `program.addCommand(...)` here.
-- `HANDOFF-expertise.md` — structured mulch records for Phase 3 close (data + meta + architecture + excalidraw-api + infrastructure domains) via `ml prime` + recent deltas via `ml diff`.
+- `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md` — Phase 4 launch checklist; verified literals; Section A drift table.
+- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` — amended plan; Pre-Work Checklist rewritten with corrected literals + 6 prereq gates.
+- `code/apps/atlas-app/src/state/hydrate.ts` — Phase 4 hydration entry point; round-trip identity tested against `selectDocument`.
+- `code/apps/atlas-app/src/state/useDataLayerFCStore.ts` — FC store keyed by `dl:` id; consumed by selectDocument + hydrate.
+- `code/apps/atlas-app/src/components/MapEditor.tsx` lines ~470 and ~250 — `buildExportOpts` (renderCustomUI cards) + load-on-mount hydration wiring.
+- `code/packages/basemap/src/{BasemapRegistry,pmtiles-protocol,style-builder}.ts` — Phase 1 deferral landed.
+- `code/packages/data/src/manifest-schema.ts` line 102 — `SceneElement` structural alias.
+- `HANDOFF.md` (this file) — agent-to-agent continuity.
