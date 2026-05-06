@@ -132,3 +132,4 @@ Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and e
 - `code/packages/basemap/src/{BasemapRegistry,pmtiles-protocol,style-builder}.ts` — Phase 1 deferral landed.
 - `code/packages/data/src/manifest-schema.ts` line 102 — `SceneElement` structural alias.
 - `HANDOFF.md` (this file) — agent-to-agent continuity.
+- `HANDOFF-expertise.md` — structured mulch records for meta + architecture + excalidraw-api domains + session deltas (`ml prime` + `ml diff --since HEAD~12`); 4 new conventions captured this session: `mx-58c357` (renderCustomUI extension point), `mx-4b9e4e` (SceneElement structural alias), `mx-fcce7f` (FC mirror via registry actions), `mx-cb3eb8` (per-wave re-scrub recurrence rule).
