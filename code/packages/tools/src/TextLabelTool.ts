@@ -14,9 +14,11 @@
 //   we explicitly opted out of per mulch convention `mx-682f8a` (atlasdraw
 //   tools dispatch independently of Excalidraw tool system via overlay).
 //
-// - Inline-editing UX is deferred. The seed carries `data: { text: "" }` so an
-//   empty text element is created; how the host focuses it for editing is a
-//   separate concern (will be filed as a follow-up seed by the orchestrator).
+// - Inline-editing UX (T25 maintainer decision 2026-05-05, atlasdraw-5193):
+//   the tool emits a "Label" placeholder text. Excalidraw's native double-click
+//   editor takes over from there — no Atlas-side overlay or focus
+//   choreography. Cheapest path; surfaces the element visually on creation
+//   instead of relying on a zero-width invisible click target.
 //
 // - scaleMode: "geographic" — labels scale with the map projection, matching
 //   the behavior of bbox annotations (rectangles, images).
@@ -55,10 +57,12 @@ export const TextLabelTool: AtlasdrawTool = {
       geo: { kind: "point", lng, lat, zRef },
       // Spec §3.4 (amended): text labels scale with the map projection.
       scaleMode: "geographic",
-      // Empty text — the bridge reads `data.text` for the element's content.
-      // Inline-editing UX (focusing the new element for typing) is host-side
-      // and will be filed as a follow-up seed.
-      data: { text: "" },
+      // "Label" placeholder — visible on creation so the user can locate the
+      // element and double-click to edit via Excalidraw's native text editor
+      // (T25 / atlasdraw-5193). Empty text was the original Wave 1b emit;
+      // it left the element invisible and required overlay focus
+      // choreography we explicitly opted out of.
+      data: { text: "Label" },
     });
   },
 };

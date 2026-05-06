@@ -1356,7 +1356,7 @@ license_constraints:
 
 # Wave 4 — Phase 1+2 Hardening (Addendum)
 
-**Status (2026-05-05 update):** WAVE 4a/4b/4c/4d SHIPPED IN PART; T19/T20/T21/T24/T25/T27/T28 OUTSTANDING. T31 + `atlasdraw-90a5` (2nd vendored fork) shipped 2026-05-05 in `b8bb015`. T26 (zRef bounds + LayerStyle migration) shipped 2026-05-05 in `a89e044` + follow-up. Original addendum (below) preserved for provenance. Per-task status block added at top; Wave 4c rewritten to match what shipped (slot retrofit via MainMenu + vendored fork, NOT the original "Wave 4c cleanup" framing); Wave 4d (emergent) section added for post-plan bug fixes.
+**Status (2026-05-05 update):** WAVE 4a/4b/4c/4d SHIPPED IN PART; T19/T20/T27/T28 OUTSTANDING. T31 + `atlasdraw-90a5` shipped in `b8bb015`. T26 zRef + LayerStyle in `a89e044`/`b13101e`. T21/T24 in `4ffea8c`. T25 (placeholder text) shipped in this commit. Original addendum (below) preserved for provenance. Per-task status block added at top; Wave 4c rewritten to match what shipped (slot retrofit via MainMenu + vendored fork, NOT the original "Wave 4c cleanup" framing); Wave 4d (emergent) section added for post-plan bug fixes.
 
 **Authored:** 2026-05-04 (post-Wave-3-T15 ship). **Why:** Audit of deferred items surfaced that Phase 1 was declared done with two gating leftovers (Task 8 scaleMode, Phase 1 baseline) and Wave 2/3 left visible UX gaps (LayerPanel unrendered, PNG export buttonless) plus one real bug (mixed-geometry FCs render wrong style). Wave 4 absorbs Phase 1 unfinished business + Phase 2 polish into a single hardening sprint that closes both phases canonically before Phase 3 (`atlasdraw-25a5` File Format) begins.
 
@@ -1374,11 +1374,11 @@ Mapping each Wave 4 task to its actual disposition. T29/T30/T31 are post-plan ta
 | T18 — auto-anchor native tools | SHIPPED | `7054ef0` (feat(phase-2): Wave 4a-T18 — useGeoAnchor extension to all native tools). |
 | T19 — Bench harness + Phase 1 baseline | OUTSTANDING | Still gated on perf-investigation skill availability. |
 | T20 — Phase 2 acceptance gate run | OUTSTANDING | Blocked by T19. |
-| T21 — Phase 1 dropped sources | OUTSTANDING | Decision pending. `BasemapRegistry` + `pmtiles-protocol` likely defer to Phase 4 (per filed seeds). |
+| T21 — Phase 1 dropped sources | SHIPPED | Maintainer decision 2026-05-05: Option B (defer). `code/packages/basemap/package.json` description corrected to match Wave 1 reality (commit `4ffea8c`). `BasemapRegistry` + `pmtiles-protocol` + `style-builder` deferred to Phase 4 self-host via forward seed `atlasdraw-2428`. Closes `atlasdraw-cdd3`. |
 | T22 — LayerPanel SidebarTrigger | SHIPPED, then SUPERSEDED | Shipped in `13ceaed` (feat(phase-2): Wave 4b-T22 — LayerPanel SidebarTrigger wiring). The Sidebar wiring of LayerPanel itself remains intact. SUPERSEDED-IN-PART by Wave 4c retrofit `7fcd94a` which moved the Layers **trigger surface** from a free-floating top-left button into `MainMenu.Item`. Closes `atlasdraw-7748`. |
 | T23 — PNG export UI button | SHIPPED, then SUPERSEDED | Originally shipped as a free-floating top-left button; SUPERSEDED by Wave 4c retrofit `7fcd94a` which moved the ExportPNG trigger into `MainMenu.Item`. Export-card UX further extended in `bd51a0d` (GeoJSON canonical export + export UI card). Closes `atlasdraw-ca89`. |
-| T24 — Mixed-geometry FC handling | OUTSTANDING | Still TODO. Sub-layers approach is the planned-of-record direction. |
-| T25 — TextLabelTool inline-editing | OUTSTANDING | Still TODO. |
+| T24 — Mixed-geometry FC handling | SHIPPED | Maintainer decision 2026-05-05: Option B (reject in v1). `requireHomogeneousGeometry` helper added to `@atlasdraw/data` (commit `4ffea8c`); rejects mixed FCs, GeometryCollection, and unsupported geometry types with `GeoJSONParseError`. MapEditor calls it post-`parse()` in the drop flow. Sub-layers per kind remains the planned-of-record direction for Phase 4+. Closes `atlasdraw-4142`. |
+| T25 — TextLabelTool inline-editing | SHIPPED | Maintainer decision 2026-05-05: Option (b) — placeholder text + Excalidraw native double-click editor. `TextLabelTool` now emits `data.text="Label"` instead of empty string; users locate the element visually and double-click to edit via Excalidraw's text editor. No imperative-API archaeology needed. Closes `atlasdraw-5193`. |
 | T26 — zRef bounds + LayerStyle migration | SHIPPED | Both halves closed 2026-05-05. (1) zRef bounds (`atlasdraw-02f6`, commit `a89e044`): added `MAX_ZREF=24` + `isValidZRef` to `@atlasdraw/geo/types.ts`; `parseGeoCustomData` rejects negative/NaN/±Infinity/>24 across point/bbox/polyline; fractional accepted (MapLibre continuous zoom); 7 new test cases. (2) LayerStyle migration (`atlasdraw-fc04`): basemap LayerStyle export was already in place since Wave 2a; atlas-app `layerRegistry.ts` swapped its inlined placeholder for an import + re-export of `@atlasdraw/basemap`'s `LayerStyle`. Shapes identical — no migration logic. |
 | T27 — Build/dep quality debt | OUTSTANDING | Still TODO; cleanup batch. |
 | T28 — Architectural orphans | OUTSTANDING | Still TODO; cleanup batch. T28.2 (`compileLayer` API decision) is dependent on T24 outcome. |
@@ -1425,11 +1425,8 @@ Three items shipped during the Wave 4 sprint that were not in the original adden
 |---|---|---|
 | T19 | bench harness | Phase 1 baseline still ungated. |
 | T20 | acceptance gate | Blocked by T19. |
-| T21 | dropped sources | Per-source decision pending; most defer to Phase 4. |
-| T24 | mixed-geometry FC bug | Sub-layers vs. reject decision pending. |
-| T25 | TextLabelTool inline-editing | Excalidraw text-edit imperative API verification needed. |
 | T27 | build/dep cleanup | Cleanup. |
-| T28 | architectural orphans | T28.2 depends on T24 resolution. |
+| T28 | architectural orphans | T28.2 (`atlasdraw-cc43`) decided 2026-05-05: stays as-is since T24 chose reject (sub-layer API change not needed). Other T28 items remain. |
 
 T31 (LayerPanel CSS module) closed in `b8bb015` (2026-05-05) — `atlasdraw-90a5` resolved affirmatively, the 2nd vendored fork (`registerSidebarTab`) shipped together with the CSS module retrofit.
 

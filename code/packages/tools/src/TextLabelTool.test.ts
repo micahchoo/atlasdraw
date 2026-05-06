@@ -7,7 +7,7 @@
 //
 //   1. "creates text element with screen scaleMode at click location" —
 //      seed.type==="text", seed.geo.kind==="point", seed.scaleMode==="geographic",
-//      seed.data.text==="" (empty; inline-editing UX deferred).
+//      seed.data.text==="Label" (placeholder; T25 — Excalidraw native double-click edits).
 //
 //   2. "does not call setActiveTool or any non-ctx-exposed API" — only
 //      `ctx.excalidraw.addElement` is called. `setActiveTool` is not on the
@@ -131,7 +131,7 @@ describe("TextLabelTool", () => {
     });
     expect(seed.geo.kind).toBe("point");
     expect(seed.scaleMode).toBe("geographic");
-    expect(seed.data?.text).toBe("");
+    expect(seed.data?.text).toBe("Label");
   });
 
   it("does not call setActiveTool or any non-ctx-exposed API", () => {
