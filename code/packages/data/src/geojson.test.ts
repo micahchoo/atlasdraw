@@ -5,7 +5,12 @@
 import { describe, expect, it } from "vitest";
 import type { FeatureCollection } from "geojson";
 
-import { GeoJSONParseError, parse, write } from "./geojson.js";
+import {
+  GeoJSONParseError,
+  parse,
+  requireHomogeneousGeometry,
+  write,
+} from "./geojson.js";
 
 const validFC: FeatureCollection = {
   type: "FeatureCollection",
@@ -86,5 +91,104 @@ describe("geojson.write", () => {
     const blob = await write(validFC);
     const round = await parse(blob);
     expect(round).toEqual(validFC);
+  });
+});
+
+describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
+  const featureOf = (geometry: unknown) =>
+    ({ type: "Feature", geometry, properties: {} }) as unknown;
+
+  const fcOf = (...geoms: unknown[]): FeatureCollection =>
+    ({
+      type: "FeatureCollection",
+      features: geoms.map(featureOf),
+    }) as FeatureCollection;
+
+  it("accepts an all-Polygon FC", () => {
+    const fc = fcOf(
+      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
+    );
+    expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
+  });
+
+  it("accepts an all-LineString FC", () => {
+    const fc = fcOf(
+      { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+      { type: "MultiLineString", coordinates: [[[0, 0], [1, 1]]] },
+    );
+    expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
+  });
+
+  it("accepts an all-Point FC", () => {
+    const fc = fcOf(
+      { type: "Point", coordinates: [0, 0] },
+      { type: "MultiPoint", coordinates: [[0, 0], [1, 1]] },
+    );
+    expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
+  });
+
+  it("accepts an empty FC", () => {
+    const fc: FeatureCollection = { type: "FeatureCollection", features: [] };
+    expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
+  });
+
+  it("ignores null geometries (RFC-legal, non-rendering)", () => {
+    const fc = fcOf(
+      null,
+      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      null,
+    );
+    expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
+  });
+
+  it("rejects mixed Polygon + LineString", () => {
+    const fc = fcOf(
+      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+    );
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(/mixed geometry kinds/);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(/fill/);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(/line/);
+  });
+
+  it("rejects mixed Point + Polygon", () => {
+    const fc = fcOf(
+      { type: "Point", coordinates: [0, 0] },
+      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+    );
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(/mixed geometry kinds/);
+  });
+
+  it("rejects GeometryCollection as unsupported", () => {
+    const fc = fcOf({
+      type: "GeometryCollection",
+      geometries: [{ type: "Point", coordinates: [0, 0] }],
+    });
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(/not supported by Atlas/);
+  });
+
+  it("rejects unknown geometry type", () => {
+    const fc = fcOf({ type: "Hyperbola", coordinates: [] });
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
+  });
+
+  it("error names the offending field path for unsupported geometry", () => {
+    const fc = fcOf(
+      { type: "Point", coordinates: [0, 0] },
+      { type: "GeometryCollection", geometries: [] },
+    );
+    try {
+      requireHomogeneousGeometry(fc);
+      throw new Error("expected requireHomogeneousGeometry to throw");
+    } catch (e) {
+      expect(e).toBeInstanceOf(GeoJSONParseError);
+      expect((e as GeoJSONParseError).field).toBe(
+        "features[1].geometry.type",
+      );
+    }
   });
 });

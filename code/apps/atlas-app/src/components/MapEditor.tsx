@@ -22,7 +22,11 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MapCanvas } from "@atlasdraw/basemap";
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
-import { parse, GeoJSONParseError } from "@atlasdraw/data";
+import {
+  parse,
+  GeoJSONParseError,
+  requireHomogeneousGeometry,
+} from "@atlasdraw/data";
 import { Excalidraw, MainMenu, setExportElementTransformer } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import { DEFAULT_SIDEBAR } from "@excalidraw/common";
@@ -285,6 +289,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       try {
         // parse() accepts a Blob; File extends Blob, so we pass it directly.
         const fc = await parse(file);
+        // T24 (atlasdraw-4142): Atlas v1 supports a single geometry kind per
+        // layer. Reject mixed FCs upfront so users see a clear error instead
+        // of silently-dropped features. Sub-layers per kind is the
+        // planned-of-record direction for Phase 4+.
+        requireHomogeneousGeometry(fc);
         const id = `dl:${crypto.randomUUID()}`;
         const style = defaultLayerStyle(fc);
         const geometryType = inferGeometryType(fc);

@@ -110,6 +110,63 @@ export async function write(fc: FeatureCollection): Promise<Blob> {
   return new Blob([json], { type: "application/json" });
 }
 
+/**
+ * Atlasdraw v1 renders one MapLibre layer style per data layer (fill | line |
+ * circle). A FeatureCollection that mixes geometry kinds (e.g. Polygon +
+ * LineString) cannot be rendered correctly in this model — `inferGeometryType`
+ * would silently drop all features that don't match the first.
+ *
+ * This is a *rendering* constraint, not a GeoJSON-spec violation, so it lives
+ * outside `parse()` (which stays RFC-pure). Callers that route the FC into
+ * MapLibre rendering should invoke this helper immediately after `parse()`
+ * to fail fast with a user-actionable error.
+ *
+ * Sub-layers per kind is the planned-of-record direction for Phase 4+ when
+ * self-host justifies the data-model complexity. T24 maintainer decision
+ * 2026-05-05 (atlasdraw-4142): reject in v1.
+ *
+ * `null` geometries are RFC-legal and treated as no-op (no contribution to
+ * the kind set). GeometryCollection and unknown types are rejected as
+ * unsupported.
+ *
+ * Throws `GeoJSONParseError` with a precise field path on mixed/unsupported
+ * input. Returns void on success.
+ */
+export function requireHomogeneousGeometry(fc: FeatureCollection): void {
+  const seen = new Set<AtlasGeometryKind>();
+  for (let i = 0; i < fc.features.length; i++) {
+    const g = fc.features[i].geometry;
+    if (g === null) continue;
+    const kind = atlasKindOf(g.type);
+    if (kind === null) {
+      throw new GeoJSONParseError(
+        `features[${i}].geometry.type ${JSON.stringify(g.type)} is not supported by Atlas (use Polygon/LineString/Point variants)`,
+        { field: `features[${i}].geometry.type` },
+      );
+    }
+    seen.add(kind);
+    if (seen.size > 1) {
+      const kinds = Array.from(seen).sort().join(", ");
+      throw new GeoJSONParseError(
+        `FeatureCollection contains mixed geometry kinds (${kinds}). ` +
+          `Atlas v1 supports a single geometry kind per layer; split your ` +
+          `file into separate FeatureCollections by geometry type.`,
+        { field: "features" },
+      );
+    }
+  }
+}
+
+/** Atlas's MapLibre layer-kind taxonomy. */
+export type AtlasGeometryKind = "fill" | "line" | "circle";
+
+function atlasKindOf(t: string): AtlasGeometryKind | null {
+  if (t === "Polygon" || t === "MultiPolygon") return "fill";
+  if (t === "LineString" || t === "MultiLineString") return "line";
+  if (t === "Point" || t === "MultiPoint") return "circle";
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // internal
 

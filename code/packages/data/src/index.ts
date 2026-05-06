@@ -6,4 +6,9 @@
 // adapters (KML/GPX/CSV) will follow the same pattern — re-export their
 // parser entry point through this file rather than from a deep path.
 
-export { parse, GeoJSONParseError } from "./geojson";
+export {
+  parse,
+  GeoJSONParseError,
+  requireHomogeneousGeometry,
+} from "./geojson";
+export type { AtlasGeometryKind } from "./geojson";

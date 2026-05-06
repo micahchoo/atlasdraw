@@ -1,7 +1,7 @@
 {
   "name": "@atlasdraw/basemap",
   "version": "0.0.0",
-  "description": "MapLibre wrapper: MapCanvas, BasemapRegistry, pmtiles protocol, style compiler",
+  "description": "MapLibre wrapper: MapCanvas + style compiler (LayerStyle, compileLayer). BasemapRegistry + pmtiles protocol deferred to Phase 4 (self-host).",
   "license": "MPL-2.0",
   "private": false,
   "main": "src/index.ts",
