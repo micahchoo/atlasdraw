@@ -14,11 +14,15 @@
     "test:typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "jszip": "^3.10.0",
+    "papaparse": "^5.4.0",
+    "shpjs": "^6.2.0",
     "ulid": "^2.3.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/geojson": "*",
+    "@types/papaparse": "^5.3.0",
     "typescript": "*",
     "vitest": "*"
   }
