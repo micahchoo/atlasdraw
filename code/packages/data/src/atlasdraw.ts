@@ -20,6 +20,7 @@ import type { FeatureCollection } from "geojson";
 import {
   ManifestSchema,
   type AtlasdrawDocument,
+  type SceneElement,
 } from "./manifest-schema.js";
 
 export const ATLASDRAW_MIME = "application/vnd.atlasdraw+zip";
@@ -182,10 +183,13 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       `scene.excalidraw.json is not valid JSON: ${(err as Error).message ?? String(err)}`,
     );
   }
-  const sceneElements: ReadonlyArray<unknown> =
+  // Reader stays liberal in what it accepts: persisted JSON could come from a
+  // future schema variant, so we don't validate per-element shape here. Cast
+  // to SceneElement[] is a structural assertion the writer's invariants held.
+  const sceneElements: ReadonlyArray<SceneElement> =
     sceneJson && typeof sceneJson === "object" &&
     Array.isArray((sceneJson as { elements?: unknown }).elements)
-      ? ((sceneJson as { elements: unknown[] }).elements as unknown[])
+      ? ((sceneJson as { elements: unknown[] }).elements as ReadonlyArray<SceneElement>)
       : [];
 
   // --- data/layer-<id>.geojson ---------------------------------------------

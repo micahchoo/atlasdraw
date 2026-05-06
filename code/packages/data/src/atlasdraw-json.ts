@@ -11,6 +11,7 @@ import type { FeatureCollection } from "geojson";
 import {
   ManifestSchema,
   type AtlasdrawDocument,
+  type SceneElement,
 } from "./manifest-schema.js";
 
 export type AtlasdrawJSONErrorCode =
@@ -123,7 +124,7 @@ export async function readJSON(blob: Blob): Promise<AtlasdrawDocument> {
 
   return {
     manifest: manifestParse.data,
-    scene: scene as ReadonlyArray<unknown>,
+    scene: scene as ReadonlyArray<SceneElement>,
     layers: layersMap,
     styleRef: styleRef ?? null,
     files: new Map<string, Blob>(),

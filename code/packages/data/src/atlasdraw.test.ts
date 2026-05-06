@@ -69,10 +69,11 @@ function synthAtlasdrawDocument(
   });
   const files = new Map<string, Blob>([["sketch.png", fileBlob]]);
 
-  const scene: ReadonlyArray<unknown> = [
+  const scene = [
     {
       id: "el-1",
       type: "rectangle",
+      version: 1,
       x: 0,
       y: 0,
       width: 10,

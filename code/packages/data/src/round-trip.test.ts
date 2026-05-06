@@ -144,10 +144,11 @@ function buildManifest(): Manifest {
 }
 
 function buildSyntheticDoc(): AtlasdrawDocument {
-  const scene: ReadonlyArray<unknown> = [
+  const scene = [
     {
       id: "el1",
       type: "rectangle",
+      version: 1,
       x: 0,
       y: 0,
       width: 100,
@@ -156,6 +157,7 @@ function buildSyntheticDoc(): AtlasdrawDocument {
     {
       id: "el2",
       type: "text",
+      version: 1,
       x: 10,
       y: 10,
       text: "hello",

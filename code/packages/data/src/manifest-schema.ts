@@ -92,14 +92,36 @@ export const ManifestSchema = z
 export type Manifest = z.infer<typeof ManifestSchema>;
 
 /**
+ * Structural minimum of an Excalidraw scene element as @atlasdraw/data sees
+ * it. Phase 4 Wave 0 (atlasdraw-3601): tightened from `unknown` so the
+ * persistence-load hydration path (`updateScene({elements: doc.scene})`) does
+ * not have to launder typing.
+ *
+ * We deliberately do NOT import @excalidraw/element types here — that would
+ * pull the entire Excalidraw type graph into a package the CLI also consumes.
+ * Instead we declare the cross-cut properties the writer touches (`id`,
+ * `type`, `version`) and leave room for the rest as `unknown` index entries.
+ *
+ * Excalidraw's `OrderedExcalidrawElement` is a structural subtype of this:
+ * the assignment `scene: excalidrawAPI.getSceneElements()` typechecks without
+ * a cast. Going the other direction (passing `doc.scene` to `updateScene`)
+ * needs a narrowing cast at the boundary — see MapEditor.tsx hydration path.
+ */
+export interface SceneElement {
+  readonly id: string;
+  readonly type: string;
+  readonly version: number;
+  readonly [key: string]: unknown;
+}
+
+/**
  * Runtime in-memory representation of an atlasdraw document. The zip writer
- * accepts this; the reader returns it. `scene` and `styleRef` are typed as
- * `unknown` to avoid coupling Wave 0 to Excalidraw / MapLibre type surfaces —
- * the reader / writer assert their concrete shape at the boundary.
+ * accepts this; the reader returns it. `styleRef` is still typed as `unknown`
+ * since basemap shape is a Phase 4 contract still in motion.
  */
 export interface AtlasdrawDocument {
   readonly manifest: Manifest;
-  readonly scene: ReadonlyArray<unknown>;
+  readonly scene: ReadonlyArray<SceneElement>;
   readonly layers: Map<string, FeatureCollection>;
   readonly styleRef: unknown;
   readonly files: Map<string, Blob>;

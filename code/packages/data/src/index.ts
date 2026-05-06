@@ -29,6 +29,7 @@ export type {
   LayerEntry,
   Permissions,
   AtlasdrawDocument,
+  SceneElement,
 } from "./manifest-schema";
 
 // Phase 3 Wave 1 Task 2/3 — .atlasdraw zip read/write.

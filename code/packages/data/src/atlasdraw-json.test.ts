@@ -52,7 +52,7 @@ function synthDoc(overrides: Partial<AtlasdrawDocument> = {}): AtlasdrawDocument
 
   return {
     manifest,
-    scene: [{ type: "rectangle", id: "el-1", x: 0, y: 0, width: 10, height: 10 }],
+    scene: [{ type: "rectangle", id: "el-1", version: 1, x: 0, y: 0, width: 10, height: 10 }],
     layers: new Map<string, FeatureCollection>([["dl:cities", sampleFC]]),
     styleRef: { version: 8, name: "atlas-default" },
     files: new Map<string, Blob>(),

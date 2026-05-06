@@ -55,6 +55,7 @@ import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { startAutoSave } from "../state/persistence";
+import { hydrate } from "../state/hydrate";
 import styles from "../styles/MapEditor.module.css";
 
 /**
@@ -255,13 +256,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // last-persisted document from IDB, start auto-save, and register the dirty
   // channel to React state for the MainMenu indicator.
   //
-  // [NOTE] Scene hydration on load() is intentionally stubbed for v1 —
-  //   `excalidrawAPI.updateScene({ elements: doc.scene })` would require
-  //   `doc.scene` to be a typed ExcalidrawElement[] but our manifest schema
-  //   types it as `ReadonlyArray<unknown>` (Wave 0 deferred coupling). Phase 4
-  //   will tighten the type at the AtlasdrawDocument boundary and wire the
-  //   updateScene call. For Wave 2 the load result is observed (logged) but
-  //   not applied so a stale IDB document can't corrupt a fresh session.
+  // Phase 4 W0 (atlasdraw-3601): scene + layers + FCs are hydrated via
+  // `hydrate(loaded, excalidrawAPI)` in state/hydrate.ts. The previously
+  // observe-only stub left a refreshed page with a blank canvas even when an
+  // IDB doc existed; this closes the round-trip gate.
   useEffect(() => {
     if (!excalidrawAPI) return;
     const store = createPersistenceStore({});
@@ -273,13 +271,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         const loaded = await store.load();
         if (cancelled) return;
         if (loaded) {
-          // [NOTE] Phase 4: hydrate Excalidraw scene + LayerRegistry from `loaded`.
-          // For now we observe-only — preserves the just-mounted blank canvas.
+          hydrate(loaded, excalidrawAPI);
           // eslint-disable-next-line no-console
-          console.info(
-            "[atlasdraw] persisted document found — hydration deferred to Phase 4",
-            { id: loaded.manifest.id, layerCount: loaded.manifest.layers.length },
-          );
+          console.info("[atlasdraw] persisted document hydrated", {
+            id: loaded.manifest.id,
+            layerCount: loaded.manifest.layers.length,
+            sceneLength: loaded.scene.length,
+          });
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -738,20 +736,21 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </MainMenu.Item>
             <MainMenu.Item
               onSelect={async () => {
+                if (!excalidrawAPI) return;
                 const store = usePersistenceStore.getState().persistenceStore;
                 if (!store) return;
                 try {
                   const loaded = await store.openFromDisk();
                   if (loaded) {
-                    // [NOTE] Phase 4: hydrate Excalidraw + LayerRegistry from `loaded`.
+                    // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
+                    // see state/hydrate.ts for ordering + idempotency.
+                    hydrate(loaded, excalidrawAPI);
                     // eslint-disable-next-line no-console
-                    console.info(
-                      "[atlasdraw] document opened — hydration deferred to Phase 4",
-                      {
-                        id: loaded.manifest.id,
-                        layerCount: loaded.manifest.layers.length,
-                      },
-                    );
+                    console.info("[atlasdraw] document opened + hydrated", {
+                      id: loaded.manifest.id,
+                      layerCount: loaded.manifest.layers.length,
+                      sceneLength: loaded.scene.length,
+                    });
                   }
                 } catch (err) {
                   // eslint-disable-next-line no-console
