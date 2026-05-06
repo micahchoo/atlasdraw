@@ -12,3 +12,21 @@ export {
   requireHomogeneousGeometry,
 } from "./geojson";
 export type { AtlasGeometryKind } from "./geojson";
+
+// Phase 3 Wave 0 Task 1 — manifest schema + AtlasdrawDocument runtime type.
+export {
+  ManifestSchema,
+  BasemapRefSchema,
+  CameraSchema,
+  LayerEntrySchema,
+  PermissionsSchema,
+  ULIDSchema,
+} from "./manifest-schema";
+export type {
+  Manifest,
+  BasemapRef,
+  Camera,
+  LayerEntry,
+  Permissions,
+  AtlasdrawDocument,
+} from "./manifest-schema";

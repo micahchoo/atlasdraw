@@ -13,9 +13,13 @@
     "test": "vitest run",
     "test:typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ulid": "^2.3.0",
+    "zod": "^3.22.0"
+  },
   "devDependencies": {
     "@types/geojson": "*",
-    "typescript": "*"
+    "typescript": "*",
+    "vitest": "*"
   }
 }
