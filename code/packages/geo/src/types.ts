@@ -38,6 +38,20 @@ export type GeoCustomData = {
   schemaVersion: 1;
 };
 
+/**
+ * Upper bound for `zRef` in GeoAnchor. MapLibre's default `maxzoom` is 22 and
+ * a few tile sources go to 24; 24 is the conservative ceiling. Negative or
+ * non-finite values are nonsensical (zRef is a MapLibre zoom level, which is
+ * defined on `[0, maxzoom]` and may be fractional). Used by the deep parser
+ * (`parseGeoCustomData`) to reject untrusted input that maplibre would otherwise
+ * silently saturate.
+ */
+export const MAX_ZREF = 24;
+
+/** True iff `v` is a valid `zRef`: finite, non-negative, and <= MAX_ZREF. */
+export const isValidZRef = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_ZREF;
+
 /** Type guard: is this element's customData a GeoCustomData? */
 export function isGeoCustomData(value: unknown): value is GeoCustomData {
   if (typeof value !== "object" || value === null) return false;

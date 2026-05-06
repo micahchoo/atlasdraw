@@ -204,3 +204,79 @@ describe("migrate", () => {
     expect(() => migrate(validPoint, 0)).toThrow(/unknown version/);
   });
 });
+
+describe("parseGeoCustomData zRef bounds (T26 / atlasdraw-02f6)", () => {
+  // zRef is a MapLibre zoom level. Allowed: finite, [0, MAX_ZREF=24], fractional
+  // values OK (MapLibre uses continuous zoom). Rejected: NaN, ±Infinity,
+  // negative, > MAX_ZREF.
+  const variantsForKind = (zRef: unknown) => [
+    {
+      ...validPoint,
+      geo: { ...validPoint.geo, zRef } as unknown,
+    },
+    {
+      ...validBbox,
+      geo: { ...validBbox.geo, zRef } as unknown,
+    },
+    {
+      ...validPolyline,
+      geo: { ...validPolyline.geo, zRef } as unknown,
+    },
+  ];
+
+  it("accepts zRef = 0 (lower bound)", () => {
+    for (const v of variantsForKind(0)) {
+      expect(() => parseGeoCustomData(v)).not.toThrow();
+    }
+  });
+
+  it("accepts zRef = 24 (upper bound)", () => {
+    for (const v of variantsForKind(24)) {
+      expect(() => parseGeoCustomData(v)).not.toThrow();
+    }
+  });
+
+  it("accepts fractional zRef (continuous zoom)", () => {
+    for (const v of variantsForKind(13.7)) {
+      expect(() => parseGeoCustomData(v)).not.toThrow();
+    }
+  });
+
+  it("rejects negative zRef", () => {
+    for (const v of variantsForKind(-1)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+      expect(() => parseGeoCustomData(v)).toThrow(/geo\.zRef.*\[0, 24\]/);
+    }
+  });
+
+  it("rejects zRef > MAX_ZREF (24.0001)", () => {
+    for (const v of variantsForKind(24.0001)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+      expect(() => parseGeoCustomData(v)).toThrow(/geo\.zRef.*\[0, 24\]/);
+    }
+  });
+
+  it("rejects NaN zRef", () => {
+    for (const v of variantsForKind(Number.NaN)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+    }
+  });
+
+  it("rejects Infinity zRef", () => {
+    for (const v of variantsForKind(Number.POSITIVE_INFINITY)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+    }
+    for (const v of variantsForKind(Number.NEGATIVE_INFINITY)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+    }
+  });
+
+  it("rejects non-number zRef", () => {
+    for (const v of variantsForKind("13" as unknown)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+    }
+    for (const v of variantsForKind(null as unknown)) {
+      expect(() => parseGeoCustomData(v)).toThrow(GeoCustomDataParseError);
+    }
+  });
+});

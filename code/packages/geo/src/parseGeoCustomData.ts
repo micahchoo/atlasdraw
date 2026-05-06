@@ -7,6 +7,7 @@
 // in @atlasdraw/data). DO NOT switch to a Result<T, E> shape — emergent codebase pattern
 // is throw + named error.
 
+import { isValidZRef, MAX_ZREF } from "./types.js";
 import type { GeoAnchor, GeoCustomData, ScaleMode } from "./types.js";
 
 /**
@@ -49,7 +50,8 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
   if (kind === "point") {
     if (!isFiniteNumber(obj.lng)) fail("geo.lng: must be a finite number");
     if (!isFiniteNumber(obj.lat)) fail("geo.lat: must be a finite number");
-    if (!isFiniteNumber(obj.zRef)) fail("geo.zRef: must be a finite number");
+    if (!isValidZRef(obj.zRef))
+      fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
     return {
       kind: "point",
       lng: obj.lng as number,
@@ -63,7 +65,8 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
     if (!isFiniteNumber(obj.south)) fail("geo.south: must be a finite number");
     if (!isFiniteNumber(obj.east)) fail("geo.east: must be a finite number");
     if (!isFiniteNumber(obj.north)) fail("geo.north: must be a finite number");
-    if (!isFiniteNumber(obj.zRef)) fail("geo.zRef: must be a finite number");
+    if (!isValidZRef(obj.zRef))
+      fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
     const west = obj.west as number;
     const east = obj.east as number;
     const south = obj.south as number;
@@ -93,7 +96,8 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
     }
     validated.push([tuple[0] as number, tuple[1] as number]);
   }
-  if (!isFiniteNumber(obj.zRef)) fail("geo.zRef: must be a finite number");
+  if (!isValidZRef(obj.zRef))
+    fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
   return { kind: "polyline", coordinates: validated, zRef: obj.zRef as number };
 }
 
