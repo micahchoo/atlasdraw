@@ -34,13 +34,16 @@ const CAMERA_EVENTS = ["move", "zoom", "rotate", "pitch"] as const;
 /**
  * Wires MapLibre camera events to CoordinateSync.syncMapToScene with a 16ms throttle.
  *
+ * Returns `syncNow` — a stable reference to `sync.syncMapToScene()` — so callers
+ * can trigger an immediate sync outside of camera events (e.g. after file load).
+ *
  * @param map            - MapLibre Map instance (null until map layer mounts)
  * @param excalidrawAPI  - Excalidraw imperative API (null until Excalidraw mounts)
  */
 export function useCoordinateSync(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
-): void {
+): { syncNow: (() => void) | null } {
   // Memoize CoordinateSync instance. Re-creates only when (map, api) tuple changes.
   // ExcalidrawImperativeAPI is structurally compatible with geo's ExcalidrawAPI
   // interface (getSceneElements + updateScene with captureUpdate).
@@ -76,4 +79,6 @@ export function useCoordinateSync(
       sync.detach();
     };
   }, [map, sync]);
+
+  return { syncNow: sync ? () => sync.syncMapToScene() : null };
 }

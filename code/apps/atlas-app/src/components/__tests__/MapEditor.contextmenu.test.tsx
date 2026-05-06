@@ -183,6 +183,7 @@ vi.mock("@excalidraw/excalidraw", () => {
     },
     MainMenu: MainMenuStub,
     Sidebar: SidebarStub,
+    setExportElementTransformer: vi.fn(),
   };
 });
 
@@ -211,7 +212,7 @@ vi.mock("../../hooks/useMapRef", () => ({
 }));
 
 vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(),
+  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
@@ -296,6 +297,16 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
       selectedElementIds: { "anno-text": true },
     });
     expect(result).toBe(false);
+  });
+
+  it("predicate returns true for a single geo arrow selection", async () => {
+    render(<MapEditor />);
+    const item = await awaitConvertItem();
+    const arrowEl = { ...fakeRectangleEl, id: "anno-arrow", type: "arrow" };
+    const result = item.predicate([arrowEl], {
+      selectedElementIds: { "anno-arrow": true },
+    });
+    expect(result).toBe(true);
   });
 
   it("predicate returns false for multi-selection", async () => {

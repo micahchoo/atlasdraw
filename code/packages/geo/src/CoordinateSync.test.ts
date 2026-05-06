@@ -118,9 +118,11 @@ describe("CoordinateSync.syncMapToScene", () => {
     expect(project).toHaveBeenCalledWith([-122.4194, 37.7749]);
     const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
     expect(passed[0]).toMatchObject({ id: "p1", x: 500, y: 400, width: 8, height: 8 });
-    // Invariant: customData.geo not mutated — same ref, same shape.
-    expect(passed[0].customData).toBe(pointCustomData);
-    expect((passed[0].customData as GeoCustomData).geo).toEqual(pointCustomData.geo);
+    // Invariant: customData.geo value preserved; customData is a NEW object
+    // (_projectElement shallow-spreads customData and adds _lastSync for reanchorIfMoved).
+    const resultData = passed[0].customData as GeoCustomData & { _lastSync?: unknown };
+    expect(resultData.geo).toEqual(pointCustomData.geo);
+    expect(resultData._lastSync).toEqual({ x: 500, y: 400 });
   });
 
   it("Test C: captureUpdate: 'NEVER' is passed to updateScene", () => {
@@ -185,8 +187,11 @@ describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
 
     const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
     expect(passed[0]).toMatchObject({ id: "b1", x: 100, y: 100, width: 200, height: 150 });
-    // Invariant: customData not mutated.
-    expect(passed[0].customData).toBe(bboxCustomData);
+    // Invariant: customData.geo value preserved; customData is a NEW object
+    // (_projectElement shallow-spreads customData and adds _lastSync).
+    const resultData = passed[0].customData as GeoCustomData & { _lastSync?: unknown };
+    expect(resultData.geo).toEqual(bboxCustomData.geo);
+    expect(resultData._lastSync).toEqual({ x: 100, y: 100, w: 200, h: 150 });
   });
 
   it("clamps width/height to >= 1 when projection inverts (rotated/pitched camera)", () => {
@@ -491,15 +496,16 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
   it("polyline + geographic — width/height clamped to >= 1 for zero-extent projected points", () => {
     // Two coords projecting to the same pixel (degenerate / extreme zoom-out).
+    // Use integer degrees so normalizeLng maps cleanly to the same value.
     const polylineGeo: GeoCustomData = {
-      geo: { kind: "polyline", coordinates: [[0, 0], [0.0001, 0.0001]], zRef: 12 },
+      geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
       scaleMode: "geographic",
       projection: "mercator",
       schemaVersion: 1,
     };
     const project = makeProjectByLngLat([
       [[0, 0], { x: 500, y: 500 }],
-      [[0.0001, 0.0001], { x: 500, y: 500 }], // collapsed to same pixel
+      [[1, 1], { x: 500, y: 500 }], // collapsed to same pixel
     ]);
     const map = makeMap(project);
     const lineEl: ExcalidrawElementLike = {

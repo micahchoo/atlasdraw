@@ -40,14 +40,22 @@ interface AppStateLike {
 function makeMockMap(opts?: {
   zoom?: number;
   unprojectImpl?: ([x, y]: [number, number]) => { lng: number; lat: number };
+  projectImpl?: ([lng, lat]: [number, number]) => { x: number; y: number };
 }): maplibregl.Map {
   const unproject = vi.fn(
     opts?.unprojectImpl ??
       (([x, y]: [number, number]) => ({ lng: x, lat: y })),
   );
+  // Identity project: project(unproject([x,y])) = [x,y]. For bbox reanchor tests,
+  // use geo fixtures where north < south numerically so seProj.y - nwProj.y > 0
+  // (matching real map convention where north → smaller y, south → larger y).
+  const project = vi.fn(
+    opts?.projectImpl ??
+      (([lng, lat]: [number, number]) => ({ x: lng, y: lat })),
+  );
   return {
     unproject,
-    project: vi.fn(),
+    project,
     getZoom: vi.fn(() => opts?.zoom ?? 12),
   } as unknown as maplibregl.Map;
 }
@@ -123,7 +131,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     });
   });
 
-  it("line stamps polyline + hybrid with projected coordinates", () => {
+  it("line stamps polyline + geographic with projected coordinates", () => {
     const { updateScene, trigger } = setup();
     trigger([
       {
@@ -151,7 +159,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
         ],
         zRef: 12,
       },
-      scaleMode: "hybrid",
+      scaleMode: "geographic",
       projection: "mercator",
       schemaVersion: 1,
     });
@@ -183,11 +191,11 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
           [25, 10],
         ],
       },
-      scaleMode: "hybrid",
+      scaleMode: "geographic",
     });
   });
 
-  it("freedraw stamps polyline + hybrid (multi-point)", () => {
+  it("freedraw stamps polyline + geographic (multi-point)", () => {
     const { updateScene, trigger } = setup();
     trigger([
       {
@@ -217,7 +225,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
           [30, 30],
         ],
       },
-      scaleMode: "hybrid",
+      scaleMode: "geographic",
     });
   });
 
@@ -236,8 +244,13 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     });
   });
 
-  it("already-anchored element passes through (idempotency)", () => {
+  it("already-anchored bbox at its projected position passes through (no re-anchor)", () => {
     const { updateScene, trigger } = setup();
+    // Geo uses north=0, south=10 (north < south numerically) so that with the
+    // identity project mock project([lng,lat])→{x:lng,y:lat}, the NW corner
+    // projects to {x:0,y:0} and SE to {x:10,y:10}, giving positive height diff
+    // (se.y - nw.y = 10 > 0). This matches real-map convention where north
+    // (larger lat) → smaller screen-y and south → larger screen-y.
     trigger([
       {
         id: "rect-anchored",
@@ -249,10 +262,10 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
         customData: {
           geo: {
             kind: "bbox",
-            west: -1,
-            east: 1,
-            north: 1,
-            south: -1,
+            west: 0,
+            east: 10,
+            north: 0,  // north=0, south=10 so seProj.y - nwProj.y = 10 > 0
+            south: 10,
             zRef: 10,
           },
           scaleMode: "geographic",
@@ -261,8 +274,84 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
         },
       },
     ]);
-    // No element in the scene needs stamping → updateScene must not be called.
+    // Position matches projected anchor → no re-anchor → updateScene not called.
     expect(updateScene).not.toHaveBeenCalled();
+  });
+
+  it("already-anchored bbox re-anchors when moved (updates customData.geo)", () => {
+    const { updateScene, trigger } = setup();
+    // Element moved to x:50, y:50 but geo still reflects old position.
+    // Identity project: nwProj=project(0,0)={x:0,y:0}; el.x=50 differs → re-anchor.
+    // Identity unproject: (50,50)→{lng:50,lat:50}; (60,60)→{lng:60,lat:60}.
+    trigger([
+      {
+        id: "rect-moved",
+        type: "rectangle",
+        x: 50,
+        y: 50,
+        width: 10,
+        height: 10,
+        customData: {
+          geo: {
+            kind: "bbox",
+            west: 0,
+            east: 10,
+            north: 0,
+            south: 10,
+            zRef: 10,
+          },
+          scaleMode: "geographic",
+          projection: "mercator",
+          schemaVersion: 1,
+        },
+      },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const reanchored = updateScene.mock.calls[0][0].elements[0] as SceneElement;
+    // unproject(50,50)→{lng:50,lat:50}; unproject(60,60)→{lng:60,lat:60}.
+    // north=max(50,60)=60; south=min(50,60)=50.
+    expect(reanchored.customData).toMatchObject({
+      geo: { kind: "bbox", west: 50, east: 60, north: 60, south: 50, zRef: 10 },
+      scaleMode: "geographic",
+    });
+  });
+
+  it("bbox anchor survives two sync-then-onChange cycles at extreme zoom-out (clamped 1px)", () => {
+    const { updateScene, trigger } = setup();
+    // Simulate a bbox element after _projectElement clamped it to 1×1px at extreme
+    // zoom-out. The geo span projects to < 1px so _projectElement writes width=1,
+    // height=1. reanchorIfMoved must NOT misinterpret the clamped dimensions as a
+    // user resize and corrupt the anchor. Two cycles catch the feedback loop: old
+    // code would re-anchor on cycle 1 and compound the error on cycle 2.
+    const ORIGINAL_GEO = {
+      kind: "bbox" as const,
+      west: 100,
+      east: 100.001, // 0.001 lng span → << 1px at zoom-out
+      north: 100,
+      south: 100.001, // north < south so seProj.y - nwProj.y > 0 with identity mock
+      zRef: 10,
+    };
+    // With identity project: nwProj={x:100,y:100}; seProj={x:100.001,y:100.001};
+    // expectedW=max(1,0.001)=1; expectedH=max(1,0.001)=1 — matches clamped values.
+    const clampedElement: SceneElement = {
+      id: "rect-clamped",
+      type: "rectangle",
+      x: 100,
+      y: 100,
+      width: 1,  // clamped by _projectElement
+      height: 1, // clamped by _projectElement
+      customData: {
+        geo: ORIGINAL_GEO,
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      },
+    };
+    trigger([clampedElement]); // cycle 1 — simulates first onChange after syncMapToScene
+    expect(updateScene).not.toHaveBeenCalled();
+    trigger([clampedElement]); // cycle 2 — simulates trailing-throttle call at same zoom
+    expect(updateScene).not.toHaveBeenCalled();
+    // Anchor integrity verified: no updateScene = geo anchor was not rewritten.
   });
 
   it("mid-drag (appState.newElement non-null) passes through", () => {
@@ -287,15 +376,54 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     const { updateScene, trigger } = setup();
     trigger([
       {
-        id: "frame-1",
-        // `frame` is a real Excalidraw type but not in our auto-anchor matrix.
-        type: "frame",
+        id: "embed-1",
+        // `embeddable` is a real Excalidraw type but is in none of the three
+        // anchor buckets (BBOX_TOOL_TYPES / POLYLINE_TOOL_TYPES / POINT_TOOL_TYPES).
+        type: "embeddable",
         x: 0,
         y: 0,
         width: 100,
         height: 100,
       },
     ]);
+    expect(updateScene).not.toHaveBeenCalled();
+  });
+
+  it("ellipse and diamond stamp bbox + geographic (same bucket as rectangle)", () => {
+    const { updateScene, trigger } = setup();
+    trigger([
+      { id: "ellipse-1", type: "ellipse", x: 0, y: 0, width: 20, height: 10 },
+      { id: "diamond-1", type: "diamond", x: 5, y: 5, width: 15, height: 15 },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const els = updateScene.mock.calls[0][0].elements as SceneElement[];
+    expect(els[0].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+    expect(els[1].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+  });
+
+  it("frame and magicframe stamp bbox + geographic", () => {
+    const { updateScene, trigger } = setup();
+    trigger([
+      { id: "frame-1", type: "frame", x: 0, y: 0, width: 100, height: 50 },
+      { id: "mframe-1", type: "magicframe", x: 0, y: 0, width: 100, height: 50 },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const els = updateScene.mock.calls[0][0].elements as SceneElement[];
+    expect(els[0].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+    expect(els[1].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+  });
+
+  it("polyline element with missing points array is not stamped", () => {
+    const { updateScene, trigger } = setup();
+    // `line` is in POLYLINE_TOOL_TYPES but buildGeoCustomData requires points
+    // to be present and non-empty; absent points → null → element passes through.
+    trigger([{ id: "line-nopts", type: "line", x: 0, y: 0, width: 0, height: 0 }]);
+    expect(updateScene).not.toHaveBeenCalled();
+  });
+
+  it("polyline element with empty points array is not stamped", () => {
+    const { updateScene, trigger } = setup();
+    trigger([{ id: "line-empty", type: "line", x: 0, y: 0, width: 0, height: 0, points: [] }]);
     expect(updateScene).not.toHaveBeenCalled();
   });
 

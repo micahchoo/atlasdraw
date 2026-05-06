@@ -18,8 +18,8 @@
 //   empty text element is created; how the host focuses it for editing is a
 //   separate concern (will be filed as a follow-up seed by the orchestrator).
 //
-// - scaleMode: "screen" — labels keep visual size as the map zooms (matches
-//   PinTool rationale; text legibility shouldn't depend on camera level).
+// - scaleMode: "geographic" — labels scale with the map projection, matching
+//   the behavior of bbox annotations (rectangles, images).
 //
 // - The seed only carries the bare `geo` payload + `scaleMode` + `data.text`.
 //   atlas-app's `seedToElement` bridge fills in the full `GeoCustomData`
@@ -42,7 +42,7 @@ export const TextLabelTool: AtlasdrawTool = {
   label: "Text Label",
   icon: "text",
   cursor: "text",
-  defaultScaleMode: "screen",
+  defaultScaleMode: "geographic",
 
   onPointerDown(e, ctx) {
     // Container-relative pixel → geographic. Same narrow ctx surface as PinTool
@@ -53,8 +53,8 @@ export const TextLabelTool: AtlasdrawTool = {
     ctx.excalidraw.addElement({
       type: "text",
       geo: { kind: "point", lng, lat, zRef },
-      // Spec §3.4: text labels stay screen-fixed in size as the map zooms.
-      scaleMode: "screen",
+      // Spec §3.4 (amended): text labels scale with the map projection.
+      scaleMode: "geographic",
       // Empty text — the bridge reads `data.text` for the element's content.
       // Inline-editing UX (focusing the new element for typing) is host-side
       // and will be filed as a follow-up seed.

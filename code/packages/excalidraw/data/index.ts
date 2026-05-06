@@ -108,6 +108,7 @@ export const exportCanvas = async (
     name = appState.name || DEFAULT_FILENAME,
     fileHandle = null,
     exportingFrame = null,
+    backgroundCanvas = null,
   }: {
     exportBackground: boolean;
     exportPadding?: number;
@@ -116,6 +117,14 @@ export const exportCanvas = async (
     name?: string;
     fileHandle?: FileSystemFileHandle | null;
     exportingFrame: ExcalidrawFrameLikeElement | null;
+    /**
+     * When provided and type is "png" or "clipboard", composites this canvas
+     * (e.g. a MapLibre basemap) under the Excalidraw annotations.
+     * Export switches to viewport mode so both layers share the same coordinate
+     * space. Frame exports bypass compositing regardless (frame has its own
+     * bounds). SVG export is unaffected — SVG cannot embed raster natively.
+     */
+    backgroundCanvas?: HTMLCanvasElement | null;
   },
 ) => {
   if (elements.length === 0) {
@@ -164,12 +173,53 @@ export const exportCanvas = async (
     }
   }
 
-  const tempCanvas = exportToCanvas(elements, appState, files, {
-    exportBackground,
-    viewBackgroundColor,
-    exportPadding,
-    exportingFrame,
-  });
+  // Composite: if a background canvas is provided (and this is a raster export
+  // with no active frame), render annotations in viewport space at the same
+  // device-pixel resolution as the background, then draw background first.
+  // Frame exports use element-bounds, not viewport — skip compositing.
+  // SVG exports fall through the early-return above and are never reached here.
+  const tempCanvas: Promise<HTMLCanvasElement> =
+    backgroundCanvas != null && !exportingFrame && (type === "png" || type === "clipboard")
+      ? (async () => {
+          // DPR: background canvas is in device pixels; appState.width is CSS px
+          const dpr = backgroundCanvas.width / appState.width;
+          const annotations = await exportToCanvas(
+            elements,
+            appState,
+            files,
+            {
+              exportBackground: false,
+              viewBackgroundColor: "transparent",
+              exportingFrame: null,
+              viewport: {
+                width: appState.width,
+                height: appState.height,
+                scrollX: appState.scrollX,
+                scrollY: appState.scrollY,
+                zoom: appState.zoom,
+              },
+            },
+            (width, height) => {
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.round(width * dpr);
+              canvas.height = Math.round(height * dpr);
+              return { canvas, scale: dpr };
+            },
+          );
+          const out = document.createElement("canvas");
+          out.width = backgroundCanvas.width;
+          out.height = backgroundCanvas.height;
+          const ctx = out.getContext("2d")!;
+          ctx.drawImage(backgroundCanvas, 0, 0);
+          ctx.drawImage(annotations, 0, 0);
+          return out;
+        })()
+      : exportToCanvas(elements, appState, files, {
+          exportBackground,
+          viewBackgroundColor,
+          exportPadding,
+          exportingFrame,
+        });
 
   if (type === "png") {
     let blob = canvasToBlob(tempCanvas);

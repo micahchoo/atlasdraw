@@ -7,7 +7,7 @@ export type {
   ExcalidrawAPI,
   ExcalidrawElementLike,
 } from "./CoordinateSync.js";
-export { projectPoint, unprojectPoint } from "./projection.js";
+export { projectPoint, unprojectPoint, normalizeLng } from "./projection.js";
 // Phase 1 Wave 2 Task 10
 export { geoToExcalidraw } from "./geoToExcalidraw.js";
 export { excalidrawToGeo } from "./excalidrawToGeo.js";
@@ -19,3 +19,4 @@ export {
   migrate,
   GeoCustomDataParseError,
 } from "./parseGeoCustomData.js";
+export { normalizeElementsForExport } from "./canonicalExport.js";

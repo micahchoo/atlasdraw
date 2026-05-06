@@ -98,6 +98,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     aiEnabled,
     showDeprecatedFonts,
     renderScrollbars,
+    getBackgroundCanvas,
   } = props;
 
   const canvasActions = props.UIOptions?.canvasActions;
@@ -208,6 +209,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           aiEnabled={aiEnabled !== false}
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}
+          getBackgroundCanvas={getBackgroundCanvas}
         >
           {children}
         </App>
@@ -366,6 +368,7 @@ export type {
 } from "./components/TTDDialog/types";
 
 export { zoomToFitBounds } from "./actions/actionCanvas";
+export { setExportElementTransformer } from "./actions/actionExport";
 export {
   getCommonBounds,
   getVisibleSceneBounds,

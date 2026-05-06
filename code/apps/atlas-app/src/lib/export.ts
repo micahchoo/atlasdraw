@@ -2,7 +2,7 @@ import type maplibregl from "maplibre-gl";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import { exportToCanvas } from "@excalidraw/excalidraw";
 
-export type ExportOpts = { scale?: number };
+export type ExportOpts = { scale?: number; backgroundColor?: string };
 
 /**
  * Composite PNG export: MapLibre basemap (+ data layers) under, Excalidraw
@@ -19,6 +19,7 @@ export async function exportPNG(
   opts: ExportOpts = {},
 ): Promise<Blob> {
   const scale = opts.scale ?? 2;
+  const backgroundColor = opts.backgroundColor ?? "transparent";
   const mapCanvas = map.getCanvas();
   // CSS logical px (NOT physical px). On retina (DPR=2) mapCanvas.width is
   // already cssWidth*DPR; using it would yield 4x logical resolution.
@@ -31,6 +32,14 @@ export async function exportPNG(
     throw new Error("exportPNG: 2D context unavailable on OffscreenCanvas");
   }
   ctx.scale(scale, scale);
+
+  // Layer 0 (optional): user-chosen background color. Fills before the map so
+  // it shows only where the map canvas has transparent pixels. If MapLibre has
+  // its own background layer the color is already baked in; this is a fallback.
+  if (backgroundColor !== "transparent") {
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   // Layer 1: MapLibre (basemap + data layers).
   ctx.drawImage(mapCanvas, 0, 0, width, height);

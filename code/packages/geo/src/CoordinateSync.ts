@@ -33,6 +33,7 @@ export interface ExcalidrawElementLike {
   y: number;
   width?: number;
   height?: number;
+  fontSize?: number;
   points?: ReadonlyArray<readonly [number, number]>;
   customData?: unknown;
   // Accept additional fields untouched.
@@ -170,7 +171,8 @@ export class CoordinateSync {
    * At currentZoom == zRef, factor == 1 (identity).
    *
    * Invariant: input element's `customData` is never mutated; the returned
-   * element is a shallow clone with overwritten `x/y/width/height/points`.
+   * element is a shallow clone with overwritten `x/y/width/height/points` and
+   * a `_lastSync` key added to `customData` for `reanchorIfMoved`.
    */
   private _projectElement(el: ExcalidrawElementLike): ExcalidrawElementLike {
     const customData = el.customData as GeoCustomData;
@@ -183,20 +185,36 @@ export class CoordinateSync {
         const { x, y } = projectPoint(this._map, anchor.lng, anchor.lat);
         if (scaleMode === "screen") {
           // Position-only update; width/height passed through untouched.
-          return { ...el, x, y };
+          return { ...el, x, y, customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x, y } } };
         }
-        // geographic | hybrid — scale stored screen-size by factor.
+        // geographic | hybrid — scale creation-zoom dims by absolute factor from zRef.
+        // Read w0/h0/fontSize0 captured on first projection to prevent compounding across
+        // consecutive syncs. Falls back to el.* for elements that predate this field.
         const f = scaleMode === "hybrid" ? clampHybridFactor(factor) : factor;
-        const width = el.width !== undefined ? el.width * f : el.width;
-        const height = el.height !== undefined ? el.height * f : el.height;
-        return { ...el, x, y, width, height };
+        const prevSync = (el.customData as Record<string, unknown>)._lastSync as Record<string, unknown> | undefined;
+        const w0 = (prevSync?.w0 as number | undefined) ?? el.width;
+        const h0 = (prevSync?.h0 as number | undefined) ?? el.height;
+        const fontSize0 = (prevSync?.fontSize0 as number | undefined) ?? el.fontSize;
+        const width = w0 !== undefined ? w0 * f : undefined;
+        const height = h0 !== undefined ? h0 * f : undefined;
+        const fontSize = fontSize0 !== undefined ? fontSize0 * f : undefined;
+        const newSync: Record<string, unknown> = { x, y, w: width, h: height, w0, h0 };
+        if (fontSize0 !== undefined) newSync.fontSize0 = fontSize0;
+        return {
+          ...el,
+          x, y,
+          ...(width !== undefined ? { width } : {}),
+          ...(height !== undefined ? { height } : {}),
+          ...(fontSize !== undefined ? { fontSize } : {}),
+          customData: { ...(el.customData as Record<string, unknown>), _lastSync: newSync },
+        };
       }
       case "bbox": {
         const nw = projectPoint(this._map, anchor.west, anchor.north);
         if (scaleMode === "screen") {
           // Stored screen-space size overrides the projected span entirely;
           // only x/y track the geographic anchor.
-          return { ...el, x: nw.x, y: nw.y };
+          return { ...el, x: nw.x, y: nw.y, customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: nw.x, y: nw.y } } };
         }
         const se = projectPoint(this._map, anchor.east, anchor.south);
         const projectedWidth = Math.max(1, se.x - nw.x);
@@ -213,6 +231,7 @@ export class CoordinateSync {
             y: nw.y,
             width: Math.max(1, projectedWidth * adj),
             height: Math.max(1, projectedHeight * adj),
+            customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: nw.x, y: nw.y, w: Math.max(1, projectedWidth * adj), h: Math.max(1, projectedHeight * adj) } },
           };
         }
         // geographic — current behavior, projected span as-is.
@@ -222,6 +241,7 @@ export class CoordinateSync {
           y: nw.y,
           width: projectedWidth,
           height: projectedHeight,
+          customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: nw.x, y: nw.y, w: projectedWidth, h: projectedHeight } },
         };
       }
       case "polyline": {
@@ -236,13 +256,13 @@ export class CoordinateSync {
           // create time and never refreshes on re-projection.
           const screenPoints = el.points;
           if (!screenPoints || screenPoints.length === 0) {
-            return { ...el, x: origin.x, y: origin.y, width: 1, height: 1 };
+            return { ...el, x: origin.x, y: origin.y, width: 1, height: 1, customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: origin.x, y: origin.y } } };
           }
           const sxs = screenPoints.map((p) => p[0]);
           const sys = screenPoints.map((p) => p[1]);
           const sw = Math.max(1, Math.max(...sxs) - Math.min(...sxs));
           const sh = Math.max(1, Math.max(...sys) - Math.min(...sys));
-          return { ...el, x: origin.x, y: origin.y, width: sw, height: sh };
+          return { ...el, x: origin.x, y: origin.y, width: sw, height: sh, customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: origin.x, y: origin.y } } };
         }
         const projected = anchor.coordinates.map(([lng, lat]) =>
           projectPoint(this._map, lng, lat),
@@ -262,7 +282,7 @@ export class CoordinateSync {
         const ys = points.map((p) => p[1]);
         const width = Math.max(1, Math.max(...xs) - Math.min(...xs));
         const height = Math.max(1, Math.max(...ys) - Math.min(...ys));
-        return { ...el, x: origin.x, y: origin.y, points, width, height };
+        return { ...el, x: origin.x, y: origin.y, points, width, height, customData: { ...(el.customData as Record<string, unknown>), _lastSync: { x: origin.x, y: origin.y, pts: points } } };
       }
     }
   }

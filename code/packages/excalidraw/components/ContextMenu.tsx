@@ -85,15 +85,18 @@ export const ContextMenu = React.memo(
             let label = "";
             if (item.label) {
               if (typeof item.label === "function") {
-                label = t(
-                  item.label(
-                    elements,
-                    appState,
-                    actionManager.app,
-                  ) as unknown as TranslationKeys,
-                );
+                const raw = item.label(elements, appState, actionManager.app);
+                try {
+                  label = t(raw as unknown as TranslationKeys);
+                } catch {
+                  label = raw;
+                }
               } else {
-                label = t(item.label as unknown as TranslationKeys);
+                try {
+                  label = t(item.label as unknown as TranslationKeys);
+                } catch {
+                  label = item.label;
+                }
               }
             }
 

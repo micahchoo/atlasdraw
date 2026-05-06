@@ -12,6 +12,20 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
 
 /**
+ * Normalize a longitude to [-180, 180].
+ *
+ * MapLibre's `map.unproject` can return lngs outside this range when the map
+ * is positioned near the date line or has scrolled past one world-width.
+ * MapLibre's `map.project` does NOT wrap out-of-range lngs — it treats lng=-254°
+ * literally, placing the element 360° west of the intended location. Normalizing
+ * at both the storage seam (unprojectPoint) and the projection seam (projectPoint)
+ * ensures geo anchors are always in canonical range.
+ */
+export function normalizeLng(lng: number): number {
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}
+
+/**
  * Project a geographic coordinate to a pixel offset from the map container origin.
  *
  * Delegates to `map.project([lng, lat])` which applies the full MapLibre
@@ -32,7 +46,8 @@ export function projectPoint(
 ): { x: number; y: number } {
   // TODO(Wave2-Task5): validate that projection === "mercator" before delegating.
   // For now we delegate unconditionally — only "mercator" exists in v1.
-  const pt = map.project([lng, lat]);
+  // Normalize lng so out-of-range anchors (e.g. -254° → 106°E) project correctly.
+  const pt = map.project([normalizeLng(lng), lat]);
   return { x: pt.x, y: pt.y };
 }
 
@@ -54,6 +69,7 @@ export function unprojectPoint(
 ): { lng: number; lat: number } {
   // `map.unproject` accepts PointLike = Point | [number, number].
   // Passing a tuple literal directly (without a cast) lets TypeScript infer [number, number].
+  // Normalize returned lng — MapLibre can return values outside [-180, 180] at the dateline.
   const lngLat = map.unproject([x, y]);
-  return { lng: lngLat.lng, lat: lngLat.lat };
+  return { lng: normalizeLng(lngLat.lng), lat: lngLat.lat };
 }

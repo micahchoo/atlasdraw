@@ -23,9 +23,9 @@ import { MapCanvas } from "@atlasdraw/basemap";
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
 import { parse, GeoJSONParseError } from "@atlasdraw/data";
-import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu, setExportElementTransformer } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
-import type { FeatureCollection } from "geojson";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type maplibregl from "maplibre-gl";
 import {
   PinTool,
@@ -33,7 +33,8 @@ import {
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "@atlasdraw/tools";
-import { isGeoCustomData } from "@atlasdraw/geo";
+import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
+import type { GeoAnchor } from "@atlasdraw/geo";
 import { useMapRef } from "../hooks/useMapRef";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
@@ -59,6 +60,97 @@ function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
   if (t === "LineString" || t === "MultiLineString") return "line";
   return "circle";
 }
+
+// ---------------------------------------------------------------------------
+// GeoJSON export helpers
+// ---------------------------------------------------------------------------
+
+function geoAnchorToGeometry(anchor: GeoAnchor): Geometry {
+  if (anchor.kind === "point") {
+    return { type: "Point", coordinates: [anchor.lng, anchor.lat] };
+  }
+  if (anchor.kind === "bbox") {
+    const { west, south, east, north } = anchor;
+    return {
+      type: "Polygon",
+      coordinates: [
+        [
+          [west, north],
+          [east, north],
+          [east, south],
+          [west, south],
+          [west, north],
+        ],
+      ],
+    };
+  }
+  return { type: "LineString", coordinates: anchor.coordinates };
+}
+
+function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
+  const features: Feature[] = [];
+  for (const el of elements) {
+    if (typeof el !== "object" || el === null) continue;
+    const cd = (el as { customData?: unknown }).customData;
+    if (!isGeoCustomData(cd)) continue;
+    features.push({ type: "Feature", geometry: geoAnchorToGeometry(cd.geo), properties: {} });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+function renderGeoJsonExportCard(elements: readonly unknown[]): React.JSX.Element {
+  const fc = buildGeoJsonExport(elements);
+  const count = fc.features.length;
+  const empty = count === 0;
+  return (
+    <div
+      className="Card"
+      style={
+        {
+          "--card-color": "var(--color-primary)",
+          "--card-color-darker": "var(--color-primary-darker)",
+          "--card-color-darkest": "var(--color-primary-darkest)",
+        } as React.CSSProperties
+      }
+    >
+      <h2>GeoJSON</h2>
+      <div className="Card-details">
+        {empty
+          ? "No geo-anchored annotations in scene"
+          : `${count} geo-anchored annotation${count !== 1 ? "s" : ""}`}
+      </div>
+      <button
+        className="Card-button"
+        type="button"
+        disabled={empty}
+        aria-disabled={empty}
+        title={empty ? "No geo-anchored annotations to export" : undefined}
+        data-testid="geojson-export-download"
+        onClick={() => {
+          const blob = new Blob([JSON.stringify(fc, null, 2)], {
+            type: "application/geo+json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "annotations.geojson";
+          a.click();
+          URL.revokeObjectURL(url);
+        }}
+      >
+        Download .geojson
+      </button>
+    </div>
+  );
+}
+
+// Stable object — passed as UIOptions prop to <Excalidraw> so renderCustomUI
+// identity doesn't change on every render. saveFileToDisk must be re-declared
+// here because setting export overrides the Excalidraw default entirely.
+const EXCALIDRAW_EXPORT_OPTS = {
+  saveFileToDisk: true,
+  renderCustomUI: (elements: readonly unknown[]) => renderGeoJsonExportCard(elements),
+};
 
 // Module-scoped so the Excalidraw mount sees a stable identity. Excalidraw
 // reads initialData once on mount; passing a fresh literal each render is
@@ -91,9 +183,29 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { map, onMapReady } = useMapRef();
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
+  // Stores the user-chosen background color, intercepted from Excalidraw's
+  // ChangeCanvasBackground picker. Applied as CSS backgroundColor on the root
+  // container so it shows behind both layers as a fallback.
+  //
+  // MapLibre-native alternative (richer, affects WebGL rendering + export):
+  //   if (!map.getLayer('atlas-bg'))
+  //     map.addLayer({ id: 'atlas-bg', type: 'background',
+  //                    paint: { 'background-color': color } }, firstLayerId)
+  //   else
+  //     map.setPaintProperty('atlas-bg', 'background-color', color)
+  // That path ensures the color appears in the live map tile rendering AND in
+  // the raw canvas captured by getBackgroundCanvas. CSS on root is sufficient
+  // for now because the composite export draws the MapLibre canvas directly —
+  // any map-level background layer would already be baked into that canvas.
+  const [mapBg, setMapBg] = useState("transparent");
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
+  // Guards against re-entrant updateScene calls in handleExcalidrawChange.
+  // CoordinateSync fires many onChange events before React can process our
+  // viewBackgroundColor reset; without this flag each one queues another
+  // updateScene, exhausting React's 50-update nesting limit.
+  const bgResetQueuedRef = useRef(false);
 
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
@@ -104,6 +216,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       onMount?.(map, excalidrawAPI);
     }
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
+
+  // Normalize geo-anchored element coords to canonical Web Mercator (zoom 0)
+  // before .excalidraw file saves so saved files are viewport-independent.
+  useEffect(() => {
+    setExportElementTransformer(
+      normalizeElementsForExport as Parameters<typeof setExportElementTransformer>[0],
+    );
+    return () => setExportElementTransformer(null);
+  }, []);
 
   // Dev-only window expose for Playwright E2E. Production builds skip this
   // branch via `import.meta.env.DEV` (Vite replaces it with `false` in prod,
@@ -119,7 +240,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   }, [map, excalidrawAPI]);
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
-  useCoordinateSync(map, excalidrawAPI);
+  // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
+  const { syncNow } = useCoordinateSync(map, excalidrawAPI);
 
   // Route wheel events to the map regardless of whether Excalidraw's drawing
   // layer is on top. Without this, scroll-to-zoom is silently captured by
@@ -245,12 +367,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (ids.length !== 1) return null;
       const el = excalidrawAPI.getSceneElements().find((x) => x.id === ids[0]);
       if (!el || !isGeoCustomData(el.customData)) return null;
-      // text/arrow elements carry geo but aren't convertible (Wave 3b T14
-      // scrub §7). annotationToFeatureCollection throws
-      // UnsupportedConvertElementError for them; we filter at the gate so
-      // the menu item shows enabled only when the conversion will actually
-      // succeed.
-      if (el.type === "text" || el.type === "arrow") return null;
+      // text elements carry geo but aren't convertible. Filter at the gate
+      // so the menu item shows enabled only when the conversion will succeed.
+      if (el.type === "text") return null;
       return {
         id: el.id,
         type: el.type,
@@ -319,7 +438,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         if (ids.length !== 1) return false;
         const el = elements.find((x) => x.id === ids[0]);
         if (!el || !isGeoCustomData(el.customData)) return false;
-        if (el.type === "text" || el.type === "arrow") return false;
+        if (el.type === "text") return false;
         return true;
       },
       perform: () => {
@@ -346,7 +465,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     if (!map || !excalidrawAPI) return;
     void (async () => {
       try {
-        const blob = await exportPNG(map, excalidrawAPI);
+        const blob = await exportPNG(map, excalidrawAPI, { backgroundColor: mapBg });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -359,10 +478,89 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         );
       }
     })();
-  }, [map, excalidrawAPI]);
+  }, [map, excalidrawAPI, mapBg]);
+
+  // Intercept ChangeCanvasBackground: keep Excalidraw transparent so the map
+  // shows through, and store the chosen color in mapBg for CSS + export.
+  //
+  // Also enforces identity scroll/zoom (scroll lock) and handles post-file-load
+  // sync. Two invariants that Atlas relies on:
+  //
+  //   1. Scroll lock — Excalidraw must keep scrollX=0, scrollY=0, zoom=1 so
+  //      that scene coordinates equal screen pixels. After file load, Excalidraw
+  //      calls scrollToContent which breaks this. We detect and immediately reset.
+  //      The geo sync runs on the following onChange once scroll is at identity.
+  //
+  //   2. Post-load sync — loading a .excalidraw file emits no camera events, so
+  //      geo-anchored elements stay at their canonical zoom-0 coordinates until
+  //      the user pans. We detect this by comparing the first geo element's scene
+  //      position against map.project(anchor) and calling syncNow() if delta>10px.
+  //      The self-terminating property: after sync, el.x == map.project(anchor)
+  //      so delta==0 on the follow-up onChange.
+  const handleExcalidrawChange = useCallback<
+    NonNullable<React.ComponentProps<typeof Excalidraw>["onChange"]>
+  >(
+    (elements, appState) => {
+      // --- 1. Background color intercept ---
+      if (appState.viewBackgroundColor !== "transparent") {
+        setMapBg(appState.viewBackgroundColor);
+        // Only queue one reset at a time. CoordinateSync fires many onChange
+        // events (one per camera event) before React processes our setState;
+        // without this guard each fires another updateScene, exhausting
+        // React's 50-nested-update limit ("Maximum update depth exceeded").
+        if (!bgResetQueuedRef.current) {
+          bgResetQueuedRef.current = true;
+          excalidrawAPI?.updateScene({
+            appState: { viewBackgroundColor: "transparent" },
+          });
+        }
+      } else {
+        bgResetQueuedRef.current = false;
+      }
+
+      // --- 2. Scroll lock ---
+      // After file load, Excalidraw calls scrollToContent setting non-zero
+      // scrollX/Y. With non-zero scroll, `el.x + scrollX` ≠ `map.project(anchor).x`
+      // so elements appear shifted from their geo positions and reanchorIfMoved
+      // picks up false user-drag deltas. Reset to identity; geo sync runs next tick.
+      if (appState.scrollX !== 0 || appState.scrollY !== 0 || appState.zoom.value !== 1) {
+        excalidrawAPI?.updateScene({
+          appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
+        });
+        return;
+      }
+
+      // --- 3. Post-load geo sync (scroll is identity here) ---
+      if (map && syncNow) {
+        for (const el of elements) {
+          const cd = (el as { customData?: unknown }).customData;
+          if (!isGeoCustomData(cd)) continue;
+          const anchor = cd.geo;
+          const ref =
+            anchor.kind === "point"
+              ? map.project([anchor.lng, anchor.lat] as [number, number])
+              : anchor.kind === "bbox"
+                ? map.project([anchor.west, anchor.north] as [number, number])
+                : map.project(anchor.coordinates[0] as [number, number]);
+          if (Math.abs((el as { x: number }).x - ref.x) > 10 || Math.abs((el as { y: number }).y - ref.y) > 10) {
+            syncNow();
+          }
+          break; // O(1): only inspect the first geo element
+        }
+      }
+    },
+    [excalidrawAPI, map, syncNow],
+  );
+
+  // Provide the live MapLibre canvas to Excalidraw's native Save as Image /
+  // Copy as PNG so they composite basemap + annotations in a single export.
+  const getBackgroundCanvas = useCallback(
+    (): HTMLCanvasElement | null => (map ? map.getCanvas() : null),
+    [map],
+  );
 
   return (
-    <div ref={rootRef} className={styles.root}>
+    <div ref={rootRef} className={styles.root} style={{ backgroundColor: mapBg }}>
       {/* Bottom layer: MapLibre GL map */}
       <div className={styles.mapLayer}>
         <MapCanvas
@@ -387,6 +585,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           initialData={EXCALIDRAW_INITIAL_DATA}
           gridModeEnabled={false}
           onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
+          onChange={handleExcalidrawChange}
+          getBackgroundCanvas={getBackgroundCanvas}
+          UIOptions={{ canvasActions: { export: EXCALIDRAW_EXPORT_OPTS } }}
         >
           {/* T22 — Layers sidebar slot. LayerPanel internally renders
               <Sidebar name="layers">. Excalidraw surfaces it only when
@@ -404,7 +605,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             <MainMenu.DefaultItems.LoadScene />
             <MainMenu.DefaultItems.SaveToActiveFile />
             <MainMenu.DefaultItems.Export />
-            <MainMenu.DefaultItems.SaveAsImage />
             <MainMenu.Item
               onSelect={handleExportPNG}
               data-testid="main-menu-export-png"

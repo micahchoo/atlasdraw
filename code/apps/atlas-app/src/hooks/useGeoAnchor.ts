@@ -9,13 +9,14 @@
  *   | type                              | kind     | scaleMode    |
  *   |-----------------------------------|----------|--------------|
  *   | rectangle, ellipse, diamond, image| bbox     | geographic   |
- *   | line, arrow, freedraw             | polyline | hybrid       |
+ *   | frame, magicframe                 | bbox     | geographic   |
+ *   | line, arrow, freedraw             | polyline | geographic   |
  *   | text                              | point    | screen       |
  *
  * Rationale (per Wave 4 plan addendum):
  *   - bbox / geographic: shape size is meaningful in world units; resize with zoom.
- *   - polyline / hybrid: vertex coordinates are geographic, but stroke thickness
- *     etc. stays screen-relative — handled by scaleMode.ts helpers + CoordinateSync.
+ *   - polyline / geographic: vertex coordinates scale fully with projection, matching
+ *     bbox behavior — lines cover consistent real-world distance at any zoom.
  *   - point / screen: text size is set explicitly by the user; only its anchor
  *     position should track the map.
  *
@@ -40,17 +41,51 @@
  */
 
 import { useEffect } from "react";
-import { unprojectPoint } from "@atlasdraw/geo";
-import type { GeoCustomData } from "@atlasdraw/geo";
+import { unprojectPoint, projectPoint, isGeoCustomData } from "@atlasdraw/geo";
+import type { GeoCustomData, GeoAnchor } from "@atlasdraw/geo";
 import type maplibregl from "maplibre-gl";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 /** Bbox-shaped tools — anchored as `kind:"bbox"` with `scaleMode:"geographic"`. */
-const BBOX_TOOL_TYPES = new Set(["rectangle", "ellipse", "diamond", "image"]);
-/** Polyline-shaped tools — anchored as `kind:"polyline"` with `scaleMode:"hybrid"`. */
+const BBOX_TOOL_TYPES = new Set([
+  "rectangle",
+  "ellipse",
+  "diamond",
+  "image",
+  "frame",
+  "magicframe",
+]);
+/** Polyline-shaped tools — anchored as `kind:"polyline"` with `scaleMode:"geographic"`. */
 const POLYLINE_TOOL_TYPES = new Set(["line", "arrow", "freedraw"]);
 /** Point-anchored tools — anchored as `kind:"point"` with `scaleMode:"screen"`. */
 const POINT_TOOL_TYPES = new Set(["text"]);
+
+/**
+ * Float tolerance for geo-coordinate comparison (~1cm on Earth's surface).
+ * `unprojectPoint(projectPoint(lng, lat))` is identity up to this threshold;
+ * any larger delta means the user moved or resized the element.
+ */
+const GEO_TOLERANCE = 1e-7;
+
+/** Mercator projection identifier used in all GeoCustomData stamps. */
+const PROJECTION = "mercator" as const;
+
+/**
+ * Spatial snapshot written by `CoordinateSync._projectElement` onto each element's
+ * `customData._lastSync`. Comparing against it instead of recomputing from the
+ * current map state makes `reanchorIfMoved` immune to the async gap between
+ * `updateScene` and `onChange`.
+ */
+interface LastSync {
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  w0?: number;
+  h0?: number;
+  fontSize0?: number;
+  pts?: ReadonlyArray<readonly [number, number]>;
+}
 
 /**
  * Element shape we care about across the discriminated union. The public
@@ -92,7 +127,7 @@ function buildGeoCustomData(
         zRef,
       },
       scaleMode: "geographic",
-      projection: "mercator",
+      projection: PROJECTION,
       schemaVersion: 1,
     };
   }
@@ -110,8 +145,8 @@ function buildGeoCustomData(
         coordinates,
         zRef,
       },
-      scaleMode: "hybrid",
-      projection: "mercator",
+      scaleMode: "geographic",
+      projection: PROJECTION,
       schemaVersion: 1,
     };
   }
@@ -126,12 +161,146 @@ function buildGeoCustomData(
         zRef,
       },
       scaleMode: "screen",
-      projection: "mercator",
+      projection: PROJECTION,
       schemaVersion: 1,
     };
   }
 
   return null;
+}
+
+/**
+ * If the element's current screen position diverges from what its geo anchor
+ * projects to (i.e. the user moved or resized it), return a new element with
+ * `customData.geo` updated to the reverse-projected position. Returns null when
+ * the position is within float tolerance — indicating `syncMapToScene` just
+ * wrote those values and no user-initiated change occurred.
+ *
+ * `zRef` is intentionally preserved from the existing anchor so scale-factor
+ * computation (`2^(currentZoom - zRef)`) stays anchored to creation zoom.
+ *
+ * NOTE: for `bbox` kind, `Math.max(1, span)` clamping in `_projectElement`
+ * means elements smaller than 1 screen-pixel produce a slightly inexact
+ * reverse-projection. This is an accepted edge case — the geo error is
+ * sub-pixel and the element renders identically.
+ *
+ * @internal
+ */
+function reanchorIfMoved(
+  el: ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown },
+  map: maplibregl.Map,
+): (ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown }) | null {
+  const existingGeo = el.customData.geo;
+  const lastSync = (el.customData as { _lastSync?: LastSync })._lastSync;
+
+  switch (existingGeo.kind) {
+    case "point": {
+      let moved: boolean;
+      if (lastSync !== undefined) {
+        // Primary path: compare against the exact values _projectElement wrote.
+        // Timing-immune — no map projection call needed for detection.
+        moved =
+          Math.abs(el.x - lastSync.x) > GEO_TOLERANCE ||
+          Math.abs(el.y - lastSync.y) > GEO_TOLERANCE;
+      } else {
+        // Fallback: element predates _lastSync — use geo-space comparison.
+        const cur = unprojectPoint(map, el.x, el.y);
+        moved =
+          Math.abs(cur.lng - existingGeo.lng) > GEO_TOLERANCE ||
+          Math.abs(cur.lat - existingGeo.lat) > GEO_TOLERANCE;
+      }
+      if (!moved) return null;
+      // Re-anchor: unproject current screen position → new geo anchor.
+      const cur = unprojectPoint(map, el.x, el.y);
+      const newAnchor: GeoAnchor = { ...existingGeo, lng: cur.lng, lat: cur.lat };
+      // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+    }
+    case "bbox": {
+      // Compare in screen space, not geo space, to handle the Math.max(1, ...)
+      // clamping that _projectElement applies at extreme zoom-out. When the
+      // projected span is < 1px, _projectElement writes width=1; reverse-
+      // projecting el.x + 1 produces a longitude far from anchor.east,
+      // causing geo-space comparison to falsely detect a user resize and
+      // corrupt the anchor. Screen-space comparison with the same clamping
+      // logic is immune: it returns null whenever the element matches what
+      // _projectElement would have written — including the clamped 1px case.
+      const SCREEN_TOL = 0.01; // float drift only; user drags are multi-pixel
+      let moved: boolean;
+      if (lastSync?.w !== undefined && lastSync?.h !== undefined) {
+        // Primary path: compare against the exact values _projectElement wrote.
+        // Timing-immune — no map projection call needed for detection.
+        moved =
+          Math.abs(el.x - lastSync.x) > SCREEN_TOL ||
+          Math.abs(el.y - lastSync.y) > SCREEN_TOL ||
+          Math.abs(el.width - lastSync.w) > SCREEN_TOL ||
+          Math.abs(el.height - lastSync.h) > SCREEN_TOL;
+      } else {
+        // Fallback: element predates _lastSync — use screen-space comparison
+        // reconstructed from the geo anchor (existing behaviour).
+        const nwProj = projectPoint(map, existingGeo.west, existingGeo.north);
+        const seProj = projectPoint(map, existingGeo.east, existingGeo.south);
+        const expectedW = Math.max(1, seProj.x - nwProj.x);
+        const expectedH = Math.max(1, seProj.y - nwProj.y);
+        moved = !(
+          Math.abs(el.x - nwProj.x) <= SCREEN_TOL &&
+          Math.abs(el.y - nwProj.y) <= SCREEN_TOL &&
+          Math.abs(el.width - expectedW) <= SCREEN_TOL &&
+          Math.abs(el.height - expectedH) <= SCREEN_TOL
+        );
+      }
+      if (!moved) return null;
+      // User moved or resized — re-anchor from current screen position.
+      const nw = unprojectPoint(map, el.x, el.y);
+      const se = unprojectPoint(map, el.x + el.width, el.y + el.height);
+      const west = Math.min(nw.lng, se.lng);
+      const east = Math.max(nw.lng, se.lng);
+      const north = Math.max(nw.lat, se.lat);
+      const south = Math.min(nw.lat, se.lat);
+      const newAnchor: GeoAnchor = { ...existingGeo, west, east, north, south };
+      // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+    }
+    case "polyline": {
+      const pts = el.points;
+      if (!pts || pts.length === 0) return null;
+      if (lastSync?.pts && lastSync.pts.length === pts.length) {
+        // Primary path: compare screen-space points against _lastSync snapshot.
+        // Timing-immune — no map projection call needed for detection.
+        const unchanged = pts.every(
+          ([dx, dy], i) =>
+            Math.abs(dx - lastSync.pts![i][0]) <= GEO_TOLERANCE &&
+            Math.abs(dy - lastSync.pts![i][1]) <= GEO_TOLERANCE,
+        );
+        if (unchanged) return null;
+        // Points moved — compute new geo coords and re-anchor.
+        const newCoords: Array<[number, number]> = pts.map(([dx, dy]) => {
+          const ll = unprojectPoint(map, el.x + dx, el.y + dy);
+          return [ll.lng, ll.lat];
+        });
+        const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
+        // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+        return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+      }
+      // Fallback: element predates _lastSync (or screen mode) — use geo-space
+      // comparison against existingGeo.coordinates (existing behaviour).
+      const newCoords: Array<[number, number]> = pts.map(([dx, dy]) => {
+        const ll = unprojectPoint(map, el.x + dx, el.y + dy);
+        return [ll.lng, ll.lat];
+      });
+      const existing = existingGeo.coordinates;
+      const unchanged =
+        newCoords.length === existing.length &&
+        newCoords.every(
+          ([lng, lat], i) =>
+            Math.abs(lng - existing[i][0]) <= GEO_TOLERANCE &&
+            Math.abs(lat - existing[i][1]) <= GEO_TOLERANCE,
+        );
+      if (unchanged) return null;
+      const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
+      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+    }
+  }
 }
 
 /**
@@ -156,10 +325,27 @@ export function buildGeoAnchorHandler(
 
     const next = elements.map((el) => {
       if (el.isDeleted) return el;
-      // Already anchored — idempotent skip.
-      const existing = (el.customData as { geo?: unknown } | undefined)?.geo;
-      if (existing) return el;
 
+      if (isGeoCustomData(el.customData)) {
+        // Already anchored — re-anchor if the user moved or resized the element.
+        // `reanchorIfMoved` returns null when screen position matches the anchor
+        // within float tolerance, which covers both "no change" and the case where
+        // `syncMapToScene` just wrote the projected values.
+        const reanchored = reanchorIfMoved(
+          el as unknown as ElementGeoFields & {
+            customData: GeoCustomData;
+            [k: string]: unknown;
+          },
+          map,
+        );
+        if (reanchored) {
+          dirty = true;
+          return reanchored;
+        }
+        return el;
+      }
+
+      // New element — stamp geo for the first time.
       const geoCustomData = buildGeoCustomData(
         el as unknown as ElementGeoFields,
         map,

@@ -517,3 +517,85 @@ describe("_projectElement: defaults preserved (no regression)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: point + geographic — fontSize scaling and compounding prevention
+// ---------------------------------------------------------------------------
+
+describe("_projectElement: point + geographic + fontSize", () => {
+  it("scales fontSize by factor alongside width/height", () => {
+    const map = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 13, // factor = 2
+    });
+    const el: ExcalidrawElementLike = {
+      id: "p-geo-fontsize",
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 24,
+      fontSize: 20,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ width: 200, height: 48, fontSize: 40 });
+  });
+
+  it("does not scale fontSize when element has none (non-text element)", () => {
+    const map = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 13,
+    });
+    const el: ExcalidrawElementLike = {
+      id: "p-geo-no-fontsize",
+      x: 0,
+      y: 0,
+      width: 32,
+      height: 32,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out.fontSize).toBeUndefined();
+    expect(out).toMatchObject({ width: 64, height: 64 });
+  });
+});
+
+describe("_projectElement: point + geographic — no compounding across sequential syncs", () => {
+  it("second sync at zoom+2 produces 4x original, not 4x already-scaled", () => {
+    const makePointEl = (): ExcalidrawElementLike => ({
+      id: "p-no-compound",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 8,
+      fontSize: 20,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    });
+
+    // First sync: zoom 13 → factor 2.
+    const map13 = makeMap({ project: vi.fn().mockReturnValue({ x: 0, y: 0 }), zoom: 13 });
+    const after13 = runSync(map13, makePointEl());
+    expect(after13).toMatchObject({ width: 20, height: 16, fontSize: 40 });
+
+    // Second sync using the first result as input: zoom 14 → factor 4.
+    // Without the fix this would produce width=80 (20*4) instead of 40 (10*4).
+    const map14 = makeMap({ project: vi.fn().mockReturnValue({ x: 0, y: 0 }), zoom: 14 });
+    const after14 = runSync(map14, after13);
+    expect(after14).toMatchObject({ width: 40, height: 32, fontSize: 80 });
+  });
+});

@@ -126,6 +126,7 @@ vi.mock("@excalidraw/excalidraw", () => {
     },
     MainMenu: MainMenuStub,
     Sidebar: SidebarStub,
+    setExportElementTransformer: vi.fn(),
   };
 });
 
@@ -154,7 +155,7 @@ vi.mock("../../hooks/useMapRef", () => ({
 }));
 
 vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(),
+  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),

@@ -25,11 +25,15 @@
 // table below).
 //
 // Mapping table (element.type → output geometry):
-//   rectangle           → Polygon  (geo.kind === "bbox" → 4-corner closed ring)
-//   ellipse             → Polygon  (geo.kind === "point" + radiusKm → @turf/circle ring)
-//   polygon | freedraw  → Polygon  (geo.kind === "polyline" → auto-close ring)
-//   line | polyline     → LineString (geo.kind === "polyline" → coords as-is)
-//   text | arrow        → throw UnsupportedConvertElementError
+//   rectangle           → Polygon    (geo.kind === "bbox" → 4-corner closed ring)
+//   ellipse/bbox        → Polygon    (64-pt ellipse approximation from bbox extents)
+//   ellipse/point       → Polygon    (geo.kind === "point" + radiusKm → @turf/circle)
+//   polygon             → Polygon    (geo.kind === "polyline" → auto-close ring)
+//   freedraw (closed)   → Polygon    (geo.kind === "polyline", first==last → closed ring)
+//   freedraw (open)     → LineString (geo.kind === "polyline", open path → coords as-is)
+//   line | polyline | arrow → LineString (geo.kind === "polyline" → coords as-is)
+//   diamond             → Polygon    (geo.kind === "bbox" → 4 midpoint vertices)
+//   text                → throw UnsupportedConvertElementError
 
 import circle from "@turf/circle";
 import type {
@@ -108,7 +112,7 @@ export function annotationToFeatureCollection(
   const t = el.type;
   const geo = el.customData?.geo;
 
-  if (t === "text" || t === "arrow") {
+  if (t === "text") {
     throw new UnsupportedConvertElementError(t);
   }
 
@@ -140,40 +144,63 @@ export function annotationToFeatureCollection(
     };
   }
 
-  // ----- ellipse → Polygon (from point + radiusKm via @turf/circle)
+  // ----- ellipse → Polygon
+  // useGeoAnchor stamps user-drawn ellipses as geo.kind="bbox". We approximate
+  // the ellipse with 64 points so the rendered shape looks like an ellipse/circle
+  // rather than its bounding rectangle.
+  // geo.kind="point" + radiusKm is kept for future programmatic use.
   if (t === "ellipse") {
-    if (geo.kind !== "point") {
-      throw new Error(
-        `annotationToFeatureCollection: ellipse requires geo.kind="point", got "${geo.kind}"`,
-      );
+    if (geo.kind === "bbox") {
+      const { west: w, south: s, east: e, north: n } = geo;
+      const cx = (w + e) / 2;
+      const cy = (s + n) / 2;
+      const rx = (e - w) / 2;
+      const ry = (n - s) / 2;
+      const steps = 64;
+      const ring: Position[] = [];
+      for (let i = 0; i < steps; i++) {
+        const angle = (2 * Math.PI * i) / steps;
+        ring.push([cx + rx * Math.cos(angle), cy + ry * Math.sin(angle)]);
+      }
+      ring.push(ring[0]); // close
+      const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
+      return {
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry: polygon }],
+      };
     }
-    const radiusKm = readRadiusKm(el);
-    if (typeof radiusKm !== "number" || radiusKm <= 0) {
-      throw new Error(
-        `annotationToFeatureCollection: ellipse ${el.id} missing positive customData._data.radiusKm`,
-      );
+    if (geo.kind === "point") {
+      const radiusKm = readRadiusKm(el);
+      if (typeof radiusKm !== "number" || radiusKm <= 0) {
+        throw new Error(
+          `annotationToFeatureCollection: ellipse ${el.id} missing positive customData._data.radiusKm`,
+        );
+      }
+      const feat = circle([geo.lng, geo.lat], radiusKm, {
+        steps: 64,
+        units: "kilometers",
+      });
+      return {
+        type: "FeatureCollection",
+        features: [feat],
+      };
     }
-    const feat = circle([geo.lng, geo.lat], radiusKm, {
-      steps: 64,
-      units: "kilometers",
-    });
-    return {
-      type: "FeatureCollection",
-      features: [feat],
-    };
+    throw new Error(
+      `annotationToFeatureCollection: ellipse requires geo.kind="bbox" or "point", got "${geo.kind}"`,
+    );
   }
 
-  // ----- polygon | freedraw → Polygon (auto-close ring)
-  if (t === "polygon" || t === "freedraw") {
+  // ----- polygon → Polygon (always auto-close ring)
+  if (t === "polygon") {
     if (geo.kind !== "polyline") {
       throw new Error(
-        `annotationToFeatureCollection: ${t} requires geo.kind="polyline", got "${geo.kind}"`,
+        `annotationToFeatureCollection: polygon requires geo.kind="polyline", got "${geo.kind}"`,
       );
     }
     const ring = closeRing(geo.coordinates as Position[]);
     if (ring.length < 4) {
       throw new Error(
-        `annotationToFeatureCollection: ${t} ${el.id} needs >=3 distinct points to form a polygon`,
+        `annotationToFeatureCollection: polygon ${el.id} needs >=3 distinct points to form a polygon`,
       );
     }
     const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
@@ -183,8 +210,63 @@ export function annotationToFeatureCollection(
     };
   }
 
-  // ----- line | polyline → LineString
-  if (t === "line" || t === "polyline") {
+  // ----- freedraw → Polygon (closed stroke) or LineString (open stroke)
+  if (t === "freedraw") {
+    if (geo.kind !== "polyline") {
+      throw new Error(
+        `annotationToFeatureCollection: freedraw requires geo.kind="polyline", got "${geo.kind}"`,
+      );
+    }
+    const coords = geo.coordinates as Position[];
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    const isClosed =
+      first && last && first[0] === last[0] && first[1] === last[1];
+    if (isClosed) {
+      if (coords.length < 4) {
+        throw new Error(
+          `annotationToFeatureCollection: freedraw ${el.id} needs >=3 distinct points to form a polygon`,
+        );
+      }
+      const polygon: Polygon = { type: "Polygon", coordinates: [coords] };
+      return {
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry: polygon }],
+      };
+    }
+    const ls: LineString = { type: "LineString", coordinates: coords };
+    return {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties: {}, geometry: ls }],
+    };
+  }
+
+  // ----- diamond → Polygon (4 midpoint vertices)
+  if (t === "diamond") {
+    if (geo.kind !== "bbox") {
+      throw new Error(
+        `annotationToFeatureCollection: diamond requires geo.kind="bbox", got "${geo.kind}"`,
+      );
+    }
+    const { west: w, south: s, east: e, north: n } = geo;
+    const midX = (w + e) / 2;
+    const midY = (s + n) / 2;
+    const ring: Position[] = [
+      [midX, n], // North
+      [e, midY], // East
+      [midX, s], // South
+      [w, midY], // West
+      [midX, n], // close
+    ];
+    const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
+    return {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties: {}, geometry: polygon }],
+    };
+  }
+
+  // ----- line | polyline | arrow → LineString
+  if (t === "line" || t === "polyline" || t === "arrow") {
     if (geo.kind !== "polyline") {
       throw new Error(
         `annotationToFeatureCollection: ${t} requires geo.kind="polyline", got "${geo.kind}"`,

@@ -216,6 +216,7 @@ export const actionCopyAsPng = register({
         ...appState,
         exportingFrame,
         name: app.getName(),
+        backgroundCanvas: app.props.getBackgroundCanvas?.() ?? null,
       });
       return {
         appState: {

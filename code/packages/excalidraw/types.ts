@@ -707,6 +707,15 @@ export interface ExcalidrawProps {
       signal: AbortSignal;
     },
   ) => MaybePromise<void> | AsyncGenerator<OnExportProgress, void>;
+  /**
+   * Called at PNG / clipboard-PNG export time to obtain a background canvas
+   * (e.g. a MapLibre basemap) composited under the Excalidraw annotations.
+   * Export switches to viewport mode so background and annotations share the
+   * same coordinate space. Return null to fall back to standard export.
+   * Frame exports bypass compositing regardless (frame has its own bounds).
+   * SVG export is unaffected — SVG cannot embed raster backgrounds natively.
+   */
+  getBackgroundCanvas?: () => HTMLCanvasElement | null;
 }
 
 export type SceneData = {

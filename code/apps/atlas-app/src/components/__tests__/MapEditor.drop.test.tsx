@@ -111,6 +111,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
         ),
     },
   ),
+  setExportElementTransformer: vi.fn(),
 }));
 
 // Synthetic map instance shared by useMapRef stub + assertions.
@@ -143,7 +144,7 @@ vi.mock("../../hooks/useMapRef", () => ({
 
 // Stub the side-effect hooks so they don't try to do real work in jsdom.
 vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(),
+  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),

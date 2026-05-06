@@ -6,7 +6,7 @@
 // Two acceptance assertions per the task brief:
 //
 //   1. "creates text element with screen scaleMode at click location" —
-//      seed.type==="text", seed.geo.kind==="point", seed.scaleMode==="screen",
+//      seed.type==="text", seed.geo.kind==="point", seed.scaleMode==="geographic",
 //      seed.data.text==="" (empty; inline-editing UX deferred).
 //
 //   2. "does not call setActiveTool or any non-ctx-exposed API" — only
@@ -100,7 +100,7 @@ describe("TextLabelTool", () => {
     expect(TextLabelTool.label).toBe("Text Label");
     expect(TextLabelTool.icon).toBe("text");
     expect(TextLabelTool.cursor).toBe("text");
-    expect(TextLabelTool.defaultScaleMode).toBe("screen");
+    expect(TextLabelTool.defaultScaleMode).toBe("geographic");
   });
 
   it("creates text element with screen scaleMode at click location", () => {
@@ -130,7 +130,7 @@ describe("TextLabelTool", () => {
       zRef: 12,
     });
     expect(seed.geo.kind).toBe("point");
-    expect(seed.scaleMode).toBe("screen");
+    expect(seed.scaleMode).toBe("geographic");
     expect(seed.data?.text).toBe("");
   });
 

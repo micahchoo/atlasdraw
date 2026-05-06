@@ -14,6 +14,8 @@ vi.mock("@excalidraw/excalidraw", () => ({
 type FakeCtx = {
   scale: ReturnType<typeof vi.fn>;
   drawImage: ReturnType<typeof vi.fn>;
+  fillRect: ReturnType<typeof vi.fn>;
+  fillStyle?: string;
 };
 type FakeOffscreen = {
   width: number;
@@ -38,6 +40,7 @@ class StubOffscreenCanvas {
     const ctx: FakeCtx = {
       scale: vi.fn(),
       drawImage: vi.fn(),
+      fillRect: vi.fn(),
     };
     this.ctx =
       nextContextOverride === undefined ? ctx : nextContextOverride;
@@ -225,6 +228,40 @@ describe("exportPNG", () => {
       scrollY: appState.scrollY,
       zoom: appState.zoom,
     });
+  });
+
+  it("fills backgroundColor before map layer when not transparent", async () => {
+    const { exportPNG } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api } = makeExcalidrawAPI();
+
+    await exportPNG(map, api, { backgroundColor: "#000000" });
+
+    const ctx = lastOffscreen!.ctx!;
+    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 800, 600);
+    // Map and Excalidraw layers still composited on top.
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips fillRect when backgroundColor is transparent (default)", async () => {
+    const { exportPNG } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api } = makeExcalidrawAPI();
+
+    await exportPNG(map, api);
+
+    expect(lastOffscreen!.ctx!.fillRect).not.toHaveBeenCalled();
   });
 
   it("throws a clear error when the 2D context is unavailable", async () => {
