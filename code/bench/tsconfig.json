@@ -13,8 +13,9 @@
     "types": ["vitest/globals", "node"],
     "baseUrl": ".",
     "paths": {
-      "@atlasdraw/data": ["../packages/data/src/index.ts"]
+      "@atlasdraw/data": ["../packages/data/src/index.ts"],
+      "@atlasdraw/geo": ["../packages/geo/src/index.ts"]
     }
   },
-  "include": ["scenarios/**/*.ts", "fixtures/**/*.ts", "vitest.config.ts"]
+  "include": ["scenarios/**/*.ts", "fixtures/**/*.ts", "vitest.config.ts", "ci-gate.ts"]
 }

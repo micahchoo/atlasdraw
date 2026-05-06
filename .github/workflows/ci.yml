@@ -1,0 +1,34 @@
+name: Bench CI gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: code/yarn.lock
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+        working-directory: code
+
+      - name: Run Phase 2 bench scenarios
+        run: yarn workspace @atlasdraw/bench bench
+        working-directory: code
+
+      - name: Assert regression gate
+        run: yarn workspace @atlasdraw/bench ci-gate
+        working-directory: code
