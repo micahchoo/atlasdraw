@@ -8,20 +8,13 @@
 // Audit: docs/decisions/opus-audit-2026-05-04-post-wave4.md
 
 import type { FeatureCollection } from "geojson";
+import type { LayerStyle } from "@atlasdraw/basemap";
 
-/**
- * Minimal LayerStyle shape, inlined here pending restore of the @atlasdraw/basemap
- * export. The Phase 2 plan expected `import { LayerStyle } from "@atlasdraw/basemap"`,
- * but BasemapRegistry/style-builder were silently dropped from Phase 1 Wave 1 (see
- * opus-audit-2026-05-04-followup.md "Top 3 findings"). Replace this local definition
- * with the basemap export once that gap is closed — tracked in seeds.
- */
-export interface LayerStyle {
-  fillColor?: string;
-  strokeColor?: string;
-  strokeWidth?: number;
-  opacity?: number; // 0..1
-}
+// Re-exported so atlas-app consumers can keep importing LayerStyle from the
+// registry module. The shape itself lives in @atlasdraw/basemap (Phase 2 Wave
+// 2a) — the local placeholder was inlined when basemap was missing the export
+// (closes atlasdraw-fc04).
+export type { LayerStyle };
 
 /**
  * Annotation layer — backed by a single Excalidraw element. id matches the element id.

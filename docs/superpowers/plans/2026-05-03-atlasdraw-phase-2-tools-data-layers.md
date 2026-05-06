@@ -1356,7 +1356,7 @@ license_constraints:
 
 # Wave 4 — Phase 1+2 Hardening (Addendum)
 
-**Status (2026-05-05 update):** WAVE 4a/4b/4c/4d SHIPPED IN PART; T19/T20/T21/T24/T25/T26/T27/T28 OUTSTANDING. T31 + `atlasdraw-90a5` (2nd vendored fork) shipped 2026-05-05 in `b8bb015`. Original addendum (below) preserved for provenance. Per-task status block added at top; Wave 4c rewritten to match what shipped (slot retrofit via MainMenu + vendored fork, NOT the original "Wave 4c cleanup" framing); Wave 4d (emergent) section added for post-plan bug fixes.
+**Status (2026-05-05 update):** WAVE 4a/4b/4c/4d SHIPPED IN PART; T19/T20/T21/T24/T25/T27/T28 OUTSTANDING. T31 + `atlasdraw-90a5` (2nd vendored fork) shipped 2026-05-05 in `b8bb015`. T26 (zRef bounds + LayerStyle migration) shipped 2026-05-05 in `a89e044` + follow-up. Original addendum (below) preserved for provenance. Per-task status block added at top; Wave 4c rewritten to match what shipped (slot retrofit via MainMenu + vendored fork, NOT the original "Wave 4c cleanup" framing); Wave 4d (emergent) section added for post-plan bug fixes.
 
 **Authored:** 2026-05-04 (post-Wave-3-T15 ship). **Why:** Audit of deferred items surfaced that Phase 1 was declared done with two gating leftovers (Task 8 scaleMode, Phase 1 baseline) and Wave 2/3 left visible UX gaps (LayerPanel unrendered, PNG export buttonless) plus one real bug (mixed-geometry FCs render wrong style). Wave 4 absorbs Phase 1 unfinished business + Phase 2 polish into a single hardening sprint that closes both phases canonically before Phase 3 (`atlasdraw-25a5` File Format) begins.
 
@@ -1379,7 +1379,7 @@ Mapping each Wave 4 task to its actual disposition. T29/T30/T31 are post-plan ta
 | T23 — PNG export UI button | SHIPPED, then SUPERSEDED | Originally shipped as a free-floating top-left button; SUPERSEDED by Wave 4c retrofit `7fcd94a` which moved the ExportPNG trigger into `MainMenu.Item`. Export-card UX further extended in `bd51a0d` (GeoJSON canonical export + export UI card). Closes `atlasdraw-ca89`. |
 | T24 — Mixed-geometry FC handling | OUTSTANDING | Still TODO. Sub-layers approach is the planned-of-record direction. |
 | T25 — TextLabelTool inline-editing | OUTSTANDING | Still TODO. |
-| T26 — zRef bounds + LayerStyle migration | SHIPPED-IN-PART | zRef bounds half SHIPPED 2026-05-05 (closes `atlasdraw-02f6`): added `MAX_ZREF=24` + `isValidZRef` to `@atlasdraw/geo/types.ts`; `parseGeoCustomData` rejects negative/NaN/±Infinity/>24 across point/bbox/polyline; fractional accepted (MapLibre continuous zoom); 7 new test cases. LayerStyle migration half (`atlasdraw-fc04`) remains OUTSTANDING. |
+| T26 — zRef bounds + LayerStyle migration | SHIPPED | Both halves closed 2026-05-05. (1) zRef bounds (`atlasdraw-02f6`, commit `a89e044`): added `MAX_ZREF=24` + `isValidZRef` to `@atlasdraw/geo/types.ts`; `parseGeoCustomData` rejects negative/NaN/±Infinity/>24 across point/bbox/polyline; fractional accepted (MapLibre continuous zoom); 7 new test cases. (2) LayerStyle migration (`atlasdraw-fc04`): basemap LayerStyle export was already in place since Wave 2a; atlas-app `layerRegistry.ts` swapped its inlined placeholder for an import + re-export of `@atlasdraw/basemap`'s `LayerStyle`. Shapes identical — no migration logic. |
 | T27 — Build/dep quality debt | OUTSTANDING | Still TODO; cleanup batch. |
 | T28 — Architectural orphans | OUTSTANDING | Still TODO; cleanup batch. T28.2 (`compileLayer` API decision) is dependent on T24 outcome. |
 | T29 — Pin slot retrofit (post-plan) | SHIPPED | `7fcd94a` (Wave 4c — Rule-0 slot retrofit). Pin trigger moved from free-floating top-left button into `MainMenu.Item`. Filed under `atlasdraw-4ad2`. Note: shipped via **MainMenu**, NOT via the originally-implied `renderTopLeftUI` route. |
@@ -1428,7 +1428,6 @@ Three items shipped during the Wave 4 sprint that were not in the original adden
 | T21 | dropped sources | Per-source decision pending; most defer to Phase 4. |
 | T24 | mixed-geometry FC bug | Sub-layers vs. reject decision pending. |
 | T25 | TextLabelTool inline-editing | Excalidraw text-edit imperative API verification needed. |
-| T26 | LayerStyle migration only | zRef bounds half shipped 2026-05-05; `atlasdraw-fc04` LayerStyle migration remains. |
 | T27 | build/dep cleanup | Cleanup. |
 | T28 | architectural orphans | T28.2 depends on T24 resolution. |
 
