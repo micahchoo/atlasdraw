@@ -1,0 +1,15 @@
+{
+  "name": "@atlasdraw/bench",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 2 benchmark harness — pure parse/validate timings, no MapLibre runtime.",
+  "scripts": {
+    "bench": "vitest run --config ./vitest.config.ts",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@atlasdraw/data": "*"
+  },
+  "devDependencies": {}
+}

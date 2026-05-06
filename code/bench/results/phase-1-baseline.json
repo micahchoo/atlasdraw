@@ -1,0 +1,30 @@
+{
+  "runAt": "2026-05-06T06:57:35.621Z",
+  "node": "v20.19.4",
+  "platform": "linux",
+  "warmup": 3,
+  "iterations": 20,
+  "scenarios": [
+    {
+      "label": "parse 1k points",
+      "iterations": 20,
+      "mean_ms": 0.776,
+      "p95_ms": 0.877,
+      "p99_ms": 0.903
+    },
+    {
+      "label": "parse 10k points",
+      "iterations": 20,
+      "mean_ms": 7.267,
+      "p95_ms": 8.056,
+      "p99_ms": 8.488
+    },
+    {
+      "label": "parse + requireHomogeneousGeometry 10k points",
+      "iterations": 20,
+      "mean_ms": 6.947,
+      "p95_ms": 7.269,
+      "p99_ms": 7.275
+    }
+  ]
+}
