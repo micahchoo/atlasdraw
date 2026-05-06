@@ -4,6 +4,10 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "noEmit": true,
+    // paths:{} clobbers the @excalidraw/* source mappings inherited from tsconfig.base.json.
+    // Removing it exposes 534 errors (rootDir violations + missing re-exports in vendored packages).
+    // atlas-app uses Vite for real module resolution; tsc --noEmit here checks only atlas-owned src/.
+    // Fixing this requires a composite-project tsconfig refactor (separate initiative).
     "paths": {}
   },
   "include": ["src/**/*"]
