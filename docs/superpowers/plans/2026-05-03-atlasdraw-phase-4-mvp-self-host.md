@@ -5,6 +5,41 @@
 
 ---
 
+> ⚠️ **PLAN-LITERAL DRIFT — READ FIRST**
+>
+> This plan was authored 2026-05-03 / 2026-05-05, BEFORE Phase 3 W2+W3 closed
+> (2026-05-06). A pre-dispatch scrub identified **12 plan-literal drifts** and
+> **5 missing Wave 0 prereqs**. Workers MUST consume:
+>
+> **`docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md`**
+>
+> before copying any file path, package name, or API signature from this plan.
+>
+> Highest-leverage corrections workers will need:
+>
+> - **Path drift:** all `apps/…` paths in this plan miss `code/` prefix; atlas-app
+>   files additionally miss `src/` segment. Actual: `code/apps/atlas-app/src/...`.
+> - **Tooling drift:** plan says `pnpm --filter X`; project uses `yarn workspace
+>   @atlasdraw/X`. Plan says `packages/sdk`; project uses `@atlasdraw/data`.
+> - **T5 wording:** says "Extend `BasemapRegistry`" — but `BasemapRegistry` is
+>   greenfield (deferred from Phase 1 T3 per `atlasdraw-2428`). Treat as
+>   "Create-or-Extend".
+> - **T13 redundant:** Phase 3 T8 already shipped `startAutoSave()` in
+>   `code/apps/atlas-app/src/state/persistence.ts:430` with debounce + sequence-
+>   counter snapshot guard. Re-scope T13 to wire the existing function, not
+>   author a new hook.
+> - **Excalidraw barrel:** plan says `index.ts`; actual is `index.tsx`.
+> - **Phase 3 prereqs (NOT in this plan):** FC registry (`atlasdraw-ad27`),
+>   scene hydration (`atlasdraw-3601`), MainMenu unification (`atlasdraw-9078`).
+>   All three must complete in Wave 0 before T1 dispatch.
+> - **Vendored Dialog (`atlasdraw-50c0`):** `Dialog.tsx` exists in vendored
+>   Excalidraw but is NOT exported from the package barrel. Decide barrel-bump
+>   vs internal-import before T8/T9/T14.
+>
+> Full mapping table + verified literals: see scrub doc Section A and Section C.
+
+---
+
 ## 1. Header
 
 ### Goal
@@ -53,32 +88,77 @@
 
 ## 2b. Pre-Work Checklist (Phase Readiness Gates)
 
-Before any Wave 0 task executes, confirm these Phase 3 deliverables are present. If any are absent, raise a blocker — do not work around them.
+> **Updated 2026-05-06 per `wave0-pre-dispatch-scrub-2026-05-06.md`.** Original
+> checklist contained drift (`pnpm`, `packages/sdk`, missing `code/` prefix,
+> assumed `BasemapRegistry` exists). Replaced with corrected gates plus 4
+> blocking prereqs the original plan missed.
+
+Before any Wave 0 task executes, confirm these gates pass. If any fail, raise a
+blocker — do not work around them.
+
+### Phase 3 outputs (consume; do not re-implement)
 
 | Gate | Check | Blocking task if absent |
 |---|---|---|
-| `packages/sdk` exports `readAtlasdraw` and `writeAtlasdraw` | `grep -r 'export.*readAtlasdraw' packages/sdk/src` returns a hit | Tasks 8, 9 (share encoding) |
-| `packages/basemap` exports `BASEMAPS` array and `BasemapConfig` type | `grep -r 'export.*BASEMAPS' packages/basemap/src` returns a hit | Tasks 5, 6, 7 |
-| `packages/basemap/src/pmtiles-protocol.ts` exists (Phase 1) | `ls packages/basemap/src/pmtiles-protocol.ts` exits 0 | Task 7 |
-| `apps/atlas-app` has a working dev server (`pnpm --filter atlas-app dev`) | Server starts without fatal error | Tasks 6, 13, 14 |
-| Phase 3 `.atlasdraw` bundle round-trip passes | `pnpm --filter sdk test` exits 0 | Tasks 8, 9 |
-| `apps/storage` directory does not yet exist (this phase creates it) | `ls apps/storage` exits non-zero | Task 1 (would overwrite existing work) |
-| `pmtiles` CLI is installed and on PATH | `pmtiles --version` exits 0 | Task 10 Step 2 — `fetch-pmtiles.sh` invokes `pmtiles extract`; silent failure if absent. Install: `go install github.com/protomaps/go-pmtiles/...@latest` <!-- shape-incorporated 2026-05-03: Q1 unblocked — pmtiles extract step is a new toolchain dep; gate prevents silent failure at fetch time --> |
+| `@atlasdraw/data` exports `read` / `write` / `readJSON` / `writeJSON` | `grep -E 'export.*\\b(read\\|write)\\b' code/packages/data/src/index.ts` returns hits | Tasks 8, 9, 13 |
+| `@atlasdraw/data` round-trip acceptance passes | `cd code/packages/data && yarn test --run` exits 0 (83/83) | Tasks 8, 9 |
+| atlas-app persistence layer present | `ls code/apps/atlas-app/src/state/{persistence,usePersistenceStore,selectDocument}.ts` exits 0 | Task 13 (re-scoped — wires existing autosave) |
+| atlas-app build clean | `cd code/apps/atlas-app && yarn build` exits 0 (1585 latent tsc errors are vite-hidden — see `atlasdraw-dc84`) | Tasks 6, 13, 14 |
+| `code/apps/storage/` does not yet exist | `ls code/apps/storage 2>/dev/null` exits non-zero | Task 1 (Wave 0 scaffold creates it) |
+| `code/apps/realtime/` exists as a Phase 5 stub — leave alone | `ls code/apps/realtime/package.json` exits 0; do NOT modify | Task 11 (compose file references but does not implement) |
+| `pmtiles` CLI installed | `pmtiles --version` exits 0 | Task 10 Step 2 — install via `go install github.com/protomaps/go-pmtiles/...@latest` |
+| `code/packages/excalidraw/index.tsx` exports `Dialog` (or import from internal path) | `grep -E '^export.*\\bDialog\\b' code/packages/excalidraw/index.tsx` returns hit OR plan accepts internal-path import | Tasks 8, 9, 14 (`atlasdraw-50c0`) |
 
-Run all checks before beginning Wave 0:
+### Phase 3 prereqs that block Phase 4 (file in Wave 0 BEFORE T1 dispatch)
+
+These were captured as `[NOTE]` markers in `MapEditor.tsx` and HANDOFF prose during
+Phase 3 W2/W3 closure. They are NOT implemented; without them Phase 4 ships on
+top of stubs.
+
+| Prereq seed | Title | Block scope |
+|---|---|---|
+| `atlasdraw-2428` | BasemapRegistry + pmtiles-protocol + style-builder (deferred from P1 T3) | T5, T6, T7 (re-word T5 from "Extend" to "Create-or-Extend") |
+| `atlasdraw-ad27` | Data-layer FC registry (selectDocument layers gap, mulch `mx-91343d`) | Any T8/T9 share that needs round-trip with data layers |
+| `atlasdraw-3601` | Excalidraw scene hydration on persistence load() | Whole Wave-2 share story (load path silently no-ops without it) |
+| `atlasdraw-9078` | MainMenu .excalidraw vs .atlasdraw entry unification (mulch `mx-30002e`) | T8/T9 ergonomics; UX-coherence on Show HN demo |
+| `atlasdraw-50c0` | Dialog API barrel-export decision | T8 ShareDialog, T9 useShareLink, T14 AboutDialog |
+
+### Doc/spec debt to fix before dispatch
+
+| Seed | Issue | Why now |
+|---|---|---|
+| `atlasdraw-5cba` | `tech-spec.md §10` still says OpenFreeMap default basemap | Q3 resolution says hybrid; spec contradicts T5/T7 |
+
+### Visible-UX bugs to triage for demo
+
+| Seed | Severity | Title |
+|---|---|---|
+| `atlasdraw-4142` | high | Mixed-geometry GeoJSON FCs render only first feature's style |
+| `atlasdraw-76b2` | high | Polyline geo-anchor breaks when zoom > creation zoom |
+
+Decision: fix in P4 Wave 0 (demo-blocking) or accept as known issues (announce in
+README "Known Limitations").
+
+### Run all gates before Wave 0
 
 ```
-Run: grep -r 'export.*readAtlasdraw' packages/sdk/src | wc -l
-Expected: ≥ 1
+Run: grep -E 'export.*\b(read|write)\b' code/packages/data/src/index.ts | wc -l
+Expected: ≥ 4 (read, write, readJSON, writeJSON)
 
-Run: grep -r 'export.*BASEMAPS' packages/basemap/src | wc -l
-Expected: ≥ 1
+Run: cd code/packages/data && yarn test --run >/dev/null 2>&1; echo $?
+Expected: 0
 
-Run: ls packages/basemap/src/pmtiles-protocol.ts
-Expected: exits 0
+Run: ls code/apps/atlas-app/src/state/{persistence,usePersistenceStore,selectDocument}.ts 2>/dev/null | wc -l
+Expected: 3
 
-Run: ls apps/storage 2>/dev/null && echo EXISTS || echo ABSENT
+Run: ls code/apps/storage 2>/dev/null && echo EXISTS || echo ABSENT
 Expected: ABSENT
+
+Run: ls code/apps/realtime/package.json
+Expected: exits 0 (P5 stub — leave alone)
+
+Run: sd show atlasdraw-2428 atlasdraw-ad27 atlasdraw-3601 atlasdraw-9078 atlasdraw-50c0 | grep -c '^Status: closed'
+Expected: 5  (all 5 prereqs must be closed before Wave 0 task dispatch)
 ```
 
 If any gate fails, stop and surface the gap before proceeding.
@@ -357,7 +437,13 @@ docs/
 
 ---
 
-### Task 5: Vendor Basemap Style JSONs + Extend `BasemapRegistry` [Wave 1]
+### Task 5: Vendor Basemap Style JSONs + Create-or-Extend `BasemapRegistry` [Wave 1]
+
+> **Scrub note (2026-05-06):** `BasemapRegistry` was deferred from Phase 1 T3
+> per `atlasdraw-2428`; it does NOT exist in `code/packages/basemap/`. T5 must
+> first scaffold `BasemapRegistry.ts` and `pmtiles-protocol.ts` (per the
+> ORIGINAL Phase 1 T3 spec lines 186-189) BEFORE the "extend" steps below run.
+> Treat the "Modify: registry.ts" file as "Create-or-Modify".
 
 **Orient:** Per Q3, the default basemap for self-hosted first run is `protomaps-light` (local PMTiles, no network). `openfreemap-bright` is gated behind `[basemap.allow_remote] = true`. Style JSONs are vendored so first run needs no network to resolve styles.
 **Flow position:** Step 0 of 3 in Flow B (styles → **registry** → BasemapPicker → MapLibre setStyle).
@@ -696,16 +782,34 @@ docs/
 
 ---
 
-### Task 13: `useAutosave` Hook — Debounced Save with Drain State [Wave 1]
+### Task 13: Wire `startAutoSave` into Drain-State Hook + Storage Client [Wave 1]
+
+> **Scrub note (2026-05-06) — RE-SCOPED.** Original spec authored a debounced
+> autosave hook from scratch. **Phase 3 T8 already shipped this.**
+>
+> Existing surface (verified literals):
+> - `code/apps/atlas-app/src/state/persistence.ts:430 startAutoSave(opts)` —
+>   trailing-edge debounce + 30s ceiling + sequence-counter snapshot guard.
+> - `code/apps/atlas-app/src/state/usePersistenceStore.ts:33 usePersistenceStore`
+>   — Zustand store with `markDirty`, `setLastSavedAt`, etc.
+> - `code/apps/atlas-app/src/components/MapEditor.tsx:470+` — wiring +
+>   `markDirty` invocation in `handleExcalidrawChange`.
+>
+> T13 is now **wire-only**: surface a thin `useAutosave()` hook that exposes
+> `{ isDraining, lastSavedAt, forceSave }` derived from `usePersistenceStore`,
+> and bridge `startAutoSave`'s save callback to `StorageClient.updateMap` (when
+> in `postgres-minio` mode) instead of (or in addition to) IndexedDB.
+> Estimated diff: ~30 lines + 1 test file. NOT a hook author.
 
 **Orient:** The Share button and the share link encoding both depend on having a clean, committed snapshot of the current map state. `useAutosave` is the single source of truth for "is the canvas dirty relative to the last persisted version" — without it, both share modes can silently publish stale data.
 **Flow position:** Step 0.5 of 4 in Flow A (canvas-edits → **autosave-debounce** → scene-snapshot → share). Parallel to Task 3 — provides `isDraining` flag consumed by Tasks 8 and 9.
-**Upstream contract:** Receives `AtlasdrawAPI.getScene(): AtlasdrawBundle` from the host-integration interface (Phase 0). Receives `StorageClient.updateMap(id, blob)` from Task 3.
+**Upstream contract:** Wraps existing `startAutoSave` + `usePersistenceStore`. Receives `StorageClient.updateMap(id, blob)` from Task 3 and routes the save callback to it when storage mode is remote.
 **Downstream contract:** Exports `{ isDraining: boolean, lastSavedAt: Date | null, forceSave(): Promise<void> }` consumed by `ShareDialog.tsx` (Task 8) and `useShareLink.ts` (Tasks 8/9).
 **Skill:** `none`
 **Files:**
-- Create: `apps/atlas-app/hooks/useAutosave.ts`
-- Create: `apps/atlas-app/hooks/useAutosave.test.ts`
+- Create: `code/apps/atlas-app/src/hooks/useAutosave.ts` (thin wrapper, ~30 lines)
+- Create: `code/apps/atlas-app/src/hooks/useAutosave.test.ts`
+- Modify (do NOT duplicate): `code/apps/atlas-app/src/state/persistence.ts` — extend `CreatePersistenceStoreOptions` to accept an optional `remoteSave?: (blob: Blob) => Promise<void>` callback that fires alongside the IndexedDB write.
 
 **Steps:**
 
