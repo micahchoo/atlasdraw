@@ -9,10 +9,12 @@
   "files": ["src", "README.md"],
   "scripts": {
     "build": "echo 'TODO: build (target: Phase 1+)' && exit 0",
+    "test": "vitest",
     "test:typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "maplibre-gl": "^4.7.1"
+    "maplibre-gl": "^4.7.1",
+    "pmtiles": "^4.4.0"
   },
   "peerDependencies": {
     "react": ">=18.0.0"

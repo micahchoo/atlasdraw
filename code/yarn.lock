@@ -8866,6 +8866,13 @@ playwright@1.59.1:
   optionalDependencies:
     fsevents "2.3.2"
 
+pmtiles@^4.4.0:
+  version "4.4.1"
+  resolved "https://registry.yarnpkg.com/pmtiles/-/pmtiles-4.4.1.tgz#11ecb2a01453ba7c0ce88027e15f768aba18913b"
+  integrity sha512-5oTeQc/yX/ft1evbpIlnoCZugQuug/iYIAj/ZTqIqzdGek4uZEho99En890EE6NOSI3JTI3IG8R7r8+SltphxA==
+  dependencies:
+    fflate "^0.8.2"
+
 png-chunk-text@1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/png-chunk-text/-/png-chunk-text-1.0.0.tgz#1c6006d8e34ba471d38e1c9c54b3f53e1085e18f"
