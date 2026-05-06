@@ -47,3 +47,6 @@ export {
 
 // Phase 3 Wave 1 Task 7 — Shapefile → GeoJSON parser.
 export { parseShapefile, ShapefileParseError } from "./shapefile";
+
+// Phase 3 Wave 1 Task 5 — Browser-only thumbnail generator (returns null in Node).
+export { generateThumbnail } from "./thumbnail";
