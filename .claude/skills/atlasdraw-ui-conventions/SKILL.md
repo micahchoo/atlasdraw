@@ -117,6 +117,12 @@ values as Excalidraw's SCSS variables — they are deliberately aligned.
 | Primary active hover | `#1864ab` | `$color-blue-7` = `#1c7ed6` (close) |
 | Scrim (dark overlay bg) | `rgba(0,0,0,0.65)` | — |
 | Context menu border | `#ccc` | `$color-gray-4` = `#ced4da` (close) |
+| Row separator (panel) | `var(--default-border-color)` inside `.excalidraw` scope | — |
+| Secondary metadata text | `var(--text-primary-color)` at 0.6 opacity inside `.excalidraw` scope; `#868e96` outside | `$color-gray-6` = `#868e96` |
+| Data layer kind badge — bg | `#dbeafe` | — (Tailwind blue-100; new role) |
+| Data layer kind badge — text | `#1e3a8a` | — (Tailwind blue-900; new role) |
+| Annotation kind badge — bg | `#fef3c7` | — (Tailwind amber-100; new role) |
+| Annotation kind badge — text | `#92400e` | — (Tailwind amber-900; new role) |
 
 **Do not invent new hex values.** If the role doesn't exist in this table, check
 `packages/excalidraw/css/variables.module.scss` for the nearest grey or blue.
@@ -455,7 +461,7 @@ bands without updating this table and adding a comment in `MapEditor.module.css`
 | New component | `code/apps/atlas-app/src/components/MyComponent.tsx` |
 | New CSS module | `code/apps/atlas-app/src/styles/MyComponent.module.css` |
 | New hook | `code/apps/atlas-app/src/hooks/useMyHook.ts` |
-| Sidebar tab | Render inside `<Excalidraw>` via `renderSidebar` prop |
+| Sidebar tab body | A function component returning **body markup only** — no `<Sidebar>` wrapper. Mount via `excalidrawAPI.registerSidebarTab({ name, label, content: <Body/> })` from inside a `useEffect` keyed on `excalidrawAPI`; return the unsubscribe. Open via `excalidrawAPI.toggleSidebar({ name: DEFAULT_SIDEBAR.name, tab: <name> })`. **Never** render `<Sidebar name="...">` directly — that creates a parallel sidebar with no public trigger button. |
 | SVG icon | Inline in component; no separate icon file |
 
 ---

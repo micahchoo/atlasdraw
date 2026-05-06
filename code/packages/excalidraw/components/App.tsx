@@ -496,6 +496,7 @@ import type {
   NullableGridSize,
   Offsets,
   ProjectContextMenuItem,
+  ProjectSidebarTab,
 } from "../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Action, ActionResult } from "../actions/types";
@@ -564,6 +565,34 @@ export const ExcalidrawAPISetContext = React.createContext<
   ((api: ExcalidrawImperativeAPI | null) => void) | null
 >(null);
 ExcalidrawAPISetContext.displayName = "ExcalidrawAPISetContext";
+
+/**
+ * Atlasdraw fork — `useSyncExternalStore`-shaped context for project
+ * sidebar tabs registered via `excalidrawAPI.registerSidebarTab`.
+ * Provided by App alongside {@link ExcalidrawAPIContext}, consumed
+ * by `DefaultSidebar` so the trigger row + tab body re-render on
+ * register/unregister without coupling tabs to AppState.
+ */
+export const ProjectSidebarTabsContext = React.createContext<{
+  subscribe: (cb: () => void) => () => void;
+  getSnapshot: () => readonly ProjectSidebarTab[];
+} | null>(null);
+ProjectSidebarTabsContext.displayName = "ProjectSidebarTabsContext";
+
+export const useProjectSidebarTabs = (): readonly ProjectSidebarTab[] => {
+  const ctx = useContext(ProjectSidebarTabsContext);
+  // Stable empty-array reference so consumers outside the App tree
+  // (storybook, isolated mounts) don't churn on every render.
+  return React.useSyncExternalStore(
+    ctx?.subscribe ?? PROJECT_SIDEBAR_TABS_NOOP_SUBSCRIBE,
+    ctx?.getSnapshot ?? PROJECT_SIDEBAR_TABS_EMPTY_SNAPSHOT,
+    ctx?.getSnapshot ?? PROJECT_SIDEBAR_TABS_EMPTY_SNAPSHOT,
+  );
+};
+
+const PROJECT_SIDEBAR_TABS_EMPTY: readonly ProjectSidebarTab[] = [];
+const PROJECT_SIDEBAR_TABS_EMPTY_SNAPSHOT = () => PROJECT_SIDEBAR_TABS_EMPTY;
+const PROJECT_SIDEBAR_TABS_NOOP_SUBSCRIBE = () => () => {};
 
 export const useApp = () => useContext(AppContext);
 export const useAppProps = () => useContext(AppPropsContext);
@@ -676,6 +705,51 @@ class App extends React.Component<AppProps, AppState> {
    */
   private projectContextMenuItems: ProjectContextMenuItem[] = [];
 
+  /**
+   * Atlasdraw fork extension — host-app-registered sidebar tabs spliced
+   * into `DefaultSidebar`. Mutated only via {@link App.registerSidebarTab}
+   * / its returned unregister fn. Order is preserved (first registered
+   * → first trigger). Re-registering with the same `name` replaces in
+   * place. Listeners are notified after every mutation so `DefaultSidebar`
+   * (a functional component) re-renders via `useSyncExternalStore`.
+   */
+  private projectSidebarTabs: ProjectSidebarTab[] = [];
+
+  /**
+   * Subscribers re-run on every {@link App.projectSidebarTabs} mutation.
+   * Populated by `useSyncExternalStore`'s `subscribe` callback inside
+   * `DefaultSidebar`. Plain `Set` (no React state) — `setState` is the
+   * wrong primitive here because (a) AppState is a sealed type used by
+   * the editor's update-coalescing pipeline, and (b) the tabs array is
+   * not part of the document/scene model.
+   */
+  private projectSidebarTabsListeners = new Set<() => void>();
+
+  /**
+   * Stable handles for {@link App.projectSidebarTabsContextValue}. The
+   * `subscribe`/`getSnapshot` pair drives `useSyncExternalStore` inside
+   * `DefaultSidebar`; identity is stable so the consumer doesn't churn
+   * subscriptions on every parent render.
+   */
+  private getProjectSidebarTabsSnapshot = (): readonly ProjectSidebarTab[] =>
+    this.projectSidebarTabs;
+
+  private subscribeProjectSidebarTabs = (cb: () => void): (() => void) => {
+    this.projectSidebarTabsListeners.add(cb);
+    return () => {
+      this.projectSidebarTabsListeners.delete(cb);
+    };
+  };
+
+  /**
+   * Stable context value for {@link ProjectSidebarTabsContext}. Identity
+   * never changes so `useSyncExternalStore` never resubscribes.
+   */
+  private projectSidebarTabsContextValue = {
+    subscribe: this.subscribeProjectSidebarTabs,
+    getSnapshot: this.getProjectSidebarTabsSnapshot,
+  };
+
   private readonly editorLifecycleEvents = new AppEventBus<
     ExcalidrawImperativeAPIEventMap,
     typeof editorLifecycleEventBehavior
@@ -780,6 +854,9 @@ class App extends React.Component<AppProps, AppState> {
       },
       registerContextMenuItem: (item: ProjectContextMenuItem) => {
         return this.registerProjectContextMenuItem(item);
+      },
+      registerSidebarTab: (tab: ProjectSidebarTab) => {
+        return this.registerProjectSidebarTab(tab);
       },
       refresh: this.refresh,
       setToast: this.setToast,
@@ -2168,6 +2245,9 @@ class App extends React.Component<AppProps, AppState> {
         onPointerLeave={this.toggleOverscrollBehavior}
       >
         <ExcalidrawAPIContext.Provider value={this.api}>
+         <ProjectSidebarTabsContext.Provider
+           value={this.projectSidebarTabsContextValue}
+         >
           <AppContext.Provider value={this}>
             <AppPropsContext.Provider value={this.props}>
               <ExcalidrawContainerContext.Provider
@@ -2440,6 +2520,7 @@ class App extends React.Component<AppProps, AppState> {
               </ExcalidrawContainerContext.Provider>
             </AppPropsContext.Provider>
           </AppContext.Provider>
+         </ProjectSidebarTabsContext.Provider>
         </ExcalidrawAPIContext.Provider>
       </div>
     );
@@ -12525,6 +12606,43 @@ class App extends React.Component<AppProps, AppState> {
       const idx = this.projectContextMenuItems.indexOf(item);
       if (idx >= 0) {
         this.projectContextMenuItems.splice(idx, 1);
+      }
+    };
+  };
+
+  /**
+   * Atlasdraw fork — register a project-defined tab to splice into
+   * `DefaultSidebar`. Returns an unregister function that removes the
+   * exact tab by reference (safe to call multiple times).
+   *
+   * Re-registering a tab with the same `name` replaces in place
+   * (last-write wins). After every mutation we replace the array
+   * reference and notify listeners so `useSyncExternalStore` consumers
+   * (e.g. `DefaultSidebar`) re-render. We allocate a fresh array
+   * because `useSyncExternalStore` requires snapshot identity to
+   * change for React to detect the update.
+   */
+  private registerProjectSidebarTab = (
+    tab: ProjectSidebarTab,
+  ): (() => void) => {
+    const existingIdx = this.projectSidebarTabs.findIndex(
+      (x) => x.name === tab.name,
+    );
+    if (existingIdx >= 0) {
+      const next = this.projectSidebarTabs.slice();
+      next[existingIdx] = tab;
+      this.projectSidebarTabs = next;
+    } else {
+      this.projectSidebarTabs = [...this.projectSidebarTabs, tab];
+    }
+    this.projectSidebarTabsListeners.forEach((cb) => cb());
+    return () => {
+      const idx = this.projectSidebarTabs.indexOf(tab);
+      if (idx >= 0) {
+        const next = this.projectSidebarTabs.slice();
+        next.splice(idx, 1);
+        this.projectSidebarTabs = next;
+        this.projectSidebarTabsListeners.forEach((cb) => cb());
       }
     };
   };

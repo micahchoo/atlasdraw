@@ -38,6 +38,9 @@ const mockFakeExcalidrawAPI = {
   // W-C — MapEditor calls excalidrawAPI.registerContextMenuItem in a
   // useEffect to wire the Convert action. Stub returns an unregister fn.
   registerContextMenuItem: vi.fn(() => vi.fn()),
+  // Sidebar-tab fork — MapEditor mounts LayerPanel as a tab inside
+  // Excalidraw's DefaultSidebar via this API. Stub returns an unregister fn.
+  registerSidebarTab: vi.fn(() => vi.fn()),
 };
 
 // MainMenu / MainMenu.Item passthrough is defined INSIDE the vi.mock factory
@@ -201,7 +204,7 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     });
   });
 
-  it("clicking the Layers item calls excalidrawAPI.toggleSidebar({name:'layers'})", async () => {
+  it("clicking the Layers item calls excalidrawAPI.toggleSidebar({name:'default', tab:'layers'})", async () => {
     const { getByTestId } = render(<MapEditor />);
     const item = await waitFor(() => getByTestId("main-menu-layers"));
 
@@ -216,7 +219,10 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     await waitFor(() => {
       expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(1);
     });
-    expect(mockToggleSidebarSpy).toHaveBeenCalledWith({ name: "layers" });
+    expect(mockToggleSidebarSpy).toHaveBeenCalledWith({
+      name: "default",
+      tab: "layers",
+    });
   });
 
   it("clicking a second time fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
@@ -229,7 +235,26 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     await waitFor(() => {
       expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(2);
     });
-    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(1, { name: "layers" });
-    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(2, { name: "layers" });
+    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(1, {
+      name: "default",
+      tab: "layers",
+    });
+    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(2, {
+      name: "default",
+      tab: "layers",
+    });
+  });
+
+  it("registers the Layers tab via registerSidebarTab", async () => {
+    render(<MapEditor />);
+    await waitFor(() => {
+      expect(mockFakeExcalidrawAPI.registerSidebarTab).toHaveBeenCalled();
+    });
+    const arg = (mockFakeExcalidrawAPI.registerSidebarTab as ReturnType<
+      typeof vi.fn
+    >).mock.calls[0][0];
+    expect(arg.name).toBe("layers");
+    expect(arg.label).toBe("Layers");
+    expect(arg.content).toBeTruthy();
   });
 });

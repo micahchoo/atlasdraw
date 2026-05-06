@@ -1,32 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 2 Wave 2b T12 — LayerPanel.
 //
-// Renders an Excalidraw <Sidebar name="layers"> tab with two sections —
-// data layers and annotations — sourced from the LayerRegistry Zustand store.
+// Two sections (data layers + annotations) sourced from the LayerRegistry
+// Zustand store. Renders the panel BODY only — no Sidebar wrapper. The
+// parent surface (DefaultSidebar via the atlasdraw fork's
+// `excalidrawAPI.registerSidebarTab` API) provides the dockable shell,
+// trigger button, and tab routing. MapEditor registers this component
+// as the "layers" tab so it shares the existing Library trigger button
+// instead of mounting a parallel sidebar that competes for the same
+// screen surface.
 //
-// Sidebar API (verified in vendored Excalidraw v0.18 source):
-//   code/packages/excalidraw/index.tsx:342
-//     export { Sidebar } from "./components/Sidebar/Sidebar";
-//   code/packages/excalidraw/components/Sidebar/common.ts:17
-//     export type SidebarProps<P = {}> = {
-//       name: SidebarName;
-//       children: React.ReactNode;
-//       docked?: boolean;
-//       ...
-//     };
-//   Sidebar exposes static subcomponents (Header, Tabs, TabTriggers, Tab,
-//   Trigger, TabTrigger). `Sidebar.Header` is the title slot.
-//
-// Sidebar internally checks `appState.openSidebar?.name === props.name`
-// and short-circuits to null when not open. The host Excalidraw editor
-// is responsible for opening "layers" (e.g. via a SidebarTrigger). For
-// unit tests we mock the export.
+// History: pre-`registerSidebarTab` revisions of this file rendered
+// `<Sidebar name="layers">` directly. That carved out a parallel sidebar
+// with no public trigger button and required a separate MainMenu item to
+// open it. Removed in favor of the DefaultSidebar splice.
 //
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T12
-// Pre-dispatch scrub: docs/decisions/wave2-pre-dispatch-scrub-2026-05-04.md §1 §2 §6
+// Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React from "react";
-import { Sidebar } from "@excalidraw/excalidraw";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import type {
@@ -35,6 +27,89 @@ import type {
   DataLayerEntry,
   LayerStyle,
 } from "../state/layerRegistry";
+import styles from "../styles/LayerPanel.module.css";
+
+// ---------------------------------------------------------------------------
+// Inline SVG icons — atlasdraw-ui-conventions §Icons:
+//   - currentColor stroke so hover/active state propagates from button color
+//   - sized via CSS (.icon class), not SVG attributes
+//   - aria-hidden on the SVG; text label or sr-only span on the button.
+// ---------------------------------------------------------------------------
+
+function IconEye() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  );
+}
+
+function IconEyeSlash() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
+      <circle cx="8" cy="8" r="2" />
+      <line x1="2" y1="2" x2="14" y2="14" />
+    </svg>
+  );
+}
+
+function IconChevronUp() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3,10 8,5 13,10" />
+    </svg>
+  );
+}
+
+function IconChevronDown() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3,6 8,11 13,6" />
+    </svg>
+  );
+}
+
+function joinClass(...names: Array<string | false | null | undefined>): string {
+  return names.filter(Boolean).join(" ");
+}
 
 // ---------------------------------------------------------------------------
 // Row components
@@ -57,95 +132,87 @@ function DataLayerRow({
   const { id, label, visible, order, featureCount, style } = entry;
 
   return (
-    <div
-      data-testid={`layer-row-${id}`}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        padding: "6px 8px",
-        borderBottom: "1px solid #eee",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div data-testid={`layer-row-${id}`} className={styles.row}>
+      <div className={styles.rowHeader}>
         <button
           type="button"
+          className={joinClass(
+            styles.iconButton,
+            visible && styles.iconButtonPressed,
+          )}
           aria-label={visible ? "Hide layer" : "Show layer"}
           aria-pressed={visible}
+          data-testid={`layer-visibility-${id}`}
           onClick={() => setVisibility(id, !visible)}
         >
-          {visible ? "\u{1F441}" : "\u{1F441}̷"}
+          {visible ? <IconEye /> : <IconEyeSlash />}
         </button>
         {/* Non-color-only kind indicator — accessibility (plan §6 scrub). */}
         <span
           aria-label="Data layer"
-          style={{
-            display: "inline-block",
-            minWidth: 16,
-            padding: "0 4px",
-            borderRadius: 3,
-            background: "#dbeafe",
-            color: "#1e3a8a",
-            fontSize: 10,
-            fontWeight: 700,
-            textAlign: "center",
-          }}
+          className={joinClass(styles.kindBadge, styles.kindBadgeData)}
         >
           D
         </span>
-        <span style={{ flex: 1 }}>{label}</span>
-        <span style={{ fontSize: 11, color: "#888" }}>
-          {featureCount} feat
-        </span>
+        <span className={styles.label}>{label}</span>
+        <span className={styles.featureCount}>{featureCount} feat</span>
         <button
           type="button"
+          className={styles.iconButton}
           aria-label="Move layer up"
+          data-testid={`layer-up-${id}`}
           onClick={() => reorder(id, order - 1)}
         >
-          {"↑"}
+          <IconChevronUp />
         </button>
         <button
           type="button"
+          className={styles.iconButton}
           aria-label="Move layer down"
+          data-testid={`layer-down-${id}`}
           onClick={() => reorder(id, order + 1)}
         >
-          {"↓"}
+          <IconChevronDown />
         </button>
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: 4,
-          fontSize: 11,
-        }}
-      >
-        <label htmlFor={`fill-${id}`}>fill</label>
+      <div className={styles.styleGrid}>
+        <label htmlFor={`fill-${id}`} className={styles.styleGridLabel}>
+          fill
+        </label>
         <input
           id={`fill-${id}`}
           type="color"
           value={style.fillColor ?? "#000000"}
+          data-testid={`layer-fill-${id}`}
           onChange={(e) => updateStyle(id, { fillColor: e.target.value })}
         />
-        <label htmlFor={`stroke-${id}`}>stroke</label>
+        <label htmlFor={`stroke-${id}`} className={styles.styleGridLabel}>
+          stroke
+        </label>
         <input
           id={`stroke-${id}`}
           type="color"
           value={style.strokeColor ?? "#000000"}
+          data-testid={`layer-stroke-${id}`}
           onChange={(e) => updateStyle(id, { strokeColor: e.target.value })}
         />
-        <label htmlFor={`stroke-width-${id}`}>width</label>
+        <label htmlFor={`stroke-width-${id}`} className={styles.styleGridLabel}>
+          width
+        </label>
         <input
           id={`stroke-width-${id}`}
           type="number"
           min={0}
           step={1}
           value={style.strokeWidth ?? 1}
+          data-testid={`layer-width-${id}`}
           onChange={(e) =>
             updateStyle(id, { strokeWidth: Number(e.target.value) })
           }
         />
-        <label htmlFor={`opacity-${id}`}>opacity</label>
+        <label htmlFor={`opacity-${id}`} className={styles.styleGridLabel}>
+          opacity
+        </label>
         <input
           id={`opacity-${id}`}
           type="range"
@@ -153,6 +220,7 @@ function DataLayerRow({
           max={1}
           step={0.05}
           value={style.opacity ?? 1}
+          data-testid={`layer-opacity-${id}`}
           onChange={(e) =>
             updateStyle(id, { opacity: Number(e.target.value) })
           }
@@ -178,52 +246,45 @@ function AnnotationLayerRow({
   return (
     <div
       data-testid={`layer-row-${id}`}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "6px 8px",
-        borderBottom: "1px solid #eee",
-      }}
+      className={joinClass(styles.row, styles.rowAnnotation)}
     >
       <button
         type="button"
+        className={joinClass(
+          styles.iconButton,
+          visible && styles.iconButtonPressed,
+        )}
         aria-label={visible ? "Hide annotation" : "Show annotation"}
         aria-pressed={visible}
+        data-testid={`layer-visibility-${id}`}
         onClick={() => setVisibility(id, !visible)}
       >
-        {visible ? "\u{1F441}" : "\u{1F441}̷"}
+        {visible ? <IconEye /> : <IconEyeSlash />}
       </button>
       <span
         aria-label="Annotation"
-        style={{
-          display: "inline-block",
-          minWidth: 16,
-          padding: "0 4px",
-          borderRadius: 3,
-          background: "#fef3c7",
-          color: "#92400e",
-          fontSize: 10,
-          fontWeight: 700,
-          textAlign: "center",
-        }}
+        className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
       >
         A
       </span>
-      <span style={{ flex: 1 }}>{label}</span>
+      <span className={styles.label}>{label}</span>
       <button
         type="button"
+        className={styles.iconButton}
         aria-label="Move annotation up"
+        data-testid={`layer-up-${id}`}
         onClick={() => reorder(id, order - 1)}
       >
-        {"↑"}
+        <IconChevronUp />
       </button>
       <button
         type="button"
+        className={styles.iconButton}
         aria-label="Move annotation down"
+        data-testid={`layer-down-${id}`}
         onClick={() => reorder(id, order + 1)}
       >
-        {"↓"}
+        <IconChevronDown />
       </button>
     </div>
   );
@@ -251,33 +312,21 @@ export function LayerPanel() {
     .sort(byOrder);
 
   return (
-    <Sidebar name="layers" docked>
-      <Sidebar.Header>Layers</Sidebar.Header>
-      <section
-        aria-label="Data Layers"
-        style={{ borderBottom: "2px solid #ccc" }}
-      >
-        <h3 style={{ margin: 0, padding: "4px 8px", fontSize: 12 }}>
-          Data Layers
-        </h3>
+    <div data-testid="layer-panel-body" className={styles.body}>
+      <section aria-label="Data Layers" className={styles.section}>
+        <h3 className={styles.heading}>Data Layers</h3>
         {dataLayers.length === 0 ? (
-          <p style={{ padding: "4px 8px", fontSize: 11, color: "#888" }}>
-            (none — drop a GeoJSON file)
-          </p>
+          <p className={styles.empty}>(none — drop a GeoJSON file)</p>
         ) : (
           dataLayers.map((entry) => (
             <DataLayerRow key={entry.id} entry={entry} mutators={mutators} />
           ))
         )}
       </section>
-      <section aria-label="Annotations">
-        <h3 style={{ margin: 0, padding: "4px 8px", fontSize: 12 }}>
-          Annotations
-        </h3>
+      <section aria-label="Annotations" className={styles.section}>
+        <h3 className={styles.heading}>Annotations</h3>
         {annotations.length === 0 ? (
-          <p style={{ padding: "4px 8px", fontSize: 11, color: "#888" }}>
-            (none — draw with Excalidraw tools)
-          </p>
+          <p className={styles.empty}>(none — draw with Excalidraw tools)</p>
         ) : (
           annotations.map((entry) => (
             <AnnotationLayerRow
@@ -288,6 +337,6 @@ export function LayerPanel() {
           ))
         )}
       </section>
-    </Sidebar>
+    </div>
   );
 }

@@ -1,30 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 2 Wave 2b T12 — LayerPanel tests.
 //
-// Why we mock @excalidraw/excalidraw:
-//   The real <Sidebar> uses Jotai context + useUIAppState, and short-circuits
-//   to null unless `appState.openSidebar?.name === "layers"`. Mounting a full
-//   Excalidraw editor in jsdom for a panel render is the wrong tradeoff for
-//   T12 — we mock Sidebar to a pass-through so children always render. The
-//   real wiring is exercised by E2E (Playwright) once a SidebarTrigger lands.
+// LayerPanel now renders body-only — no Sidebar wrapper. The parent
+// surface (DefaultSidebar via excalidrawAPI.registerSidebarTab) provides
+// the dockable shell; LayerPanel just renders sections. So we no longer
+// need to mock @excalidraw/excalidraw — the component imports nothing
+// from there.
 //
 // Store seeding follows the same pattern as state/__tests__/layerRegistry.test.ts —
 // `setState({ entries: [] })` in beforeEach, then call action methods.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import type { FeatureCollection } from "geojson";
-
-vi.mock("@excalidraw/excalidraw", () => {
-  const Sidebar = ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="sidebar">{children}</div>
-  );
-  // Static subcomponent — matches the real Sidebar's `Header` slot.
-  Sidebar.Header = ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="sidebar-header">{children}</div>
-  );
-  return { Sidebar };
-});
 
 import { LayerPanel } from "../LayerPanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";

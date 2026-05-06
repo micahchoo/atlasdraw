@@ -982,6 +982,35 @@ export type ProjectContextMenuItem = {
   icon?: React.ReactNode;
 };
 
+/**
+ * Atlasdraw fork extension — host-app-defined tab spliced into
+ * Excalidraw's `DefaultSidebar` (the sidebar that hosts the Library
+ * and canvas Search tabs). Lets host apps share the existing
+ * SidebarTrigger button + dockable shell instead of mounting a
+ * parallel sidebar that competes for the same screen space.
+ *
+ * Tabs are addressable by `name` for `excalidrawAPI.toggleSidebar(
+ *   { name: DEFAULT_SIDEBAR.name, tab: <name> })`.
+ *
+ * Multiple registrations with the same `name` are deduped (last-write
+ * wins); the unregister function only removes the specific item it
+ * created (referential equality).
+ */
+export type ProjectSidebarTab = {
+  /** Unique id within the project. Also used as the SidebarTab's `tab`
+   *  value (the addressable handle for `toggleSidebar({tab})`). */
+  name: string;
+  /** Visible trigger label (rendered inside the tab-trigger button
+   *  next to the optional icon). */
+  label: string;
+  /** Tab body. Rendered inside the existing DefaultSidebar shell, so
+   *  no `<Sidebar>` / `<Sidebar.Tab>` wrapper is needed (this content
+   *  becomes the body of a `<Sidebar.Tab>` automatically). */
+  content: React.ReactNode;
+  /** Optional leading icon for the tab trigger. */
+  icon?: React.ReactNode;
+};
+
 export interface ExcalidrawImperativeAPI {
   /** Whether the editor has been unmounted and the API is no longer usable. */
   isDestroyed: boolean;
@@ -1016,6 +1045,22 @@ export interface ExcalidrawImperativeAPI {
    * viewMode.
    */
   registerContextMenuItem: (item: ProjectContextMenuItem) => () => void;
+  /**
+   * Atlasdraw fork extension — register a project-defined tab inside
+   * Excalidraw's `DefaultSidebar` (the sidebar hosting Library and
+   * canvas Search). The tab shares DefaultSidebar's trigger button and
+   * dockable shell, so host apps avoid mounting a parallel sidebar
+   * that competes for the same screen surface. Returns an unregister
+   * function.
+   *
+   * Activate the tab from outside: `toggleSidebar({ name:
+   *   DEFAULT_SIDEBAR.name, tab: <ProjectSidebarTab.name> })`.
+   *
+   * Item shape: see {@link ProjectSidebarTab}. Registrations are
+   * deduped by `name` (last-write wins) so a re-running effect
+   * doesn't multiply tabs.
+   */
+  registerSidebarTab: (tab: ProjectSidebarTab) => () => void;
   refresh: InstanceType<typeof App>["refresh"];
   setToast: InstanceType<typeof App>["setToast"];
   addFiles: (data: BinaryFileData[]) => void;

@@ -14,7 +14,7 @@ import { useUIAppState } from "../context/ui-appState";
 
 import "../components/dropdownMenu/DropdownMenu.scss";
 
-import { useExcalidrawSetAppState } from "./App";
+import { useExcalidrawSetAppState, useProjectSidebarTabs } from "./App";
 import { LibraryMenu } from "./LibraryMenu";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
@@ -74,6 +74,14 @@ export const DefaultSidebar = Object.assign(
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
 
+      // Atlasdraw fork — host-app-registered tabs spliced into the
+      // DefaultSidebar shell so the project doesn't have to mount a
+      // parallel <Sidebar> that competes for the same screen surface.
+      // `useProjectSidebarTabs` is `useSyncExternalStore`-backed; the
+      // array reference changes on every register/unregister so React
+      // re-renders this component when atlas-side wiring evolves.
+      const projectTabs = useProjectSidebarTabs();
+
       const isForceDocked = appState.openSidebar?.tab === CANVAS_SEARCH_TAB;
 
       return (
@@ -105,6 +113,16 @@ export const DefaultSidebar = Object.assign(
                 <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB}>
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
+                {projectTabs.map((tab) => (
+                  <Sidebar.TabTrigger
+                    key={tab.name}
+                    tab={tab.name}
+                    data-testid={`sidebar-tab-trigger-${tab.name}`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </Sidebar.TabTrigger>
+                ))}
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
@@ -114,6 +132,15 @@ export const DefaultSidebar = Object.assign(
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
               <SearchMenu />
             </Sidebar.Tab>
+            {projectTabs.map((tab) => (
+              <Sidebar.Tab
+                key={tab.name}
+                tab={tab.name}
+                data-testid={`sidebar-tab-${tab.name}`}
+              >
+                {tab.content}
+              </Sidebar.Tab>
+            ))}
             {children}
           </Sidebar.Tabs>
         </Sidebar>

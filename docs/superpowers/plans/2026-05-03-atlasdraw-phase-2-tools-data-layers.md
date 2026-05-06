@@ -1356,9 +1356,87 @@ license_constraints:
 
 # Wave 4 — Phase 1+2 Hardening (Addendum)
 
+**Status (2026-05-04 scrub):** WAVE 4a/4b/4c/4d SHIPPED IN PART; T19/T20/T21/T24/T25/T26/T27/T28 OUTSTANDING. Original addendum (below) preserved for provenance. Per-task status block added at top; Wave 4c rewritten to match what shipped (slot retrofit via MainMenu + vendored fork, NOT the original "Wave 4c cleanup" framing); Wave 4d (emergent) section added for post-plan bug fixes.
+
 **Authored:** 2026-05-04 (post-Wave-3-T15 ship). **Why:** Audit of deferred items surfaced that Phase 1 was declared done with two gating leftovers (Task 8 scaleMode, Phase 1 baseline) and Wave 2/3 left visible UX gaps (LayerPanel unrendered, PNG export buttonless) plus one real bug (mixed-geometry FCs render wrong style). Wave 4 absorbs Phase 1 unfinished business + Phase 2 polish into a single hardening sprint that closes both phases canonically before Phase 3 (`atlasdraw-25a5` File Format) begins.
 
 **Wave 4 is NOT in the original 2026-05-03 plan.** It exists because Phase 2 acceptance was always going to require Phase 1 baseline (T16) and that gate cannot fire without Phase 1 completing. Rather than ship Phase 2 as "functional but ungated," Wave 4 closes both at once.
+
+---
+
+## Per-task status block (scrubbed 2026-05-04)
+
+Mapping each Wave 4 task to its actual disposition. T29/T30/T31 are post-plan tasks introduced by seed `atlasdraw-4ad2` (UI conventions Rule-0 retrofit) — they were never numbered in the original addendum but are folded in here for canonical record.
+
+| Task | Status | Commit / Reason |
+|---|---|---|
+| T17 — scaleMode override | SHIPPED | `8579bc6` (feat(phase-2): Wave 4a-T17 — scaleMode helpers + CoordinateSync wire). Closes `atlasdraw-375a`. |
+| T18 — auto-anchor native tools | SHIPPED | `7054ef0` (feat(phase-2): Wave 4a-T18 — useGeoAnchor extension to all native tools). |
+| T19 — Bench harness + Phase 1 baseline | OUTSTANDING | Still gated on perf-investigation skill availability. |
+| T20 — Phase 2 acceptance gate run | OUTSTANDING | Blocked by T19. |
+| T21 — Phase 1 dropped sources | OUTSTANDING | Decision pending. `BasemapRegistry` + `pmtiles-protocol` likely defer to Phase 4 (per filed seeds). |
+| T22 — LayerPanel SidebarTrigger | SHIPPED, then SUPERSEDED | Shipped in `13ceaed` (feat(phase-2): Wave 4b-T22 — LayerPanel SidebarTrigger wiring). The Sidebar wiring of LayerPanel itself remains intact. SUPERSEDED-IN-PART by Wave 4c retrofit `7fcd94a` which moved the Layers **trigger surface** from a free-floating top-left button into `MainMenu.Item`. Closes `atlasdraw-7748`. |
+| T23 — PNG export UI button | SHIPPED, then SUPERSEDED | Originally shipped as a free-floating top-left button; SUPERSEDED by Wave 4c retrofit `7fcd94a` which moved the ExportPNG trigger into `MainMenu.Item`. Export-card UX further extended in `bd51a0d` (GeoJSON canonical export + export UI card). Closes `atlasdraw-ca89`. |
+| T24 — Mixed-geometry FC handling | OUTSTANDING | Still TODO. Sub-layers approach is the planned-of-record direction. |
+| T25 — TextLabelTool inline-editing | OUTSTANDING | Still TODO. |
+| T26 — zRef bounds + LayerStyle migration | OUTSTANDING | Still TODO; cleanup batch. |
+| T27 — Build/dep quality debt | OUTSTANDING | Still TODO; cleanup batch. |
+| T28 — Architectural orphans | OUTSTANDING | Still TODO; cleanup batch. T28.2 (`compileLayer` API decision) is dependent on T24 outcome. |
+| T29 — Pin slot retrofit (post-plan) | SHIPPED | `7fcd94a` (Wave 4c — Rule-0 slot retrofit). Pin trigger moved from free-floating top-left button into `MainMenu.Item`. Filed under `atlasdraw-4ad2`. Note: shipped via **MainMenu**, NOT via the originally-implied `renderTopLeftUI` route. |
+| T30 — Convert slot retrofit (post-plan) | SHIPPED | `7fcd94a`. Convert action wired through a **vendored `registerContextMenuItem` API extension** to Excalidraw — a new public surface added to the local fork. Was NOT in the original plan. Filed under `atlasdraw-4ad2`. |
+| T31 — LayerPanel CSS module retrofit (post-plan) | NOT SHIPPED — likely NOT NEEDED | Filed under `atlasdraw-4ad2`. Currently moot pending `atlasdraw-90a5` decision: a 2nd vendored fork (`registerSidebarTab`) is queued for Phase 4 dialog, which would move LayerPanel **into Excalidraw's existing Sidebar surface**, eliminating the need for an atlas-side CSS module retrofit. If that fork ships, T31 is closed-as-moot. If it does not, T31 reopens. |
+
+---
+
+## Wave 4d — Emergent (post-plan) section
+
+Three items shipped during the Wave 4 sprint that were not in the original addendum. Documented here for provenance + close-loop traceability.
+
+### Wave 4d-1 — LayerRegistry render-sync hook
+
+- **Commit:** `3e477a3` (fix(phase-2): LayerRegistry render-sync — wire Bug A (annotation tracking) + Bug B (visibility toggle)).
+- **Why:** T11 LayerRegistry shipped state-only; LayerPanel reflected registry state but newly-drawn annotations were not auto-tracked (Bug A) and visibility toggles did not propagate to scene render (Bug B).
+- **Resolution:** New `useLayerRegistrySync` hook wires annotations into the registry on creation and applies visibility filters when the toggle changes.
+- **Plan-coverage gap closed:** retrospectively closes the implicit gap left by T11 ("registry exists, but nothing wires scene to it").
+
+### Wave 4d-2 — Polyline geo-anchor width/height fix
+
+- **Commit:** `c2742e6` (fix(phase-1): polyline geo-anchor reproject width/height (atlasdraw-76b2)).
+- **Why:** Polyline reprojection in `_projectElement` updated `points[]` but not the element's `width`/`height` bounding box; downstream Excalidraw rendering used the stale bbox, producing wrong-sized hit regions and selection handles after pan/zoom.
+- **Closes seed:** `atlasdraw-76b2` (filed during Wave 4 ship).
+
+### Wave 4d-3 — MainMenu DefaultItems preservation
+
+- **Commit:** `6a09227` (fix(phase-2): preserve Excalidraw default MainMenu items beside atlas additions).
+- **Why:** Wave 4c slot retrofit (`7fcd94a`) inadvertently replaced Excalidraw's `MainMenu.DefaultItems` (Open / Save / Export / Help) with atlas-only items.
+- **Resolution:** Atlas items now render alongside `<MainMenu.DefaultItems.*>`, preserving Excalidraw's default surface.
+
+### Wave 4d-4 — UI surface audit + 5 phase-plan amendment seeds
+
+- **Commit:** `556e733` (docs(decisions): Excalidraw v0.18 UI surface audit + 5 phase plan amendment seeds).
+- **What:** Audit document + filed seeds `atlasdraw-e898`, `atlasdraw-50c0`, `atlasdraw-3daf`, `atlasdraw-e4c1`, `atlasdraw-9a2b`, `atlasdraw-90a5` — forward-looking corrections to Phase 3/4/6/7 plans (UI surface from Toolbar.tsx → MainMenu) and the 2nd vendored-fork decision (`registerSidebarTab` for Phase 4 dialog).
+- **Status:** these are forward-looking; they do not amend Phase 2 directly. Phase 3/4/6/7 amendments landed in `0974357`. Recorded here for trace only.
+
+---
+
+## Outstanding Wave 4 work (post-scrub)
+
+| Task | Bucket | Notes |
+|---|---|---|
+| T19 | bench harness | Phase 1 baseline still ungated. |
+| T20 | acceptance gate | Blocked by T19. |
+| T21 | dropped sources | Per-source decision pending; most defer to Phase 4. |
+| T24 | mixed-geometry FC bug | Sub-layers vs. reject decision pending. |
+| T25 | TextLabelTool inline-editing | Excalidraw text-edit imperative API verification needed. |
+| T26 | zRef bounds | Cleanup. |
+| T27 | build/dep cleanup | Cleanup. |
+| T28 | architectural orphans | T28.2 depends on T24 resolution. |
+
+T31 (LayerPanel CSS module) remains conditionally-outstanding pending `atlasdraw-90a5`.
+
+---
+
+## Original addendum (preserved as-authored, 2026-05-04)
 
 **Scope summary:** 12 tasks across 3 sub-waves. All work either had a deferral seed already filed or got a new seed during the audit (see "Seed cross-reference" below). All work is Phase 2 path-suffixed (`code/apps/atlas-app/src`, `code/packages/{tools,geo,data,basemap}/src`); plan-literal scrub mandatory per `mx-e9dc63`.
 
@@ -1473,6 +1551,8 @@ Arrow has bound endpoints — confirm whether bound arrows derive position from 
 
 ### Task T22: Wave 4b — LayerPanel SidebarTrigger wiring [CHANGE SITE]
 
+**Status (2026-05-04 scrub):** SHIPPED in `13ceaed` per the brief below. **SUPERSEDED-IN-PART** by Wave 4c retrofit (`7fcd94a`) which moved the Layers **trigger** from a free-floating top-left button into `MainMenu.Item`. The Sidebar wiring of LayerPanel itself remains intact; only the trigger surface changed. See "Wave 4c retrofit" notes appended below the original Wave 4c (T26–T28) section.
+
 **Orient:** T12 shipped `LayerPanel.tsx` but Excalidraw's `<Sidebar>` short-circuits to null without `appState.openSidebar?.name === "layers"`. Render `<LayerPanel />` as a child of `<Excalidraw>` and add a toggle button. Visible UX for the entire Wave 2 layer-management surface depends on this.
 **Flow position:** Visible-UX polish (parallel with T23/T24/T25).
 **Skill:** `atlasdraw-ui-conventions` — invoke before writing the toggle button. The toggle button slots into the top-left button group (z-index 10, alongside pinButton) — do NOT create a new floating surface. Check surface decision tree, button/icon patterns, conditional class pattern, aria-pressed, and data-testid requirements.
@@ -1484,6 +1564,8 @@ Arrow has bound endpoints — confirm whether bound arrows derive position from 
 ---
 
 ### Task T23: Wave 4b — PNG export UI button + auto-download [CHANGE SITE]
+
+**Status (2026-05-04 scrub):** SHIPPED, then SUPERSEDED. Initial implementation shipped as a free-floating top-left trigger; SUPERSEDED by Wave 4c retrofit (`7fcd94a`) which moved the trigger into `MainMenu.Item`. Export-card UX further extended in `bd51a0d` (GeoJSON canonical export + export UI card + mapBg intercept). Closes `atlasdraw-ca89`.
 
 **Orient:** T15 shipped `exportPNG()` but no UI surface. Add a button (toolbar or floating) that calls `exportPNG`, generates a filename (`atlasdraw-${Date.now()}.png`), and triggers download via `URL.createObjectURL` + an invisible `<a download>`. Browser smoke test for tainted-canvas (CORS-blocked basemap tiles) — most likely silent-fail surface in T15.
 **Flow position:** Visible-UX polish; serialize after T22 if both modify MapEditor.tsx.
@@ -1560,6 +1642,50 @@ Arrow has bound endpoints — confirm whether bound arrows derive position from 
 - `code/packages/basemap/src/style-compiler.ts` (compileLayer API decision; post-T24)
 - vitest configs (RTL cleanup decision)
 **Closes seeds:** `atlasdraw-6e9a`, `atlasdraw-cc43`, `atlasdraw-cf62`.
+
+---
+
+---
+
+### Task T29: Wave 4c — Pin slot retrofit (post-plan, from `atlasdraw-4ad2`) [RETROFIT]
+
+**Status (2026-05-04 scrub):** SHIPPED in `7fcd94a`. Filed under seed `atlasdraw-4ad2` (Rule-0 UI-conventions retrofit). NOT in the original 2026-05-04 addendum — added retrospectively by this scrub for canonical record.
+
+**Orient:** The Pin trigger (atlas-app's "pin annotation to map" toggle) shipped in earlier waves as a free-floating top-left button. Rule-0 of `atlasdraw-ui-conventions` says "slot first" — atlas-app must use Excalidraw's existing UI surfaces before introducing free-floating overlays. Pin moved into `MainMenu.Item`.
+
+**What shipped:** `MainMenu.Item` slot in `code/apps/atlas-app/src/components/MapEditor.tsx` (or its current MainMenu wiring path) calling the same pin handler. Free-floating button removed. Co-existing with `MainMenu.DefaultItems` (preserved by `6a09227` follow-up).
+
+**Surface decision:** MainMenu (not `renderTopLeftUI`, not a new floating panel). Locks in atlasdraw-ui-conventions surface decision tree.
+
+**Closes seed:** `atlasdraw-4ad2` (Pin slot portion).
+
+---
+
+### Task T30: Wave 4c — Convert slot retrofit + vendored `registerContextMenuItem` (post-plan) [RETROFIT, VENDORED FORK]
+
+**Status (2026-05-04 scrub):** SHIPPED in `7fcd94a`. Filed under seed `atlasdraw-4ad2`. NOT in the original 2026-05-04 addendum — added retrospectively by this scrub.
+
+**Orient:** T14 shipped `handleConvert` (annotation → data layer) but the trigger needed a slot. Excalidraw v0.18 has no public extension point for context-menu items. Two paths considered: atlas-side overlay (rejected — same Rule-0 violation as Pin) vs. vendored fork (chosen).
+
+**What shipped:** A **new public `registerContextMenuItem` API** added to the local Excalidraw fork (`code/packages/excalidraw/`). Atlas-app calls `registerContextMenuItem({ label: "Convert to data layer", … })` to inject Convert into the right-click menu when the selection is a single annotation with a `geo` customData.
+
+**Why a fork (not an overlay):** the conversion action is contextual to a selected element — overlay mounting and right-click suppression would have been brittle. A first-class API is the durable answer. This is the **first** vendored extension shipped to the local Excalidraw fork; precedent for the 2nd fork (`registerSidebarTab`, queued in `atlasdraw-90a5`).
+
+**Files:**
+- `code/packages/excalidraw/` — new `registerContextMenuItem` public API + types.
+- `code/apps/atlas-app/src/...` — call site that registers the Convert handler.
+
+**Closes seed:** `atlasdraw-4ad2` (Convert slot portion). Establishes vendored-fork pattern for atlas-side UI extensions.
+
+---
+
+### Task T31: Wave 4c — LayerPanel CSS module retrofit (post-plan) [CONDITIONAL, NOT SHIPPED]
+
+**Status (2026-05-04 scrub):** NOT SHIPPED — likely NOT NEEDED. Filed under seed `atlasdraw-4ad2`. NOT in the original 2026-05-04 addendum.
+
+**Orient:** LayerPanel currently uses inline styles. Original retrofit plan was to migrate to a CSS module for parity with atlas-app conventions. **Conditionally moot:** if the queued 2nd vendored fork (`atlasdraw-90a5` — `registerSidebarTab`) lands as planned for Phase 4, LayerPanel migrates **into Excalidraw's existing Sidebar surface**, eliminating the need for an atlas-side CSS module retrofit.
+
+**Decision deferred to:** outcome of `atlasdraw-90a5`. If `registerSidebarTab` ships, T31 closes-as-moot. If `registerSidebarTab` is rejected or deferred, T31 reopens as standalone CSS-module work.
 
 ---
 

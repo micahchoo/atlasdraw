@@ -104,6 +104,8 @@ const mockFakeExcalidrawAPI = {
   updateScene: updateSceneSpy,
   toggleSidebar: vi.fn(),
   registerContextMenuItem: registerContextMenuItemSpy,
+  // Sidebar-tab fork — MapEditor's layers-tab effect calls this on mount.
+  registerSidebarTab: vi.fn(() => vi.fn()),
 };
 
 vi.mock("@excalidraw/excalidraw", () => {

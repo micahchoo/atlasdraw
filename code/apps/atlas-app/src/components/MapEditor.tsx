@@ -25,6 +25,7 @@ import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
 import { parse, GeoJSONParseError } from "@atlasdraw/data";
 import { Excalidraw, MainMenu, setExportElementTransformer } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import { DEFAULT_SIDEBAR } from "@excalidraw/common";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type maplibregl from "maplibre-gl";
 import {
@@ -417,6 +418,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [map, registry, excalidrawAPI],
   );
 
+  // Register the LayerPanel as a tab inside Excalidraw's DefaultSidebar
+  // (the sidebar that hosts Library + canvas Search). Replaces the
+  // previous parallel `<Sidebar name="layers">` mount: shares the
+  // existing trigger button, dock state, and tab routing instead of
+  // requiring a custom MainMenu open-action and a second sidebar
+  // surface. The MainMenu "Layers panel" item below addresses this
+  // tab via `toggleSidebar({name: DEFAULT_SIDEBAR.name, tab: "layers"})`.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    return excalidrawAPI.registerSidebarTab({
+      name: "layers",
+      label: "Layers",
+      content: <LayerPanel />,
+    });
+  }, [excalidrawAPI]);
+
   // W-C — Surface Convert as a right-click context-menu item via the
   // atlasdraw fork's `excalidrawAPI.registerContextMenuItem` (added to
   // packages/excalidraw/components/App.tsx). Item appears at the tail
@@ -589,11 +606,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           getBackgroundCanvas={getBackgroundCanvas}
           UIOptions={{ canvasActions: { export: EXCALIDRAW_EXPORT_OPTS } }}
         >
-          {/* T22 — Layers sidebar slot. LayerPanel internally renders
-              <Sidebar name="layers">. Excalidraw surfaces it only when
-              appState.openSidebar?.name === "layers" — toggled via the
-              MainMenu "Layers panel" item below. */}
-          <LayerPanel />
+          {/* LayerPanel mounts as a tab inside DefaultSidebar via
+              registerSidebarTab (see useEffect above). No <Sidebar> child
+              here — DefaultSidebar's trigger button + dockable shell are
+              shared. */}
 
           {/* MainMenu — passing <MainMenu> as a child of <Excalidraw>
               REPLACES the default menu via tunnel (MainMenu.tsx:30 +
@@ -621,7 +637,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </MainMenu.Item>
             <MainMenu.Item
               onSelect={() =>
-                excalidrawAPI?.toggleSidebar({ name: "layers" })
+                excalidrawAPI?.toggleSidebar({
+                  name: DEFAULT_SIDEBAR.name,
+                  tab: "layers",
+                })
               }
               data-testid="main-menu-layers"
             >
