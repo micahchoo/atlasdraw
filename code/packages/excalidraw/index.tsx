@@ -358,6 +358,8 @@ export { LiveCollaborationTrigger };
 export { Stats } from "./components/Stats";
 
 export { DefaultSidebar } from "./components/DefaultSidebar";
+export { Dialog } from "./components/Dialog";
+export type { DialogProps, DialogSize } from "./components/Dialog";
 export { TTDDialog } from "./components/TTDDialog/TTDDialog";
 export { TTDDialogTrigger } from "./components/TTDDialog/TTDDialogTrigger";
 export { TTDStreamFetch } from "./components/TTDDialog/utils/TTDStreamFetch";
