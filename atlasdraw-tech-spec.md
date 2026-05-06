@@ -322,7 +322,7 @@ The MapLibre wrapper.
 - `pmtiles-protocol.ts` — registers the `pmtiles://` protocol on the global `maplibregl` once, idempotently.
 - `style-builder.ts` — builds a custom style from a Maputnik export, injecting our user's data-layer sources.
 
-The decision to default to OpenFreeMap public tiles vs Protomaps PMTiles is config-driven (see §10).
+**Default basemap is hybrid (Q3 resolution, 2026-05-04):** a low-zoom Protomaps PMTiles slice (`world-low-zoom.pmtiles`, zoom 0-6) is bundled in the container image so first-run requires no network. OpenFreeMap public tiles are available as a demo/opt-in basemap behind `[basemap.allow_remote] = true`. The bundled PMTiles is the canonical default; OpenFreeMap is no longer the default. See §10 and `docs/decisions/cross-phase-audit.md` GAP-5.
 
 ### 4.3 `packages/data`
 File format I/O. Pure parsers, no UI.
@@ -731,7 +731,7 @@ volumes:
   miniodata:
 ```
 
-Five containers feels like a lot. We compensate by ensuring `docker compose up` in a fresh checkout produces a fully functional, end-to-end app at `localhost:3000` — no environment fiddling, no API keys, default basemap from OpenFreeMap public tiles.
+Five containers feels like a lot. We compensate by ensuring `docker compose up` in a fresh checkout produces a fully functional, end-to-end app at `localhost:3000` — no environment fiddling, no API keys, default basemap served from the bundled `world-low-zoom.pmtiles` (Protomaps PMTiles slice, zoom 0-6) baked into the image. OpenFreeMap public tiles are an opt-in alternative basemap (see §4.2 hybrid-default decision).
 
 ---
 
