@@ -50,6 +50,11 @@ import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
 import { exportPNG } from "../lib/export";
+import { createPersistenceStore } from "../state/persistence";
+import { usePersistenceStore } from "../state/usePersistenceStore";
+import { useLayerRegistryStore } from "../state/layerRegistry";
+import { selectDocument } from "../state/selectDocument";
+import { startAutoSave } from "../state/persistence";
 import styles from "../styles/MapEditor.module.css";
 
 /**
@@ -244,6 +249,66 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
   }, [map, excalidrawAPI]);
 
+  // T9 — Persistence wiring.
+  //
+  // On excalidrawAPI ready: create a PersistenceStore, attempt to load() the
+  // last-persisted document from IDB, start auto-save, and register the dirty
+  // channel to React state for the MainMenu indicator.
+  //
+  // [NOTE] Scene hydration on load() is intentionally stubbed for v1 —
+  //   `excalidrawAPI.updateScene({ elements: doc.scene })` would require
+  //   `doc.scene` to be a typed ExcalidrawElement[] but our manifest schema
+  //   types it as `ReadonlyArray<unknown>` (Wave 0 deferred coupling). Phase 4
+  //   will tighten the type at the AtlasdrawDocument boundary and wire the
+  //   updateScene call. For Wave 2 the load result is observed (logged) but
+  //   not applied so a stale IDB document can't corrupt a fresh session.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    const store = createPersistenceStore({});
+    usePersistenceStore.getState().setPersistenceStore(store);
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const loaded = await store.load();
+        if (cancelled) return;
+        if (loaded) {
+          // [NOTE] Phase 4: hydrate Excalidraw scene + LayerRegistry from `loaded`.
+          // For now we observe-only — preserves the just-mounted blank canvas.
+          // eslint-disable-next-line no-console
+          console.info(
+            "[atlasdraw] persisted document found — hydration deferred to Phase 4",
+            { id: loaded.manifest.id, layerCount: loaded.manifest.layers.length },
+          );
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[atlasdraw] persistence.load() failed", err);
+      }
+    })();
+
+    const unsubDirty = store.onDirty(() => {
+      // The underlying store's onDirty fires on its own markDirty(); mirror
+      // into Zustand for the MainMenu indicator. Wrapped in setState rather
+      // than markDirty() to avoid re-forwarding back into the store.
+      usePersistenceStore.setState({ isDirty: true });
+    });
+
+    const dispose = startAutoSave(store, () =>
+      selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
+    );
+    usePersistenceStore.getState().setAutosaveDispose(dispose);
+
+    return () => {
+      cancelled = true;
+      unsubDirty();
+      dispose();
+      usePersistenceStore.getState().setAutosaveDispose(null);
+      usePersistenceStore.getState().setPersistenceStore(null);
+      void store.close();
+    };
+  }, [excalidrawAPI]);
+
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
   const { syncNow } = useCoordinateSync(map, excalidrawAPI);
@@ -272,6 +337,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { activeAtlasTool, setActiveAtlasTool, dispatchPointerDown } =
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
+
+  // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
+  // Selector form so the component re-renders ONLY on isDirty flips, not on
+  // store/dispose pointer changes.
+  const isDirty = usePersistenceStore((s) => s.isDirty);
 
   // T13 — GeoJSON drag-and-drop import.
   //
@@ -574,6 +644,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           break; // O(1): only inspect the first geo element
         }
       }
+
+      // --- 4. T9 — mark persistence dirty.
+      // Every onChange is a candidate edit. The underlying PersistenceStore
+      // debounces (5s) + ceilings (30s) so the actual IDB write rate is bounded.
+      // Indicator flips immediately (no debounce) per the T9 contract.
+      usePersistenceStore.getState().markDirty();
     },
     [excalidrawAPI, map, syncNow],
   );
@@ -629,6 +705,74 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           <MainMenu>
             <MainMenu.DefaultItems.LoadScene />
             <MainMenu.DefaultItems.SaveToActiveFile />
+            {/* T9 — atlasdraw-format Save / Open. Sit adjacent to the
+                Excalidraw-native items rather than wrapping them: the
+                DefaultItems FCs are closure-bound to Excalidraw's internal
+                actionLoadScene / actionSaveToActiveFile and don't expose a
+                clean onSelect override. v1 ergonomic gap is the dual entry
+                points (Excalidraw .excalidraw vs atlasdraw .atlasdraw); Phase
+                4 may unify under a single Save dialog with format picker.
+                Indicator flips on every onChange via markDirty() — no
+                debounce per T9 contract. */}
+            <MainMenu.Item
+              onSelect={async () => {
+                if (!excalidrawAPI) return;
+                const store = usePersistenceStore.getState().persistenceStore;
+                if (!store) return;
+                try {
+                  await store.saveToDisk(
+                    selectDocument(
+                      excalidrawAPI,
+                      useLayerRegistryStore.getState(),
+                    ),
+                  );
+                  usePersistenceStore.getState().clearDirty();
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn("[atlasdraw] saveToDisk failed", err);
+                }
+              }}
+              data-testid="main-menu-save-atlasdraw"
+            >
+              Save .atlasdraw…
+            </MainMenu.Item>
+            <MainMenu.Item
+              onSelect={async () => {
+                const store = usePersistenceStore.getState().persistenceStore;
+                if (!store) return;
+                try {
+                  const loaded = await store.openFromDisk();
+                  if (loaded) {
+                    // [NOTE] Phase 4: hydrate Excalidraw + LayerRegistry from `loaded`.
+                    // eslint-disable-next-line no-console
+                    console.info(
+                      "[atlasdraw] document opened — hydration deferred to Phase 4",
+                      {
+                        id: loaded.manifest.id,
+                        layerCount: loaded.manifest.layers.length,
+                      },
+                    );
+                  }
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn("[atlasdraw] openFromDisk failed", err);
+                }
+              }}
+              data-testid="main-menu-open-atlasdraw"
+            >
+              Open .atlasdraw…
+            </MainMenu.Item>
+            {isDirty && (
+              <MainMenu.Item
+                onSelect={() => {
+                  /* indicator-only; no action */
+                }}
+                data-testid="main-menu-unsaved-indicator"
+                aria-label="Unsaved changes"
+              >
+                ● Unsaved
+              </MainMenu.Item>
+            )}
             <MainMenu.DefaultItems.Export />
             <MainMenu.Item
               onSelect={handleExportPNG}
