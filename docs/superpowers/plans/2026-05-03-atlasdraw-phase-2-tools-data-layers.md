@@ -1424,7 +1424,7 @@ Three items shipped during the Wave 4 sprint that were not in the original adden
 | Task | Bucket | Notes |
 |---|---|---|
 | T20 | acceptance gate | T19 baseline now exists; remaining T20 work is Phase 2 scenario + ci-gate + workflow. |
-| T27 | build/dep cleanup | Cleanup. |
+| T27 | build/dep cleanup | PARTIAL. Shipped 2026-05-05: `atlasdraw-0c97` (husky postinstall — `code/scripts/prepare-husky.js` chdirs to git toplevel before invoking husky, tolerates non-git contexts) + `atlasdraw-b733` (atlas-app `vitest@3.0.6` devDep made explicit). Outstanding: `atlasdraw-dc84` + `atlasdraw-8a21` (atlas-app `paths:{}` clobber + Phase 1 typecheck-debt cluster). Experiment 2026-05-05 confirmed dropping `paths:{}` exposes 534 tsc errors — not just path resolution but also rootDir violations + missing-export issues — needs composite-project refactor or per-package baseline, not a quick fix. |
 | T28 | architectural orphans | T28.2 (`atlasdraw-cc43`) decided 2026-05-05: stays as-is since T24 chose reject (sub-layer API change not needed). Other T28 items remain. |
 
 T31 (LayerPanel CSS module) closed in `b8bb015` (2026-05-05) — `atlasdraw-90a5` resolved affirmatively, the 2nd vendored fork (`registerSidebarTab`) shipped together with the CSS module retrofit.
