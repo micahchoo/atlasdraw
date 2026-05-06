@@ -8,7 +8,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "bin": {
-    "atlasdraw": "src/index.ts"
+    "atlasdraw": "src/atlasdraw.ts"
   },
   "files": ["src", "README.md"],
   "scripts": {
