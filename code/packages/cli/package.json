@@ -4,6 +4,7 @@
   "description": "Headless tooling: lint, convert, render",
   "license": "MIT",
   "private": false,
+  "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "bin": {
@@ -11,11 +12,17 @@
   },
   "files": ["src", "README.md"],
   "scripts": {
-    "build": "echo 'TODO: build (target: Phase 3+)' && exit 0",
+    "build": "echo 'TODO: build (target: Phase 3 T10/T11)' && exit 0",
+    "test": "vitest run",
     "test:typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@atlasdraw/data": "0.0.0",
+    "commander": "^11.0.0"
+  },
   "devDependencies": {
-    "typescript": "*"
+    "@types/node": "*",
+    "typescript": "*",
+    "vitest": "3.0.6"
   }
 }

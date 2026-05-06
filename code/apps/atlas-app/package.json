@@ -21,6 +21,7 @@
     "@atlasdraw/geo": "0.1.0",
     "@atlasdraw/tools": "0.1.0",
     "@excalidraw/excalidraw": "0.18.0",
+    "idb": "^8.0.0",
     "immer": "11.1.6",
     "lodash.throttle": "^4.1.1",
     "maplibre-gl": "^4.7.1",
