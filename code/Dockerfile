@@ -11,8 +11,7 @@ RUN --mount=type=cache,target=/root/.cache/yarn \
 
 ARG NODE_ENV=production
 
-RUN npm_config_target_arch=${TARGETARCH} yarn build:packages && \
-    npm_config_target_arch=${TARGETARCH} yarn workspace @atlasdraw/atlas-app build
+RUN npm_config_target_arch=${TARGETARCH} yarn workspace @atlasdraw/atlas-app build
 
 FROM nginx:1.27-alpine
 
