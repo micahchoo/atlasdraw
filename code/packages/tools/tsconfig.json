@@ -3,10 +3,11 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "paths": {
-      "@atlasdraw/geo": ["../geo/src/index.ts"],
-      "@atlasdraw/geo/*": ["../geo/src/*"]
-    }
+    "composite": true,
+    "incremental": true
   },
+  "references": [
+    { "path": "../geo" }
+  ],
   "include": ["src/**/*"]
 }

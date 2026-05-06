@@ -1,36 +1,11 @@
 {
-  "compilerOptions": {
-    "rootDir": "./",
-    "target": "ESNext",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "types": ["vitest/globals", "@testing-library/jest-dom"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "module": "ESNext",
-    "moduleResolution": "node",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx",
-    "baseUrl": ".",
-    "paths": {
-      "@excalidraw/common": ["./packages/common/src/index.ts"],
-      "@excalidraw/common/*": ["./packages/common/src/*"],
-      "@excalidraw/excalidraw": ["./packages/excalidraw/index.tsx"],
-      "@excalidraw/excalidraw/*": ["./packages/excalidraw/*"],
-      "@excalidraw/element": ["./packages/element/src/index.ts"],
-      "@excalidraw/element/*": ["./packages/element/src/*"],
-      "@excalidraw/math": ["./packages/math/src/index.ts"],
-      "@excalidraw/math/*": ["./packages/math/src/*"],
-      "@excalidraw/utils": ["./packages/utils/src/index.ts"],
-      "@excalidraw/utils/*": ["./packages/utils/src/*"]
-    }
-  },
-  "include": ["packages", "excalidraw-app"],
-  "exclude": ["examples", "dist", "types", "tests"]
+  "// note": "Composite-project solution root. Run `tsc -b` from code/ to build the atlas-owned type graph (basemap, data, geo, tools, cli). atlas-app and realtime are intentionally NOT referenced here because they are non-composite leaf consumers (atlas-app: noEmit + Vite; realtime: Phase 5 stub). Vendored Excalidraw packages (common/element/excalidraw/math/utils) are also NOT referenced — their src has internal cycles (utils <-> element <-> excalidraw) that prevent composite. Vendored remains path-resolved via tsconfig.base.json `paths`. To typecheck atlas-app, run `cd apps/atlas-app && tsc --noEmit` — its own `references` block resolves atlas-owned types via project refs.",
+  "files": [],
+  "references": [
+    { "path": "./packages/basemap" },
+    { "path": "./packages/data" },
+    { "path": "./packages/geo" },
+    { "path": "./packages/tools" },
+    { "path": "./packages/cli" }
+  ]
 }

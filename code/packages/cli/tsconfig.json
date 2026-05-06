@@ -3,10 +3,14 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
+    "composite": true,
+    "incremental": true,
     "types": ["node"]
   },
+  "references": [
+    { "path": "../data" }
+  ],
   "include": [
-    "src/**/*",
-    "../data/src/shpjs.d.ts"
+    "src/**/*"
   ]
 }
