@@ -498,6 +498,9 @@ docs/
 **Codebooks: cache-coherence** — The Share button must check `useAutosave().isDraining` before snapshotting. If draining, show a "Saving…" spinner and retry after drain completes. Publishing a stale in-flight buffer is the primary failure mode.
 
 **Skill:** `atlasdraw-ui-conventions` — invoke before building `ShareDialog.tsx`. This is a modal (new standalone surface) — correct because it's a distinct multi-step flow. Check color tokens, button pattern (primary filled for "Copy link", default for cancel), text sizing, aria labels, data-testid on all interactive elements.
+
+<!-- audit-amended 2026-05-04: dialog primitive — before implementing ShareDialog as a raw React portal, grep `code/packages/excalidraw/` for exported `Dialog` or `ConfirmDialog` primitives (focus trap, Escape, scroll lock already wired). If found, extend them. If NOT found → vendored fork required: add `registerDialog` API (~50 LOC patch, same pattern as the vendored `registerContextMenuItem` extension in Wave 4c). Justifiable: Excalidraw's dialog UX (focus trap, Escape handling, scroll lock) must not be re-implemented independently. Pre-dispatch scrub: grep `code/packages/excalidraw/index.ts` for `Dialog` export before writing any dialog code. -->
+
 **Files:**
 - Create: `apps/atlas-app/hooks/useShareLink.ts`
 - Create: `apps/atlas-app/components/ShareDialog.tsx`
@@ -739,6 +742,9 @@ docs/
 **Upstream contract:** Reads `app version` from `package.json` (injected via Vite define). Links to `ADR-0006-telemetry.md`.
 **Downstream contract:** Displayed via Help menu or `?` button in toolbar.
 **Skill:** `atlasdraw-ui-conventions` — invoke before building `AboutDialog.tsx`. Modal is correct (distinct informational surface). The trigger "?" button slots into the existing toolbar (not a new floating element). Check button pattern, color tokens, data-testid.
+
+<!-- audit-amended 2026-05-04: dialog primitive — same constraint as ShareDialog (Task 8). Grep `code/packages/excalidraw/index.ts` for exported `Dialog` or `ConfirmDialog` before writing AboutDialog. If Excalidraw exposes its dialog primitive, extend it; if not, the vendored `registerDialog` fork (Task 8 amendment) covers both dialogs. Do not build a second independent portal. -->
+
 **Files:**
 - Create: `apps/atlas-app/components/AboutDialog.tsx`
 - Create: `apps/atlas-app/components/AboutDialog.test.tsx`

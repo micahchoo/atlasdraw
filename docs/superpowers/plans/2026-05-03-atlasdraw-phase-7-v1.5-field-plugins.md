@@ -544,7 +544,10 @@ qgis-plugin/                    # sibling project, outside monorepo root
 
 **Orient:** Implements install/uninstall/enable/disable lifecycle — including SHA-256 integrity verification of the plugin Worker bundle at install time — and the editor-side UI so users can manage plugins from within the app.
 **Flow position:** Step 2 of K in Plugin API flow (SDK surface → **registry + integrity + UI** → permission dialog)
-**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing PluginManagerPanel. This is a Sidebar tab (existing surface). The "Install from folder" button and enable/disable toggles follow atlas button pattern. Permission dialog is a modal (correct — distinct confirmation flow). Check aria-pressed on toggles, data-testid on all interactive elements, color tokens.
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing PluginManagerPanel. This is a Sidebar tab (existing surface) with `name="plugins"` — confirmed non-colliding with Excalidraw v0.18 reserved names (`"libraries"`, `"customSidebar"`). The "Install from folder" button and enable/disable toggles follow atlas button pattern. Permission dialog is a modal (correct — distinct confirmation flow). Check aria-pressed on toggles, data-testid on all interactive elements, color tokens.
+
+<!-- audit-amended 2026-05-04: Sidebar tab pattern confirmed correct for PluginManagerPanel. Explicit name="plugins" added — audit flagged Phase 6 AssetLibraryPanel collision with reserved "libraries" name; ensure PluginManagerPanel does not repeat this. Grep `code/packages/excalidraw/components/Sidebar/` to verify "plugins" is not in the reserved list before implementing. PluginPermissionDialog uses the same dialog-primitive decision from Phase 4 finding 2 (check for Excalidraw's exported Dialog primitive first; fall back to registerDialog vendored fork if absent). -->
+
 **Tech:** Uses `@stablelib/sha256` (declared in tech stack header) for bundle integrity hashing. Hash is computed over the Worker entry `Uint8Array` at install time and stored in IndexedDB alongside the manifest. At enable time the bundle is re-hashed and compared; mismatch aborts startup with `PluginIntegrityError`.
 
 <contracts>

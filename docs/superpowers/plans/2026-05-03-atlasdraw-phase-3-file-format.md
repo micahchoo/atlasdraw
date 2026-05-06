@@ -446,13 +446,19 @@ packages/cli/
 
 **Orient:** Wire `PersistenceStore` into the Zustand store so the editor auto-saves on state change and the "Save" / "Open" toolbar buttons call the FSA paths — this is the last step that makes persistence visible to the user.
 **Flow position:** Step 2 of 2 in Persistence flow (persistence.ts → **store.ts wiring** → toolbar buttons)
-**Skill:** `atlasdraw-ui-conventions` — invoke before adding Save/Open buttons and the isDirty indicator to `Toolbar.tsx`. Buttons slot into the existing toolbar surface (not a new panel). Check button pattern, text size, aria labels, data-testid.
+**Skill:** `atlasdraw-ui-conventions` — invoke before adding Save/Open buttons and the isDirty indicator. Check button pattern, text size, aria labels, data-testid.
 **Codebooks:** `optimistic-ui-vs-data-consistency`
 **Files:**
 - Modify: `apps/atlas-app/state/store.ts`
-- Modify: `apps/atlas-app/components/Toolbar.tsx`
+- Modify: `apps/atlas-app/App.tsx` (MainMenu composition)
 
-> **Codebook note:** The wiring task makes optimistic persistence visible in the UI. The dirty flag must gate the "unsaved changes" indicator in the toolbar — a user who sees no indicator and refreshes must not lose work. Wire `onDirty` to a Zustand `isDirty` boolean. Do not debounce the UI indicator (show immediately); only debounce the actual write.
+<!-- audit-amended 2026-05-04: UI surface corrected — plan previously said "Toolbar.tsx" but Excalidraw v0.18 renders its own toolbar; custom buttons placed directly in Toolbar.tsx are overwritten on re-render. Correct surfaces:
+  - Save: extend `MainMenu.DefaultItems.SaveToActiveFile` (FSA-backed, already wired in v0.18 — greps `code/packages/excalidraw/components/mainMenu/DefaultItems.tsx`)
+  - Open: extend `MainMenu.DefaultItems.LoadScene` (FSA-backed, same file)
+  - isDirty indicator: add `<MainMenu.Item>` rendering the asterisk/bullet — slots into the MainMenu render tree, survives Excalidraw re-renders
+  Do NOT modify Toolbar.tsx for these actions; it is an Excalidraw-owned surface. -->
+
+> **Codebook note:** The wiring task makes optimistic persistence visible in the UI. The dirty flag must gate the "unsaved changes" indicator — a user who sees no indicator and refreshes must not lose work. Wire `onDirty` to a Zustand `isDirty` boolean. Do not debounce the UI indicator (show immediately); only debounce the actual write.
 
 - [ ] **Step 1: Add persistence slice to Zustand store**
 
@@ -461,9 +467,14 @@ packages/cli/
   Run: `yarn workspace atlas-app build`
   Expected: Build succeeds; TypeScript finds no errors in `store.ts`; `isDirty` and `markDirty` are exported from the store type.
 
-- [ ] **Step 2: Wire toolbar buttons**
+- [ ] **Step 2: Wire Save/Open/isDirty via Excalidraw MainMenu**
 
-  In `Toolbar.tsx`: "Save" button calls `store.persistenceStore?.saveToDisk(getDoc())`. "Open" button calls `store.persistenceStore?.openFromDisk()` then hydrates store. Show `isDirty` indicator (bullet or asterisk in title) when `store.isDirty`.
+  <!-- audit-amended 2026-05-04: use MainMenu API, not Toolbar.tsx -->
+  In `App.tsx`, compose the `renderMenu` prop or `<MainMenu>` children:
+  - Wrap `<MainMenu.DefaultItems.SaveToActiveFile>` to call `store.persistenceStore?.saveToDisk(getDoc())` on select.
+  - Wrap `<MainMenu.DefaultItems.LoadScene>` to call `store.persistenceStore?.openFromDisk()` then hydrate store.
+  - Add `<MainMenu.Item>` for the `isDirty` indicator (renders bullet/asterisk) when `store.isDirty === true`.
+  Grep `code/packages/excalidraw/components/mainMenu/DefaultItems.tsx` to confirm exact exported names before implementing.
 
   Run: `yarn workspace atlas-app build`
   Expected: Build succeeds; no TypeScript errors in `Toolbar.tsx`; `isDirty` prop flows from store to indicator element.

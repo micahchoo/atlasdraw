@@ -675,8 +675,11 @@ Note: Task 5 is in Wave 1 but serially depends on Task 4b. Start Task 5 only aft
 **Orient:** Render threaded comments in the sidebar and as anchor pins on the map. Users can type replies, @-mention collaborators, and resolve threads. This is the "present-and-review" UX.
 **Flow position:** Step 2 of 2 in comments flow (yjs-doc → **UI**)
 **Upstream contract:** `useComments.ts` hook subscribing to the comments Y.Doc from Task 6
-**Downstream contract:** `CommentThread[]` displayed in panel + `CommentAnchor` pins rendered via MapLibre markers
-**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing CommentsPanel, CommentAnchor, CommentComposer. CommentsPanel is a Sidebar tab (existing surface — do not create a new floating panel). CommentAnchor is a MapLibre marker overlay at z-index 5. CommentComposer input must use the isolation wrapper pattern. Check button pattern, data-testid, aria labels.
+**Downstream contract:** `CommentThread[]` displayed in panel + `CommentAnchor` pins rendered as Excalidraw elements
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing CommentsPanel, CommentAnchor, CommentComposer. CommentsPanel is a Sidebar tab (existing surface — do not create a new floating panel). CommentComposer input must use the isolation wrapper pattern. Check button pattern, data-testid, aria labels.
+
+<!-- audit-amended 2026-05-04: CommentAnchor rendering approach corrected — plan said "MapLibre Marker at z-index 5" but audit flags this as undefined: MapLibre markers are DOM overlays that reprojection does not drive; they drift on pan/zoom unless manually re-positioned. Correct approach: render CommentAnchor as Excalidraw elements with `customData.kind === "comment"` marker. The geo-anchor reprojection pipeline (Phase 1/2) already handles element repositioning on map pan/zoom via `_projectElement`. This gives correct positional tracking for free. CommentAnchor.tsx becomes a thin wrapper that creates an ExcalidrawElement with `customData: { kind: "comment", threadId: string }` rather than a MapLibre Marker. The element's position is managed by the same geo-anchor wires that drive all other pinned annotations. -->
+
 
 `Codebooks: text-editing-mode-isolation` — space/enter keys in `CommentComposer` must not trigger map tool actions. Mount the composer in a `<div onKeyDown={e => e.stopPropagation()}>` wrapper.
 `Codebooks: focus-management-across-boundaries` — opening the comment panel must move focus to the first unresolved thread; closing must return focus to the annotation that was clicked.
@@ -704,7 +707,8 @@ Note: Task 5 is in Wave 1 but serially depends on Task 4b. Start Task 5 only aft
 
 - [ ] **Step 3: Implement `CommentsPanel.tsx`, `CommentComposer.tsx`, `CommentAnchor.tsx`**
 
-  `CommentAnchor` renders a MapLibre `Marker` at the annotation's bounding-box center. Clicking the marker opens the panel at that thread. `CommentComposer` detects `@` prefix to show a mention picker (list of room members from the existing presence state from Phase 5).
+  <!-- audit-amended 2026-05-04: CommentAnchor implementation -->
+  `CommentAnchor` creates an ExcalidrawElement (`type: "ellipse"` or `"text"`) with `customData: { kind: "comment", threadId: string }` — rendered by Excalidraw's own canvas, positioned by the geo-anchor reprojection pipeline (not a MapLibre Marker). Clicking the element (via Excalidraw's `onPointerDown` / element selection) opens the CommentsPanel at that thread. `CommentComposer` detects `@` prefix to show a mention picker (list of room members from the existing presence state from Phase 5).
 
   Run: `pnpm --filter @atlasdraw/atlas-app test CommentsPanel`
   Expected: All 5 tests PASS
@@ -1072,13 +1076,20 @@ Wave 2 tasks start once Wave 1 completes. They depend on LayerStyle (Task 2), ge
 **Flow position:** Step 2 of 2 in asset-library flow (library-reader → **fixtures + UI**)
 **Upstream contract:** `parseLibraryFile()` and `getBuiltInLibraries()` from Task 14a; `AtlasdrawAPI.addAnnotation()` from Task 1
 **Downstream contract:** User can browse libraries in sidebar and click to insert an annotation element
-**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing AssetLibraryPanel. This is a Sidebar tab (existing surface). Library item tiles follow icon button pattern (square, 2rem, inline SVG). Check color tokens, data-testid on items and insert buttons, aria labels on icon-only tiles.
+**Skill:** `test-driven-development` + `atlasdraw-ui-conventions` — invoke ui-conventions before writing AssetLibraryPanel. Library item tiles follow icon button pattern (square, 2rem, inline SVG). Check color tokens, data-testid on items and insert buttons, aria labels on icon-only tiles.
+
+<!-- audit-amended 2026-05-04: Sidebar name collision + implementation approach decision required.
+  PROBLEM: Excalidraw v0.18 reserves `<Sidebar name="libraries">` for its own built-in Library panel. A parallel `<Sidebar name="library">` (plan's original name) collides and produces undefined behavior (two sidebars competing for the same slot).
+  TWO VALID PATHS — decide before implementing:
+  A) Extend Excalidraw's own Library panel via `excalidrawAPI.updateLibrary({ libraryItems, merge: true })`. Inserts atlas fixture items directly into Excalidraw's existing library UI. No new sidebar; no collision. Tradeoff: atlas-specific grouping (wildfire/transit/hazard sections) is not supported by the built-in library UI — items appear in a flat list.
+  B) Create a parallel Sidebar with `name="atlas-assets"` (NOT "library" or "libraries" — both reserved). Atlas controls the full UI (grouped sections, descriptions). Tradeoff: two library-like surfaces exist side-by-side; potentially confusing.
+  RECOMMENDATION: Path A for MVP (simpler, zero collision risk); Path B if grouped browsing UX is a hard requirement. Grep `code/packages/excalidraw/types.ts` for `updateLibrary` signature before implementing either path. -->
 
 **Files:**
 - Create: `packages/data/fixtures/libraries/wildfire-icons.excalidrawlib`
 - Create: `packages/data/fixtures/libraries/transit-symbols.excalidrawlib`
 - Create: `packages/data/fixtures/libraries/hazard-markers.excalidrawlib`
-- Create: `apps/atlas-app/components/AssetLibraryPanel.tsx`
+- Create: `apps/atlas-app/components/AssetLibraryPanel.tsx` (Path B only — omit if Path A chosen)
 - Create: `apps/atlas-app/__tests__/AssetLibraryPanel.test.tsx`
 
 - [ ] **Step 1: Author curated fixture files**
