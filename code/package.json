@@ -96,6 +96,8 @@
     "clean-install": "yarn rm:node_modules && yarn install"
   },
   "resolutions": {
-    "strip-ansi": "6.0.1"
+    "strip-ansi": "6.0.1",
+    "dompurify": "^3.4.2",
+    "nanoid": "^3.3.8"
   }
 }
