@@ -19,6 +19,7 @@
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import { syncInvalidIndices } from "@excalidraw/element";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
@@ -90,8 +91,14 @@ export function hydrate(
   // SceneElement[] to the canonical OrderedExcalidrawElement[] updateScene
   // expects; the persisted shape is whatever a prior session's
   // getSceneElements() returned, so the round-trip identity holds.
+  // Pass through syncInvalidIndices to repair any missing fractional
+  // indices (e.g. from older docs persisted before T-3601 enforced them);
+  // a no-op when indices are already valid (mirrors restore.ts:704 + closes
+  // future recurrence of atlasdraw-27d8 on doc load).
   excalidrawAPI.updateScene({
-    elements: loaded.scene as unknown as Parameters<
+    elements: syncInvalidIndices(
+      loaded.scene as unknown as Parameters<typeof syncInvalidIndices>[0],
+    ) as unknown as Parameters<
       typeof excalidrawAPI.updateScene
     >[0]["elements"],
   });

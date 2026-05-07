@@ -362,6 +362,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
+  // Tracks the prior elements array reference so handleExcalidrawChange can
+  // skip markDirty when Excalidraw fires onChange without an actual element
+  // mutation (initial mount, viewport-only updates, scroll-lock self-fires).
+  // Closes atlasdraw-12f0 — the "● Unsaved" indicator no longer trips on
+  // first load before the user has done anything.
+  const prevElementsRef = useRef<readonly unknown[] | null>(null);
   // Guards against re-entrant updateScene calls in handleExcalidrawChange.
   // CoordinateSync fires many onChange events before React can process our
   // viewBackgroundColor reset; without this flag each one queues another
@@ -800,11 +806,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         }
       }
 
-      // --- 4. T9 — mark persistence dirty.
-      // Every onChange is a candidate edit. The underlying PersistenceStore
-      // debounces (5s) + ceilings (30s) so the actual IDB write rate is bounded.
-      // Indicator flips immediately (no debounce) per the T9 contract.
-      usePersistenceStore.getState().markDirty();
+      // --- 4. T9 — mark persistence dirty (gated on real element mutation).
+      // Excalidraw fires onChange on initial mount, viewport changes, scroll-
+      // lock self-fires, and selection updates — none of which are user
+      // edits. Mark dirty only when the elements reference actually changes
+      // from the prior call, AND skip the first call (which establishes the
+      // baseline). The underlying PersistenceStore debounces (5s) + ceilings
+      // (30s) so the actual IDB write rate stays bounded.
+      const prev = prevElementsRef.current;
+      prevElementsRef.current = elements;
+      if (prev !== null && elements !== prev) {
+        usePersistenceStore.getState().markDirty();
+      }
     },
     [excalidrawAPI, map, syncNow],
   );

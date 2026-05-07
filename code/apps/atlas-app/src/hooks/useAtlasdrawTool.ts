@@ -22,6 +22,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import { syncInvalidIndices } from "@excalidraw/element";
 import type maplibregl from "maplibre-gl";
 import { projectPoint } from "@atlasdraw/geo";
 import type { GeoCustomData } from "@atlasdraw/geo";
@@ -78,9 +79,16 @@ export function buildToolContext(
     excalidraw: {
       addElement: (seed: AtlasdrawElementSeed) => {
         const newEl = seedToElement(seed, map);
-        excalidrawAPI.updateScene({
-          elements: [...excalidrawAPI.getSceneElements(), newEl],
-        });
+        // syncInvalidIndices assigns fractional indices to newly-inserted
+        // elements (the seed factory leaves `index` undefined). Excalidraw's
+        // Scene.replaceAllElements validates indices and throws
+        // InvalidFractionalIndexError if any neighbor is unset. Mirror the
+        // pattern used in code/packages/excalidraw/data/restore.ts:704.
+        const nextElements = syncInvalidIndices([
+          ...excalidrawAPI.getSceneElements(),
+          newEl,
+        ]);
+        excalidrawAPI.updateScene({ elements: nextElements });
         return newEl.id;
       },
       updateElement: (id: string, patch: Partial<AtlasdrawElementSeed>) => {
@@ -185,8 +193,8 @@ function applyElementPatch(
   const patched = patchElement(map, target, patch);
 
   const next = elements.slice();
-  next[idx] = patched;
-  excalidrawAPI.updateScene({ elements: next });
+  next[idx] = patched as (typeof elements)[number];
+  excalidrawAPI.updateScene({ elements: syncInvalidIndices(next) });
 }
 
 /**
