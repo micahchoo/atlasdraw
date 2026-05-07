@@ -41,3 +41,7 @@ anti-pattern-report.txt
 # Firebase build artifacts
 firebase/
 .vercel/
+
+# playwright-cli session artifacts
+.playwright-cli/
+.playwright/
