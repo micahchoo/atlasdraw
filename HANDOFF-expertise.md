@@ -1,19 +1,20 @@
-# Mulch expertise sidecar — Phase 4 Wave 0 handoff
+# Mulch expertise sidecar — Phase 4 Wave 0 + smoke-test handoff
 
-Generated: 2026-05-06T14:09:26-07:00
+Generated: 2026-05-06T18:59:49-07:00
 
-## Recent deltas (this session, HEAD~12..HEAD)
+## Recent deltas (this session, HEAD~16..HEAD)
 
 ```
 
-Expertise changes since HEAD~12
+Expertise changes since HEAD~17
 
-architecture (5 changes):
+architecture (6 changes):
   + [convention] mx-01984d No single state/store.ts in atlas-app — pattern is per-conce...
   + [convention] mx-3342d8 App.tsx is a one-liner <MapEditor /> — the actual change-sit...
   + [convention] mx-91343d Data-layer FeatureCollections live in MapLibre sources at ru...
   + [convention] mx-4b9e4e AtlasdrawDocument.scene typed via structural alias SceneElem...
   + [convention] mx-fcce7f Data-layer FeatureCollection mirroring lives in LayerRegistr...
+  + [convention] mx-cc3214 Excalidraw v0.18 vendored Scene.replaceAllElements ALWAYS va...
 
 data (3 changes):
   + [failure] mx-d16fa9 Blob.type silently dropped through zip writer — ZIP format h...
@@ -63,11 +64,9 @@ meta (25 changes):
 
 # Project Expertise (via Mulch)
 
-## meta (22 records, updated just now)
-- [decision] writing-skills: REVIEW:skill-removed: status=ORPHANED xrefs=OK(0evals) value=REVIEW:skill-removed (mx-e64ebb)
-- [convention] correction: first handoff attempt was incomplete — did not dispatch record-extractor and skipped som... (mx-391d6f)
+## meta (20 records, updated 4h ago)
+- [convention] Always use absolute paths in Bash tool calls — shell cwd persists across Bash calls in agent threads... (mx-0d9feb)
 - [convention] Peer-vs-parent discriminator for wave task assignment: when deferring missing work into an existing ... (mx-537417)
-- [convention] Two pre-dispatch artifacts cut Worker brief failure rate sharply: (1) PRE-SPIKE — when the plan name... (mx-7ef9cf) [relates to: mx-372bdb, mx-537ae1]
 - [convention] Plan literals go stale within 24h of authoring when a parallel wave ships — Phase 2 plan was authore... (mx-d9ab91)
 - [convention] When plan claims to 'extend interface with X+Y', grep current types.ts first — X or Y may already be... (mx-ce5d92)
 - [convention] Types-only files land before any consumer task — T01 pattern: when multiple downstream tasks (T11/T1... (mx-364d3c)
@@ -87,15 +86,16 @@ meta (25 changes):
 - [convention] correction: plan-literal drift includes API-shape drift, not just path drift — T11 plan said Promise... (mx-744b7e)
 - [convention] Pre-dispatch scrub recurrence rule: when a phase plan is authored before the immediately-preceding w... (mx-cb3eb8)
 
-## architecture (6 records, updated just now)
+## architecture (7 records, updated just now)
 - [convention] Data layer IDs use dl:${crypto.randomUUID()} format; mint at call site, NOT inside registry — T11, T... (mx-417b33)
 - [convention] No single state/store.ts in atlas-app — pattern is per-concern Zustand stores. (mx-01984d)
 - [convention] App.tsx is a one-liner <MapEditor /> — the actual change-site for any Excalidraw composition is code... (mx-3342d8)
 - [convention] Data-layer FeatureCollections live in MapLibre sources at runtime, not in any registry. (mx-91343d)
 - [convention] AtlasdrawDocument.scene typed via structural alias SceneElement = { id: string; type: string; versio... (mx-4b9e4e)
 - [convention] Data-layer FeatureCollection mirroring lives in LayerRegistry actions (registerDataLayer, convertAnn... (mx-fcce7f)
+- [convention] Excalidraw v0.18 vendored Scene.replaceAllElements ALWAYS validates fractional indices via validateF... (mx-cc3214)
 
-## excalidraw-api (3 records, updated just now)
+## excalidraw-api (3 records, updated 4h ago)
 - [convention] MainMenu DefaultItems live at main-menu/DefaultItems.tsx (kebab-case path), not mainMenu/. (mx-025e8a)
 - [convention] <MainMenu.DefaultItems.LoadScene> and <SaveToActiveFile> are closure-bound to internal actions — no ... (mx-30002e)
 - [convention] Excalidraw v0.18 UIOptions.canvasActions.export.renderCustomUI is the official extension point for i... (mx-58c357)
@@ -110,7 +110,7 @@ meta (25 changes):
   - Evidence: `--evidence-commit <sha>`, `--evidence-bead <id>`
 - `mulch doctor` — check record health
 
-... and 71 more records across 3 domains (use --budget <n> to show more)
+... and 73 more records across 3 domains (use --budget <n> to show more)
 
 # 🚨 SESSION CLOSE PROTOCOL 🚨
 

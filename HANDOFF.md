@@ -2,13 +2,13 @@
 
 ## Goal
 
-> "/check-handoff then do a scrub for phase 3" → "do all 4" → "scrub the plans for phase 4" → "look at older phase plans and see what was not implemented in time for phase 4" → "do as you recommend" → "start the prereqs" → "9078: unify export menu via Excalidraw's existing place; e9db: A composite-tsconfig"
+> "/check-handoff then do a scrub for phase 3" → "do all 4" → "scrub the plans for phase 4" → "look at older phase plans and see what was not implemented in time for phase 4" → "do as you recommend" → "start the prereqs" → "9078: unify export menu via Excalidraw's existing place; e9db: A composite-tsconfig" → "what is the current visual smoke test of the demo expected" → "start testing with the playwright-cli" → "fix these"
 
-Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and expose the 1585 latent tsc errors via composite-project tsconfig refactor.
+Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`), expose the 1585 latent tsc errors via composite-project tsconfig refactor, then run a real-browser smoke test and fix what breaks.
 
 ## Progress
 
-**This session — 11 commits, 5/6 Wave 0 prereqs closed + Phase 3 closure scrub.**
+**This session — 16 commits.** All 6 Wave 0 prereqs closed; smoke-test surfaced 4 bugs and fixed 3 (last is open-debt).
 
 - ✅ `05fdea0` — fix(tsconfig): `ignoreDeprecations 6.0 → 5.0` + Phase 3 closure scrub (filed atlasdraw-ad27/3601/9078/0403, closed 25a5)
 - ✅ `7270c2a` — docs(phase-4): wave0 pre-dispatch scrub + plan amendments + seed DAG wiring (filed e9db; blocked 4579 by 6 prereqs)
@@ -18,9 +18,14 @@ Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and e
 - ✅ `73642c2` — feat(state): T-ad27 data-layer FC registry — useDataLayerFCStore (+14 tests)
 - ✅ `2f2d496` — feat(state): T-3601 hydrate scene + layers + FCs from persistence load() (+8 tests)
 - ✅ `e2e99e8` — feat(state): T-9078 unify atlasdraw export menu via renderCustomUI (+4 tests)
-- ⏳ **`atlasdraw-e9db`** composite-tsconfig refactor — worker IN FLIGHT at handoff write time. Auto-notifies on completion.
+- ✅ `daa59db` — chore(handoff): mid-session handoff at 82% context (e9db worker still running)
+- ✅ `e69c91b` — chore(handoff): mulch sidecar + 4 session conventions captured
+- ✅ `f0df8af` — refactor(tsconfig): T-e9db composite-project references — replace atlas-app paths:{} clobber (worker output salvaged from working tree after watchdog timeout; 539 latent tsc errors now visible vs hidden)
+- ✅ `87735b7` — chore(seeds): unblock atlasdraw-4579 — all 6 Phase 4 Wave 0 prereqs closed
+- ✅ `7624a9b` — chore(seeds): file 4 issues from playwright smoke test of HEAD (27d8/12f0/8ae2/320b)
+- ✅ `ae1a15c` — fix(atlas-app): smoke-test bugs — Pin tool (P0), dirty-on-init, stale title
 
-**Wave 0 status (6 prereqs):** 5 SHIPPED, 1 IN-FLIGHT.
+**Wave 0 status (6 prereqs):** ALL CLOSED.
 
 | Seed | Status | Commit |
 |---|---|---|
@@ -30,13 +35,43 @@ Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and e
 | `atlasdraw-ad27` FC registry | ✅ closed | `73642c2` (+14 tests) |
 | `atlasdraw-3601` scene hydration | ✅ closed | `2f2d496` (+8 tests) |
 | `atlasdraw-9078` MainMenu unification | ✅ closed | `e2e99e8` (+4 tests) |
-| `atlasdraw-e9db` composite-tsconfig | ⏳ in-flight | TBD |
+| `atlasdraw-e9db` composite-tsconfig | ✅ closed | `f0df8af` (worker salvage; 539 latent errors visible) |
+
+**Smoke-test follow-up (4 seeds filed in `7624a9b`, 3 closed in `ae1a15c`):**
+
+| Seed | Status | Resolution |
+|---|---|---|
+| `atlasdraw-27d8` (P0) Pin tool `InvalidFractionalIndexError` | ✅ closed | `syncInvalidIndices` wrap in `addElement` + `applyElementPatch` + `hydrate.ts` step 3 |
+| `atlasdraw-12f0` (P2) `● Unsaved` indicator on first load | ✅ closed | `prevElementsRef` gates `markDirty` so initial mount doesn't trip dirty |
+| `atlasdraw-8ae2` (P3) stale "Phase 1 Demo" title + overlay | ✅ closed | title now "Atlasdraw"; demo overlay deleted from `App.tsx` |
+| `atlasdraw-320b` (P3) blob-URL number-null warnings | ⏳ open | Needs source-map sleuthing on `blob:http://...` URL — deferred |
 
 **Test counts at handoff:**
 - `@atlasdraw/data`: 83 (unchanged contract; SceneElement structural alias added).
 - `@atlasdraw/cli`: 11.
 - `@atlasdraw/basemap`: 0 → **12** (BasemapRegistry + pmtiles-protocol + style-builder).
-- `@atlasdraw/atlas-app`: 113 → **139** (+26 from ad27 + 3601 + 9078).
+- `@atlasdraw/atlas-app`: 113 → **139** (+26 from ad27 + 3601 + 9078; smoke-test fixes preserved baseline).
+- atlas-app `yarn build`: green (11.90s).
+- `tsc -b` from `code/`: 0 errors in atlas-owned graph; 539 latent atlas-app errors now visible (Phase 4+ task).
+
+**Smoke-test verification (real browser via playwright-cli):**
+- Page loads, title "Atlasdraw" ✓
+- MainMenu opens with full item list (Open, Save to..., Export composite PNG, Pin to map, Layers panel, Find on canvas, Help, Reset, Canvas BG, Dark mode) — no stale Unsaved item ✓
+- Save-to-... dialog shows 4 cards: Save to disk → Save .atlasdraw → Open .atlasdraw → GeoJSON (smartly disabled with "No geo-anchored annotations in scene" helper text) ✓
+- Pin tool placement no longer throws `InvalidFractionalIndexError` ✓
+- Console: only 1 favicon 404 (cosmetic) + the open `atlasdraw-320b` blob-URL number-null warnings.
+
+**Known broken / incomplete (post-smoke-test reality check):**
+
+| Issue | Symptom | Tracker |
+|---|---|---|
+| No basemap picker | Can't switch styles in UI yet (registry exists but no `BasemapPicker` component) | Phase 4 T6 |
+| Mixed-geometry GeoJSON | A FeatureCollection with both points AND lines renders only the FIRST feature's geometry style | `atlasdraw-4142` (HIGH severity, demo-blocking) |
+| Binary scene assets | Paste an image into the canvas → save → refresh → image is GONE. `addFiles()` was deferred from 3601 | tracked in 3601 closure note |
+| IDB stderr noise | Component tests log `indexedDB is not defined` but pass | `atlasdraw-0403` (low; non-functional) |
+| No share-link, no storage server, no docker | Phase 4 T1+ work; not yet implemented | Phase 4 epic `atlasdraw-4579` |
+| `atlasdraw-320b` blob-URL warnings | 3× console "Expected value to be of type number, but found null instead" from `blob:http://...` URL — needs source-map sleuthing | `atlasdraw-320b` (P3) |
+| `cli/src/atlasdraw.ts` chmod drift | Mode-only 644→755 in working tree across all sessions; correct mode for shebang CLI but `git status` keeps showing it. Cannot `git checkout --` without explicit auth | benign cosmetic |
 
 **Branch:** main, **36 ahead** of origin/main. Working tree dirty: `code/packages/cli/src/atlasdraw.ts` (chmod 644→755 mode-only — benign, CLI bin file with shebang). Untracked: `.claude/scheduled_tasks.lock` (runtime).
 
@@ -114,13 +149,11 @@ Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`) and e
 
 ## Next Steps
 
-1. **Wait for `e9db` worker completion notification.** Auto-notifies. If commit lands cleanly, close `atlasdraw-e9db`, verify `atlasdraw-4579` (Phase 4 epic) is no longer blocked. If worker reports `dd418c2` intent invalidates composite-project, surface to user.
-2. **Verify Phase 4 epic unblocks.** `sd ready | grep atlasdraw-4579` should now show it. T1 (Storage Contract Types) is the first dispatch target.
-3. **Visible-UX bug triage** (`atlasdraw-4142` mixed-geometry GeoJSON, `atlasdraw-76b2` polyline geo-anchor zoom break). Both flagged demo-blocking severity. Decide P4 inclusion or "Known Limitations" README entry.
-4. **Address binary scene asset hydration** — file a follow-up seed (or extend `atlasdraw-3601`'s closure note) for `excalidrawAPI.addFiles(loaded.files)` with blob→BinaryFileData conversion. Required before any user pastes an image into the canvas.
-5. **Re-file mulch records** — record-extractor pass to capture this session's 4 lessons (renderCustomUI, composite-project, SceneElement, FC mirror seam).
-6. **Phase 4 T1 dispatch** — once e9db closes, `code/apps/storage/` scaffold + `StorageMode`/`StorageClient` types is the first task. Plan §T1 lines 202-236. Verify against scrub doc Section A path-mapping table BEFORE briefing.
-7. **Push to origin.** Branch is 36 ahead at handoff write (will be 37 when e9db lands). `git push origin main` is the trivial next step.
+1. **Phase 4 T1 dispatch** — Wave 0 complete. T1 (`code/apps/storage/` scaffold + `StorageMode`/`StorageClient` types) is the first dispatch target. Plan §T1 lines 202-236. Verify against `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md` Section A path-mapping table BEFORE briefing the worker.
+2. **Visible-UX bug triage** (`atlasdraw-4142` mixed-geometry GeoJSON, `atlasdraw-76b2` polyline geo-anchor zoom break). Both flagged demo-blocking severity. Decide: fix in P4 or accept as known issues with "Known Limitations" README entry.
+3. **Binary scene asset hydration** — `excalidrawAPI.addFiles(loaded.files)` deferred from `atlasdraw-3601`. Needs blob→BinaryFileData conversion. File a fresh seed and schedule before any image-paste demo path.
+4. **`atlasdraw-320b` blob-URL warnings** — open. Investigate via Chrome DevTools sourcemap on the `blob:http://...:2460` warning. Likely MapLibre style spec fed null for a numeric field; could be from BasemapRegistry style-builder or selectDocument FC reads.
+5. **Push to origin.** Branch is 42 ahead at handoff write. `git push origin main` is the trivial next step.
 
 ## Context Files
 
