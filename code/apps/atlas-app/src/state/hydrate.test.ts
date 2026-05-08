@@ -94,7 +94,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("hydrate", () => {
-  it("calls updateScene with the loaded scene elements", () => {
+  it("calls updateScene with the loaded scene elements", async () => {
     const { api } = makeAPI();
     const scene: ReadonlyArray<SceneElement> = [sceneEl("el-1"), sceneEl("el-2", "text")];
     const loaded: AtlasdrawDocument = {
@@ -105,13 +105,13 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     expect(api.updateScene).toHaveBeenCalledTimes(1);
     expect(api.updateScene).toHaveBeenCalledWith({ elements: scene });
   });
 
-  it("registers annotation layers from the manifest", () => {
+  it("registers annotation layers from the manifest", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -125,7 +125,7 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     const entries = useLayerRegistryStore.getState().entries;
     expect(entries).toHaveLength(1);
@@ -137,7 +137,7 @@ describe("hydrate", () => {
     });
   });
 
-  it("registers data layers and seeds the FC store", () => {
+  it("registers data layers and seeds the FC store", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -159,7 +159,7 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     const entries = useLayerRegistryStore.getState().entries;
     expect(entries).toHaveLength(1);
@@ -167,7 +167,7 @@ describe("hydrate", () => {
     expect(useDataLayerFCStore.getState().get("dl:cities")).toEqual(sampleFC);
   });
 
-  it("preserves visible=false from the manifest after register stamps true", () => {
+  it("preserves visible=false from the manifest after register stamps true", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -181,13 +181,13 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     const entry = useLayerRegistryStore.getState().entries[0];
     expect(entry?.visible).toBe(false);
   });
 
-  it("clears prior registry + FC entries before applying the loaded doc", () => {
+  it("clears prior registry + FC entries before applying the loaded doc", async () => {
     const { api } = makeAPI();
 
     // Pre-populate as if the user had imported layers before hitting Open.
@@ -215,7 +215,7 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     const entries = useLayerRegistryStore.getState().entries;
     expect(entries).toHaveLength(1);
@@ -235,14 +235,14 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
     // Flush the microtask queue.
     await Promise.resolve();
 
     expect(usePersistenceStore.getState().isDirty).toBe(false);
   });
 
-  it("skips data-layer entries whose FC is missing from the doc", () => {
+  it("skips data-layer entries whose FC is missing from the doc", async () => {
     const { api } = makeAPI();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const loaded: AtlasdrawDocument = {
@@ -265,11 +265,52 @@ describe("hydrate", () => {
       files: new Map(),
     };
 
-    hydrate(loaded, api);
+    await hydrate(loaded, api);
 
     expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("converts Blobs to BinaryFileData and calls addFiles", async () => {
+    const { api } = makeAPI();
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]); // PNG magic
+    const blob = new Blob([pngBytes], { type: "image/png" });
+    const loaded: AtlasdrawDocument = {
+      manifest: baseManifest(),
+      scene: [],
+      layers: new Map(),
+      styleRef: {},
+      files: new Map([["file-1", blob]]),
+    };
+
+    await hydrate(loaded, api);
+
+    expect(api.addFiles).toHaveBeenCalledTimes(1);
+    const passed = (api.addFiles as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{
+      id: string;
+      mimeType: string;
+      dataURL: string;
+    }>;
+    expect(passed).toHaveLength(1);
+    expect(passed[0].id).toBe("file-1");
+    expect(passed[0].mimeType).toBe("image/png");
+    expect(passed[0].dataURL).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it("addFiles is skipped when loaded.files is empty", async () => {
+    const { api } = makeAPI();
+    const loaded: AtlasdrawDocument = {
+      manifest: baseManifest(),
+      scene: [],
+      layers: new Map(),
+      styleRef: {},
+      files: new Map(),
+    };
+
+    await hydrate(loaded, api);
+
+    expect(api.addFiles).not.toHaveBeenCalled();
   });
 });
 
@@ -278,7 +319,7 @@ describe("hydrate", () => {
 // ---------------------------------------------------------------------------
 
 describe("hydrate ∘ selectDocument round-trip", () => {
-  it("re-applies a snapshot taken from a populated registry", () => {
+  it("re-applies a snapshot taken from a populated registry", async () => {
     // Seed a registry + FC store as if the user had imported a layer.
     const reg = useLayerRegistryStore.getState();
     reg.registerDataLayer({
@@ -303,7 +344,7 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
 
     const { api: api2 } = makeAPI();
-    hydrate(snap, api2);
+    await hydrate(snap, api2);
 
     // Registry shape matches.
     const restored = useLayerRegistryStore.getState().entries;

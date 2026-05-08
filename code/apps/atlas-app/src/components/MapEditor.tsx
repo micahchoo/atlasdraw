@@ -251,7 +251,7 @@ function renderAtlasdrawOpenCard(
             if (loaded) {
               // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
               // see state/hydrate.ts for ordering + idempotency.
-              hydrate(loaded, excalidrawAPI);
+              await hydrate(loaded, excalidrawAPI);
               // eslint-disable-next-line no-console
               console.info("[atlasdraw] document opened + hydrated", {
                 id: loaded.manifest.id,
@@ -434,7 +434,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         const loaded = await store.load();
         if (cancelled) return;
         if (loaded) {
-          hydrate(loaded, excalidrawAPI);
+          await hydrate(loaded, excalidrawAPI);
           // eslint-disable-next-line no-console
           console.info("[atlasdraw] persisted document hydrated", {
             id: loaded.manifest.id,

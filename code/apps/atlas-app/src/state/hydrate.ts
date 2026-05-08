@@ -19,6 +19,7 @@
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { BinaryFileData, FileId, DataURL } from "@excalidraw/excalidraw";
 import { syncInvalidIndices } from "@excalidraw/element";
 
 import { useLayerRegistryStore } from "./layerRegistry";
@@ -38,10 +39,19 @@ import { usePersistenceStore } from "./usePersistenceStore";
  *   4. Microtask-defer `isDirty = false` so it lands AFTER Excalidraw's
  *      onChange-driven `markDirty()` from step 3.
  */
-export function hydrate(
+async function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function hydrate(
   loaded: AtlasdrawDocument,
   excalidrawAPI: ExcalidrawImperativeAPI,
-): void {
+): Promise<void> {
   // Step 1 — clear prior runtime state (idempotent on a fresh mount).
   const registry = useLayerRegistryStore.getState();
   const priorIds = registry.entries.map((e) => e.id);
@@ -103,7 +113,28 @@ export function hydrate(
     >[0]["elements"],
   });
 
-  // Step 4 — clear the dirty flag AFTER the synchronous onChange that
+  // Step 4 — binary scene assets (images pasted into canvas).
+  // `loaded.files` is Map<string, Blob>; Excalidraw's addFiles() wants
+  // BinaryFileData[] with dataURL. Convert each Blob back to a dataURL.
+  // Deferred from atlasdraw-3601; closes the "paste image → save → refresh
+  // → image gone" gap.
+  if (loaded.files.size > 0 && excalidrawAPI.addFiles) {
+    const binaryFiles: BinaryFileData[] = await Promise.all(
+      Array.from(loaded.files.entries()).map(async ([id, blob]) => {
+        const dataURL = (await blobToDataURL(blob)) as DataURL;
+        return {
+          id: id as FileId,
+          mimeType: (blob.type || "application/octet-stream") as BinaryFileData["mimeType"],
+          dataURL,
+          created: Date.now(),
+          lastRetrieved: Date.now(),
+        };
+      }),
+    );
+    excalidrawAPI.addFiles(binaryFiles);
+  }
+
+  // Step 5 — clear the dirty flag AFTER the synchronous onChange that
   // updateScene fires (which would otherwise re-mark dirty). queueMicrotask
   // runs after the Excalidraw onChange callback resolves but before the next
   // frame, so the MainMenu indicator never blinks on.
