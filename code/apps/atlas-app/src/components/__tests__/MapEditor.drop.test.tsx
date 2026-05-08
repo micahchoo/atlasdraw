@@ -44,6 +44,16 @@ vi.mock("@atlasdraw/basemap", () => ({
     strokeWidth: 1,
     opacity: 0.5,
   })),
+  registerPmtilesProtocol: vi.fn(),
+  getBasemap: vi.fn((id: string) =>
+    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  ),
+  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
+  BASEMAPS: [
+    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
+    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
+    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+  ],
 }));
 
 // Stub <Excalidraw> — renders children (LayerPanel + MainMenu items) but
@@ -118,6 +128,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
 const mockMap = {
   addSource: vi.fn(),
   addLayer: vi.fn(),
+  setStyle: vi.fn(),
   // The real MapEditor renders other hooks (useCoordinateSync, useMapWheelRouter,
   // useGeoAnchor) that may probe `map.on / off / project / etc`. Provide cheap
   // no-ops so they don't blow up on read.

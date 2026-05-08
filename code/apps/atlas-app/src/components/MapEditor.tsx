@@ -21,7 +21,15 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { MapCanvas } from "@atlasdraw/basemap";
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
-import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
+import {
+  compileLayer,
+  defaultLayerStyle,
+  BASEMAPS,
+  getBasemap,
+  buildStyle,
+  registerPmtilesProtocol,
+} from "@atlasdraw/basemap";
+import type { BasemapConfig } from "@atlasdraw/basemap";
 import {
   parse,
   GeoJSONParseError,
@@ -49,6 +57,7 @@ import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
+import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -359,6 +368,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // for now because the composite export draws the MapLibre canvas directly —
   // any map-level background layer would already be baked into that canvas.
   const [mapBg, setMapBg] = useState("transparent");
+  // Phase 4 T6 — active basemap, replacing the canvas background picker slot.
+  const [activeBasemapId, setActiveBasemapId] =
+    useState<BasemapConfig["id"]>("protomaps-light");
+  const [showBasemapPicker, setShowBasemapPicker] = useState(false);
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -383,6 +396,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       onMount?.(map, excalidrawAPI);
     }
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
+
+  // Phase 4 T6 — apply basemap style when the map is ready or the user
+  // switches basemaps. registerPmtilesProtocol is idempotent; safe to call
+  // before every setStyle that references pmtiles:// URLs.
+  useEffect(() => {
+    if (!map) return;
+    registerPmtilesProtocol();
+    const apply = async () => {
+      const config = getBasemap(activeBasemapId);
+      if (!config) return;
+      const style = await buildStyle(config, {
+        pmtilesPath: "/data/world-low-zoom.pmtiles",
+      });
+      map.setStyle(style);
+    };
+    void apply();
+  }, [map, activeBasemapId]);
 
   // atlasdraw-9078 — UIOptions.canvasActions.export passed to <Excalidraw>.
   // Memoized on excalidrawAPI identity so the renderCustomUI closure binds
@@ -919,7 +949,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             <MainMenu.DefaultItems.SearchMenu />
             <MainMenu.DefaultItems.Help />
             <MainMenu.DefaultItems.ClearCanvas />
-            <MainMenu.DefaultItems.ChangeCanvasBackground />
+            {/* Phase 4 T6 — Basemap picker replaces the canvas background
+                picker. Previously ChangeCanvasBackground set a solid color
+                behind Excalidraw; now we switch the MapLibre basemap style.
+                The dialog is rendered inside the Excalidraw tree so it
+                inherits focus trap + Escape handling from the vendored
+                Dialog primitive (atlasdraw-50c0). */}
+            <MainMenu.Item
+              onSelect={() => setShowBasemapPicker(true)}
+              data-testid="main-menu-basemap"
+            >
+              🗺 Basemap
+            </MainMenu.Item>
+            {showBasemapPicker && (
+              <BasemapPickerDialog
+                activeId={activeBasemapId}
+                onSelect={setActiveBasemapId}
+                onCloseRequest={() => setShowBasemapPicker(false)}
+              />
+            )}
             <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
         </Excalidraw>

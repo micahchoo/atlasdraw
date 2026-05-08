@@ -25,6 +25,16 @@ vi.mock("@atlasdraw/basemap", () => ({
     React.createElement("div", { "data-testid": "map-canvas-stub" }),
   compileLayer: vi.fn(),
   defaultLayerStyle: vi.fn(),
+  registerPmtilesProtocol: vi.fn(),
+  getBasemap: vi.fn((id: string) =>
+    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  ),
+  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
+  BASEMAPS: [
+    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
+    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
+    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+  ],
 }));
 
 const mockToggleSidebarSpy = vi.fn();
@@ -136,6 +146,7 @@ vi.mock("@excalidraw/excalidraw", () => {
 const mockMap = {
   addSource: vi.fn(),
   addLayer: vi.fn(),
+  setStyle: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
   project: vi.fn(() => ({ x: 0, y: 0 })),
@@ -256,5 +267,29 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     expect(arg.name).toBe("layers");
     expect(arg.label).toBe("Layers");
     expect(arg.content).toBeTruthy();
+  });
+
+  it("renders the Basemap MainMenu item (T6)", async () => {
+    const { getByTestId } = render(<MapEditor />);
+    await waitFor(() => {
+      expect(getByTestId("main-menu-basemap")).toBeTruthy();
+    });
+  });
+
+  it("clicking Basemap item opens the picker dialog (T6)", async () => {
+    const { getByTestId, queryByTestId } = render(<MapEditor />);
+    const item = await waitFor(() => getByTestId("main-menu-basemap"));
+
+    // Dialog is not mounted initially.
+    expect(queryByTestId("basemap-option-protomaps-light")).toBeNull();
+
+    fireEvent.click(item);
+
+    // Dialog renders all three basemap options.
+    await waitFor(() => {
+      expect(getByTestId("basemap-option-protomaps-light")).toBeTruthy();
+    });
+    expect(getByTestId("basemap-option-protomaps-dark")).toBeTruthy();
+    expect(getByTestId("basemap-option-openfreemap-bright")).toBeTruthy();
   });
 });

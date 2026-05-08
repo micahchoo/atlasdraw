@@ -45,6 +45,16 @@ vi.mock("@atlasdraw/basemap", () => ({
     strokeWidth: 1,
     opacity: 0.5,
   })),
+  registerPmtilesProtocol: vi.fn(),
+  getBasemap: vi.fn((id: string) =>
+    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  ),
+  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
+  BASEMAPS: [
+    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
+    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
+    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+  ],
 }));
 
 // Fake selected element — a rectangle with valid bbox geo. Mutated per-test.
@@ -192,6 +202,7 @@ vi.mock("@excalidraw/excalidraw", () => {
 const mockMap = {
   addSource: vi.fn(),
   addLayer: vi.fn(),
+  setStyle: vi.fn(),
   on: vi.fn(),
   off: vi.fn(),
   project: vi.fn(() => ({ x: 0, y: 0 })),

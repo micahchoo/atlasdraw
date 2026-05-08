@@ -47,6 +47,16 @@ vi.mock("@atlasdraw/basemap", () => ({
   MapCanvas: () => null,
   compileLayer: vi.fn(),
   defaultLayerStyle: vi.fn(),
+  registerPmtilesProtocol: vi.fn(),
+  getBasemap: vi.fn((id: string) =>
+    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  ),
+  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
+  BASEMAPS: [
+    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
+    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
+    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+  ],
 }));
 
 vi.mock("@atlasdraw/data", () => ({
