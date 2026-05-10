@@ -17,3 +17,11 @@ export { registerPmtilesProtocol } from "./pmtiles-protocol";
 
 export { buildStyle } from "./style-builder";
 export type { BuildStyleOptions } from "./style-builder";
+
+// Phase 4, Wave 1 (T7): resolver + VITE_PMTILES_PATH env gate.
+export {
+  resolveStyle,
+  getPmtilesPath,
+  BasemapRemoteGatedError,
+} from "./resolver";
+export type { ResolveStyleOptions } from "./resolver";

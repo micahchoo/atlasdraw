@@ -25,9 +25,9 @@ import {
   compileLayer,
   defaultLayerStyle,
   BASEMAPS,
-  getBasemap,
-  buildStyle,
+  resolveStyle,
   registerPmtilesProtocol,
+  BasemapRemoteGatedError,
 } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 import {
@@ -397,19 +397,30 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     }
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
 
-  // Phase 4 T6 — apply basemap style when the map is ready or the user
+  // Phase 4 T6/T7 — apply basemap style when the map is ready or the user
   // switches basemaps. registerPmtilesProtocol is idempotent; safe to call
-  // before every setStyle that references pmtiles:// URLs.
+  // before every setStyle that references pmtiles:// URLs. resolveStyle
+  // (T7) owns env-var-backed pmtiles path resolution and the remote-tile
+  // gate; we just pass the active id and the current allow-remote flag.
   useEffect(() => {
     if (!map) return;
     registerPmtilesProtocol();
     const apply = async () => {
-      const config = getBasemap(activeBasemapId);
-      if (!config) return;
-      const style = await buildStyle(config, {
-        pmtilesPath: "/data/world-low-zoom.pmtiles",
-      });
-      map.setStyle(style);
+      try {
+        // TODO(T14/T15): wire allowRemote from app config (Q3 default = false).
+        const style = await resolveStyle(activeBasemapId, {
+          allowRemote: false,
+        });
+        map.setStyle(style);
+      } catch (err) {
+        if (err instanceof BasemapRemoteGatedError) {
+          console.warn(
+            `[basemap] Skipping '${err.basemapId}': remote tiles disabled`,
+          );
+          return;
+        }
+        throw err;
+      }
     };
     void apply();
   }, [map, activeBasemapId]);
