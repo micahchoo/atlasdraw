@@ -444,6 +444,31 @@ docs/
 > first scaffold `BasemapRegistry.ts` and `pmtiles-protocol.ts` (per the
 > ORIGINAL Phase 1 T3 spec lines 186-189) BEFORE the "extend" steps below run.
 > Treat the "Modify: registry.ts" file as "Create-or-Modify".
+>
+> **Scrub note (2026-05-10, plan-literal drift):** Steps 1 + 2 below name an
+> incorrect source for the Protomaps styles. Protomaps GitHub releases do NOT
+> ship `light.json` / `dark.json` as downloadable assets — themes are published
+> as a CJS npm module that produces the layer array at call time. **Use the
+> npm package `protomaps-themes-base@^4.5.0` instead** (verified 2026-05-10,
+> `main: dist/cjs/index.cjs`). Concrete procedure replaces Step 1+2 verbatim
+> instructions:
+>
+> 1. Add `protomaps-themes-base@^4.5.0` to `code/packages/basemap`
+>    `devDependencies` (build-time only — generated JSON is committed; no
+>    runtime dep on the npm package). 2. Write a one-shot generator script `code/packages/basemap/scripts/build-styles.mjs`
+>    that:
+>    - Imports `{ layers, namedFlavor }` (or the equivalent exported helpers — grep `node_modules/protomaps-themes-base/dist/cjs/index.cjs` to pin actual names).
+>    - For each of `light` and `dark`, builds a complete `StyleSpecification` with `version: 8`, a single `protomaps` vector source whose `url` is the literal `"pmtiles://__PMTILES_PATH__"`, the `glyphs` URL pointing at `"https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf"` (or vendor locally later), and the theme's layer array.
+>    - Writes `code/packages/basemap/src/styles/{protomaps-light,protomaps-dark}.json` (pretty-printed).
+> 3. Wire the script into `package.json` as a `prebuild` / `build:styles`
+>    script, then commit the generated JSONs. The `protomaps-themes-base`
+>    dep stays as a `devDependency` — runtime loads from the committed JSON.
+> 4. Verification command in Step 1 (the `node -e` check for `__PMTILES_PATH__`
+>    in `s.sources`) remains valid as-is.
+>
+> Step 3 (OpenFreeMap bright) is unchanged — `https://tiles.openfreemap.org/styles/bright` returns valid JSON (verified 2026-05-10, 200 OK).
+>
+> Originating audit: 2026-05-10 review of botched prior dispatch that hand-rolled toy 5-layer stubs as fake "vendored" styles.
 
 **Orient:** Per Q3, the default basemap for self-hosted first run is `protomaps-light` (local PMTiles, no network). `openfreemap-bright` is gated behind `[basemap.allow_remote] = true`. Style JSONs are vendored so first run needs no network to resolve styles.
 **Flow position:** Step 0 of 3 in Flow B (styles → **registry** → BasemapPicker → MapLibre setStyle).
@@ -536,6 +561,22 @@ docs/
 ---
 
 ### Task 7: PMTiles Protocol Registration + `resolver.ts` Config Gate [Wave 1]
+
+> **Scrub note (2026-05-10, plan-literal drift):** Step 1 below says "Update
+> `pmtiles-protocol.ts` to accept a base path." That conflates protocol
+> registration (a one-time MapLibre `addProtocol` call) with style-token
+> substitution. The current `code/packages/basemap/src/pmtiles-protocol.ts`
+> (verified 2026-05-10) takes no arguments and registers `pmtiles://` once,
+> idempotently. **Do NOT add a parameter to `registerPmtilesProtocol`.**
+> Path substitution is the resolver's job:
+>
+> - `pmtiles-protocol.ts` (Phase 1): unchanged — `registerPmtilesProtocol(): void`, no path arg.
+> - `style-builder.ts` (Phase 4 Wave 0 — already exists): already performs the `__PMTILES_PATH__` → caller-supplied path substitution via `JSON.stringify().split(TOKEN).join(path)`. Keep as the substitution engine.
+> - `resolver.ts` (new this task): provides `getPmtilesPath()` (reads `import.meta.env.VITE_PMTILES_PATH` with a dev fallback) and `resolveStyle(id, opts)` that does the gate check + delegates substitution to `buildStyle()`.
+>
+> Net effect of T7: a single `resolveStyle(id, { allowRemote })` call in `MapEditor.tsx` (replacing the current hardcoded `buildStyle(config, { pmtilesPath: "/data/india.pmtiles" })` shape that landed and was reverted on 2026-05-10).
+>
+> Originating audit: 2026-05-10 review of botched prior dispatch that hardcoded `/data/india.pmtiles` directly in `MapEditor.tsx` and skipped the resolver entirely.
 
 **Orient:** Per Q3, the local PMTiles file must be wired at app startup without network. `pmtiles-protocol.ts` already exists from Phase 1; this task wires it to the volume-mounted file path and gates the remote basemap option via config.
 **Flow position:** Step 2 of 3 in Flow B and Step 2 of 3 in Flow C (protomaps-style → **pmtiles-protocol** → MapCanvas tile requests).
