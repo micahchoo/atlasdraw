@@ -1,0 +1,21 @@
+{
+  "name": "@atlasdraw/storage",
+  "version": "0.0.0",
+  "description": "Atlasdraw storage server — Fastify HTTP API for map persistence (sqlite-fs minimal stack, postgres-minio full stack)",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "scripts": {
+    "build": "echo 'TODO: tsc build (Phase 4 T3)' && exit 0",
+    "start": "echo 'TODO: Fastify server (Phase 4 T3)' && exit 0",
+    "test": "vitest run",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "*",
+    "vitest": "*"
+  }
+}
