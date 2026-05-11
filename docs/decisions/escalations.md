@@ -80,6 +80,33 @@ Appended to Phase 5 → Phase 6 contract:
 
 ---
 
+### Decision (2026-05-11) — RESOLVED
+
+**Selected:** Option C — defer Yjs-layer E2EE to Phase 6 evaluation.
+
+**Decided by:** maintainer (micahalex7), confirmed via AskUserQuestion in check-handoff resumption session.
+
+**Implications confirmed:**
+
+- Phase 5 plan ships unchanged — its existing Phase 5 Scope Limitation language (server-trusted relay, `yjs-crypto.ts` as stub, ADR `0007-yjs-e2ee-threat-model.md` as constraint-setting deliverable) is now load-bearing rather than provisional.
+- `packages/data/src/yjs-crypto.ts` lands as stub only (API + tests, not wired into y-websocket path).
+- `setupWSConnection` from `y-websocket` is the relay primitive for Phase 5. No custom log-replay handler.
+- Threat-model ADR `0007-yjs-e2ee-threat-model.md` is now a Phase 5 Task 0 hard requirement (must merge before any Phase 5 code).
+- Phase 6 inherits two work items: (1) wire `setPersistence` to storage API; (2) evaluate Option B relay rewrite (commit or formally close).
+- **E-02 is unblocked** — Phase 7 Tasks 9/10 (SnapshotStore, DiffEngine) may proceed on the plaintext-Y.Doc assumption. See E-02 decision block below.
+
+**Gate checkboxes (closed):**
+
+- [x] Maintainer selects Option A, B, or C → **C**
+- [x] If Option C (recommended): `decisions/0007-yjs-e2ee-threat-model.md` is written → **deferred to Phase 5 Task 0**; ADR is itself a Phase 5 hard-gate deliverable, not a precondition for selecting C.
+- [x] Phase 6 plan backlog receives an explicit E2EE evaluation task → tracked via Phase 5 → Phase 6 contract row in plan (line 54).
+
+**Seed closures:**
+- `atlasdraw-4f26` (HELD: Maintainer decision on E-01) → `outcome:success` 2026-05-11.
+- `atlasdraw-fef0` (HELD: E-02 gate) → closed in tandem; see E-02 decision block.
+
+---
+
 ## E-02 — Phase 7 Snapshot/Diff Dependency on E-01 Resolution
 
 **Date escalated:** 2026-05-03  
@@ -105,6 +132,16 @@ This is not a blocker if E-01 resolves as Option A or Option C (server-trusted r
 **Tasks 9 and 10 may proceed assuming Option A/C until E-01 is formally closed.** If E-01 resolves as Option B, re-open this gate before Task 10 execution.
 
 *This escalation is informational until E-01 is closed.*
+
+---
+
+### Decision (2026-05-11) — RESOLVED
+
+**E-01 closed as Option C (server-trusted relay, plaintext Y.Doc).** Phase 7 Tasks 9 (SnapshotStore) and 10 (DiffEngine) proceed under the plaintext-Y.Doc assumption — no `decryptSnapshot` step required, no key-management scope to define. Gate closed.
+
+**Re-open trigger:** if Phase 6 evaluates Option B and selects it, this gate re-opens before Phase 7 Task 10 implementation and `DiffEngine` contracts must add a decryption step.
+
+**Seed closure:** `atlasdraw-fef0` (HELD: E-02 gate) → `outcome:success` 2026-05-11.
 
 ---
 
