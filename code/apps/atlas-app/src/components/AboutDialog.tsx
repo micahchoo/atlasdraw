@@ -153,7 +153,15 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
         >
           <strong style={{ fontSize: "0.8125rem" }}>Telemetry policy</strong>
           <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8125rem" }}>
-            No analytics. No call-home. No required API keys.
+            No analytics. No call-home. No required API keys.{" "}
+            <a
+              href="https://github.com/atlasdraw/atlasdraw/blob/main/docs/architecture/adr/0006-telemetry.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#1971c2" }}
+            >
+              ADR-0006
+            </a>
           </p>
         </section>
 
