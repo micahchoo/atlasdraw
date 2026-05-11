@@ -40,8 +40,11 @@ async function main(): Promise<void> {
     logger.info("Sentry initialized");
   }
 
+  // Fastify v5: pass a pre-built pino instance via loggerInstance, not
+  // logger. The `logger` key only accepts boolean | pino-options-object
+  // and rejects an instantiated logger with FST_ERR_LOG_INVALID_LOGGER_CONFIG.
   const app = Fastify({
-    logger,
+    loggerInstance: logger,
     bodyLimit: 50 * 1024 * 1024, // 50 MiB
   });
 
