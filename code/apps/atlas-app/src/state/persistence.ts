@@ -432,6 +432,7 @@ export function startAutoSave(
   getDoc: () => AtlasdrawDocument,
   intervalMs = 5000,
   maxFlushMs = 30000,
+  onSaved?: () => void,
 ): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -450,12 +451,18 @@ export function startAutoSave(
   const flush = (): void => {
     clearTimers();
     const snapshot = getDoc();
-    // Fire-and-forget: the store's internal write chain serializes writes,
-    // so an in-flight save before the next flush still completes in order.
-    void store.save(snapshot).catch((err) => {
-      // eslint-disable-next-line no-console
-      console.error("[persistence] auto-save failed", err);
-    });
+    // The store's internal write chain serializes writes, so an in-flight
+    // save before the next flush still completes in order. We DO await the
+    // promise here (via .then) so the onSaved callback fires only after the
+    // IDB write commits — otherwise the "unsaved" indicator would clear
+    // before durability, which is dishonest.
+    void store
+      .save(snapshot)
+      .then(() => onSaved?.())
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[persistence] auto-save failed", err);
+      });
   };
 
   const unsubscribe = store.onDirty(() => {

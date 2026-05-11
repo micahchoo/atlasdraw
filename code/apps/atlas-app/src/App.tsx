@@ -1,9 +1,11 @@
 import { MapEditor } from "./components/MapEditor";
 
-// San Francisco default viewport
+// India default viewport — matches both the maintainer's interest area and
+// the world-low-zoom.pmtiles archive (zoom 0-6 global coverage). Per-user
+// override belongs in a user-settings store (deferred to Phase 5+).
 const INITIAL_VIEW = {
-  center: [-122.4194, 37.7749] as [number, number],
-  zoom: 12,
+  center: [78.5, 22] as [number, number],
+  zoom: 4,
 };
 
 export function App() {

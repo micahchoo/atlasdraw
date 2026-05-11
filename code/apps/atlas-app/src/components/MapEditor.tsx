@@ -508,8 +508,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       usePersistenceStore.setState({ isDirty: true });
     });
 
-    const dispose = startAutoSave(store, () =>
-      selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
+    const dispose = startAutoSave(
+      store,
+      () => selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
+      undefined,
+      undefined,
+      () => usePersistenceStore.getState().clearDirty(),
     );
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 
