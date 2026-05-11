@@ -4,10 +4,13 @@
 // adapter is picked from STORAGE_MODE env at startup; both implement the
 // StorageClient contract from ./types so routes are adapter-agnostic.
 
+import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
 import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
+import { logger } from "./logger";
+import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
 
@@ -16,8 +19,29 @@ export * from "./config";
 
 async function main(): Promise<void> {
   const config = loadConfig();
+
+  // T18: opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009.
+  // beforeSend scrubs Authorization headers and request IPs — operators who
+  // wire this DSN should still document the data flow in their privacy notice.
+  if (config.SENTRY_DSN) {
+    Sentry.init({
+      dsn: config.SENTRY_DSN,
+      beforeSend(event) {
+        if (event.request?.headers) {
+          delete event.request.headers["authorization"];
+          delete event.request.headers["Authorization"];
+        }
+        if (event.user?.ip_address) {
+          delete event.user.ip_address;
+        }
+        return event;
+      },
+    });
+    logger.info("Sentry initialized");
+  }
+
   const app = Fastify({
-    logger: true,
+    logger,
     bodyLimit: 50 * 1024 * 1024, // 50 MiB
   });
 
@@ -37,6 +61,7 @@ async function main(): Promise<void> {
           blobSecretKey: config.BLOB_SECRET_KEY,
         });
 
+  registerHealthRoute(app, config.STORAGE_MODE);
   registerMapRoutes(app, client);
   registerShareRoutes(app, client, config.PUBLIC_URL);
 

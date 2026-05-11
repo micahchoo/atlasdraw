@@ -15,6 +15,13 @@ const BaseSchema = z.object({
   // on the same origin as atlas-app). Operators override in compose env
   // for absolute URLs (e.g. `https://atlas.example.com`).
   PUBLIC_URL: z.string().default(""),
+  // T18: structured-log level for pino. Standard pino levels apply
+  // ("fatal","error","warn","info","debug","trace","silent").
+  LOG_LEVEL: z.string().default("info"),
+  // T18: optional Sentry DSN. When unset, Sentry init is a no-op — the
+  // server runs identically without any third-party data egress. Hosted
+  // operators opt in by setting this env (see ADR-0009).
+  SENTRY_DSN: z.string().optional(),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({
