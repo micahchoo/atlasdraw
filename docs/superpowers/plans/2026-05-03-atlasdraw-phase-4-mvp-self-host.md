@@ -316,6 +316,58 @@ docs/
 
 ### Task 2: Storage Config & `StorageMode` Detection [Wave 0] — Startup Discriminator
 
+> **Scrub note (2026-05-10, scope expansion):** This task as written covers
+> only the **backend** `apps/storage/src/config.ts`. The casual-vs-power tier
+> split (static GH Pages build for casual users + docker-compose self-host
+> for power users) requires a separate **frontend** deployment-mode
+> discriminator in `atlas-app` that the current plan does not specify.
+>
+> **Decision (2026-05-10):** `atlas-app` gets its own `AppConfig` keyed on
+> `VITE_BUILD_TARGET` ∈ { `'pages'` | `'local-only'` | `'hosted'` }. Selected
+> at build time and tree-shaken so the `pages` bundle ships none of the
+> power-tier code paths.
+>
+> - `pages` — static deploy (GitHub Pages). localStorage-only persistence.
+>   No `StorageClient` import, no share UI, no auth UI. AboutDialog renders
+>   a "Demo edition — get sharing & collab via self-host at <link>" badge.
+> - `local-only` — same surface as `pages` but without the demo badging
+>   (for dev runs and personal single-user self-host without docker).
+> - `hosted` — full client. Runtime-detects backend via `/config.json` at
+>   startup, includes share UI (T4 client), realtime client (Phase 5), etc.
+>
+> **What changes in this plan:**
+> - T1's `StorageMode` union is unchanged — that governs the backend only
+>   (`postgres-minio` | `sqlite-fs`); irrelevant when frontend is in `pages`
+>   mode because no backend exists.
+> - T2 (this task) stays scoped to `apps/storage` as written.
+> - **New T2b (Wave 0):** create `code/apps/atlas-app/src/config/app-config.ts`
+>   with the `VITE_BUILD_TARGET` Zod schema, `loadAppConfig()` (defaults to
+>   `'pages'` if unset), and feature-flag exports (`ENABLE_SHARE_UI`,
+>   `ENABLE_REALTIME`, `ENABLE_BACKEND_PERSISTENCE`). Tree-shake-friendly:
+>   imports gated on `if (import.meta.env.VITE_BUILD_TARGET === 'hosted')`
+>   patterns so Vite rollup can drop dead branches per build.
+> - **T4 (share endpoint)** + **T8/T9 (share-link client)** become no-ops
+>   in `pages` build; their imports stay behind the `ENABLE_SHARE_UI` flag.
+> - **T14 (AboutDialog)** must render the active `VITE_BUILD_TARGET` and
+>   the demo-edition badge when in `pages` mode.
+> - **Resolver default `pmtilesPath`** can be a build-time constant in the
+>   `pages` build (the bundled 43 MB `world-low-zoom.pmtiles` is the only
+>   option); the `hosted` build keeps reading `VITE_PMTILES_PATH` at build.
+> - **Vite `base` setting** must be set to the GH Pages repo slug (e.g.
+>   `base: "/atlasdraw/"`) when `VITE_BUILD_TARGET === 'pages'`; default `/`
+>   otherwise. Without this, GH Pages project sites 404 every asset.
+>
+> **Why up front, not retrofit:** if the casual tier lands after T1/T2/T3/T4
+> ship, every share-related task has to be re-edited to add a guard. Cheaper
+> to bake the discriminator into Wave 0 — same week as T1/T2 — so all
+> downstream tasks code against a known build-target axis.
+>
+> Originating decision: 2026-05-10 user request to ship GH Pages for casual
+> users while keeping `docker-compose.minimal.yml` / `docker-compose.yml` as
+> the power-user deploy. Architecture (config-agnostic resolver, AppConfig
+> pattern) already shaped for this; the amendment is making the build-target
+> split explicit before T1/T2 dispatch so workers don't have to invent it.
+
 **Orient:** The `docker-compose.minimal.yml` (3-svc, per Q10) runs storage in `sqlite-fs` mode; the full stack runs `postgres-minio`. The server must detect mode from env at startup and fail loudly if required env vars are missing.
 **Flow position:** Step 0.5 of 4 in Flow A (parallel to Task 1, feeds Task 3).
 **Upstream contract:** Receives `StorageMode` type from Task 1.

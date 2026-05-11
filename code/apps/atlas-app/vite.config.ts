@@ -36,7 +36,14 @@ const pmtilesNotFoundPlugin = {
   },
 };
 
+// GH Pages project sites serve from `https://<user>.github.io/<repo>/`. When
+// `VITE_BUILD_TARGET=pages`, emit asset URLs under that prefix; otherwise `/`.
+// `process.env` here (Node-side config) — not `import.meta.env` (browser-side).
+const BUILD_TARGET = process.env.VITE_BUILD_TARGET;
+const BASE = BUILD_TARGET === "pages" ? "/atlasdraw/" : "/";
+
 export default defineConfig({
+  base: BASE,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   plugins: [react(), pmtilesNotFoundPlugin] as any,
   server: {

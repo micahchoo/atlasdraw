@@ -1,3 +1,6 @@
-# Local PMTiles archives — too large for git (4-5 GB each).
-# Place archives here for dev; production volume-mounts at /data/*.pmtiles.
-public/data/
+# Local PMTiles archives are too large for git (e.g. india.pmtiles ~4.9 GB).
+# Ignore everything in public/data/ by default; un-ignore the bundled
+# world-low-zoom archive (43 MB) so it ships via Git LFS for the GH Pages
+# build. Production self-host volume-mounts at /data/*.pmtiles independently.
+public/data/*
+!public/data/world-low-zoom.pmtiles
