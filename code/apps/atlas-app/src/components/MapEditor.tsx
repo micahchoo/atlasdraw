@@ -66,6 +66,12 @@ import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { startAutoSave } from "../state/persistence";
 import { hydrate } from "../state/hydrate";
+import { getAppConfig } from "../config/app-config";
+import {
+  createHttpStorageClient,
+  type StorageClient,
+} from "../services/createHttpStorageClient";
+import { openDB } from "idb";
 import styles from "../styles/MapEditor.module.css";
 
 /**
@@ -106,6 +112,74 @@ function geoAnchorToGeometry(anchor: GeoAnchor): Geometry {
     };
   }
   return { type: "LineString", coordinates: anchor.coordinates };
+}
+
+// ---------------------------------------------------------------------------
+// T13 — remoteSave callback factory.
+//
+// Translates a `(blob: Blob) => Promise<void>` into HTTP calls against the
+// storage server. Holds an in-memory `mapId` ref (lazy-minted by the first
+// save) and persists it to the same IndexedDB the PersistenceStore uses
+// (db `atlasdraw-autosave`, store `state`, key `remoteMapId`) so reloads
+// target the same map.
+// ---------------------------------------------------------------------------
+
+const REMOTE_DB_NAME = "atlasdraw-autosave";
+const REMOTE_DB_VERSION = 1;
+const REMOTE_STORE = "state";
+const KEY_REMOTE_MAP_ID = "remoteMapId";
+
+const remoteIdDbPromise = (): Promise<import("idb").IDBPDatabase> =>
+  openDB(REMOTE_DB_NAME, REMOTE_DB_VERSION, {
+    upgrade(database) {
+      if (!database.objectStoreNames.contains(REMOTE_STORE)) {
+        database.createObjectStore(REMOTE_STORE);
+      }
+    },
+  });
+
+function buildRemoteSaveCallback(
+  client: StorageClient,
+): (blob: Blob) => Promise<void> {
+  // mapId loads asynchronously from IDB on first call; until then we treat
+  // it as "unknown" and wait. The `idLoad` promise resolves exactly once.
+  let mapId: string | null = null;
+  let idLoaded = false;
+  const idLoad: Promise<void> = (async () => {
+    try {
+      const db = await remoteIdDbPromise();
+      const stored = (await db.get(REMOTE_STORE, KEY_REMOTE_MAP_ID)) as
+        | string
+        | undefined;
+      if (stored && /^[A-Za-z0-9_-]{21}$/.test(stored)) {
+        mapId = stored;
+      }
+    } catch (err) {
+      // IDB unavailable (private mode / quota) — we'll mint a fresh id per
+      // session. Observably lossy but never throws.
+      // eslint-disable-next-line no-console
+      console.warn("[atlasdraw] remoteSave id-load failed", err);
+    } finally {
+      idLoaded = true;
+    }
+  })();
+
+  return async (blob: Blob): Promise<void> => {
+    if (!idLoaded) await idLoad;
+    if (mapId === null) {
+      const record = await client.createMap(blob);
+      mapId = record.id;
+      try {
+        const db = await remoteIdDbPromise();
+        await db.put(REMOTE_STORE, mapId, KEY_REMOTE_MAP_ID);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[atlasdraw] remoteSave id-persist failed", err);
+      }
+    } else {
+      await client.updateMap(mapId, blob);
+    }
+  };
 }
 
 function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
@@ -480,8 +554,41 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // IDB doc existed; this closes the round-trip gate.
   useEffect(() => {
     if (!excalidrawAPI) return;
-    const store = createPersistenceStore({});
+
+    // T13 — backend persistence wire-up. Only constructed when the build
+    // target opts in (hosted edition); local-only/pages tiers run the IDB
+    // path unchanged. The factory holds an in-memory `mapId` ref so the
+    // first save mints a new id (POST /maps) and subsequent saves hit
+    // PUT /maps/:id. The id is persisted to localStorage under a known
+    // key so reloads continue updating the same map.
+    const cfg = getAppConfig();
+    const remoteSave = cfg.enableBackendPersistence
+      ? buildRemoteSaveCallback(
+          createHttpStorageClient({ baseUrl: cfg.storageBaseUrl }),
+        )
+      : undefined;
+    const store = createPersistenceStore({ remoteSave });
     usePersistenceStore.getState().setPersistenceStore(store);
+
+    // T13: register an imperative `forceSave` that bypasses the debounce
+    // (option (b) from the T13 brief — hold the store + getDoc pair here,
+    // call store.save(getDoc())). ShareDialog / useShareLink consume this
+    // via useAutosave().forceSave to guarantee a fresh snapshot before
+    // share-link minting.
+    const getDoc = () =>
+      selectDocument(excalidrawAPI, useLayerRegistryStore.getState());
+    usePersistenceStore.getState().setForceSave(async () => {
+      try {
+        await store.save(getDoc());
+        usePersistenceStore.getState().setLastSavedAt(Date.now());
+        usePersistenceStore.getState().setDraining(false);
+      } catch (err) {
+        // Surface the failure but always clear isDraining — leaving it
+        // stuck would silently freeze the Share button forever.
+        usePersistenceStore.getState().setDraining(false);
+        throw err;
+      }
+    });
 
     let cancelled = false;
     void (async () => {
@@ -507,15 +614,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       // The underlying store's onDirty fires on its own markDirty(); mirror
       // into Zustand for the MainMenu indicator. Wrapped in setState rather
       // than markDirty() to avoid re-forwarding back into the store.
-      usePersistenceStore.setState({ isDirty: true });
+      // T13: also flip isDraining so consumers know a save will fire.
+      usePersistenceStore.setState({ isDirty: true, isDraining: true });
     });
 
     const dispose = startAutoSave(
       store,
-      () => selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
+      getDoc,
       undefined,
       undefined,
-      () => usePersistenceStore.getState().clearDirty(),
+      () => {
+        usePersistenceStore.getState().clearDirty();
+        usePersistenceStore.getState().setDraining(false);
+        usePersistenceStore.getState().setLastSavedAt(Date.now());
+      },
     );
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 

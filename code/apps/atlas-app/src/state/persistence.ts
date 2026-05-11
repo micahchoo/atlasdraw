@@ -150,6 +150,17 @@ export interface PersistenceStore {
 export interface CreatePersistenceStoreOptions {
   /** Override the IDB name (tests may pass a per-test name). */
   dbName?: string;
+  /**
+   * T13 (Phase 4): optional best-effort push to the storage HTTP API. Fires
+   * AFTER the IDB write resolves. Failures are logged but do not propagate —
+   * IDB is the local source of truth; the dirty bit clearing logic at the
+   * end of `save()` is bound to the IDB write, not to remoteSave. A failed
+   * remote write therefore looks observably identical to "no remoteSave
+   * configured" from the autosave pump's perspective; the caller is
+   * responsible for surfacing remote-state divergence elsewhere (e.g. a
+   * background reconciliation task or an offline indicator).
+   */
+  remoteSave?: (blob: Blob) => Promise<void>;
 }
 
 /**
@@ -224,6 +235,18 @@ export function createPersistenceStore(
       // Clear dirty only if no `markDirty()` arrived during the write.
       if (dirtySeq === seqAtStart) {
         dirty = false;
+      }
+      // T13: best-effort push to the remote storage API. Sequenced AFTER the
+      // IDB write so the local source of truth lands first; failures are
+      // observable in logs only and do not block the dirty-bit clearing
+      // above. The Blob is the same one we wrote locally — no re-serialize.
+      if (options.remoteSave) {
+        try {
+          await options.remoteSave(blob);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error("[persistence] remoteSave failed (local IDB write succeeded)", err);
+        }
       }
     });
   };

@@ -119,6 +119,68 @@ describe("createPersistenceStore — IDB", () => {
 });
 
 // ---------------------------------------------------------------------------
+// T13 — remoteSave callback option
+// ---------------------------------------------------------------------------
+
+describe("createPersistenceStore — remoteSave callback (T13)", () => {
+  it("fires remoteSave after the IDB write resolves", async () => {
+    const calls: string[] = [];
+    const remoteSave: (blob: Blob) => Promise<void> = vi.fn(
+      async (_blob: Blob) => {
+        calls.push("remote");
+      },
+    );
+    const store = createPersistenceStore({
+      dbName: freshDb(),
+      remoteSave,
+    });
+    // Hook into the IDB write by reloading immediately — the load() succeeds
+    // only after the put() resolves, so its position in the call log tells
+    // us the IDB write happened before remoteSave.
+    const doc = makeDoc();
+    await store.save(doc);
+    calls.push("post-save");
+
+    expect(remoteSave).toHaveBeenCalledTimes(1);
+    // First argument is a Blob.
+    const mockedRemote = remoteSave as unknown as ReturnType<typeof vi.fn>;
+    const arg = mockedRemote.mock.calls[0]?.[0];
+    expect(arg).toBeInstanceOf(Blob);
+    // remoteSave must have been awaited before save() resolved.
+    expect(calls).toEqual(["remote", "post-save"]);
+    // And the local round-trip still works.
+    const loaded = await store.load();
+    expect(loaded?.manifest.id).toBe(ULID);
+
+    await store.close();
+  });
+
+  it("swallows remoteSave failures — save() resolves and dirty clears", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const remoteSave = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const store = createPersistenceStore({
+      dbName: freshDb(),
+      remoteSave,
+    });
+    const doc = makeDoc();
+    store.markDirty();
+    // The promise must NOT reject.
+    await expect(store.save(doc)).resolves.toBeUndefined();
+    expect(store.isDirty()).toBe(false);
+    expect(remoteSave).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("remoteSave failed"),
+      expect.any(Error),
+    );
+
+    errSpy.mockRestore();
+    await store.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // startAutoSave — debounce + ceiling
 // ---------------------------------------------------------------------------
 

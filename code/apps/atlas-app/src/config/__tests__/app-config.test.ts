@@ -39,4 +39,21 @@ describe("loadAppConfig", () => {
     expect(() => loadAppConfig("staging")).toThrow(/VITE_BUILD_TARGET/);
     expect(() => loadAppConfig("staging")).toThrow(/"staging"/);
   });
+
+  // T13 — VITE_STORAGE_BASE_URL.
+  it("defaults storageBaseUrl to empty string (same-origin) when env is unset", () => {
+    const cfg = loadAppConfig("hosted", undefined);
+    expect(cfg.storageBaseUrl).toBe("");
+  });
+
+  it("propagates VITE_STORAGE_BASE_URL when provided", () => {
+    const cfg = loadAppConfig("hosted", "http://localhost:4000");
+    expect(cfg.storageBaseUrl).toBe("http://localhost:4000");
+  });
+
+  it("storageBaseUrl is set even on non-hosted targets (consumer gates on enableBackendPersistence)", () => {
+    const cfg = loadAppConfig("local-only", "http://localhost:4000");
+    expect(cfg.storageBaseUrl).toBe("http://localhost:4000");
+    expect(cfg.enableBackendPersistence).toBe(false);
+  });
 });

@@ -31,7 +31,10 @@ describe("usePersistenceStore", () => {
     usePersistenceStore.setState({
       persistenceStore: null,
       isDirty: false,
+      isDraining: false,
+      lastSavedAt: null,
       autosaveDispose: null,
+      forceSave: () => Promise.resolve(),
     });
   });
 
