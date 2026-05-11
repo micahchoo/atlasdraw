@@ -1,168 +1,137 @@
-# Handoff
+# Handoff — 2026-05-10 (Phase 4 Wave 1 basemap stack ↔ working end-to-end)
 
 ## Goal
 
-> "/check-handoff then do a scrub for phase 3" → "do all 4" → "scrub the plans for phase 4" → "look at older phase plans and see what was not implemented in time for phase 4" → "do as you recommend" → "start the prereqs" → "9078: unify export menu via Excalidraw's existing place; e9db: A composite-tsconfig" → "what is the current visual smoke test of the demo expected" → "start testing with the playwright-cli" → "fix these"
+The user's words at session start: *"the last phase was a botched job, check its work, the phase with pmtiles integration"*. After the audit confirmed Phase 4 Wave 0 was botched and partially mislabeled-complete, the user directed:
+1. revert the uncommitted churn and reopen the seeds
+2. file new seeds for all and reiterate where we are in the phased plan
+3. commit this and dispatch wave 1 with T5+T7 first
+4. continue as recommended (smoke-test → T3/T4 storage)
 
-Land Phase 4 Wave 0 prereqs to unblock the Phase 4 epic (`atlasdraw-4579`), expose the 1585 latent tsc errors via composite-project tsconfig refactor, then run a real-browser smoke test and fix what breaks.
+Net effect: get Phase 4 Wave 1 basemap stack (T5/T6/T7) actually working end-to-end, with honest seeds capturing what was botched and what's still pending.
 
 ## Progress
 
-**This session — 16 commits.** All 6 Wave 0 prereqs closed; smoke-test surfaced 4 bugs and fixed 3 (last is open-debt).
+### Completed this session — committed
 
-- ✅ `05fdea0` — fix(tsconfig): `ignoreDeprecations 6.0 → 5.0` + Phase 3 closure scrub (filed atlasdraw-ad27/3601/9078/0403, closed 25a5)
-- ✅ `7270c2a` — docs(phase-4): wave0 pre-dispatch scrub + plan amendments + seed DAG wiring (filed e9db; blocked 4579 by 6 prereqs)
-- ✅ `d038fe2` — feat(excalidraw): T-50c0 barrel-export Dialog + DialogProps + DialogSize
-- ✅ `d06ce90` — feat(basemap): T-2428 scaffold BasemapRegistry + pmtiles-protocol + style-builder (+12 tests)
-- ✅ `9b734e0` — docs(spec): T-5cba update §4.2 + §10 to reflect hybrid-default basemap (Q3)
-- ✅ `73642c2` — feat(state): T-ad27 data-layer FC registry — useDataLayerFCStore (+14 tests)
-- ✅ `2f2d496` — feat(state): T-3601 hydrate scene + layers + FCs from persistence load() (+8 tests)
-- ✅ `e2e99e8` — feat(state): T-9078 unify atlasdraw export menu via renderCustomUI (+4 tests)
-- ✅ `daa59db` — chore(handoff): mid-session handoff at 82% context (e9db worker still running)
-- ✅ `e69c91b` — chore(handoff): mulch sidecar + 4 session conventions captured
-- ✅ `f0df8af` — refactor(tsconfig): T-e9db composite-project references — replace atlas-app paths:{} clobber (worker output salvaged from working tree after watchdog timeout; 539 latent tsc errors now visible vs hidden)
-- ✅ `87735b7` — chore(seeds): unblock atlasdraw-4579 — all 6 Phase 4 Wave 0 prereqs closed
-- ✅ `7624a9b` — chore(seeds): file 4 issues from playwright smoke test of HEAD (27d8/12f0/8ae2/320b)
-- ✅ `ae1a15c` — fix(atlas-app): smoke-test bugs — Pin tool (P0), dirty-on-init, stale title
+- ✅ **Audit of Phase 4 Wave 0 botched dispatch** — code-reviewer agent produced punch list; reverted 4 unstaged files (style-builder.ts churn, hardcoded /data/india.pmtiles in MapEditor.tsx, chmod +x on cli/atlasdraw.ts, toy-stub styles in basemap/src/styles/); reopened `atlasdraw-3601` (`+test-debt`) — original close was premature, `addFiles` later landed in e33c257 without test coverage. Commit `3be3d90`.
+- ✅ **Plan amendments (pre-dispatch scrub) for T5 + T7** — caught two plan-literal-drift cases before dispatching. T5 Step 1+2 named the wrong source for Protomaps styles (releases don't ship JSON; use `protomaps-themes-base@^4.5.0` npm package). T7 Step 1 wrongly said add a base-path arg to `pmtiles-protocol.ts` (would conflate protocol registration with substitution). Both have dated 2026-05-10 scrub notes at the section header. Commit `213a1a5`.
+- ✅ **T5 dispatched in worktree** — real Protomaps light/dark (68 layers each) via `protomaps-themes-base@^4.5.0` devDep + `code/packages/basemap/scripts/build-styles.mjs` generator. OpenFreeMap bright fetched verbatim from `tiles.openfreemap.org/styles/bright`. Three style JSONs committed (242KB / 242KB / 120KB). Commit `e35fa53`. Seed closed: `atlasdraw-bdf9`.
+- ✅ **T7 dispatched in worktree** — `code/packages/basemap/src/resolver.ts` with `resolveStyle(id, {allowRemote, pmtilesPath})` + `BasemapRemoteGatedError`. MapEditor.tsx now calls resolveStyle. 6 new tests. Commit `ac7f256`. Seed closed: `atlasdraw-e088`.
+- ✅ **Wave-misorder cleanup** — T6 BasemapPicker (commit 9cb691e from prior session) shipped during Wave 0 ahead of T5/T7. With T5 + T7 now landed, option (a) "keep T6 as is" applies. Seed closed: `atlasdraw-ea96`.
+- ✅ **`.env.example`** documenting `VITE_PMTILES_PATH` for new contributors. Commit `a4cc35d`.
+- ✅ **Smoke-test discovered 3 real seam bugs** (unit tests were green; runtime broken):
+   - `atlasdraw-bff1` — VITE_PMTILES_PATH wasn't picked up; Vite's textual `import.meta.env.X` replacement only fires on the literal pattern, and the resolver had aliased it through a local var. Refactored resolver to be config-agnostic: `pmtilesPath` is required in `ResolveStyleOptions`; caller (MapEditor.tsx) reads env directly.
+   - `atlasdraw-4607` — Vite SPA fallback returned 200/HTML for missing `/data/*.pmtiles`, causing MapLibre "Wrong magic number". Added `pmtilesNotFoundPlugin` (configureServer middleware) that returns true 404 + helpful message.
+   - `atlasdraw-7899` — MapCanvas hardcoded `openfreemap liberty` as default styleUrl; replaced with inline empty MapLibre style (no network fetch).
+   All three commits: `cfb951e`, closures `6d38f9b`.
+- ✅ **Post-smoke followups** — BasemapPickerDialog moved out of `<MainMenu>` (auto-close was unmounting it). `transparentAppliedRef` gate prevents Excalidraw's mount-time default-vbg (#ffffff or #121212) from leaking into `mapBg`. `MapCanvas` now uses `requestAnimationFrame(map.resize)` + `ResizeObserver`. MapCanvas placeholder bg → `rgba(0,0,0,0)`. Commit `21fa034`.
+- ✅ **World-low-zoom pmtiles archive** — Extracted zoom 0-6 from build `20260510.pmtiles` via `pmtiles extract` (CLI v1.30.2) using HTTP range requests. 2.17 seconds, 42.5 MB output at `code/apps/atlas-app/public/data/world-low-zoom.pmtiles` (gitignored). Resolver default already targets this path. Seed closed: `atlasdraw-1a95`. Commit `b4c5e01`.
+- ✅ **INITIAL_VIEW → India** (78.5°E, 22°N @ z=4) instead of San Francisco @ z=12 (zoom 12 outside world-low-zoom's max-zoom range). Commit `3fe1c26`.
+- ✅ **Autosave now clears `● Unsaved` indicator** — Added optional `onSaved` callback to `startAutoSave` (5th param, trailing optional). MapEditor passes `usePersistenceStore.clearDirty`. The previous behavior left isDirty stuck `true` forever after first mutation. Commit `3fe1c26`.
 
-**Wave 0 status (6 prereqs):** ALL CLOSED.
+### Open after this session
 
-| Seed | Status | Commit |
-|---|---|---|
-| `atlasdraw-50c0` Dialog barrel | ✅ closed | `d038fe2` |
-| `atlasdraw-2428` BasemapRegistry | ✅ closed | `d06ce90` (+12 tests) |
-| `atlasdraw-5cba` tech-spec doc-debt | ✅ closed | `9b734e0` |
-| `atlasdraw-ad27` FC registry | ✅ closed | `73642c2` (+14 tests) |
-| `atlasdraw-3601` scene hydration | ✅ closed | `2f2d496` (+8 tests) |
-| `atlasdraw-9078` MainMenu unification | ✅ closed | `e2e99e8` (+4 tests) |
-| `atlasdraw-e9db` composite-tsconfig | ✅ closed | `f0df8af` (worker salvage; 539 latent errors visible) |
+- ⬚ `atlasdraw-3601` (P1, `+test-debt`) — Excalidraw `addFiles()` round-trip test for image hydration.
+- ⬚ `atlasdraw-320b` (P3) — 3× MapLibre "Expected value to be of type number, but found null" warnings from blob-URL worker context. Smoke-test residue.
+- ⬚ `atlasdraw-087c` (P3) — `hydrate.ts` data-layer `visible:true` TODO comment in production path.
+- ⬚ `atlasdraw-b9d2` / `atlasdraw-d1a1` / `atlasdraw-95de` (P3, duplicates across instances) — Space+drag pan doesn't reach the map. Hand-tool button workaround. Diagnosis + fix sketch in seed body.
+- ⬚ `atlasdraw-e6f7` / `atlasdraw-189c` (P2, duplicates) — Plan §5 T12 Makefile basemap-world recipe (archive landed in `b4c5e01`, but Makefile target itself was never written).
+- ⬚ **T1 + T2 storage scaffold** — Plan calls these Wave 0 tasks but they were never executed. No `code/apps/storage/` dir exists. Blocks T3/T4 dispatch. No seed filed yet for these.
 
-**Smoke-test follow-up (4 seeds filed in `7624a9b`, 3 closed in `ae1a15c`):**
+### Wave 1 task scoreboard
 
-| Seed | Status | Resolution |
-|---|---|---|
-| `atlasdraw-27d8` (P0) Pin tool `InvalidFractionalIndexError` | ✅ closed | `syncInvalidIndices` wrap in `addElement` + `applyElementPatch` + `hydrate.ts` step 3 |
-| `atlasdraw-12f0` (P2) `● Unsaved` indicator on first load | ✅ closed | `prevElementsRef` gates `markDirty` so initial mount doesn't trip dirty |
-| `atlasdraw-8ae2` (P3) stale "Phase 1 Demo" title + overlay | ✅ closed | title now "Atlasdraw"; demo overlay deleted from `App.tsx` |
-| `atlasdraw-320b` (P3) blob-URL number-null warnings | ⏳ open | Needs source-map sleuthing on `blob:http://...` URL — deferred |
-
-**Test counts at handoff:**
-- `@atlasdraw/data`: 83 (unchanged contract; SceneElement structural alias added).
-- `@atlasdraw/cli`: 11.
-- `@atlasdraw/basemap`: 0 → **12** (BasemapRegistry + pmtiles-protocol + style-builder).
-- `@atlasdraw/atlas-app`: 113 → **139** (+26 from ad27 + 3601 + 9078; smoke-test fixes preserved baseline).
-- atlas-app `yarn build`: green (11.90s).
-- `tsc -b` from `code/`: 0 errors in atlas-owned graph; 539 latent atlas-app errors now visible (Phase 4+ task).
-
-**Smoke-test verification (real browser via playwright-cli):**
-- Page loads, title "Atlasdraw" ✓
-- MainMenu opens with full item list (Open, Save to..., Export composite PNG, Pin to map, Layers panel, Find on canvas, Help, Reset, Canvas BG, Dark mode) — no stale Unsaved item ✓
-- Save-to-... dialog shows 4 cards: Save to disk → Save .atlasdraw → Open .atlasdraw → GeoJSON (smartly disabled with "No geo-anchored annotations in scene" helper text) ✓
-- Pin tool placement no longer throws `InvalidFractionalIndexError` ✓
-- Console: only 1 favicon 404 (cosmetic) + the open `atlasdraw-320b` blob-URL number-null warnings.
-
-**Known broken / incomplete (post-smoke-test reality check):**
-
-| Issue | Symptom | Tracker |
-|---|---|---|
-| No basemap picker | Can't switch styles in UI yet (registry exists but no `BasemapPicker` component) | Phase 4 T6 |
-| Mixed-geometry GeoJSON | A FeatureCollection with both points AND lines renders only the FIRST feature's geometry style | `atlasdraw-4142` (HIGH severity, demo-blocking) |
-| Binary scene assets | Paste an image into the canvas → save → refresh → image is GONE. `addFiles()` was deferred from 3601 | tracked in 3601 closure note |
-| IDB stderr noise | Component tests log `indexedDB is not defined` but pass | `atlasdraw-0403` (low; non-functional) |
-| No share-link, no storage server, no docker | Phase 4 T1+ work; not yet implemented | Phase 4 epic `atlasdraw-4579` |
-| `atlasdraw-320b` blob-URL warnings | 3× console "Expected value to be of type number, but found null instead" from `blob:http://...` URL — needs source-map sleuthing | `atlasdraw-320b` (P3) |
-| `cli/src/atlasdraw.ts` chmod drift | Mode-only 644→755 in working tree across all sessions; correct mode for shebang CLI but `git status` keeps showing it. Cannot `git checkout --` without explicit auth | benign cosmetic |
-
-**Branch:** main, **36 ahead** of origin/main. Working tree dirty: `code/packages/cli/src/atlasdraw.ts` (chmod 644→755 mode-only — benign, CLI bin file with shebang). Untracked: `.claude/scheduled_tasks.lock` (runtime).
+| Task | Status |
+|---|---|
+| T3 storage HTTP + adapters | NOT STARTED (blocked on T1+T2) |
+| T4 share endpoint          | NOT STARTED (blocked on T3) |
+| T5 real basemap styles     | ✅ landed (e35fa53) |
+| T6 BasemapPicker UI        | ✅ landed (9cb691e + 21fa034 fixed positioning bug) |
+| T7 pmtiles resolver        | ✅ landed (ac7f256 + cfb951e refactored for Vite env transform) |
+| T13 useAutosave hook       | partially landed — autosave wired in `3fe1c26` |
+| T14 AboutDialog            | NOT STARTED |
+| T17 ADRs                   | NOT STARTED |
+| T18 observability baseline | NOT STARTED |
 
 ## What Worked
 
-- **Pre-dispatch scrub before Wave 0.** `wave0-pre-dispatch-scrub-2026-05-06.md` consolidated 12 plan-literal drifts + 5 missing prereq gates BEFORE any worker dispatch. Workers consumed verified literals from the scrub doc, not the raw plan; zero plan-literal drift in 4 worker outputs.
-- **Seed DAG via `sd block`.** Wired `atlasdraw-4579` (Phase 4 epic) blocked by all 6 prereqs. `sd ready` immediately surfaced the right next-up issues without needing prose interpretation. Survives handoff loss.
-- **Parallel worker dispatch with explicit non-overlap matrix.** Wave A: 2428 (basemap) + ad27 (atlas-app state) ran concurrent, zero file overlap, both green on first return. Wave B: 9078 + e9db ran concurrent (different surfaces — atlas-app components vs tsconfig). 4 workers total, 4 commits.
-- **Worker pivots when given context.** 9078 worker discovered `UIOptions.canvasActions.export.renderCustomUI` (Excalidraw's official extension point) AFTER seeing the brief's "build a parallel dialog" suggestion — pivoted to extending the existing dialog. Strictly better outcome. 3601 worker chose structural `SceneElement` alias instead of importing `OrderedExcalidrawElement` to avoid polluting CLI deps.
-- **Closure-loop discipline.** Each closed seed has a per-commit `outcome:success` rationale recorded; HANDOFF prose isn't load-bearing.
+- **Pre-dispatch scrub before worker dispatch.** Caught two plan-literal-drift bugs (Protomaps source URL, pmtiles-protocol arg shape) before workers could ship the wrong thing. Lesson reinforced from `mx-d4f376` / `mx-cb3eb8`.
+- **Worktree isolation for parallel workers.** Dispatched T5 + T7 in `isolation: "worktree"` subagents simultaneously; both rebased onto main, returned commits, cherry-picked into main cleanly (no merge conflicts because file ownership was clean).
+- **Read PMTiles header before further code iteration.** The 1-hour "dark rectangle" rabbit hole ended the moment I read 127 bytes of the india.pmtiles header. Diagnosis: bbox restricted to South Asia.
+- **pmtiles CLI HTTP range-request extract.** 135 GB world archive → 42.5 MB zoom 0-6 extract in 2.17 seconds, no full download. Recipe: `pmtiles extract https://build.protomaps.com/<key>.pmtiles --maxzoom=6 OUTPUT`.
 
 ## What Didn't Work
 
-- **`code/packages/cli/src/atlasdraw.ts` chmod drift** appears in `git status` after every worker that touches the workspace. Mode-only 644→755 (correct for shebang CLI entry). Tried `git checkout --` to discard; auth denial blocked it. Left dirty across all 5 commits — harmless but ugly.
-- **`paths:{}` clobber root-cause TBD.** e9db worker's first task is to investigate `dd418c2`'s "intentional" annotation. If the intent invalidates composite-project, the worker will surface back rather than force.
-- **Phase 4 plan path drift NOT bulk-fixed.** All `apps/…` references in the plan still miss `code/` prefix; atlas-app paths still miss `src/`. Workers consult the scrub doc instead. A future bulk sed-replace is low-leverage (banner caught everything that needed catching this session) but should happen before any non-AI human reads the plan.
+- **Three speculative diagnoses for the "dark rectangle" symptom** before reading the pmtiles header: (a) MapCanvas placeholder #f0f0f0 bleed, (b) Excalidraw default `viewBackgroundColor` leak into `mapBg`, (c) MapLibre canvas resize lag. The vbg-leak and resize fixes WERE real bugs (kept), but they didn't fix the symptom because the symptom was about pmtiles bbox. Lesson: **inspect data shape before iterating on code**.
+- **Playwright daemon kept crashing on `playwright-cli open`.** Lightpanda doesn't run React fully. Live DOM inspection from this session was effectively impossible — relied on the user to share screenshots + console logs.
+- **First commit attempt swept the 4.9 GB `india.pmtiles` binary into staged tree.** Caught immediately, reset, added `code/apps/atlas-app/.gitignore` rule for `public/data/`. **Don't `git add <directory>` when the directory could contain large binaries.**
 
 ## Key Decisions
 
-- **`SceneElement` structural alias** (3601) — `{ id, type, version, [key:string]: unknown }`. Excalidraw's `OrderedExcalidrawElement` is structurally assignable to it. Avoids circular dep between `@atlasdraw/data` (currently excalidraw-free) and the vendored Excalidraw.
-- **FC store wiring via LayerRegistry actions, not `useLayerRegistrySync`** (ad27) — the hook never sees FC payloads (MapEditor.tsx does, but brief forbade touching it). Registry actions already receive FC as a parameter. Cleanest seam.
-- **`hydrate.ts` factored as pure function** (3601, advisor recommendation) — `hydrate(loaded, excalidrawAPI)` callable from both load-on-mount and MainMenu Open. Tests use it directly without React mount.
-- **`queueMicrotask` for `isDirty=false` after hydration** (3601) — handles the autosave race where `markDirty` could fire mid-hydration. Tested explicitly.
-- **`renderCustomUI` extension point** (9078) — Excalidraw's `UIOptions.canvasActions.export.renderCustomUI` injects React into JSONExportDialog Card grid. atlas-app already wired it for GeoJSON. Extended with 2 cards for `.atlasdraw` save/open. Zero vendored-fork changes needed.
-- **Composite-project for ALL packages including vendored** (e9db brief) — partial composite is messier than full composite. Vendored Excalidraw packages get `composite: true` even though they don't publish d.ts independently.
+- **Resolver is config-agnostic.** `@atlasdraw/basemap` does not read env vars. Atlas-app reads `import.meta.env.VITE_PMTILES_PATH` and passes the resolved path into `resolveStyle()`. Rationale: Vite's textual env replacement only fires on the literal `import.meta.env.X` pattern; cross-package source files where the access is aliased through a local var get missed. The package boundary stays clean and the env semantics stay where Vite can see them.
+- **Vite middleware for `/data/*.pmtiles` returns true 404, not SPA HTML fallback.** Anything else would hide config errors behind cryptic MapLibre `Wrong magic number` errors.
+- **MapCanvas default style is now inline empty MapLibre style (`name: "atlasdraw-empty"`), with `rgba(0,0,0,0)` background.** No network fetch; works offline; nothing visible until the real basemap style is applied.
+- **BasemapPickerDialog renders at the root level, not inside `<MainMenu>`.** State stays on MapEditor; MainMenu auto-close on item click doesn't unmount the dialog.
+- **`transparentAppliedRef` gate.** Excalidraw v0.18 emits an `onChange` with its default `viewBackgroundColor` ("#ffffff" or "#121212") on mount before `initialData` applies. The watchdog now only captures user color picks AFTER seeing `transparent` once — proof the reset has been applied.
+- **INITIAL_VIEW = India, not SF.** Matches the maintainer's interest area AND the world-low-zoom archive (zoom 0-6 only; SF at zoom 12 would have no tile data).
+- **`startAutoSave` takes optional `onSaved` callback (5th param).** Threaded `usePersistenceStore.clearDirty` from MapEditor. Awaits `store.save()` before firing the callback — durability-honest.
 
 ## Trajectory
 
-**How we got here.** Session opened on `26cdbc9` (Phase 3 W2+W3 closure handoff). User asked for /check-handoff + Phase 3 scrub. Scrub found tsc broken in data + cli (`tsconfig.base.json:3 "ignoreDeprecations": "6.0"` invalid for TS 5.9.3 — but handoff claimed "tsc clean") + atlasdraw-25a5 still open + 3 Phase 4 prereqs stranded as `[NOTE]` markers in MapEditor.tsx. Fixed all 4 in `05fdea0`. User said "scrub the plans for phase 4" — found 12 drifts; "look at older phase plans" — found 5 inherited prereqs. User said "do as you recommend" → `7270c2a` consolidated everything as durable artifact + plan amendments + seed DAG wiring. User said "start the prereqs" — dispatched workers in waves: Dialog barrel (direct), 2428 + ad27 parallel, 3601 sequential after ad27 closed (consumes FC store), then 9078 + e9db parallel after maintainer decisions. e9db still in flight at handoff write.
+**How we got here.** Session started with the user calling out that the prior Phase 4 phase was a botched job. The code-reviewer audit confirmed Wave 0 was misrepresented as complete (6 prereqs closed; plan actually had 8 tasks; atlasdraw-3601 was prematurely closed with a deferred addFiles gap quietly patched in a later "bug triage" commit). The session then pivoted to repair: revert uncommitted churn, reopen 3601, file 4 follow-up seeds (T5/T7/T6-misorder/hydrate-TODO). Then dispatched T5 + T7 in worktree workers after a pre-dispatch scrub that caught two plan-literal-drift bugs (Protomaps source not GitHub releases JSON; pmtiles-protocol parameterless by design). Cherry-picked both commits clean. Then smoke-tested the running dev server, surfaced 3 new bugs (env-var seam, pmtiles SPA fallback, MapCanvas liberty leak), fixed and shipped them. THEN spent ~hour chasing speculative code diagnoses for a "dark rectangle covers most of viewport" symptom — wrong about MapCanvas placeholder, wrong about Excalidraw vbg leak, wrong about canvas resize. The user finally asked "is this happening because the protomap file is only for india", which was the actual answer (bbox 68°E-97°E, 6°N-37°N). Extracted a 42.5 MB world-low-zoom archive via `pmtiles extract` HTTP range requests, switched INITIAL_VIEW to India, fixed the autosave dirty-flag-stuck bug, and filed seeds for the open issues.
 
-**Hard calls.**
-- **Sequential vs parallel for 3601.** ad27 created the FC store; 3601 hydrates from it. Parallel would have left 3601 worker guessing the API shape. Cost: ~8 minutes serial; benefit: zero rework.
-- **Defer GeoJSON export card to follow-up seed?** Brief allowed deferring if scope ballooned. 9078 worker found the card was already in atlas-app (T15 wired GeoJSON renderCustomUI before this session). Just added 2 more cards next to it. No deferral.
-- **`renderCustomUI` over parallel dialog.** Brief's first option was vendored-fork in-place; second was atlas-app-owned dialog mimicking the visual pattern. Worker found a third (and best) option after orienting. Surface the lesson: brief should mention `renderCustomUI` if it exists; advisor caught it on second look.
+**Hard calls.** Whether to dispatch parallel workers vs serial for T5+T7 — went parallel via worktrees, paid off (no conflict, faster). Whether to amend the plan vs just bake corrections into the worker brief — amended the plan (per publish-or-audit-ready), takes more effort but keeps the durable artifact correct. Whether to silently fold T1+T2 storage scaffold into a T3 dispatch — surfaced to user instead, correctly identified as scope creep that the prior session would have done quietly.
 
-**Shaky ground.**
-- **e9db result unknown at handoff time.** If composite-project surfaces 100+ NEW errors (vs. the existing 1585), the migration broke something subtle. Re-investigate before merging.
-- **`addFiles()` deferred** in 3601 hydration. `loaded.files` is `Map<string,Blob>` but `addFiles` wants `BinaryFileData[]` with `dataURL`. Inverse-of-`dataUrlToBlob` conversion untested. Tracked as known-deferred. First user with binary scene assets (images pasted into the canvas) hits a hydration miss.
-- **Phase 2 `dd418c2` intent.** If `paths:{}` was intentional for a vendored package quirk that composite-project doesn't address, the e9db migration may need a partial revert. Watch the worker's commit body for the intent finding.
+**Shaky ground.** The `transparentAppliedRef` gate fix assumes Excalidraw's mount-time emit is the FIRST emit and that we'll see `vbg === "transparent"` shortly after on the watchdog's reset cycle. If Excalidraw skips the transparent emit (e.g., consecutive non-transparent emits), `transparentAppliedRef` stays false forever and user color-picks won't propagate. Probably works in practice but not formally verified.
 
-**Invisible context.**
-- **`code/apps/realtime/` is a Phase 5 stub** (commit `2026-05-03` per file mtime) with `package.json` declaring `@atlasdraw/realtime` AGPL-3.0. Plan T11 references `docker-compose.realtime.yml` but never acknowledges the prior scaffold. Don't re-scaffold.
-- **Excalidraw `UIOptions.canvasActions.export.renderCustomUI`** is the ONLY extension point that injects into a vendored dialog without a vendored-fork patch. atlas-app's MapEditor.tsx wires it via `buildExportOpts` (added by 9078 worker). Future Phase 4 dialog work should route through this seam, not build parallel dialogs.
-- **`SceneElement` structural alias** in `@atlasdraw/data/manifest-schema.ts` — Excalidraw type changes that break this contract will only surface as `tsc -b` errors AFTER e9db lands composite-project.
-- **Test count baselines after this session:** data 83, cli 11, basemap 12 (NEW), atlas-app 139 (was 113 before session). Phase 4 T1+ baselines off these counts.
+**Invisible context.** The user has `india.pmtiles` (4.9 GB) at `code/apps/atlas-app/public/data/india.pmtiles` — that's their personal test data, gitignored. They have a deep familiarity with the codebase and limited patience for chase-the-rabbit diagnostics; multiple `?` responses signaled to keep updates terse and direct. The user reads the code itself, not summary prose — pointing them to specific commits + file:line is more useful than narrative descriptions. The Excalidraw v0.18 vendored fork is heavily customized; the `.claude/rules/excalidraw-api.md` rule is load-bearing — **grep the vendored source before assuming any API shape**.
 
 ## Active Skills & Routing
 
-- **check-handoff** (this session, opening) — invoked at `/check-handoff` user request.
-- **handoff** (this skill) — invoked proactively at 82% context per CLAUDE.md PROACTIVE rule.
-- **Delegation Protocol (CLAUDE.md)** — drove 4 worker dispatches across 2 parallel waves. Shared prefix discipline: each worker brief opened with `## SHARED_CONTEXT` block of verified literals so workers didn't re-grep.
-- **`docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md`** — durable artifact workers consume INSTEAD of raw plan. Same convention as `wave1/2/3-pre-dispatch-scrub-2026-05-04.md`. Phase 5+ should follow this pattern.
-- **`.claude/rules/excalidraw-api.md`** — fired during 9078 brief drafting, drove the `renderCustomUI` discovery.
-- **`atlasdraw-ui-conventions`** skill — invoked by 9078 worker before adding cards to JSONExportDialog.
+- `playwright-cli` was loaded but its daemon crashed repeatedly on `open`. Avoid for live-DOM inspection in this environment.
+- `handoff` (this skill) at session end.
+- `dispatching-parallel-agents` implicitly used for T5+T7 dual worktree dispatch.
+- Pending routing for next agent:
+  - **`writing-plans`** before any T1/T2 storage scaffold work (multi-file, fresh package layout)
+  - **pre-dispatch scrub** convention (mx-d4f376, mx-cb3eb8, mx-04ac8d) applies to T1/T2 — they're claimed Wave 0 but plan-spec quality is unverified
+  - **`adversarial-api-testing`** for T4 share endpoint per plan §5 Task 4
+  - **`systematic-debugging`** for `atlasdraw-320b` (blob-URL warnings — need sourcemap sleuthing)
 
 ## Infrastructure Delta
 
-- **Plugins/Hooks/Pipelines:** unchanged.
-- **Skills:** unchanged.
-- **Mulch domains:** unchanged this session (no new records). Suggest record-extractor at next pipeline close to capture: `renderCustomUI` extension point (would have saved 9078 worker's pivot time); composite-project topology decision (e9db); SceneElement structural-alias pattern (3601); FC store mirror via registry actions not sync hook (ad27).
-- **Project files (non-`.claude/`):**
-  - NEW: `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md`.
-  - NEW: `code/packages/basemap/src/{BasemapRegistry,pmtiles-protocol,style-builder}.ts` + `src/__tests__/*` + `vitest.config.ts`.
-  - NEW: `code/apps/atlas-app/src/state/{useDataLayerFCStore,hydrate}.ts` + matching `__tests__`/.test files.
-  - NEW: `code/apps/atlas-app/src/components/__tests__/MapEditor.atlasdraw-export.test.tsx` (and `MapEditor.hydration.test.tsx`).
-  - MODIFIED: `code/packages/tsconfig.base.json` (ignoreDeprecations 6.0→5.0); `code/packages/excalidraw/index.tsx` (Dialog barrel); `code/apps/atlas-app/src/components/MapEditor.tsx` (hydration wiring + atlasdraw export cards + removed adjacent MainMenu items); `code/apps/atlas-app/src/state/{layerRegistry,selectDocument}.ts` (FC mirror); `atlasdraw-tech-spec.md` (§4.2 + §10); `code/packages/data/src/manifest-schema.ts` (SceneElement) + dependent test fixtures + barrel re-export.
-  - MODIFIED: `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` (top banner; Pre-Work Checklist rewrite; T5 wording; T13 re-scope).
-  - DIRTY (intentional, do not commit): `code/packages/cli/src/atlasdraw.ts` chmod 644→755.
+No infrastructure changes this session. Skills/hooks/pipelines unchanged. Plugin versions unchanged.
 
 ## Knowledge State
 
-- **Indexed:** no `context add` packages this session.
-- **Productive tiers:** scrub doc + plan + seeds + mulch records (cited inline). `mulch-prime-cache.sh` not run; meta domain stayed warm.
-- **Gaps:** none encountered that needed external indexing.
+- **Indexed**: protomaps-themes-base@4.5.0 (probed via npm install, not via foxhound `context add`); pmtiles header layout (manually decoded in this session — could be a candidate for mulch convention record).
+- **Productive tiers**: default routing sufficient. `ctx_search` after `ctx_batch_execute` was used productively for plan section retrieval. `ml search` was light this session.
+- **Gaps**: No indexed docs for go-pmtiles CLI; recipes had to be discovered by `--help`. Plausible to add via `foxhound context add` if T12 Makefile work continues.
 
 ## Next Steps
 
-1. **Phase 4 T1 dispatch** — Wave 0 complete. T1 (`code/apps/storage/` scaffold + `StorageMode`/`StorageClient` types) is the first dispatch target. Plan §T1 lines 202-236. Verify against `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md` Section A path-mapping table BEFORE briefing the worker.
-2. **Visible-UX bug triage** (`atlasdraw-4142` mixed-geometry GeoJSON, `atlasdraw-76b2` polyline geo-anchor zoom break). Both flagged demo-blocking severity. Decide: fix in P4 or accept as known issues with "Known Limitations" README entry.
-3. **Binary scene asset hydration** — `excalidrawAPI.addFiles(loaded.files)` deferred from `atlasdraw-3601`. Needs blob→BinaryFileData conversion. File a fresh seed and schedule before any image-paste demo path.
-4. **`atlasdraw-320b` blob-URL warnings** — open. Investigate via Chrome DevTools sourcemap on the `blob:http://...:2460` warning. Likely MapLibre style spec fed null for a numeric field; could be from BasemapRegistry style-builder or selectDocument FC reads.
-5. **Push to origin.** Branch is 42 ahead at handoff write. `git push origin main` is the trivial next step.
+1. **Smoke-test verification after restart.** Hard-refresh http://localhost:5174/. Verify: world basemap renders (India centered at z=4), pan works, hand-tool works, "● Unsaved" clears 5-30s after a mutation, basemap picker opens from menu without closing menu.
+
+2. **File T1 + T2 seeds explicitly** (atlasdraw planning). Without these, T3/T4 storage dispatch is blocked. Plan §3 Task 1 (StorageMode + StorageClient + MapRecord + ShareToken types) and Task 2 (Zod schema + AppConfig detection) are both still "Wave 0" in the plan but were never executed.
+
+3. **Pick the next block**:
+   - **T1+T2** to unblock T3+T4 (heaviest remaining; needs pre-dispatch scrub of plan §3 sections)
+   - **atlasdraw-3601** addFiles round-trip test (small bite, finishes Wave 0 audit trail)
+   - **atlasdraw-b9d2** space+drag bridge (P3, hand-tool workaround works; fix sketch in seed)
+   - **T13 useAutosave**, **T14 AboutDialog**, **T17 ADRs**, **T18 observability baseline** (lighter Wave 1 tasks)
+
+4. **Push to origin.** Local main is 62 ahead at handoff write. `git push origin main` is the trivial next step; not done autonomously per house rule.
+
+5. **Consolidate duplicate seeds.** `atlasdraw-1a95` (closed) was mirrored across instances as `e6f7` and `189c` (still open). Same for space+drag (`b9d2` / `d1a1` / `95de`). The seeds CLI cross-instance mirroring is creating drift. Decide: dedup manually, or accept as cross-instance copies.
+
+6. **Stale-plan check**: `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` has two dated 2026-05-10 scrub notes from this session — plan is current, no archival needed.
 
 ## Context Files
 
-- `docs/decisions/wave0-pre-dispatch-scrub-2026-05-06.md` — Phase 4 launch checklist; verified literals; Section A drift table.
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` — amended plan; Pre-Work Checklist rewritten with corrected literals + 6 prereq gates.
-- `code/apps/atlas-app/src/state/hydrate.ts` — Phase 4 hydration entry point; round-trip identity tested against `selectDocument`.
-- `code/apps/atlas-app/src/state/useDataLayerFCStore.ts` — FC store keyed by `dl:` id; consumed by selectDocument + hydrate.
-- `code/apps/atlas-app/src/components/MapEditor.tsx` lines ~470 and ~250 — `buildExportOpts` (renderCustomUI cards) + load-on-mount hydration wiring.
-- `code/packages/basemap/src/{BasemapRegistry,pmtiles-protocol,style-builder}.ts` — Phase 1 deferral landed.
-- `code/packages/data/src/manifest-schema.ts` line 102 — `SceneElement` structural alias.
-- `HANDOFF.md` (this file) — agent-to-agent continuity.
-- `HANDOFF-expertise.md` — structured mulch records for meta + architecture + excalidraw-api domains + session deltas (`ml prime` + `ml diff --since HEAD~12`); 4 new conventions captured this session: `mx-58c357` (renderCustomUI extension point), `mx-4b9e4e` (SceneElement structural alias), `mx-fcce7f` (FC mirror via registry actions), `mx-cb3eb8` (per-wave re-scrub recurrence rule).
+- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` — Phase 4 plan with 2026-05-10 scrub notes on Task 5 + Task 7. The §3 Task 1/2 sections describe the still-unbuilt storage scaffold.
+- `code/packages/basemap/src/resolver.ts` — config-agnostic resolver; required `pmtilesPath` shape.
+- `code/apps/atlas-app/src/components/MapEditor.tsx` — basemap-style effect (line ~410), Excalidraw onChange watchdog (line ~810, vbg gate + scroll lock), autosave wiring (line ~511, onSaved callback).
+- `code/apps/atlas-app/vite.config.ts` — `pmtilesNotFoundPlugin` middleware (atlasdraw-4607).
+- `code/apps/atlas-app/.env.example` — VITE_PMTILES_PATH documentation; `.env.local` is gitignored.
+- `code/packages/basemap/scripts/build-styles.mjs` — T5 generator script for vendoring Protomaps + OpenFreeMap styles.
+- `.claude/rules/excalidraw-api.md` — load-bearing; grep before assuming Excalidraw v0.18 API shape.
+- `HANDOFF-expertise.md` — structured mulch records (ml prime + ml diff). Not regenerated this session; meta domain still authoritative as of 5h-ago marker.
