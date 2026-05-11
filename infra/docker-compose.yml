@@ -1,0 +1,116 @@
+# Atlasdraw — full production-recommended self-host stack.
+#
+# Five services: web (atlas-app) + storage (Fastify, postgres-minio mode)
+# + postgres + minio + caddy (TLS + reverse proxy). All inter-service
+# traffic stays on the compose network; only Caddy exposes 80/443 to
+# the outside world.
+#
+# Run:
+#   cp infra/.env.example .env
+#   # edit .env — set PUBLIC_DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# What you get:
+#   - https://${PUBLIC_DOMAIN}/        → atlas-app (web)
+#   - https://${PUBLIC_DOMAIN}/api/*   → storage HTTP API (Caddy strips /api)
+#   - Postgres on the internal network, never exposed externally.
+#   - MinIO on the internal network; console on 9001 reachable only via
+#     compose exec or by adding a Caddy route for it.
+#
+# Phase 5 adds a `realtime` service via compose profiles
+# (`profiles: ["realtime"]`); the placeholder block at the bottom is the
+# anchor — uncomment when realtime ships.
+
+services:
+  storage:
+    build:
+      context: ..
+      dockerfile: code/apps/storage/Dockerfile
+    environment:
+      STORAGE_MODE: postgres-minio
+      PORT: "4000"
+      DATABASE_URL: postgres://${POSTGRES_USER:-atlasdraw}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-atlasdraw}
+      BLOB_ENDPOINT: http://minio:9000
+      BLOB_ACCESS_KEY: ${MINIO_ROOT_USER:-atlasdraw}
+      BLOB_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      PUBLIC_URL: https://${PUBLIC_DOMAIN}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    depends_on:
+      - postgres
+      - minio
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: code/apps/atlas-app/Dockerfile
+      args:
+        VITE_BUILD_TARGET: hosted
+        # Same origin — Caddy routes /api/* to storage. createHttpStorageClient
+        # accepts an empty baseUrl as "same origin"; the leading slash here
+        # tells it to prefix requests with /api before they hit Caddy.
+        VITE_STORAGE_BASE_URL: /api
+        VITE_PMTILES_PATH: /data/world-low-zoom.pmtiles
+    depends_on:
+      - storage
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atlasdraw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-atlasdraw}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-atlasdraw}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniodata:/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on:
+      - web
+      - storage
+    restart: unless-stopped
+
+  # Phase 5 placeholder (compose profiles, Compose v2.2+):
+  # realtime:
+  #   build:
+  #     context: ..
+  #     dockerfile: code/apps/realtime/Dockerfile
+  #   profiles: ["realtime"]
+  #   depends_on:
+  #     - storage
+  #   environment:
+  #     STORAGE_BASE_URL: http://storage:4000
+  #   restart: unless-stopped
+
+volumes:
+  pgdata:
+  miniodata:
+  caddy_data:    # auto-renewed TLS certs persist across container restarts
+  caddy_config:
