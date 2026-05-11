@@ -1,4 +1,6 @@
 # Phase 4 — MVP Polish & Self-Host
+**Status:** ✅ COMPLETE (closed 2026-05-11). All 19 tasks (T1–T18) shipped; T16 acceptance smoke 10/10. See `HANDOFF.md` (commit `cbd6507`) for scoreboard and trajectory. Eleven scrub-note amendments in §5 document plan-vs-shipped drift. Parent seed `atlasdraw-4579` closed `outcome:success`.
+
 **Plan date:** 2026-05-03
 **Weeks:** 10–11 (shifted +1 from spec's "Weeks 9–10" per Q7 chain)
 **Goal:** The Show HN moment — a stranger clones the repo, runs one command, and immediately understands what Atlasdraw is.
