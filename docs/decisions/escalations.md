@@ -88,17 +88,17 @@ Appended to Phase 5 → Phase 6 contract:
 
 **Implications confirmed:**
 
-- Phase 5 plan ships unchanged — its existing Phase 5 Scope Limitation language (server-trusted relay, `yjs-crypto.ts` as stub, ADR `0007-yjs-e2ee-threat-model.md` as constraint-setting deliverable) is now load-bearing rather than provisional.
+- Phase 5 plan ships unchanged — its existing Phase 5 Scope Limitation language (server-trusted relay, `yjs-crypto.ts` as stub, threat-model ADR as constraint-setting deliverable) is now load-bearing rather than provisional. ADR shipped at `docs/architecture/adr/0010-yjs-e2ee-threat-model.md` (path drift from plan spec; plan body refs to `decisions/0007-yjs-e2ee-threat-model.md` are historical, covered by Task 0 scrub-note 2026-05-11).
 - `packages/data/src/yjs-crypto.ts` lands as stub only (API + tests, not wired into y-websocket path).
 - `setupWSConnection` from `y-websocket` is the relay primitive for Phase 5. No custom log-replay handler.
-- Threat-model ADR `0007-yjs-e2ee-threat-model.md` is now a Phase 5 Task 0 hard requirement (must merge before any Phase 5 code).
+- Threat-model ADR `docs/architecture/adr/0010-yjs-e2ee-threat-model.md` is now a Phase 5 Task 0 hard requirement (must merge before any Phase 5 code). **Shipped 2026-05-11** in commit pending below.
 - Phase 6 inherits two work items: (1) wire `setPersistence` to storage API; (2) evaluate Option B relay rewrite (commit or formally close).
 - **E-02 is unblocked** — Phase 7 Tasks 9/10 (SnapshotStore, DiffEngine) may proceed on the plaintext-Y.Doc assumption. See E-02 decision block below.
 
 **Gate checkboxes (closed):**
 
 - [x] Maintainer selects Option A, B, or C → **C**
-- [x] If Option C (recommended): `decisions/0007-yjs-e2ee-threat-model.md` is written → **deferred to Phase 5 Task 0**; ADR is itself a Phase 5 hard-gate deliverable, not a precondition for selecting C.
+- [x] If Option C (recommended): threat-model ADR is written → **shipped 2026-05-11 at `docs/architecture/adr/0010-yjs-e2ee-threat-model.md`** (path drift from plan's `decisions/0007-...`; ADR numbering bumped to 0010 to avoid collision with ADR-0007 storage-dual-mode).
 - [x] Phase 6 plan backlog receives an explicit E2EE evaluation task → tracked via Phase 5 → Phase 6 contract row in plan (line 54).
 
 **Seed closures:**

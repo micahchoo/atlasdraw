@@ -157,6 +157,7 @@ tests/
 ---
 
 <!-- shape-incorporated 2026-05-03: new Task 0 — write threat-model ADR before any Phase 5 code ships; constraint-setting deliverable for E-01 Option C -->
+<!-- scrub-note 2026-05-11: ADR shipped at docs/architecture/adr/0010-yjs-e2ee-threat-model.md (NOT docs/decisions/0007-...). Path drift: plan was authored 2026-05-03 before Phase 4 established docs/architecture/adr/ as the ADR home (ADRs 0006-0009 land there). Numbering bumped to 0010 to avoid collision with ADR-0007 (storage-dual-mode). Task 0 Step 1 substantively complete; remaining Task 0 follow-ups: review-before-Phase-5-dispatch, Task 2's [realtime] config block needs an ADR-0010 reference comment, and self-host README + production.md need "What the relay can see" disclosure paragraph. E-01 closed Option C 2026-05-11; E-02 unblocked. -->
 ### Task 0: decisions/ — Yjs E2EE Threat-Model ADR [CHANGE SITE]
 
 **Orient:** Write the ADR documenting the server-trusted relay scope for Phase 5 and committing Phase 6 to evaluate Option B. This is a constraint-setting deliverable — it must exist before Phase 5 ships so the threat model is honest and on record. Required by E-01 gate condition (see `docs/decisions/escalations.md`).
