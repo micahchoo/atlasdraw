@@ -358,4 +358,45 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     // Excalidraw received the scene.
     expect(api2.updateScene).toHaveBeenCalledWith({ elements: sceneElements });
   });
+
+  it("preserves embedded files through selectDocument → hydrate (paste-image round-trip)", async () => {
+    // Simulate the post-paste Excalidraw state: getFiles() returns a BinaryFiles
+    // record keyed by file id, with the image's bytes as a base64 data URL.
+    // PNG signature: 89 50 4E 47 0D 0A 1A 0A — first 8 bytes of any PNG.
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const originalDataURL = `data:image/png;base64,${btoa(String.fromCharCode(...pngBytes))}`;
+
+    const { api: api1 } = makeAPI();
+    (api1.getFiles as ReturnType<typeof vi.fn>).mockReturnValue({
+      "file-paste-1": {
+        id: "file-paste-1",
+        mimeType: "image/png",
+        dataURL: originalDataURL,
+      },
+    });
+
+    // Save: selectDocument must extract the file as a Blob with correct mimeType.
+    const snap = selectDocument(api1, useLayerRegistryStore.getState());
+    expect(snap.files.size).toBe(1);
+    const blob = snap.files.get("file-paste-1");
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob?.type).toBe("image/png");
+
+    // Refresh: a fresh API receives the snapshot.
+    const { api: api2 } = makeAPI();
+    await hydrate(snap, api2);
+
+    // addFiles must be invoked with a BinaryFileData whose dataURL byte-equals
+    // the original (id, mimeType, bytes all preserved through Blob round-trip).
+    expect(api2.addFiles).toHaveBeenCalledTimes(1);
+    const passed = (api2.addFiles as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{
+      id: string;
+      mimeType: string;
+      dataURL: string;
+    }>;
+    expect(passed).toHaveLength(1);
+    expect(passed[0].id).toBe("file-paste-1");
+    expect(passed[0].mimeType).toBe("image/png");
+    expect(passed[0].dataURL).toBe(originalDataURL);
+  });
 });
