@@ -182,6 +182,10 @@ Expected: file present, non-empty
 
 ---
 
+<!-- scrub-note 2026-05-11: Task 1 pre-dispatch drift (recursive plan-literal drift per mulch mx-04ac8d):
+     (a) `code/packages/protocol/` workspace DOES NOT EXIST — plan only specifies files inside `src/`; scaffold must come first. Mirror code/packages/data/ shape: package.json (name "@atlasdraw/protocol", license MIT, main/types "src/index.ts", scripts test + test:typecheck), tsconfig.json (extends ../tsconfig.base.json, outDir dist, composite, include src/**), src/index.ts re-exporter. Root workspaces glob already matches `packages/*` so no root package.json edit needed (verify with `grep workspaces code/package.json`).
+     (b) Step 4 verify command uses `pnpm -F` — this is a yarn-classic monorepo. Swap to `yarn workspace @atlasdraw/protocol test:typecheck` (uses the `test:typecheck` script convention from other workspaces).
+     (c) Step 3 says "Export from `realtime-events.ts`" but `RealtimeConfig` is a config schema type semantically distinct from wire events; consider co-locating with `room-key.ts` or its own `realtime-config.ts` file. Worker discretion; document choice in the brief. -->
 ### Task 1: Wire Protocol — Event Type Contracts [CHANGE SITE]
 
 **Orient:** Define the canonical wire-protocol types that every other Phase 5 task imports; without these, relay and client diverge on payload shape.
@@ -207,6 +211,16 @@ Expected: 0 errors, 0 warnings
 
 ---
 
+<!-- scrub-note 2026-05-11: Per ADR-0010 gate checkbox 4 (item shipped 2026-05-11), Task 2 Step 2 must add a comment to the `[realtime]` block in `config.toml.example` referencing ADR-0010 — operators reading the example config see the trust-boundary disclosure inline:
+     ```
+     # [realtime]
+     # When enabled, the realtime relay process can read your data-layer
+     # geometry (Yjs CRDT ops) in plaintext. Scene + comments remain
+     # encrypted via Socket.IO. See docs/architecture/adr/0010-yjs-e2ee-threat-model.md.
+     # enabled = true
+     # ws_url = "ws://localhost:4001"
+     ```
+     Also: `infra/config.toml.example` does not exist as of 2026-05-11. Phase 4 shipped `infra/.env.example` (env-var convention) instead of `config.toml`. Confirm Phase 5 config strategy with maintainer before dispatch — does atlas-app read TOML or env? Plan spec assumes TOML; Phase 4 reality is env vars (VITE_*). This is a plan-vs-shipped config-format drift; worker brief must resolve before touching config files. -->
 ### Task 2: Config Schema — Realtime Feature Flag [CHANGE SITE]
 
 **Orient:** Wire the `[realtime] enabled` flag into atlas-app's config reader so every UI component has a single boolean to branch on (Q1).

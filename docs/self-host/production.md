@@ -230,6 +230,27 @@ TLS. For production exposure, also consider:
   `tcpdump` outbound traffic — the only legitimate destinations are the
   ACME endpoints and the (optional) Sentry ingestion URL.
 
+### Future: real-time relay trust boundary (Phase 5+)
+
+Phase 5 will add an optional real-time collaboration relay (`apps/realtime`,
+disabled by default). When you enable it via `[realtime] enabled = true`,
+the relay process **can read your data-layer geometry** (Yjs CRDT ops) in
+plaintext. Scene drawings and comments remain end-to-end encrypted via
+Socket.IO — only the *map layer* geometry is visible to the relay.
+
+This is a deliberate, bounded trade-off documented in
+[ADR-0010](../architecture/adr/0010-yjs-e2ee-threat-model.md). If you do
+not want the relay process to see your geometry data, either:
+
+1. Don't enable real-time (single-player mode remains a first-class
+   deployment target), or
+2. Run your own relay — the trust boundary is "relay operator," which
+   for self-hosters is you.
+
+Full end-to-end encryption of data-layer ops (Option B in the ADR) is
+deferred to Phase 6 evaluation. This disclosure will be expanded with
+concrete operator-facing guidance when Phase 5 ships.
+
 ## Topology
 
 ```
