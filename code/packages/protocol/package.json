@@ -1,0 +1,20 @@
+{
+  "name": "@atlasdraw/protocol",
+  "version": "0.0.0",
+  "description": "Atlasdraw wire-protocol types: realtime CollabEvent union + RoomKey fragment parser",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "vitest run",
+    "test:typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "5.x",
+    "vitest": "*"
+  }
+}
