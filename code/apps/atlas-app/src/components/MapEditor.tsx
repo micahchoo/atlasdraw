@@ -58,7 +58,7 @@ import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
-import { getAppConfig } from "../config/app-config";
+import { AboutDialog } from "./AboutDialog";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -373,6 +373,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [activeBasemapId, setActiveBasemapId] =
     useState<BasemapConfig["id"]>("protomaps-light");
   const [showBasemapPicker, setShowBasemapPicker] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -943,24 +944,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 were unified INTO Excalidraw's existing JSONExport dialog
                 via `renderCustomUI` — see `renderAtlasdrawExportCards`
                 above. Single entry point: MainMenu → Export. */}
-            {getAppConfig().showDemoBadge && (
-              <>
-                <MainMenu.Item
-                  onSelect={() => {
-                    window.open(
-                      "https://github.com/atlasdraw/atlasdraw#self-host",
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
-                  }}
-                  data-testid="main-menu-demo-badge"
-                  aria-label="Demo edition — open self-host docs"
-                >
-                  ⚡ Demo edition — self-host for full features
-                </MainMenu.Item>
-                <MainMenu.Separator />
-              </>
-            )}
+            <MainMenu.Item
+              onSelect={() => setShowAboutDialog(true)}
+              data-testid="main-menu-about"
+            >
+              ℹ About Atlasdraw
+            </MainMenu.Item>
+            <MainMenu.Separator />
             {isDirty && (
               <MainMenu.Item
                 onSelect={() => {
@@ -1060,6 +1050,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           onSelect={setActiveBasemapId}
           onCloseRequest={() => setShowBasemapPicker(false)}
         />
+      )}
+
+      {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
+          picker so MainMenu auto-close doesn't unmount it. */}
+      {showAboutDialog && (
+        <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
       )}
     </div>
   );

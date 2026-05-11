@@ -1,7 +1,34 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
+
+// AboutDialog (T14) needs version + build hash. Read from atlas-app's
+// package.json and a short git rev at config time; fall back to "unknown"
+// if either fails (CI without git history, fresh clones, etc.).
+const APP_VERSION = ((): string => {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8"),
+    ) as { version?: string };
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+})();
+const GIT_HASH = ((): string => {
+  try {
+    return execSync("git rev-parse --short HEAD", {
+      cwd: __dirname,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "unknown";
+  }
+})();
 
 // atlasdraw-4607 — without this, Vite's SPA fallback returns 200 + index.html
 // for missing `/data/*.pmtiles` paths, and MapLibre/pmtiles then fails with
@@ -65,6 +92,10 @@ const cleanupPublicDataPlugin = {
 
 export default defineConfig({
   base: BASE,
+  define: {
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(APP_VERSION),
+    "import.meta.env.VITE_GIT_HASH": JSON.stringify(GIT_HASH),
+  },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   plugins: [react(), pmtilesNotFoundPlugin, cleanupPublicDataPlugin] as any,
   server: {
