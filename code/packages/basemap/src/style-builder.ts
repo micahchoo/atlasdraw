@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // SPDX-License-Identifier: MPL-2.0
 // @atlasdraw/basemap — Phase 4 Wave 0 (T2428): style-builder.
 // Loads a vendored MapLibre style JSON for a given BasemapConfig and (for
@@ -28,16 +29,26 @@ const PMTILES_TOKEN = "__PMTILES_PATH__";
  * JSON via dynamic import; if the file does not exist (Wave 0 stub state),
  * returns a minimal valid placeholder so downstream consumers can compile.
  */
+// Vite-compatible glob: registers every JSON in ./styles/ at build time so
+// the bundler emits real chunks. The prior `import(`./styles/${file}`)`
+// template-literal form is NOT statically analyzable — Vite skipped emitting
+// any style JSONs, and the production build silently 404'd on style fetches
+// (atlasdraw-styles-prod-missing, 2026-05-10). `query: '?import'` keeps the
+// JSONs as ES-module imports rather than as URL references. `eager: false`
+// (default) preserves lazy loading per basemap.
+const STYLE_MODULES = import.meta.glob<{ default: unknown }>(
+  "./styles/*.json",
+);
+
 export async function buildStyle(
   config: BasemapConfig,
   opts: BuildStyleOptions = {},
 ): Promise<maplibregl.StyleSpecification> {
   let raw: unknown;
-  try {
-    // Dynamic import keeps the JSON out of the bundle until requested and
-    // tolerates missing files at scaffold time.
-    raw = (await import(`./styles/${config.styleFile}`)).default;
-  } catch {
+  const loader = STYLE_MODULES[`./styles/${config.styleFile}`];
+  if (loader) {
+    raw = (await loader()).default;
+  } else {
     // Phase 4 Task 5 Steps 1-3 will vendor real styles. Until then, return
     // a minimal valid spec so the pipeline can be exercised end-to-end.
     raw = placeholderStyle();
