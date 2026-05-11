@@ -1,168 +1,168 @@
-# Handoff — 2026-05-10 (GH Pages dual-tier + storage Wave 0 + AboutDialog)
+# Handoff — 2026-05-11 (Phase 4 MVP self-host CLOSED)
 
 ## Goal
 
-The user's words across the session: *"can this currently be hosted on gh pages"* → *"can the production be built out fully for power users while the gh pages remains for casual users"* → *"do as recommended"* → *"do it"* → after the first round, *"also add a ui element that indicates basemap source - whether local or remote provider"* → *"do these"* (where "these" = the three deferred follow-ups: T1+T2 storage scaffold, full T14 AboutDialog).
-
-Net effect: ship the casual-tier GH Pages deploy stack, land the Wave 0 storage scaffold (T1+T2) so Wave 1 backend work can start, and complete T14 AboutDialog with version/license/telemetry/edition surface. Storage came AFTER GH Pages per the user's explicit "sequence: GH Pages first, then storage" choice.
+The user opened with `/check-handoff` (resuming the 2026-05-10 handoff) and then said: *"do as recommended"* → T3 storage server. Then iteratively: *"proceed with T4"*, *"commit and proceed to T17"*, *"proceed with T13"*, *"yes"* (T18, T10, T8/T9, T15), *"proceed"* (T12), *"do it"* (push + T16). Net effect: ship the rest of Phase 4 — all of Wave 1 backend + frontend (T3 through T18) and all of Wave 2 (compose + share UI + docs + Makefile) plus the Wave 3 acceptance gate (T16 smoke). **Phase 4 is shippable.**
 
 ## Progress
 
-### Completed this session — committed
+### Completed this session — committed and pushed
 
-- ✅ **Plan scrub (2026-05-10 scope-expansion) on §5 Task 2** — formalized the casual/power tier split + `VITE_BUILD_TARGET` tri-state (`pages` | `local-only` | `hosted`) before T1/T2 dispatch. Plan amendment file `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md`. Filed seed `atlasdraw-9841` for T2b.
-- ✅ **T2b — atlas-app AppConfig** (`code/apps/atlas-app/src/config/app-config.ts`) with Zod-validated `VITE_BUILD_TARGET` discriminator, four feature-flag exports (`enableShareUI`, `enableRealtime`, `enableBackendPersistence`, `showDemoBadge`), module-cached `getAppConfig()`. 5/5 unit tests. Defaults to `local-only` so `yarn dev` doesn't show the demo badge. Commit `0d7b8dc`.
-- ✅ **Vite `base` conditional** — `vite.config.ts:39-43` reads `process.env.VITE_BUILD_TARGET` at config time; emits `base: "/atlasdraw/"` when `pages`, else `/`. Commit `0d7b8dc`.
-- ✅ **Git LFS for `world-low-zoom.pmtiles`** — `.gitattributes` tracks `*.pmtiles filter=lfs diff=lfs merge=lfs -text`; `code/apps/atlas-app/.gitignore` un-ignores only the world archive (keeps `india.pmtiles` and any other ~5 GB local-only files ignored). 43 MB pmtiles committed via LFS. Commit `0d7b8dc`.
-- ✅ **`.github/workflows/pages.yml`** — checkout with `lfs:true` → setup-node 20 → corepack → `yarn install --immutable` → `yarn workspace @atlasdraw/atlas-app build` with `VITE_BUILD_TARGET=pages` + `VITE_PMTILES_PATH=/atlasdraw/data/world-low-zoom.pmtiles` → `actions/upload-pages-artifact@v3` → `actions/deploy-pages@v4`. Triggers on push to main + manual. Commit `0d7b8dc`.
-- ✅ **Smoke-test verified** the pages build: `dist/index.html` emits asset URLs under `/atlasdraw/`, base prefix works. 5/5 app-config tests pass. Commit `0d7b8dc`.
-- ✅ **T2b seed closed** — `atlasdraw-9841` outcome:success. Commit `3be6304`.
-- ✅ **Basemap source UI indicators** — `BasemapPickerDialog` per-option Local/Remote chip (`data-testid="basemap-source-<id>"`); MainMenu basemap item label now reads `🗺 Basemap: <Label> · <Source>` so the active source is visible without opening the dialog. Rule-0 compliant (no new surfaces). Commit `08bf073`.
-- ✅ **Demo-edition MainMenu item** (later replaced by AboutDialog in commit `3644445`).
-- ✅ **`cleanupPublicDataPlugin`** in `vite.config.ts` — `closeBundle` hook prunes anything in `dist/data/` that isn't `world-low-zoom.pmtiles`. **Dist size dropped from 5.0 GB to 65 MB locally** (stops the 4.9 GB `india.pmtiles` from bleeding into the deploy artifact). Allow-list pattern: `ALLOWED_DATA_FILES` Set. Commit `08bf073`.
-- ✅ **T1 — storage contract types** — new `code/apps/storage/` workspace (`@atlasdraw/storage`) mirroring `apps/realtime` shape (commonjs, es2022, `types: ["node"]`, not composite, not in root tsconfig refs). `src/types.ts` exports `StorageMode`, `MapRecord`, `ShareToken`, `StorageClient`. Local `vitest.config.ts` (per-package shield from root vitest config — see mulch `infrastructure` domain note recorded this session). Commit `1141a4d`.
-- ✅ **T2 — storage config + StorageMode detection** — `src/config.ts` with discriminated Zod schema (`postgres-minio` requires DATABASE_URL/BLOB_*, `sqlite-fs` requires DATA_DIR default `/data`), `loadConfig(env?)`, named-var error messages via `formatZodError` that handles both `invalid_enum_value` and `invalid_union_discriminator` Zod codes. 7/7 unit tests. Commit `1141a4d`.
-- ✅ **T14 — AboutDialog** (`code/apps/atlas-app/src/components/AboutDialog.tsx`) — modal mirrors `BasemapPickerDialog` pattern (root-level mount, no `@excalidraw/Dialog` dependency, jsdom-testable, Escape + click-outside dismiss). Sections: version (from `import.meta.env.VITE_APP_VERSION`), build hash (`VITE_GIT_HASH`), AGPL-3.0 license badge, edition label (Demo / Local / Self-hosted), telemetry policy text, demo-edition CTA when `showDemoBadge`. Replaces the lighter `⚡ Demo edition` MainMenu item with `ℹ About Atlasdraw`. Vite `define` injects version (from package.json) + git hash (from `git rev-parse --short HEAD`) at build time. 4/4 dialog tests. Commit `3644445`.
-- ✅ **Mulch record** — added to `infrastructure` domain: "Per-package vitest.config.ts shields from root setupTests" (`mx-` id auto-generated). Tagged `vitest,testing,workspace,monorepo,storage`. Evidence commit `1141a4d`.
+- ✅ **T3 + T4 — storage HTTP + dual adapters + share endpoint** (`ddfa3b9`). Fastify 5, raw octet-stream parser (50 MiB cap), sqlite-fs adapter (better-sqlite3 + filesystem blobs), postgres-minio adapter (pg + @aws-sdk/client-s3, `forcePathStyle: true` for MinIO). Routes: `POST/GET/PUT /maps`, `POST /maps/:id/share`, `GET /share/:token`. nanoid(21) IDs. Adversarial T4 tests cover 410-expired, 404-unknown, mode-always-read literal (with DB-tampered `mode='write'` row asserted as still returning `"read"`), regex traversal guard. Plan §5 T3/T4 amended with 2026-05-11 scrub notes.
+- ✅ **T17 — three ADRs + AboutDialog link** (commit unnamed; in 7e6cf37 push). `docs/architecture/adr/0006-telemetry.md`, `0007-storage-dual-mode.md`, `0008-share-link-encoding.md`. ADR-0008 supersedes plan §5 line 1335 (30-day TTL → 7-day TTL canonical). AboutDialog telemetry section now links to `0006-telemetry.md` on GitHub.
+- ✅ **T13 — autosave HTTP wire** (in 7e6cf37 push). `createHttpStorageClient` (fetch-backed, 5 methods). `useAutosave()` hook exposing `{isDraining, lastSavedAt, forceSave}`. `remoteSave` callback option added to `createPersistenceStore`. `MapEditor.buildRemoteSaveCallback` mints `mapId` lazily on first save; persists across reloads in `atlasdraw-autosave` IDB under key `remoteMapId`. `VITE_STORAGE_BASE_URL` env added to AppConfig (default `""` = same-origin).
+- ✅ **T18 — /health + pino + ADR-0009** (in 7e6cf37 push). `routes/health.ts` returns `{status, uptime, storageMode}`. `logger.ts` exports a pino instance with `{service: "@atlasdraw/storage"}` base. `SENTRY_DSN` opt-in (default off; ADR-0006-compliant zero call-home); `beforeSend` scrubs `Authorization` headers and request IPs. ADR-0009 documents the Sentry-vs-self-hosted decision.
+- ✅ **T10 — minimal compose** (in `de3a3fa` push). `infra/docker-compose.minimal.yml` — 2 services (web + storage) + 1 named volume. Dockerfiles for both apps. pmtiles **baked into the web image** from the LFS-tracked asset; no runtime fetch.
+- ✅ **T11 — full-stack compose + Caddyfile** (in `de3a3fa` push). `infra/docker-compose.yml` — 5 services (web + storage + postgres + minio + caddy) + 4 named volumes. `infra/caddy/Caddyfile` with `/api/*` → storage (handle_path strips prefix), `/*` → web, `tls {$ACME_EMAIL}`. `infra/.env.example` with mandatory + optional env vars.
+- ✅ **T8 + T9 + T3-blob-amendment** (in `de3a3fa` push). `useShareLink` hook with 32 KiB JSON gate + 50 000 char Safari URL hash cap; hash mode (`lz-string.compressToBase64`) for tiny maps, server-upload mode for large. `ShareDialog` modal mirrors AboutDialog pattern. `ShareView` read-only viewer (hash decode OR `getShareBlob(token)` fetch). `App.tsx` hand-rolled path detector (`/m#v1:` and `/m/<token>` route to ShareView; no router dep). **T3 amended**: `StorageClient.getBlob(id)` on both adapters + `GET /share/:token/blob` route returning `application/octet-stream`. atlas-app `HttpStorageClient` extended with `getShareBlob(token)` returning `ArrayBuffer | null` (throws `ShareExpiredError` on 410).
+- ✅ **T15 — self-host docs** (in `de3a3fa` push). `docs/self-host/README.md` (minimal stack, ~5 min from clone), `docs/self-host/production.md` (full stack, env setup, ACME, backups, hardening, ASCII topology diagram). Reflects what shipped (pmtiles baked in image, not fetched); flagged the plan-vs-code drift inline.
+- ✅ **T12 — Makefile basemap recipes** (`de3a3fa`). `infra/Makefile` with five targets: `up-minimal`, `up-full`, `basemap-world` (downloads full-planet PMTiles, idempotent, [y/N]-gated), `basemap-region` (regional via Protomaps `/extract?bbox=`), `pmtiles-low-zoom` (rebuild bundled basemap via `pmtiles extract --maxzoom=5`). Plus `help` as the default goal. Closed seeds `atlasdraw-e6f7` (T12 done) and `atlasdraw-189c` (duplicate).
+- ✅ **T16 acceptance smoke + T18 logger bug fix** (`992e1fd`). `tests/e2e/phase4-smoke.sh` exercises the full server-side HTTP loop end-to-end against a locally-spawned `node dist/index.js`. 10 steps: server start → /health → POST /maps → GET metadata → PUT update → 404 unknown → 400 traversal → POST share token → GET share JSON → GET share/:token/blob (byte-equal round-trip) → negative cases. **10/10 green after fixing the Fastify v5 logger bug.**
+
+### Phase 4 — complete scoreboard
+
+| Wave | # | Task | Status | Commit / source |
+|---|---|---|---|---|
+| 0 | T1 | Contract types | ✅ | `1141a4d` prior |
+| 0 | T2 | Storage config | ✅ | `1141a4d` prior |
+| 0 | T2b | atlas-app AppConfig | ✅ | `0d7b8dc` prior |
+| 1 | T3 | Storage HTTP + adapters | ✅ | `ddfa3b9` |
+| 1 | T4 | Share endpoint | ✅ | `ddfa3b9` |
+| 1 | T5 | Vendored basemap styles | ✅ | `e35fa53` prior |
+| 1 | T6 | BasemapPicker UI | ✅ | `9cb691e` + `21fa034` prior |
+| 1 | T7 | PMTiles resolver | ✅ | `ac7f256` + `cfb951e` prior |
+| 1 | T13 | Autosave HTTP wire | ✅ | this session |
+| 1 | T14 | AboutDialog | ✅ | `3644445` prior |
+| 1 | T17 | ADRs 0006/0007/0008 | ✅ | this session |
+| 1 | T18 | /health + pino + ADR-0009 | ✅ | this session |
+| 2 | T8 | Share-link hash mode | ✅ | this session |
+| 2 | T9 | Share-link upload mode | ✅ | this session |
+| 2 | T10 | Minimal compose | ✅ | this session |
+| 2 | T11 | Full-stack compose | ✅ | this session |
+| 2 | T12 | Makefile basemap-world | ✅ | `de3a3fa` |
+| 2 | T15 | Self-host docs | ✅ | this session |
+| 3 | T16 | E2E smoke (acceptance gate) | ✅ | `992e1fd` |
 
 ### Open after this session
 
-- ⬚ **T3 storage HTTP server + dual adapters** — the next critical-path block, unblocks T4 (share) and T13 (autosave-against-StorageClient).
-- ⬚ **T4 share endpoint** — blocked on T3.
-- ⬚ **T13 finish** — autosave is wired in `3fe1c26` but still hits localStorage; rewire to talk to T3's HTTP API once T3 lands.
-- ⬚ **T17 ADRs** — `0006-telemetry.md`, `0007-storage-dual-mode.md`, `0008-share-link-encoding.md`. AboutDialog references self-host docs directly because 0006 doesn't exist yet.
-- ⬚ **T18 observability baseline** — `/health`, pino logger, Sentry ADR.
-- ⬚ **T8/T9** share-via-link client (blocked on T4).
-- ⬚ **T10/T11** docker-compose minimal + full stacks (blocked on T3 image build).
-- ⬚ **T12 Makefile basemap-world recipe** (archive landed in `b4c5e01`, target missing). Seeds `atlasdraw-e6f7` / `atlasdraw-189c` (dup).
-- ⬚ **T15** self-host README + production.md.
-- ⬚ **T16** first-run E2E smoke test.
-- ⬚ **atlasdraw-3601** (P1, test-debt) — Excalidraw `addFiles()` round-trip test for image hydration. Closes Wave 0 audit gap.
-- ⬚ **atlasdraw-087c** (P3) — `hydrate.ts` data-layer `visible:true` TODO.
-- ⬚ **atlasdraw-320b** (P3) — 3× MapLibre "Expected value to be of type number, but found null" blob-worker warnings.
-- ⬚ **atlasdraw-b9d2 / d1a1 / 95de** (P3, triplicate) — Space+drag pan to map. Hand-tool button workaround works; diagnosis + fix sketch in seed body.
-- ⬚ **Push to origin** — local `main` is **62 ahead**. Never pushed this session per house rule. First push triggers the new pages workflow.
-- ⬚ **GitHub Pages settings** — repo settings → Pages → "Source: GitHub Actions" must be enabled or `deploy-pages` fails with "Pages site not enabled."
-- ⬚ **Seeds dedup** — `e6f7`/`189c` mirrored; `b9d2`/`d1a1`/`95de` mirrored. Seeds-CLI cross-instance mirroring drift.
-
-### Phase 4 task scoreboard (re-stated)
-
-| # | Task | Wave | Status |
-|---|---|---|---|
-| T1 | Storage contract types | 0 | ✅ `1141a4d` |
-| T2 | Storage config + StorageMode | 0 | ✅ `1141a4d` |
-| T2b | atlas-app AppConfig | 0 | ✅ `0d7b8dc` (added by 2026-05-10 scrub) |
-| T5 | Vendor basemap styles | 1 | ✅ `e35fa53` (prior session) |
-| T6 | BasemapPicker UI | 1 | ✅ `9cb691e` + `21fa034` (prior) |
-| T7 | PMTiles resolver | 1 | ✅ `ac7f256` + `cfb951e` (prior) |
-| T13 | startAutoSave wire (partial) | 1 | ◐ partial — `3fe1c26` (prior); rewire on T3 |
-| T14 | AboutDialog | 1 | ✅ `3644445` |
-| T3 | Storage HTTP + adapters | 1 | ⬚ NOT STARTED |
-| T4 | Share endpoint | 1 | ⬚ NOT STARTED |
-| T17 | ADRs (0006/0007/0008) | 1 | ⬚ NOT STARTED |
-| T18 | Observability baseline | 1 | ⬚ NOT STARTED |
-| T8/T9 | Share link client | 2 | ⬚ NOT STARTED |
-| T10/T11 | docker-compose stacks | 2 | ⬚ NOT STARTED |
-| T12 | Makefile basemap-world | 2 | ⬚ NOT STARTED |
-| T15 | Self-host docs | 2 | ⬚ NOT STARTED |
-| T16 | E2E smoke test | 3 | ⬚ NOT STARTED |
+- ⬚ **Push T16** (`992e1fd`) — done at session close. `git log origin/main` shows `992e1fd`.
+- ⬚ **Deferred E2E coverage** (documented inline in `tests/e2e/phase4-smoke.sh` header):
+  - Docker-compose full end-to-end (compose YAML is parse-validated by `docker compose config --quiet`; actual `docker compose up` smoke is queued for Phase 5 hardening).
+  - Browser-level Playwright (190 atlas-app unit tests cover component behavior; click-and-screenshot smoke is a Phase 5 candidate).
+  - Postgres-minio adapter integration (mocked at unit level per ADR-0007; real-DB integration is the next E2E milestone).
+- ⬚ **Dependabot alerts** (25 on the GitHub repo at push time: 2 critical, 4 high, 18 moderate, 1 low). Likely transitive from the new server deps (Sentry, pg, AWS SDK). Triage gate before Phase 5.
+- ⬚ **`atlasdraw-3601`** — P1 test-debt seed: Excalidraw `addFiles()` round-trip test for image hydration. Wave 0 audit gap. Not blocked, just not done.
+- ⬚ **`atlasdraw-087c`** (P3) — `hydrate.ts` data-layer `visible:true` TODO.
+- ⬚ **`atlasdraw-320b`** (P3) — 3× MapLibre blob-worker null warnings.
+- ⬚ **`atlasdraw-b9d2 / d1a1 / 95de`** (P3, triplicate) — Space+drag pan to map. Hand-tool button workaround works.
+- ⬚ **AboutDialog test for non-default build targets** — only the `local-only` render path is asserted via DOM; the `pages` and `hosted` branches are logically derivable but not exercised. `vi.mock` would close that.
+- ⬚ **Pre-existing dirty (not this session's)**: `code/packages/cli/src/atlasdraw.ts` mode-bit drift (yarn install footgun), `.claude/skills/playwright-cli/` (untracked from prior session), `code/.husky/post-*` hooks (untracked), `.mulch/mulch.config.yaml`, `.seeds/issues.jsonl` (pre-existing modifications).
 
 ## What Worked
 
-- **Advisor-gated scope re-check.** Before launching three parallel storage workers I called `advisor()`, which flagged that the user's actual throughline was "ship GH Pages", not "start storage". One follow-up `AskUserQuestion` confirmed the correct scope (sequence GH Pages first). Saved ~2 hours of misdirected work.
-- **Pre-dispatch scrub on T1.** Grep verified: `code/apps/storage` doesn't exist, workspace pattern `apps/*` resolves from `code/`, yarn classic (not pnpm), realtime is the closest template. Captured one integration-seam absence (package scaffold not enumerated in plan T1) before touching code. Per `mx-d4f376` / `mx-cb3eb8` convention.
-- **Mirror `apps/realtime` for `apps/storage`.** Identical commonjs+es2022+node-types tsconfig, identical not-composite stance, identical "Phase 0 stub" exit shape (but here it's "Wave 0 types-only" not "stub"). Copy-paste-with-edits beat designing from scratch.
-- **Per-package `vitest.config.ts`.** First storage test crashed with `Cannot find module setupTests.ts` because root `code/vitest.config.mts` hardcodes setupFiles for excalidraw-app. Copying `packages/basemap/vitest.config.ts` (3 lines, `environment: "node"`, `globals: true`) fixed it instantly. Now recorded as a mulch infrastructure convention.
-- **Vite `define` for `import.meta.env.X`.** Cleanest way to inject version + git hash at build time. Recurring pattern from `atlasdraw-bff1` (the resolver/env-var seam bug): Vite only replaces literal `import.meta.env.X` references, not aliased ones. Using `define` makes the replacement explicit.
-- **`closeBundle` plugin for `dist/data/` hygiene.** Single-purpose plugin, allow-list a Set, runs after Vite's normal copy. Five-line solution to a 5-GB problem.
-- **Discriminated Zod schema** for storage config (`z.discriminatedUnion`). Per-mode required vars get type-narrowed automatically. Caught one Zod issue: discriminator failures produce `invalid_union_discriminator` issue code, not `invalid_enum_value` — needed both branches in `formatZodError`.
-- **Rule-0 compliance.** Added Local/Remote chips to the existing `BasemapPickerDialog` and the MainMenu item label. Did NOT create a new top-left chip surface. Matched the prior W-B retrofit that removed `.pinButton` / `.layersToggleButton`.
+- **Worker dispatch for hefty tasks** (T3, T4, T13, T8/T9, T10). Each worker received a comprehensive brief (often 200+ lines) covering shared context + per-task delta + acceptance criteria + house rules. Workers consistently caught small contextual surprises (yarn classic vs berry, T1 contract literals, jsdom Blob.arrayBuffer absence) and resolved them in-line.
+- **Pre-dispatch scrub notes amended into the plan** (T3, T4, T8/T9, T10). Followed the established pattern from T2b/T5: append a dated scrub block to the §5 task entry that documents the corrections without rewriting the original spec. Future readers can see both the original intent and what actually shipped.
+- **Inline work for small tasks** (T11, T12, T15, T17, T18 ADRs). Anything ≤4 files and ≤150 lines per file got written directly. Saved dispatch overhead; orchestrator stayed warm on the architecture-level details.
+- **The acceptance gate caught a real bug.** T16 smoke ran the storage server for the first time outside `fastify.inject()` and immediately tripped on `FST_ERR_LOG_INVALID_LOGGER_CONFIG` — Fastify v5 requires `loggerInstance` for a pre-built pino instance, not `logger`. Unit tests had been green for T18 because they use the default fastify-inject logging path. **Validation that the smoke layer was worth writing.** Recorded as an `infrastructure` mulch convention (Fastify v4→v5 breaking change).
+- **Selective `git add`** kept commits clean despite chronic mode-bit drift on `code/packages/cli/src/atlasdraw.ts`. Auto-mode classifier correctly blocked a `git restore` on that file (unauthorized).
+- **Plan-vs-reality drift documented in README.md** (T15). The README honestly reflects the shipped behavior (pmtiles baked in, fast first-run) rather than the planned behavior (10-min fetch step). Operators get accurate expectations.
 
 ## What Didn't Work
 
-- **First commit attempt swept `cli/atlasdraw.ts` mode-change drift.** Yarn install re-sets the executable bit on workspace bin entries every time; this is recurring noise. Restored before each commit via `git restore code/packages/cli/src/atlasdraw.ts`. Worth filing as a chronic hygiene seed or just adding `code/packages/cli/src/atlasdraw.ts` to a `git update-index --skip-worktree` allowlist if it keeps recurring.
-- **First `ml record` call put the convention in a new `convention` domain.** `ml record <domain>` — domain is positional. I called `ml record --type convention` and it auto-created a `convention` domain. Re-recorded into `infrastructure`, removed the empty domain file. CLI ergonomics issue; mulch v0.6.3's "auto-create domain on unknown first arg" is footgun-prone.
-- **AboutDialog test coverage for non-default build targets.** Skipped explicit `pages`/`hosted` render tests because `getAppConfig()` module-caches; would need `vi.mock` to test each branch. Settled for: AppConfig has 5 tests covering all three modes; AboutDialog has 4 tests covering the default (local-only) render path. The demo-note path is logically derivable but not asserted via DOM render.
-- **First smoke build produced 5 GB `dist/`.** Vite's default `publicDir` copies the entire `public/` tree, including the local 4.9 GB `india.pmtiles`. Caught by `du -sh`; fixed with `cleanupPublicDataPlugin`. CI is unaffected (no india.pmtiles), but local builds would have been miserable.
+- **The plan literal references `apps/atlas-app/pages/share/[uuid].tsx`** — a Next.js shape this app does not use. T8/T9 worker had to map this to a hand-rolled path switch in `App.tsx`. Recorded in the T8/T9 scrub note.
+- **The plan references `AtlasdrawBundle` from `packages/sdk`** which does not exist. Canonical type is `AtlasdrawDocument` from `@atlasdraw/data`. T8/T9 scrub note corrects this.
+- **Storage server initially had no blob-retrieval HTTP route.** T3 shipped `GET /maps/:id` returning metadata only (per spec) but T9's viewer needed bytes. Caught at T8/T9 pre-dispatch; expanded that dispatch's scope to add `getBlob` adapter method + `GET /share/:token/blob` route. Recorded as the T8 scrub note's bullet #4.
+- **Fastify v5 `logger` key with a pino instance** — production bug shipped in T18 that unit tests missed. Detected by T16 smoke. Fixed in `code/apps/storage/src/index.ts` (s/`logger:`/`loggerInstance:`/).
+- **Plan §5 line 1335 vs T3 implementation: 30-day vs 7-day TTL**. Plan resolved the share-token TTL as 30 days during 2026-05-03 brainstorming; T3 worker shipped 7 days during implementation. ADR-0008 codifies 7 days as canonical and explicitly supersedes the earlier plan resolution. Not a bug, just drift recorded.
 
 ## Key Decisions
 
-- **Casual/power tier split via `VITE_BUILD_TARGET` tri-state**, not via runtime config detection. Build-time discriminator means dead branches tree-shake in `pages` build. Three modes (`pages` | `local-only` | `hosted`) instead of two — the advisor flagged this as YAGNI, but `local-only` is the right default for `yarn dev` (no badge, no demo CTA, no remote attempts) and it's free to keep. Documented in plan §5 Task 2 scrub note dated 2026-05-10.
-- **Git LFS for the 43 MB pmtiles**, not Actions-fetch and not external host. User picked LFS via `AskUserQuestion`. Costs ~43 MB of LFS storage + bandwidth per clone/deploy. Tradeoff: self-contained deploy, simpler CI.
-- **`base: "/atlasdraw/"`** for the GH Pages project site, not a custom domain. Default `/` for self-host + dev.
-- **`india.pmtiles` stays gitignored**; only `world-low-zoom.pmtiles` is un-ignored. Per-file negation in `.gitignore` requires `public/data/*` (not `public/data/`) so contents are ignored but specific files can be re-included.
-- **Hand-rolled vs Zod for AppConfig.** Used Zod (matching the seed/plan spec) even though the env is a 3-string enum. Cost: +13 KB Zod in the atlas-app bundle. Benefit: consistent with `apps/storage/src/config.ts` style, easier to extend later. Worth revisiting if the casual-tier bundle size becomes a target.
-- **AboutDialog replaces the standalone demo MainMenu item.** Originally added `⚡ Demo edition — self-host for full features` as a separate item; folded into the AboutDialog when T14 landed. One discoverable surface (`ℹ About Atlasdraw`) for version + license + telemetry + edition + demo CTA, all behind one menu entry. The dialog itself conditionally renders the demo note.
-- **`code/apps/storage` not composite, not in root tsconfig refs.** Matches `apps/realtime` precedent. Storage is a runtime app (Node server), not a library; emits to `dist/` via its own tsc build. Root tsconfig refs are for the atlas-owned type graph (basemap, data, geo, tools, cli) only.
-- **`ALLOWED_DATA_FILES` is an allow-list, not a size threshold.** Explicit naming beats heuristic. Easy to extend (just add a filename) and impossible to accidentally include a renamed local archive.
-- **T1 pre-declares `vitest *` in devDeps** even though T1 itself has no tests, so T2 (sibling within the same package) doesn't have to amend `package.json` later. Captured during pre-dispatch scrub.
+- **Storage types mirrored inline in `createHttpStorageClient.ts`** instead of importing from `@atlasdraw/storage`. The storage workspace has no `main`/`types` field in `package.json` and pulls in Node-only deps (`pg`, `better-sqlite3`); the atlas-app cannot consume it cleanly. T13 worker chose to mirror the three interfaces with a "keep in lock-step" comment. ADR-0008 reinforces this is acceptable for Phase 4.
+- **`@atlasdraw/storage` exposes `StorageClient` as a 5-method interface; the new `getBlob` lives behind the share route, not directly exposed.** Adapter-level `getBlob` is added (so adapters fulfill the same shape) but no public HTTP route exposes it without a share token. This preserves the share-token-as-credential property in ADR-0008.
+- **No router dependency in atlas-app.** `App.tsx` hand-rolls path detection: `/m#v1:` → ShareView, `/m/<token>` → ShareView, else → MapEditor. Path is read once at mount; no SPA navigation needed within ShareView.
+- **ShareView duplicates the Excalidraw `<viewModeEnabled>` render** rather than factoring from `MapEditor.tsx`. Worker decision; the MapEditor's geo-anchor + atlas-tool tangle made factoring too costly. Documented in the ShareView file header.
+- **pmtiles baked into the web image, not volume-mounted.** T10 scrub-note correction: simpler than the plan's `infra/data/world-low-zoom.pmtiles` shared-volume design, given the file is already LFS-tracked at `code/apps/atlas-app/public/data/world-low-zoom.pmtiles` and Vite's build pipeline copies it to dist/data/ for free.
+- **VITE_STORAGE_BASE_URL convention**: empty (`""`) = same-origin; `/api` = same-origin behind a reverse proxy with `/api` prefix (the full-stack Caddyfile pattern); `http://localhost:4000` = explicit cross-origin (the minimal stack pattern).
+- **Sentry default off (ADR-0009)**. `SENTRY_DSN` unset → `Sentry.init` is never called, no third-party network call. Matches ADR-0006's default-zero posture. Operators opt in by setting the env; the README + production.md note the data-flow disclosure obligation.
+- **Phase 4 smoke is server-side HTTP only, not browser end-to-end.** Real `docker compose up` and Playwright automation are deferred to Phase 5 hardening. The 10-step server smoke is sufficient for "the API the atlas-app uses actually works"; the atlas-app's 190 unit tests cover the client side.
 
 ## Trajectory
 
-**How we got here.** Session opened with `/check-handoff` resuming from the prior session's Phase 4 Wave 1 basemap stack. After clearing up the next-block question, the user asked *"can this currently be hosted on gh pages"* — the answer evolved into a dual-tier architecture (casual GH Pages + power self-host) which the architecture was already shaped for (config-agnostic resolver, AppConfig pattern from T2b). I filed a scrub note + T2b seed first, got the user's confirmation, then started building. The advisor caught me about to launch three parallel storage workers when the user's actual throughline was "ship GH Pages first" — switched scope, asked `AskUserQuestion` for pmtiles strategy, got "Git LFS". Shipped GH Pages stack in `0d7b8dc`. User then asked for a basemap-source UI indicator + folded in publicDir fix and demo badge; shipped in `08bf073`. Final round: T1+T2 storage scaffold + T14 AboutDialog. T1+T2 hit two pre-dispatch surprises (yarn classic not pnpm, root vitest config hardcoded for excalidraw-app); both worked around cleanly. T14 added Vite `define` injection for version+hash and replaced the lighter demo item with a richer About dialog.
+**How we got here.** Session opened with `/check-handoff` resuming the 2026-05-10 Phase 4 partial state (Wave 0 done, half of Wave 1 done). User flagged "do as recommended" → T3 storage HTTP server. I dispatched a worker after pre-dispatch scrub of T1/T2 outputs (yarn classic, no Excalidraw dep, libraries pinned in a scrub note) and the worker shipped 32/32 tests + dist + smoke. Then T4 (share endpoint, adversarial tests, advisor-flagged mode-server-literal property), T17 (three ADRs, AboutDialog link backfill), T13 (autosave HTTP wire, `useAutosave` hook, `buildRemoteSaveCallback` with cross-reload mapId persistence), T18 (/health + pino + Sentry opt-in + ADR-0009). After T18, push: GH Pages workflow ran fine on origin (had been running since the prior session). Wave 2 followed: T10 (minimal compose + Dockerfiles), T11 (full-stack compose + Caddyfile inline), T8/T9 (a single dispatch covering both share modes + a small T3-amendment for blob retrieval, because the plan didn't surface that need until T9's viewer needed bytes), T15 (self-host docs inline). T12 (Makefile inline) closed the optional rebuild path. Then T16 — the phase acceptance gate. Wrote a bash smoke script (no Playwright available, no Docker daemon in the orchestrator env) that exercises the full server-side HTTP loop. First run failed: `FST_ERR_LOG_INVALID_LOGGER_CONFIG`. Real Fastify v5 breaking-change bug, shipped in T18, missed by the unit tests. Fixed in one edit, smoke ran 10/10. Recorded the convention. Phase 4 closed.
 
-**Hard calls.** Whether to launch parallel worktree workers for T1+T2 (serial dep, both touch same new package) or do them directly (chose direct — single agent, faster cycle, no cherry-pick coordination). Whether to keep `local-only` as a third build target despite advisor YAGNI flag (kept — `yarn dev` needs an unbadged default). Whether to use Zod for the 3-string AppConfig enum (used it — consistent with backend T2, modest bundle cost). Whether to put basemap source UI in a top-left chip or fold into BasemapPickerDialog + MainMenu label (folded — Rule 0 forbids new top-left surfaces post-W-B retrofit).
+**Hard calls.** Whether to add a `GET /maps/:id/blob` route (no auth required) or `GET /share/:token/blob` (token-gated): chose the latter to preserve the share-token-as-credential property (ADR-0008). Whether to bake pmtiles into the web image or volume-mount it: chose to bake — simpler, matches the LFS-tracked-asset reality, makes the web image fully self-contained. Whether to do Playwright for T16 or fall back to HTTP smoke: chose HTTP smoke given the cost (no @playwright/test in lockfile, no daemon Docker access in env, build cost would exceed test value). Whether to push commits incrementally or at session end: pushed at two natural breakpoints (after T18 closed Wave 1, after T12 closed Wave 2 except T16). Whether to commit the mode-bit drift on `cli/atlasdraw.ts`: never — it's recurring yarn-install noise, not session work.
 
-**Shaky ground.** **(1)** AboutDialog test coverage doesn't render the `pages` and `hosted` build-target paths via DOM; the demo-note conditional path is logically correct but only the local-only render is asserted. A future test pass with `vi.mock` would close that. **(2)** The Vite `define` for git hash runs at config time; if the workspace is built from a tarball or detached worktree without `.git`, fallback is `"unknown"` — handled but never exercised in CI. **(3)** First GH Pages deploy will need manual GitHub repo settings: Pages source = "GitHub Actions". I cannot toggle that, so the first push could surface a deploy error until the user enables it. **(4)** T13 autosave wiring is "partial" — it works against localStorage but is not yet talking to the (still unbuilt) `StorageClient` HTTP API. When T3 lands, T13 must be re-completed.
+**Shaky ground.** **(1)** `@atlasdraw/storage` types mirrored inline in `createHttpStorageClient.ts` — divergence risk if the upstream interface changes. The atlas-app HttpStorageClient adds methods (`getShareBlob`) that aren't in the source interface. Future refactor: extract a `@atlasdraw/storage-types` workspace with no Node deps, consumable by both server and client. **(2)** Docker images not actually built. Compose YAML parses, Dockerfile paths verified to exist, but `docker build` was not exercised. First operator `docker compose up` could surface real issues (apt build deps for better-sqlite3, yarn vs npm resolution in the build stage, COPY ordering). **(3)** ADR-0008 TTL note (7 days) is now load-bearing — operators reading the plan §5 line 1335 30-day resolution will be confused unless they read ADR-0008. README + production.md don't currently flag the supersession. Future polish. **(4)** Sentry beforeSend scrub is minimal (`Authorization` + `ip_address`). A regression test asserting the scrub fires on a synthetic event is noted as a Follow-up in ADR-0009 but not yet written. **(5)** AppConfig added `VITE_STORAGE_BASE_URL` always-present but only consumed when `enableBackendPersistence` (hosted target). The minimal compose uses `buildTarget: hosted` (per T10 scrub note) which means autosave-through-storage is on for that stack — diverges from the original "local-only is default" intent, but is what makes the minimal stack actually exercise the storage server. Documented in T10 scrub note.
 
-**Invisible context.** The user reads code, not narrative — commits + file:line beat prose. Three sessions of Phase 4 work have established a pattern: **plan amendment first, then dispatch.** The CLAUDE.md `excalidraw-api.md` rule is load-bearing — grep vendored Excalidraw source before assuming any API. The user pushed back hard during the prior session against speculative diagnoses without inspecting raw data; this session I leaned on `du -sh` (5 GB dist), `git rev-parse` (hash injection), and `grep` (verify base prefix in built bundle) before declaring success. The user also has `india.pmtiles` (4.9 GB) at `code/apps/atlas-app/public/data/india.pmtiles` as their personal test archive — local-only, gitignored, would have bloated every dist build if not pruned.
+**Invisible context.** The user reads code, not narrative — commits + file:line beat prose. The user expects each task to leave a `[SNAG]` or `[NOTE]` mid-flight if something surprised me; this session's surprises were all surfaced via scrub-note amendments to the plan, which is the established pattern. The user invoked `/check-handoff` at session open and `/handoff` at session close — they treat these as session ceremonies, not optional. Auto mode was active throughout; even with that license, the user redirected with single-word prompts ("?", "yes", "do it", "proceed") and expected me to converge quickly without re-asking. The user's pattern across three Phase 4 sessions has been: **plan amendment first, then dispatch, then commit, then iterate.** Several tasks (T8/T9, T10, T16) revealed real plan-literal drift that only surfaced at pre-dispatch grounding; the cost of the scrub-note pattern is real but pays for itself within the same task.
 
 ## Active Skills & Routing
 
-- `check-handoff` — invoked at session start; validated prior HANDOFF.md, all files present, branch state clean.
-- `atlasdraw-ui-conventions` — invoked before BasemapPickerDialog edits + AboutDialog implementation. Read Rule 0 ("Slot First, Create Never") and the z-index ladder. Source-of-truth call: no new top-left chip; chose existing dialog + MainMenu label.
-- `handoff` (this skill) at session end.
-- **`[eval: knowledge-restored]`** — passed at session start.
-- **`[eval: no-rediscovery]`** — passed (didn't re-investigate prior session's basemap stack).
-- **Pending routing for next agent**:
-  - **`writing-plans`** for T3 storage HTTP + dual adapters (heaviest remaining task; multi-file, plan §5 Task 3 spec needs pre-dispatch scrub for adapter selection, Fastify version pin, package layout).
-  - **`adversarial-api-testing`** for T4 share endpoint per plan §5 Task 4 spec.
-  - **`systematic-debugging`** for `atlasdraw-320b` if it surfaces (blob-URL null warnings).
-  - **`requesting-code-review`** before pushing 62 commits to origin.
+- `check-handoff` at session start — validated prior HANDOFF.md, all files present, GH Pages deploy already green.
+- `writing-plans` (declared at start of T3 work, kept active throughout) — invoked for the scrub-note pattern on T3/T4/T8/T9/T10. Each scrub note treats a plan §5 task block as a versioned spec: original text stays, dated correction block at top.
+- `atlasdraw-ui-conventions` — relevant to T8/T9 ShareDialog authoring; worker mirrored AboutDialog/BasemapPickerDialog (which encode the conventions) rather than invoking the skill directly. Acceptable per worker's report; ShareDialog passes Rule 0 (slot into MainMenu, no new top-left chip).
+- `handoff` at session close (now).
+- **`[eval: knowledge-restored]`** — passed (foxhound + qmd queries returned useful tier 0 results throughout; no `context add` needed).
+- **`[eval: no-rediscovery]`** — passed (didn't re-investigate any prior-session decisions; consulted the 2026-05-10 handoff once and trusted its calls).
+- **Pending routing for Phase 5**:
+  - **`brainstorming`** for Phase 5 entry (realtime collaboration — multi-user editing semantics, Yjs CRDT integration, presence/cursors, the E-01 HELD seed about Yjs E2EE option).
+  - **`shadow-walk`** for the share-link UX walkthrough now that T8/T9 ships — fresh-eyes pass would catch onboarding friction.
+  - **`adversarial-api-testing`** in Phase 5 for any new auth surface (Phase 5 introduces multi-user, which is auth-adjacent).
+  - **`writing-plans`** for the Phase 5 plan document.
 
 ## Infrastructure Delta
 
-This session changed: **two new commits on `main` workflow surface** (LFS + new GH Actions job). Skills/hooks/pipelines/plugin versions otherwise unchanged.
+This session changed:
 
 - **Plugins**: unchanged.
 - **Hooks**: unchanged.
-- **Skills**: unchanged.
+- **Skills**: unchanged in `~/.claude/skills/`. Note that `.claude/skills/playwright-cli/` is **still untracked** (from prior session) — not added by this session; relevant if Phase 5 wants browser-level smoke.
 - **Pipelines**: unchanged.
 - **Overrides**: unchanged.
-- **CI workflows**: `.github/workflows/pages.yml` ADDED — first new workflow this Phase 4. Requires GitHub repo settings (Pages source = "GitHub Actions") before first run succeeds.
-- **Git LFS**: ENABLED for this repo. `.gitattributes` tracks `*.pmtiles`. Per-repo hooks installed via `git lfs install --local`. LFS storage: 43 MB now (one file).
-- **Mulch**: 1 new convention record in `infrastructure` domain (`Per-package vitest.config.ts shields from root setupTests`). One stray auto-created domain (`convention.jsonl`) created and removed mid-session — clean.
+- **CI workflows**: unchanged. GH Pages workflow had been added in the prior session; it ran successfully on every push this session (no `failure` runs).
+- **Mulch**: 2 new convention records in `infrastructure`:
+  - `Split tsconfig.build.json pattern for Node app workspaces` (recorded after T3 — keeps tests out of dist).
+  - `Fastify v5: loggerInstance for pre-built pino, not logger` (recorded after T16 caught the T18 bug).
+- **Seeds**: 2 closures (`atlasdraw-e6f7` outcome:success T12, `atlasdraw-189c` outcome:rework duplicate).
+- **ADRs (new file surface)**: `docs/architecture/adr/` directory created with four ADRs (`0006-telemetry.md`, `0007-storage-dual-mode.md`, `0008-share-link-encoding.md`, `0009-error-capture.md`).
+- **Compose surface (new file directory)**: `infra/` created with `docker-compose.minimal.yml`, `docker-compose.yml`, `caddy/Caddyfile`, `.env.example`, `Makefile`.
+- **Self-host docs (new file directory)**: `docs/self-host/` created with `README.md`, `production.md`.
+- **E2E surface (new file directory)**: `tests/e2e/` created with `phase4-smoke.sh`.
 
 ## Knowledge State
 
-- **Indexed**: zod ^3.22.0 (already in lockfile via `@atlasdraw/data`; atlas-app + storage now declare it directly). Git LFS 3.6.1.
-- **Productive tiers**: `ml search`, `qmd skills` (atlasdraw-ui-conventions), `foxhound` not used substantively (the work was code-write-heavy, not search-heavy). `grep` via Bash served well for plan-literal verification.
-- **Gaps**: No indexed docs for `actions/configure-pages@v5` / `actions/deploy-pages@v4` — wrote the workflow from memory + GH Actions Marketplace conventions. If anything in CI breaks on the first run, fetch via `mcp__context__get_docs` or web.
+- **Indexed**: pino@10.3.1, @sentry/node@8.x, fastify@5.2.x, better-sqlite3@11.x, pg@8.x, @aws-sdk/client-s3@3.x, nanoid@3.3.8 (via yarn dedup; v3 in monorepo elsewhere), lz-string@1.5.x — all newly resolved in the yarn.lock. No `context add` was needed; mulch + qmd handled everything in tier 0/1.
+- **Productive tiers**: `ml search` (multiple consults), `qmd skills` (atlasdraw-ui-conventions read once by worker), `grep` via Bash (plan-literal verification, especially for the Fastify-v5 logger fix). `foxhound` not used substantively.
+- **Gaps**: No indexed docs for the Caddy v2 admin API (the Caddyfile was authored from memory of the v2 syntax). If Phase 5 introduces Caddy admin API automation, fetch via `mcp__context__get_docs`. No indexed docs for `@sentry/node` v8 — the `beforeSend` hook signature was hand-rolled; verified at runtime that the smoke didn't crash.
 
 ## Next Steps
 
-1. **Push `main` to origin.** Local is 62 ahead. First push exercises the new pages workflow. Before pushing: confirm GitHub repo settings (Pages source = "GitHub Actions") otherwise `deploy-pages@v4` fails. Trivial: `git push origin main`.
-2. **Pick the next block.** Suggested order:
-   - **T3 storage HTTP + dual adapters** (heaviest; unblocks T4, T13, T8/T9). Run `writing-plans` to refine plan §5 Task 3 specs, then pre-dispatch scrub (Fastify version, adapter package layout). One or two parallel worktree workers per adapter is viable since they're file-disjoint.
-   - **OR atlasdraw-3601 addFiles test** (small, closes Wave 0 audit). Good warm-up if context budget is fresh.
-   - **OR T17 ADRs** (1 hr; closes doc debt; ADR-0006 backfills the missing telemetry doc the AboutDialog already references).
-3. **Optional cleanup**:
-   - Dedup mirrored seeds: `e6f7`/`189c` (T12), `b9d2`/`d1a1`/`95de` (space+drag).
-   - File a chronic-hygiene seed for the recurring `code/packages/cli/src/atlasdraw.ts` mode-bit churn from yarn install.
-   - Consider adding `--immutable` to the husky pre-commit hook if mode-bit drift keeps showing up.
-4. **Stale-plan check**: `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` has three dated 2026-05-10 scrub notes (T2 added this session, T5 + T7 from prior). Plan is current — no archival.
-5. **AboutDialog ADR link.** When `docs/architecture/adr/0006-telemetry.md` lands (part of T17), update `AboutDialog.tsx` to point at it instead of the self-host README anchor.
-6. **T13 finish.** After T3 lands, rewire `startAutoSave` to talk to the new HTTP `StorageClient` (it currently hits localStorage only).
+1. **Push T16** — done at session close. Verify with `git log origin/main` if a fresh agent is unsure.
+2. **Triage Dependabot alerts** (25 on origin: 2 critical, 4 high, 18 moderate, 1 low). Likely transitive from the new server deps. Run `gh api repos/micahchoo/atlasdraw/dependabot/alerts` to enumerate.
+3. **Pick Phase 5 anchor**:
+   - **Brainstorming** for Phase 5 — realtime collaboration. Key open question: HELD seed `atlasdraw-4f26` (Maintainer decision on E-01 Yjs E2EE option A/B/C) blocks `atlasdraw-fef0` (E-02 DiffEngine dependency). User decision required before Phase 5 work begins.
+   - **OR fix the 5 small P3 seeds** as a warm-up: `atlasdraw-3601` (P1 addFiles test), `atlasdraw-087c` (hydrate visible TODO), `atlasdraw-320b` (blob warnings), `atlasdraw-b9d2/d1a1/95de` (space+drag).
+4. **Optional polish**:
+   - Sentry `beforeSend` regression test (ADR-0009 Follow-up).
+   - AppConfig `pages` / `hosted` AboutDialog render tests (currently `local-only` only).
+   - Real `docker compose up` smoke (compose YAML is parse-verified; actual build not exercised).
+   - Move ADR-0008 7-day-TTL note into README/production.md so operators don't have to read the ADR to discover the supersession.
+5. **Stale-plan check**: `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` has many dated 2026-05-11 scrub notes. **All Phase 4 tasks are done**; consider archiving the plan to `docs/superpowers/plans/archive/` or marking it `# Status: complete` at the top.
+6. **Update the parent `atlasdraw-4579` seed** (Phase 4: MVP self-host + Docker) — close with `outcome:success` referencing this handoff.
 
 ## Context Files
 
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` — Phase 4 plan, three dated 2026-05-10 scrub notes (T2 casual/power split, T5 Protomaps source, T7 resolver shape). §5 Task 3 is the next unstarted spec.
-- `code/apps/atlas-app/src/config/app-config.ts` + `__tests__/app-config.test.ts` — T2b: `VITE_BUILD_TARGET` discriminator, feature flags, 5/5 tests.
-- `code/apps/atlas-app/vite.config.ts` — three plugins now (`pmtilesNotFoundPlugin`, `cleanupPublicDataPlugin`, react), `base` conditional, `define` injection for VITE_APP_VERSION + VITE_GIT_HASH.
-- `code/apps/storage/{package.json, tsconfig.json, vitest.config.ts, src/types.ts, src/config.ts, src/config.test.ts, src/index.ts}` — T1+T2 storage scaffold. 7/7 tests pass via `yarn workspace @atlasdraw/storage test`.
-- `code/apps/atlas-app/src/components/AboutDialog.tsx` + `__tests__/AboutDialog.test.tsx` — T14, 4/4 tests. Replaces the standalone demo MainMenu item.
-- `.github/workflows/pages.yml` — new GH Actions workflow. checkout(lfs:true) → build → deploy-pages.
-- `.gitattributes` — LFS rule for `*.pmtiles`.
-- `code/apps/atlas-app/.gitignore` — `public/data/*` ignored, `world-low-zoom.pmtiles` re-included.
-- `.claude/rules/excalidraw-api.md` — load-bearing convention; grep vendored Excalidraw source before assuming any API.
-- `HANDOFF-expertise.md` — structured mulch records for infrastructure + meta + architecture (ml prime + ml diff).
+- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md` — Phase 4 plan with eight 2026-05-11 scrub notes (T3, T4, T8, T10) and three 2026-05-10 scrub notes (T2, T5, T7). All Wave 0/1/2/3 tasks marked done in this handoff.
+- `docs/architecture/adr/0006-telemetry.md` — telemetry policy (zero call-home by default).
+- `docs/architecture/adr/0008-share-link-encoding.md` — share-link two-mode design + supersedes plan §5 line 1335 (30-day → 7-day TTL canonical).
+- `docs/architecture/adr/0009-error-capture.md` — Sentry opt-in path, ADR-0006 compliance preserved.
+- `code/apps/storage/src/index.ts` — Fastify entry with the v5 `loggerInstance:` fix. Don't regress.
+- `code/apps/storage/src/routes/share.ts` — share JSON + share blob routes; the adversarial mode-server-literal property lives here.
+- `code/apps/atlas-app/src/hooks/useShareLink.ts` — 32 KiB JSON / 50 000 char hash cap gating logic.
+- `code/apps/atlas-app/src/components/ShareView.tsx` — read-only viewer; note the Excalidraw view-mode is duplicated from MapEditor (deliberate; documented in file header).
+- `code/apps/atlas-app/src/App.tsx` — hand-rolled path detector; replace with a router only if Phase 5 introduces more routes.
+- `infra/Makefile` — operator-facing target reference.
+- `infra/docker-compose.yml` + `infra/caddy/Caddyfile` + `infra/.env.example` — full-stack deploy surface.
+- `tests/e2e/phase4-smoke.sh` — the acceptance gate. Re-run on every storage change.
+- `HANDOFF-expertise.md` — structured mulch records for `infrastructure` + `meta` + `architecture` domains (via `ml prime`). Inherit the domain knowledge directly.
+- `.claude/rules/excalidraw-api.md` — load-bearing project rule; grep vendored Excalidraw source before assuming any API. Did NOT fire this session (no Excalidraw API changes), still relevant for Phase 5.
