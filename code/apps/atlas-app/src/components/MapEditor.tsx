@@ -386,6 +386,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // viewBackgroundColor reset; without this flag each one queues another
   // updateScene, exhausting React's 50-update nesting limit.
   const bgResetQueuedRef = useRef(false);
+  // True once Excalidraw has emitted at least one onChange with vbg ==
+  // "transparent" (i.e. our initialData/reset has actually been applied).
+  // Excalidraw v0.18 emits a default-vbg ("#ffffff") onChange on mount
+  // BEFORE initialData lands — without this guard, setMapBg(default-white)
+  // ran on every load, painting an opaque rectangle over the map.
+  const transparentAppliedRef = useRef(false);
 
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
@@ -807,7 +813,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     (elements, appState) => {
       // --- 1. Background color intercept ---
       if (appState.viewBackgroundColor !== "transparent") {
-        setMapBg(appState.viewBackgroundColor);
+        // Gate: only treat as a user color-pick after we've seen a transparent
+        // state at least once (= our initialData/reset has been applied).
+        // Otherwise the mount-time default `#ffffff` emit gets captured into
+        // mapBg and paints an opaque rectangle over the map.
+        if (transparentAppliedRef.current) {
+          setMapBg(appState.viewBackgroundColor);
+        }
         // Only queue one reset at a time. CoordinateSync fires many onChange
         // events (one per camera event) before React processes our setState;
         // without this guard each fires another updateScene, exhausting
@@ -819,6 +831,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           });
         }
       } else {
+        transparentAppliedRef.current = true;
         bgResetQueuedRef.current = false;
       }
 
@@ -978,13 +991,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               🗺 Basemap
             </MainMenu.Item>
-            {showBasemapPicker && (
-              <BasemapPickerDialog
-                activeId={activeBasemapId}
-                onSelect={setActiveBasemapId}
-                onCloseRequest={() => setShowBasemapPicker(false)}
-              />
-            )}
             <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
         </Excalidraw>
@@ -1014,6 +1020,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             });
           }}
           style={{ cursor: activeAtlasTool.cursor }}
+        />
+      )}
+
+      {/* Phase 4 T6 — Basemap picker. Rendered at the root level (NOT inside
+          MainMenu) so MainMenu auto-close on item click doesn't unmount it.
+          The dialog manages its own focus trap, Escape, and click-outside. */}
+      {showBasemapPicker && (
+        <BasemapPickerDialog
+          activeId={activeBasemapId}
+          onSelect={setActiveBasemapId}
+          onCloseRequest={() => setShowBasemapPicker(false)}
         />
       )}
     </div>

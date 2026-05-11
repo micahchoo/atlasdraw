@@ -58,15 +58,21 @@ export interface MapCanvasProps {
 // Defaults
 // ---------------------------------------------------------------------------
 
-// Empty offline style — no network fetch. Atlas-app's basemap-effect
-// (Phase 4 T6/T7) replaces this with the active basemap style after mount.
-// Standalone callers can pass their own styleUrl prop.
+// Empty offline style — no network fetch, no opaque background. Atlas-app's
+// basemap-effect (Phase 4 T6/T7) replaces this with the active basemap style
+// after mount. A `#f0f0f0` placeholder bled through behind the real style on
+// the 2026-05-10 smoke test; using `rgba(0,0,0,0)` keeps the WebGL canvas
+// clear so map.setStyle's transition has no leftover paint to fight.
 const DEFAULT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   name: "atlasdraw-empty",
   sources: {},
   layers: [
-    { id: "background", type: "background", paint: { "background-color": "#f0f0f0" } },
+    {
+      id: "background",
+      type: "background",
+      paint: { "background-color": "rgba(0,0,0,0)" },
+    },
   ],
 };
 
@@ -125,7 +131,18 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       });
     }
 
+    // 2026-05-10 — keep the WebGL canvas sized to the container. With an
+    // inline `style` arg, the map's "load" fires synchronously enough that
+    // MapLibre measures the container BEFORE the surrounding flex/grid layout
+    // has settled. Without this, the canvas is locked at the initial measured
+    // size — producing a small rectangle in the upper-left corner regardless
+    // of viewport. ResizeObserver keeps it in sync if the parent resizes too.
+    requestAnimationFrame(() => map.resize());
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
     };
