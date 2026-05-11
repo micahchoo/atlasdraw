@@ -852,15 +852,70 @@ docs/
 
 ### Task 10: `docker-compose.minimal.yml` — 3-Service Stack [Wave 2]
 
+> **Scrub note (2026-05-11, pre-dispatch):** Three scope adjustments from
+> pre-dispatch grounding against the shipped Phase 4 surface:
+>
+> 1. **Path correction.** Plan literal `infra/...` is correct — workspace
+>    root is `code/`, but compose lives one level up at repo root next to
+>    `docs/`. No `code/` prefix needed for this task.
+> 2. **Dockerfiles required and not in the spec.** Plan asks for a
+>    compose file but the services (`web`, `storage`) need Dockerfiles
+>    that don't exist yet. T10 must also create:
+>    - `code/apps/atlas-app/Dockerfile` — multi-stage: yarn build → serve
+>      `dist/` via nginx:alpine.
+>    - `code/apps/storage/Dockerfile` — multi-stage: yarn build → node:20
+>      runtime. Run `node dist/index.js`.
+>    Plus `.dockerignore` files for both apps to avoid sending
+>    `node_modules`, build artifacts, and (critically) the gitignored
+>    `india.pmtiles` 4.9 GB local archive into the build context.
+> 3. **`fetch-pmtiles.sh` is unnecessary for T10.** The 43 MB
+>    `world-low-zoom.pmtiles` is already committed to repo via Git LFS at
+>    `code/apps/atlas-app/public/data/world-low-zoom.pmtiles` and is
+>    baked into the atlas-app Vite build output (`dist/data/`). The web
+>    image ships with the pmtiles file inside its nginx serving root —
+>    no runtime fetch needed. The shared compose volume is therefore
+>    only for the storage server's sqlite db + blobs (`/data` in the
+>    storage container). T12 (Makefile basemap-world) covers rebuilding
+>    the pmtiles from upstream Protomaps; T10 just consumes the
+>    pre-built asset.
+>
+> **Service set** (down from spec's 3 to 2 + 1 named volume):
+> - `web` — atlas-app dist served by nginx:alpine. Port 3000.
+>   Built with `VITE_BUILD_TARGET=local-only` (no demo badge, no GH-Pages
+>   base prefix) and `VITE_STORAGE_BASE_URL=http://localhost:4000` (so
+>   `enableBackendPersistence=true` would route to storage — but note:
+>   `enableBackendPersistence` is gated on `buildTarget === "hosted"`,
+>   not on `local-only`; minimal stack DOES NOT autosave to storage by
+>   default. T10 ships the stack; T11 full stack uses `buildTarget=hosted`.)
+>
+>   **Sub-decision:** for the minimal stack, build with
+>   `VITE_BUILD_TARGET=hosted` so autosave actually exercises the
+>   storage server. Otherwise the minimal stack is browser-only and the
+>   storage container is unused — defeats the purpose of bundling
+>   storage in the compose.
+> - `storage` — apps/storage image. `STORAGE_MODE=sqlite-fs`,
+>   `DATA_DIR=/data`, `LOG_LEVEL=info`. Port 4000.
+> - Named volume `atlas-storage-data` mounted at `/data` in the storage
+>   container only.
+>
+> **No `depends_on` health gate** (per spec) — Phase 5 hardening adds
+> healthchecks. T10's `depends_on: storage` is sufficient.
+>
+> **Verification command** — `docker compose -f infra/docker-compose.minimal.yml config --quiet` validates YAML/compose syntax without needing the daemon. If docker is unavailable in CI / orchestrator env, `python3 -c "import yaml; yaml.safe_load(open('infra/docker-compose.minimal.yml'))"` is a fallback.
+>
+> Originating audit: 2026-05-11 pre-dispatch scrub.
+
 **Orient:** This is the first-run stack (Q10). A curious user runs one command and gets a working Atlasdraw with zero external dependencies. Services: web + storage (sqlite-fs mode) + shared data volume. No postgres, no minio, no caddy. (Q1: no realtime container in Phase 4.)
 **Flow position:** Step 3 of 3 in Flow C (config-detection → **minimal compose** → first-run experience).
-**Upstream contract:** Receives `STORAGE_MODE=sqlite-fs`, `DATA_DIR=/data` — these env vars activate the sqlite-fs adapter from Task 3. Requires `infra/data/world-low-zoom.pmtiles` to exist (fetched by `make pmtiles-fetch`).
+**Upstream contract:** Receives `STORAGE_MODE=sqlite-fs`, `DATA_DIR=/data` — these env vars activate the sqlite-fs adapter from Task 3. Requires `code/apps/atlas-app/public/data/world-low-zoom.pmtiles` (already committed via Git LFS) to be present at image-build time.
 **Downstream contract:** Running stack at `localhost:3000` consumed by Task 15 (smoke test).
 **Skill:** `none`
 **Files:**
 - Create: `infra/docker-compose.minimal.yml`
-- Create: `infra/data/.gitkeep`
-- Create: `infra/data/fetch-pmtiles.sh`
+- Create: `code/apps/atlas-app/Dockerfile`
+- Create: `code/apps/atlas-app/.dockerignore`
+- Create: `code/apps/storage/Dockerfile`
+- Create: `code/apps/storage/.dockerignore`
 
 **Steps:**
 
