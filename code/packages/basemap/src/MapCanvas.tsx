@@ -8,8 +8,12 @@
  * Deliberately minimal: no basemap registry, no PMTiles protocol, no style
  * switching logic. Those land in later waves.
  *
- * Default styleUrl: OpenFreeMap "liberty" style — public, no API key required.
- * Swap to any MapLibre-compatible style URL via the `styleUrl` prop.
+ * Default style: an empty in-memory MapLibre style (transparent canvas, no
+ * tile fetch). Callers wire a real style via setStyle() or by passing the
+ * `styleUrl` prop. The previous Phase 1 default fetched OpenFreeMap "liberty"
+ * on every mount, which (a) caused a spurious network request before the
+ * Phase 4 T6/T7 picker effect overrode it, and (b) couldn't run offline.
+ * (atlasdraw-7899, 2026-05-10).
  *
  * Phase 1 constraints enforced at construction:
  *   maxPitch: 0          — pitch=0 assumption keeps CoordinateSync projection-agnostic (OQ-2)
@@ -31,11 +35,11 @@ export interface MapCanvasInitialView {
 
 export interface MapCanvasProps {
   /**
-   * MapLibre-compatible style URL.
-   * Defaults to OpenFreeMap "liberty" — public, no API key needed.
-   * Swap for any PMTiles or vector tile style URL as needed.
+   * MapLibre-compatible style URL or inline StyleSpecification.
+   * Defaults to an empty offline style (no tile fetch). Phase 4 callers
+   * supply the real style via setStyle() after mount (see MapEditor.tsx).
    */
-  styleUrl?: string;
+  styleUrl?: string | maplibregl.StyleSpecification;
 
   /** Initial viewport; changes after mount are ignored (map controls its own state). */
   initialView?: MapCanvasInitialView;
@@ -54,10 +58,17 @@ export interface MapCanvasProps {
 // Defaults
 // ---------------------------------------------------------------------------
 
-const DEFAULT_STYLE_URL =
-  // OpenFreeMap liberty — free, public, no API key required.
-  // See https://openfreemap.org/
-  "https://tiles.openfreemap.org/styles/liberty";
+// Empty offline style — no network fetch. Atlas-app's basemap-effect
+// (Phase 4 T6/T7) replaces this with the active basemap style after mount.
+// Standalone callers can pass their own styleUrl prop.
+const DEFAULT_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  name: "atlasdraw-empty",
+  sources: {},
+  layers: [
+    { id: "background", type: "background", paint: { "background-color": "#f0f0f0" } },
+  ],
+};
 
 const DEFAULT_CENTER: [number, number] = [0, 20];
 const DEFAULT_ZOOM = 2;
@@ -71,7 +82,7 @@ const DEFAULT_ZOOM = 2;
  * It fills its container — apply width/height on the container or via `className`.
  */
 export const MapCanvas: React.FC<MapCanvasProps> = ({
-  styleUrl = DEFAULT_STYLE_URL,
+  styleUrl = DEFAULT_STYLE,
   initialView,
   onMapReady,
   className,

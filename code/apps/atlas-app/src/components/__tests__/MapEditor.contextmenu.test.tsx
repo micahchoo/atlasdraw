@@ -55,6 +55,8 @@ vi.mock("@atlasdraw/basemap", () => ({
     { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
     { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
   ],
+  resolveStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
+  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error { constructor(public readonly basemapId: string) { super(`Basemap ${basemapId} requires allow_remote=true`); this.name = "BasemapRemoteGatedError"; } },
 }));
 
 // Fake selected element — a rectangle with valid bbox geo. Mutated per-test.

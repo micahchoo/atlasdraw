@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: MPL-2.0
 // @atlasdraw/basemap — Phase 4 Wave 1 (T7): basemap style resolver + remote gate.
 //
-// Owns:
-//   - getPmtilesPath(): reads VITE_PMTILES_PATH (Vite injects via import.meta.env)
-//     with a dev fallback.
-//   - resolveStyle(id, opts): looks up the BasemapConfig, enforces the remote-tile
-//     gate (allow_remote), and delegates token substitution to buildStyle.
-//
 // Boundary contract (per 2026-05-10 scrub note on plan §5 Task 7 Step 1):
 //   - pmtiles-protocol.ts stays argument-less (registers the `pmtiles://` scheme).
 //   - style-builder.ts is the substitution engine (consumes opts.pmtilesPath).
-//   - This module is the only place that knows where the pmtiles archive LIVES.
+//   - This module enforces the remote-tile gate and delegates substitution.
+//
+// Boundary contract (per 2026-05-10 smoke-test fix atlasdraw-bff1):
+//   - This package does NOT read environment variables. Vite's textual
+//     `import.meta.env.X` replacement only fires on the literal pattern, and
+//     cross-package source files can't rely on its semantics. The caller
+//     (atlas-app) reads VITE_PMTILES_PATH and passes the resolved path in.
 
 import type maplibregl from "maplibre-gl";
 
@@ -37,25 +37,14 @@ export interface ResolveStyleOptions {
    */
   allowRemote: boolean;
   /**
-   * Override the resolved pmtiles archive path. Primarily a test-injection
-   * seam; production callers should rely on `getPmtilesPath()`.
+   * Path/URL to the local PMTiles archive. Substituted into self-hosted
+   * style JSONs wherever the `__PMTILES_PATH__` token appears. Ignored
+   * when the basemap is `requiresRemote: true`.
+   *
+   * The caller is responsible for reading this from its environment
+   * (e.g. `import.meta.env.VITE_PMTILES_PATH` in a Vite-built app).
    */
-  pmtilesPath?: string;
-}
-
-/**
- * Resolve the pmtiles archive path. Reads `VITE_PMTILES_PATH` at build/runtime
- * (Vite injects via `import.meta.env`); falls back to the dev default served
- * out of `apps/atlas-app/public/data/`.
- *
- * The `typeof import.meta` guard keeps this callable under Node-only test
- * harnesses (vitest jsdom environment exposes import.meta but stays defensive).
- */
-export function getPmtilesPath(): string {
-  const meta = import.meta as { env?: Record<string, string | undefined> };
-  const envPath =
-    typeof import.meta !== "undefined" ? meta.env?.VITE_PMTILES_PATH : undefined;
-  return envPath || "/data/world-low-zoom.pmtiles";
+  pmtilesPath: string;
 }
 
 /**
@@ -64,8 +53,7 @@ export function getPmtilesPath(): string {
  *   - Throws if the basemap id is unknown.
  *   - Throws BasemapRemoteGatedError if the basemap requires remote tiles
  *     and the caller has not opted in.
- *   - Delegates `__PMTILES_PATH__` substitution to buildStyle (style-builder
- *     owns the substitution algorithm; this module just supplies the path).
+ *   - Delegates `__PMTILES_PATH__` substitution to buildStyle.
  */
 export async function resolveStyle(
   id: BasemapConfig["id"],
@@ -78,6 +66,5 @@ export async function resolveStyle(
   if (config.requiresRemote && !opts.allowRemote) {
     throw new BasemapRemoteGatedError(id);
   }
-  const pmtilesPath = opts.pmtilesPath ?? getPmtilesPath();
-  return buildStyle(config, { pmtilesPath });
+  return buildStyle(config, { pmtilesPath: opts.pmtilesPath });
 }

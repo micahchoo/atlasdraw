@@ -1,0 +1,3 @@
+# Local PMTiles archives — too large for git (4-5 GB each).
+# Place archives here for dev; production volume-mounts at /data/*.pmtiles.
+public/data/

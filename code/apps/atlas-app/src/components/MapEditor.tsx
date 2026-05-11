@@ -399,17 +399,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Phase 4 T6/T7 — apply basemap style when the map is ready or the user
   // switches basemaps. registerPmtilesProtocol is idempotent; safe to call
-  // before every setStyle that references pmtiles:// URLs. resolveStyle
-  // (T7) owns env-var-backed pmtiles path resolution and the remote-tile
-  // gate; we just pass the active id and the current allow-remote flag.
+  // before every setStyle that references pmtiles:// URLs.
+  //
+  // The pmtiles path is read HERE (not inside @atlasdraw/basemap) because
+  // Vite's textual `import.meta.env.X` replacement only fires on files it
+  // transforms in the app's compile pipeline — moving the read out of the
+  // basemap package was the fix for atlasdraw-bff1.
   useEffect(() => {
     if (!map) return;
     registerPmtilesProtocol();
     const apply = async () => {
       try {
         // TODO(T14/T15): wire allowRemote from app config (Q3 default = false).
+        const pmtilesPath =
+          import.meta.env.VITE_PMTILES_PATH ?? "/data/world-low-zoom.pmtiles";
         const style = await resolveStyle(activeBasemapId, {
           allowRemote: false,
+          pmtilesPath,
         });
         map.setStyle(style);
       } catch (err) {

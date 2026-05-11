@@ -18,10 +18,8 @@ export { registerPmtilesProtocol } from "./pmtiles-protocol";
 export { buildStyle } from "./style-builder";
 export type { BuildStyleOptions } from "./style-builder";
 
-// Phase 4, Wave 1 (T7): resolver + VITE_PMTILES_PATH env gate.
-export {
-  resolveStyle,
-  getPmtilesPath,
-  BasemapRemoteGatedError,
-} from "./resolver";
+// Phase 4, Wave 1 (T7): resolver + remote-gate. The pmtiles path is
+// caller-supplied (see resolver.ts boundary contract); this package does
+// not read environment variables.
+export { resolveStyle, BasemapRemoteGatedError } from "./resolver";
 export type { ResolveStyleOptions } from "./resolver";
