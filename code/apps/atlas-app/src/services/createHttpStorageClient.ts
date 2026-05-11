@@ -1,13 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 4 T13 — HTTP client for the @atlasdraw/storage server.
 //
-// The atlas-app SPA talks to the storage HTTP API (Phase 4 T3+T4) through
-// this thin client. Five methods, all routed to fetch():
-//   - createMap     POST /maps             body: octet-stream  → MapRecord
-//   - getMap        GET  /maps/:id                              → MapRecord | null
-//   - updateMap     PUT  /maps/:id         body: octet-stream  → MapRecord
-//   - createShareToken POST /maps/:id/share                     → ShareToken
-//   - resolveToken  GET  /share/:token                          → ShareToken | null
+// The atlas-app SPA talks to the storage HTTP API (Phase 4 T3+T4+T8) through
+// this thin client. Six methods, all routed to fetch():
+//   - createMap        POST /maps               body: octet-stream  → MapRecord
+//   - getMap           GET  /maps/:id                                → MapRecord | null
+//   - updateMap        PUT  /maps/:id           body: octet-stream  → MapRecord
+//   - createShareToken POST /maps/:id/share                          → ShareToken
+//   - resolveToken     GET  /share/:token                            → ShareToken | null
+//   - getShareBlob     GET  /share/:token/blob                       → ArrayBuffer | null
+//
+// `getShareBlob` is HTTP-only — not part of the shared `StorageClient`
+// contract. It hangs off the returned object so the ShareView consumer can
+// fetch raw map bytes without coupling the server-side adapter contract to
+// browser-only types like ArrayBuffer.
 //
 // Why mirror types here instead of importing `@atlasdraw/storage`: the storage
 // workspace publishes types via `dist/types.d.ts` but has no `main`/`types`
@@ -51,6 +57,32 @@ export interface StorageClient {
   updateMap(id: string, blob: Blob | Uint8Array): Promise<MapRecord>;
   createShareToken(mapId: string): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
+}
+
+/**
+ * Thrown by `getShareBlob` when the server returns 410 Gone (token expired
+ * or orphaned). Distinguishes "missing" (404 → null) from "was-here-now-gone"
+ * (410 → error) so the ShareView UI can render distinct messages.
+ */
+export class ShareExpiredError extends Error {
+  constructor() {
+    super("ShareExpired");
+    this.name = "ShareExpiredError";
+  }
+}
+
+/**
+ * Extended HTTP client — `StorageClient` plus the share-blob retrieval
+ * helper that's HTTP-only (no server-side adapter equivalent surfaced to
+ * the SPA). Returned by `createHttpStorageClient`.
+ */
+export interface HttpStorageClient extends StorageClient {
+  /**
+   * Fetch raw map bytes for a share token. Returns `null` on 404 (token
+   * never existed or already-cleaned-up); throws `ShareExpiredError` on
+   * 410 (was-here-now-gone). Throws on any other non-2xx.
+   */
+  getShareBlob(token: string): Promise<ArrayBuffer | null>;
 }
 
 export interface HttpStorageClientOptions {
@@ -97,7 +129,7 @@ async function expectJsonOrThrow<T>(res: Response, op: string): Promise<T> {
  */
 export function createHttpStorageClient(
   opts: HttpStorageClientOptions,
-): StorageClient {
+): HttpStorageClient {
   const baseUrl = opts.baseUrl;
   // Capture once at construction so test injections are stable even if the
   // global `fetch` is later patched.
@@ -174,6 +206,21 @@ export function createHttpStorageClient(
         expires_at: body.expires_at ?? new Date(Date.now() + 7 * 86400_000).toISOString(),
         created_at: body.map.created_at,
       };
+    },
+
+    async getShareBlob(token) {
+      const res = await fetchImpl(
+        joinUrl(baseUrl, `/share/${encodeURIComponent(token)}/blob`),
+        { method: "GET" },
+      );
+      if (res.status === 404) return null;
+      if (res.status === 410) throw new ShareExpiredError();
+      if (!res.ok) {
+        throw new Error(
+          `[storage-http] getShareBlob failed: ${res.status} ${res.statusText}`,
+        );
+      }
+      return await res.arrayBuffer();
     },
   };
 }

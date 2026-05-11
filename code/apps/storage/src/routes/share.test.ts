@@ -8,15 +8,19 @@ import type { ShareToken, StorageClient } from "../types";
 import { registerMapRoutes } from "./maps";
 import { registerShareRoutes } from "./share";
 
-// Spy-wrapping StorageClient — increments counters on the two methods T4
-// touches so we can assert that route-level validation rejects bad input
-// BEFORE the adapter is called.
+// Spy-wrapping StorageClient — increments counters on the methods the
+// share routes touch so we can assert that route-level validation rejects
+// bad input BEFORE the adapter is called.
 interface SpyClient extends StorageClient {
-  calls: { createShareToken: number; resolveToken: number };
+  calls: {
+    createShareToken: number;
+    resolveToken: number;
+    getBlob: number;
+  };
 }
 
 function wrapWithSpy(inner: StorageClient): SpyClient {
-  const calls = { createShareToken: 0, resolveToken: 0 };
+  const calls = { createShareToken: 0, resolveToken: 0, getBlob: 0 };
   return {
     calls,
     createMap: inner.createMap.bind(inner),
@@ -29,6 +33,10 @@ function wrapWithSpy(inner: StorageClient): SpyClient {
     resolveToken: async (token) => {
       calls.resolveToken += 1;
       return inner.resolveToken(token);
+    },
+    getBlob: async (id) => {
+      calls.getBlob += 1;
+      return inner.getBlob(id);
     },
   };
 }
@@ -254,6 +262,104 @@ describe("/share routes", () => {
         const res = await app.inject({
           method: "GET",
           url: `/share/${encodeURIComponent(badToken)}`,
+        });
+        expect(res.statusCode).toBe(400);
+        expect(spy.calls.resolveToken).toBe(before);
+      },
+    );
+  });
+
+  // ─── GET /share/:token/blob ─────────────────────────────────────────────
+
+  describe("GET /share/:token/blob", () => {
+    async function mintTokenForFreshMap(payload: Buffer): Promise<{
+      mapId: string;
+      token: string;
+    }> {
+      const create = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: { "content-type": "application/octet-stream" },
+        payload,
+      });
+      const map = create.json();
+      const share = await app.inject({
+        method: "POST",
+        url: `/maps/${map.id}/share`,
+      });
+      const body = share.json();
+      return { mapId: map.id, token: body.token };
+    }
+
+    it("returns 200 with the raw blob bytes for a valid token", async () => {
+      const payload = Buffer.from("hello, atlas world");
+      const { token } = await mintTokenForFreshMap(payload);
+      const callsBefore = spy.calls.getBlob;
+      const res = await app.inject({
+        method: "GET",
+        url: `/share/${token}/blob`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/octet-stream");
+      expect(res.headers["cache-control"]).toBe("private, max-age=60");
+      // res.rawPayload is a Buffer in fastify inject's response.
+      expect(Buffer.from(res.rawPayload).equals(payload)).toBe(true);
+      expect(spy.calls.getBlob).toBe(callsBefore + 1);
+    });
+
+    it("returns 404 for an unknown but well-formed token", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: `/share/${"z".repeat(21)}/blob`,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it("returns 410 when the token is expired", async () => {
+      const { token } = await mintTokenForFreshMap(Buffer.from("x"));
+      const db = new Database(dbPath);
+      const pastIso = new Date(Date.now() - 60_000).toISOString();
+      const updated = db
+        .prepare("UPDATE share_tokens SET expires_at = ? WHERE token = ?")
+        .run(pastIso, token);
+      expect(updated.changes).toBe(1);
+      db.close();
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/share/${token}/blob`,
+      });
+      expect(res.statusCode).toBe(410);
+    });
+
+    it("returns 410 for an orphaned token (map row deleted under it)", async () => {
+      const { mapId, token } = await mintTokenForFreshMap(Buffer.from("x"));
+      const db = new Database(dbPath);
+      db.pragma("foreign_keys = OFF");
+      const result = db
+        .prepare("DELETE FROM maps WHERE id = ?")
+        .run(mapId);
+      expect(result.changes).toBe(1);
+      db.close();
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/share/${token}/blob`,
+      });
+      expect(res.statusCode).toBe(410);
+    });
+
+    it.each([
+      ["short", "too-short"],
+      ["!".repeat(21), "illegal-chars"],
+      ["a".repeat(22), "too-long"],
+    ])(
+      "returns 400 for invalid token format (%s — %s) without invoking adapter",
+      async (badToken) => {
+        const before = spy.calls.resolveToken;
+        const res = await app.inject({
+          method: "GET",
+          url: `/share/${encodeURIComponent(badToken)}/blob`,
         });
         expect(res.statusCode).toBe(400);
         expect(spy.calls.resolveToken).toBe(before);

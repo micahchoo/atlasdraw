@@ -47,4 +47,11 @@ export interface StorageClient {
   updateMap(id: string, blob: Buffer): Promise<MapRecord>;
   createShareToken(mapId: string): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
+  /**
+   * Retrieve the raw blob bytes for a map by id. Returns `null` if the id
+   * is malformed, the map row is missing, or the underlying blob storage
+   * is missing the object (orphaned row). Phase 4 T8/T9 share-via-link
+   * consumes this through the `GET /share/:token/blob` route.
+   */
+  getBlob(id: string): Promise<Buffer | null>;
 }

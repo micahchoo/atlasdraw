@@ -106,4 +106,28 @@ describe("sqlite-fs adapter", () => {
     const resolved = await client.resolveToken(created.token);
     expect(resolved).toEqual(created);
   });
+
+  // Phase 4 T8 amendment — blob retrieval for /share/:token/blob.
+  it("getBlob returns the original bytes for an existing map", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    const payload = Buffer.from("scene-bytes-roundtrip");
+    const map = await client.createMap(payload);
+    const fetched = await client.getBlob(map.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.equals(payload)).toBe(true);
+  });
+
+  it("getBlob returns null for unknown id (well-formed)", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    const fetched = await client.getBlob("a".repeat(21));
+    expect(fetched).toBeNull();
+  });
+
+  it("getBlob returns null for malformed id (defense in depth)", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    expect(await client.getBlob("not-a-nanoid")).toBeNull();
+    expect(await client.getBlob("")).toBeNull();
+    expect(await client.getBlob("../../etc/passwd")).toBeNull();
+    expect(await client.getBlob("a".repeat(22))).toBeNull();
+  });
 });

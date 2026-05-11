@@ -242,6 +242,38 @@ export function createPostgresMinioAdapter(opts: {
       );
       return res.rows[0] ? rowToShare(res.rows[0]) : null;
     },
+
+    async getBlob(id: string): Promise<Buffer | null> {
+      // Phase 4 T8 amendment — consumed by GET /share/:token/blob. Mirrors
+      // sqlite-fs semantics: malformed id → null, missing object → null,
+      // unexpected SDK errors propagate.
+      if (!ID_RE.test(id)) {
+        return null;
+      }
+      await ensureBucket();
+      const key = `maps/${id}.atlasdraw`;
+      try {
+        const res = await s3.send(
+          new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+        );
+        const body = (res as { Body?: unknown }).Body as
+          | {
+              transformToByteArray?: () => Promise<Uint8Array>;
+            }
+          | undefined;
+        if (!body || typeof body.transformToByteArray !== "function") {
+          return null;
+        }
+        const bytes = await body.transformToByteArray();
+        return Buffer.from(bytes);
+      } catch (err: unknown) {
+        const name = (err as { name?: string })?.name ?? "";
+        if (name === "NoSuchKey" || name === "NotFound") {
+          return null;
+        }
+        throw err;
+      }
+    },
   };
 }
 

@@ -195,4 +195,52 @@ describe("postgres-minio adapter", () => {
     );
     expect(selectCalls.length).toBe(0);
   });
+
+  // Phase 4 T8 amendment — getBlob support for /share/:token/blob.
+  it("getBlob returns null for malformed id (no S3 call)", async () => {
+    const client = makeAdapter();
+    const result = await client.getBlob("not-a-nanoid");
+    expect(result).toBeNull();
+    // No GetObjectCommand should have been issued.
+    const getCalls = s3SendMock.mock.calls.filter(
+      ([c]) => (c as { input: { Key?: string } }).input?.Key !== undefined,
+    );
+    expect(getCalls.length).toBe(0);
+  });
+
+  it("getBlob issues a GetObjectCommand under maps/<id>.atlasdraw", async () => {
+    const client = makeAdapter();
+    const id = "a".repeat(21);
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    // CreateBucketCommand (ensureBucket) then GetObjectCommand.
+    s3SendMock.mockResolvedValueOnce({}); // CreateBucket (or already-exists swallowed)
+    s3SendMock.mockResolvedValueOnce({
+      Body: {
+        transformToByteArray: async () => bytes,
+      },
+    });
+
+    const result = await client.getBlob(id);
+    expect(result).not.toBeNull();
+    expect(Buffer.from(bytes).equals(result!)).toBe(true);
+
+    const getCmd = s3SendMock.mock.calls
+      .map(([c]) => c as { input: { Bucket?: string; Key?: string } })
+      .find((c) => c.input.Key !== undefined);
+    expect(getCmd).toBeDefined();
+    expect(getCmd!.input.Bucket).toBe("atlasdraw-maps");
+    expect(getCmd!.input.Key).toBe(`maps/${id}.atlasdraw`);
+  });
+
+  it("getBlob returns null on NoSuchKey from S3", async () => {
+    const client = makeAdapter();
+    const id = "a".repeat(21);
+    // First call: CreateBucket (swallowed). Second call: GetObject throws.
+    s3SendMock.mockResolvedValueOnce({});
+    const err = Object.assign(new Error("missing"), { name: "NoSuchKey" });
+    s3SendMock.mockRejectedValueOnce(err);
+
+    const result = await client.getBlob(id);
+    expect(result).toBeNull();
+  });
 });

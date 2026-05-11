@@ -759,6 +759,64 @@ docs/
 
 ### Task 8: Share-via-Link — URL Hash Mode (tiny maps <32 KB) [Wave 2]
 
+> **Scrub note (2026-05-11, pre-dispatch — covers T8 and T9):** Four
+> corrections from pre-dispatch grounding against the Phase 4 shipped
+> surface:
+>
+> 1. **Path correction.** Plan literals `apps/atlas-app/...` are
+>    `code/apps/atlas-app/...`. `apps/atlas-app/pages/share/[uuid].tsx`
+>    assumes Next.js routing — this app is Vite SPA, no router. Replace
+>    with a path-based switch in `App.tsx` (currently a one-liner
+>    `<MapEditor />` per mulch convention `mx-3342d8`).
+> 2. **AtlasdrawBundle is not a thing.** The plan invokes a `packages/sdk`
+>    `AtlasdrawBundle` that does not exist. The canonical persisted
+>    type is `AtlasdrawDocument` from `@atlasdraw/data` (mulch
+>    `mx-4b9e4e`). For hash mode, JSON-stringify the document directly
+>    and lz-string-compress that string. For upload mode, use
+>    `write(doc)` to produce the Blob (same as autosave), POST to
+>    storage. No SDK indirection needed.
+> 3. **Dialog primitive: do NOT depend on Excalidraw's Dialog.** The
+>    audit-amended note at line 779 says to grep `code/packages/excalidraw/`
+>    for an exported Dialog — but the established convention (handoff
+>    2026-05-10, AboutDialog implementation) is to author standalone
+>    modals mirroring `BasemapPickerDialog` and `AboutDialog`
+>    (root-level mount, no `@excalidraw/Dialog` import, jsdom-testable,
+>    Escape + click-outside dismiss). ShareDialog follows the same
+>    pattern. Skip the Excalidraw-Dialog grep.
+> 4. **Storage server has no blob-retrieval HTTP route.** T3 shipped
+>    `GET /maps/:id` returning `MapRecord` JSON (metadata only, no
+>    blob). T9's viewer needs the blob bytes. This dispatch therefore
+>    extends T3:
+>    - Add `getBlob(id: string): Promise<Buffer | null>` to the
+>      `StorageClient` interface (`code/apps/storage/src/types.ts`).
+>    - Implement on both adapters (`sqlite-fs` reads
+>      `$DATA_DIR/blobs/{id}.atlasdraw`; `postgres-minio` issues
+>      `GetObjectCommand` against the `atlasdraw-maps` bucket).
+>    - Add `GET /share/:token/blob` route to `routes/share.ts` —
+>      validates token, checks expiry (410 if expired/orphaned),
+>      fetches `getBlob(map.id)`, returns 200 with
+>      `application/octet-stream` body. Same 400/404/410 traversal
+>      and existence guards as `GET /share/:token`.
+>    - Mirror the storage-side blob route on the atlas-app
+>      `createHttpStorageClient` as a new `getShareBlob(token)`
+>      method. The 5-method `StorageClient` interface stays as-is;
+>      this is an HTTP-only addition since adapter-level `getBlob`
+>      lives behind the share route, not directly exposed.
+>
+> **Tests required:**
+> - storage: `getBlob` unit tests on both adapters; `/share/:token/blob`
+>   route tests (200/404/410/400).
+> - atlas-app: `useShareLink` hash-mode round-trip; upload-mode
+>   round-trip (mock fetch); `ShareDialog` render + drain-gated copy;
+>   path router test in `App.tsx` (hash, token, default).
+>
+> **lz-string** is not in `code/yarn.lock`. Install
+> `lz-string@^1.5.0` as an atlas-app dep + `@types/lz-string` devDep.
+>
+> Originating audit: 2026-05-11 pre-dispatch scrub.
+
+
+
 **Orient:** Maps below 32 KB uncompressed should share as a fully self-contained URL hash — no server round-trip, no storage dependency. This is the zero-infrastructure share path.
 **Flow position:** Step 2a of 4 in Flow A (scene-snapshot → **size-check → lz-compress → URL hash** → clipboard).
 

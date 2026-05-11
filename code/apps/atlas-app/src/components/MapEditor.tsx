@@ -59,6 +59,7 @@ import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { AboutDialog } from "./AboutDialog";
+import { ShareDialog } from "./ShareDialog";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -69,6 +70,7 @@ import { hydrate } from "../state/hydrate";
 import { getAppConfig } from "../config/app-config";
 import {
   createHttpStorageClient,
+  type HttpStorageClient,
   type StorageClient,
 } from "../services/createHttpStorageClient";
 import { openDB } from "idb";
@@ -448,6 +450,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useState<BasemapConfig["id"]>("protomaps-light");
   const [showBasemapPicker, setShowBasemapPicker] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+
+  // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
+  // dialog opens (avoids hitting fetch in the local-only / pages tiers).
+  const shareClientRef = useRef<HttpStorageClient | null>(null);
+  function getShareClient(): HttpStorageClient {
+    if (!shareClientRef.current) {
+      const cfg = getAppConfig();
+      shareClientRef.current = createHttpStorageClient({
+        baseUrl: cfg.storageBaseUrl ?? "",
+      });
+    }
+    return shareClientRef.current;
+  }
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
@@ -1062,6 +1078,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               ℹ About Atlasdraw
             </MainMenu.Item>
+            {/* Phase 4 T8 — Share link. Root-level mounted (same pattern as
+                AboutDialog) so MainMenu auto-close doesn't unmount the
+                dialog before the link is copied. */}
+            <MainMenu.Item
+              onSelect={() => setShowShareDialog(true)}
+              data-testid="main-menu-share"
+            >
+              🔗 Share map
+            </MainMenu.Item>
             <MainMenu.Separator />
             {isDirty && (
               <MainMenu.Item
@@ -1168,6 +1193,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           picker so MainMenu auto-close doesn't unmount it. */}
       {showAboutDialog && (
         <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
+      )}
+
+      {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
+          (selectDocument needs the imperative API). The dialog auto-fires
+          the share-link generation on mount. */}
+      {showShareDialog && excalidrawAPI && (
+        <ShareDialog
+          onCloseRequest={() => setShowShareDialog(false)}
+          getDoc={() =>
+            selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
+          }
+          client={getShareClient()}
+        />
       )}
     </div>
   );

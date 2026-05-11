@@ -171,5 +171,22 @@ export function createSqliteFsAdapter(opts: {
       const row = selectShare.get(token) as ShareRow | undefined;
       return row ? rowToShare(row) : null;
     },
+
+    async getBlob(id: string): Promise<Buffer | null> {
+      // Defense-in-depth: reject malformed ids before any filesystem call.
+      // Phase 4 T8 amendment — consumed by GET /share/:token/blob.
+      if (!ID_RE.test(id)) {
+        return null;
+      }
+      const fullPath = path.join(dataDir, "blobs", `${id}.atlasdraw`);
+      try {
+        return fs.readFileSync(fullPath);
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+          return null;
+        }
+        throw err;
+      }
+    },
   };
 }

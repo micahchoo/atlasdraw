@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createHttpStorageClient,
+  ShareExpiredError,
   type MapRecord,
 } from "../createHttpStorageClient";
 
@@ -133,5 +134,70 @@ describe("createHttpStorageClient", () => {
     const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
     await client.createMap(new Blob([new Uint8Array(4)]));
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // Phase 4 T8 amendment — getShareBlob (HTTP-only helper).
+  describe("getShareBlob", () => {
+    const TOKEN = "abcdefghij1234567890K";
+
+    it("returns the ArrayBuffer on 200 with octet-stream payload", async () => {
+      const bytes = new Uint8Array([0xa1, 0xb2, 0xc3, 0xd4]);
+      const fetchSpy = vi.fn(async (url: unknown) => {
+        expect(url).toBe(`http://localhost:4000/share/${TOKEN}/blob`);
+        return new Response(bytes, {
+          status: 200,
+          headers: { "Content-Type": "application/octet-stream" },
+        });
+      }) as unknown as typeof fetch;
+
+      const client = createHttpStorageClient({
+        baseUrl: "http://localhost:4000",
+        fetch: fetchSpy,
+      });
+      const buf = await client.getShareBlob(TOKEN);
+      expect(buf).not.toBeNull();
+      expect(new Uint8Array(buf!)).toEqual(bytes);
+    });
+
+    it("returns null on 404 (token never existed)", async () => {
+      const fetchSpy = vi.fn(
+        async () => emptyResponse(404),
+      ) as unknown as typeof fetch;
+      const client = createHttpStorageClient({
+        baseUrl: "http://localhost:4000",
+        fetch: fetchSpy,
+      });
+      expect(await client.getShareBlob(TOKEN)).toBeNull();
+    });
+
+    it("throws ShareExpiredError on 410", async () => {
+      const fetchSpy = vi.fn(
+        async () => emptyResponse(410),
+      ) as unknown as typeof fetch;
+      const client = createHttpStorageClient({
+        baseUrl: "http://localhost:4000",
+        fetch: fetchSpy,
+      });
+      await expect(client.getShareBlob(TOKEN)).rejects.toBeInstanceOf(
+        ShareExpiredError,
+      );
+    });
+
+    it("throws on 5xx with operation name in the message", async () => {
+      const fetchSpy = vi.fn(
+        async () =>
+          new Response("boom", {
+            status: 500,
+            statusText: "Internal Server Error",
+          }),
+      ) as unknown as typeof fetch;
+      const client = createHttpStorageClient({
+        baseUrl: "http://localhost:4000",
+        fetch: fetchSpy,
+      });
+      await expect(client.getShareBlob(TOKEN)).rejects.toThrow(
+        /getShareBlob.*500/,
+      );
+    });
   });
 });
