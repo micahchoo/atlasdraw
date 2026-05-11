@@ -42,10 +42,31 @@ const pmtilesNotFoundPlugin = {
 const BUILD_TARGET = process.env.VITE_BUILD_TARGET;
 const BASE = BUILD_TARGET === "pages" ? "/atlasdraw/" : "/";
 
+// Vite copies the whole `public/` tree into `dist/`. Local-only archives
+// (e.g. india.pmtiles ~4.9 GB) live in `public/data/` for dev convenience
+// but must NOT ship in production builds. After the bundle is written,
+// prune everything in `dist/data/` except the allowlisted archives.
+const ALLOWED_DATA_FILES = new Set<string>(["world-low-zoom.pmtiles"]);
+const cleanupPublicDataPlugin = {
+  name: "atlasdraw-cleanup-public-data",
+  apply: "build" as const,
+  closeBundle() {
+    const distData = path.resolve(__dirname, "dist", "data");
+    if (!fs.existsSync(distData)) return;
+    for (const entry of fs.readdirSync(distData)) {
+      if (ALLOWED_DATA_FILES.has(entry)) continue;
+      const full = path.join(distData, entry);
+      fs.rmSync(full, { recursive: true, force: true });
+      // eslint-disable-next-line no-console
+      console.log(`[atlasdraw] pruned dist/data/${entry} (build hygiene)`);
+    }
+  },
+};
+
 export default defineConfig({
   base: BASE,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  plugins: [react(), pmtilesNotFoundPlugin] as any,
+  plugins: [react(), pmtilesNotFoundPlugin, cleanupPublicDataPlugin] as any,
   server: {
     port: 5174,
     fs: {

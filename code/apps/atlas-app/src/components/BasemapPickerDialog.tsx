@@ -162,6 +162,19 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
                 <span style={{ fontWeight: isActive ? 600 : 400 }}>
                   {b.label}
                 </span>
+                <span
+                  data-testid={`basemap-source-${b.id}`}
+                  style={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 400,
+                    color: b.requiresRemote ? "#92400e" : "#1e3a8a",
+                    background: b.requiresRemote ? "#fef3c7" : "#dbeafe",
+                    padding: "1px 6px",
+                    borderRadius: "3px",
+                  }}
+                >
+                  {b.requiresRemote ? "Remote" : "Local"}
+                </span>
               </button>
             );
           })}

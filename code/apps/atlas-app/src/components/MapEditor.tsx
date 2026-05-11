@@ -24,7 +24,7 @@ import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 import {
   compileLayer,
   defaultLayerStyle,
-  BASEMAPS,
+  getBasemap,
   resolveStyle,
   registerPmtilesProtocol,
   BasemapRemoteGatedError,
@@ -58,6 +58,7 @@ import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
+import { getAppConfig } from "../config/app-config";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -942,6 +943,24 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 were unified INTO Excalidraw's existing JSONExport dialog
                 via `renderCustomUI` — see `renderAtlasdrawExportCards`
                 above. Single entry point: MainMenu → Export. */}
+            {getAppConfig().showDemoBadge && (
+              <>
+                <MainMenu.Item
+                  onSelect={() => {
+                    window.open(
+                      "https://github.com/atlasdraw/atlasdraw#self-host",
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                  data-testid="main-menu-demo-badge"
+                  aria-label="Demo edition — open self-host docs"
+                >
+                  ⚡ Demo edition — self-host for full features
+                </MainMenu.Item>
+                <MainMenu.Separator />
+              </>
+            )}
             {isDirty && (
               <MainMenu.Item
                 onSelect={() => {
@@ -993,7 +1012,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onSelect={() => setShowBasemapPicker(true)}
               data-testid="main-menu-basemap"
             >
-              🗺 Basemap
+              {(() => {
+                const active = getBasemap(activeBasemapId);
+                if (!active) return "🗺 Basemap";
+                const source = active.requiresRemote ? "Remote" : "Local";
+                return `🗺 Basemap: ${active.label} · ${source}`;
+              })()}
             </MainMenu.Item>
             <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
