@@ -70,4 +70,34 @@ describe("loadConfig", () => {
   it("throws when STORAGE_MODE is unset", () => {
     expect(() => loadConfig({})).toThrow(/STORAGE_MODE/);
   });
+
+  describe("PUBLIC_URL (T4)", () => {
+    it("defaults PUBLIC_URL to '' for sqlite-fs", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "sqlite-fs",
+        DATA_DIR: "/tmp/x",
+      });
+      expect(cfg.PUBLIC_URL).toBe("");
+    });
+
+    it("honors an explicit PUBLIC_URL override", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "sqlite-fs",
+        DATA_DIR: "/tmp/x",
+        PUBLIC_URL: "https://atlas.example.com",
+      });
+      expect(cfg.PUBLIC_URL).toBe("https://atlas.example.com");
+    });
+
+    it("defaults PUBLIC_URL to '' for postgres-minio", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "postgres-minio",
+        DATABASE_URL: "x",
+        BLOB_ENDPOINT: "x",
+        BLOB_ACCESS_KEY: "x",
+        BLOB_SECRET_KEY: "x",
+      });
+      expect(cfg.PUBLIC_URL).toBe("");
+    });
+  });
 });

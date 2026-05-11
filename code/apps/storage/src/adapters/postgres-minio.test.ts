@@ -1,0 +1,198 @@
+// postgres-minio adapter tests — pg + S3 client mocked at the module level
+// (per scrub note: testcontainers would be heavier than necessary here).
+// We assert SQL strings, parameter shape, and S3 key derivation.
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const queryMock = vi.fn();
+const s3SendMock = vi.fn();
+
+vi.mock("pg", () => {
+  class Pool {
+    query = queryMock;
+    constructor(_opts?: unknown) {}
+  }
+  return { Pool };
+});
+
+vi.mock("@aws-sdk/client-s3", () => {
+  class S3Client {
+    send = s3SendMock;
+    constructor(_opts?: unknown) {}
+  }
+  class PutObjectCommand {
+    public input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  class GetObjectCommand {
+    public input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  class CreateBucketCommand {
+    public input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
+  return {
+    S3Client,
+    PutObjectCommand,
+    GetObjectCommand,
+    CreateBucketCommand,
+  };
+});
+
+// Imported AFTER mocks so the adapter sees the mocked modules.
+import {
+  __postgresMinioInternals,
+  createPostgresMinioAdapter,
+} from "./postgres-minio";
+
+function makeAdapter() {
+  return createPostgresMinioAdapter({
+    databaseUrl: "postgres://x",
+    blobEndpoint: "http://minio:9000",
+    blobAccessKey: "k",
+    blobSecretKey: "s",
+  });
+}
+
+describe("postgres-minio adapter", () => {
+  beforeEach(() => {
+    queryMock.mockReset();
+    s3SendMock.mockReset();
+    // Default: schema-create + INSERT/UPDATE return empty result sets.
+    queryMock.mockResolvedValue({ rows: [], rowCount: 0 });
+    s3SendMock.mockResolvedValue({});
+  });
+
+  it("constant bucket name", () => {
+    expect(__postgresMinioInternals.BUCKET).toBe("atlasdraw-maps");
+  });
+
+  it("createMap puts blob under maps/<id>.atlasdraw and inserts a row", async () => {
+    const client = makeAdapter();
+    const record = await client.createMap(Buffer.from("hello"));
+
+    expect(record.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
+    expect(record.blob_ref).toBe(`maps/${record.id}.atlasdraw`);
+    expect(record.byte_size).toBe(5);
+
+    // S3 was called with a CreateBucketCommand then a PutObjectCommand.
+    const putCalls = s3SendMock.mock.calls.map(([c]) => c);
+    const putObject = putCalls.find(
+      (c) => (c as { input: { Key?: string } }).input.Key !== undefined,
+    ) as { input: { Bucket: string; Key: string; Body: Buffer } } | undefined;
+    expect(putObject).toBeDefined();
+    expect(putObject!.input.Bucket).toBe("atlasdraw-maps");
+    expect(putObject!.input.Key).toBe(record.blob_ref);
+
+    // Postgres INSERT after schema creation.
+    const queries = queryMock.mock.calls.map(([sql]) => sql as string);
+    expect(queries.some((q) => /CREATE TABLE IF NOT EXISTS maps/i.test(q))).toBe(
+      true,
+    );
+    const insertCall = queryMock.mock.calls.find(([sql]) =>
+      /INSERT INTO maps/i.test(sql as string),
+    );
+    expect(insertCall).toBeDefined();
+    const params = insertCall![1] as unknown[];
+    expect(params[0]).toBe(record.id);
+    expect(params[3]).toBe(record.blob_ref);
+    expect(params[4]).toBe(5);
+  });
+
+  it("getMap with malformed id short-circuits to null (no SQL)", async () => {
+    const client = makeAdapter();
+    const result = await client.getMap("not-a-nanoid");
+    expect(result).toBeNull();
+    const selectCalls = queryMock.mock.calls.filter(([sql]) =>
+      /SELECT .* FROM maps WHERE id =/i.test(sql as string),
+    );
+    expect(selectCalls.length).toBe(0);
+  });
+
+  it("getMap returns null when SELECT yields no rows", async () => {
+    const client = makeAdapter();
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // schema
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // select
+    const result = await client.getMap("a".repeat(21));
+    expect(result).toBeNull();
+  });
+
+  it("getMap maps a row through with ISO-stringified timestamps", async () => {
+    const client = makeAdapter();
+    const id = "a".repeat(21);
+    const created = new Date("2026-01-01T00:00:00.000Z");
+    const updated = new Date("2026-01-02T00:00:00.000Z");
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // schema
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        {
+          id,
+          created_at: created,
+          updated_at: updated,
+          blob_ref: `maps/${id}.atlasdraw`,
+          byte_size: 42,
+        },
+      ],
+      rowCount: 1,
+    });
+    const result = await client.getMap(id);
+    expect(result).toEqual({
+      id,
+      created_at: created.toISOString(),
+      updated_at: updated.toISOString(),
+      blob_ref: `maps/${id}.atlasdraw`,
+      byte_size: 42,
+    });
+  });
+
+  it("updateMap throws not-found when the row is missing", async () => {
+    const client = makeAdapter();
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // schema
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // select
+    await expect(
+      client.updateMap("a".repeat(21), Buffer.from("x")),
+    ).rejects.toThrow(/not found/);
+  });
+
+  it("createShareToken inserts with mode=read and 7d expiry", async () => {
+    const client = makeAdapter();
+    const mapId = "a".repeat(21);
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // schema
+    queryMock.mockResolvedValueOnce({ rows: [{ id: mapId }], rowCount: 1 }); // map lookup
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // insert
+
+    const token = await client.createShareToken(mapId);
+    expect(token.mode).toBe("read");
+    expect(token.map_id).toBe(mapId);
+
+    const insertCall = queryMock.mock.calls.find(([sql]) =>
+      /INSERT INTO share_tokens/i.test(sql as string),
+    );
+    expect(insertCall).toBeDefined();
+    const params = insertCall![1] as unknown[];
+    expect(params[0]).toBe(token.token);
+    expect(params[1]).toBe(mapId);
+    expect(params[2]).toBe("read");
+
+    const expires = params[3] as Date;
+    const created = params[4] as Date;
+    expect(expires.getTime() - created.getTime()).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+
+  it("resolveToken returns null for malformed token without SQL", async () => {
+    const client = makeAdapter();
+    const result = await client.resolveToken("bad");
+    expect(result).toBeNull();
+    const selectCalls = queryMock.mock.calls.filter(([sql]) =>
+      /FROM share_tokens/i.test(sql as string),
+    );
+    expect(selectCalls.length).toBe(0);
+  });
+});

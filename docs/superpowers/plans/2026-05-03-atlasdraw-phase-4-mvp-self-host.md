@@ -397,16 +397,73 @@ docs/
 
 ### Task 3: Storage HTTP Server — Routes + Dual Adapters [Wave 1]
 
+> **Scrub note (2026-05-11, pre-dispatch):** Three plan-literal corrections + library
+> pinning from pre-dispatch scrub against the T1/T2 outputs (`code/apps/storage/`
+> commit `1141a4d`):
+>
+> 1. **Path correction.** All `Files:` and Step file paths read `apps/storage/...` —
+>    actual workspace path is `code/apps/storage/...` (workspace root is `code/`,
+>    same correction T1/T2 already applied silently). Workers must use the `code/`
+>    prefix verbatim.
+> 2. **Library pinning** (none of these exist in `code/yarn.lock` yet — all are new
+>    workspace deps in `code/apps/storage/package.json`):
+>    - `fastify@^5.2.0` — HTTP server. CJS-compatible per `tsconfig.json` (`module: commonjs`).
+>    - `better-sqlite3@^11` + `@types/better-sqlite3` — sqlite-fs metadata store.
+>      Sync API, native binding, requires `node-gyp` toolchain at install time
+>      (already present on the dev host; CI uses prebuilt binary).
+>    - `pg@^8` + `@types/pg` — postgres-minio metadata store.
+>    - `@aws-sdk/client-s3@^3` — MinIO/S3 blob layer. Tree-shakeable; smaller than
+>      the `minio` npm package. MinIO is S3-API-compatible — point `endpoint` at
+>      `BLOB_ENDPOINT`, use path-style addressing (`forcePathStyle: true`).
+>    - `nanoid@^5` — 21-char map IDs and share tokens (126 bits entropy each, per
+>      T4 adversarial spec).
+>    - DevDeps already declared (T1+T2): `vitest`, `typescript`, `@types/node`,
+>      `zod`. Plus `tmp@^0.2` (devDep) for sqlite-fs unit-test scratch dirs.
+> 3. **Binary body parser.** `POST /maps` and `PUT /maps/:id` take raw binary, not
+>    multipart. Use Fastify's built-in raw-body parser registered for
+>    `application/octet-stream` with `parseAs: 'buffer'` and `bodyLimit: 50 * 1024 * 1024`
+>    set at server construction. Do NOT add `@fastify/multipart` (wrong tool for
+>    this content type; would add ~80KB to the server image for no value).
+>
+> **Adapter contract reminder** (from `code/apps/storage/src/types.ts:44-50`):
+> the `StorageClient` interface declares all five methods T3 must implement —
+> `createMap`, `getMap`, `updateMap`, `createShareToken`, `resolveToken`. T3 ships
+> all five on both adapters even though `createShareToken`/`resolveToken` are not
+> exercised by T3's own routes (those are T4's routes). This keeps the adapter
+> shape stable for T4 and prevents a follow-up "we missed the share methods" amendment.
+>
+> **Test strategy refinement** (Step 6 says "testcontainers or mock for postgres-minio"
+> — choose mock):
+> - `sqlite-fs` adapter: real I/O against `tmp` dir, real `better-sqlite3`, real
+>   blob writes. Fast (<200ms), high signal.
+> - `postgres-minio` adapter: unit tests stub `pg.Client.query` and the S3 client.
+>   Asserts: correct SQL shape, correct S3 key derivation, errors propagate.
+>   Integration testing (real Postgres + MinIO) is deferred to T16 compose smoke.
+> - Route tests use `fastify.inject()` against the sqlite-fs adapter only.
+>
+> **Wave decomposition.** Step 1 (postgres-minio) and Step 2 (sqlite-fs) are
+> file-disjoint and look parallelizable, but the marginal speedup is not worth
+> the worktree-coordination cost (both modify the same `package.json` to add
+> deps, both must agree on the adapter contract reading from `types.ts`).
+> **Recommended: single executor, sequential within T3.**
+>
+> **Excalidraw API rule** (`.claude/rules/excalidraw-api.md`): N/A — T3 does not
+> touch Excalidraw. No grep gate required.
+>
+> Originating audit: 2026-05-11 pre-dispatch scrub against the spec; T1/T2
+> outputs read at `code/apps/storage/src/{types,config}.ts` to ground contract.
+
 **Orient:** This is the core persistence layer for maps. It must handle both compose stacks (Q10): postgres-minio in the full stack, sqlite-fs in the minimal one. The adapter is selected once at startup; routes are identical in both modes.
 **Flow position:** Step 1 of 4 in Flow A (types → **storage-server** → share → compose).
 **Upstream contract:** Receives `AppConfig` (StorageMode + validated env) from Task 2; receives `StorageClient`, `MapRecord`, `ShareToken` types from Task 1.
 **Downstream contract:** Produces running Fastify server at `http://storage:4000` with routes `POST /maps`, `GET /maps/:id`, `PUT /maps/:id`. Consumed by Task 8 (share upload path) and Task 12/13 (compose env wiring).
 **Skill:** `none`
 **Files:**
-- Create: `apps/storage/src/index.ts`
-- Create: `apps/storage/src/routes/maps.ts`
-- Create: `apps/storage/src/adapters/postgres-minio.ts`
-- Create: `apps/storage/src/adapters/sqlite-fs.ts`
+- Create: `code/apps/storage/src/index.ts`
+- Create: `code/apps/storage/src/routes/maps.ts`
+- Create: `code/apps/storage/src/adapters/postgres-minio.ts`
+- Create: `code/apps/storage/src/adapters/sqlite-fs.ts`
+- Modify: `code/apps/storage/package.json` (add deps pinned in scrub note above)
 
 **Steps:**
 
@@ -451,14 +508,55 @@ docs/
 
 ### Task 4: Share Endpoint — `POST /maps/:id/share` + `GET /share/:token` [Wave 1]
 
+> **Scrub note (2026-05-11, pre-dispatch):** Three corrections from pre-dispatch
+> scrub against T3's shipped adapter shape (commit not yet landed) and T2's
+> config schema (commit `1141a4d`):
+>
+> 1. **Path correction** (same as T3 scrub): `Files:` paths read `apps/storage/...`
+>    — actual is `code/apps/storage/...`.
+> 2. **`PUBLIC_URL` config field is missing from T2.** Step 1 below references
+>    `config.PUBLIC_URL` but `code/apps/storage/src/config.ts` (T2) only declares
+>    `STORAGE_MODE`, `PORT`, and the per-mode envs. T4 must extend `BaseSchema`
+>    to add `PUBLIC_URL: z.string().default("")`. Empty default means the response
+>    `url` becomes `"/m/<token>"` (relative); operators set `PUBLIC_URL=https://atlasdraw.example.com`
+>    in their compose env for an absolute URL. Update `code/apps/storage/src/config.test.ts`
+>    to assert the default.
+> 3. **TTL is adapter-side, not config-side, in Phase 4.** T3 hard-coded "now + 7 days"
+>    inside `createShareToken` on both adapters. Phase 4 keeps it hard-coded;
+>    ADR-0008 (T17) will introduce `SHARE_TOKEN_TTL_DAYS` config when revocation /
+>    replay semantics are revisited. T4 does not change adapter TTL logic — it
+>    only consumes `expires_at` from the `ShareToken` returned by the adapter.
+>
+> **Token format**: nanoid v3 default alphabet uses `A-Za-z0-9_-`. Validation
+> regex is identical to map-id: `/^[A-Za-z0-9_-]{21}$/`. The same validator helper
+> from T3's `routes/maps.ts` can be reused — extract to `src/util/id.ts` if it's
+> not already shared.
+>
+> **Adversarial coverage** (Step 2 spec is authoritative; ensure all 4 cases land):
+> - expired token → 410 Gone (not 404; distinguishes from "never existed")
+> - unknown token → 404
+> - `mode` in response is always `"read"`, never reflected from request body
+> - `:id` and `:token` with traversal chars (`../`, `..%2F`, `..\`) → 400 before
+>   any adapter call (regex-validated)
+> - Bonus (not in original spec but cheap): malformed nanoid (wrong length, illegal
+>   char) → 400, asserted explicitly.
+>
+> **Excalidraw API rule** (`.claude/rules/excalidraw-api.md`): N/A — T4 doesn't
+> touch Excalidraw.
+>
+> Originating audit: 2026-05-11 pre-dispatch scrub.
+
 **Orient:** The share token endpoint is the first auth-adjacent surface in Atlasdraw. Token entropy, TTL, server-side read-only enforcement, and replay prevention must be correct from day one — this is the adversarial surface, not a detail.
 **Flow position:** Step 1.5 of 4 in Flow A (storage-server → **share-endpoint** → share-link-modes → compose).
 **Upstream contract:** Receives `StorageClient` (createShareToken, resolveToken) from Task 3's adapter. Receives `ShareToken` type from Task 1.
 **Downstream contract:** Produces `POST /maps/:id/share → { token, url }` and `GET /share/:token → MapRecord | 404/410` consumed by Task 9 (UUID upload share) and Task 15 (smoke test).
 **Skill:** `adversarial-api-testing`
 **Files:**
-- Create: `apps/storage/src/routes/share.ts`
-- Modify: `apps/storage/src/index.ts` (register share routes)
+- Create: `code/apps/storage/src/routes/share.ts`
+- Create: `code/apps/storage/src/routes/share.test.ts`
+- Modify: `code/apps/storage/src/index.ts` (register share routes)
+- Modify: `code/apps/storage/src/config.ts` (add `PUBLIC_URL` field)
+- Modify: `code/apps/storage/src/config.test.ts` (assert `PUBLIC_URL` default)
 
 **Adversarial sub-checks (per skill annotation):**
 1. Token entropy: `nanoid(21)` — 126 bits, adequate for non-secret tokens with TTL.

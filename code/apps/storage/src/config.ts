@@ -10,6 +10,11 @@ import type { StorageMode } from "./types";
 const BaseSchema = z.object({
   STORAGE_MODE: z.enum(["postgres-minio", "sqlite-fs"]),
   PORT: z.coerce.number().int().positive().default(4000),
+  // T4: prefix for share URLs returned by POST /maps/:id/share. Empty
+  // default → relative `/m/<token>` (works when storage is reverse-proxied
+  // on the same origin as atlas-app). Operators override in compose env
+  // for absolute URLs (e.g. `https://atlas.example.com`).
+  PUBLIC_URL: z.string().default(""),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({

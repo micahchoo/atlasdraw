@@ -5,16 +5,25 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "scripts": {
-    "build": "echo 'TODO: tsc build (Phase 4 T3)' && exit 0",
-    "start": "echo 'TODO: Fastify server (Phase 4 T3)' && exit 0",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
     "test": "vitest run",
     "test:typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3",
+    "better-sqlite3": "^11",
+    "fastify": "^5.2.0",
+    "nanoid": "^5",
+    "pg": "^8",
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "*",
     "@types/node": "*",
+    "@types/pg": "*",
+    "@types/tmp": "*",
+    "tmp": "^0.2",
     "typescript": "*",
     "vitest": "*"
   }
