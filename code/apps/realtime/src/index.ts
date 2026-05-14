@@ -3,15 +3,18 @@
 //
 // Creates an http.Server, mounts:
 //   - GET /health (plain HTTP)
-//   - Socket.IO on /socket.io (stub — real handlers in Task 5)
-//   - y-websocket upgrade handler on /yjs/:roomId (stub — real wiring in Task 6)
+//   - Socket.IO on /socket.io with event handlers (SCENE_UPDATE, MAP_CAMERA_UPDATE,
+//     CURSOR, COMMENT — see socket-io-server.ts)
+//   - y-websocket upgrade handler on /yjs/:roomId (see yjs-server.ts)
 //
-// See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 3.
+// See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 3 / Task 5.
 
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { registerHealth } from "./health";
-import type { CollabEvent, RealtimeConfig } from "@atlasdraw/protocol";
+import { registerSocketIOHandlers } from "./socket-io-server";
+import { registerYjsHandler } from "./yjs-server";
+import type { RealtimeConfig } from "@atlasdraw/protocol";
 
 const PORT = parseInt(process.env["PORT"] ?? "4001", 10);
 
@@ -20,12 +23,8 @@ const PORT = parseInt(process.env["PORT"] ?? "4001", 10);
 // ---------------------------------------------------------------------------
 const server = http.createServer();
 
-// Health endpoint — must be registered before Socket.IO so it runs first.
-registerHealth(server);
-console.log("[realtime] health endpoint mounted on GET /health");
-
 // ---------------------------------------------------------------------------
-// Socket.IO (stub — Task 5 wires event handlers)
+// Socket.IO
 // ---------------------------------------------------------------------------
 const io = new SocketIOServer(server, {
   cors: {
@@ -33,26 +32,23 @@ const io = new SocketIOServer(server, {
     methods: ["GET", "POST"],
   },
 });
-console.log(`[realtime] Socket.IO mounted on /socket.io (stub — ${Object.keys(io?.of ?? {}).length} namespaces)`);
+
+// Health endpoint — registered before event handlers; passes `io` so the
+// response includes the real connection count.
+registerHealth(server, io);
+console.log("[realtime] health endpoint mounted on GET /health");
+
+// Socket.IO event handlers — SCENE_UPDATE, MAP_CAMERA_UPDATE, CURSOR, COMMENT
+// with per-socket rate limiting (rate-limit.ts). Per ADR-0010, the relay never
+// inspects encrypted payload content.
+registerSocketIOHandlers(io);
+console.log("[realtime] Socket.IO event handlers registered on /socket.io");
 
 // ---------------------------------------------------------------------------
-// y-websocket upgrade handler (stub — Task 6 wires setupWSConnection)
+// y-websocket upgrade handler — delegates to yjs-server.ts
 // ---------------------------------------------------------------------------
-server.on("upgrade", (request, socket, head) => {
-  try {
-    const url = new URL(request.url ?? "/", "http://localhost");
-    if (url.pathname.startsWith("/yjs/")) {
-      const roomId = url.pathname.slice("/yjs/".length);
-      console.log(`[realtime] y-websocket upgrade for room: ${roomId} (stub)`);
-      // Stub: close the connection. Task 6 replaces this with setupWSConnection.
-      socket.destroy();
-    }
-    // Non-/yjs/ upgrades pass through (e.g. Socket.IO WebSocket transport).
-  } catch {
-    socket.destroy();
-  }
-});
-console.log("[realtime] y-websocket handler mounted on /yjs/:roomId (stub)");
+registerYjsHandler(server);
+console.log("[realtime] y-websocket handler mounted on /yjs/:roomId");
 
 // ---------------------------------------------------------------------------
 // Listen

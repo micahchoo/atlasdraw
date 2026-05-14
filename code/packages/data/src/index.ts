@@ -55,3 +55,8 @@ export { generateThumbnail } from "./thumbnail";
 // Phase 5 Task 4 — Yjs CRDT type model for real-time data layers.
 export { YjsLayer, addFeature, deleteFeature, setProperty, appendVertex, deleteVertex } from "./yjs-layer";
 export { toGeoJSON, observeLayer } from "./yjs-snapshot";
+
+// Phase 5 Task 8 — Yjs AES-GCM Encryption Layer (stub, not wired).
+// Phase 6 wires if Option B selected; drops if Option A confirmed.
+// See ADR-0010: docs/architecture/adr/0010-yjs-e2ee-threat-model.md
+export { encryptUpdate, decryptUpdate } from "./yjs-crypto";

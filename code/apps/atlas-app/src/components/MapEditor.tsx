@@ -56,6 +56,7 @@ import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+import { useCollab } from "../hooks/useCollab";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { AboutDialog } from "./AboutDialog";
@@ -451,6 +452,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [showBasemapPicker, setShowBasemapPicker] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+
+  // Phase 5 T7 — collab state. Always called (returns inactive state when
+  // realtime is disabled, which is the default for all current builds).
+  // No-op for single-player deployments (Q1). UI components (Task 11) read
+  // collab.active to decide whether to render cursor overlays + presence list.
+  const collab = useCollab();
 
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
