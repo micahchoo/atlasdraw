@@ -52,6 +52,10 @@ services:
         # tells it to prefix requests with /api before they hit Caddy.
         VITE_STORAGE_BASE_URL: /api
         VITE_PMTILES_PATH: /data/world-low-zoom.pmtiles
+        # Realtime — set VITE_REALTIME_ENABLED=true and provide the ws:// URL
+        # when the [realtime] config.toml section has enabled = true.
+        VITE_REALTIME_ENABLED: ${VITE_REALTIME_ENABLED:-false}
+        VITE_REALTIME_WS_URL: ${VITE_REALTIME_WS_URL:-}
     depends_on:
       - storage
     restart: unless-stopped
@@ -97,17 +101,21 @@ services:
       - storage
     restart: unless-stopped
 
-  # Phase 5 placeholder (compose profiles, Compose v2.2+):
-  # realtime:
-  #   build:
-  #     context: ..
-  #     dockerfile: code/apps/realtime/Dockerfile
-  #   profiles: ["realtime"]
-  #   depends_on:
-  #     - storage
-  #   environment:
-  #     STORAGE_BASE_URL: http://storage:4000
-  #   restart: unless-stopped
+  # Phase 5 realtime relay (compose profiles, Compose v2.2+).
+  # Start with: docker compose --profile realtime -f infra/docker-compose.yml up -d
+  realtime:
+    build:
+      context: ..
+      dockerfile: code/apps/realtime/Dockerfile
+    profiles: ["realtime"]
+    depends_on:
+      - storage
+    ports:
+      - "4001:4001"
+    environment:
+      PORT: "4001"
+      REDIS_URL: ${REDIS_URL:-}
+    restart: unless-stopped
 
 volumes:
   pgdata:

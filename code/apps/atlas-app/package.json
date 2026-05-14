@@ -19,6 +19,7 @@
     "@atlasdraw/basemap": "0.0.0",
     "@atlasdraw/data": "0.0.0",
     "@atlasdraw/geo": "0.1.0",
+    "@atlasdraw/protocol": "0.0.0",
     "@atlasdraw/tools": "0.1.0",
     "@excalidraw/excalidraw": "0.18.0",
     "idb": "^8.0.0",

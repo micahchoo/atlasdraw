@@ -6,16 +6,40 @@ describe("loadAppConfig", () => {
     const cfg = loadAppConfig("hosted");
     expect(cfg.buildTarget).toBe("hosted");
     expect(cfg.enableShareUI).toBe(true);
-    expect(cfg.enableRealtime).toBe(true);
+    // Realtime defaults to disabled even on hosted — opt-in gate.
+    expect(cfg.realtime.enabled).toBe(false);
+    expect(cfg.realtime.wsUrl).toBeUndefined();
     expect(cfg.enableBackendPersistence).toBe(true);
     expect(cfg.showDemoBadge).toBe(false);
+  });
+
+  it("enables realtime on hosted when VITE_REALTIME_ENABLED=true", () => {
+    const cfg = loadAppConfig("hosted", undefined, "true", "ws://localhost:4001");
+    expect(cfg.realtime.enabled).toBe(true);
+    expect(cfg.realtime.wsUrl).toBe("ws://localhost:4001");
+  });
+
+  it("leaves wsUrl undefined when VITE_REALTIME_WS_URL is empty", () => {
+    const cfg = loadAppConfig("hosted", undefined, "true", "");
+    expect(cfg.realtime.enabled).toBe(true);
+    expect(cfg.realtime.wsUrl).toBeUndefined();
+  });
+
+  it("realtime stays disabled on pages even when env says true", () => {
+    const cfg = loadAppConfig("pages", undefined, "true", "ws://localhost:4001");
+    expect(cfg.realtime.enabled).toBe(false);
+  });
+
+  it("realtime stays disabled on local-only even when env says true", () => {
+    const cfg = loadAppConfig("local-only", undefined, "true", "ws://localhost:4001");
+    expect(cfg.realtime.enabled).toBe(false);
   });
 
   it("returns demo-badge + no power features when VITE_BUILD_TARGET=pages", () => {
     const cfg = loadAppConfig("pages");
     expect(cfg.buildTarget).toBe("pages");
     expect(cfg.enableShareUI).toBe(false);
-    expect(cfg.enableRealtime).toBe(false);
+    expect(cfg.realtime.enabled).toBe(false);
     expect(cfg.enableBackendPersistence).toBe(false);
     expect(cfg.showDemoBadge).toBe(true);
   });
@@ -24,7 +48,7 @@ describe("loadAppConfig", () => {
     const cfg = loadAppConfig("local-only");
     expect(cfg.buildTarget).toBe("local-only");
     expect(cfg.enableShareUI).toBe(false);
-    expect(cfg.enableRealtime).toBe(false);
+    expect(cfg.realtime.enabled).toBe(false);
     expect(cfg.enableBackendPersistence).toBe(false);
     expect(cfg.showDemoBadge).toBe(false);
   });
@@ -32,6 +56,7 @@ describe("loadAppConfig", () => {
   it("defaults to local-only when VITE_BUILD_TARGET is undefined (dev runs)", () => {
     const cfg = loadAppConfig(undefined);
     expect(cfg.buildTarget).toBe("local-only");
+    expect(cfg.realtime.enabled).toBe(false);
     expect(cfg.showDemoBadge).toBe(false);
   });
 

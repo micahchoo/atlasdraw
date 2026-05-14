@@ -1,0 +1,23 @@
+# Atlasdraw — production config (TOML).
+# Copy to config.toml (NOT committed) and edit. Compose maps these values
+# into Vite build args + service env vars; see infra/docker-compose.yml.
+
+# ---------------------------------------------------------------------------
+# [realtime]
+# Optional realtime collaboration relay (Phase 5). Leave enabled = false
+# for the single-player deployment path.
+#
+# When enabled, the realtime relay process can read your data-layer
+# geometry (Yjs CRDT ops) in plaintext. Scene + comments remain
+# encrypted via Socket.IO. See docs/architecture/adr/0010-yjs-e2ee-threat-model.md.
+# ---------------------------------------------------------------------------
+[realtime]
+enabled = false
+# ws_url = "ws://localhost:4001"
+
+# ---------------------------------------------------------------------------
+# Reserved for Phase 6+:
+#
+# [redis]
+# url = ""  # optional @socket.io/redis-adapter for multi-instance scaling
+# ---------------------------------------------------------------------------
