@@ -10,7 +10,7 @@
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "emitDeclarationOnly": true,
-    "ignoreDeprecations": "5.0",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@excalidraw/common": ["./common/src/index.ts"],
       "@excalidraw/common/*": ["./common/src/*"],

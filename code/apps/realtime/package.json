@@ -4,14 +4,26 @@
   "description": "Atlasdraw realtime relay — Socket.IO scene/camera/cursor + y-websocket Yjs CRDT for data layers",
   "license": "AGPL-3.0-only",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "echo 'TODO: tsc build (Phase 5)' && exit 0",
-    "start": "echo 'TODO: relay server (Phase 5)' && exit 0",
-    "test:typecheck": "tsc --noEmit"
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test:typecheck": "tsc --noEmit",
+    "test": "echo 'TODO: integration tests (Phase 5 Wave 2)' && exit 0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@atlasdraw/protocol": "0.0.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "ioredis": "^5.4.0",
+    "socket.io": "^4.7.0",
+    "ws": "^8.16.0",
+    "y-protocols": "^1.0.6",
+    "y-websocket": "^2.0.0"
+  },
   "devDependencies": {
-    "typescript": "*",
-    "@types/node": "*"
+    "@types/node": "*",
+    "tsx": "^4.7.0",
+    "typescript": "*"
   }
 }

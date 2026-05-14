@@ -88,3 +88,15 @@ export interface RealtimeConfig {
    */
   wsUrl?: string;
 }
+
+/**
+ * y-protocols awareness state — broadcast per-client via y-websocket.
+ * Encoded as JSON by y-protocols; consumed by CursorOverlay (Task 11)
+ * and CollabState (Task 7) for presence rendering.
+ */
+export interface AwarenessState {
+  user: { name: string; color: string };
+  cursor: { x: number; y: number } | null;
+  viewport: { lng: number; lat: number; zoom: number; bearing: number } | null;
+  lastDrawAt: number | null;
+}

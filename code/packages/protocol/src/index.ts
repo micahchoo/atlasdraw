@@ -14,5 +14,6 @@ export type {
   RealtimeConfig,
 } from "./realtime-events";
 
+export type { AwarenessState } from "./realtime-events";
 export type { RoomKey } from "./room-key";
 export { parseRoomFragment } from "./room-key";
