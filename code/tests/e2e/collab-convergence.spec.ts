@@ -24,7 +24,8 @@
  *   - window.__atlasdraw__.collabState exposed (CollabState singleton, added
  *     in MapEditor.tsx's DEV-only window expose block, same pattern as map
  *     and excalidrawAPI)
- *   - Room URL fragment pattern: #<roomId>,<base64url-32byte-key>
+ *   - Room URL fragment pattern: #room:<roomId>,<base64url-32byte-key>
+ *     (Phase 5 collab-integration plan / Q-P5-2 — `room:` prefix required)
  *
  * Playwright projects: chromium is the primary target; firefox and webkit
  * should pass identically (y-websocket and Socket.IO are browser-agnostic at
@@ -47,7 +48,7 @@ const FEATURE_ID = "convergence-polygon";
 // ---------------------------------------------------------------------------
 
 function roomUrl(roomId: string): string {
-  return `http://localhost:5174/#${roomId},${KEY_B64}`;
+  return `http://localhost:5174/#room:${roomId},${KEY_B64}`;
 }
 
 /**
