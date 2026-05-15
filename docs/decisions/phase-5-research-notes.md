@@ -23,6 +23,102 @@
 
 ---
 
+## Locked Decisions (Phase 5 collab-integration plan, 2026-05-15)
+
+These decisions are minted post-Wave-4 for the
+`2026-05-15-atlasdraw-phase-5-collab-integration.md` plan. They constrain the
+wire protocol and capability model; downstream work cites them by Q-P5-N.
+
+### Q-P5-1 — SCENE_SNAPSHOT via joiner-pull election preserves dumb-relay invariant
+
+**Recorded:** 2026-05-15
+
+**Decision.** Late joiners get an empty canvas because `SCENE_UPDATE` is an
+event stream, not a state replica. To catch up, the joiner emits
+`REQUEST_SNAPSHOT` once after `JOIN_ROOM` is acknowledged. The relay
+deterministically elects a single existing room member (lowest `socket.id`
+lexicographic order) and routes the request via `io.to(senderId).emit(...)`.
+The elected peer encrypts its current Excalidraw scene with the room key and
+emits `SCENE_SNAPSHOT { targetId, data: EncryptedPayload }`. The relay forwards
+that envelope to `targetId` only, never broadcast. If the joiner receives no
+snapshot within 2 s, it re-emits `REQUEST_SNAPSHOT`; the relay picks the next
+eligible peer. Joiner applies the snapshot only during a 5 s "joining" window
+post-connect, after which incoming snapshots are dropped to avoid clobbering
+SCENE_UPDATEs already in flight.
+
+**Why this shape (not sender-push on PEER_JOINED).** Sender-push has every
+existing peer broadcast on `PEER_JOINED` → N concurrent snapshots per join
+(storm); silent failure if the picked sender disconnects mid-encrypt; race
+between snapshot and live SCENE_UPDATE on the joiner side. Joiner-pull with
+relay-elected responder eliminates the storm, gives a deterministic single
+sender, and provides a retry path. Election logic lives in the relay (already
+trusted per ADR-0010 to route ciphertext); it operates on `socket.id` only and
+never inspects payload.
+
+**Constrains.**
+- New event types: `SceneSnapshotEvent` and `RequestSnapshotEvent` in
+  `packages/protocol/src/realtime-events.ts`.
+- `targetId: string` lives on `SceneSnapshotEvent` only — **not** on
+  `BaseEvent`; the addressing field is opt-in per variant, not union-wide.
+- Relay change in `apps/realtime/src/socket-io-server.ts`: handle
+  `REQUEST_SNAPSHOT` and emit `SCENE_SNAPSHOT` via `io.to(targetSocketId)`.
+- Joiner-side timer + 5 s acceptance window in
+  `apps/atlas-app/src/state/collab.ts`.
+
+**Preserves.** ADR-0010 dumb-relay invariant — the relay routes ciphertext
+between sockets; it never decrypts. Snapshot payload is AES-GCM with the same
+room key used for `SCENE_UPDATE`, reusing `scene-crypto.ts` (`encryptScene` /
+`decryptScene`).
+
+---
+
+### Q-P5-2 — URL room-key fragment grants write capability; existing share URLs remain read-only
+
+**Recorded:** 2026-05-15
+
+**Decision.** Possession of a valid `#room:<roomId>,<base64urlKey>` URL is the
+write gate for Phase 5 collab — anyone with the link can edit. The existing
+share-URL families remain read-only viewers:
+
+| URL family | Path | Hash | Capability |
+|---|---|---|---|
+| Hash-mode shared map | `/m` | `#v1:<encoded>` | Read-only viewer (ShareView) |
+| Token-mode shared map | `/m/<token>` | (any) | Read-only viewer (ShareView) |
+| Collab room | `/` | `#room:<roomId>,<key>` | **Read-write editor (MapEditor + collab)** |
+
+The `room:` prefix is retained even though `#v1:` and `#room:` live on
+different paths (`/m` vs `/`) and would not collide on routing alone. Rationale:
+(a) forward-compat — adding additional hash-rooted modes (e.g. comment-anchor,
+deep-link) on the editor path stays cleanly disambiguated; (b) defensive — a
+copy-paste accident that strips the path but keeps the hash still parses
+unambiguously; (c) the prefix is cheap to add and removes a class of "is this a
+share fragment or a room key" ambiguity at the parser boundary.
+
+**Why this shape (not server-side auth).** Phase 5 ships the collab MVP. Auth
+adds: user identity store, ACL model, invite flow, revocation. Capability-by-URL
+is the same model Excalidraw upstream uses and Figma uses for "anyone with link
+can edit." The URL key never reaches the server (it's the fragment; browsers
+don't transmit `#...`); the relay is trusted to route, not to authorize. Phase 6
+revisits if a multi-tenant deployment surfaces.
+
+**Constrains.**
+- `packages/protocol/src/room-key.ts` — `parseRoomFragment` MUST accept (and
+  prefer) the `room:` prefix. The legacy un-prefixed shape (currently the only
+  shape the parser accepts) is removed; no production callers exist yet.
+- `packages/protocol/src/room-key.ts` — add `generateRoomKey()` and
+  `buildRoomFragment(roomId, keyB64)` that emit the `room:`-prefixed shape.
+- `apps/atlas-app/src/App.tsx` — `pickView` routes `#room:` on `/` to
+  `MapEditor`; `#v1:` and `/m/` continue to route to `ShareView`.
+- `apps/atlas-app/src/components/ShareView.tsx` — must NOT honor `#room:` even
+  if reached by a malformed URL; if `#room:` is observed on `/m`, fail closed
+  (render read-only with a hint that the URL was malformed).
+
+**Phase 6 obligation.** When auth lands, write-capable URLs must either embed
+a revocable token or be replaced by a server-side capability check. The URL-key
+model from Phase 5 is provisional, not permanent.
+
+---
+
 ## OQ-1 — Yjs awareness encryption boundary
 
 ### Wire format (verified from PROTOCOL.md + y-websocket client)
