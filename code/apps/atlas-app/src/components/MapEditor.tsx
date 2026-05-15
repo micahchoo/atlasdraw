@@ -57,6 +57,7 @@ import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { useCollab } from "../hooks/useCollab";
+import { useYjsLayer } from "../hooks/useYjsLayer";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { AboutDialog } from "./AboutDialog";
@@ -459,6 +460,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // collab.active to decide whether to render cursor overlays + presence list.
   const collab = useCollab();
 
+  // Phase 5 Task 9 — YjsLayer React binding. When collab is active and
+  // connected, returns the GeoJSON FeatureCollection snapshot and CRUD
+  // mutators from the shared Y.Doc. When inactive, returns nulls.
+  // The map re-projection effect below syncs features to the MapLibre source.
+  const yjsLayer = useYjsLayer(collab);
+
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
   const shareClientRef = useRef<HttpStorageClient | null>(null);
@@ -774,6 +781,66 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       root.removeEventListener("dragover", onDragOverCapture, { capture: true });
     };
   }, [processGeoJsonDrop]);
+
+  // ---------------------------------------------------------------------------
+  // Phase 5 Task 9 — Collab data layer: MapLibre source + layer lifecycle.
+  // ---------------------------------------------------------------------------
+
+  const COLLAB_DATA_ID = "collab-data";
+
+  // Effect 1: add/remove the map source+layer when collab activates/deactivates.
+  useEffect(() => {
+    if (!map) return;
+
+    if (yjsLayer.features) {
+      if (!map.getSource(COLLAB_DATA_ID)) {
+        map.addSource(COLLAB_DATA_ID, {
+          type: "geojson",
+          data: yjsLayer.features,
+        });
+        const geometryType = inferGeometryType(yjsLayer.features);
+        map.addLayer(
+          compileLayer(
+            COLLAB_DATA_ID,
+            defaultLayerStyle(yjsLayer.features),
+            geometryType,
+          ),
+        );
+      }
+    } else {
+      // Collab deactivated — remove source and layer.
+      try {
+        if (map.getLayer(COLLAB_DATA_ID))
+          map.removeLayer(COLLAB_DATA_ID);
+        if (map.getSource(COLLAB_DATA_ID))
+          map.removeSource(COLLAB_DATA_ID);
+      } catch {
+        /* Guard against redundant cleanup */
+      }
+    }
+
+    return () => {
+      try {
+        if (map.getLayer(COLLAB_DATA_ID))
+          map.removeLayer(COLLAB_DATA_ID);
+        if (map.getSource(COLLAB_DATA_ID))
+          map.removeSource(COLLAB_DATA_ID);
+      } catch {
+        /* Guard against redundant cleanup on unmount */
+      }
+    };
+  }, [map, !!yjsLayer.features]);
+
+  // Effect 2: push GeoJSON data updates to the existing map source.
+  useEffect(() => {
+    if (!map || !yjsLayer.features) return;
+    const src = map.getSource(COLLAB_DATA_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (src) {
+      src.setData(yjsLayer.features);
+    }
+  }, [map, yjsLayer.features]);
 
   // W-B — Convert annotation → data layer via MainMenu.Item.
   //

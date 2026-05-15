@@ -1,0 +1,79 @@
+/* PresenceList.module.css
+ *
+ * Compact sidebar widget showing connected collaborators.
+ * Absolutely positioned at top-right (z-index 10, same band as toolbar
+ * buttons per atlasdraw-ui-conventions z-index ladder).
+ *
+ * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
+ * Color tokens are the atlas-side palette (literal hex values).
+ */
+
+.root {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  min-width: 140px;
+  background: #ffffff;
+  border: 1px solid #adb5bd;
+  border-radius: 6px;
+  padding: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  font-family: system-ui, sans-serif;
+}
+
+/* Collapsed (icon-only) variant — narrower, no border, dot cluster */
+.rootCompact {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid #adb5bd;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.header {
+  font-size: 12px;
+  font-weight: 600;
+  color: #212529;
+  margin: 0 0 6px 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #adb5bd;
+}
+
+.peerList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.peerRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Colored dot representing a peer */
+.avatarDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Username label — truncated at ~12 characters */
+.username {
+  font-size: 12px;
+  font-weight: 400;
+  color: #212529;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}

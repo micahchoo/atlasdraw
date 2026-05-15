@@ -1,0 +1,38 @@
+/* CursorOverlay.module.css
+ *
+ * Absolutely positioned SVG overlay for remote peer cursors.
+ * Sits between the Excalidraw layer (z-index 1) and atlas tool overlay
+ * (z-index 5) — new band at z-index 2 per atlasdraw-ui-conventions z-index
+ * ladder.
+ *
+ * Uses pointer-events: none so all mouse events pass through to Excalidraw
+ * and the map layer below.
+ */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+}
+
+/* Bounce animation — fires on cursor position change.
+ * Pulses opacity to draw attention to the moved cursor. */
+.bouncing {
+  animation: collab-cursor-bounce 0.4s ease-out;
+}
+
+@keyframes collab-cursor-bounce {
+  0% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.85;
+  }
+}

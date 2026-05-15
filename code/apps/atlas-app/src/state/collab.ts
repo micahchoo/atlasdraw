@@ -14,8 +14,11 @@
 // are stored as peer viewport overlays only — local camera is never updated.
 
 import { io, type Socket } from "socket.io-client";
-import { YjsLayer } from "@atlasdraw/data";
+import * as Y from "yjs";
+import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
 import { getAppConfig } from "../config/app-config";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+import { encryptScene, decryptScene } from "../collab/scene-crypto";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -55,8 +58,12 @@ export class CollabState {
   private _socket: Socket | null = null;
   private _yjsWs: WebSocket | null = null;
   private _yjsLayer: YjsLayer | null = null;
+  private _undoManager: CollabUndoManager | null = null;
   private _peers: Map<string, PeerMeta> = new Map();
   private _localCursor: CursorState = { x: 0, y: 0 };
+  private _roomKey: CryptoKey | null = null;
+  private _onSceneUpdateCallback: ((elements: ExcalidrawElement[]) => void) | null = null;
+  private _currentRoomId: string = "";
 
   /**
    * Whether realtime collaboration is enabled for this session. Set once in
@@ -98,6 +105,32 @@ export class CollabState {
     return this._yjsLayer?.doc ?? null;
   }
 
+  /**
+   * The CollabUndoManager for this collab session, scoped to local-origin ops
+   * only so User A's undo never silently removes User B's work.
+   *
+   * Created when the Socket.IO connection establishes (so socket.id is known);
+   * destroyed on `disconnect()`. Null before connection is established.
+   *
+   * All local Yjs mutations must be tagged with the local origin to be tracked:
+   *   ydoc.transact(() => { addFeature(...); }, socket.id);
+   *
+   * See @atlasdraw/data CollabUndoManager (Phase 5 Task 12).
+   */
+  get undoManager(): CollabUndoManager | null {
+    return this._undoManager;
+  }
+
+  /**
+   * Register a callback invoked when a remote SCENE_UPDATE is received and
+   * successfully decrypted. The callback receives the deserialized elements.
+   *
+   * Set to `null` to unregister.
+   */
+  set onSceneUpdate(callback: ((elements: ExcalidrawElement[]) => void) | null) {
+    this._onSceneUpdateCallback = callback;
+  }
+
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------
@@ -106,11 +139,13 @@ export class CollabState {
    * Open both WebSocket connections for a collaborative room.
    *
    * @param roomId  Opaque room identifier (from URL fragment, see RoomKey).
-   * @param _key    AES-GCM CryptoKey for scene encryption (reserved; used by
-   *                Tasks 8/10 — not wired in Task 7).
+   * @param key     AES-GCM CryptoKey for scene encryption (Tasks 8/10).
    */
-  connect(roomId: string, _key?: CryptoKey): void {
+  connect(roomId: string, key?: CryptoKey): void {
     if (!this.active) return;
+
+    this._roomKey = key ?? null;
+    this._currentRoomId = roomId;
 
     // URL resolution: same-origin when wsUrl is unset (the default for
     // local-only / Pages deployments that enable realtime).
@@ -126,6 +161,18 @@ export class CollabState {
 
     this._socket.on("connect", () => {
       this._socket?.emit("JOIN_ROOM", { roomId });
+
+      // Phase 5 Task 12: Create CollabUndoManager with the socket.id as
+      // local origin so undo only affects this client's data-layer ops.
+      // All local Yjs mutations must be tagged with this origin via
+      //   ydoc.transact(fn, socket.id)
+      // to be tracked.
+      if (this._yjsLayer) {
+        this._undoManager = new CollabUndoManager(
+          this._yjsLayer.doc,
+          this._socket!.id,
+        );
+      }
     });
 
     // MAP_CAMERA_UPDATE: update peer viewport overlay only; do NOT apply to
@@ -165,6 +212,25 @@ export class CollabState {
       },
     );
 
+    // SCENE_UPDATE — decrypt incoming encrypted scene payload and forward
+    // decrypted elements to the registered callback (if any).
+    this._socket.on(
+      "SCENE_UPDATE",
+      async (event: {
+        senderId: string;
+        data: { iv: string; ciphertext: string };
+      }) => {
+        if (!this._roomKey || !this._onSceneUpdateCallback) return;
+        try {
+          const elements = await decryptScene(event.data, this._roomKey);
+          this._onSceneUpdateCallback(elements);
+        } catch {
+          // Decryption failed — payload may be tampered or key mismatch.
+          // AES-GCM auth tag catches this; silently discard per ADR-0010.
+        }
+      },
+    );
+
     // PEER_LEFT — remove the disconnecting peer from the presence map.
     this._socket.on(
       "PEER_LEFT",
@@ -196,6 +262,23 @@ export class CollabState {
   }
 
   /**
+   * Encrypt the current scene elements and broadcast as SCENE_UPDATE.
+   *
+   * Safe to call even before connect() — silently no-ops when the socket or
+   * room key is unavailable.
+   *
+   * @param elements - The full Excalidraw element array to encrypt and emit.
+   */
+  async emitSceneUpdate(elements: ExcalidrawElement[]): Promise<void> {
+    if (!this._socket?.connected || !this._roomKey) return;
+    const encrypted = await encryptScene(elements, this._roomKey);
+    this._socket.emit("SCENE_UPDATE", {
+      roomId: this._currentRoomId,
+      data: encrypted,
+    });
+  }
+
+  /**
    * Tear down both WebSocket connections and destroy the Y.Doc.
    *
    * Safe to call even when `connect()` was never called (no-op if socket/Yjs
@@ -206,6 +289,7 @@ export class CollabState {
     this._socket = null;
     this._yjsWs?.close();
     this._yjsWs = null;
+    this._undoManager = null;
     this._yjsLayer?.doc.destroy();
     this._yjsLayer = null;
     this._peers.clear();

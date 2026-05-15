@@ -60,3 +60,8 @@ export { toGeoJSON, observeLayer } from "./yjs-snapshot";
 // Phase 6 wires if Option B selected; drops if Option A confirmed.
 // See ADR-0010: docs/architecture/adr/0010-yjs-e2ee-threat-model.md
 export { encryptUpdate, decryptUpdate } from "./yjs-crypto";
+
+// Phase 5 Task 12 — Undo behavior under distributed state.
+// Yjs UndoManager wrapped with per-user origin scoping so User A's undo
+// never silently removes User B's work.
+export { CollabUndoManager } from "./collab-undo-manager";

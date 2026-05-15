@@ -1,11 +1,19 @@
-/* MapEditor layout — three stacked layers inside a relative container.
+/* MapEditor layout — four stacked layers inside a relative container.
  *
  * .root            — sizing root; fills whatever container App.tsx provides.
- * .mapLayer        — MapLibre GL canvas; bottom of stack.
+ * .mapLayer        — MapLibre GL canvas; bottom of stack (z-index 0).
  * .excalidrawLayer — Excalidraw canvas; sits on top, pointer-events disabled
- *                    by default. Task 13 applies .excalidrawLayerActive to
- *                    re-enable pointer-events when drawing mode is active.
+ *                    by default (z-index 1). Task 13 applies
+ *                    .excalidrawLayerActive to re-enable pointer-events when
+ *                    drawing mode is active.
+ * .cursorOverlay   — (owned by CollabWrapper/CursorOverlay) SVG layer at
+ *                    z-index 2, between Excalidraw and atlas tool overlay.
  * .fullSize        — utility; applied to <MapCanvas> so it fills .mapLayer.
+ *
+ * Phase 5 Task 11 additions:
+ *   z-index 2  — CursorOverlay SVG (pointer-events: none, cursor dots)
+ *   z-index 10 — PresenceList sidebar widget (absolute, top-right)
+ *                Same band as toolbar buttons — different screen region.
  */
 
 .root {

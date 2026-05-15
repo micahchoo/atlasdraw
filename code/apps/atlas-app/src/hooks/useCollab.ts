@@ -16,6 +16,7 @@
 //   (Task 11) and useYjsLayer (Task 9).
 
 import { createContext, useContext, useRef } from "react";
+import * as Y from "yjs";
 import { CollabState } from "../state/collab";
 import type { PeerMeta, CursorState } from "../state/collab";
 
@@ -27,6 +28,7 @@ export interface CollabContextValue {
   active: boolean;
   peers: Map<string, PeerMeta>;
   localCursor: CursorState;
+  yjsDoc: Y.Doc | null;
   connect: (roomId: string, key?: CryptoKey) => void;
   disconnect: () => void;
 }
@@ -72,6 +74,7 @@ export function useCollab(): CollabContextValue {
     active: collab.active,
     peers: collab.peers,
     localCursor: collab.localCursor,
+    yjsDoc: collab.yjsDoc,
     connect: collab.connect.bind(collab),
     disconnect: collab.disconnect.bind(collab),
   };
