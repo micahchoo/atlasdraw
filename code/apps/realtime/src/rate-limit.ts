@@ -26,6 +26,7 @@ export type RateLimitedEvent =
   | "CURSOR"
   | "MAP_CAMERA_UPDATE"
   | "SCENE_UPDATE"
+  | "SCENE_SNAPSHOT"
   | "COMMENT";
 
 /**
@@ -69,6 +70,11 @@ const RATE_LIMITS: Record<RateLimitedEvent, RateLimitConfig> = {
   CURSOR: { maxPerWindow: 6, windowMs: 100, maxPayloadBytes: 1024 },
   MAP_CAMERA_UPDATE: { maxPerWindow: 3, windowMs: 100, maxPayloadBytes: 1024 },
   SCENE_UPDATE: { maxPerWindow: 1, windowMs: 100, maxPayloadBytes: 262144 },
+  // Q-P5-1: SCENE_SNAPSHOT is a joiner-pull reply carrying a full encrypted
+  // scene. Same byte cap as SCENE_UPDATE (256 KB); slightly looser per-window
+  // budget since elections may briefly fan-out under churn (legitimate bursts
+  // are rare — typically 1 per join).
+  SCENE_SNAPSHOT: { maxPerWindow: 2, windowMs: 1000, maxPayloadBytes: 262144 },
   COMMENT: { maxPerWindow: 1, windowMs: 200, maxPayloadBytes: 65536 },
 };
 

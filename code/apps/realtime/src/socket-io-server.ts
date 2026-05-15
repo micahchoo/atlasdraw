@@ -25,6 +25,8 @@ import type {
   MapCameraUpdateEvent,
   CursorEvent,
   CommentEvent,
+  RequestSnapshotEvent,
+  SceneSnapshotEvent,
 } from "@atlasdraw/protocol";
 import { checkRateLimit } from "./rate-limit";
 import type { RateLimitedEvent } from "./rate-limit";
@@ -222,6 +224,97 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
           trackSender(socket, senderId);
           socket.to(roomId).emit("COMMENT", payload);
         }
+      },
+    );
+
+    // -----------------------------------------------------------------------
+    // REQUEST_SNAPSHOT — joiner-pull (Q-P5-1)
+    //
+    // The joiner emits this once after JOIN_ROOM is acked. The relay
+    // deterministically elects ONE existing room member (lexicographically
+    // smallest socket.id) and forwards the request to that peer only. Never
+    // broadcast. If the requester is alone in the room, do nothing — the
+    // joiner stays with an empty scene (correct outcome for an empty room).
+    //
+    // The relay reads the requester's own socket.id server-side and stamps
+    // it as senderId in the routed envelope, so the elected peer knows
+    // whom to address its SCENE_SNAPSHOT reply to.
+    // -----------------------------------------------------------------------
+    socket.on(
+      "REQUEST_SNAPSHOT",
+      (payload: unknown) => {
+        if (
+          !payload ||
+          typeof payload !== "object" ||
+          typeof (payload as Record<string, unknown>).roomId !== "string"
+        ) {
+          return; // malformed — silently drop
+        }
+        const { roomId } = payload as { roomId: string };
+        if (!roomId || roomId !== currentRoom) return;
+
+        const roomSockets = io.sockets.adapter.rooms.get(roomId);
+        if (!roomSockets) return;
+
+        // Election: lexicographically-smallest socket.id excluding requester.
+        // Deterministic & churn-resilient — same id wins across re-requests
+        // unless the prior winner disconnected.
+        let elected: string | null = null;
+        for (const id of roomSockets) {
+          if (id === socket.id) continue;
+          if (elected === null || id < elected) elected = id;
+        }
+        if (elected === null) return; // requester is alone — no-op
+
+        const envelope: RequestSnapshotEvent = {
+          type: "REQUEST_SNAPSHOT",
+          roomId,
+          senderId: socket.id,
+          timestamp: Date.now(),
+        };
+        io.to(elected).emit("REQUEST_SNAPSHOT", envelope);
+      },
+    );
+
+    // -----------------------------------------------------------------------
+    // SCENE_SNAPSHOT — encrypted reply to a joiner-pull (Q-P5-1)
+    //
+    // Emitted by the peer that the relay elected. Routed to `targetId` only,
+    // never broadcast. Validates payload shape (iv + ciphertext, both
+    // strings), confirms target is in the same room (no cross-room leakage),
+    // applies the same byte cap as SCENE_UPDATE (256 KB).
+    // -----------------------------------------------------------------------
+    socket.on(
+      "SCENE_SNAPSHOT",
+      (payload: unknown) => {
+        if (!checkRateLimited(socket, "SCENE_SNAPSHOT", payload)) return;
+
+        const evt = payload as Partial<SceneSnapshotEvent>;
+        if (
+          typeof evt.roomId !== "string" ||
+          typeof evt.targetId !== "string" ||
+          !evt.data ||
+          typeof evt.data.iv !== "string" ||
+          typeof evt.data.ciphertext !== "string"
+        ) {
+          return; // malformed — silently drop
+        }
+
+        // Sender must be in the room they claim, and target must be in the
+        // same room — prevents cross-room snapshot leakage.
+        if (evt.roomId !== currentRoom) return;
+        const targetSocket = io.sockets.sockets.get(evt.targetId);
+        if (!targetSocket || !targetSocket.rooms.has(evt.roomId)) return;
+
+        const envelope: SceneSnapshotEvent = {
+          type: "SCENE_SNAPSHOT",
+          roomId: evt.roomId,
+          senderId: socket.id,
+          timestamp: Date.now(),
+          targetId: evt.targetId,
+          data: evt.data,
+        };
+        io.to(evt.targetId).emit("SCENE_SNAPSHOT", envelope);
       },
     );
 
