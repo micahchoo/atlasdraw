@@ -1,57 +1,70 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// ShareDialog — Phase 4 T8. Share-link generation UI.
+// ShareDialog — Phase 4 T8 + Phase 5 collab integration (Step 7).
 //
 // Mirrors AboutDialog: inline styles, root-level mount, no @excalidraw/Dialog
 // dependency, fully testable in jsdom outside the Excalidraw provider tree.
 //
-// States: idle → generating → success(url, mode) | error(message). Auto-fires
-// generate() on mount; the user only sees the loading spinner briefly before
-// the success state lands.
+// Phase 5 amendment: the dialog now opens to a mode picker — "Share read-only"
+// vs "Collaborate" — instead of auto-firing useShareLink.generate(). Read-only
+// preserves the existing hash/upload heuristic inside useShareLink (the user
+// only picks the user-facing capability; hash vs upload remains an internal
+// size-based decision). Collaborate goes through generateRoomKey() + CollabState.
+//
+// Q-P5-2: a `#room:` URL grants write capability — anyone with the link can
+// edit. Existing share URLs (`/m#v1:`, `/m/<token>`) remain read-only via the
+// ShareView path. The hint text in the collab success state surfaces this
+// explicitly to the user.
 
 import React, { useEffect, useRef, useState } from "react";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
+import { generateRoomKey } from "@atlasdraw/protocol";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
+import type { CollabState } from "../state/collab";
 
 export interface ShareDialogProps {
   onCloseRequest: () => void;
   getDoc: () => AtlasdrawDocument;
   client: HttpStorageClient;
+  /**
+   * CollabState owned by MapEditor. The dialog reuses this instance so the
+   * resulting collab session is the same socket as the editor's live session
+   * — no double-connect to the same room.
+   */
+  collabState: CollabState;
 }
 
-const MODE_HINT: Record<ShareMode, string> = {
+type DialogView =
+  | { kind: "picker" }
+  | { kind: "readonly-loading" }
+  | { kind: "readonly-success"; url: string; mode: ShareMode }
+  | { kind: "collab-loading" }
+  | { kind: "collab-success"; url: string }
+  | { kind: "error"; message: string };
+
+const READONLY_MODE_HINT: Record<ShareMode, string> = {
   hash: "Tiny map — link is fully self-contained (no server lookup).",
   upload:
     "Uploaded to server; link expires in 7 days. Edits after sharing won't update this link.",
 };
 
+// Q-P5-2: this hint text surfaces the write-capability semantics of the
+// collab link to the user. Anyone holding the URL can edit; there is no
+// server-side auth in Phase 5.
+const COLLAB_HINT =
+  "Collaborative — anyone with this link can edit.";
+
 export const ShareDialog: React.FC<ShareDialogProps> = ({
   onCloseRequest,
   getDoc,
   client,
+  collabState,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [url, setUrl] = useState<string | null>(null);
+  const [view, setView] = useState<DialogView>({ kind: "picker" });
   const [copied, setCopied] = useState(false);
-  const { isSharing, error, mode, generate } = useShareLink({
-    getDoc,
-    client,
-  });
-
-  // Auto-fire generation on mount. The dialog opens to "loading" then
-  // resolves to success/error.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const result = await generate();
-      if (!cancelled) setUrl(result);
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { generate } = useShareLink({ getDoc, client });
 
   // Escape to close.
   useEffect(() => {
@@ -81,14 +94,53 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     };
   }, [onCloseRequest]);
 
-  const handleCopy = async () => {
-    if (!url) return;
+  const startReadonly = async () => {
+    setView({ kind: "readonly-loading" });
+    const result = await generate();
+    if (result === null) {
+      setView({
+        kind: "error",
+        message: "Failed to generate share link.",
+      });
+      return;
+    }
+    // useShareLink's internal `mode` state is set synchronously inside
+    // generate() before it returns the URL, but the React state is stale
+    // for our purposes — re-derive from the URL shape.
+    const mode: ShareMode = result.includes("/m#v1:") ? "hash" : "upload";
+    setView({ kind: "readonly-success", url: result, mode });
+  };
+
+  const startCollab = async () => {
+    setView({ kind: "collab-loading" });
     try {
-      await navigator.clipboard.writeText(url);
+      const { roomId, key, fragment } = await generateRoomKey();
+      // Reuse the editor's CollabState instance — opens the live session for
+      // THIS tab too so any subsequent edits broadcast immediately.
+      collabState.connect(roomId, key);
+      // `fragment` already starts with `#`; concatenating onto origin yields
+      // a same-path `/#room:...` URL (editor route).
+      const url = `${window.location.origin}/${fragment}`;
+      setView({ kind: "collab-success", url });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start collaboration.";
+      setView({ kind: "error", message });
+    }
+  };
+
+  const currentUrl =
+    view.kind === "readonly-success" || view.kind === "collab-success"
+      ? view.url
+      : null;
+
+  const handleCopy = async () => {
+    if (!currentUrl) return;
+    try {
+      await navigator.clipboard.writeText(currentUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Fallback: select the input contents so the user can Cmd-C.
       inputRef.current?.select();
     }
   };
@@ -134,13 +186,87 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
           Share map
         </h2>
 
-        {isSharing && !url && !error && (
-          <div data-testid="share-dialog-loading" style={{ padding: "0.5rem 0" }}>
-            Generating share link…
+        {view.kind === "picker" && (
+          <div
+            data-testid="share-dialog-mode-picker"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.5rem",
+              margin: "0 0 0.75rem 0",
+            }}
+          >
+            <button
+              type="button"
+              onClick={startReadonly}
+              data-testid="share-dialog-pick-readonly"
+              style={{
+                padding: "10px 14px",
+                border: "1px solid #adb5bd",
+                borderRadius: "4px",
+                background: "#ffffff",
+                color: "#212529",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Share read-only
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 400,
+                  color: "#495057",
+                  marginTop: "2px",
+                }}
+              >
+                Recipients view a snapshot — no live editing.
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={startCollab}
+              data-testid="share-dialog-pick-collab"
+              style={{
+                padding: "10px 14px",
+                border: "1px solid #1971c2",
+                borderRadius: "4px",
+                background: "#1971c2",
+                color: "#ffffff",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Collaborate
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 400,
+                  color: "#dbeafe",
+                  marginTop: "2px",
+                }}
+              >
+                Live editing — anyone with the link can edit.
+              </div>
+            </button>
           </div>
         )}
 
-        {error && (
+        {(view.kind === "readonly-loading" || view.kind === "collab-loading") && (
+          <div
+            data-testid="share-dialog-loading"
+            style={{ padding: "0.5rem 0" }}
+          >
+            {view.kind === "collab-loading"
+              ? "Starting collaboration…"
+              : "Generating share link…"}
+          </div>
+        )}
+
+        {view.kind === "error" && (
           <div
             data-testid="share-dialog-error"
             role="alert"
@@ -154,18 +280,24 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               fontSize: "0.8125rem",
             }}
           >
-            {error}
+            {view.message}
           </div>
         )}
 
-        {url && (
+        {currentUrl && (
           <>
-            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                marginBottom: "0.5rem",
+              }}
+            >
               <input
                 ref={inputRef}
                 type="text"
                 readOnly
-                value={url}
+                value={currentUrl}
                 data-testid="share-dialog-url"
                 onFocus={(e) => e.currentTarget.select()}
                 style={{
@@ -197,17 +329,30 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 {copied ? "Copied" : "Copy link"}
               </button>
             </div>
-            {mode && (
+            {view.kind === "readonly-success" && (
               <p
                 data-testid="share-dialog-mode-hint"
-                data-mode={mode}
+                data-mode={view.mode}
                 style={{
                   margin: "0 0 0.75rem 0",
                   fontSize: "0.75rem",
                   color: "#495057",
                 }}
               >
-                {MODE_HINT[mode]}
+                {READONLY_MODE_HINT[view.mode]}
+              </p>
+            )}
+            {view.kind === "collab-success" && (
+              <p
+                data-testid="share-dialog-mode-hint"
+                data-mode="collab"
+                style={{
+                  margin: "0 0 0.75rem 0",
+                  fontSize: "0.75rem",
+                  color: "#495057",
+                }}
+              >
+                {COLLAB_HINT}
               </p>
             )}
           </>

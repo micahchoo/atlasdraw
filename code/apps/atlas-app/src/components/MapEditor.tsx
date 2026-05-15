@@ -36,7 +36,7 @@ import {
   requireHomogeneousGeometry,
 } from "@atlasdraw/data";
 import { Excalidraw, MainMenu, setExportElementTransformer } from "@excalidraw/excalidraw";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import { DEFAULT_SIDEBAR } from "@excalidraw/common";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type maplibregl from "maplibre-gl";
@@ -57,7 +57,9 @@ import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { useCollab } from "../hooks/useCollab";
+import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
+import { CollabState } from "../state/collab";
 import { LayerPanel } from "./LayerPanel";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { AboutDialog } from "./AboutDialog";
@@ -459,6 +461,42 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // No-op for single-player deployments (Q1). UI components (Task 11) read
   // collab.active to decide whether to render cursor overlays + presence list.
   const collab = useCollab();
+
+  // Phase 5 collab integration (Step 6) — a single CollabState instance owned
+  // by MapEditor. The lifecycle is component-scoped: instantiated on mount,
+  // disconnected on unmount. Both useCollabRoom (URL → connect) and
+  // ShareDialog (manual collab share) call into this same instance to avoid
+  // opening two sockets to the same room.
+  //
+  // Note: this is separate from the `useCollab` context above, which is the
+  // pre-existing read-only React surface for cursor/presence UI. The plan
+  // (Step 6) deliberately keeps the wiring explicit — no new context.
+  const collabState = useMemo(() => new CollabState(), []);
+
+  // Phase 5 collab integration (Step 5) — fragment → connect bridge.
+  // Reads window.location.hash and connects when it's a `#room:` fragment.
+  // Surfaces an inline banner if the fragment is malformed.
+  const { error: collabRoomError } = useCollabRoom(collabState);
+
+  // Phase 5 collab integration — wire Excalidraw <-> CollabState for Q-P5-1
+  // snapshot pull. setSceneAccessor lets THIS client serve REQUEST_SNAPSHOT
+  // when the relay elects us; setSceneReceiver applies an inbound
+  // SCENE_SNAPSHOT to the local Excalidraw scene.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    collabState.setSceneAccessor(() => excalidrawAPI.getSceneElements() as ExcalidrawElement[]);
+    collabState.setSceneReceiver((elements) =>
+      excalidrawAPI.updateScene({ elements }),
+    );
+  }, [collabState, excalidrawAPI]);
+
+  // Unmount cleanup — close the live session if any. Safe when no connection
+  // was ever opened (disconnect() is idempotent).
+  useEffect(() => {
+    return () => {
+      collabState.disconnect();
+    };
+  }, [collabState]);
 
   // Phase 5 Task 9 — YjsLayer React binding. When collab is active and
   // connected, returns the GeoJSON FeatureCollection snapshot and CRUD
@@ -1270,8 +1308,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       )}
 
       {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
-          (selectDocument needs the imperative API). The dialog auto-fires
-          the share-link generation on mount. */}
+          (selectDocument needs the imperative API). Phase 5 collab integration:
+          opens to a mode picker (read-only / Collaborate) instead of auto-
+          firing the read-only generate. Receives the editor's CollabState so
+          the Collaborate path reuses the same socket as the editor. */}
       {showShareDialog && excalidrawAPI && (
         <ShareDialog
           onCloseRequest={() => setShowShareDialog(false)}
@@ -1279,7 +1319,34 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
           }
           client={getShareClient()}
+          collabState={collabState}
         />
+      )}
+
+      {/* Phase 5 collab integration — inline banner when the URL fragment
+          carries a malformed `#room:` link. Surfaces useCollabRoom's parse
+          error to the user without blocking the editor. */}
+      {collabRoomError && (
+        <div
+          data-testid="collab-room-error"
+          role="alert"
+          style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 10,
+            background: "#fff5f5",
+            border: "1px solid #ffc9c9",
+            color: "#c92a2a",
+            padding: "6px 12px",
+            borderRadius: 4,
+            fontSize: 13,
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
+          }}
+        >
+          {collabRoomError}
+        </div>
       )}
     </div>
   );
