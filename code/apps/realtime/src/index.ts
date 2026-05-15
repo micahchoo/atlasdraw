@@ -14,6 +14,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { registerHealth } from "./health";
 import { registerSocketIOHandlers } from "./socket-io-server";
 import { registerYjsHandler } from "./yjs-server";
+import { attachRedisAdapterIfConfigured } from "./redis-adapter";
 import type { RealtimeConfig } from "@atlasdraw/protocol";
 
 const PORT = parseInt(process.env["PORT"] ?? "4001", 10);
@@ -49,6 +50,11 @@ console.log("[realtime] Socket.IO event handlers registered on /socket.io");
 // ---------------------------------------------------------------------------
 registerYjsHandler(server);
 console.log("[realtime] y-websocket handler mounted on /yjs/:roomId");
+
+// ---------------------------------------------------------------------------
+// Optional Redis adapter — opt-in multi-instance scaling
+// ---------------------------------------------------------------------------
+attachRedisAdapterIfConfigured(io);
 
 // ---------------------------------------------------------------------------
 // Listen

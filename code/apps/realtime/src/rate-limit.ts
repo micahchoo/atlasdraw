@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — per-socket rate limiter + message-size cap.
 //
-// Phase 5 Task 5 (atlasdraw plan 2026-05-03 § Task 5). Implements per-socket
-// sliding-window counters for each event type. Windows reset every 100 ms
-// (200 ms for COMMENT). Out-of-rate messages are silently dropped and logged
-// at WARN level. Oversized payloads are rejected the same way.
+// Phase 5 Task 5 + Task 13 (atlasdraw plan 2026-05-03 § Task 5 + Task 13).
+// Implements per-socket sliding-window counters for each event type. Windows
+// reset every 100 ms (200 ms for COMMENT). Out-of-rate messages are silently
+// dropped and logged at WARN level.
+//
+// Phase 5 Task 13 adds a discriminanted-union return type
+// (CheckRateLimitResult) so callers can distinguish oversized from
+// rate-limited results. The handler (socket-io-server.ts) disconnects sockets
+// that exceed per-type byte caps with code 4008 MESSAGE_TOO_LARGE.
 //
 // ADR-0010: relay never inspects encrypted payloads — this limiter checks
 // byte length only (Buffer.byteLength of the serialized JSON), never the
@@ -22,6 +27,25 @@ export type RateLimitedEvent =
   | "MAP_CAMERA_UPDATE"
   | "SCENE_UPDATE"
   | "COMMENT";
+
+/**
+ * Result of a rate-limit or size check.
+ *
+ * - `{ pass: true }` – the message is allowed.
+ * - `{ pass: false, reason: "oversized", size, maxSize }` – payload exceeds the
+ *   per-type byte cap. Handlers MUST disconnect the offending socket.
+ * - `{ pass: false, reason: "rate_limited" }` – within rate but over the
+ *   per-window count. Handlers MUST silently drop the message.
+ */
+export type CheckRateLimitResult =
+  | { pass: true }
+  | {
+      pass: false;
+      reason: "oversized";
+      size: number;
+      maxSize: number;
+    }
+  | { pass: false; reason: "rate_limited" };
 
 interface RateLimitConfig {
   /** Max messages allowed per `windowMs`-long window. */
@@ -84,9 +108,9 @@ export function checkRateLimit(
   socket: Socket,
   eventType: RateLimitedEvent,
   payload: unknown,
-): boolean {
+): CheckRateLimitResult {
   const config = RATE_LIMITS[eventType];
-  if (!config) return true; // unknown event type — allow (safety net)
+  if (!config) return { pass: true }; // unknown event type — allow (safety net)
 
   // --- Payload size check ---
   const payloadSize = Buffer.byteLength(JSON.stringify(payload));
@@ -95,7 +119,12 @@ export function checkRateLimit(
       `[realtime] WARN socket=${socket.id} event=${eventType} oversized ` +
         `(${payloadSize} B, max ${config.maxPayloadBytes} B)`,
     );
-    return false;
+    return {
+      pass: false,
+      reason: "oversized",
+      size: payloadSize,
+      maxSize: config.maxPayloadBytes,
+    };
   }
 
   // --- Rate window check ---
@@ -114,8 +143,8 @@ export function checkRateLimit(
       `[realtime] WARN socket=${socket.id} event=${eventType} rate-limited ` +
         `(${entry.count - 1}/${config.maxPerWindow} per ${config.windowMs} ms)`,
     );
-    return false;
+    return { pass: false, reason: "rate_limited" };
   }
 
-  return true;
+  return { pass: true };
 }

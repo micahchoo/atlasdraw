@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — Socket.IO event handlers for the relay.
 //
-// Phase 5 Task 5 (atlasdraw plan 2026-05-03 § Task 5). Registers the four
-// Socket.IO event types that make the relay work:
+// Phase 5 Task 5 + Task 13 (atlasdraw plan 2026-05-03 § Task 5 + Task 13).
+// Registers the four Socket.IO event types that make the relay work:
 //   - SCENE_UPDATE         – relay encrypted payload, LWW per-element (client)
 //   - MAP_CAMERA_UPDATE    – relay plaintext camera, LWW by timestamp at relay
 //   - CURSOR               – relay immediately, no LWW
 //   - COMMENT              – relay encrypted payload, LWW by version at relay
+//
+// Task 13 additions:
+//   - Room size guard: JOIN_ROOM checks io.sockets.adapter.rooms for the
+//     target room and rejects the join with ROOM_FULL if already at
+//     MAX_ROOM_SIZE (default 4, env-overridable).
+//   - Oversized payload disconnection: the checkRateLimited wrapper detects
+//     oversized results from rate-limit.ts and emits ERROR (code 4008
+//     MESSAGE_TOO_LARGE) before calling socket.disconnect(true).
 //
 // Per ADR-0010 the relay never inspects encrypted payloads — SCENE_UPDATE
 // and COMMENT data are forwarded as opaque { iv, ciphertext } blobs.
@@ -89,6 +97,9 @@ function trackSender(socket: Socket, senderId: string): void {
  *   - Never inspect encrypted payload content
  */
 export function registerSocketIOHandlers(io: SocketIOServer): void {
+  // Maximum concurrent sockets per room — env-configurable, default 4.
+  const MAX_ROOM_SIZE = parseInt(process.env["MAX_ROOM_SIZE"] ?? "4", 10);
+
   io.on("connection", (socket: Socket) => {
     // -----------------------------------------------------------------------
     // Per-socket state
@@ -96,7 +107,7 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     let currentRoom: string | null = null;
 
     // -----------------------------------------------------------------------
-    // JOIN_ROOM
+    // JOIN_ROOM — with room-size guard (MAX_ROOM_SIZE, default 4)
     // -----------------------------------------------------------------------
     socket.on(
       "JOIN_ROOM",
@@ -110,6 +121,17 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
         }
         const { roomId } = payload as { roomId: string };
         if (!roomId) return;
+
+        // Room size guard — reject join if room already has MAX_ROOM_SIZE sockets
+        const roomSockets = io.sockets.adapter.rooms.get(roomId);
+        if (roomSockets && roomSockets.size >= MAX_ROOM_SIZE) {
+          socket.emit("ROOM_FULL", {
+            code: "ROOM_FULL",
+            message: "Room is full",
+            roomId,
+          });
+          return;
+        }
 
         currentRoom = roomId;
         socket.join(roomId);
@@ -249,5 +271,15 @@ function checkRateLimited(
   eventType: RateLimitedEvent,
   payload: unknown,
 ): boolean {
-  return checkRateLimit(socket, eventType, payload);
+  const result = checkRateLimit(socket, eventType, payload);
+  if (!result.pass && result.reason === "oversized") {
+    // Emit an ERROR event then disconnect on next tick — this gives
+    // Socket.IO's async flush time to deliver the packet before the
+    // transport closes.
+    socket.emit("ERROR", { code: 4008, message: "MESSAGE_TOO_LARGE" });
+    setImmediate(() => {
+      socket.disconnect(true);
+    });
+  }
+  return result.pass;
 }
