@@ -7,6 +7,8 @@ export type {
   MapCameraUpdateEvent,
   CursorEvent,
   CommentEvent,
+  RequestSnapshotEvent,
+  SceneSnapshotEvent,
   EncryptedPayload,
   VersionedEncryptedPayload,
   MapCameraPayload,
@@ -16,4 +18,4 @@ export type {
 
 export type { AwarenessState } from "./realtime-events";
 export type { RoomKey } from "./room-key";
-export { parseRoomFragment } from "./room-key";
+export { parseRoomFragment, generateRoomKey, buildRoomFragment } from "./room-key";

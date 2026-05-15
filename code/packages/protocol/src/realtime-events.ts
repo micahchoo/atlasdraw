@@ -69,6 +69,42 @@ export interface CommentEvent extends BaseEvent {
 }
 
 /**
+ * Joiner-pull request for the current scene state, emitted once after
+ * `JOIN_ROOM` is acknowledged. Cites Q-P5-1: the relay deterministically
+ * elects a single existing room member (lowest `socket.id` lexicographically)
+ * and forwards this request to that one peer only — never broadcast. Avoids
+ * the N-snapshot storm that would result from a sender-push design and gives
+ * the joiner a deterministic retry path (re-emit on 2 s timeout; relay picks
+ * the next eligible peer).
+ *
+ * Carries no addressing field — the relay reads the sender's own `socket.id`
+ * server-side and includes it in the routed envelope so the elected peer
+ * knows whom to address its `SceneSnapshotEvent` reply to.
+ */
+export interface RequestSnapshotEvent extends BaseEvent {
+  type: "REQUEST_SNAPSHOT";
+}
+
+/**
+ * Encrypted scene snapshot addressed to a specific joiner. Emitted by the
+ * peer that the relay elected in response to a `RequestSnapshotEvent`. Cites
+ * Q-P5-1: the relay routes this envelope to `targetId` only via
+ * `io.to(targetId).emit(...)`, never broadcast. Preserves the ADR-0010
+ * dumb-relay invariant — payload is AES-GCM with the room key, the relay
+ * routes ciphertext without decrypting.
+ *
+ * `targetId` is opt-in per variant; it intentionally does NOT live on
+ * `BaseEvent` to avoid polluting every event type with an addressing field
+ * that is only meaningful for direct (non-room-broadcast) replies.
+ */
+export interface SceneSnapshotEvent extends BaseEvent {
+  type: "SCENE_SNAPSHOT";
+  /** Socket.IO id of the joiner this snapshot is addressed to. */
+  targetId: string;
+  data: EncryptedPayload;
+}
+
+/**
  * Canonical wire-protocol envelope for all Socket.IO traffic in Phase 5+.
  * Yjs data-layer ops travel on the separate `/yjs/:roomId` channel and are
  * not part of this union (per ADR-0010).
@@ -77,7 +113,9 @@ export type CollabEvent =
   | SceneUpdateEvent
   | MapCameraUpdateEvent
   | CursorEvent
-  | CommentEvent;
+  | CommentEvent
+  | RequestSnapshotEvent
+  | SceneSnapshotEvent;
 
 /** Realtime feature-flag config. `enabled = false` is the deployment default. */
 export interface RealtimeConfig {
