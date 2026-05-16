@@ -72,6 +72,32 @@ export class ShareExpiredError extends Error {
 }
 
 /**
+ * Phase 6 A13a: a workspace summary as surfaced by the managed-mode
+ * `/api/workspaces` route. Plan-literal — Wave 3 Worker 2 owns the server
+ * route shape; this mirror keeps the client decoupled from the server pkg.
+ */
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  plan: "free" | "pro";
+}
+
+/**
+ * Phase 6 A13a: response body from `/api/checkout-session`. The Stripe
+ * SDK lives server-side (Wave 3 Worker 2); the client only redirects to
+ * the returned URL. No `@stripe/stripe-js` dep is required here.
+ */
+export interface CheckoutSessionResponse {
+  url: string;
+}
+
+/**
+ * Phase 6 A13a: tiers offered on the billing page. The server route maps
+ * each to a Stripe price ID; the client never knows those IDs.
+ */
+export type CheckoutPriceTier = "pro" | "pro-plus";
+
+/**
  * Extended HTTP client — `StorageClient` plus the share-blob retrieval
  * helper that's HTTP-only (no server-side adapter equivalent surfaced to
  * the SPA). Returned by `createHttpStorageClient`.
@@ -83,6 +109,23 @@ export interface HttpStorageClient extends StorageClient {
    * 410 (was-here-now-gone). Throws on any other non-2xx.
    */
   getShareBlob(token: string): Promise<ArrayBuffer | null>;
+  /**
+   * Phase 6 A13a: list workspaces visible to the current user (managed
+   * mode only). Self-host (no workspace context resolver, or resolver
+   * returns null) short-circuits to `[]` without a network call — there
+   * is no `/api/workspaces` route in the FOSS server.
+   */
+  listWorkspaces(): Promise<WorkspaceSummary[]>;
+  /**
+   * Phase 6 A13a: kick off Stripe checkout for a workspace upgrade. The
+   * server route constructs the Stripe session and returns the redirect
+   * URL; the client never touches the Stripe SDK directly. Self-host
+   * short-circuits the same way `listWorkspaces` does.
+   */
+  createCheckoutSession(input: {
+    workspaceId: string;
+    priceTier: CheckoutPriceTier;
+  }): Promise<CheckoutSessionResponse>;
 }
 
 export interface HttpStorageClientOptions {
@@ -245,6 +288,46 @@ export function createHttpStorageClient(
         );
       }
       return await res.arrayBuffer();
+    },
+
+    async listWorkspaces() {
+      // Phase 6 A13a: self-host short-circuit. When no workspace resolver
+      // is configured (FOSS edition / `getWorkspaceId()` returns nullish),
+      // there is no `/api/workspaces` route to call. Returning `[]` keeps
+      // the `WorkspaceSwitcher` consumer trivially render-nothing-safe.
+      if (!getWorkspaceId()) return [];
+      const res = await fetchImpl(joinUrl(baseUrl, "/api/workspaces"), {
+        method: "GET",
+        headers: withWorkspaceHeader(),
+      });
+      const body = await expectJsonOrThrow<WorkspaceSummary[]>(
+        res,
+        "listWorkspaces",
+      );
+      return body;
+    },
+
+    async createCheckoutSession(input) {
+      // Self-host short-circuit identical to `listWorkspaces`. The FOSS
+      // server has no Stripe integration; the billing page renders a
+      // docs hint in self-host so this path is never reached, but the
+      // guard keeps the client total-functions.
+      if (!getWorkspaceId()) {
+        throw new Error(
+          "[storage-http] createCheckoutSession is unavailable in self-host mode",
+        );
+      }
+      const res = await fetchImpl(joinUrl(baseUrl, "/api/checkout-session"), {
+        method: "POST",
+        headers: withWorkspaceHeader({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify(input),
+      });
+      return expectJsonOrThrow<CheckoutSessionResponse>(
+        res,
+        "createCheckoutSession",
+      );
     },
   };
 }

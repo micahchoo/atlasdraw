@@ -15,12 +15,27 @@ vi.mock("../components/MapEditor", () => ({
 vi.mock("../components/ShareView", () => ({
   ShareView: () => <div data-testid="route-share-view" />,
 }));
+// Phase 6 A13a — BillingPage is rendered by App at `/billing`. Mock it to a
+// sentinel that surfaces the `workspaceId` prop so we can verify the route
+// honors `?workspaceId=` query (the bridge MapEditor's Upgrade button uses).
+vi.mock("../components/BillingPage", () => ({
+  BillingPage: ({ workspaceId }: { workspaceId: string | null }) => (
+    <div
+      data-testid="route-billing-page"
+      data-workspace-id={workspaceId ?? ""}
+    />
+  ),
+}));
 
 import { App } from "../App";
 
-function setLocation(pathname: string, hash: string): void {
+function setLocation(
+  pathname: string,
+  hash: string,
+  search: string = "",
+): void {
   Object.defineProperty(window, "location", {
-    value: { ...window.location, pathname, hash },
+    value: { ...window.location, pathname, hash, search },
     writable: true,
   });
 }
@@ -57,5 +72,19 @@ describe("App path routing", () => {
     setLocation("/m", "#something-else");
     render(<App />);
     expect(screen.queryByTestId("route-map-editor")).not.toBeNull();
+  });
+
+  it("renders BillingPage on /billing", () => {
+    setLocation("/billing", "");
+    render(<App />);
+    expect(screen.queryByTestId("route-billing-page")).not.toBeNull();
+    expect(screen.queryByTestId("route-map-editor")).toBeNull();
+  });
+
+  it("threads ?workspaceId= into BillingPage so the upgrade survives the hop", () => {
+    setLocation("/billing", "", "?workspaceId=ws-alpha");
+    render(<App />);
+    const node = screen.getByTestId("route-billing-page");
+    expect(node.getAttribute("data-workspace-id")).toBe("ws-alpha");
   });
 });
