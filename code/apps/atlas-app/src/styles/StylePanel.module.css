@@ -1,0 +1,271 @@
+/* StylePanel.module.css
+ *
+ * Per-layer style editor surface — opens as a floating dialog above the
+ * LayerPanel. Lives at z-index 100 (context-menu band; modal-ish surface
+ * with no scrim because it's panel-attached, not viewport-blocking).
+ *
+ * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
+ *   - Atlas-side palette hex literals (this surface may live outside the
+ *     `.excalidraw` scope when LayerPanel opens it from a portal-less render).
+ *   - Inline SVG icons (none in this file yet — the close button uses ×).
+ *   - aria-pressed on the tab buttons; aria-label on the close.
+ */
+
+.panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  width: 280px;
+  max-height: 80vh;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #adb5bd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-family: system-ui, sans-serif;
+  color: #212529;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #adb5bd;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  color: #212529;
+}
+
+.closeBtn:hover {
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  color: #868e96;
+}
+
+/* --- tab strip ------------------------------------------------------------ */
+
+.tabStrip {
+  display: flex;
+  border-bottom: 1px solid #adb5bd;
+}
+
+.tab {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  background: #ffffff;
+  color: #212529;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  background: #f8f9fa;
+}
+
+.tabActive {
+  font-weight: 600;
+  border-bottom-color: #1971c2;
+  color: #1971c2;
+}
+
+/* --- body / fields -------------------------------------------------------- */
+
+.body {
+  padding: 12px;
+}
+
+.tabBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.fieldLabel {
+  flex: 0 0 auto;
+  color: #212529;
+}
+
+.field input[type="color"] {
+  width: 2rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field select {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  background: #ffffff;
+  color: #212529;
+}
+
+/* --- stop rows (categorical) --------------------------------------------- */
+
+.stopList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stopRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stopRow input[type="text"] {
+  flex: 1;
+  padding: 2px 6px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.stopRow input[type="color"] {
+  width: 2rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+}
+
+.stopRow button {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.stopRow button:hover {
+  background: #f8f9fa;
+}
+
+/* --- ramp picker ---------------------------------------------------------- */
+
+.rampRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rampSwatch {
+  flex: 1 1 60px;
+  height: 18px;
+  min-width: 60px;
+  padding: 0;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rampSwatch:hover {
+  border-color: #1971c2;
+}
+
+.rampSwatchActive {
+  border: 2px solid #1971c2;
+}
+
+/* --- graduated preview ---------------------------------------------------- */
+
+.stopPreview {
+  display: flex;
+  gap: 2px;
+}
+
+.previewSwatch {
+  flex: 1;
+  min-height: 24px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 2px;
+}
+
+.previewLabel {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #212529;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* --- buttons -------------------------------------------------------------- */
+
+.applyBtn {
+  padding: 6px 12px;
+  border: 1px solid #1971c2;
+  border-radius: 4px;
+  background: #1971c2;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.applyBtn:hover {
+  background: #1864ab;
+  border-color: #1864ab;
+}
+
+.secondaryBtn {
+  padding: 4px 8px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.secondaryBtn:hover {
+  background: #f8f9fa;
+}
