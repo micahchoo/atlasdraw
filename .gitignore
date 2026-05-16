@@ -57,3 +57,6 @@ v8-compile-cache-*/
 # Autoresearch session artifacts (machine-local; regenerated per loop)
 autoresearch-metrics.json
 hypotheses.jsonl
+
+# deps-index runtime data (pending/resolved JSON; the rule.md is tracked)
+.claude/.deps-index/
