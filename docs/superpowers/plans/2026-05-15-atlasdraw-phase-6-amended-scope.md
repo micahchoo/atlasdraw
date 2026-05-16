@@ -33,7 +33,7 @@ Tasks below are numbered fresh (A1–A14) to avoid confusion with the original p
 
 | ID | Title | Source | Notes |
 |---|---|---|---|
-| **A1** | ADR-0006 — Telemetry policy | Original T4 | Required gate for any new client code that might call home; v1.0 needs an explicit zero-telemetry posture documented. |
+| **A1** | ADR-0011 — Hosted-mode telemetry (extends ADR-0006) | Original T4 (adapted) | ADR-0006 already exists (backfilled Phase 4 T17) and remains authoritative for OSS/self-host. ADR-0011 satisfies its deferred §Follow-ups by adding the hosted-mode (`MANAGED_MODE=true`) posture — server-side `pino` operational events only, no client beacon, Stripe holds billing PII. Gates Wave 3 A13b/A13c. |
 
 ### Wave 1 — Core features (parallel after Wave 0)
 
