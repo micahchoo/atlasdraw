@@ -65,8 +65,11 @@ import { CommentsPanelHost } from "./CommentsPanelHost";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { MaputnikDialog } from "./MaputnikDialog";
+import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { AboutDialog } from "./AboutDialog";
 import { ShareDialog } from "./ShareDialog";
+import { PrintDialog } from "./PrintDialog";
+import type { LayerLegendEntry } from "../lib/print-pdf";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -460,6 +463,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [maputnikOpen, setMaputnikOpen] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  // Phase 6 A10 — PDF export modal.
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  // Phase 6 A12 — Asset library info panel + dialog. Pushes the 3 bundled
+  // .excalidrawlib fixtures (wildfire / transit / hazard) into Excalidraw's
+  // built-in library via updateLibrary({ libraryItems, merge: true }).
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
 
   // Phase 5 T7 — collab state. Always called (returns inactive state when
   // realtime is disabled, which is the default for all current builds).
@@ -1236,6 +1245,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               Export composite PNG (with basemap)
             </MainMenu.Item>
+            {/* Phase 6 A10 — Print PDF. Root-mounted (like AboutDialog /
+                ShareDialog) so MainMenu auto-close doesn't unmount it. */}
+            <MainMenu.Item
+              onSelect={() => setShowPrintDialog(true)}
+              data-testid="main-menu-export-pdf"
+            >
+              Export PDF…
+            </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.Item
               onSelect={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
@@ -1283,6 +1300,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               data-testid="main-menu-edit-style"
             >
               Edit basemap style
+            </MainMenu.Item>
+            {/* Phase 6 A12 — Asset library info panel. Pushes the 3 bundled
+                atlas fixtures (wildfire / transit / hazard) into Excalidraw's
+                built-in library via updateLibrary; the dialog itself just
+                lists what's available + a button to open Excalidraw's library
+                sidebar tab. Root-level mounted (same pattern as Maputnik /
+                Basemap pickers) so MainMenu auto-close doesn't unmount it. */}
+            <MainMenu.Item
+              onSelect={() => setShowAssetLibrary(true)}
+              data-testid="main-menu-asset-library"
+            >
+              Asset library
             </MainMenu.Item>
             <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
@@ -1335,6 +1364,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         />
       )}
 
+      {/* Phase 6 A12 — Asset library info panel. Same root-level pattern as
+          the basemap picker / Maputnik modal — MainMenu auto-close on item
+          click would otherwise unmount it. Panel mounts → pushes the 3
+          bundled .excalidrawlib fixtures into Excalidraw's built-in library
+          via updateLibrary({ libraryItems, merge: true }); button opens
+          Excalidraw's library sidebar tab so the user can browse + stamp. */}
+      {showAssetLibrary && (
+        <AssetLibraryPanel
+          excalidrawAPI={excalidrawAPI}
+          onCloseRequest={() => setShowAssetLibrary(false)}
+        />
+      )}
+
       {/* Phase 6 A4 — Maputnik "Edit basemap style" modal. Hosted at the root
           level (same pattern as the basemap picker) so MainMenu auto-close
           doesn't unmount it. Iframe sandbox is intentionally restrictive —
@@ -1373,6 +1415,28 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           }
           client={getShareClient()}
           collabState={collabState}
+        />
+      )}
+
+      {/* Phase 6 A10 — PrintDialog (PDF export). Root-level mount so the
+          MainMenu auto-close on item-select doesn't unmount the dialog.
+          getMapCanvas returns the live MapLibre canvas at submit time, so
+          the PDF reflects the user's current viewport (not the moment the
+          dialog opened). Legend entries are derived from the layer
+          registry: annotation entries have no color of their own → use a
+          neutral grey; data layers carry style.fillColor. */}
+      {showPrintDialog && (
+        <PrintDialog
+          getMapCanvas={() => map?.getCanvas() ?? null}
+          layers={useLayerRegistryStore
+            .getState()
+            .entries.map<LayerLegendEntry>((e) => ({
+              id: e.id,
+              name: e.label,
+              color:
+                e.kind === "data" ? e.style.fillColor : "#868e96",
+            }))}
+          onCloseRequest={() => setShowPrintDialog(false)}
         />
       )}
 
