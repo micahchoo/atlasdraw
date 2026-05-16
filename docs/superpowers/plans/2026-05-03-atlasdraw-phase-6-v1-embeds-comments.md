@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-03
 **Weeks:** 16–25 (shifted +1 from spec's "Weeks 15–24" per Q7 chain)
-**Status:** Ready to execute
+**Status:** ⚠️ **Scope superseded 2026-05-15** — see `2026-05-15-atlasdraw-phase-6-amended-scope.md` (authoritative). Q-P6-1 cuts: Felt importer (Tasks 3, 15), AtlasdrawAPI + ADR-0005 (Task 1), Embed SDK (Tasks 4a, 4b, 5), AtlasdrawAPI workspace methods (Task 19), SDK CI gates (Tasks 22–24), API surface freeze (Task 26 — replaced by simpler v1.0 tag). This document is preserved for full task specs of the **kept** tasks (T4 telemetry ADR, T6–T14, T16–T18, T20, T21, T25).
 **Plan author:** writing-plans skill
 
 ---

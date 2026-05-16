@@ -7,6 +7,30 @@
 
 ---
 
+## Locked Decisions (Phase 6 amendment, 2026-05-15)
+
+### Q-P6-1 — Drop Felt importer and entire Embed-SDK / AtlasdrawAPI direction; v1.0 is the standalone app, not a platform
+
+**Recorded:** 2026-05-15
+**Constrains:** `docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md`
+
+**Decision.** Phase 6 ships v1.0 of Atlasdraw the *application*, not Atlasdraw the *platform*. The following original-plan features are removed:
+
+- **Felt importer** (original Tasks 3 and 15) — the project takes inspiration from Felt but does not target file-format compatibility. CSV/GeoJSON/KML/SHP readers in `@atlasdraw/data` (Phase 3) remain the import surface.
+- **AtlasdrawAPI postMessage interface** (original Task 1, ADR-0005) — no programmatic third-party automation surface in v1.0.
+- **Embed SDK** (`packages/sdk`, original Tasks 4a/4b/5) — no `<AtlasdrawEmbed>` widget, no `mount()`, no iframe bridge.
+- **Workspace-scoped AtlasdrawAPI auth boundary** (original Task 19) — collapses with the API drop.
+- **SDK CI gates** (original Tasks 22 bundle-size, 23 postMessage round-trip, 24 telemetry guard) — irrelevant without an SDK package.
+- **AtlasdrawAPI surface freeze** (original Task 26) — v1.0 tags ship without an API contract; replaced by a simpler "v1.0 standalone app release" gate.
+
+**Kept.** Anchored comments, Maputnik integration, layer styling UI + style compiler, geocoding, workspace abstraction (for self-host multi-document organization, not multi-tenant SaaS), print-to-PDF, asset library, hosted-mode quotas + Stripe (the maintainer-funded hosting story still stands), accessibility pass, hosted-mode E2E.
+
+**Why.** The user (Atlasdraw owner) is not building a Felt competitor or a developer-platform product. The original plan's "Felt-class" framing inherited features that exist because Felt monetizes around them — file-import compatibility for migration, an SDK for embed partnerships. Atlasdraw's product story is the *standalone editor* with self-host. Removing the API direction removes 7 tasks, an entire `packages/sdk` workspace, two ADRs of contract surface, and the bundle-size / postMessage CI infrastructure — none of which serve the standalone-app product.
+
+**Downstream impact — Phase 7.** The plugin sandbox plan (`docs/superpowers/plans/2026-05-03-atlasdraw-phase-7-v1.5-field-plugins.md`) consumes `AtlasdrawAPI` as the load-bearing Worker postMessage contract (Task 2, Q11 assumption). Dropping AtlasdrawAPI invalidates that assumption and requires Phase 7 to be rearchitected — most likely as direct npm-loaded extensions rather than a Worker-sandboxed plugin host, or deferred indefinitely. Phase 7 plan is **flagged for revision** but not amended in this scope; see seeds issue (to be filed) for follow-up.
+
+---
+
 ## OQ1 — Felt format: ZIP archive or JSON blob?
 
 **Finding:** There is no public `.felt` binary format. Felt exposes map data exclusively through its REST API, which requires a bearer token (OAuth / API key).
