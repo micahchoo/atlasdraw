@@ -39,12 +39,23 @@ export { write, read, AtlasdrawFormatError } from "./atlasdraw";
 export { writeJSON, readJSON, AtlasdrawJSONError } from "./atlasdraw-json";
 
 // Phase 3 Wave 1 Task 6 — CSV → GeoJSON parser.
+// Phase 6 A8 — `CsvReadOptions` adds an optional Photon geocoder hook.
 export {
   parseCSV,
   CSVParseError,
   CSV_HEURISTIC_THRESHOLD,
   CSV_HEURISTIC_THRESHOLD_SMALL_DATASET,
 } from "./csv";
+export type { CsvReadOptions } from "./csv";
+
+// Phase 6 A7 — Photon-compatible geocoder client + LRU cache.
+// Operator-configured; no default endpoint (ADR-0006 / ADR-0011).
+export {
+  PhotonGeocoder,
+  GeocoderNetworkError,
+  GeocoderResponseError,
+} from "./geocode";
+export type { GeocodeResult, GeocoderConfig } from "./geocode";
 
 // Phase 3 Wave 1 Task 7 — Shapefile → GeoJSON parser.
 export { parseShapefile, ShapefileParseError } from "./shapefile";

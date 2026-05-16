@@ -15,6 +15,16 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false"),
   VITE_REALTIME_WS_URL: z.string().default(""),
+  // Phase 6 A4: Maputnik base URL for the "Edit basemap style" modal. Default
+  // points at the public Maputnik instance; self-hosters who don't want the
+  // public Maputnik can point this at a self-hosted instance.
+  VITE_MAPUTNIK_URL: z.string().default("https://maputnik.github.io/editor/"),
+  // Phase 6 A8: Photon-compatible geocoder endpoint. EMPTY by default — no
+  // call-home. Operators opt in by setting this to e.g.
+  //   https://photon.komoot.io      (public, rate-limited)
+  //   https://photon.self-host.lan  (their own instance)
+  // See ADR-0006 / ADR-0011 (zero call-home, telemetry posture).
+  VITE_GEOCODER_ENDPOINT: z.string().default(""),
 });
 
 export type AppConfig = {
@@ -31,6 +41,22 @@ export type AppConfig = {
    * otherwise it's set but unused (`enableBackendPersistence` is false).
    */
   storageBaseUrl: string;
+  /**
+   * Phase 6 A4: base URL of the Maputnik editor used by the "Edit basemap
+   * style" modal. Defaults to the public instance
+   * `https://maputnik.github.io/editor/`. Self-hosters who don't want the
+   * public Maputnik can point this at a self-hosted instance via
+   * `VITE_MAPUTNIK_URL`.
+   */
+  maputnikUrl: string;
+  /**
+   * Phase 6 A8: optional Photon-compatible geocoder endpoint. When the
+   * field is `undefined`, geocoding is disabled and CSV imports behave
+   * exactly as in Phase 3 (no fetch is ever issued). When set, the
+   * MapEditor's CSV-import path constructs a `PhotonGeocoder` against this
+   * URL. Operator-configured; ADR-0006 / ADR-0011 (zero call-home).
+   */
+  geocoder?: { endpoint: string };
 };
 
 export function loadAppConfig(
@@ -38,12 +64,17 @@ export function loadAppConfig(
   rawStorageBaseUrl: string | undefined = import.meta.env.VITE_STORAGE_BASE_URL,
   rawRealtimeEnabled: string | undefined = import.meta.env.VITE_REALTIME_ENABLED,
   rawRealtimeWsUrl: string | undefined = import.meta.env.VITE_REALTIME_WS_URL,
+  rawMaputnikUrl: string | undefined = import.meta.env.VITE_MAPUTNIK_URL,
+  rawGeocoderEndpoint: string | undefined = import.meta.env
+    .VITE_GEOCODER_ENDPOINT,
 ): AppConfig {
   const parsed = EnvSchema.safeParse({
     VITE_BUILD_TARGET: rawTarget,
     VITE_STORAGE_BASE_URL: rawStorageBaseUrl,
     VITE_REALTIME_ENABLED: rawRealtimeEnabled,
     VITE_REALTIME_WS_URL: rawRealtimeWsUrl,
+    VITE_MAPUTNIK_URL: rawMaputnikUrl,
+    VITE_GEOCODER_ENDPOINT: rawGeocoderEndpoint,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -58,6 +89,12 @@ export function loadAppConfig(
   const realtimeEnabled =
     buildTarget === "hosted" && parsed.data.VITE_REALTIME_ENABLED === "true";
   const wsUrl = parsed.data.VITE_REALTIME_WS_URL || undefined;
+  const geocoderEndpoint = parsed.data.VITE_GEOCODER_ENDPOINT.trim();
+  // Empty string → undefined (i.e. geocoder OFF). Zero call-home: when the
+  // operator hasn't supplied an endpoint, no geocoder is constructed and
+  // the CSV-import path makes no network calls. ADR-0006 / ADR-0011.
+  const geocoder =
+    geocoderEndpoint === "" ? undefined : { endpoint: geocoderEndpoint };
   return {
     buildTarget,
     enableShareUI: buildTarget === "hosted",
@@ -65,6 +102,8 @@ export function loadAppConfig(
     enableBackendPersistence: buildTarget === "hosted",
     showDemoBadge: buildTarget === "pages",
     storageBaseUrl: parsed.data.VITE_STORAGE_BASE_URL,
+    maputnikUrl: parsed.data.VITE_MAPUTNIK_URL,
+    geocoder,
   };
 }
 

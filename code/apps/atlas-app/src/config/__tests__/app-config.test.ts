@@ -81,4 +81,56 @@ describe("loadAppConfig", () => {
     expect(cfg.storageBaseUrl).toBe("http://localhost:4000");
     expect(cfg.enableBackendPersistence).toBe(false);
   });
+
+  // Phase 6 A4 — VITE_MAPUTNIK_URL.
+  it("defaults maputnikUrl to the public Maputnik instance when env is unset", () => {
+    const cfg = loadAppConfig("local-only", undefined, undefined, undefined, undefined);
+    expect(cfg.maputnikUrl).toBe("https://maputnik.github.io/editor/");
+  });
+
+  it("propagates VITE_MAPUTNIK_URL when provided (self-hosted Maputnik)", () => {
+    const cfg = loadAppConfig(
+      "local-only",
+      undefined,
+      undefined,
+      undefined,
+      "https://maputnik.example.org/editor/",
+    );
+    expect(cfg.maputnikUrl).toBe("https://maputnik.example.org/editor/");
+  });
+
+  // Phase 6 A8 — VITE_GEOCODER_ENDPOINT.
+  it("leaves geocoder undefined when VITE_GEOCODER_ENDPOINT is unset (zero call-home)", () => {
+    const cfg = loadAppConfig("hosted", undefined, undefined, undefined, undefined, undefined);
+    expect(cfg.geocoder).toBeUndefined();
+  });
+
+  it("leaves geocoder undefined when VITE_GEOCODER_ENDPOINT is empty / whitespace", () => {
+    const cfg = loadAppConfig("hosted", undefined, undefined, undefined, undefined, "   ");
+    expect(cfg.geocoder).toBeUndefined();
+  });
+
+  it("populates geocoder.endpoint when VITE_GEOCODER_ENDPOINT is set", () => {
+    const cfg = loadAppConfig(
+      "hosted",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "https://photon.example",
+    );
+    expect(cfg.geocoder).toEqual({ endpoint: "https://photon.example" });
+  });
+
+  it("geocoder works on local-only target too (it's a build-time opt-in, not tier-gated)", () => {
+    const cfg = loadAppConfig(
+      "local-only",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "https://photon.example",
+    );
+    expect(cfg.geocoder).toEqual({ endpoint: "https://photon.example" });
+  });
 });

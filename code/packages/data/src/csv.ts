@@ -25,9 +25,36 @@
 // per-row warnings here (Phase 5 concern). Empty file → EMPTY_FILE.
 // No coord columns identifiable → NO_COORD_COLUMNS. Papa-level parse failure
 // → PARSE_FAILED.
+//
+// Phase 6 A8 — optional geocoder hook (CsvReadOptions.geocoder). When set
+// AND the CSV has an address column, rows that don't already carry a valid
+// lat/lng pair are resolved via the geocoder. The geocoder is operator-
+// configured (ADR-0006 / ADR-0011, zero call-home); when `opts.geocoder`
+// is absent the reader's behaviour is identical to pre-A8.
 
 import Papa from "papaparse";
 import type { Feature, FeatureCollection } from "geojson";
+
+import type { PhotonGeocoder } from "./geocode.js";
+
+/**
+ * Optional parameters for `parseCSV`. Forward-compatible: existing callers
+ * pass nothing and get the pre-A8 behaviour.
+ */
+export interface CsvReadOptions {
+  /**
+   * Phase 6 A8 — Photon-compatible geocoder used to resolve rows that have
+   * an address column but no parseable lat/lng. When omitted, geocoding is
+   * skipped entirely and the reader makes NO network calls.
+   */
+  geocoder?: PhotonGeocoder;
+}
+
+/**
+ * Max in-flight geocoder requests during a single CSV import. Keeps Photon
+ * happy (Komoot's public instance is rate-limited) and bounds memory.
+ */
+const GEOCODE_MAX_CONCURRENCY = 5;
 
 export const CSV_HEURISTIC_THRESHOLD = 0.8;
 export const CSV_HEURISTIC_THRESHOLD_SMALL_DATASET = 1.0;
@@ -50,7 +77,10 @@ export class CSVParseError extends Error {
 
 type Row = Record<string, unknown>;
 
-export async function parseCSV(blob: Blob): Promise<FeatureCollection> {
+export async function parseCSV(
+  blob: Blob,
+  opts?: CsvReadOptions,
+): Promise<FeatureCollection> {
   const text = await blob.text();
 
   let parsed: Papa.ParseResult<Row>;
@@ -95,7 +125,14 @@ export async function parseCSV(blob: Blob): Promise<FeatureCollection> {
   const lngCol =
     lngNamed ?? pickColumnByValue(headers, rows, -180, 180, [latCol]);
 
-  if (latCol === null || lngCol === null || latCol === lngCol) {
+  const addressCol = headers.find((h) => ADDRESS_NAME_RE.test(h));
+  const hasCoordCols =
+    latCol !== null && lngCol !== null && latCol !== lngCol;
+
+  // A8: if there are no coord columns but a geocoder + address column are
+  // available, fall through to the geocoder pass instead of throwing.
+  // Without a geocoder, behaviour matches pre-A8 (throw).
+  if (!hasCoordCols && !(opts?.geocoder && addressCol !== undefined)) {
     throw new CSVParseError(
       "NO_COORD_COLUMNS",
       "Could not identify latitude and longitude columns. " +
@@ -104,33 +141,113 @@ export async function parseCSV(blob: Blob): Promise<FeatureCollection> {
     );
   }
 
-  const addressCol = headers.find((h) => ADDRESS_NAME_RE.test(h));
-
+  // Pass 1: emit features that already have valid lat/lng. Track rows that
+  // are missing coords but carry an address — pass 2 geocodes those.
+  interface PendingRow {
+    properties: Record<string, unknown>;
+    address: string;
+  }
   const features: Feature[] = [];
+  const pending: PendingRow[] = [];
+
   for (const row of rows) {
-    const lat = toFiniteNumber(row[latCol]);
-    const lng = toFiniteNumber(row[lngCol]);
-    if (lat === null || lng === null) continue;
-    if (lat < -90 || lat > 90) continue;
-    if (lng < -180 || lng > 180) continue;
+    const lat = hasCoordCols ? toFiniteNumber(row[latCol!]) : null;
+    const lng = hasCoordCols ? toFiniteNumber(row[lngCol!]) : null;
+    const latOk = lat !== null && lat >= -90 && lat <= 90;
+    const lngOk = lng !== null && lng >= -180 && lng <= 180;
 
     const properties: Record<string, unknown> = {};
     for (const key of headers) {
-      if (key === latCol || key === lngCol) continue;
+      if (hasCoordCols && (key === latCol || key === lngCol)) continue;
       properties[key] = row[key];
     }
     if (addressCol !== undefined) {
       properties["_addressColumn_v1"] = addressCol;
     }
 
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [lng, lat] },
-      properties,
-    });
+    if (latOk && lngOk) {
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [lng!, lat!] },
+        properties,
+      });
+      continue;
+    }
+
+    // Missing/invalid coords. If a geocoder is wired and we have an
+    // address value, defer to pass 2. Otherwise the row is dropped
+    // (matches pre-A8 behaviour).
+    if (opts?.geocoder && addressCol !== undefined) {
+      const addr = row[addressCol];
+      if (typeof addr === "string" && addr.trim() !== "") {
+        pending.push({ properties, address: addr });
+      }
+    }
+  }
+
+  // Pass 2: geocode pending rows. Concurrency-capped — Komoot rate-limits
+  // the public Photon instance, and self-hosted instances appreciate the
+  // courtesy too. Null geocoder results drop the row (do NOT throw).
+  // Per-row network errors also drop the row to keep imports resilient.
+  if (opts?.geocoder && pending.length > 0) {
+    const resolved = await runWithConcurrency(
+      pending,
+      GEOCODE_MAX_CONCURRENCY,
+      async (p) => {
+        try {
+          const r = await opts.geocoder!.geocode(p.address);
+          if (!r) return null;
+          const feat: Feature = {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [r.lng, r.lat] },
+            properties: {
+              ...p.properties,
+              _geocoded_v1: true,
+              _geocodeConfidence_v1: r.confidence,
+              _geocodeDisplayName_v1: r.displayName,
+            },
+          };
+          return feat;
+        } catch {
+          return null;
+        }
+      },
+    );
+    for (const feat of resolved) {
+      if (feat) features.push(feat);
+    }
   }
 
   return { type: "FeatureCollection", features };
+}
+
+/**
+ * Promise-pool semaphore. `worker` runs against each item; at most `cap`
+ * worker invocations are in-flight at any time. Results are returned in
+ * the same order as `items`.
+ */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  cap: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const runners: Promise<void>[] = [];
+  const workers = Math.max(1, Math.min(cap, items.length));
+  for (let w = 0; w < workers; w++) {
+    runners.push(
+      (async () => {
+        while (true) {
+          const i = next++;
+          if (i >= items.length) return;
+          results[i] = await worker(items[i]!);
+        }
+      })(),
+    );
+  }
+  await Promise.all(runners);
+  return results;
 }
 
 // ---------------------------------------------------------------------------

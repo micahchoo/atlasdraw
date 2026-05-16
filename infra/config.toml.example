@@ -16,6 +16,26 @@ enabled = false
 # ws_url = "ws://localhost:4001"
 
 # ---------------------------------------------------------------------------
+# [geocoder]  (Phase 6 A7/A8)
+#
+# Photon-compatible geocoder endpoint used by the CSV-import path to
+# resolve address columns to lat/lng. OFF by default (zero call-home,
+# per ADR-0006 + ADR-0011) — uncomment `endpoint` to opt in.
+#
+# The atlas-app reads this via the build-time env var
+# `VITE_GEOCODER_ENDPOINT`, which docker-compose / your deploy pipeline
+# is expected to inject from the value below. With no endpoint set, the
+# CSV reader makes NO network calls — behaviour matches Phase 3.
+#
+# Compatible servers:
+#   - https://photon.komoot.io       (public, Komoot's rate-limited host)
+#   - your own self-hosted Photon    (recommended for any volume)
+#   - Pelias / Nominatim's Photon fork (Photon-shape JSON only)
+# ---------------------------------------------------------------------------
+[geocoder]
+# endpoint = "https://photon.komoot.io"
+
+# ---------------------------------------------------------------------------
 # Reserved for Phase 6+:
 #
 # [redis]
