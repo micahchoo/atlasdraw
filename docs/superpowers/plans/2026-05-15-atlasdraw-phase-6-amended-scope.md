@@ -1,7 +1,7 @@
 # Atlasdraw Phase 6 — Amended Scope (v1.0 standalone app)
 
 **Plan date:** 2026-05-15
-**Status:** Ready to execute
+**Status:** Completed 2026-05-15
 **Supersedes scope of:** `docs/superpowers/plans/2026-05-03-atlasdraw-phase-6-v1-embeds-comments.md`
 **Decision:** Q-P6-1 in `docs/decisions/phase-6-research-notes.md` §"Locked Decisions (Phase 6 amendment, 2026-05-15)"
 
