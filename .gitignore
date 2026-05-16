@@ -45,3 +45,15 @@ firebase/
 # playwright-cli session artifacts
 .playwright-cli/
 .playwright/
+
+# Yarn install temp unpack dirs (created by `yarn install` at repo root,
+# abandoned across runs — never tracked)
+yarn--*/
+
+# Build / process caches at repo root
+playwright-transform-cache-*/
+v8-compile-cache-*/
+
+# Autoresearch session artifacts (machine-local; regenerated per loop)
+autoresearch-metrics.json
+hypotheses.jsonl
