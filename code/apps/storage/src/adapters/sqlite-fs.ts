@@ -8,7 +8,12 @@ import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { MapRecord, ShareToken, StorageClient } from "../types";
+import type {
+  MapRecord,
+  ShareToken,
+  StorageClient,
+  WorkspaceScope,
+} from "../types";
 
 const ID_RE = /^[A-Za-z0-9_-]{21}$/;
 const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -19,6 +24,7 @@ interface MapRow {
   updated_at: string;
   blob_ref: string;
   byte_size: number;
+  workspace_id: string | null;
 }
 
 interface ShareRow {
@@ -27,6 +33,7 @@ interface ShareRow {
   mode: string;
   expires_at: string;
   created_at: string;
+  workspace_id: string | null;
 }
 
 export function createSqliteFsAdapter(opts: {
@@ -44,7 +51,8 @@ export function createSqliteFsAdapter(opts: {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       blob_ref TEXT NOT NULL,
-      byte_size INTEGER NOT NULL
+      byte_size INTEGER NOT NULL,
+      workspace_id TEXT
     );
     CREATE TABLE IF NOT EXISTS share_tokens (
       token TEXT PRIMARY KEY,
@@ -52,21 +60,35 @@ export function createSqliteFsAdapter(opts: {
       mode TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      workspace_id TEXT,
       FOREIGN KEY (map_id) REFERENCES maps(id)
     );
   `);
 
+  // Phase 6 A9: in-place ADD COLUMN for databases created pre-A9. SQLite
+  // raises a duplicate-column error if the column already exists — catch
+  // and ignore so this remains idempotent across restarts. Existing rows
+  // pick up `NULL` by default which is exactly the self-host semantics.
+  for (const table of ["maps", "share_tokens"] as const) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN workspace_id TEXT`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("duplicate column name")) throw err;
+    }
+  }
+
   const insertMap = db.prepare(
-    `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size, workspace_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectMap = db.prepare(`SELECT * FROM maps WHERE id = ?`);
   const updateMapRow = db.prepare(
     `UPDATE maps SET updated_at = ?, byte_size = ? WHERE id = ?`,
   );
   const insertShare = db.prepare(
-    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, workspace_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectShare = db.prepare(`SELECT * FROM share_tokens WHERE token = ?`);
 
@@ -77,6 +99,7 @@ export function createSqliteFsAdapter(opts: {
       updated_at: row.updated_at,
       blob_ref: row.blob_ref,
       byte_size: row.byte_size,
+      workspace_id: row.workspace_id ?? null,
     };
   }
 
@@ -87,23 +110,29 @@ export function createSqliteFsAdapter(opts: {
       mode: "read",
       expires_at: row.expires_at,
       created_at: row.created_at,
+      workspace_id: row.workspace_id ?? null,
     };
   }
 
   return {
-    async createMap(blob: Buffer): Promise<MapRecord> {
+    async createMap(
+      blob: Buffer,
+      scope?: WorkspaceScope,
+    ): Promise<MapRecord> {
       const id = nanoid(21);
       const now = new Date().toISOString();
       const blobRef = `blobs/${id}.atlasdraw`;
       const fullPath = path.join(dataDir, blobRef);
       fs.writeFileSync(fullPath, blob);
-      insertMap.run(id, now, now, blobRef, blob.byteLength);
+      const workspaceId = scope?.workspaceId ?? null;
+      insertMap.run(id, now, now, blobRef, blob.byteLength, workspaceId);
       return {
         id,
         created_at: now,
         updated_at: now,
         blob_ref: blobRef,
         byte_size: blob.byteLength,
+        workspace_id: workspaceId,
       };
     },
 
@@ -133,10 +162,14 @@ export function createSqliteFsAdapter(opts: {
         updated_at: now,
         blob_ref: existing.blob_ref,
         byte_size: blob.byteLength,
+        workspace_id: existing.workspace_id ?? null,
       };
     },
 
-    async createShareToken(mapId: string): Promise<ShareToken> {
+    async createShareToken(
+      mapId: string,
+      scope?: WorkspaceScope,
+    ): Promise<ShareToken> {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
@@ -147,12 +180,14 @@ export function createSqliteFsAdapter(opts: {
       const token = nanoid(21);
       const now = new Date();
       const expires = new Date(now.getTime() + SHARE_TTL_MS);
+      const workspaceId = scope?.workspaceId ?? null;
       const record: ShareToken = {
         token,
         map_id: mapId,
         mode: "read",
         expires_at: expires.toISOString(),
         created_at: now.toISOString(),
+        workspace_id: workspaceId,
       };
       insertShare.run(
         record.token,
@@ -160,6 +195,7 @@ export function createSqliteFsAdapter(opts: {
         record.mode,
         record.expires_at,
         record.created_at,
+        workspaceId,
       );
       return record;
     },

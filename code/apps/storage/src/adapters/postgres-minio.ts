@@ -12,7 +12,12 @@ import {
 } from "@aws-sdk/client-s3";
 import { nanoid } from "nanoid";
 import { Pool } from "pg";
-import type { MapRecord, ShareToken, StorageClient } from "../types";
+import type {
+  MapRecord,
+  ShareToken,
+  StorageClient,
+  WorkspaceScope,
+} from "../types";
 
 const BUCKET = "atlasdraw-maps";
 const ID_RE = /^[A-Za-z0-9_-]{21}$/;
@@ -24,6 +29,7 @@ interface MapRow {
   updated_at: Date | string;
   blob_ref: string;
   byte_size: number | string;
+  workspace_id?: string | null;
 }
 
 interface ShareRow {
@@ -32,6 +38,7 @@ interface ShareRow {
   mode: string;
   expires_at: Date | string;
   created_at: Date | string;
+  workspace_id?: string | null;
 }
 
 function isoize(v: Date | string): string {
@@ -48,6 +55,7 @@ function rowToMap(row: MapRow): MapRecord {
       typeof row.byte_size === "string"
         ? parseInt(row.byte_size, 10)
         : row.byte_size,
+    workspace_id: row.workspace_id ?? null,
   };
 }
 
@@ -58,6 +66,7 @@ function rowToShare(row: ShareRow): ShareToken {
     mode: "read",
     expires_at: isoize(row.expires_at),
     created_at: isoize(row.created_at),
+    workspace_id: row.workspace_id ?? null,
   };
 }
 
@@ -92,15 +101,19 @@ export function createPostgresMinioAdapter(opts: {
           created_at TIMESTAMP WITH TIME ZONE NOT NULL,
           updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
           blob_ref TEXT NOT NULL,
-          byte_size BIGINT NOT NULL
+          byte_size BIGINT NOT NULL,
+          workspace_id TEXT
         );
         CREATE TABLE IF NOT EXISTS share_tokens (
           token TEXT PRIMARY KEY,
           map_id TEXT NOT NULL REFERENCES maps(id),
           mode TEXT NOT NULL,
           expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL
+          created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+          workspace_id TEXT
         );
+        ALTER TABLE maps ADD COLUMN IF NOT EXISTS workspace_id TEXT;
+        ALTER TABLE share_tokens ADD COLUMN IF NOT EXISTS workspace_id TEXT;
       `);
     })();
     return initReady;
@@ -139,16 +152,20 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   return {
-    async createMap(blob: Buffer): Promise<MapRecord> {
+    async createMap(
+      blob: Buffer,
+      scope?: WorkspaceScope,
+    ): Promise<MapRecord> {
       await ensureSchema();
       const id = nanoid(21);
       const blobRef = `maps/${id}.atlasdraw`;
       await putBlob(blobRef, blob);
       const now = new Date();
+      const workspaceId = scope?.workspaceId ?? null;
       await pool.query(
-        `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, now, now, blobRef, blob.byteLength],
+        `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size, workspace_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, now, now, blobRef, blob.byteLength, workspaceId],
       );
       return {
         id,
@@ -156,6 +173,7 @@ export function createPostgresMinioAdapter(opts: {
         updated_at: now.toISOString(),
         blob_ref: blobRef,
         byte_size: blob.byteLength,
+        workspace_id: workspaceId,
       };
     },
 
@@ -165,7 +183,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size
+        `SELECT id, created_at, updated_at, blob_ref, byte_size, workspace_id
          FROM maps WHERE id = $1`,
         [id],
       );
@@ -178,7 +196,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const existing = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size
+        `SELECT id, created_at, updated_at, blob_ref, byte_size, workspace_id
          FROM maps WHERE id = $1`,
         [id],
       );
@@ -198,10 +216,14 @@ export function createPostgresMinioAdapter(opts: {
         updated_at: now.toISOString(),
         blob_ref: row.blob_ref,
         byte_size: blob.byteLength,
+        workspace_id: row.workspace_id ?? null,
       };
     },
 
-    async createShareToken(mapId: string): Promise<ShareToken> {
+    async createShareToken(
+      mapId: string,
+      scope?: WorkspaceScope,
+    ): Promise<ShareToken> {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
@@ -216,10 +238,11 @@ export function createPostgresMinioAdapter(opts: {
       const token = nanoid(21);
       const now = new Date();
       const expires = new Date(now.getTime() + SHARE_TTL_MS);
+      const workspaceId = scope?.workspaceId ?? null;
       await pool.query(
-        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [token, mapId, "read", expires, now],
+        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, workspace_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [token, mapId, "read", expires, now, workspaceId],
       );
       return {
         token,
@@ -227,6 +250,7 @@ export function createPostgresMinioAdapter(opts: {
         mode: "read",
         expires_at: expires.toISOString(),
         created_at: now.toISOString(),
+        workspace_id: workspaceId,
       };
     },
 
@@ -236,7 +260,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<ShareRow>(
-        `SELECT token, map_id, mode, expires_at, created_at
+        `SELECT token, map_id, mode, expires_at, created_at, workspace_id
          FROM share_tokens WHERE token = $1`,
         [token],
       );

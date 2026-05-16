@@ -4,6 +4,10 @@
 // octet-stream (octets parsed at server init via addContentTypeParser). The
 // 50 MiB body limit is enforced by Fastify's bodyLimit option; oversize
 // uploads return 413 before the handler runs.
+//
+// Phase 6 A9: when the workspace middleware attaches `request.workspace`,
+// `createMap` is scoped to that workspace and a `workspace_scoped` event
+// emits via the request's pino logger per ADR-0011.
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { StorageClient } from "../types";
@@ -29,7 +33,17 @@ export function registerMapRoutes(
         .code(415)
         .send({ error: "Content-Type must be application/octet-stream" });
     }
-    const record = await client.createMap(body);
+    const workspaceId = request.workspace ?? null;
+    const record = await client.createMap(body, { workspaceId });
+    if (workspaceId) {
+      // ADR-0011: server-side workspace-scoped event. Emits only when a
+      // workspace context is attached (managed mode or self-host where
+      // the operator passed the header).
+      request.log.info(
+        { workspaceId, route: "/maps", method: "POST" },
+        "workspace_scoped",
+      );
+    }
     return reply.code(201).send(record);
   });
 

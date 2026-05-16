@@ -58,7 +58,17 @@ export function registerShareRoutes(
         return reply.code(404).send({ error: "not found" });
       }
       try {
-        const token = await client.createShareToken(id);
+        // Phase 6 A9: token is scoped to the requesting workspace (or
+        // null in self-host) and a `workspace_scoped` event emits per
+        // ADR-0011 when the context is non-null.
+        const workspaceId = request.workspace ?? null;
+        const token = await client.createShareToken(id, { workspaceId });
+        if (workspaceId) {
+          request.log.info(
+            { workspaceId, route: "/maps/:id/share", method: "POST" },
+            "workspace_scoped",
+          );
+        }
         return reply.code(201).send({
           token: token.token,
           url: `${publicUrl}/m/${token.token}`,

@@ -110,6 +110,18 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
 
     // -----------------------------------------------------------------------
     // JOIN_ROOM — with room-size guard (MAX_ROOM_SIZE, default 4)
+    //
+    // Phase 6 A9: payload accepts an optional `workspaceId: string`. When
+    // present, the actual Socket.IO room key becomes `${workspaceId}/${roomId}`
+    // so cross-workspace leakage is impossible at the relay layer. Self-host
+    // clients (Phase 5 collab) omit the field and the legacy single-tenant
+    // room key is preserved — existing tests must keep passing.
+    //
+    // The relay is opaque — it never reads the joined room key out of any
+    // subsequent event. SCENE_UPDATE / CURSOR / COMMENT carry the same
+    // `roomId` the client used here (which means workspace-namespaced if
+    // the client passed workspaceId at join time), so room alignment is
+    // the client's contract to maintain.
     // -----------------------------------------------------------------------
     socket.on(
       "JOIN_ROOM",
@@ -121,25 +133,36 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
         ) {
           return;
         }
-        const { roomId } = payload as { roomId: string };
-        if (!roomId) return;
+        const obj = payload as Record<string, unknown>;
+        const baseRoomId = obj.roomId as string;
+        if (!baseRoomId) return;
+
+        // Phase 6 A9: optional workspaceId namespace.
+        const rawWorkspace = obj.workspaceId;
+        const workspaceId =
+          typeof rawWorkspace === "string" && rawWorkspace.length > 0
+            ? rawWorkspace
+            : null;
+        const roomKey = workspaceId
+          ? `${workspaceId}/${baseRoomId}`
+          : baseRoomId;
 
         // Room size guard — reject join if room already has MAX_ROOM_SIZE sockets
-        const roomSockets = io.sockets.adapter.rooms.get(roomId);
+        const roomSockets = io.sockets.adapter.rooms.get(roomKey);
         if (roomSockets && roomSockets.size >= MAX_ROOM_SIZE) {
           socket.emit("ROOM_FULL", {
             code: "ROOM_FULL",
             message: "Room is full",
-            roomId,
+            roomId: baseRoomId,
           });
           return;
         }
 
-        currentRoom = roomId;
-        socket.join(roomId);
+        currentRoom = roomKey;
+        socket.join(roomKey);
 
         // Notify existing peers that a new participant joined.
-        socket.to(roomId).emit("PEER_JOINED", { peerId: socket.id });
+        socket.to(roomKey).emit("PEER_JOINED", { peerId: socket.id });
       },
     );
 

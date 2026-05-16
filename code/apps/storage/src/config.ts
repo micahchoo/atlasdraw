@@ -22,6 +22,18 @@ const BaseSchema = z.object({
   // server runs identically without any third-party data egress. Hosted
   // operators opt in by setting this env (see ADR-0009).
   SENTRY_DSN: z.string().optional(),
+  // Phase 6 A9: hosted-mode flag. When `MANAGED_MODE=true` the workspace
+  // middleware requires `X-Workspace-ID` on protected routes and route
+  // handlers emit `workspace_scoped` events per ADR-0011. Default false
+  // preserves self-host behaviour identically to Phase 4.
+  MANAGED_MODE: z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v) => {
+      if (typeof v === "boolean") return v;
+      if (typeof v !== "string") return false;
+      return v.toLowerCase() === "true" || v === "1";
+    }),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({

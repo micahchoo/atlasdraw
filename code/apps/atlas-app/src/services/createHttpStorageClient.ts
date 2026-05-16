@@ -96,11 +96,22 @@ export interface HttpStorageClientOptions {
    * runtime `fetch` at call time.
    */
   fetch?: typeof fetch;
+  /**
+   * Phase 6 A9: workspace context. When the function resolves to a non-null
+   * id, the client attaches `X-Workspace-ID: <id>` to every request. When
+   * it resolves to null, no header is attached — server treats the request
+   * as default-tenant (Phase 4 self-host compat). Implemented as a function
+   * so consumers can swap the active workspace at runtime without rebuilding
+   * the client (Wave 3 A13a will lean on this).
+   */
+  getWorkspaceId?: () => string | null | undefined;
 }
 
 const OCTET_STREAM_HEADERS = {
   "Content-Type": "application/octet-stream",
 };
+
+const WORKSPACE_HEADER = "X-Workspace-ID";
 
 function joinUrl(base: string, path: string): string {
   if (!base) return path;
@@ -134,12 +145,24 @@ export function createHttpStorageClient(
   // Capture once at construction so test injections are stable even if the
   // global `fetch` is later patched.
   const fetchImpl = opts.fetch ?? ((...args) => fetch(...args));
+  const getWorkspaceId = opts.getWorkspaceId ?? (() => null);
+
+  // Phase 6 A9: shallow-merge workspace header onto whatever the caller
+  // already passes. Resolves the workspace via the supplied function on
+  // every call so swapping workspaces at runtime takes effect immediately.
+  function withWorkspaceHeader(
+    extra?: Record<string, string>,
+  ): Record<string, string> | undefined {
+    const ws = getWorkspaceId();
+    if (!ws) return extra;
+    return { ...(extra ?? {}), [WORKSPACE_HEADER]: ws };
+  }
 
   return {
     async createMap(blob) {
       const res = await fetchImpl(joinUrl(baseUrl, "/maps"), {
         method: "POST",
-        headers: OCTET_STREAM_HEADERS,
+        headers: withWorkspaceHeader(OCTET_STREAM_HEADERS),
         body: blob as BodyInit,
       });
       return expectJsonOrThrow<MapRecord>(res, "createMap");
@@ -148,6 +171,7 @@ export function createHttpStorageClient(
     async getMap(id) {
       const res = await fetchImpl(joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`), {
         method: "GET",
+        headers: withWorkspaceHeader(),
       });
       if (res.status === 404) return null;
       return expectJsonOrThrow<MapRecord>(res, "getMap");
@@ -156,7 +180,7 @@ export function createHttpStorageClient(
     async updateMap(id, blob) {
       const res = await fetchImpl(joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`), {
         method: "PUT",
-        headers: OCTET_STREAM_HEADERS,
+        headers: withWorkspaceHeader(OCTET_STREAM_HEADERS),
         body: blob as BodyInit,
       });
       return expectJsonOrThrow<MapRecord>(res, "updateMap");
@@ -165,7 +189,7 @@ export function createHttpStorageClient(
     async createShareToken(mapId) {
       const res = await fetchImpl(
         joinUrl(baseUrl, `/maps/${encodeURIComponent(mapId)}/share`),
-        { method: "POST" },
+        { method: "POST", headers: withWorkspaceHeader() },
       );
       // The server returns { token, url, expires_at } — only `token` and
       // `expires_at` map onto the ShareToken interface; the others are
@@ -188,7 +212,7 @@ export function createHttpStorageClient(
     async resolveToken(token) {
       const res = await fetchImpl(
         joinUrl(baseUrl, `/share/${encodeURIComponent(token)}`),
-        { method: "GET" },
+        { method: "GET", headers: withWorkspaceHeader() },
       );
       if (res.status === 404 || res.status === 410) return null;
       // T13: T8/T9 will consume the { map, mode } body. For autosave we
@@ -211,7 +235,7 @@ export function createHttpStorageClient(
     async getShareBlob(token) {
       const res = await fetchImpl(
         joinUrl(baseUrl, `/share/${encodeURIComponent(token)}/blob`),
-        { method: "GET" },
+        { method: "GET", headers: withWorkspaceHeader() },
       );
       if (res.status === 404) return null;
       if (res.status === 410) throw new ShareExpiredError();

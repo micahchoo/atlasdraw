@@ -10,9 +10,12 @@ import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
 import { logger } from "./logger";
+import { registerWorkspaceMiddleware } from "./middleware/workspace";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
+
+export * from "./middleware/workspace";
 
 export * from "./types";
 export * from "./config";
@@ -65,6 +68,10 @@ async function main(): Promise<void> {
         });
 
   registerHealthRoute(app, config.STORAGE_MODE);
+  // Phase 6 A9: workspace middleware runs as a global preHandler. It
+  // bypasses /health internally and either requires (managed) or attaches
+  // (self-host) `X-Workspace-ID` for every other route.
+  registerWorkspaceMiddleware(app, { managed: config.MANAGED_MODE });
   registerMapRoutes(app, client);
   registerShareRoutes(app, client, config.PUBLIC_URL);
 

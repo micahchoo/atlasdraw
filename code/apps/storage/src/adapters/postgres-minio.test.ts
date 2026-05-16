@@ -149,6 +149,10 @@ describe("postgres-minio adapter", () => {
       updated_at: updated.toISOString(),
       blob_ref: `maps/${id}.atlasdraw`,
       byte_size: 42,
+      // Phase 6 A9: rows queried without a workspace_id column return null
+      // here. The mock row in this test doesn't set workspace_id, so the
+      // rowToMap normaliser produces null.
+      workspace_id: null,
     });
   });
 

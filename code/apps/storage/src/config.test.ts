@@ -100,4 +100,36 @@ describe("loadConfig", () => {
       expect(cfg.PUBLIC_URL).toBe("");
     });
   });
+
+  // Phase 6 A9 — MANAGED_MODE flag for the workspace middleware.
+  describe("MANAGED_MODE (A9)", () => {
+    it("defaults MANAGED_MODE to false when unset (self-host)", () => {
+      const cfg = loadConfig({ STORAGE_MODE: "sqlite-fs" });
+      expect(cfg.MANAGED_MODE).toBe(false);
+    });
+
+    it("parses MANAGED_MODE=true (string) as true", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "sqlite-fs",
+        MANAGED_MODE: "true",
+      });
+      expect(cfg.MANAGED_MODE).toBe(true);
+    });
+
+    it("parses MANAGED_MODE=false (string) as false", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "sqlite-fs",
+        MANAGED_MODE: "false",
+      });
+      expect(cfg.MANAGED_MODE).toBe(false);
+    });
+
+    it("parses MANAGED_MODE=1 as true", () => {
+      const cfg = loadConfig({
+        STORAGE_MODE: "sqlite-fs",
+        MANAGED_MODE: "1",
+      });
+      expect(cfg.MANAGED_MODE).toBe(true);
+    });
+  });
 });
