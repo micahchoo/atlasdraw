@@ -76,3 +76,10 @@ export { encryptUpdate, decryptUpdate } from "./yjs-crypto";
 // Yjs UndoManager wrapped with per-user origin scoping so User A's undo
 // never silently removes User B's work.
 export { CollabUndoManager } from "./collab-undo-manager";
+
+// Phase 6 A11 — `.excalidrawlib` reader + built-in atlas library index.
+// Powers the atlas-app AssetLibraryPanel (Phase 6 A12) which pushes the
+// bundled wildfire / transit / hazard fixtures into Excalidraw's built-in
+// library via `excalidrawAPI.updateLibrary({ libraryItems, merge: true })`.
+export { parseLibraryFile, getBuiltInLibraries } from "./asset-library";
+export type { ExcalidrawLibrary, LibraryParseError } from "./asset-library";
