@@ -36,6 +36,45 @@ enabled = false
 # endpoint = "https://photon.komoot.io"
 
 # ---------------------------------------------------------------------------
+# [managed]  (Phase 6 A13b/A13c — hosted-mode only)
+#
+# Server-side managed-mode config. OFF by default — self-host operators
+# leave the entire [managed] section commented. When enabled, apps/storage
+# requires X-Workspace-ID on protected routes, enforces per-workspace
+# map-count quotas, and exposes /api/workspaces + /api/billing/* routes.
+# See docs/architecture/adr/0011-hosted-mode-telemetry.md for the data
+# flow + PII boundary; Stripe holds billing identity, not the app.
+#
+# Telemetry: in managed mode, the following pino events are emitted to
+# stdout (operator log pipeline):
+#   - workspace_created          {workspaceId, plan, timestamp}
+#   - quota_breach               {workspaceId, quotaType, attemptedValue, limit, timestamp}
+#   - stripe_webhook_received    {eventType, customerId, timestamp}
+# No third-party analytics call-out from the app process.
+#
+# These keys flow through to env vars consumed by apps/storage at boot:
+#   enabled              → MANAGED_MODE
+#   quota_free_maps      → QUOTA_FREE_MAPS  (default 3)
+#   quota_pro_maps       → QUOTA_PRO_MAPS   (default 100)
+#   site_url             → SITE_URL         (Stripe redirect base)
+# ---------------------------------------------------------------------------
+# [managed]
+# enabled = false
+# quota_free_maps = 3
+# quota_pro_maps  = 100
+# site_url = "https://atlas.example.com"
+#
+# [managed.stripe]
+# # Stripe API keys + price ids. NEVER commit real values — these live in
+# # the operator's secret store and reach the container through env vars:
+# #   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
+# #   STRIPE_PRICE_PRO, STRIPE_PRICE_PRO_25.
+# secret_key = "sk_live_…"
+# webhook_secret = "whsec_…"
+# price_pro = "price_…"
+# price_pro_25 = "price_…"
+
+# ---------------------------------------------------------------------------
 # Reserved for Phase 6+:
 #
 # [redis]

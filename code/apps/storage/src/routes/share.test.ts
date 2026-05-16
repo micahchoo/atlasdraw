@@ -38,6 +38,17 @@ function wrapWithSpy(inner: StorageClient): SpyClient {
       calls.getBlob += 1;
       return inner.getBlob(id);
     },
+    // Phase 6 A13b/A13c: workspaces contract methods — share routes
+    // don't touch these, but the StorageClient interface requires them.
+    // Pass-through to the inner adapter so any incidental test that
+    // exercises workspaces still works.
+    createWorkspace: inner.createWorkspace.bind(inner),
+    getWorkspace: inner.getWorkspace.bind(inner),
+    listWorkspaces: inner.listWorkspaces.bind(inner),
+    updateWorkspacePlan: inner.updateWorkspacePlan.bind(inner),
+    countWorkspaceMaps: inner.countWorkspaceMaps.bind(inner),
+    findWorkspaceByStripeCustomerId:
+      inner.findWorkspaceByStripeCustomerId.bind(inner),
   };
 }
 

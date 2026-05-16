@@ -10,10 +10,13 @@ import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
 import { logger } from "./logger";
+import { registerQuotaMiddleware } from "./middleware/quota";
 import { registerWorkspaceMiddleware } from "./middleware/workspace";
+import { registerBillingRoutes } from "./routes/billing";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
+import { registerWorkspaceRoutes } from "./routes/workspaces";
 
 export * from "./middleware/workspace";
 
@@ -72,8 +75,36 @@ async function main(): Promise<void> {
   // bypasses /health internally and either requires (managed) or attaches
   // (self-host) `X-Workspace-ID` for every other route.
   registerWorkspaceMiddleware(app, { managed: config.MANAGED_MODE });
+  // Phase 6 A13b: quota guard runs after the workspace middleware. In
+  // self-host it's a no-op; in managed mode it 402s POST /maps when the
+  // workspace's map count would exceed its plan cap.
+  registerQuotaMiddleware(app, {
+    managed: config.MANAGED_MODE,
+    client,
+    limits: {
+      free: config.QUOTA_FREE_MAPS,
+      pro: config.QUOTA_PRO_MAPS,
+      pro_25: config.QUOTA_PRO_MAPS,
+    },
+  });
   registerMapRoutes(app, client);
   registerShareRoutes(app, client, config.PUBLIC_URL);
+  // Phase 6 A13b/A13c: workspaces + billing routes. Both 404 in
+  // self-host. Billing routes also 503 in managed mode if Stripe env
+  // isn't fully configured (don't fail boot — fail at request time).
+  registerWorkspaceRoutes(app, {
+    managed: config.MANAGED_MODE,
+    client,
+  });
+  registerBillingRoutes(app, {
+    managed: config.MANAGED_MODE,
+    client,
+    stripeSecretKey: config.STRIPE_SECRET_KEY,
+    stripeWebhookSecret: config.STRIPE_WEBHOOK_SECRET,
+    stripePricePro: config.STRIPE_PRICE_PRO,
+    stripePricePro25: config.STRIPE_PRICE_PRO_25,
+    siteUrl: config.SITE_URL,
+  });
 
   await app.listen({ host: "0.0.0.0", port: config.PORT });
   app.log.info(

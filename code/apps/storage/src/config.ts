@@ -34,6 +34,23 @@ const BaseSchema = z.object({
       if (typeof v !== "string") return false;
       return v.toLowerCase() === "true" || v === "1";
     }),
+  // ─── Phase 6 A13b: per-workspace quotas ─────────────────────────────
+  // Map-count limits per plan. Self-host (MANAGED_MODE=false) bypasses
+  // quota checks entirely; these env vars are only consulted in managed
+  // mode. Defaults match the original Task 17 spec (3 / 100).
+  QUOTA_FREE_MAPS: z.coerce.number().int().positive().default(3),
+  QUOTA_PRO_MAPS: z.coerce.number().int().positive().default(100),
+  // ─── Phase 6 A13c: Stripe checkout + webhook ────────────────────────
+  // All four are optional — managed-mode deployments that haven't yet
+  // wired Stripe still come up. Routes that require them raise a clear
+  // 503 at request time. Values flow straight through to the Stripe
+  // SDK; never logged.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRICE_PRO: z.string().optional(),
+  STRIPE_PRICE_PRO_25: z.string().optional(),
+  // Site URL used for Stripe checkout success/cancel redirects.
+  SITE_URL: z.string().default("http://localhost:3000"),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({

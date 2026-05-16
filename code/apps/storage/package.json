@@ -18,6 +18,7 @@
     "nanoid": "^5",
     "pg": "^8",
     "pino": "10.3.1",
+    "stripe": "^17.0.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {

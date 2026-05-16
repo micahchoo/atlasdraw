@@ -12,6 +12,8 @@ import type {
   MapRecord,
   ShareToken,
   StorageClient,
+  Workspace,
+  WorkspacePlan,
   WorkspaceScope,
 } from "../types";
 
@@ -34,6 +36,14 @@ interface ShareRow {
   expires_at: string;
   created_at: string;
   workspace_id: string | null;
+}
+
+interface WorkspaceRow {
+  id: string;
+  name: string;
+  plan: string;
+  stripe_customer_id: string | null;
+  created_at: string;
 }
 
 export function createSqliteFsAdapter(opts: {
@@ -63,6 +73,20 @@ export function createSqliteFsAdapter(opts: {
       workspace_id TEXT,
       FOREIGN KEY (map_id) REFERENCES maps(id)
     );
+    -- Phase 6 A13b: workspaces table for quota + plan tracking.
+    -- Created unconditionally so self-host DBs share the schema; the
+    -- table is just unused outside managed mode.
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      plan TEXT NOT NULL,
+      stripe_customer_id TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS workspaces_stripe_customer_id_idx
+      ON workspaces(stripe_customer_id);
+    CREATE INDEX IF NOT EXISTS maps_workspace_id_idx
+      ON maps(workspace_id);
   `);
 
   // Phase 6 A9: in-place ADD COLUMN for databases created pre-A9. SQLite
@@ -91,6 +115,41 @@ export function createSqliteFsAdapter(opts: {
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectShare = db.prepare(`SELECT * FROM share_tokens WHERE token = ?`);
+
+  // Phase 6 A13b: workspaces prepared statements.
+  const insertWorkspace = db.prepare(
+    `INSERT INTO workspaces (id, name, plan, stripe_customer_id, created_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const selectWorkspace = db.prepare(
+    `SELECT * FROM workspaces WHERE id = ?`,
+  );
+  const selectAllWorkspaces = db.prepare(
+    `SELECT * FROM workspaces ORDER BY created_at ASC`,
+  );
+  const updateWorkspacePlanRow = db.prepare(
+    `UPDATE workspaces
+     SET plan = ?, stripe_customer_id = COALESCE(?, stripe_customer_id)
+     WHERE id = ?`,
+  );
+  const selectWorkspaceByStripeCustomer = db.prepare(
+    `SELECT * FROM workspaces WHERE stripe_customer_id = ?`,
+  );
+  const countMapsForWorkspace = db.prepare(
+    `SELECT COUNT(*) as n FROM maps WHERE workspace_id = ?`,
+  );
+
+  function rowToWorkspace(row: WorkspaceRow): Workspace {
+    return {
+      id: row.id,
+      name: row.name,
+      // Validate against the WorkspacePlan union at the adapter boundary
+      // — anything else is a DB-corruption / hand-edit and surfaces loudly.
+      plan: row.plan as WorkspacePlan,
+      stripe_customer_id: row.stripe_customer_id ?? null,
+      created_at: row.created_at,
+    };
+  }
 
   function rowToMap(row: MapRow): MapRecord {
     return {
@@ -223,6 +282,58 @@ export function createSqliteFsAdapter(opts: {
         }
         throw err;
       }
+    },
+
+    // ─── Phase 6 A13b/A13c: workspaces ─────────────────────────────────
+    async createWorkspace(input: {
+      id: string;
+      name: string;
+      plan: WorkspacePlan;
+    }): Promise<Workspace> {
+      const now = new Date().toISOString();
+      insertWorkspace.run(input.id, input.name, input.plan, null, now);
+      return {
+        id: input.id,
+        name: input.name,
+        plan: input.plan,
+        stripe_customer_id: null,
+        created_at: now,
+      };
+    },
+
+    async getWorkspace(id: string): Promise<Workspace | null> {
+      const row = selectWorkspace.get(id) as WorkspaceRow | undefined;
+      return row ? rowToWorkspace(row) : null;
+    },
+
+    async listWorkspaces(): Promise<Workspace[]> {
+      const rows = selectAllWorkspaces.all() as WorkspaceRow[];
+      return rows.map(rowToWorkspace);
+    },
+
+    async updateWorkspacePlan(
+      id: string,
+      plan: WorkspacePlan,
+      stripeCustomerId?: string | null,
+    ): Promise<void> {
+      // Stripe customer id is sticky once set — COALESCE in the SQL above
+      // preserves the existing value when a `null` arrives (e.g. a
+      // downgrade-on-cancellation event that doesn't re-send the id).
+      updateWorkspacePlanRow.run(plan, stripeCustomerId ?? null, id);
+    },
+
+    async countWorkspaceMaps(id: string): Promise<number> {
+      const row = countMapsForWorkspace.get(id) as { n: number } | undefined;
+      return row ? Number(row.n) : 0;
+    },
+
+    async findWorkspaceByStripeCustomerId(
+      customerId: string,
+    ): Promise<Workspace | null> {
+      const row = selectWorkspaceByStripeCustomer.get(customerId) as
+        | WorkspaceRow
+        | undefined;
+      return row ? rowToWorkspace(row) : null;
     },
   };
 }

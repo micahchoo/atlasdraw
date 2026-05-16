@@ -58,6 +58,28 @@ export interface WorkspaceScope {
 }
 
 /**
+ * Workspace plan tier. Phase 6 A13b/A13c:
+ *  - `free`   — default tier; map count gated by `QUOTA_FREE_MAPS`.
+ *  - `pro`    — paid tier; map count gated by `QUOTA_PRO_MAPS`.
+ *  - `pro_25` — higher paid tier; same map quota as `pro` for v1 (kept
+ *               as a distinct tier so Stripe priceId metadata round-trips
+ *               accurately for future per-tier quota differentiation).
+ */
+export type WorkspacePlan = "free" | "pro" | "pro_25";
+
+/**
+ * A persisted workspace. `stripe_customer_id` is `null` for free-tier
+ * workspaces that haven't gone through Stripe checkout yet.
+ */
+export interface Workspace {
+  id: string;
+  name: string;
+  plan: WorkspacePlan;
+  stripe_customer_id: string | null;
+  created_at: string;
+}
+
+/**
  * Storage adapter contract. Both `postgres-minio` and `sqlite-fs` adapters
  * implement this; atlas-app consumes it through the HTTP layer (T3) and
  * never touches an adapter directly.
@@ -75,4 +97,28 @@ export interface StorageClient {
    * consumes this through the `GET /share/:token/blob` route.
    */
   getBlob(id: string): Promise<Buffer | null>;
+
+  // ─── Phase 6 A13b/A13c: workspaces table ────────────────────────────
+  //
+  // Managed-mode features (quotas + Stripe billing) but live on the
+  // adapter contract so both adapters expose an identical surface.
+  // Self-host servers never call these — `/api/workspaces` and
+  // `/api/billing/*` routes 404 when `MANAGED_MODE=false`.
+  createWorkspace(input: {
+    id: string;
+    name: string;
+    plan: WorkspacePlan;
+  }): Promise<Workspace>;
+  getWorkspace(id: string): Promise<Workspace | null>;
+  listWorkspaces(): Promise<Workspace[]>;
+  updateWorkspacePlan(
+    id: string,
+    plan: WorkspacePlan,
+    stripeCustomerId?: string | null,
+  ): Promise<void>;
+  /** Count maps belonging to a workspace. Phase 6 A13b quota guard. */
+  countWorkspaceMaps(id: string): Promise<number>;
+  findWorkspaceByStripeCustomerId(
+    customerId: string,
+  ): Promise<Workspace | null>;
 }
