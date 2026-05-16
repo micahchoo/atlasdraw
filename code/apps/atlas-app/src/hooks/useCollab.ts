@@ -19,6 +19,7 @@ import { createContext, useContext, useRef } from "react";
 import * as Y from "yjs";
 import { CollabState } from "../state/collab";
 import type { PeerMeta, CursorState } from "../state/collab";
+import type { CommentsLayer } from "../state/comments";
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -29,7 +30,13 @@ export interface CollabContextValue {
   peers: Map<string, PeerMeta>;
   localCursor: CursorState;
   yjsDoc: Y.Doc | null;
-  connect: (roomId: string, key?: CryptoKey) => void;
+  /** Phase 6 A3 — anchored-comments Y.Doc layer (null until connect()). */
+  commentsLayer: CommentsLayer | null;
+  connect: (
+    roomId: string,
+    key?: CryptoKey,
+    workspaceId?: string | null,
+  ) => void;
   disconnect: () => void;
 }
 
@@ -75,6 +82,7 @@ export function useCollab(): CollabContextValue {
     peers: collab.peers,
     localCursor: collab.localCursor,
     yjsDoc: collab.yjsDoc,
+    commentsLayer: collab.commentsLayer,
     connect: collab.connect.bind(collab),
     disconnect: collab.disconnect.bind(collab),
   };

@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+ * Phase 6 A3 — CommentAnchorsOverlay container.
+ *
+ * Positioned absolutely over the MapLibre + Excalidraw stack. The container
+ * itself is pointer-events: none so clicks pass through to the canvas;
+ * individual <CommentAnchor> nodes opt back in via pointer-events: auto.
+ */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}

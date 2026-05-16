@@ -1,0 +1,101 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+ * Phase 6 A3 — CommentAnchor styles.
+ *
+ * Positioned absolutely in the parent overlay container; left/top are inline
+ * style values computed at render time (map projection / scene→viewport).
+ * Z-index sits in the toolbar band (10) per atlasdraw-ui-conventions.
+ */
+
+.anchor {
+  position: absolute;
+  z-index: 10;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -100%);
+  pointer-events: auto;
+}
+
+.button {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #1971c2;
+  border-radius: 50% 50% 50% 4px;
+  background: #ffffff;
+  color: #1971c2;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.buttonResolved {
+  border-color: #868e96;
+  color: #868e96;
+}
+
+.icon {
+  width: 12px;
+  height: 12px;
+}
+
+.popover {
+  position: absolute;
+  top: -8px;
+  left: 24px;
+  z-index: 100;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 200px;
+  max-width: 280px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  color: #212529;
+}
+
+.popoverHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.popoverAuthor {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.popoverTimestamp {
+  font-size: 11px;
+  color: #868e96;
+}
+
+.popoverText {
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 6px;
+}
+
+.popoverActions {
+  display: flex;
+  gap: 4px;
+}
+
+.popoverButton {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  cursor: pointer;
+}
+
+.popoverButton:hover {
+  background: #f8f9fa;
+}

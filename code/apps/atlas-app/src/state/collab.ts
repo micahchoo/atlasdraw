@@ -19,6 +19,7 @@ import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
 import { getAppConfig } from "../config/app-config";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw";
 import { encryptScene, decryptScene } from "../collab/scene-crypto";
+import { CommentsLayer } from "./comments";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -64,6 +65,10 @@ export class CollabState {
   private _roomKey: CryptoKey | null = null;
   private _onSceneUpdateCallback: ((elements: ExcalidrawElement[]) => void) | null = null;
   private _currentRoomId: string = "";
+  // Phase 6 A3 — anchored comments live in a separate Y.Doc with its own
+  // WebSocket connection (different docName, different ACL granularity).
+  // Lifecycle bound to connect()/disconnect().
+  private _commentsLayer: CommentsLayer | null = null;
 
   // -------------------------------------------------------------------------
   // Snapshot pull state (Q-P5-1)
@@ -183,12 +188,30 @@ export class CollabState {
   // -------------------------------------------------------------------------
 
   /**
+   * The comments Y.Doc layer for this collab session. Created when
+   * `connect()` is called with a roomId; destroyed on `disconnect()`.
+   * Null otherwise.
+   *
+   * Phase 6 A3 — anchored comments. Distinct from `yjsDoc` (data layer).
+   * See `state/comments.ts` and ADR-0010 trust posture.
+   */
+  get commentsLayer(): CommentsLayer | null {
+    return this._commentsLayer;
+  }
+
+  /**
    * Open both WebSocket connections for a collaborative room.
    *
-   * @param roomId  Opaque room identifier (from URL fragment, see RoomKey).
-   * @param key     AES-GCM CryptoKey for scene encryption (Tasks 8/10).
+   * @param roomId       Opaque room identifier (from URL fragment, see RoomKey).
+   * @param key          AES-GCM CryptoKey for scene encryption (Tasks 8/10).
+   * @param workspaceId  Phase 6 A9 workspace scope; null/undefined for
+   *                     self-host / Phase-5-compatible behavior.
    */
-  connect(roomId: string, key?: CryptoKey): void {
+  connect(
+    roomId: string,
+    key?: CryptoKey,
+    workspaceId?: string | null,
+  ): void {
     if (!this.active) return;
 
     this._roomKey = key ?? null;
@@ -372,6 +395,19 @@ export class CollabState {
     this._yjsLayer = new YjsLayer();
     this._yjsWs = new WebSocket(`${wsUrl}/yjs/${roomId}`);
 
+    // -----------------------------------------------------------------------
+    // Phase 6 A3 — anchored comments Y.Doc on a separate WebSocket.
+    //
+    // Distinct docName (`comments/${roomId}` or
+    // `comments/${workspaceId}/${roomId}`) — see protocol/comment-schema.ts.
+    // Trust posture: plaintext on relay per ADR-0010 (same as data-layer doc).
+    // -----------------------------------------------------------------------
+    this._commentsLayer = new CommentsLayer({
+      wsUrl,
+      roomId,
+      workspaceId: workspaceId ?? null,
+    });
+
     this._yjsWs.onopen = () => {
       // WebSocket ready — Task 9 will bind Yjs sync here.
     };
@@ -424,6 +460,9 @@ export class CollabState {
     this._undoManager = null;
     this._yjsLayer?.doc.destroy();
     this._yjsLayer = null;
+    // Phase 6 A3 — tear down the comments Y.Doc + provider in lockstep.
+    this._commentsLayer?.destroy();
+    this._commentsLayer = null;
     this._peers.clear();
   }
 

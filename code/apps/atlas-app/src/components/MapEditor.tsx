@@ -61,7 +61,10 @@ import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
 import { CollabState } from "../state/collab";
 import { LayerPanel } from "./LayerPanel";
+import { CommentsPanelHost } from "./CommentsPanelHost";
+import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
+import { MaputnikDialog } from "./MaputnikDialog";
 import { AboutDialog } from "./AboutDialog";
 import { ShareDialog } from "./ShareDialog";
 import { exportPNG } from "../lib/export";
@@ -453,6 +456,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [activeBasemapId, setActiveBasemapId] =
     useState<BasemapConfig["id"]>("protomaps-light");
   const [showBasemapPicker, setShowBasemapPicker] = useState(false);
+  // Phase 6 A4 — Maputnik "Edit basemap style" modal.
+  const [maputnikOpen, setMaputnikOpen] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
 
@@ -973,6 +978,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     });
   }, [excalidrawAPI]);
 
+  // Phase 6 A3 — anchored comments Sidebar tab. Same DefaultSidebar surface
+  // as Layers; opens via toggleSidebar({name: DEFAULT_SIDEBAR.name, tab:
+  // "comments"}). CommentsPanelHost wires useCollab().commentsLayer
+  // internally and renders body markup only.
+  useEffect(() => {
+    if (!excalidrawAPI) return;
+    return excalidrawAPI.registerSidebarTab({
+      name: "comments",
+      label: "Comments",
+      content: <CommentsPanelHost />,
+    });
+  }, [excalidrawAPI]);
+
   // W-C — Surface Convert as a right-click context-menu item via the
   // atlasdraw fork's `excalidrawAPI.registerContextMenuItem` (added to
   // packages/excalidraw/components/App.tsx). Item appears at the tail
@@ -1258,10 +1276,26 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 return `🗺 Basemap: ${active.label} · ${source}`;
               })()}
             </MainMenu.Item>
+            {/* Phase 6 A4 — "Edit basemap style" opens the Maputnik modal,
+                pointed at the active basemap's vendored style JSON URL. */}
+            <MainMenu.Item
+              onSelect={() => setMaputnikOpen(true)}
+              data-testid="main-menu-edit-style"
+            >
+              Edit basemap style
+            </MainMenu.Item>
             <MainMenu.DefaultItems.ToggleTheme />
           </MainMenu>
         </Excalidraw>
       </div>
+
+      {/* Phase 6 A3 — anchored comment overlay. Iterates the live
+          CommentsLayer and renders one bubble per unresolved comment,
+          projected to screen coords. Doubles as the pending-anchor picker
+          (next map click or single-element selection). z-index 10 (toolbar
+          band); the container is pointer-events: none so non-anchor clicks
+          pass through. */}
+      <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
 
       {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
           active. Captures pointerdown above Excalidraw (zIndex 5) so map clicks
@@ -1300,6 +1334,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           onCloseRequest={() => setShowBasemapPicker(false)}
         />
       )}
+
+      {/* Phase 6 A4 — Maputnik "Edit basemap style" modal. Hosted at the root
+          level (same pattern as the basemap picker) so MainMenu auto-close
+          doesn't unmount it. Iframe sandbox is intentionally restrictive —
+          see MaputnikDialog header comment for security posture. */}
+      {maputnikOpen && (() => {
+        const active = getBasemap(activeBasemapId);
+        const styleFile = active?.styleFile ?? "protomaps-light.json";
+        const origin =
+          typeof window !== "undefined" ? window.location.origin : "";
+        const activeStyleUrl = `${origin}/styles/${styleFile}`;
+        return (
+          <MaputnikDialog
+            activeStyleUrl={activeStyleUrl}
+            maputnikUrl={getAppConfig().maputnikUrl}
+            onCloseRequest={() => setMaputnikOpen(false)}
+          />
+        );
+      })()}
 
       {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
           picker so MainMenu auto-close doesn't unmount it. */}
