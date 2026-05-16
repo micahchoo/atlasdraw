@@ -31,6 +31,7 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@excalidraw/common";
+import { FocusTrap } from "./FocusTrap";
 import type {
   ExcalidrawImperativeAPI,
   LibraryItem,
@@ -161,6 +162,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
       }}
       data-testid="asset-library-dialog-overlay"
     >
+      <FocusTrap>
       <div
         ref={panelRef}
         role="dialog"
@@ -300,6 +302,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
           </ul>
         </footer>
       </div>
+      </FocusTrap>
     </div>
   );
 };

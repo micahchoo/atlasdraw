@@ -1,0 +1,73 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+ * Phase 6 A14b — High-contrast theme overrides.
+ *
+ * Targets WCAG AAA contrast (≥7:1 between foreground/background). Activates on:
+ *   - prefers-contrast: more  (system-level user preference)
+ *   - [data-theme="high-contrast"] on <html> (manual app-level opt-in)
+ *
+ * Reference: WCAG 2.1 §1.4.6 Contrast (Enhanced)
+ *   https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html
+ *
+ * The atlasdraw-ui-conventions palette uses literal Bootstrap-5 hex tokens
+ * (no CSS vars yet). Inline styles in components reference those hex values
+ * directly, so for this pass we override:
+ *   - The `--color-surface` CSS variable that several modal panels reference
+ *     via `var(--color-surface, #fff)`.
+ *   - A small set of new tokens (--ad-fg, --ad-bg, --ad-border, --ad-link,
+ *     --ad-accent) that newer components SHOULD reference when authored.
+ *
+ * Migration note: components written before this stylesheet (BasemapPicker,
+ * MaputnikDialog, PrintDialog, etc.) hard-code hex values. They will not pick
+ * up these overrides until a follow-up converts them to var() references.
+ * That's an explicit follow-up — out of scope for this wave per plan §A14b.
+ */
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-surface: #ffffff;
+    --ad-fg: #000000;
+    --ad-bg: #ffffff;
+    --ad-border: #000000;
+    --ad-link: #0000ee; /* true blue, WCAG AAA on white */
+    --ad-accent: #0000aa;
+    --ad-error: #b00000;
+    --ad-muted: #1a1a1a; /* ≥7:1 on white */
+  }
+
+  /* Force borders visible on all interactive surfaces. */
+  button,
+  input,
+  select,
+  textarea {
+    outline-color: #000000;
+  }
+
+  /* Strengthen focus rings — WCAG 2.4.7 Focus Visible (AAA-aligned). */
+  *:focus-visible {
+    outline: 3px solid #0000ee;
+    outline-offset: 2px;
+  }
+}
+
+[data-theme="high-contrast"] {
+  --color-surface: #ffffff;
+  --ad-fg: #000000;
+  --ad-bg: #ffffff;
+  --ad-border: #000000;
+  --ad-link: #0000ee;
+  --ad-accent: #0000aa;
+  --ad-error: #b00000;
+  --ad-muted: #1a1a1a;
+}
+
+[data-theme="high-contrast"] button,
+[data-theme="high-contrast"] input,
+[data-theme="high-contrast"] select,
+[data-theme="high-contrast"] textarea {
+  outline-color: #000000;
+}
+
+[data-theme="high-contrast"] *:focus-visible {
+  outline: 3px solid #0000ee;
+  outline-offset: 2px;
+}

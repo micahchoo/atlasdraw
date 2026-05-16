@@ -65,15 +65,38 @@ export interface CommentsLayerOptions {
 }
 
 type Listener = (comments: ReadonlyArray<Comment>) => void;
+/**
+ * Phase 6 A14b — fires once per newly-arrived comment, after the initial
+ * sync window. Used by aria-live announcers; not used by render code.
+ */
+type AdditionListener = (comment: Comment) => void;
 
 export class CommentsLayer {
   readonly doc: Y.Doc;
   private readonly _provider: { destroy: () => void } | null;
   private readonly _listeners: Set<Listener> = new Set();
+  private readonly _additionListeners: Set<AdditionListener> = new Set();
   private _cachedSnapshot: ReadonlyArray<Comment> = [];
+  /**
+   * Phase 6 A14b — wall-clock timestamp captured at construction. Any
+   * comment whose `createdAt` is older than this is considered "already
+   * present at sync time" and is NOT announced as a new arrival. This
+   * suppresses the initial replay storm that y-websocket fires when the
+   * relay returns the room's existing CRDT state.
+   *
+   * Limitations:
+   *   - clock-skew between clients can over- or under-include announcements
+   *     by a few seconds; acceptable noise for an aria-live polite hint.
+   *   - if a stale offline write replays from another tab with a createdAt
+   *     in the past, it will not announce. Also acceptable.
+   */
+  private readonly _syncedAt: number;
+  /** Ids we've already announced — Y.Array.observeDeep can fire repeatedly. */
+  private readonly _announcedIds: Set<string> = new Set();
 
   constructor(opts: CommentsLayerOptions) {
     this.doc = opts.doc ?? new Y.Doc();
+    this._syncedAt = Date.now();
 
     // The y-websocket WebsocketProvider expects a base URL and a room name;
     // it appends `/${roomName}` itself, which collides with our docName-as-URL-path
@@ -105,11 +128,44 @@ export class CommentsLayer {
     const arr = this._array();
     arr.observeDeep(() => {
       this._cachedSnapshot = this._compute();
+      // Fire generic snapshot listeners.
       for (const l of this._listeners) l(this._cachedSnapshot);
+      // Phase 6 A14b — addition listeners. We announce only comments
+      // we've never seen before AND whose `createdAt` is newer than the
+      // sync window (suppresses replay storm of pre-existing comments
+      // when the relay sends the initial state).
+      if (this._additionListeners.size > 0) {
+        for (const c of this._cachedSnapshot) {
+          if (this._announcedIds.has(c.id)) continue;
+          this._announcedIds.add(c.id);
+          if (c.createdAt < this._syncedAt) continue;
+          for (const l of this._additionListeners) l(c);
+        }
+      } else {
+        // Even without listeners, mark seen ids so a late-binding listener
+        // doesn't suddenly announce a flood of old comments.
+        for (const c of this._cachedSnapshot) this._announcedIds.add(c.id);
+      }
     });
 
     // Seed the snapshot for the first subscriber.
     this._cachedSnapshot = this._compute();
+    // Treat any comments present at construction as "already synced" —
+    // don't announce them later if an addition listener attaches.
+    for (const c of this._cachedSnapshot) this._announcedIds.add(c.id);
+  }
+
+  /**
+   * Phase 6 A14b — Subscribe to NEW comments (not the full snapshot). The
+   * listener fires once per id, and only for comments whose createdAt is at
+   * or after the sync window (`Date.now()` at construction). Returns an
+   * unsubscribe function. Used by aria-live announcers.
+   */
+  subscribeAdditions(listener: AdditionListener): () => void {
+    this._additionListeners.add(listener);
+    return () => {
+      this._additionListeners.delete(listener);
+    };
   }
 
   // -------------------------------------------------------------------------

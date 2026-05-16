@@ -16,6 +16,7 @@
 // explicitly to the user.
 
 import React, { useEffect, useRef, useState } from "react";
+import { FocusTrap } from "./FocusTrap";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 import { generateRoomKey } from "@atlasdraw/protocol";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
@@ -158,6 +159,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       }}
       data-testid="share-dialog-overlay"
     >
+      <FocusTrap>
       <div
         ref={panelRef}
         role="dialog"
@@ -378,6 +380,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
           </button>
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 };

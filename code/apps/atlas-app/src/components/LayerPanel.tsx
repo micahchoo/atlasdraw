@@ -28,6 +28,7 @@ import type {
   LayerStyle,
 } from "../state/layerRegistry";
 import styles from "../styles/LayerPanel.module.css";
+import { useAnnounce } from "./AriaAnnouncer";
 import { StylePanel } from "./StylePanel";
 
 // ---------------------------------------------------------------------------
@@ -334,8 +335,25 @@ export function LayerPanel() {
     string | null
   >(null);
 
+  // Phase 6 A14b — aria-live announcements on layer-visibility toggles. We
+  // wrap setVisibility (not the underlying store) so the registry stays
+  // pure; the panel is the surface that decides when to announce.
+  const announce = useAnnounce();
+  const announcingSetVisibility = React.useCallback(
+    (id: string, visible: boolean) => {
+      // Resolve label from the latest entries snapshot — looking it up here
+      // (not closing over the row's stale value) keeps the message accurate
+      // if a label rename races with the toggle.
+      const entry = entries.find((e) => e.id === id);
+      const name = entry?.label ?? id;
+      setVisibility(id, visible);
+      announce(`Layer "${name}" ${visible ? "shown" : "hidden"}`);
+    },
+    [entries, setVisibility, announce],
+  );
+
   const mutators: Mutators = {
-    setVisibility,
+    setVisibility: announcingSetVisibility,
     reorder,
     updateStyle,
     openStyle: setStylePanelLayerId,

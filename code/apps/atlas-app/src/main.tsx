@@ -1,4 +1,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
+// Phase 6 A14b — high-contrast theme overrides. Activates under
+// prefers-contrast:more or [data-theme="high-contrast"] on <html>.
+import "./styles/high-contrast.css";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

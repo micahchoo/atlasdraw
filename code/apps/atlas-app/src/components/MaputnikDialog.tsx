@@ -20,6 +20,7 @@
 // instance — no analytics is injected by us.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { FocusTrap } from "./FocusTrap";
 
 export interface MaputnikDialogProps {
   /**
@@ -121,6 +122,7 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
       }}
       data-testid="maputnik-dialog-overlay"
     >
+      <FocusTrap>
       <div
         ref={panelRef}
         role="dialog"
@@ -231,6 +233,7 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
           JSON from Maputnik and paste it into your config to apply.
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 };

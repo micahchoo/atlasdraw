@@ -9,6 +9,7 @@
 import React, { useEffect, useRef } from "react";
 import { BASEMAPS, getBasemap } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
+import { FocusTrap } from "./FocusTrap";
 
 export interface BasemapPickerDialogProps {
   activeId: BasemapConfig["id"];
@@ -88,6 +89,7 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
       }}
       data-testid="basemap-picker-overlay"
     >
+      <FocusTrap>
       <div
         ref={panelRef}
         role="dialog"
@@ -192,6 +194,7 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
             : "This basemap uses offline PMTiles — no network required."}
         </div>
       </div>
+      </FocusTrap>
     </div>
   );
 };

@@ -23,6 +23,7 @@ import type maplibregl from "maplibre-gl";
 import { sceneCoordsToViewportCoords } from "@excalidraw/common";
 import { useCollab } from "../hooks/useCollab";
 import type { Comment } from "../state/comments";
+import { useAnnounce } from "./AriaAnnouncer";
 import { CommentAnchor } from "./CommentAnchor";
 import {
   setPendingAnchor,
@@ -74,6 +75,17 @@ export function CommentAnchorsOverlay(
     setComments(commentsLayer.comments);
     return commentsLayer.subscribe(setComments);
   }, [commentsLayer]);
+
+  // Phase 6 A14b — aria-live announcements for newly-arrived comments. The
+  // CommentsLayer's sync-window guard suppresses the replay storm; this
+  // overlay just routes the addition events into the announcer.
+  const announce = useAnnounce();
+  useEffect(() => {
+    if (!commentsLayer) return;
+    return commentsLayer.subscribeAdditions((c) => {
+      announce(`New comment from ${c.authorName}`);
+    });
+  }, [commentsLayer, announce]);
 
   // ---- Anchor picker: map mode ------------------------------------------
   // When the panel signals "I want a map anchor", capture the next map click

@@ -14,6 +14,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
+import { FocusTrap } from "./FocusTrap";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import type { DataLayerEntry } from "../state/layerRegistry";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
@@ -128,30 +129,33 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
 
   if (!entry) {
     return (
-      <div
-        role="dialog"
-        aria-label="Style editor"
-        className={styles.panel}
-        data-testid="style-panel"
-      >
-        <div className={styles.header}>
-          <span className={styles.title}>Style editor</span>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            aria-label="Close"
-            data-testid="style-close"
-            onClick={onClose}
-          >
-            ×
-          </button>
+      <FocusTrap>
+        <div
+          role="dialog"
+          aria-label="Style editor"
+          className={styles.panel}
+          data-testid="style-panel"
+        >
+          <div className={styles.header}>
+            <span className={styles.title}>Style editor</span>
+            <button
+              type="button"
+              className={styles.closeBtn}
+              aria-label="Close"
+              data-testid="style-close"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
+          <p className={styles.empty}>Layer not found.</p>
         </div>
-        <p className={styles.empty}>Layer not found.</p>
-      </div>
+      </FocusTrap>
     );
   }
 
   return (
+    <FocusTrap>
     <div
       role="dialog"
       aria-label="Style editor"
@@ -214,6 +218,7 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
         )}
       </div>
     </div>
+    </FocusTrap>
   );
 }
 

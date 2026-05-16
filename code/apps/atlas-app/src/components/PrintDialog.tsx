@@ -16,6 +16,7 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import { FocusTrap } from "./FocusTrap";
 import {
   exportPDF,
   type LayerLegendEntry,
@@ -176,6 +177,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
       }}
       data-testid="print-dialog-overlay"
     >
+      <FocusTrap>
       <div
         ref={panelRef}
         role="dialog"
@@ -366,6 +368,7 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           </div>
         </form>
       </div>
+      </FocusTrap>
     </div>
   );
 };

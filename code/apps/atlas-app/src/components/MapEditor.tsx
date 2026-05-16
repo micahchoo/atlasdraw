@@ -60,6 +60,7 @@ import { useCollab } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
 import { CollabState } from "../state/collab";
+import { useAnnounce } from "./AriaAnnouncer";
 import { LayerPanel } from "./LayerPanel";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
@@ -69,6 +70,8 @@ import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { AboutDialog } from "./AboutDialog";
 import { ShareDialog } from "./ShareDialog";
 import { PrintDialog } from "./PrintDialog";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 import type { LayerLegendEntry } from "../lib/print-pdf";
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
@@ -469,6 +472,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // .excalidrawlib fixtures (wildfire / transit / hazard) into Excalidraw's
   // built-in library via updateLibrary({ libraryItems, merge: true }).
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  // Phase 6 A13a — active workspace (managed mode only). Seeded from the
+  // A9 env resolver so the boot path still works; the WorkspaceSwitcher
+  // updates this when the user picks one. Self-host: stays at the env-
+  // resolved value (typically null) and the switcher renders nothing.
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
+    () =>
+      resolveWorkspaceFromEnv(
+        typeof import.meta.env === "undefined"
+          ? {}
+          : (import.meta.env as Record<string, string | undefined>),
+      ).id,
+  );
 
   // Phase 5 T7 — collab state. Always called (returns inactive state when
   // realtime is disabled, which is the default for all current builds).
@@ -520,12 +535,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
+  // Phase 6 A13a: thread `getWorkspaceId` so storage requests carry the
+  // X-Workspace-ID header for the currently-selected workspace. We use a
+  // ref to the active id so re-renders don't rebuild the client.
+  const activeWorkspaceIdRef = useRef<string | null>(activeWorkspaceId);
+  useEffect(() => {
+    activeWorkspaceIdRef.current = activeWorkspaceId;
+  }, [activeWorkspaceId]);
   const shareClientRef = useRef<HttpStorageClient | null>(null);
   function getShareClient(): HttpStorageClient {
     if (!shareClientRef.current) {
       const cfg = getAppConfig();
       shareClientRef.current = createHttpStorageClient({
         baseUrl: cfg.storageBaseUrl ?? "",
+        getWorkspaceId: () => activeWorkspaceIdRef.current,
       });
     }
     return shareClientRef.current;
@@ -550,6 +573,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // BEFORE initialData lands — without this guard, setMapBg(default-white)
   // ran on every load, painting an opaque rectangle over the map.
   const transparentAppliedRef = useRef(false);
+  // Phase 6 A14b — aria-live selection-change announcer. We compare prev
+  // selected ids against current to fire one announcement per real change;
+  // throttle wall-clock to ≤1 announcement / 500ms so a rubber-band-select
+  // sweep doesn't spam the screen-reader queue.
+  const announceMapEditor = useAnnounce();
+  const prevSelectionIdsRef = useRef<string>("");
+  const lastSelectionAnnounceAtRef = useRef<number>(0);
 
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
@@ -1151,8 +1181,35 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (prev !== null && elements !== prev) {
         usePersistenceStore.getState().markDirty();
       }
+
+      // --- 5. Phase 6 A14b — selection-change aria-live announcement.
+      // Compare the sorted selected-id set against the prior call. Throttled
+      // to ≤1 announcement per 500ms so a rubber-band drag-select doesn't
+      // spam the screen-reader queue.
+      const selectedIds = Object.keys(appState.selectedElementIds ?? {})
+        .sort()
+        .join(",");
+      if (selectedIds !== prevSelectionIdsRef.current) {
+        prevSelectionIdsRef.current = selectedIds;
+        const now = Date.now();
+        if (
+          selectedIds !== "" &&
+          now - lastSelectionAnnounceAtRef.current >= 500
+        ) {
+          lastSelectionAnnounceAtRef.current = now;
+          const ids = selectedIds.split(",");
+          if (ids.length === 1) {
+            const el = elements.find(
+              (e: { id: string }) => e.id === ids[0],
+            ) as { type?: string } | undefined;
+            announceMapEditor(`Selected: ${el?.type ?? "element"}`);
+          } else {
+            announceMapEditor(`Selected: ${ids.length} elements`);
+          }
+        }
+      }
     },
-    [excalidrawAPI, map, syncNow],
+    [excalidrawAPI, map, syncNow, announceMapEditor],
   );
 
   // Provide the live MapLibre canvas to Excalidraw's native Save as Image /
@@ -1325,6 +1382,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           band); the container is pointer-events: none so non-anchor clicks
           pass through. */}
       <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
+
+      {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
+          renders null; managed-mode renders a top-right dropdown that
+          lists workspaces and routes free-tier users to /billing for an
+          upgrade. The HTTP client is the same shared instance used by
+          ShareDialog so X-Workspace-ID flows through autosave too. */}
+      <WorkspaceSwitcher
+        client={getShareClient()}
+        activeId={activeWorkspaceId}
+        onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
+      />
 
       {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
           active. Captures pointerdown above Excalidraw (zIndex 5) so map clicks

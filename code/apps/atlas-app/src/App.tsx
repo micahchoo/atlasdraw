@@ -15,10 +15,16 @@
 //   /m/<token>           → ShareView (upload mode)
 //   /m#room:...          → ShareView (defensive — Q-P5-2; treat as read-only)
 //   /#room:<id>,<key>    → MapEditor (collab session; URL key = write cap)
+//   /billing             → BillingPage (managed-mode upgrade page; A13a)
 //   anything else        → MapEditor (the editor)
 
+import { AriaAnnouncer } from "./components/AriaAnnouncer";
+import { BillingPage } from "./components/BillingPage";
 import { MapEditor } from "./components/MapEditor";
 import { ShareView } from "./components/ShareView";
+import { getAppConfig } from "./config/app-config";
+import { createHttpStorageClient } from "./services/createHttpStorageClient";
+import { resolveWorkspaceFromEnv } from "./state/workspace";
 
 // India default viewport — matches both the maintainer's interest area and
 // the world-low-zoom.pmtiles archive (zoom 0-6 global coverage). Per-user
@@ -47,6 +53,32 @@ function pickView() {
   if (path.startsWith("/m/")) {
     return <ShareView />;
   }
+  // Phase 6 A13a: `/billing` route — Stripe checkout entry point. Renders
+  // in self-host too (with a FOSS hint) so users following an "Upgrade" link
+  // accidentally on a self-host deploy get a sensible explanation.
+  //
+  // workspaceId resolution: prefer `?workspaceId=` query (set by the in-app
+  // Upgrade button so the active workspace survives the full-page reload),
+  // then fall back to the A9 env resolver (`VITE_WORKSPACE_ID`). In a
+  // multi-tenant managed deploy the env var is not set per-user, so the
+  // query-string hop is the load-bearing path — without it every BillingPage
+  // visit renders disabled Upgrade buttons.
+  if (path === "/billing") {
+    const cfg = getAppConfig();
+    const params = new URLSearchParams(window.location.search);
+    const queryWs = params.get("workspaceId");
+    const envCtx = resolveWorkspaceFromEnv(
+      typeof import.meta.env === "undefined"
+        ? {}
+        : (import.meta.env as Record<string, string | undefined>),
+    );
+    const workspaceId = queryWs && queryWs !== "" ? queryWs : envCtx.id;
+    const client = createHttpStorageClient({
+      baseUrl: cfg.storageBaseUrl,
+      getWorkspaceId: () => workspaceId,
+    });
+    return <BillingPage client={client} workspaceId={workspaceId} />;
+  }
   // Q-P5-2: `#room:` on the editor path (`/`) is the write-capable collab
   // entry point. MapEditor mounts useCollabRoom which decodes the key and
   // opens the live session.
@@ -60,6 +92,9 @@ export function App() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       {pickView()}
+      {/* Phase 6 A14b — single hidden aria-live region for screen-reader
+          announcements. See components/AriaAnnouncer.tsx. */}
+      <AriaAnnouncer />
     </div>
   );
 }
