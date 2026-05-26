@@ -1,482 +1,310 @@
 # Atlasdraw — Subsystems
 
-**Status: Speculative.** Derived from spec §4, phase plans, and Q5 license resolution.
-No code exists to verify against.
+**Status:** Code-verified subsystem discovery (2026-05-15). This is the first
+pass that traces actual imports, exports, coupling edges, and flow basins
+against source code. Replaces all prior speculative editions.
 
-For risks associated with subsystem boundaries, see `risk-map.md`.
-For evolution of these boundaries over time, see `evolution.md`.
+Previous subsystems.md (written pre-code) speculated grouping like "atlas-app
++ geo + basemap + tools = editor subsystem." **Reality is finer-grained.**
+Atlas-owned packages have surprisingly little mutual coupling — they are
+independent modules sharing atlas-app as their sole consumer. The architecture
+is hub-and-spoke, not layered.
 
 ---
 
-## Dependency Graph
+## 1. Subsystem Map
+
+| # | Subsystem | Root path | Boundary type | Depends on (atlas) | Risk signals | Drainage | Basin aligned? |
+|---|-----------|-----------|---------------|--------------------|--------------|----------|----------------|
+| 1 | **Vendored Excalidraw Kernel** | `code/packages/{excalidraw,element,math,common,utils}` | Tight — dense internal coupling (gossiphs confirms top centrality files all from this cluster). Stylistic: 16,805 `var` declarations | None (self-contained fork) | No upstream git remote; manual merge only; 30+ inherited legacy deps (roughjs, codemirror 6 early releases, etc.); 5+ inherited SaaS endpoints in env files | Low | No — consumed as black box |
+| 2 | **Geospatial Engine** | `code/packages/geo` | Tight — pure functions + types, well-scoped; but CoordinateSync is a stateful runtime class in an otherwise pure package | maplibre-gl (optional peer) | CoordinateSync mixes runtime state (rAF loop, MapLibre ref) with pure type definitions | High | Yes |
+| 3 | **Drawing Tools** | `code/packages/tools` | Loose — 8 independent tool modules sharing types | `@atlasdraw/geo` (types + projection) | All tools use `any`-typed element creators (Excalidraw heritage); `@turf/circle` and `@turf/distance` are the only external math deps | Mixed (each tool one file) | Yes |
+| 4 | **Map Renderer** | `code/packages/basemap` | Loose — 4 concerns in one package: React component + style system + registry + pmtiles protocol | maplibre-gl, pmtiles (external only) | Package carries MapCanvas (React), style compiler, basemap registry, pmtiles protocol — distinct concerns grouped by deployment convenience | Mixed | Partial — stream capture blurs boundary |
+| 5 | **Data Interchange** | `code/packages/data` | Loose — file I/O + Yjs CRDT wrapper + geocoding client bundled together | jszip, papaparse, shpjs, yjs, zod (external only) | KML/GPX/GeoTIFF parsers absent despite README claims; Yjs crypto is stub; Photon geocoder has no default endpoint (ADR-0006/0011) | High | Yes |
+| 6 | **Collaboration Protocol** | `code/packages/protocol` | Tight — pure types + small utilities, no runtime deps | None | Small surface, low risk. Dual-protocol design (Socket.IO + y-websocket) documented in types | Low | Yes |
+| 7 | **Editor SPA** | `code/apps/atlas-app` | Porous — imports all subsystems 2–6 plus vendored Excalidraw | All 2–6, `@excalidraw/excalidraw`, + 12 external deps | 21K `any` escapes (inherited through vendored types); no E2E CI; 15+ dead Excalidraw env vars; no size-limit guard | High (central hub) | N/A (the hub all flows converge on) |
+| 8 | **Storage Server** | `code/apps/storage` | Tight — **zero imports from any @atlasdraw package**. Standalone Fastify server with self-defined types | None (external only: fastify, better-sqlite3, pg, @aws-sdk/client-s3, stripe, sentry, zod) | No DB migration framework (schema created on first start); no connection pooling beyond pg.Pool; parallel type hierarchy to packages/data/manifest-schema.ts | Low | Weak | 
+| 9 | **Collaboration Relay** | `code/apps/realtime` | Tight — opaque relay, no runtime sharing | `@atlasdraw/protocol` (types only) | Rooms ephemeral (5 min TTL); `setPersistence` is TODO; CORS `*`; no health endpoint returns connection count | Low | Yes |
+| 10 | **CLI Tooling** | `code/packages/cli` | Tight | `@atlasdraw/data`, commander | Stub — 2 commands (lint, convert) | Low | Yes |
+| 11 | **Embed SDK** | `code/packages/sdk` | N/A — stub | None | Phase 0 stub with sentinel export only; build script is `exit 0` | N/A | N/A |
+
+### Consolidated functional views (for communication, NOT for coupling analysis)
+
+These groupings share a common consumer (atlas-app) but have zero or minimal
+cross-coupling with each other:
+
+| Group | Subsystems | Actual coupling |
+|-------|-----------|-----------------|
+| **Vendored Kernel** | 1 | Dense internal cluster; consumed as black box via `@excalidraw/excalidraw` |
+| **Mapping Stack** | 2, 3, 4 | tools -> geo (types only). basemap independent. Shared consumer is atlas-app |
+| **Data Pipeline** | 5, 6 | Zero cross-coupling. Shared consumers are atlas-app + cli (data) and atlas-app + realtime (protocol) |
+| **Server Backend** | 8, 9 | Zero cross-coupling: different tech stacks (Fastify vs Socket.IO), no shared code |
+| **Tooling** | 10, 11 | cli -> data; sdk is stub. Independent concerns |
+| **Editor SPA** | 7 | Hub, not subsystem. Consumes all |
+
+---
+
+## 2. Flow Basins
+
+### 2.1 Basin A: Annotation Drawing (critical path)
 
 ```
-decisions/
-    (no runtime deps — governance only)
-
-packages/geo
-    (no internal deps)
-
-packages/excalidraw
-    ← packages/element
-    ← packages/math
-    ← packages/common
-
-packages/basemap
-    ← packages/geo
-
-packages/data
-    ← packages/geo
-
-packages/tools
-    ← packages/geo
-    ← packages/basemap
-    ← packages/excalidraw
-
-packages/sdk
-    ← packages/geo
-    ← packages/basemap
-    ← packages/excalidraw (via AtlasdrawAPI postMessage surface only)
-
-packages/cli
-    ← packages/geo
-    ← packages/data
-    (no browser runtime dep — Node.js only)
-
-packages/plugin-host  [Phase 7]
-    ← packages/sdk  (AtlasdrawAPI surface)
-
-apps/atlas-app
-    ← packages/excalidraw
-    ← packages/basemap
-    ← packages/geo
-    ← packages/data
-    ← packages/tools
-    ← packages/sdk  (embed mode rendering path)
-    ← packages/plugin-host  [Phase 7]
-
-apps/realtime
-    ← (no internal package deps — pure relay)
-    external: y-websocket, socket.io
-
-apps/storage
-    ← (no internal package deps — pure API server)
-    external: fastify, pg, minio, better-sqlite3
+User interaction
+  -> MapEditor.tsx (atlas-app)
+    -> useAtlasdrawTool.ts (hook selects active tool)
+      -> @atlasdraw/tools (e.g., PinTool.ts)
+        -> packages/element (vendored) — creates Excalidraw element
+        -> customData.geo set with GeoAnchor from @atlasdraw/geo
+    -> Excalidraw scene graph (vendored) owns the element
+    -> CoordinateSync (packages/geo) reprojects on every map move
+      (throttled at 16ms, uses MapLibre project()/unproject())
+    -> LayerRegistry (zustand state/layerRegistry.ts) tracks annotation
+    -> Persistence: useAutosave -> idb (IndexedDB) + optional storage server
 ```
 
-[CONFIDENCE: medium — dependency directions are clear from spec §4; exact import graph is
-engineering judgment until Phase 0 ships]
+**Boundary crossings:** 4 subsystem boundaries (Editor SPA -> Drawing Tools
+-> Geo Engine -> Vendored Kernel -> back). This is the critical path. All 8
+tools follow this same pattern. The heaviest intra-atlas coupling edge
+(gossiphs score 854) connects `tools/src/convert.ts` <-> `useGeoAnchor.ts`.
+
+### 2.2 Basin B: Data Import
+
+```
+Drag-and-drop / file input
+  -> MapEditor.tsx drop handler
+    -> @atlasdraw/data (geojson.ts, csv.ts, or shapefile.ts)
+    -> Creates MapLibre GeoJSON source + layer
+    -> LayerRegistry (state/layerRegistry.ts) creates data layer entry
+    -> MapCanvas (packages/basemap) renders the layer
+```
+
+**Boundary agreement:** Flow aligns with structural boundaries. Data package
+parses, atlas-app manages state, basemap renders. Clean separation.
+
+### 2.3 Basin C: Save / Load
+
+```
+Save:
+  MapEditor.tsx -> @atlasdraw/data (write.ts / atlasdraw.ts)
+    -> .atlasdraw zip bundle (scene.json, data/*.geojson, style.json, manifest.json)
+    -> HTTP PUT to storage server
+      -> adapter (sqlite-fs -> fs, or postgres-minio -> pg Pool + S3)
+
+Load:
+  HTTP GET from storage server
+    -> @atlasdraw/data (read.ts) -> MapEditor.tsx
+```
+
+**Divergence:** Storage server has zero shared types with the data package.
+`Manifest` in `packages/data/src/manifest-schema.ts` and `MapRecord` in
+`apps/storage/src/types.ts` are hand-maintained parallel definitions. The
+HTTP boundary is the only contract.
+
+### 2.4 Basin D: Real-time Collaboration
+
+```
+Client A edits element
+  Socket.IO events (scene update, camera, cursor, comment)
+    -> apps/realtime (socket-io-server.ts)
+      -> broadcast to room peers
+
+  Yjs CRDT mutations (data layer)
+    -> apps/realtime (yjs-server.ts, y-websocket upgrade)
+      -> Yjs sync protocol to room peers
+```
+
+**Dual protocol:** Two independent flow paths. Socket.IO for ephemeral events
+(scene, camera, cursor, comments). y-websocket for persistent CRDT data layer
+sync. Both share types from `@atlasdraw/protocol`.
+
+**Boundary divergence:** Protocol types are the only shared surface between
+client and relay. The relay is an opaque forwarder — it never inspects
+encrypted payload content (ADR-0010).
+
+### 2.5 Basin E: CLI Headless
+
+```
+CLI command (atlasdraw lint / convert)
+  -> packages/cli (commands/lint.ts, commands/convert.ts)
+    -> @atlasdraw/data (read, parse, write)
+      -> File system output
+```
+
+Simple linear flow. No boundary divergence — the cli -> data dependency is
+the intended contract.
+
+[CONFIDENCE: high for all 5 flow basins — verified against source imports]
 
 ---
 
-## 1. `packages/geo`
+## 3. Boundary Justification
 
-**Root path (predicted):** `packages/geo/`
-**Boundary type:** module (npm workspace package)
-**License:** MIT (Q5)
-**Drainage density:** low (pure utility functions; no UI, no side-effects)
-**Phase introduced:** Phase 1
+### Why 11 subsystems instead of broader groupings
 
-### Responsibility
+The hub-and-spoke pattern (atlas-app consuming all packages) means that atlas
+packages are **loosely coupled to each other** and **tightly coupled to
+atlas-app**. Grouping them into broader functional units misrepresents the
+actual coupling structure:
 
-Coordinate transforms, GeoJSON adapters, and projection utilities. This is the shared math
-layer that every other geo-aware package depends on. It knows nothing about MapLibre, nothing
-about Excalidraw — only about coordinate systems and GeoJSON data structures.
+| Proposed group | Actual coupling | Verdict |
+|----------------|----------------|---------|
+| geo + basemap + tools = "mapping stack" | tools -> geo (types only). basemap has zero atlas deps. No shared code or tests | Not a subsystem — three independent modules with same consumer |
+| data + protocol = "data interchange" | Zero mutual imports. Different consumers (data -> atlas-app + cli; protocol -> atlas-app + realtime) | Not a subsystem — independent contracts |
+| storage + realtime = "server" | Zero mutual imports. Different tech stacks. Storage has zero atlas deps | Not a subsystem — independent processes |
+| cli + sdk = "tooling" | cli -> data; sdk is stub. Different concerns | Not a subsystem |
 
-Key predicted files (spec §3):
-- `projection.ts` — wrappers around `map.project`/`map.unproject` for offline/offscreen
-  projection (no live MapLibre instance required for CLI use)
-- `geojson-adapters.ts` — normalize GeoJSON FeatureCollections from various sources
-- `coord-transform.ts` — WGS84 ↔ Mercator pixel conversions used by CoordinateSync
+The system is better understood as **a set of independent modules consumed
+by a monolithic SPA** than as layered subsystems.
 
-### Upstream contracts in
+### Key structural boundaries
 
-- GeoJSON FeatureCollection (external standard)
-- WGS84 `{lng, lat}` coordinate pairs (external standard)
+1. **Fork boundary (subsystem 1 vs. 2–11):** The sharpest boundary in the
+   codebase. 16,805 `var` statements and 21K `any` escapes on one side; zero
+   `var` and strict types on the other. The fork boundary is structural (git
+   history), stylistic (var/const/let), AND type-safety (any/not-any).
 
-### Downstream contracts out
+2. **Storage isolation (subsystem 8):** The storage server imports nothing
+   from any @atlasdraw package. It defines its own `MapRecord`, `Workspace`,
+   and `ShareToken` types independently from the frontend's `Manifest` and
+   `AtlasdrawDocument`. This means the HTTP boundary is the **only** contract
+   — no schema-sharing mechanism exists.
 
-- `projection.ts` API: consumed by `packages/basemap`, `packages/tools`, `apps/atlas-app`
-- GeoJSON normalization API: consumed by `packages/data`
-- [CONFIDENCE: medium on exact API surface]
+3. **Protocol-only relay (subsystem 9):** `@atlasdraw/protocol` is the only
+   atlas package imported by the realtime relay, and it's a pure-type
+   dependency — no runtime values cross this boundary at compile time.
 
----
-
-## 2. `packages/basemap`
-
-**Root path (predicted):** `packages/basemap/`
-**Boundary type:** module (npm workspace package)
-**License:** MPL-2.0 (Q5)
-**Drainage density:** mixed (mostly stateful — wraps MapLibre map instance)
-**Phase introduced:** Phase 1
-
-### Responsibility
-
-MapLibre GL JS wrapper, style management, and basemap registry. Owns the `MaplibreWrapper`
-component that mounts the map into the DOM. Manages the `BasemapRegistry` — the list of
-available basemap presets (bundled PMTiles, remote tile URLs). Owns style import/export
-for the Maputnik bridge (Phase 6).
-
-Key predicted files (spec §4.2):
-- `MaplibreWrapper.tsx` — React component; mounts map; emits camera change events
-- `BasemapRegistry.ts` — default presets; default is `local-pmtiles` after Phase 4 (Q3)
-- `style-import-export.ts` — serialize/deserialize MapLibre style for `.atlasdraw` (Phase 6)
-
-### Upstream contracts in
-
-- PMTiles file path (bundled or remote URL)
-- MapLibre style object (from `.atlasdraw manifest.json`)
-
-### Downstream contracts out
-
-- Camera change events (`{lng, lat, zoom, bearing, pitch}`) — consumed by `apps/atlas-app`
-  CoordinateSync
-- `map.project` / `map.unproject` — exposed via `packages/geo`
-- [CONFIDENCE: medium]
+[CONFIDENCE: high]
 
 ---
 
-## 3. `packages/data`
+## 4. Fault Lines
 
-**Root path (predicted):** `packages/data/`
-**Boundary type:** module (npm workspace package)
-**License:** MIT (Q5)
-**Drainage density:** low (pure I/O — readers, writers, adapters)
-**Phase introduced:** Phase 2 (data layers), extended Phase 3 (file format), Phase 6 (geocoding, importers)
+### 4.1 Fork boundary (var/const/let)
 
-### Responsibility
+The most significant fault line. All 16,805 `var` declarations exist
+exclusively in vendored Excalidraw packages. Atlas-owned code (all packages
++ apps) uses `const`/`let` exclusively:
+- `packages/basemap`: 0 files with `var`
+- `packages/data`: 0 files with `var`
+- `packages/geo`: 0 files with `var`
+- `packages/tools`: 0 files with `var`
+- `packages/protocol`: 0 files with `var`
+- `packages/cli`: 0 files with `var`
+- `packages/sdk`: 0 files with `var`
+- `apps/atlas-app`: 0 files with `var`
+- `apps/storage`: 0 files with `var`
+- `apps/realtime`: 0 files with `var`
+- `packages/excalidraw`: 300+ files with `var` (16,805 declarations total)
 
-All file format I/O. Reads and writes the `.atlasdraw` ZIP container. Imports external formats
-(GeoJSON, KML, Shapefile, CSV, GeoTIFF, Felt JSON snapshots). Exports to GeoJSON and other
-formats. Houses the geocoding client (Photon/Nominatim/Pelias, Phase 6) and the CSV geocode
-pipeline.
+[CONFIDENCE: high — exhaustive grep across all packages]
 
-Key predicted files:
-- `atlasdraw-format.ts` — ZIP read/write, manifest schema validation (Phase 3)
-- `geojson.ts` — GeoJSON import/export
-- `kml.ts` — KML import
-- `shp.ts` — Shapefile import (via `shapefile` npm package, async-loaded per spec §8)
-- `csv.ts` — CSV → GeoJSON; wires geocoding for address columns (Phase 6)
-- `geotiff.ts` — COG raster via `geotiff.js`; MapLibre `raster` source via `cog://` protocol (spec §3)
-- `felt.ts` — `.felt.json` → `.atlasdraw` importer (Phase 6, Q13; GeoJSON snapshot format per OQ1)
-- `geocoding/photon-client.ts` — Photon/Nominatim/Pelias HTTP wrapper with in-memory LRU cache (Phase 6)
+### 4.2 State management (zustand vs. jotai)
 
-### Upstream contracts in
+Zustand is used in atlas-app (3 stores: `layerRegistry`, `collab`,
+`persistence` all use `create()` from zustand). Jotai exists only in
+vendored Excalidraw packages.
 
-- File byte arrays / Blob objects from the browser or Node.js filesystem
-- MapLibre style object (for `.atlasdraw` round-trip)
+**Verified: atlas-app has zero jotai imports.** The two-state-libraries-
+in-one-bundle concern from the ecosystem doc is real but the split is
+clean — bounded entirely by the fork boundary.
 
-### Downstream contracts out
+[CONFIDENCE: high — exhaustive grep of atlas-app src/ for `from.*jotai`
+returned zero results]
 
-- `AtlasdrawFile` typed object (manifest + scene + layers + assets)
-- GeoJSON FeatureCollection (for any import path)
-- [CONFIDENCE: medium]
+### 4.3 Dual realtime protocol
 
----
+Socket.IO (events: scene, camera, cursor, comments) + y-websocket (CRDT
+data layer sync). Two transport protocols for collaboration on the same
+server. They serve different data types (ephemeral vs. persistent) but
+require atlas-app to maintain two separate WebSocket connections.
 
-## 4. `packages/tools`
+[CONFIDENCE: high — verified against apps/realtime/src/index.ts]
 
-**Root path (predicted):** `packages/tools/`
-**Boundary type:** module (npm workspace package)
-**License:** MPL-2.0 (Q5)
-**Drainage density:** mixed (event handlers; stateful tool activation)
-**Phase introduced:** Phase 2
+### 4.4 Tsconfig composite boundary
 
-### Responsibility
+Only 5 atlas-owned packages are in `code/tsconfig.json` composite project
+(`basemap`, `data`, `geo`, `tools`, `cli`). atlas-app, realtime, and all
+vendored packages are excluded. Typechecking the full system requires
+two separate `tsc` invocations.
 
-Geo-aware Excalidraw custom tools. Each tool implements the `AtlasdrawTool` interface: an
-`id`, icon, cursor style, and pointer event handlers that call `ctx.map.unproject` and
-`ctx.excalidrawAPI.updateScene`. Tools register via Excalidraw's `setActiveTool({ type:
-"custom", customType: "<id>" })`. (spec §4.4)
+[CONFIDENCE: high — verified against code/tsconfig.json]
 
-Planned tools (Phase 2 + Phase 4):
-- `PinTool` — places a pin element at a geo-anchored position
-- `PolygonTool` — geo-aware polygon drawing
-- `RouteTool` (route-snap) — sends strokes to OSRM/Valhalla, snaps to road geometry (Phase 4;
-  feature-flagged off by default for self-hosters without a routing service)
-- `MeasureTool` — distance/area measurement with geodesic calculation
+### 4.5 Dead configuration
 
-### Upstream contracts in
+15+ Excalidraw SaaS env vars (`VITE_APP_BACKEND_V2_*`, `VITE_APP_LIBRARY_*`,
+`VITE_APP_WS_SERVER_URL`, `VITE_APP_FIREBASE_CONFIG`, etc.) remain in
+`.env.development` and `.env.production`. These are dead for atlas-app
+(no `VITE_APP_*` vars are read by atlas-app code). The atlas-app Dockerfile
+passes only `VITE_*` (not `VITE_APP_*`) vars.
 
-- `ctx.map` (MapLibre map instance from `packages/basemap`)
-- `ctx.excalidrawAPI` (Excalidraw imperative API from `packages/excalidraw`)
-- `ctx.appState` (Excalidraw AppState)
-
-### Downstream contracts out
-
-- Excalidraw `ExcalidrawElement[]` with `customData.geo` fields set
-  [CONFIDENCE: low — `customData.geo` vs `customData.geoAnchor` field name is unresolved;
-  see MISMATCH-3 in cross-phase audit]
+[CONFIDENCE: high — verified against Dockerfile ARGs and atlas-app config]
 
 ---
 
-## 5. `packages/sdk`
+## 5. Stream Capture
 
-**Root path (predicted):** `packages/sdk/`
-**Boundary type:** module (npm workspace package, separately published)
-**License:** MIT (Q5) — deliberately separated so embedding devs are not AGPL-bound
-**Drainage density:** low (thin postMessage surface only)
-**Phase introduced:** Phase 6
+Modules that absorbed responsibilities from adjacent domains:
 
-### Responsibility
+### 5.1 CoordinateSync in `@atlasdraw/geo`
 
-The public embed widget. A lean wrapper that renders an Atlasdraw map in an `<iframe>` and
-exposes a postMessage API surface (`AtlasdrawAPI`). All methods are async and
-structured-clone-compatible (Q11, ADR 0005). The SDK contains no network calls — enforced by
-CI grep check (`sdk-telemetry-guard.yml`). Bundle hard limit: 300 KB (`size-limit` CI, Phase 6).
+**What:** `CoordinateSync` is a stateful runtime class (requestAnimationFrame
+loop, MapLibre instance reference, Excalidraw API reference) living in a
+package otherwise composed of pure functions and types.
 
-`AtlasdrawAPI` exposes (Phase 6, Q11):
-- `setScene(scene)` / `getScene()` — scene round-trip
-- `setCamera(cameraState)` / `getCamera()`
-- `setLayers(layers)` / `getLayers()`
-- `on(event, handler)` — subscribe to canvas events
-- `exportPNG(options)` / `exportPDF(options)`
+**Impact:** Low — the package is small enough that mixed concerns don't
+create confusion. But it prevents `@atlasdraw/geo` from being a truly pure
+library.
 
-### Upstream contracts in
+### 5.2 Style system in `@atlasdraw/basemap`
 
-- postMessage events from `apps/atlas-app` (embed renderer)
+**What:** The basemap package carries 4 distinct concerns: MapCanvas (React
+component), style system (types + compiler + builder), basemap registry, and
+PMTiles protocol handler.
 
-### Downstream contracts out
+**Impact:** Low-medium. If the style system grows significantly (Maputnik
+integration), extraction of `style-compiler.ts` + `style-builder.ts` into a
+separate `@atlasdraw/style` package would be warranted.
 
-- `AtlasdrawAPI` — the public TypeScript interface; governed by ADR 0005
-- [CONFIDENCE: high on contract stability — Q11 explicitly mandates postMessage-safe, no
-  breaking changes without ADR]
+### 5.3 Yjs layer wrapper in `@atlasdraw/data`
 
----
+**What:** `yjs-layer.ts` and `yjs-snapshot.ts` live in `@atlasdraw/data`
+because they wrap data-layer mutations under CRDT. But Yjs is fundamentally
+a runtime collaboration concern, not a data format concern.
 
-## 6. `packages/cli`
+**Impact:** Low. The Yjs wrapper is small and focused on data-layer types.
+Moving it would require a new collaboration-data package.
 
-**Root path (predicted):** `packages/cli/`
-**Boundary type:** module (npm workspace package, separately published)
-**License:** MIT (Q5)
-**Drainage density:** low (command pipeline, no UI)
-**Phase introduced:** Phase 0 (skeleton), fleshed out in later phases
+### 5.4 Storage types parallel to data types
 
-### Responsibility
+**What:** `apps/storage/src/types.ts` defines `MapRecord`, `Workspace`,
+`ShareToken` independently from `packages/data/src/manifest-schema.ts`
+which defines `Manifest`, `AtlasdrawDocument`. Parallel type hierarchies
+with no shared schema.
 
-Headless tooling for server-side or CI use cases. Node.js only — no browser runtime.
-Commands: `lint` (validate `.atlasdraw` file schema), `convert` (transform between formats),
-`render` (headless PNG/PDF render via MapLibre in Node/JSDOM or Puppeteer).
-Intended for Persona D (developer) workflows and the QGIS bridge pipeline.
+**Impact:** Low-medium. Schema drift is possible. The Zod schemas in
+`packages/data` could serve as source of truth if storage ever imports
+from atlas packages.
 
-### Upstream contracts in
-
-- `.atlasdraw` file path (filesystem)
-- `packages/data` API (format parsing)
-- `packages/geo` API (coordinate utilities)
-
-### Downstream contracts out
-
-- stdout / filesystem (render artifacts, lint reports)
-- Exit code 0/1 for CI integration
-- [CONFIDENCE: low — CLI command surface is not fully specified in plans]
+[CONFIDENCE: high — all stream captures verified against source]
 
 ---
 
-## 7. `packages/excalidraw` (vendored)
+## 6. Confidence Assessment
 
-**Root path (predicted):** `packages/excalidraw/`
-**Boundary type:** module (vendored upstream fork — not npm-installed)
-**License:** MIT (Excalidraw's license — inherited, not modified by Atlasdraw)
-**Drainage density:** high (React components, complex state machine)
-**Phase introduced:** Phase 0 (vendored from fork point)
-
-### Responsibility
-
-The freehand drawing engine and scene model. Excalidraw elements, the scene renderer, tool
-framework, history (undo/redo), and the `ExcalidrawAPI` imperative handle. Atlasdraw patches
-this package to add `customData.geo` support in the element schema, tune defaults, and adjust
-hit-testing for Mercator surface rendering. Patches are tracked in `upstream-patches.md`.
-
-**Patched vendored packages:**
-- `packages/excalidraw` — patched (geo field support, rendering hints)
-- `packages/element` — vendored, no patches
-- `packages/math` — vendored, no patches
-- `packages/common` — vendored, no patches
-
-### Upstream contracts in
-
-- Monthly upstream merge from `excalidraw/excalidraw` (ADR 0004, Q6)
-
-### Downstream contracts out
-
-- `ExcalidrawAPI` — consumed by `packages/tools`, `apps/atlas-app`
-- `ExcalidrawElement` with `customData` — consumed by `packages/geo` (GeoAnchor binding)
-- [CONFIDENCE: high on API stability — upstream API surface is mature; risk is in `customData`
-  field persistence through upstream merges]
-
----
-
-## 8. `apps/atlas-app`
-
-**Root path (predicted):** `apps/atlas-app/`
-**Boundary type:** process (browser SPA — Vite build artifact)
-**License:** AGPL-3.0 (Q5)
-**Drainage density:** high (main app — composition hub)
-**Phase introduced:** Phase 0 (skeleton), full editor Phase 1–6
-
-### Responsibility
-
-The editor SPA. Composes `packages/excalidraw`, `packages/basemap`, `packages/geo`,
-`packages/data`, and `packages/tools` into a single React application. Owns the CoordinateSync
-layer (MapLibre is source of truth; Excalidraw scroll/zoom is derived — spec §0). Owns the
-Zustand store, layer panel, toolbar, sidebar, embed mode, and plugin UI (Phase 7).
-
-Key predicted areas:
-- `AtlasCanvas.tsx` — root composition: MapLibre canvas + Excalidraw canvas layered
-- `CoordinateSync.ts` — the bridge: MapLibre camera change → Excalidraw scroll/zoom update;
-  Excalidraw tool down → map.unproject → GeoAnchor
-- `state/store.ts` — Zustand slices (scene, layers, camera, room, workspace)
-- `components/LayerPanel.tsx` — data layer management
-- `components/embed/` — embed-mode renderer (stripped chrome)
-- `components/plugins/` — plugin manager UI (Phase 7)
-
-**Stream capture risk:** As the composition hub, `atlas-app` will likely absorb concerns that
-belong in packages over time. See `evolution.md`.
-
-### Upstream contracts in
-
-- All packages listed in dependency graph above
-- `VITE_*` environment variables (see `infrastructure.md`)
-
-### Downstream contracts out
-
-- The built SPA artifact (served by web service)
-- postMessage events to `packages/sdk` consumers (embed API)
-- [CONFIDENCE: medium]
-
----
-
-## 9. `apps/realtime`
-
-**Root path (predicted):** `apps/realtime/`
-**Boundary type:** process (Node.js server — separate Docker service)
-**License:** AGPL-3.0 (Q5 — by symmetry with other apps; Phase 0 does not list `apps/realtime`
-  explicitly under license assignment, but `apps/atlas-app` is AGPL and realtime is an app.
-  This is a judgment call — flagged for verification at Phase 5.) [CONFIDENCE: medium]
-**Drainage density:** low (intentionally dumb relay)
-**Phase introduced:** Phase 5
-
-### Responsibility
-
-WebSocket relay only — intentionally no persistence, no business logic. Forks
-`excalidraw/excalidraw-room` at Phase 5. Runs two protocols on the same HTTP server (Q9):
-1. Socket.IO namespace — scene sync events, camera sync, cursor presence (username + color)
-2. `/yjs/:roomId` WebSocket — Yjs binary CRDT sync via `y-websocket` `setupWSConnection`
-
-Room lifecycle: in-memory. TTL eviction after last client disconnects (default 5 min).
-Persistence is explicitly out-of-scope for Phase 5 (TODO comment for Phase 6 `setPersistence`).
-
-**`yjs-crypto.ts`** — ships as API stub only in Phase 5. Wiring deferred to Phase 6 pending
-E-01 resolution. (plan-5 Task 8)
-
-### Upstream contracts in
-
-- HTTP upgrade requests from Caddy
-- `apps/atlas-app` Socket.IO client events
-
-### Downstream contracts out
-
-- Broadcast scene/cursor events to all room participants
-- Yjs awareness protocol messages
-- [CONFIDENCE: high on relay shape; low on E2EE final form]
-
----
-
-## 10. `apps/storage`
-
-**Root path (predicted):** `apps/storage/`
-**Boundary type:** process (Node.js server — separate Docker service)
-**License:** AGPL-3.0 (judgment call — not listed in Phase 0 license task, but consistent with
-  AGPL coverage for server apps; flagged for verification at Phase 4) [CONFIDENCE: medium]
-**Drainage density:** mixed (REST API with database + blob I/O)
-**Phase introduced:** Phase 4
-
-### Responsibility
-
-Persistent storage REST API. Handles map CRUD, share token generation/validation, and blob
-upload/download. In Phase 6 adds workspace management, user accounts, and comment threads for
-the hosted-flagship deployment.
-
-Key API routes (predicted from plan-4/plan-6 task descriptions):
-- `POST /maps` — create map (returns mapId)
-- `GET /maps/:id` — fetch map metadata
-- `PUT /maps/:id` — update map metadata
-- `POST /maps/:id/payload` — upload `.atlasdraw` blob
-- `GET /maps/:id/payload` — download `.atlasdraw` blob
-- `POST /maps/:id/share` — generate share token (nanoid)
-- `GET /share/:token` — resolve share token → map
-- `POST /workspaces` — create workspace (Phase 6)
-- `GET /workspaces/:id/maps` — list maps in workspace (Phase 6)
-- `POST /webhooks/stripe` — Stripe webhook handler (Phase 6, `MANAGED_MODE` only)
-- `GET /health` — health check endpoint (GAP-6 mitigation)
-
-[CONFIDENCE: medium — route shapes inferred; exact contract is engineering judgment]
-
-### Upstream contracts in
-
-- `DATABASE_URL` (Postgres connection string)
-- `BLOB_ENDPOINT` + credentials (MinIO or S3)
-- `STORAGE_MODE` env var (`postgres-minio` | `sqlite-filesystem`)
-
-### Downstream contracts out
-
-- Map metadata JSON (consumed by `apps/atlas-app`)
-- Share token URL scheme (consumed by `apps/atlas-app` share UI)
-- [CONFIDENCE: medium]
-
----
-
-## 11. `decisions/` (knowledge subsystem)
-
-**Root path:** `decisions/` (repo root) and `docs/decisions/`
-**Boundary type:** knowledge / governance (no runtime artifact, no build output)
-**License:** N/A (documentation)
-**Drainage density:** low (static markdown files)
-**Phase introduced:** Phase 0
-
-### Responsibility
-
-The architectural decision record (ADR) corpus. Captures every load-bearing architectural
-decision with its context, rationale, and consequences. Also includes escalations (E-01/E-02/
-E-03), open questions resolutions (Q1–Q13), and cross-phase audit results.
-
-Known ADRs post-Phase-7 (predicted):
-| ADR | Topic | Status |
-|-----|-------|--------|
-| 0001 | Fork Excalidraw rather than npm-install | Accepted |
-| 0002 | MapLibre as basemap renderer | Accepted |
-| 0003 | Yjs for CRDT (not Automerge) | Accepted |
-| 0004 | Upstream merge policy + hard-exit threshold | Accepted (Q6) |
-| 0005 | SDK postMessage contract (`AtlasdrawAPI`) | Pending → Accepted at Phase 6 |
-| 0006 | Telemetry policy (opt-out, embed-absent) | Accepted |
-| 0007 | Yjs E2EE threat model | Pending (E-01 unresolved) |
-| 0008+ | Phase 6–7 decisions (TBD) | — |
-
-Escalations: `docs/decisions/escalations.md` (E-01, E-02, E-03)
-Open questions: `docs/decisions/open-questions-resolution.md` (Q1–Q13)
-Cross-phase audit: `docs/decisions/cross-phase-audit.md`
-
-Source glob for staleness tracking: `decisions/**/*.md`, `docs/decisions/**/*.md`
-
----
-
-## Plugin Host (`packages/plugin-host`) — Phase 7
-
-**Root path (predicted):** `packages/plugin-host/`
-**Boundary type:** module (npm workspace package)
-**License:** MIT [CONFIDENCE: low — Q5 specifies SDK as MIT; plugin-host not mentioned; MIT
-  is consistent with SDK precedent but is a judgment call]
-**Phase introduced:** Phase 7
-
-### Responsibility
-
-Web Worker sandbox + PluginRegistry for the Phase 7 plugin/extension API. Spawns plugin code
-in a Worker, wires a postMessage bridge (via `comlink` or manual bridge), enforces a permission
-model (request/grant/deny per plugin). Plugin manifest uses SPDX license field (Q5 enforcement
-at plugin layer, plan-7 Task 1).
-
-Plugins cannot access the DOM directly — they request mutations through the `AtlasdrawAPI`
-subset they are permissioned for. (plan-7 Feature 2)
-
-[CONFIDENCE: low — Phase 7 plugin design is high-level; security properties not fully specified]
+| Section | Confidence | Basis |
+|---------|-----------|-------|
+| Subsystem map (all 11) | HIGH | Every package.json read; every export barrel read; import edges traced |
+| Vendored Excalidraw (subsystem 1) | HIGH | gossiphs coupling graph + exhaustive grep for var/any |
+| Geospatial Engine (subsystem 2) | HIGH | Full source read; zero internal deps |
+| Drawing Tools (subsystem 3) | HIGH | All 8 tool files + index.ts read |
+| Map Renderer (subsystem 4) | HIGH | All exports read; four concerns identified |
+| Data Interchange (subsystem 5) | HIGH | Full parser set verified (+ documented gaps) |
+| Collaboration Protocol (subsystem 6) | HIGH | Full type surface read |
+| Editor SPA (subsystem 7) | HIGH | Components, hooks, state stores inventoried |
+| Storage Server (subsystem 8) | HIGH | Entry point + routes + adapter types read |
+| Collaboration Relay (subsystem 9) | HIGH | Entry point + dual protocol traced |
+| CLI Tooling (subsystem 10) | MEDIUM | File listing only; command surface not fully audited |
+| Embed SDK (subsystem 11) | HIGH | Stub confirmed; build script is `exit 0` |
+| Flow basins (all 5) | HIGH | Import chains traced from entry to terminal |
+| Fault lines | HIGH | Quantitative grep data for all patterns |
+| Stream capture | HIGH | Each claim verified against source |

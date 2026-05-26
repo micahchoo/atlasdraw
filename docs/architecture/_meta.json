@@ -1,83 +1,87 @@
 {
   "schema_version": 1,
-  "last_full_run": "2026-05-03T00:00:00Z",
+  "last_full_run": "2026-05-15T22:00:00Z",
   "project_shape": "monorepo",
-  "speculative": true,
-  "_note": "SPECULATIVE — derived from PRD/spec/plans, not verified against code. git_hash is null because no code exists. source_glob points at predicted code paths post-Phase-7.",
+  "speculative": false,
+  "_note": "Code-verified sweep 2026-05-15 — all claims verified against actual source files. Replaces speculative 2026-05-03 edition.",
   "docs": {
     "architecture/overview.md": {
       "git_hash": null,
       "source_glob": ["**/*"],
       "zoom_level": "domain",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-03T00:00:00Z",
+      "stale": true
     },
     "architecture/domain.md": {
-      "git_hash": null,
-      "source_glob": [
-        "PRD.md",
-        "docs/**/*.md",
-        "decisions/**/*.md"
-      ],
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["README.md", "PRD.md", "code/apps/atlas-app/src/**/*", "code/packages/geo/src/**/*", "code/packages/tools/src/**/*", "code/packages/data/src/**/*"],
       "zoom_level": "domain",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
     },
     "architecture/ecosystem.md": {
-      "git_hash": null,
-      "source_glob": [
-        "package.json",
-        "packages/*/package.json",
-        "apps/*/package.json",
-        "infra/**/*"
-      ],
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["code/package.json", "code/packages/*/package.json", "code/apps/*/package.json", "infra/**/*", "code/.env.*", "infra/.env.*"],
       "zoom_level": "ecosystem",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
     },
     "architecture/infrastructure.md": {
-      "git_hash": null,
-      "source_glob": [
-        "infra/**/*",
-        ".github/workflows/**/*",
-        "apps/storage/src/**/*",
-        "apps/realtime/src/**/*"
-      ],
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["code/.github/workflows/**/*", "code/Dockerfile", "infra/docker-compose*.yml", "code/.env.*", "infra/.env.*", "code/vitest.config.mts", "code/tsconfig*.json", "code/apps/storage/src/**/*", "code/apps/realtime/src/**/*"],
       "zoom_level": "infrastructure",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
     },
     "architecture/subsystems.md": {
-      "git_hash": null,
-      "source_glob": [
-        "packages/**/*",
-        "apps/**/*",
-        "decisions/**/*"
-      ],
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["code/packages/*/package.json", "code/apps/*/package.json", "code/packages/*/src/**/*", "code/apps/*/src/**/*"],
       "zoom_level": "subsystem",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
     },
     "architecture/risk-map.md": {
-      "git_hash": null,
-      "source_glob": [
-        "docs/decisions/**/*",
-        "docs/superpowers/plans/**/*"
-      ],
-      "zoom_level": "domain",
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["docs/architecture/**/*.md", "docs/decisions/**/*"],
+      "zoom_level": "synthesis",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
     },
     "architecture/evolution.md": {
-      "git_hash": null,
-      "source_glob": [
-        "docs/PHASES.md",
-        "docs/decisions/**/*",
-        "docs/superpowers/plans/**/*"
-      ],
-      "zoom_level": "domain",
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["docs/PHASES.md", "docs/decisions/**/*", "docs/superpowers/plans/**/*"],
+      "zoom_level": "synthesis",
       "subsystem": null,
-      "last_updated": "2026-05-03T00:00:00Z"
+      "last_updated": "2026-05-15T22:00:00Z"
+    },
+    "architecture/cross-cutting/patterns.md": {
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["docs/architecture/**/*.md"],
+      "zoom_level": "synthesis",
+      "subsystem": null,
+      "last_updated": "2026-05-15T22:00:00Z"
+    },
+    "architecture/subsystems/atlas-app/": {
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["code/apps/atlas-app/src/**/*"],
+      "zoom_level": "component+contract+module+behavior",
+      "subsystem": "editor-spa",
+      "last_updated": "2026-05-15T22:00:00Z"
+    },
+    "architecture/subsystems/storage/": {
+      "git_hash": "06ba306552813ff9129e3670d8b7d7ed1e2d8aa8",
+      "source_glob": ["code/apps/storage/src/**/*"],
+      "zoom_level": "component+contract+module+behavior",
+      "subsystem": "storage-server",
+      "last_updated": "2026-05-15T22:00:00Z"
     }
+  },
+  "subsystems_remaining": ["vendored-kernel", "geo-engine", "drawing-tools", "map-renderer", "data-interchange", "collab-protocol", "collab-relay", "cli-tooling", "embed-sdk"],
+  "gates": {
+    "wave1_to_2": "pass",
+    "wave2_to_3": "pass — decision-check: all packages covered, hub-and-spoke verified, fork boundary clean",
+    "wave3_to_4": "pass — editor-spa + storage-server each have 4/4 agents complete",
+    "phase1_to_2": "pending — claim-verification gate"
   }
 }

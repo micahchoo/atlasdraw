@@ -1,400 +1,313 @@
-# Atlasdraw — Architectural Patterns
+# Cross-Cutting Patterns
 
-**Status: Speculative.** Predicted post-Phase-7 shape; revise against real code.
-**Schema:** codebase-mapping-schema.md § Patterns
-**Last updated:** 2026-05-03
+**Status:** Wave 4 synthesis — derived from Wave 1-3 code-verified documentation (domain, ecosystem, infrastructure, subsystems, and all 11 subsystem quadrants).
 
----
+**Date:** 2026-05-15
 
-## Overview
-
-This document catalogs the load-bearing architectural patterns that recur across two or more subsystems in Atlasdraw. Each entry names the pattern, locates it in the codebase, explains why it was chosen, and records what alternatives were rejected.
-
-[CONFIDENCE: high] marks claims that follow directly from the tech spec, PRD, or open-questions resolutions. [CONFIDENCE: med] marks claims derived from phase plans where the spec is silent. [CONFIDENCE: low] marks extrapolations.
+**Previous version:** Speculative, pre-code patterns document (May 3). This revision replaces all prior content with code-verified findings.
 
 ---
 
-## P-01 — Two Stacked Rendering Surfaces
+## 1. Cross-Subsystem Patterns
 
-**Name:** Dual-canvas stacking with `pointerEvents` toggle
-**Where used:** `apps/atlas-app/components/MapEditor.tsx`, Phase 1 core
-**Source:** Tech Spec §0 "Mental Model", Phase 1 plan Flow A/B [CONFIDENCE: high]
+### 1.1 Hub-and-Spoke Coupling (Structural Dominant)
 
-### Description
+The single most defining architectural pattern: **atlas-app is the sole consumer of all packages; packages have minimal mutual coupling.**
 
-The editor presents a single DOM viewport containing two full-bleed rendering surfaces stacked via CSS `position: absolute`:
+| Edge | Direction | Coupling | Evidence |
+|------|-----------|----------|----------|
+| tools -> geo | types only | Weak | `Coordinate` type import from `@atlasdraw/geo` |
+| cli -> data | runtime | Moderate | `@atlasdraw/data` is a runtime dependency of `@atlasdraw/cli` |
+| protocol -> realtime | types only | Weak | `@atlasdraw/protocol` is the only atlas package imported by realtime |
+| storage -> (none) | none | Zero | Storage server imports zero `@atlasdraw/*` packages |
+| basemap -> (none) | none | Zero | `@atlasdraw/basemap` has zero atlas-internal dependencies |
 
-1. **MapLibre GL JS canvas** (bottom layer) — renders the geographic basemap and all data layers (GeoJSON sources/layers). Owns geographic camera state.
-2. **Excalidraw canvas** (top layer) — renders annotations (shapes, text, arrows, pins). Owns the drawing interaction surface.
+The system is better understood as **a set of independent modules consumed by a monolithic SPA** than as layered subsystems. This was the primary correction from the speculative subsystems document.
 
-The two canvases share a viewport but have independent coordinate systems. Switching between "map navigation mode" and "drawing mode" is implemented by toggling `pointer-events: none` on the Excalidraw layer:
+**Risk:** LOW. The hub is a 1538-line god module (MapEditor.tsx) that drains all cross-subsystem communication through event handler wiring. Splitting MapEditor would not change the coupling structure — it would just reorganize the hub internally. The risk is not architectural rigidity but **composition surface fragility**: one file touches every contract surface.
 
-- **Map mode:** Excalidraw layer has `pointer-events: none` → map receives all pointer input → panning and zooming work normally.
-- **Drawing mode:** Excalidraw layer has `pointer-events: auto` → Excalidraw captures pointer events → drawing tools are active.
+### 1.2 Fork Boundary (Disciplined)
 
-### Why chosen
+The vendored Excalidraw (`packages/excalidraw`) is separated from atlas-owned code by three independent boundaries:
 
-Excalidraw's renderer is a canvas element that cannot be made transparent in the sense of "pass events through when not drawing." The toggle is the simplest mechanism that avoids re-implementing either renderer. It was confirmed workable in Phase 0 research and cross-browser hardened in Phase 1 Task 17.
+- **Variable declarations:** 16,805 `var` on vendored side, zero `var` in any atlas-owned package
+- **State management:** Zustand (3 stores) in atlas-app, jotai only in vendored Excalidraw
+- **Type safety:** ~21K `any` escapes in vendored, vs. systemic-but-bounded `any` in atlas-app (53 of 56 source files)
 
-### Alternatives rejected
+**Risk:** LOW. The boundary is clean and exhaustive. However, the boundary negotiation layer (glue code in MapEditor.tsx and hooks/) is where most `any` escapes in atlas-app originate, and these are systemic, not incidental — Excalidraw's loose type surface forces the escape. The three `any` roots are Excalidraw type boundary, Yjs observer patterns (untyped callbacks), and File System Access API (not yet standardized).
 
-| Alternative | Why rejected |
-|---|---|
-| Single SVG/Canvas renderer combining geo + annotations | Would require reimplementing Excalidraw's entire interaction model. Out of scope. |
-| Excalidraw as a React overlay (position: fixed, no canvas) | Excalidraw is canvas-native; DOM overlay loses performance and hit-test accuracy. |
-| MapLibre custom layer implementing Excalidraw draw calls | MapLibre custom layers are WebGL; Excalidraw is 2D Canvas. Context mismatch. |
+### 1.3 Dual Realtime Protocol
 
-### Cross-browser hazard
+Two independent communication channels coexist in collaboration flows:
 
-Pointer events, wheel events, and touch events behave differently across Chrome, Firefox, Safari, and iOS Safari. Phase 1 Task 17 dedicates a hardening week to this. See `docs/test-matrix/phase-1.md`.
+| Channel | Scope | Persistence | Conflict Resolution |
+|---------|-------|-------------|---------------------|
+| Socket.IO | Scene updates, camera, cursor, comments | Ephemeral (not stored on relay) | LWW per field |
+| y-websocket (Yjs) | Data layer CRDT mutations | In-memory with TTL (5 min default) | CRDT merge |
 
----
+Both share types from `@atlasdraw/protocol`. The relay never inspects payload content (ADR-0010). This pattern was listed in the prior subsystems doc as a fault line and remains so.
 
-## P-02 — Discriminated Union Geo-Anchor (`GeoAnchor`)
+**Risk:** MEDIUM. The dual protocol was introduced incrementally (Socket.IO in Phase 5, Yjs sync in Phase 6) and the ordering between Socket.IO scene updates and Yjs data layer sync is undocumented. Concurrent edits to both scene and data layer could produce inconsistent client states. Phase 6 Wave 3 added more Yjs-backed features (comments), widening the fault line.
 
-**Name:** Discriminated union on `kind` field for element geographic anchoring
-**Where used:** `packages/geo/types.ts`, consumed by `CoordinateSync`, all geo-aware tools
-**Source:** Tech Spec §3.1, Phase 1 plan Task 4 [CONFIDENCE: high]
+### 1.4 Configuration Fragmentation
 
-### Description
+Configuration is split across four independent systems with no shared schema:
 
-Every Excalidraw element that participates in geo-projection carries a `customData.geo` field typed as `GeoCustomData`:
+1. **Build-time env injection** (`VITE_*`) — validated loosely via `import.meta.env` casts
+2. **Storage config** (`config.ts`) — Zod-validated discriminated union, enforced at startup
+3. **Realtime env** — no validation (plain `process.env` reads)
+4. **Inherited Excalidraw envs** — legacy variables from upstream vendored code
 
-```ts
-export type GeoAnchor =
-  | { kind: "point"; lng: number; lat: number; zRef: number }
-  | { kind: "bbox"; west: number; south: number; east: number; north: number; zRef: number }
-  | { kind: "polyline"; coordinates: Array<[number, number]>; zRef: number };
+**Risk:** LOW. The split follows deployment topology (frontend vs server vs upstream). The main issue is that there is no single source of truth for configuration keys across the monorepo — environment variable naming conventions differ (`VITE_STORAGE_BASE_URL` vs `STORAGE_BASE_URL` vs Docker compose env vars).
 
-export type GeoCustomData = {
-  geo: GeoAnchor;
-  scaleMode: "geographic" | "screen" | "hybrid";
-  schemaVersion: 1;
-  projection: "mercator";   // reserved; always "mercator" in v1 (Q12)
-};
-```
+### 1.5 No Auth Model
 
-The `kind` discriminant drives the projection logic in `CoordinateSync.projectElement()`:
-- `point` → single `map.project([lng, lat])` call
-- `bbox` → `map.project(nw)` + `map.project(se)`, derives width/height
-- `polyline` → project each coordinate, offset to element-local space
+Identity and authentication are absent from the architecture:
 
-`zRef` records the MapLibre zoom level at element creation time, anchoring the "natural size" for `screen` and `hybrid` scale modes.
+- **Storage server:** No bearer tokens, no user identity. The workspace middleware (global `preHandler`) reads `X-Workspace-ID` header, but does not authenticate the caller. Workspace scoping is a tenancy boundary, not an auth boundary.
+- **Share tokens:** The only access control mechanism. Token minting is unauthenticated (anyone with the map ID can create a share token). Token expiration is hardcoded (30 days default).
+- **Self-host mode:** No auth at all. `MANAGED_MODE=false` bypasses workspace and billing routes entirely.
 
-### Why chosen
+**Risk:** MEDIUM-HIGH. By design for v1 (self-host assumed trusted network). However, adding authentication later requires deep architectural changes to the middleware chain, config validation, and adapter layer. The workspace middleware is structurally positioned to accept auth, but no auth provider exists.
 
-Discriminated unions make exhaustive matching typesafe (TypeScript `switch` on `kind` gets compile-time exhaustiveness). The three kinds cover all Excalidraw element shapes without over-generalizing. Adding a fourth kind (`polygon`) in v2 requires no schema migration — add a variant and update `projectElement`.
+### 1.6 No Observability Stack
 
-### Alternatives rejected
+Observability is present in skeleton form only:
 
-| Alternative | Why rejected |
-|---|---|
-| Flat `{ lng, lat, lng2?, lat2?, coords? }` | Ambiguous at runtime; no compiler-enforced exhaustiveness. |
-| GeoJSON `Feature` as the anchor | Carries unnecessary GeoJSON envelope weight; `CoordinateSync` doesn't need it. |
-| Storing pixel position as canonical (no geo anchor) | Breaks on every camera change; geo anchor must be the source of truth. |
+- **Sentry** is initialized in storage when `SENTRY_DSN` is set, but no route handler or `setErrorHandler` routes errors to it. The SDK produces zero telemetry under normal operation.
+- **Health checks** are partial. Storage serves `/health`. A `health.ts` exists in realtime's src directory but is not wired as a route.
+- **Structured logging** uses pino on both storage and realtime, but there is no centralized log aggregation across services.
+- **Distributed tracing** is absent — no OpenTelemetry, no Jaeger.
 
-### Field name constraint
-
-[CONFIDENCE: high] The field is `customData.geo`, not `customData.geoAnchor`. See cross-phase-audit MISMATCH-3. Any code or documentation using `geoAnchor` as the field name is wrong.
+**Risk:** MEDIUM. Acceptable for single-developer self-host. Becomes a debugging bottleneck in multi-service hosted deployments.
 
 ---
 
-## P-03 — Annotation vs. Data Layer Dichotomy
+## 2. Type System Fragmentation
 
-**Name:** Hard semantic split between Excalidraw annotations and MapLibre data layers
-**Where used:** Entire application; implemented as `LayerRegistry` in `packages/data`, Phase 2
-**Source:** Tech Spec §2 (Mental Model), Phase 2 plan preamble [CONFIDENCE: high]
+The codebase has three independent type domains with no shared schema or automatic contract validation:
 
-### Description
+### 2.1 Domain Inventory
 
-Atlasdraw treats two fundamentally different kinds of content as non-interchangeable by default:
+| Domain | Location | ID Format | Naming | Validated By | Purpose |
+|--------|----------|-----------|--------|-------------|---------|
+| **Storage** | `apps/storage/src/types.ts` | nanoid(21) | `snake_case` | Hand-rolled regex (`ID_RE`) | Envelope metadata |
+| **Document** | `packages/data/src/manifest-schema.ts` | ULID (26 chars) | `camelCase` | Zod schema | Document payload |
+| **Protocol** | `packages/protocol/src/` | N/A (event typenames) | `camelCase` | TypeScript | Wire format |
 
-| Property | Annotation | Data Layer |
-|---|---|---|
-| Renderer | Excalidraw canvas | MapLibre GL layer |
-| Storage format | Excalidraw scene elements | GeoJSON `FeatureCollection` |
-| Conflict resolution | LWW (version + versionNonce) | Yjs CRDT |
-| Coordinate source of truth | `customData.geo` → projected to `x/y` | GeoJSON coordinates direct |
-| Style | Excalidraw element properties | MapLibre layer style spec |
-| Collab channel | `SCENE_UPDATE` Socket.IO | `DATA_LAYER_OP` Yjs |
+### 2.2 Field Naming Divergence
 
-The `LayerRegistry` (introduced Phase 2) is the authoritative registry of all data layers. It tracks `{ id, featureCollection, style, visible, locked }` per layer and is the single source of truth for what MapLibre sources/layers exist.
+| Concept | Storage | Data/Manifest |
+|---------|---------|---------------|
+| Record ID field | `id` (nanoid(21)) | `manifest.id` (ULID) |
+| Timestamp | `created_at` | `createdAt` |
+| Visible name | (none — no title field) | `title` |
+| Byte size | `byte_size` | (not tracked) |
+| Owner | (none) | (none — neither layer) |
 
-Conversion between the two is possible for geometric shapes (polygon, polyline, rectangle, circle) via `annotationToFeatureCollection()` in `packages/tools/convert.ts`. Text and arrow annotations have no lossless GeoJSON projection and cannot be converted.
+### 2.3 The Opaque-Blob Invariant
 
-### Why the split is load-bearing
+The storage server **never parses the blob content** it stores. `MapRecord` describes envelope metadata (where the blob is, how big it is, which workspace owns it). `AtlasdrawDocument` describes payload (what is inside the atlasdraw file). These are genuinely different concerns, and the parallel type hierarchies are correct by design.
 
-The split is not cosmetic. The two rendering paths, conflict-resolution strategies, and collaboration protocols are incompatible. Blurring the distinction leads to: applying LWW to structured GeoJSON (losing concurrent edits), running Yjs CRDT on freehand sketch elements (over-engineering), or trying to render GeoJSON in Excalidraw's canvas (coordinate system mismatch). The `LayerRegistry` enforces the boundary.
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|---|---|
-| Single unified element model (everything is an Excalidraw element) | GeoJSON data layers can have 50k+ features; Excalidraw scene cannot render that. |
-| Everything as GeoJSON in MapLibre | Loses Excalidraw's free-form annotation capabilities entirely. |
-| Dynamic dispatch (decide per-element at runtime) | Eliminates the compiler-enforced boundary; collab protocols diverge. |
+**Risk:** LOW-MEDIUM. The parallel hierarchies are correct, but schema drift between storage snake_case fields and data package camelCase fields is possible without compile-time checking. If a future feature requires the storage server to inspect manifest content (e.g., search by title), this invariant breaks.
 
 ---
 
-## P-04 — Dual Collaboration Protocols on One Connection
+## 3. ID Scheme Conflicts
 
-**Name:** Excalidraw LWW for annotations + Yjs CRDT for data layers, multiplexed over one Socket.IO connection
-**Where used:** `apps/realtime/`, `apps/atlas-app/state/collab.ts`, Phase 5
-**Source:** Tech Spec §5.1, Q9 resolution [CONFIDENCE: high]
+Two independent ID schemes coexist, with no shared generation utility:
 
-### Description
+| Scheme | Format | Length | Used By | Purpose |
+|--------|--------|--------|---------|---------|
+| nanoid(21) | `[A-Za-z0-9_-]{21}` | 21 chars | Storage (MapRecord.id, ShareToken.token) | Persistent record IDs |
+| ULID | `[0-9A-HJKMNP-TV-Z]{26}` | 26 chars | Data/Manifest (Manifest.id) | Document IDs |
+| Excalidraw element IDs | Opaque string | variable | Excalidraw elements | Scene element references |
+| Yjs client IDs | Integer | numeric | Yjs peers | CRDT identity |
 
-A single Socket.IO connection carries four event channels with different semantics:
+**Critical finding:** The storage server assigns a nanoid(21) to each map record (DB row). The blob itself contains a manifest with a completely different ULID. There is no contract ensuring they match or relate — the blob's manifest ID is opaque to the storage server. This is a byproduct of the opaque-blob invariant (Section 2.3).
 
-| Channel | Payload | Semantics | Rate |
-|---|---|---|---|
-| `SCENE_UPDATE` | Encrypted Excalidraw element diff | LWW (version + versionNonce) | max 10/s |
-| `DATA_LAYER_OP` | Yjs update bytes | CRDT merge | unbounded |
-| `MAP_CAMERA_UPDATE` | `{lng, lat, zoom, bearing, pitch}` | LWW | throttled 30 Hz |
-| `CURSOR` | `{userId, lngLat, color}` | LWW | throttled 60 Hz |
-| `COMMENT` | Encrypted comment payload | versioned LWW | max 5/s |
-
-The relay (`apps/realtime`) is protocol-agnostic for `DATA_LAYER_OP` — it treats Yjs bytes as opaque and relays them. The relay never decrypts `SCENE_UPDATE` or `COMMENT` payloads.
-
-Q9 resolved the question of whether to use separate WebSocket connections: the decision was **one Socket.IO connection, multiplexed**, to avoid the complexity of two connection lifecycles, two reconnection strategies, and two auth handshakes per room.
-
-### Why chosen
-
-Excalidraw's existing LWW is well-proven for freehand sketching where last-write-wins is acceptable (concurrent annotation edits rarely conflict meaningfully). Data layers are structured GeoJSON where a user editing polygon vertices can have work clobbered by LWW if two users touch different vertex arrays simultaneously. CRDT solves this at the cost of additional complexity — applied only where the cost is justified.
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|---|---|
-| Yjs CRDT for everything | Excalidraw's upstream is LWW; adopting Yjs for annotations means forking conflict-resolution logic and losing upstream merge compatibility. |
-| LWW for data layers | Users lose concurrent GeoJSON edits in ways that are hard to undo. |
-| Two separate WebSocket connections | Doubled reconnection complexity, doubled auth surface, no gain (Q9). |
+**Risk:** LOW. Each ID scheme is appropriate for its domain. The mismatch between storage and manifest IDs is architecturally correct for v1. The real risk is if someone assumes they are interchangeable.
 
 ---
 
-## P-05 — `postMessage`-Safe API Surface (AtlasdrawAPI)
+## 4. Lifecycle Management Gaps
 
-**Name:** Structured-clone-friendly public API from v1
-**Where used:** `packages/sdk/src/api-types.ts`, `packages/sdk/src/AtlasdrawEmbed.tsx`, Phase 6; enforced in Phase 7 Worker host
-**Source:** Q11 resolution, Phase 6 Task 1, ADR `0005-sdk-postmessage-contract.md` [CONFIDENCE: high]
+### 4.1 Resource Inventory
 
-### Description
+| Resource | Subsystem | Managed? | Cleanup | Gap |
+|----------|-----------|----------|---------|-----|
+| Postgres connection pool | Storage | No | Relies on process death | `pool.end()` never called |
+| SQLite database connection | Storage | No | Relies on process death | DB instance never closed |
+| S3 buckets | Storage | Lazy | Created on first `putBlob` | No teardown |
+| Realtime rooms | Realtime | TTL (5 min) | Last-client-disconnect + timer | `setPersistence` is TODO; rooms ephemeral |
+| Share tokens | Storage | None | Table grows without bound | No GC job, no DELETE endpoint |
+| Orphaned blobs | Storage | None | N/A | Write-before-insert pattern on createMap |
+| IDB FSA handles | Atlas-app | Per-session | Persisted across sessions | RemoteMapId stickiness — cross-session identity leak |
+| Excalidraw global transformer | Atlas-app | Manual | `setExportElementTransformer(null)` on unmount | Not scoped to instance |
 
-`AtlasdrawAPI` — the public surface exposed to embed consumers and plugin authors — is designed from Phase 6 (v1.0) to be postMessage-safe:
+### 4.2 Systemic Gaps
 
-- All methods are `async` or fire-and-forget (no synchronous returns of non-cloneable values).
-- All return values are JSON-serializable (no DOM nodes, no class instances, no functions, no `Map`/`Set` objects).
-- All arguments are structured-clone-compatible.
+1. **No graceful shutdown.** Neither storage nor realtime registers SIGTERM/SIGINT handlers. Connection pools drain implicitly on process death.
+2. **No resource reconciler.** Orphaned blobs, expired share tokens, and disconnected Yjs documents accumulate. Only Yjs has TTL-based eviction.
+3. **No cross-subsystem lifecycle coordination.** Storage and realtime are independent processes with no shared lifecycle protocol. A map load in atlas-app requires two independent TCP connections (HTTP to storage, WebSocket to realtime), each with independent failure and retry semantics.
 
-A structural test enforces this: every public method on `AtlasdrawAPI` must pass a structured-clone round-trip on its arguments and return value. CI fails if a method is added that violates this contract.
-
-In Phase 7, this constraint pays off: the same `AtlasdrawAPI` surface is exposed to plugin Workers via a `postMessage` bridge without any API changes. Plugin authors use the same types they would use in a React embedding context.
-
-### Why chosen
-
-Retrofitting a synchronous API to be postMessage-safe in v1.5 would break every plugin author's contract. Cheaper to constrain v1 today than to publish a stable contract that contradicts the v1.5 sandbox (Q11 rationale).
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|---|---|
-| Rich synchronous API in v1, wrapper layer in v1.5 | Creates a permanently divergent API surface: native consumers get one API, Worker consumers get a wrapper. Plugin authors face two contracts. |
-| Defer API design until Phase 7 | Phase 6 ships the embed SDK; the API must be published. Deferral means publishing an unstable contract. |
+**Risk:** MEDIUM. Acceptable for v1 self-host. Becomes operational debt in managed/hosted mode where persistent storage grows without GC.
 
 ---
 
-## P-06 — Vendored Upstream + Patch Journal
+## 5. Error Handling Inconsistency
 
-**Name:** Fork-with-patch-journal for Excalidraw packages
-**Where used:** `packages/excalidraw/` (vendored), `packages/element/`, `packages/math/`, `packages/common/`; `decisions/upstream-patches.md`; CI guard
-**Source:** Q6 resolution, ADR `0004-upstream-merge-policy.md`, Phase 0 Task 3 [CONFIDENCE: high]
+### 5.1 Per-Subsystem Patterns
 
-### Description
+| Subsystem | Pattern | Validation | Error Propagation |
+|-----------|---------|------------|-------------------|
+| Storage | Per-route try/catch + `isNotFoundError()` (string prefix check) | Zod only at startup; hand-rolled `ID_RE` regex in routes | Default Fastify 500 for uncaught |
+| Atlas-app | Ad-hoc catch in persistence/import flows | TypeScript compile-time only | Unhandled promise rejections |
+| Tools | `UnsupportedConvertElementError` class | TypeScript only | Thrown to caller |
+| Data | Zod schemas for deserialization validation | Zod on read | Thrown errors |
+| Protocol | No error handling (pure type defs) | TypeScript only | N/A (no runtime) |
+| Realtime | Socket.IO error events, try/catch in room lifecycle | Minimal | Logged via pino; error events to client |
+| CLI | Commander error handling | Commander arg validation | `process.exit(code)` |
+| SDK | Promise rejection via PostMessage | TypeScript only | Rejected promises to host |
 
-Atlasdraw is a fork of `excalidraw/excalidraw`. Rather than depending on `@excalidraw/excalidraw` via npm (which would prevent the `customData.geo` hook points needed for geo anchoring), the Excalidraw packages are vendored into the monorepo under `packages/`.
+### 5.2 Systemic Issues
 
-Every patch applied to vendored files is required to be documented in `decisions/upstream-patches.md`. A CI guard (`infra/ci/patch-journal-guard.sh` or equivalent) validates that any PR modifying vendored files has a corresponding entry in the patch journal. PRs that modify vendored files without a journal entry fail CI.
+1. **No unified error type.** Each subsystem defines its own error taxonomy. Storage uses `isNotFoundError()` (string prefix check). Tools define `UnsupportedConvertElementError`. There is no `@atlasdraw/errors` or shared error base class.
+2. **Sentry is initialized but not wired** (Section 1.6).
+3. **No structured error response format.** Storage returns error strings directly as response bodies. Atlas-app errors are UI-only (toast notifications). No machine-readable error codes exist.
 
-A quarterly upstream-merge review is scheduled per ADR `0004-upstream-merge-policy.md`. Hard exit thresholds (patch divergence exceeds N files, or upstream API breaks are detected) trigger an architecture review. The cadence is quarterly, not continuous, to avoid perpetual merge conflict churn.
-
-### Why chosen
-
-`npm install @excalidraw/excalidraw` provides no stable hooks for `customData` mutation at the rendering level. The fork is necessary. The patch journal prevents the fork from silently accumulating undocumented divergence that becomes unmergeable at the quarterly review.
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|---|---|
-| `npm install`, monkey-patch at runtime | No stable hook points for geo anchor injection in the render loop. |
-| Fork with no merge policy | Guaranteed permanent divergence. Upstream bug fixes and features never land. |
-| Continuous upstream tracking (merge every PR) | Merge conflicts at high frequency; too expensive for a small team. |
+**Risk:** MEDIUM. Acceptable for a single-developer project. Becomes a debugging bottleneck in multi-service deployments where error provenance matters.
 
 ---
 
-## P-07 — Hybrid Basemap Default
+## 6. State Management Fragmentation
 
-**Name:** Bundled minimal PMTiles for self-host + opt-in OpenFreeMap for hosted
-**Where used:** `packages/basemap/`, `infra/docker-compose.yml`, `BasemapRegistry`
-**Source:** Q3 resolution, Phase 4 plan [CONFIDENCE: high]
+### 6.1 Patterns by Subsystem
 
-### Description
+| Pattern | Used By | Rationale |
+|---------|---------|-----------|
+| Zustand stores (3) | Atlas-app (layerRegistry, collab, persistence) | Central state for editor |
+| Vanilla store + `useSyncExternalStore` | Atlas-app (comments-anchor-picker) | Avoids context provider dependency in MapEditor |
+| Jotai atoms | Excalidraw (vendored) | Inherited upstream pattern |
+| Yjs CRDT shared types | Atlas-app data layers | Multi-user consistency |
+| Module-level variables | Realtime (YjsServer rooms map) | Simple server-side state |
+| Map-based handler storage | SDK (subscription handlers) | Per-subscription lifecycle |
+| Stateless (no module state) | CLI, geo, tools | Pure function design |
 
-The default basemap strategy is split by deployment context:
+### 6.2 Observations
 
-- **Self-hosted (docker-compose default):** Ships `infra/data/world-low-zoom.pmtiles` (zoom 0–6, ~200 MB). `BasemapRegistry` defaults to `local-pmtiles` when `realtime.enabled = false` and self-host config is detected. First run shows a world map without any network calls.
-- **Hosted flagship (`app.atlasdraw.org`):** `BasemapRegistry` defaults to `openfreemap-bright` when `[basemap.allow_remote] = true` is explicit in config.
+The fragmentation follows subsystem boundaries cleanly. No subsystem mixes patterns internally. The only notable divergence is the vanilla comments-anchor-picker store in atlas-app, which explicitly bypasses Zustand to avoid inserting a context provider into the component tree. This is a pragmatic choice, not an inconsistency.
 
-`make basemap-world` downloads the full ~120 GB world PMTiles for self-hosters who want full zoom coverage.
-
-The PRD's §5 principle ("no telemetry that calls home, no required basemap key") drove this. A docker-compose default that phones home to `tiles.openfreemap.org` on first run violates that principle. The hybrid resolves both concerns.
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|---|---|
-| Always OpenFreeMap | Violates PRD §5 zero-call-home principle for self-hosters. |
-| Always bundled PMTiles (full world) | 120 GB is not shippable in a Docker image. Violates "single Docker command" principle. |
-| No default basemap (user must configure) | Terrible first-run experience; "blank canvas" is confusing. |
+**Risk:** LOW. Each pattern fits its subsystem's needs. The fragmentation is architectural, not accidental.
 
 ---
 
-## P-08 — Dual Docker-Compose Stacks
+## 7. Knot Complement — Parallelism Opportunities
 
-**Name:** Minimal 3-service + full 5-service compose profiles
-**Where used:** `infra/docker-compose.minimal.yml` (3 svc), `infra/docker-compose.yml` (5 svc), `infra/docker-compose.cloud.yml`
-**Source:** Q10 resolution, Phase 4 plan Task 10/11 [CONFIDENCE: high]
+### 7.1 Current Serialization Points
 
-### Description
+| Serialization | Subsystems | Why Coupled |
+|---------------|------------|-------------|
+| Storage blob write -> DB record update | Storage | Transactional intent (blob must exist before record points to it) |
+| IndexedDB save -> Remote storage save | Atlas-app + Storage | Dirty-bit guard prevents concurrent saves |
+| Socket.IO connect -> Yjs connect | Atlas-app + Realtime | Scene state must arrive before data layer can render |
+| Map load -> Data layer load | Atlas-app + Storage + Data | Serial by flow design |
+| CLI commands | CLI | Single-process synchronous design |
 
-Two compose profiles serve different deployment contexts:
+### 7.2 Genuinely Parallel (Not Exploited)
 
-| File | Services | Use case |
-|---|---|---|
-| `docker-compose.minimal.yml` | `atlas-app`, `storage`, `tile-server` | Single-player self-host, no realtime |
-| `docker-compose.yml` | + `realtime`, `redis` | Multi-user collaboration |
-| `docker-compose.cloud.yml` | + `stripe-cli` | Hosted-mode local development (Phase 6) |
+- **Storage adapter operations:** SQLite queries and blob I/O could be parallelized within a single request (read blob while reading DB record). Current implementation serializes: DB lookup -> blob fetch -> response.
+- **CLI render commands:** Must be spawned as separate processes for concurrency. The CLI has no internal parallelism.
+- **Yjs document + Socket.IO room creation** on the realtime server could run in parallel rather than sequentially.
 
-The minimal stack deliberately excludes `realtime` and `redis` so a solo user running the app locally has a three-service footprint. Q10 confirmed this split is the right default.
+### 7.3 Structural Parallelism (By Design)
 
-### Why chosen
+The hub-and-spoke architecture means that all packages can be developed, tested, and deployed independently from each other. The only deployment coupling is that atlas-app references them at build time (npm workspace + TypeScript project references). No runtime coordination is needed between packages.
 
-The PRD positions Atlasdraw as "single-player first-class." A mandatory `redis` + `realtime` container for users who never collaborate imposes unnecessary operational overhead. The split makes the default case simple and the collaboration case explicit.
-
----
-
-## P-09 — Per-Package License Split
-
-**Name:** Three-way AGPL/MPL/MIT license split aligned to package role
-**Where used:** Root `LICENSING.md`, per-package `package.json` `"license"` field, CI SPDX check
-**Source:** Q5 resolution, ADR `0002-license-split.md`, Phase 0 Task 2 [CONFIDENCE: high]
-
-### Description
-
-| License | Packages/Apps | Rationale |
-|---|---|---|
-| AGPL-3.0 | `apps/atlas-app`, `apps/realtime` | Server-side and SaaS use triggers copyleft; protects the hosted product |
-| MIT | `packages/sdk`, `packages/cli`, `packages/geo`, `packages/data` | Embed SDK and utilities must be freely embeddable without license obligation |
-| MPL-2.0 | `packages/basemap`, `packages/tools` | File-level copyleft: forks must share basemap/tool improvements, but can link freely |
-
-CI enforces: every `package.json` must have a `"license"` field matching a valid SPDX identifier. PRs that add a package without a license field fail CI. Plugin manifests (Phase 7) also require a valid SPDX `license` field; validation throws at install time.
+**Risk:** LOW. Current serialization is correct for v1. Parallelism optimization is premature until profiling shows actual bottlenecks.
 
 ---
 
-## P-10 — Stub-Then-Wire
+## 8. Cross-Frame Synthesis (Origami x Stratigraphy)
 
-**Name:** Shipping a typed stub that satisfies the contract but has no implementation, with a named gate that triggers wiring
-**Where used:** `packages/data/src/yjs-crypto.ts` (Phase 5 stub → Phase 6 wire per E-01), `decisions/0005-sdk-postmessage-contract.md` (Phase 0 stub → Phase 6 content)
-**Source:** Phase 5 produces contract table, E-01 escalation [CONFIDENCE: high]
+### 8.1 Era-Distance Weighted Crossings
 
-### Description
+Era distances (from atlas-app stratigraphy, estimated by phase introduction):
 
-When a feature's implementation depends on an open architectural decision (an escalation), Atlasdraw ships a stub:
+| Crossed Pairs | Era Distance | Surface | Assessment |
+|---------------|-------------|---------|------------|
+| Geo (Era 1) <-> Protocol (Era 5) | 4 | CoordinateSync state via CollabState | Largest origami fold. The CoordinateSync state machine was designed in Era 1 for local MapLibre-Excalidraw sync but its output now flows through Protocol types into the realtime relay. Structurally sound but undocumented — no single document describes how CoordinateSync state flows through the protocol layer. |
+| Tools (Era 2) <-> Protocol (Era 5) | 3 | Tool-emitted events via CollabState | Minimal — tools emit seeds, protocol carries diff events. No fold. |
+| Data (Era 3) <-> Protocol (Era 5) | 2 | YjsLayer CRDT over y-websocket | The fold is clean because Yjs handles serialization. Data layer states are transmitted via Yjs sync protocol, not custom wire format. |
+| Basemap (Era 4) <-> Protocol (Era 5) | 1 | Style switching via CollabState | Weak coupling — basemap style is a property transmitted in manifest, not a realtime concern. |
 
-1. The stub file exists with the correct exported API (`encryptUpdate(bytes): Uint8Array`, `decryptUpdate(bytes): Uint8Array`).
-2. The stub implementation is a no-op or identity (returns input unchanged).
-3. Tests cover the stub's API contract, not its implementation.
-4. The real gate condition (E-01 resolution: Option A or Option B for Yjs E2EE) is documented in the Phase 5 → Phase 6 contract table.
+**Predicted response growth after cuts:** If CoordinateSync were extracted from `@atlasdraw/geo` into its own package (e.g., `@atlasdraw/coordinate-sync`), the fold distance would collapse from 4 to 0, simplifying the contract surface. The fold exists because geo was the natural home for coordinate logic, and protocol was added later for realtime. Given current coupling, extraction is not justified — the fold is one file and one protocol event type.
 
-When Phase 6 resolves E-01:
-- **Option A selected (server-trusted is acceptable):** Drop `yjs-crypto.ts`, remove stub, update ADR.
-- **Option B selected (client-side encryption needed):** Wire `yjs-crypto.ts` against the AES-GCM key from the room URL fragment.
+### 8.2 Stream Capture Analysis
 
-This pattern prevents Phase 5 from being blocked by an unsettled architectural decision while ensuring Phase 6 cannot forget to close the gate.
+Stream captures identified across subsystems — endorheic basins that could be absorbed into larger flows:
 
-### Alternatives rejected
+| Stream | Currently In | Capture Candidate | Driver | Urgency |
+|--------|-------------|-------------------|--------|---------|
+| Style system | basemap (style-compiler + style-builder) | Separate `@atlasdraw/style` package | Maputnik integration | Low |
+| Yjs layer wrapper | data (YjsLayer class) | Yrs/WASM backend | Performance | Medium |
+| CoordinateSync | geo | atlas-app CollabState (partially captured) | Realtime protocol | Low |
+| Storage types | storage (isolated by design) | OpenAPI/schema sharing | Multi-client | Low |
 
-| Alternative | Why rejected |
-|---|---|
-| Block Phase 5 on E-01 resolution | Delays three months of parallel work on a decision that can be deferred. |
-| Wire the real implementation speculatively | Commits to an approach (Option B) before the threat model ADR is reviewed. |
+The style system and Yjs layer wrapper are truly endorheic — self-contained with no current cross-subsystem influence. The CoordinateSync is a **partial capture**: designed for local MapLibre-Excalidraw sync but later partially absorbed into the collab flow. Its state machine is still local (in `geo`), but its output flows through protocol and realtime.
 
----
+### 8.3 Fault Lines Spanning Subsystems
 
-## P-11 — Worker Prelude Sandbox Hardening
+| Fault Line | Spans | Type | Width Trend |
+|------------|-------|------|-------------|
+| Fork boundary (var/const) | Excalidraw vs all atlas-owned | Stylistic + type safety | **Stable** (no mixing) |
+| State management (zustand/jotai) | Atlas-app vs Excalidraw | Library choice | **Stable** (follows fork boundary exactly) |
+| Dual realtime protocol | Atlas-app + Protocol + Realtime | Protocol divergence | **Widening** (Phase 6 added Yjs-backed comments alongside Socket.IO corridor) |
+| Tsconfig composite boundary | All packages (separate project refs) | Build system | **Stable** |
+| ID scheme (nanoid vs ULID) | Storage vs Data | Architectural | **Stable** (by design) |
+| DB schema (SQLite vs Postgres) | Storage adapters | Implementation divergence | **Stable** (same columns, different types) |
 
-**Name:** Nulling or wrapping dangerous Worker globals before plugin entry point executes
-**Where used:** `packages/plugin-host/src/PluginPermissions.ts`, Phase 7 Task 2
-**Source:** Phase 7 research notes Q: W0-1b, Phase 7 plan Task 2 [CONFIDENCE: high]
-
-### Description
-
-Web Workers retain access to `self.fetch`, `self.XMLHttpRequest`, `self.WebSocket`, and `self.importScripts` by default. These are escape vectors for arbitrary code run by a plugin. The Worker prelude — code that executes before the plugin's entry point is loaded — overrides or deletes these globals:
-
-```ts
-// PluginPermissions.ts — Worker prelude (injected before plugin entry)
-self.fetch = createPermissionCheckedFetch(grantedPermissions);
-self.XMLHttpRequest = undefined as unknown as typeof XMLHttpRequest;
-self.WebSocket = undefined as unknown as typeof WebSocket;
-self.importScripts = () => { throw new Error("importScripts not permitted in Atlasdraw plugins"); };
-// dynamic import() cannot be blocked in JS; rely on CSP script-src
-```
-
-`fetch` is replaced with a permission-checked wrapper that validates the requested host against the plugin's declared `fetch:<host>` permissions. All other network primitives are set to `undefined` or throw.
-
-**Known limitation:** This is defense-in-depth, not origin isolation. A plugin running in a same-origin Worker can still reach same-origin endpoints. True isolation requires hosting the plugin Worker in a cross-origin iframe on a separate subdomain (`plugins.atlasdraw.app`). This is the **v2 plugin hardening milestone**, explicitly recorded in the Phase 7 produces contract.
-
-### Permission grammar
-
-`PermissionId` union: `"read:layers" | "read:camera" | "write:layers" | "fetch:<host>"`
-
-`fetch:*` wildcard is explicitly disallowed at manifest validation time.
+The dual realtime protocol fault line is the only one showing signs of widening. Each Phase 6 wave adds more surface area where both protocols must coexist without an explicit ordering contract.
 
 ---
 
-## P-12 — Schema-Version + Projection Field (Forward-Compat Sentinel)
+## 9. Confidence Assessment
 
-**Name:** Reserved fields in `GeoCustomData` that assert invariants today and enable migration tomorrow
-**Where used:** `packages/geo/types.ts`, `CoordinateSync.ts`
-**Source:** Q12 resolution, ADR `0003-coord-system.md` [CONFIDENCE: high]
+| Pattern | Confidence | Basis |
+|---------|-----------|-------|
+| Hub-and-spoke coupling | HIGH | Verified against import graphs of all 11 subsystems |
+| Fork boundary | HIGH | Exhaustive grep of all packages (var/const/jotai/any) |
+| Dual realtime protocol | HIGH | Flow traces verified against source |
+| Type system fragmentation | HIGH | Direct comparison of types.ts vs manifest-schema.ts |
+| ID scheme conflict | HIGH | Verified type definitions in both subsystems |
+| Lifecycle management gaps | HIGH | All storage flows and atlas-app behavior traces verified |
+| Error handling inconsistency | HIGH | Per-route error analysis of storage; atlas-app failure modes verified |
+| State management fragmentation | HIGH | Inventory across all subsystems verified |
+| Configuration fragmentation | MEDIUM | 3 of 4 config systems verified; Excalidraw legacy vars inferred |
+| No auth model | HIGH | Storage routes, middleware, share token flow verified |
+| Cross-frame synthesis | MEDIUM | Era distances estimated from git history; origami fold is analytical inference |
+| Parallelism opportunities | MEDIUM | Serialization points identified from flow traces; actual profiling needed |
+| No observability | HIGH | Sentry, health checks, logging verified against source |
+| DB schema fragmentation | HIGH | Both adapter schemas compared directly |
 
-### Description
+---
 
-`GeoCustomData` carries two fields that are reserved for future expansion:
+## 10. Summary
 
-```ts
-export type GeoCustomData = {
-  geo: GeoAnchor;
-  scaleMode: "geographic" | "screen" | "hybrid";
-  schemaVersion: 1;        // bumped on breaking geo schema changes
-  projection: "mercator";  // reserved; always "mercator" in v1
-};
-```
+### Highest-Risk Patterns (recommended for Phase 7+)
 
-`CoordinateSync` contains an assertion:
+1. **No auth model** (Section 1.5) — Adding auth later requires deep architectural changes to storage middleware, config, and adapter layer. The workspace middleware is positioned for it but no provider exists. This is the highest-impact pattern to address before multi-tenant hosted mode.
 
-```ts
-if (geo.projection !== "mercator") {
-  throw new Error(`Unsupported projection: ${geo.projection}. This build only handles Mercator.`);
-}
-```
+2. **Lifecycle management gaps** (Section 4.2) — No graceful shutdown, no resource GC, no cross-subsystem lifecycle coordination. Acceptable for self-host v1, becomes operational debt in hosted mode.
 
-When MapLibre globe mode (v1.5+) lands, `projection` can take `"globe"` and `CoordinateSync` gains a globe-aware projection path. Without the reserved field, adding globe support requires a data migration on all existing `customData.geo` entries.
+3. **Dual realtime protocol fault line** (Section 8.3) — Widening with each Phase 6 wave. Socket.IO-to-Yjs ordering is undocumented and untested.
 
-`schemaVersion: 1` is the migration version indicator. Any breaking change to the `GeoAnchor` shape increments it; a migration function handles old documents.
+4. **No observability** (Section 1.6) — Sentry is scaffolded but not wired. Debugging production issues in multi-service deployment requires manual log spelunking across two pino instances.
 
-### Alternatives rejected
+### Patterns to Preserve (Correct by Design)
 
-| Alternative | Why rejected |
-|---|---|
-| Add `projection` in v1.5 when needed | Requires data migration for all existing maps. Free today, expensive later. |
-| No `schemaVersion` | Silent data corruption when old documents meet new code that expects different field shapes. |
+1. **Hub-and-spoke coupling** (Section 1.1) — Correct architecture for the problem domain. Packages are independently deployable. The risk is not the pattern but the 1538-line MapEditor.tsx and its single-file fragility.
+
+2. **Fork boundary discipline** (Section 1.2) — Three independent boundaries all cleanly enforced. No mixing. This is the gold standard for vendored-dependency management in a monorepo.
+
+3. **Storage type isolation** (Section 2.3) — The opaque-blob invariant is correct. Storage types describe envelope, not payload. Schema sharing (OpenAPI) could be added without breaking this invariant.

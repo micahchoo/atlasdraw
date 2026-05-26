@@ -1,200 +1,202 @@
 # Atlasdraw — Domain
 
-**Status: Speculative.** Derived from PRD.md. No code exists to verify against.
+**Status:** Verified against v1.0.0 source (2026-05-15). Replaces prior speculative edition.
 
 ---
 
-## Market Position
+## Domain Summary
 
-Atlasdraw operates in the **cartography prosumer market** — the gap between GIS desktop tools
-(QGIS, ArcGIS) and consumer map builders (Google My Maps, Snazzy Maps). The explicit reference
-class in the PRD is: "what Figma is to Sketch for design," applied to maps (PRD §2).
+Atlasdraw is an open-source, self-hostable collaborative web map studio. It stacks an Excalidraw drawing surface on top of a MapLibre GL JS basemap so that hand-drawn annotations (freehand sketches, arrows, labels, polygons) stay geographically anchored under pan, zoom, and collaborative editing. The product serves the **prosumer cartography market** — the gap between GIS desktop tools (QGIS, ArcGIS) and consumer map builders (Google My Maps). The explicit reference class is "what Figma is to Sketch for design" applied to maps (PRD §2), and it directly targets users displaced when Felt pivoted to enterprise GIS in 2025.
 
-[CONFIDENCE: high] The target user is technically capable but not a GIS professional. They want
-geographic precision without GIS ceremony, and freehand expressiveness without sacrificing
-accurate spatial data.
+[CONFIDENCE: high — verified against README, PRD §1–2, and code/apps/atlas-app/src/components/MapEditor.tsx line 4–6 (the component docblock that states "Stacks MapLibre GL (bottom) + Excalidraw (top, transparent)")]
 
-**Competitive context** (PRD §2):
+### Key differentiators
 
-| Competitor | Relationship | Gap Atlasdraw fills |
-|------------|-------------|---------------------|
-| Atlas.co | Direct — closest feature match | Atlas.co is a startup; Atlasdraw bets on OSS permanence and self-host option |
-| uMap | Indirect — OSS, web-based | uMap lacks freehand drawing; Atlasdraw adds Excalidraw annotation layer |
-| Felt | Indirect — polished SaaS | Felt is closed source and SaaS-only; Atlasdraw is AGPL with self-host first-class |
-| Mapbox Studio | Adjacent — style editor | Mapbox is infrastructure, not a story-telling tool |
-| QGIS | Downstream data source | QGIS is the desktop tool prosumers are trying to escape; Phase 7 adds a bridge |
+- **Self-hostable** — one `docker compose up` (AGPL-3.0, no open-core split).
+- **Local-first** — IndexedDB persistence (idb) + bundled PMTiles basemap; no network required in default config.
+- **File-portable** — `.atlasdraw` is a zipped bundle of JSON + GeoJSON. Human-readable, diff-friendly, importable into QGIS.
+- **Real-time collaboration** — Yjs CRDT + Socket.IO relay, inherited from the Excalidraw upstream.
+- **Not a GIS** — no raster algebra, network analysis, or coordinate reprojection outside Mercator.
 
-(PRD §2, spec §0)
+[CONFIDENCE: high — verified against MapEditor.tsx persistence wiring (lines 667–754, using idb), bundled PMTiles path (line 609), and code/apps/realtime/src/]
 
 ---
 
-## Personas
+## Core Capabilities
 
-Four primary personas shape the product surface (PRD §3):
+What the system actually does, verified against source code:
 
-### Persona A: Priya, the data journalist
+| Capability | Status | Evidence |
+|---|---|---|
+| Stacked MapLibre + Excalidraw with CoordinateSync | Shipped | MapEditor.tsx lines 4–6, useCoordinateSync hook |
+| Drawing tools: pin, polygon, polyline, freehand, text, arrow, rectangle, circle | Shipped | packages/tools/src/index.ts exports all 8 tools |
+| GeoAnchor discriminated union (point/bbox/polyline) + ScaleMode | Shipped | packages/geo/src/types.ts lines 16–39 |
+| LayerPanel (sidebar tab in Excalidraw's DefaultSidebar) | Shipped | MapEditor.tsx lines 1011–1018, LayerPanel.tsx |
+| Basemap picker + basemap registry | Shipped | BasemapPickerDialog.tsx, packages/basemap/src/BasemapRegistry.ts |
+| Maputnik style editing in modal | Shipped | MaputnikDialog.tsx, MapEditor.tsx lines 1451–1465 |
+| Categorical + graduated layer styling | Shipped | StylePanel.tsx, ColorRampPicker.tsx |
+| GeoJSON drag-and-drop import | Shipped | MapEditor.tsx lines 800–865, packages/data/src/geojson.ts |
+| CSV import with lat/lng or address geocoding | Shipped | packages/data/src/csv.ts, geocode.ts (Photon) |
+| Shapefile import | Shipped | packages/data/src/shapefile.ts |
+| `.atlasdraw` zip format (read/write) | Shipped | packages/data/src/atlasdraw.ts |
+| `.atlasdraw.json` pure-JSON format | Shipped | packages/data/src/atlasdraw-json.ts |
+| PNG composite export (basemap + annotations) | Shipped | MapEditor.tsx lines 1077–1094, export.ts |
+| PDF print layout (pdf-lib) | Shipped | PrintDialog.tsx, MapEditor.tsx lines 1496–1509 |
+| GeoJSON export of geo-anchored annotations | Shipped | MapEditor.tsx lines 200–276 |
+| Real-time collab (Yjs + Socket.IO) | Shipped | apps/realtime/src/, packages/data/src/yjs-layer.ts |
+| Presence + cursors | Shipped | useCollab hook, PresenceList.tsx |
+| Anchored comments (Y.Doc threads) | Shipped | CommentsPanelHost.tsx, CommentAnchorsOverlay.tsx |
+| Photon geocoder client (opt-in) | Shipped | packages/data/src/geocode.ts |
+| Asset library (.excalidrawlib reader + curated atlas fixtures) | Shipped | AssetLibraryPanel.tsx, packages/data/src/asset-library.ts |
+| Workspace abstraction + hosted/managed mode | Shipped | WorkspaceSwitcher.tsx, state/workspace.ts |
+| Annotation-to-data-layer conversion | Shipped | tools/src/convert.ts, MapEditor.tsx lines 964–1002 |
+| Accessibility: FocusTrap, AriaAnnouncer | Shipped | MapEditor.tsx line 63 (AriaAnnouncer), FocusTrap across dialogs |
+| Zustand state management | Shipped | state/layerRegistry.ts, state/collab.ts, state/persistence.ts |
+| CLI (headless lint/convert/render stub) | Shipped | packages/cli/src/ |
 
-Regional newsroom reporter. Ships 2–4 map-based stories per month. Prior stack: QGIS for
-processing, Datawrapper for choropleths, Felt for annotation and embeds.
+**Features listed in README/PRD but NOT found in v1.0 code:**
 
-**Jobs:** Import a CSV of incidents onto a styled basemap in under five minutes; sketch arrows,
-callouts, and explanatory text; share a draft link with an editor; embed the final map as a
-responsive iframe in her CMS.
+| Claimed feature | Status | Notes |
+|---|---|---|
+| KML/KMZ importer | NOT IMPLEMENTED | No parser in packages/data/src/ |
+| GPX importer | NOT IMPLEMENTED | No parser in packages/data/src/ |
+| GeoTIFF importer | NOT IMPLEMENTED | No parser in packages/data/src/ |
+| Spatial transforms (buffer/intersect/union/centroid/simplify) | NOT IMPLEMENTED | No Turf.js wrappers found; PRD lists this for v1.0 but code does not ship it |
+| Route-snap tool (OSRM/Valhalla) | NOT IMPLEMENTED | PolylineTool exists but no route-snapping wrapper |
+| Embed widget / SDK | STUB ONLY | packages/sdk/ exists as a package slot; README explicitly marks out of scope |
 
-**Pain points:** Mapbox and ArcGIS billing surprises; Datawrapper's rigid map types; the
-"screenshot of QGIS" anti-pattern.
-
-**Willingness to pay:** $5–15/mo hosted; newsroom can self-host.
-
-[CONFIDENCE: high — verbatim from PRD §3]
-
-### Persona B: Marcus, the civic planner / community organizer
-
-Works at a five-person planning consultancy or neighborhood association. Builds maps to argue
-for bike lanes, document zoning impacts, coordinate volunteers.
-
-**Jobs:** Combine a city open-data shapefile with a hand-drawn proposal overlay; collect comments
-from non-technical stakeholders on a shared link; print to PDF for a council meeting; preserve
-the project as an archivable file his client can keep after the engagement ends.
-
-**Pain points:** ArcGIS Online seats are unaffordable; Google My Maps cannot handle polygons or
-layered analysis; QGIS scares his collaborators.
-
-[CONFIDENCE: high — verbatim from PRD §3]
-
-### Persona C: Dr. Ana, the field researcher / academic
-
-Ecologist, archaeologist, or social scientist. Needs offline/airgap capability.
-Core requirement: export to a self-contained file that runs with no server.
-
-**Jobs:** Tag field samples with coordinates and photos; annotate satellite imagery; export data
-as GeoJSON for R/Python analysis; produce a figure-quality map for publication.
-
-**Pain points:** Any SaaS dependency is a liability on a research vessel or in a remote field
-site; academic licenses do not cover institutional self-hosting; embargoed data cannot touch
-third-party servers.
-
-[CONFIDENCE: high — verbatim from PRD §3]
-
-### Persona D: Jonas, the developer / indie hacker
-
-Builds on top of Atlasdraw. Wants a self-hostable geo-annotation component he can embed in his
-own app without a licensing call to a vendor.
-
-**Jobs:** Embed the map widget in an existing React app; extend the tool palette with a
-domain-specific drawing tool; use the CLI for server-side rendering of map thumbnails.
-
-**Pain points:** Mapbox GL JS has a restrictive license for offline/self-host; Leaflet lacks a
-drawing layer; Excalidraw lacks geo context.
-
-[CONFIDENCE: high — verbatim from PRD §3]
+[CONFIDENCE: high — all claims verified against file system and grep of packages/data/src/ and packages/tools/src/]
 
 ---
 
-## Three Jobs-to-be-Done
+## Domain Concepts
 
-Across all four personas, three jobs dominate (PRD §4):
+These terms have precise technical meanings within Atlasdraw, verified against source code.
 
-### Job 1: Import-and-share
+### Spatial concepts
 
-> "I have a file (CSV, GeoJSON, KML, Shapefile, GeoTIFF). Get it onto a beautiful basemap and
-> give me a link I can send within five minutes."
+**annotation** — An Excalidraw element (freehand, shape, text, arrow, etc.) that carries geographic anchor data in its `customData.geo` field. Survives map pan/zoom via CoordinateSync. Two characteristics define it: (a) it is managed by Excalidraw's scene graph, and (b) its `customData` passes the `isGeoCustomData()` type guard (packages/geo/src/types.ts line 56). [CONFIDENCE: high]
 
-This job drives: `packages/data` (import), `packages/basemap` (styling), `apps/storage`
-(share tokens), Phase 3 (file format), Phase 4 (share API).
+**data layer** — A MapLibre-rendered GeoJSON source, managed by the LayerRegistry (Zustand slice in state/layerRegistry.ts). Has its own style (fillColor, opacity), visibility toggle, and ordering separate from annotations. Created via drag-and-drop GeoJSON import (MapEditor.tsx lines 800–865) or annotation-to-data-layer conversion (lines 964–1002). [CONFIDENCE: high]
 
-### Job 2: Draw-and-annotate
+**GeoAnchor** — The discriminated union anchoring an Excalidraw element to map coordinates. Defined in packages/geo/src/types.ts lines 16–19:
+```typescript
+{ kind: "point"; lng: number; lat: number; zRef: number }
+| { kind: "bbox"; west; south; east; north; zRef: number }
+| { kind: "polyline"; coordinates: Array<[number, number]>; zRef: number }
+```
+Field path on the Excalidraw element: `customData.geo` (NOT `customData.geoAnchor`). The `zRef` field records the MapLibre zoom level at creation time for scaling calculations. [CONFIDENCE: high — verified against packages/geo/src/types.ts]
 
-> "I have a map and a story. Let me sketch routes, regions, arrows, callouts, and pins, with a
-> few collaborators editing simultaneously, and let the result feel hand-crafted, not
-> auto-generated."
+**GeoCustomData** — The wrapper type around GeoAnchor. Contains `{ geo, scaleMode, projection: "mercator", schemaVersion: 1 }` (packages/geo/src/types.ts lines 34–39). `scaleMode` is one of `"geographic" | "screen" | "hybrid"` (line 25). [CONFIDENCE: high]
 
-This job drives: `packages/tools` (drawing tools), `packages/excalidraw` (freehand renderer),
-`apps/realtime` (collaboration), Phase 1–2 (geo tools), Phase 5 (real-time collab).
+**basemap** — A MapLibre style registered in BasemapRegistry (packages/basemap/src/BasemapRegistry.ts). Each entry has an `id`, `label`, `styleFile` (JSON URL or vendored path), and `requiresRemote` flag. Default is `protomaps-light` from a bundled PMTiles file. Basemap resolution (packages/basemap/src/resolver.ts) gates remote tile sources behind an `allowRemote` flag — local is the default. [CONFIDENCE: high]
 
-### Job 3: Present-and-embed
+**CoordinateSync** — The layer that reprojects Excalidraw scene geometry on every map `move` event. Lives in packages/geo/src/CoordinateSync.ts. Uses MapLibre's `project()`/`unproject()` to translate between (lng, lat) and screen (x, y). Throttled at 16ms. [CONFIDENCE: high — MapEditor.tsx line 758, packages/geo/src/index.ts line 4]
 
-> "Lock down the camera, hide the chrome, generate a static PNG/PDF and a responsive iframe,
-> and let me publish without paying per pageview."
+### Application concepts
 
-This job drives: `packages/sdk` (embed widget), `packages/cli` (headless render),
-`apps/atlas-app` (embed mode), Phase 6 (embeds, SDK).
+**scene** — The Excalidraw document: elements array + appState (camera, selectedIds, etc.) + files (blobs). Owned by `@excalidraw/excalidraw`. In Atlasdraw, scene elements carry `customData.geo` fields. [CONFIDENCE: high]
 
-**Secondary jobs** (v1.5 and beyond, per PRD §4): offline/airgap use (Persona C), classroom
-use (verified-free-for-edu policy), lightweight field data collection (Personas B and C).
+**layer** — Two kinds exist in the LayerRegistry (state/layerRegistry.ts):
+- *Annotation layer*: tracks Excalidraw scene element IDs, visibility, opacity
+- *Data layer*: backed by a MapLibre GeoJSON source + layer, with its own fillColor, label, and style
+[CONFIDENCE: high — verified against state/layerRegistry.ts and MapEditor.tsx LayerPanel wiring]
 
----
+**.atlasdraw file** — A zipped bundle containing:
+- `scene.json` — Excalidraw scene elements
+- `data/*.geojson` — per imported data layer
+- `style.json` — active MapLibre style reference
+- `manifest.json` — schema version, layer list, camera, metadata
+Defined in packages/data/src/manifest-schema.ts and packages/data/src/atlasdraw.ts. [CONFIDENCE: high]
 
-## Domain Vocabulary
+**room** — A real-time collaboration session. Maps to one Yjs document + one Socket.IO namespace. Managed by `CollabState` (state/collab.ts). Rooms are in-memory at the relay layer (apps/realtime/src/yjs-server.ts); persistence is handled by the storage service. [CONFIDENCE: high]
 
-These terms have precise technical meanings within Atlasdraw. Use them consistently.
+**workspace** — A logical tenant for hosted/managed mode. Identified by a ULID. Plumbed through storage routes via the `X-Workspace-ID` header (state/workspace.ts, WorkspaceSwitcher.tsx). In self-host mode, defaults to a single workspace from env config. [CONFIDENCE: high]
 
-### Core spatial concepts
-
-**basemap** — The MapLibre-rendered background tile layer. After Phase 4, defaults to a bundled
-PMTiles file (OpenFreeMap-derived tiles, Protomaps-sourced). [CONFIDENCE: high — Q3 resolution]
-Note: spec §10 still describes OpenFreeMap as the default; Q3 amended this to a PMTiles hybrid
-default (GAP-5 in cross-phase audit).
-
-**scene** — The full Excalidraw document: all elements, appState (camera), files (blobs). Owned
-by `packages/excalidraw`. In Atlasdraw, scene elements carry `customData.geo` fields that bind
-them to geographic coordinates. [CONFIDENCE: medium — `customData.geo` vs `customData.geoAnchor`
-field name is unresolved between Phase 1 and Phase 3; see MISMATCH-3 in cross-phase audit]
-
-**layer** — A logical grouping of map features. Two kinds exist:
-- *Annotation layer*: Excalidraw elements (freehand, shapes, text). Lives in the scene.
-- *Data layer*: GeoJSON / PMTiles / raster source rendered by MapLibre. Managed by
-  `LayerRegistry` (Zustand slice in `apps/atlas-app/state/store.ts` per Phase 2).
-
-**annotation** — A single Excalidraw element geo-anchored to map coordinates. Has a `GeoAnchor`
-(see below). The defining characteristic is persistence through map pan/zoom — the element
-re-projects to stay attached to its geographic position.
-
-**GeoAnchor** — The data structure binding an Excalidraw element to a map position.
-[CONFIDENCE: low — the exact shape is unresolved. Phase 1 defines a discriminated union
-`{kind, ..., zRef}`; Phase 3 and Phase 5 consume different flat shapes. See MISMATCH-1, -3, -5
-in cross-phase audit. Do not treat any specific field list as authoritative until Phase 1
-ships.]
-
-**data layer** — A MapLibre-rendered source (GeoJSON, PMTiles, WMS raster, PostGIS in Phase 7)
-displayed beneath the annotation layer. Has its own opacity, filter, and style controls managed
-through the layer panel (Phase 2).
-
-**room** — A real-time collaboration session identified by a `roomId`. Maps to one Yjs document
-and one Socket.IO namespace. Rooms are in-memory at the relay layer; persistence is not wired
-at Phase 5 (TTL eviction after last client disconnects). [CONFIDENCE: high — plan-5 Task 6]
-
-**manifest** — The `manifest.json` file inside a `.atlasdraw` ZIP container. Records schema
-version, layer list, thumbnail hash, and metadata. Defined in Phase 3.
-
-**embed** — A rendered Atlasdraw map delivered as a responsive `<iframe>` via a public URL
-(`/embed/:shareToken`). The embed renderer is a stripped build of `atlas-app` — no editing
-chrome, no authentication. Wired in Phase 6.
-
-**share-link** — A URL containing a `nanoid`-generated token. Two kinds: *view-only* (read
-access to a stored map) and *edit-invite* (joins a collaboration room). Generated by
-`apps/storage` and validated on read. [CONFIDENCE: high — plan-4 Tasks 5–6]
-
-**scene-crypto** — The encryption layer applied to annotation traffic in E2EE mode. In Phase 5,
-ships as an API stub (`yjs-crypto.ts`). The resolved option (E-01 Option C) is server-trusted
-relay — the server holds no plaintext annotations, but the room key is not zero-knowledge.
-True zero-knowledge E2EE remains unresolved (E-01). [CONFIDENCE: medium — E-01 escalation
-is open]
+**share-link** — A URL containing a nanoid-generated token. Two modes: view-only read access, or collaborate invite that joins a collab room. Generated via storage service HTTP API. [CONFIDENCE: medium — the exact link structure needs verification against apps/storage/src/routes/]
 
 ---
 
-## What Atlasdraw Is Not
+## User Personas
 
-These boundaries are stated in the PRD or tech spec and hold through Phase 7:
+Verified against PRD §3 (not cross-checked against code — these are product personas, not code artifacts):
 
-- **Not a GIS.** No coordinate reprojection pipeline for EPSG:anything-other-than-Mercator in
-  the main editor. `packages/geo` handles transform utilities but the map renderer is Mercator
-  throughout. (spec §3)
-- **Not a real-time database.** `apps/realtime` is a dumb relay. It does not persist CRDT state.
-  Persistence is the storage service's concern. (plan-5 Task 6)
-- **Not a tile server.** Atlasdraw does not generate tiles. PMTiles files are served from object
-  storage (CloudFlare R2 recommended; spec §4 via plan-4 research notes).
-- **Not a routing engine.** Route-snap in `packages/tools` calls an external OSRM/Valhalla
-  endpoint. Running that endpoint is the operator's problem. (spec §4.4)
-- **Not open-core.** All features ship in the AGPL OSS package. Hosted billing is an
-  operational choice, not a feature gate. (Q4 resolution)
+- **Persona A: Priya, data journalist** — imports CSVs, annotates with arrows/callouts, shares embeddable links, self-hosts or pays $5–15/mo.
+- **Persona B: Marcus, urban planner / community organizer** — combines shapefiles with hand-drawn overlays, collects stakeholder comments, prints PDF for council meetings.
+- **Persona C: Dr. Ana, field researcher / academic** — needs offline/airgap, multiple data formats, publication-quality exports, embargoed data never touches third-party servers.
+- **Persona D: Jonas, developer / indie** — wants embeddable map widget, extensible tools, CLI for headless use.
+
+The PRD names a fifth latent persona — indie developer embedding a "draw on a map" widget — marked out of MVP scope. This matches the `packages/sdk` stub and the README's explicit out-of-scope declaration for the embed SDK.
+
+[CONFIDENCE: high — verbatim from PRD §3, consistent with README's v1.0 scope boundaries]
+
+---
+
+## Scope Boundaries
+
+### In scope for v1.0 (code-verified)
+
+- Stacked map + drawing canvas with CoordinateSync
+- 8 geo-aware drawing tools (pin, polygon, polyline, freehand, text label, arrow, rectangle, circle)
+- Layer panel (annotations vs. data layers)
+- Basemap picker + Maputnik style editor
+- Data layer styling (categorical + graduated color ramps)
+- GeoJSON, CSV, and Shapefile import
+- `.atlasdraw` and `.atlasdraw.json` file formats
+- PNG and PDF export
+- GeoJSON export of annotations
+- Real-time collaboration via Yjs + Socket.IO
+- Presence (multi-cursor)
+- Anchored comments
+- Photon geocoding for CSV address columns (opt-in)
+- Asset library (.excalidrawlib)
+- Print layout dialog
+- Workspace abstraction + optional hosted/managed mode
+- Accessibility (FocusTrap, AriaAnnouncer, keyboard nav)
+- CLI tools (stub)
+- IndexedDB local persistence + optional remote storage
+
+### Out of scope for v1.0 (verified)
+
+- **Embed widget / SDK** — `packages/sdk/` is an empty package slot; README explicitly excludes from v1.0 per Q-P6-1 decision.
+- **KML/KMZ importer** — listed in README features but no parser exists in packages/data/src/.
+- **GPX importer** — listed in README features but no parser exists in packages/data/src/.
+- **GeoTIFF importer** — listed in README features but no parser exists in packages/data/src/.
+- **Spatial transforms** (buffer/intersect/union/centroid/simplify) — listed in PRD §7.2 v1.0 scope but no code exists; no Turf.js wrappers found.
+- **Route-snap tool** — PRD describes route tool snapping to OSRM/Valhalla; only PolylineTool exists.
+- **Felt importer** — README explicitly excludes.
+- **Phase 7 plugin sandbox** — flagged for revision.
+- **PostGIS direct connection** — PRD v1.5.
+- **Enterprise auth / SSO / audit** — out of scope per PRD §13.
+
+[CONFIDENCE: high — all "not implemented" claims verified via grep of packages/data/src/ and packages/tools/src/]
+
+### What Atlasdraw is NOT (per PRD §13, verified against code)
+
+- **Not a GIS** — no raster algebra, network analysis, coordinate reprojection outside Mercator.
+- **Not a tile server** — PMTiles served from object storage; Atlasdraw does not generate tiles.
+- **Not a routing engine** — no route-snapping in v1.0 code; PolylineTool draws free polylines.
+- **Not open-core** — all features ship in the AGPL OSS package. Hosted billing is operational, not a feature gate.
+
+---
+
+## Confidence Assessment
+
+| Section | Confidence | Evidence |
+|---|---|---|
+| Domain summary | HIGH | README, PRD §1–2, MapEditor.tsx docblock |
+| Core capabilities table (shipped) | HIGH | Verified against packages/*/src/index.ts exports and MapEditor.tsx imports |
+| Core capabilities table (not shipped) | HIGH | Verified via grep of packages/data/src/ for KML/GPX/GeoTIFF parsers — zero hits |
+| Domain concepts (spatial) | HIGH | Verified against packages/geo/src/types.ts |
+| Domain concepts (application) | HIGH | Verified against state/*.ts and packages/data/src/ |
+| User personas | HIGH | Verbatim from PRD §3; not code-checked (personas are product artifacts, not code) |
+| Scope boundaries (in scope) | HIGH | Verified against file system and component imports in MapEditor.tsx |
+| Scope boundaries (out of scope) | HIGH | Verified via grep; none of the claimed-unimplemented parsers exist |
+| Share-link structure | MEDIUM | Storage route handling inferred from createHttpStorageClient; exact link schema needs apps/storage/src/routes/ verification |
+| CLI capabilities | MEDIUM | packages/cli/src/ exists with commands/ directory but full command surface area not audited |
+| SDK/embed widget | HIGH | packages/sdk/ exists as package.json only; no implementable code |
+
+**Confidence scale:**
+- **HIGH** = verified against two or more source files + grep cross-reference
+- **MEDIUM** = verified against one source file or inferred from imports; direct evidence exists but was not fully traced
+- **LOW** = based on plans/spec without code evidence (not used in this document — all claims have at least medium confidence)

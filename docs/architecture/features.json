@@ -1,0 +1,18 @@
+{
+  "root": "/mnt/Ghar/2TA/DevStuff/atlasdraw",
+  "git_sha": "117c973",
+  "generated_at": "2026-05-16T02:49:54Z",
+  "features": [
+    {
+      "id": "feat-f8e1b257",
+      "kind": "config",
+      "name": "workflows",
+      "path": ".github/workflows",
+      "language": "config",
+      "evidence": {
+        "file": ".github/workflows"
+      },
+      "related": []
+    }
+  ]
+}

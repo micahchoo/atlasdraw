@@ -1,281 +1,242 @@
-# Atlasdraw — Risk Map
+# Atlasdraw -- Risk Map
 
-**Status: Speculative.** Derived from spec §11, escalations doc (E-01, E-02, E-03),
-cross-phase audit, and phase plan research notes. No code exists.
+**Status: Code-verified.** Aggregated from Wave 1-3 diagnostics (2026-05-15).
+Replaces the prior speculative edition (which predicted risks from plans; this
+edition traces every claim to source code).
 
-Cross-references: see `subsystems.md` for subsystem boundaries, `evolution.md` for
-re-evaluation points, `ecosystem.md` for external dependency risks.
-
----
-
-## Summary Table
-
-| ID | Risk | Severity | Category | Owner Phase | Escalation |
-|----|------|----------|----------|-------------|-----------|
-| R-01 | Coordinate sync drift | High | Technical | Phase 1 | — |
-| R-02 | GeoAnchor type mismatch | High | Technical | Phase 1 | MISMATCH-1,-3,-5 |
-| R-03 | Excalidraw fork churn | High | Technical | Ongoing | — |
-| R-04 | Bundle size cliff | Medium | Technical | Phase 4/6 | — |
-| R-05 | Performance regression under large datasets | Medium | Technical | Phase 1/2 | — |
-| R-06 | Yjs E2EE boundary | High | Security | Phase 5/6 | E-01 |
-| R-07 | Plugin Worker sandbox weakness | Medium | Security | Phase 7 | — |
-| R-08 | License contagion (AGPL) | Medium | Legal | Phase 0 | — |
-| R-09 | Attribution removal (AGPL §7) | Low | Legal | Phase 0 | — |
-| R-10 | OpenFreeMap / basemap uptime | Medium | Operational | Phase 4 | — |
-| R-11 | Maintainer bandwidth exhaustion | Medium | Operational | Ongoing | — |
-| R-12 | Atlas.co competition | Medium | Market | Phase 4/6 | — |
-| R-13 | Phase 7 versioning / DiffEngine blocked | Low | Technical | Phase 7 | E-02 |
-| R-14 | Observability gap on hosted instance | Medium | Operational | Phase 6 | GAP-6 |
+> Sources: `domain.md`, `ecosystem.md`, `infrastructure.md`, `subsystems.md`,
+> `atlas-app/{behavior,components,contracts,modules}.md`,
+> `storage/{behavior,components,contracts,modules}.md`.
 
 ---
 
-## Technical Risks
+## 1. Risk Inventory
 
-### R-01: Coordinate sync drift
-**Severity:** High
-**Affected subsystems:** `apps/atlas-app` (CoordinateSync), `packages/basemap`, `packages/geo`
-**Description:** MapLibre and Excalidraw maintain separate coordinate systems. The CoordinateSync
-layer (`apps/atlas-app`) must translate every MapLibre camera-change event into Excalidraw
-`scrollX`/`scrollY`/`zoom` updates without accumulated floating-point error. Any path that skips
-re-projection (resize, orientation change, device pixel ratio change, zoom to bounds) will cause
-geo-anchored elements to visually drift from their map positions. This is a structural risk that
-persists across every phase; it does not go away after Phase 1 ships. (spec §0, spec §3)
+### FATAL (blocks action)
 
-**Current mitigation:** Phase 1 establishes a benchmark gate (`bench/results/phase-1-baseline.json`)
-with a visual regression test: "rectangle drawn on MapLibre stays geo-anchored during pan/zoom."
-(PHASES.md Phase 1 gate)
+| # | Risk | Severity | Dimension(s) | Affected Subsystems | Fix Complexity | Source |
+|---|------|----------|-------------|--------------------|---------------|--------|
+| F1 | **No E2E CI for map+canvas rendering** | Fatal | Readiness, Spatial | Editor SPA (atlas-app), Geospatial Engine, Map Renderer | Hard (infrastructure + test suite) | `infrastructure.md` SSITest Infrastructure |
+| F2 | **MapEditor.tsx god module (1538 lines, 10+ responsibilities)** | Fatal | Spatial, Tangle Complexity | Editor SPA (atlas-app) | Hard (refactor wave before Phase 7) | `atlas-app/components.md` SS1 |
+| F3 | **Storage quota race condition (count-then-insert not atomic across requests)** | Fatal | Flow Impact, Readiness | Storage Server | Medium (serializable isolation or advisory lock) | `storage/behavior.md` SS2.2 |
+| F4 | **remoteSave stale-state gap (IDB succeeds, server fails, dirty=false)** | Fatal | Flow Impact, Temporal (contemporary) | Editor SPA (persistence), Storage Server | Medium (add remote-state indicator, retry queue) | `atlas-app/behavior.md` SS6.2 |
+| F5 | **No DB migration framework (schema created inline on first start)** | Fatal | Readiness, Temporal (contemporary) | Storage Server | Medium (add Kysely, Prisma Migrate, or flyway) | `infrastructure.md` SSInfrastructure Risks |
+| F6 | **Excalidraw fork divergence (no upstream git remote, manual merge only)** | Fatal | Temporal (fossil), Tangle Complexity | Vendored Excalidraw Kernel | Hard (add upstream remote, establish merge cadence) | `ecosystem.md` SSEcosystem Risks |
 
-**Residual risk:** Benchmark tests capture pan/zoom under controlled conditions. Edge cases
-(rapid zoom, multi-touch, fractional DPR) are not covered until Phase 1 E2E matrix is expanded.
-[CONFIDENCE: medium]
+### WARNING (flag but proceed)
 
----
+| # | Risk | Severity | Dimension(s) | Affected Subsystems | Fix Complexity | Source |
+|---|------|----------|-------------|--------------------|---------------|--------|
+| W1 | **21K `any` type escapes (vendored Excalidraw boundary)** | Warning | Spatial, Tangle Complexity | All 11 subsystems (concentrated in Vendored Kernel) | Hard (systemic, requires dedicated wave) | `infrastructure.md` SSEra Markers |
+| W2 | **Orphaned blob risk (no transaction wrapping blob write + DB insert)** | Warning | Flow Impact, Temporal (contemporary) | Storage Server | Medium (wrap S3/fs + DB in saga pattern or 2PC) | `storage/behavior.md` SS1.2 |
+| W3 | **Stripe idempotency in-memory only (lost on restart, no multi-replica)** | Warning | Constraint Ordering, Temporal (contemporary) | Storage Server | Medium (add Redis-backed store; Redis config path exists) | `storage/behavior.md` SS1.5 |
+| W4 | **15+ dead Excalidraw env vars in `.env.*`** | Warning | Temporal (fossil), Readiness | Editor SPA (config) | Easy (prune .env files, confirm atlas-app ignores them) | `infrastructure.md` SSEnvironment |
+| W5 | **Husky pre-commit disabled (lint-staged commented out)** | Warning | Readiness, Temporal (fossil) | Root (CI/Husky) | Easy (uncomment, verify lint-staged config) | `infrastructure.md` SSLocal CI |
+| W6 | **Cross-session identity leak in IndexedDB (remoteMapId persists)** | Warning | Flow Impact, Temporal (contemporary) | Editor SPA (persistence) | Medium (namespace keys by workspace or document) | `atlas-app/behavior.md` SS3.3 |
+| W7 | **Sentry vestigial (loads at boot, zero telemetry from any handler)** | Warning | Readiness, Temporal (contemporary) | Storage Server | Easy (wire `captureException` into Fastify error handler) | `storage/modules.md` SSSentry |
+| W8 | **CollabWrapper.tsx dead code (exported, zero importers)** | Warning | Spatial, Temporal (contemporary) | Editor SPA | Easy (remove file and remaining references) | `atlas-app/modules.md` SSDeadwood |
+| W9 | **workspaces.ts + billing.ts dead code in self-host (always 404)** | Warning | Spatial, Temporal (contemporary) | Storage Server (routes) | Easy (conditionally register routes) | `storage/modules.md` SSDeadwood |
+| W10 | **Yarn Classic v1 EOL (no PnP, no Corepack, degrading compatibility)** | Warning | Temporal (fossil), Readiness | Root (toolchain) | Hard (migrate to Yarn 4 or pnpm) | `ecosystem.md` SSEcosystem Risks |
+| W11 | **Storage Postgres pool never closed (no graceful shutdown handler)** | Warning | Flow Impact, Temporal (contemporary) | Storage Server | Easy (register `process.on('SIGTERM', () => pool.end())`) | `storage/behavior.md` SS3 |
+| W12 | **No rate limiting on any endpoint** | Warning | Readiness, Temporal (contemporary) | Storage Server | Medium (add `@fastify/rate-limit`) | `storage/contracts.md` SS7.6 |
+| W13 | **Realtime server single-instance by default (Redis adapter opt-in)** | Warning | Constraint Ordering, Temporal (contemporary) | Collaboration Relay | Medium (document multi-instance requirements) | `infrastructure.md` SSInfrastructure Risks |
+| W14 | **Realtime rooms ephemeral (5 min TTL, setPersistence is TODO)** | Warning | Flow Impact, Temporal (contemporary) | Collaboration Relay | Medium (wire setPersistence in yjs-server.ts) | `infrastructure.md` SSInfrastructure Risks |
+| W15 | **CoordinateSync scroll lock fragility (scroll=identity enforced on each onChange)** | Warning | Tangle Complexity, Flow Impact | Geospatial Engine, Editor SPA | Medium (add invariant enforcement layer) | `atlas-app/contracts.md` SS3.2 |
+| W16 | **Two independent ID systems (nanoid storage rows vs ULID manifests)** | Warning | Tangle Complexity, Temporal | Storage Server, Data Interchange | Medium (document cross-reference contract) | `storage/contracts.md` SS3 |
+| W17 | **MapLibre source/layer rollback not atomic on drop failure** | Warning | Flow Impact | Editor SPA, Map Renderer | Easy (improve try/catch rollback) | `atlas-app/contracts.md` SS3.5 |
+| W18 | **YjsLayer + MapLibre source lifecycle race (source may not exist on setData)** | Warning | Flow Impact | Editor SPA, Collaboration Protocol | Medium (presence check before setData) | `atlas-app/contracts.md` SS3.6 |
 
-### R-02: GeoAnchor type mismatch
-**Severity:** High
-**Affected subsystems:** `packages/excalidraw`, `packages/geo`, `packages/tools`, `apps/atlas-app`,
-`apps/realtime`
-**Description:** Three separate cross-phase mismatches document inconsistency in the `GeoAnchor`
-type shape:
-- MISMATCH-1: Phase 1 defines discriminated union `{kind, ..., zRef}`; Phase 3 consumes flat
-  `{lng, lat, zoom, projection: 'EPSG:4326'}`
-- MISMATCH-3: Phase 1 uses field `customData.geo`; Phase 3 consumes `customData.geoAnchor`
-- MISMATCH-5: Phase 5 consumes flat `{lng, lat, zoom, bearing}`; `bearing` has no provenance
-  in Phase 1 or Phase 2 type definitions
+### INFO (note only)
 
-These mismatches are across producer phases (1) and consumer phases (3, 5). If the field name
-and shape are not reconciled before Phase 3 ships, the file format will encode the wrong field
-name and a migration will be required post-Phase-3. (cross-phase audit §12)
-
-**Current mitigation:** Cross-phase audit documents all three mismatches. A resolution task
-should appear in Phase 1 or Phase 3 plan amendments before Phase 3 ships. No phase plan
-currently contains this resolution task — it is an audit finding, not a planned fix.
-[CONFIDENCE: high that this risk is real; low on whether it is addressed before Phase 3]
-
-**Residual risk:** If Phase 3 ships with the wrong field name, a file format migration is
-required. File format changes after public release (Phase 4 Show HN) are costly.
-
----
-
-### R-03: Excalidraw fork churn
-**Severity:** High
-**Affected subsystems:** `packages/excalidraw` and all dependents
-**Description:** Monthly upstream merges from `excalidraw/excalidraw` will accumulate patch
-conflicts over time. The `upstream-patches.md` file tracks all patches; as Atlasdraw
-diverges more (geo tools, customData schema, rendering hints), merge conflicts will increase.
-The hard-exit threshold (two consecutive quarters of broken patches OR `customData` field
-removal) may trigger unexpectedly. (Q6, ADR 0004, spec §11)
-
-**Current mitigation:** ADR 0004 defines the merge policy, hard-exit criteria, and quarterly
-review cadence. CI workflow (`upstream-sync-check.yml`) alerts when `upstream-patches.md` is
-stale. First quarterly review is scheduled for Q3 2026.
-
-**Residual risk:** If `customData` is removed or renamed upstream (low probability but Excalidraw
-has no formal stability guarantee for this field), the entire GeoAnchor binding breaks.
-Mitigation in that event: freeze merges, evaluate thin-wrapper approach. Cost is high.
+| # | Risk | Severity | Dimension(s) | Affected Subsystems | Fix Complexity | Source |
+|---|------|----------|-------------|--------------------|---------------|--------|
+| I1 | **AssetLibraryPanel incomplete (console.log in production, no apparent resolver)** | Info | Spatial, Temporal (contemporary) | Editor SPA | Low (remove debug logging) | `atlas-app/components.md` SS8 |
+| I2 | **LayerPanel drag-reorder UNSAFE pointer handler (HACK comment)** | Info | Spatial, Temporal (contemporary) | Editor SPA | Low (implement proper DnD) | `atlas-app/components.md` SS5 |
+| I3 | **Comments-anchor-picker vanilla store (second state pattern beyond Zustand)** | Info | Tangle Complexity | Editor SPA | Low (document or migrate to Zustand) | `atlas-app/components.md` SS8 |
+| I4 | **ID_RE regex duplicated 4x across maps.ts, share.ts, both adapters** | Info | Readiness | Storage Server | Easy (extract shared utility) | `storage/components.md` SSWeaknesses |
+| I5 | **isNotFoundError helper duplicated in maps.ts and share.ts** | Info | Readiness | Storage Server | Easy (extract to shared module) | `storage/components.md` SSWeaknesses |
+| I6 | **`ignoreDeprecations: "6.0"` in storage tsconfig** | Info | Temporal (fossil) | Storage Server | Easy (verify and remove) | `storage/components.md` SSQuality |
+| I7 | **No lazy-loading (all 21 components statically bundled)** | Info | Readiness | Editor SPA | Medium (React.lazy for dialogs) | `atlas-app/modules.md` SSRisks |
+| I8 | **Workspace table created unconditionally in self-host** | Info | Spatial | Storage Server | Easy (gate on MANAGED_MODE) | `storage/components.md` SSDead Code |
+| I9 | **Storage types manually mirrored in atlas-app (no shared types package)** | Info | Tangle Complexity, Readiness | Storage Server, Editor SPA | Medium (publish types-only sub-package) | `storage/modules.md` SType Duplication |
+| I10 | **Expired share tokens never cleaned (permanent table growth)** | Info | Flow Impact | Storage Server | Low (periodic cleanup or maintenance note) | `storage/behavior.md` SS3 |
 
 ---
 
-### R-04: Bundle size cliff
-**Severity:** Medium
-**Affected subsystems:** `apps/atlas-app`, `packages/sdk`
-**Description:** The Atlasdraw editor bundles MapLibre GL JS, Excalidraw, and geo-processing
-libraries. If async-splitting discipline is not maintained (Maputnik, Turf, shapefile parser
-must remain async-loaded per spec §8), the initial parse + render time will exceed the 3-second
-budget on mid-tier mobile. The SDK hard limit of 300 KB is a separate constraint.
+## 2. Prioritization
 
-**Current mitigation:** `size-limit` CI enforces 300 KB SDK limit (Phase 6). Spec §8 mandates
-async loading for heavy modules. Bundle benchmark gate at Phase 1.
+### Tier 1: Maximum impact, minimum prerequisites (this week)
 
-**Residual risk:** Feature additions in Phase 6–7 (Maputnik bridge, plugin host, PostGIS client)
-must each be evaluated for bundle impact. `plugin-host` with `comlink` adds a Worker bootstrap
-cost. [CONFIDENCE: medium]
+| # | Action | Unlocks | Effort |
+|---|--------|---------|--------|
+| 1 | **W5: Re-enable Husky pre-commit** | Catches regressions before they land | Minutes |
+| 2 | **W4: Prune 15+ dead Excalidraw env vars** | Removes config noise, prevents accidental data egress | Minutes |
+| 3 | **W8: Remove CollabWrapper.tsx** | Eliminates confusing dead module | Minutes |
+| 4 | **W7: Wire Sentry into Fastify error handler** | Enables operational observability | Minutes |
+| 5 | **W11: Register pool.end() on SIGTERM** | Plugs resource leak | Minutes |
+| 6 | **I4/I5: Deduplicate ID_RE and isNotFoundError** | Reduces maintenance burden | Minutes |
+| 7 | **F4: Add remoteSave failure indicator** | Closes known data-integrity gap | Hours |
 
----
+### Tier 2: Medium effort, high pay-off (next sprint)
 
-### R-05: Performance regression under large datasets
-**Severity:** Medium
-**Affected subsystems:** `apps/atlas-app`, `packages/geo`, `packages/data`
-**Description:** The 60fps-with-50k-features claim (spec §8) has not been verified against a
-real workload. Phase 1 establishes the benchmark baseline, but data layers (Phase 2) and file
-import (Phase 3) add rendering pressure. GeoTIFF COG rendering via `geotiff.js` is particularly
-unknown in performance profile.
+| # | Action | Unlocks | Effort |
+|---|--------|---------|--------|
+| 8 | **F5: Add DB migration framework** | Enables safe schema evolution | Days |
+| 9 | **F3: Make quota check atomic** | Enables safe concurrent multi-tenant POSTs | Days |
+| 10 | **W3: Move Stripe idempotency to Redis** | Enables multi-replica billing | Days |
+| 11 | **W6: Namespace IndexedDB keys** | Prevents cross-session identity confusion | Days |
+| 12 | **W12: Add rate limiting** | Basic DoS protection | Hours |
 
-**Current mitigation:** Phase 1 benchmark gate. Phase 2 regression ≤ +20% rule. `requestIdleCallback`
-for non-camera-driven re-projection; Worker for CPU-heavy projection paths (spec §8 mitigation
-list).
+### Tier 3: Structural changes (next quarter)
 
-**Residual risk:** GeoTIFF COG performance under large files is unspecified. Phase 7 PostGIS
-source streaming performance is unspecified. [CONFIDENCE: medium]
-
----
-
-## Security Risks
-
-### R-06: Yjs E2EE boundary
-**Severity:** High
-**Affected subsystems:** `apps/realtime`, `apps/atlas-app`
-**Escalation:** E-01 (unresolved)
-**Description:** E-01 documents three options for the Yjs collaboration security model:
-- Option A: No encryption — relay sees all content (lowest security)
-- Option B: True zero-knowledge E2EE — key never reaches server (highest security, highest
-  implementation cost; E-02 notes this blocks Phase 7 SnapshotStore/DiffEngine)
-- Option C (recommended): Server-trusted relay with scene-crypto — server holds encrypted
-  payloads but relay is not zero-knowledge; room key is scoped and not stored persistently
-
-Phase 5 ships with `yjs-crypto.ts` as an API stub only — wiring is deferred to Phase 6 pending
-E-01 resolution. ADR 0007 will capture the final decision. The stub without wiring means Phase 5
-collaboration traffic is in plaintext at the relay layer.
-
-**Current mitigation:** E-01 escalation is open. Phase 5 plan documents the stub and the
-deferral explicitly. ADR 0007 is the resolution artifact.
-
-**Residual risk:** If E-01 resolves as Option B (true E2EE), significant rework is required
-in both `apps/realtime` and `apps/atlas-app`. If E-01 resolves as Option C (server-trusted),
-the security property must be clearly communicated to self-hosters (a compromised relay reads
-all content). Either resolution has downstream implications for E-02.
+| # | Action | Unlocks | Effort |
+|---|--------|---------|--------|
+| 13 | **F1: Add E2E CI (Playwright, map+canvas critical path)** | Enables safe refactoring of rendering stack | Weeks |
+| 14 | **F2: Decompose MapEditor.tsx** | Enables Phase 7 without breaking core | Weeks |
+| 15 | **F6: Establish Excalidraw upstream sync cadence** | Reduces merge cost drift | Weeks |
+| 16 | **W1: Systemic `any` reduction wave** | Enables type-safe refactoring across boundaries | Months |
 
 ---
 
-### R-07: Plugin Worker sandbox weakness
-**Severity:** Medium
-**Affected subsystems:** `packages/plugin-host` (Phase 7)
-**Description:** Phase 7 research notes flag that Web Worker sandboxing is weaker than it
-appears. Workers can make arbitrary `fetch` calls; `postMessage` serialization can be abused.
-The Phase 7 plugin security model relies on the postMessage bridge to limit plugin API surface,
-but a malicious plugin author could still exfiltrate data via `fetch`. (plan-7 research notes)
+## 3. Risk Clusters
 
-**Current mitigation:** `sandbox-escape.test.ts` adversarial tests for DOM access and arbitrary
-fetch (plan-7 Feature 2 test plan). `PluginPermissions.ts` permission model with install-time
-approval prompt.
+### Cluster A: Data Integrity
 
-**Residual risk:** The plugin sandbox is meaningful for accidental misuse but not for
-adversarial plugins. This is explicitly deferred: "This is meaningful security work; defer it
-to v1.5 deliberately" (spec §7 note). The residual risk is a known accepted tradeoff at Phase 7
-scope. [CONFIDENCE: medium]
+Risks that compound: if you trust any one, you might trust the wrong thing.
 
----
+```
+F4 (remoteSave stale gap)
+  +-- User sees "saved" but server blob is stale
+       +-- W2 (orphaned blobs) means blob may also be missing
+            +-- W3 (Stripe idempotency in-memory) means billing events
+                can double-process on restart
+```
 
-## Legal Risks
+**Surface:** 3 flow basins (Save/Load, Collaboration, Billing).  
+**Break-glass:** F4 + W2 fix first; W3 only when Stripe is active.
 
-### R-08: License contagion (AGPL)
-**Severity:** Medium
-**Affected subsystems:** `apps/atlas-app`, `apps/realtime` (AGPL); boundary with MIT/MPL packages
-**Description:** AGPL-3.0 requires that operators who run a modified version as a network service
-must publish their modifications. This is intentional (Plausible-model, Q4). The risk is that
-Persona D (developer) accidentally creates an AGPL-contaminated product by importing from
-`packages/basemap` (MPL) or the app packages (AGPL) in a way they did not intend.
+### Cluster B: Architecture Inertia
 
-**Current mitigation:** Q5 deliberately puts the embed SDK (`packages/sdk`) and CLI
-(`packages/cli`) under MIT so developer use cases (Persona D) are unencumbered. `LICENSING.md`
-documents the license split with worked examples (plan-0 Task 1). CI fails if any package.json
-is missing its `"license"` field.
+Risks that compound: each makes the others harder to fix.
 
-**Residual risk:** The MPL-2.0 packages (`packages/basemap`, `packages/tools`) have file-level
-copyleft. Modifications to those files must be published under MPL. A developer who patches
-`BasemapRegistry.ts` for proprietary use may be surprised. `LICENSING.md` must document this.
+```
+F2 (MapEditor god module)
+  +-- Any refactor hits lines across 10+ responsibilities
+       +-- W1 (21K any escapes) means TypeScript won't catch broken contracts
+            +-- F1 (no E2E CI) means no safety net after refactor
+```
 
----
+**Surface:** 1 subsystem (Editor SPA) but all 5 flow basins.  
+**Break-glass:** F1 (E2E CI) is the gating fix -- without it, MapEditor decomposition is blind surgery.
 
-### R-09: Attribution removal
-**Severity:** Low
-**Affected subsystems:** `packages/sdk`, `apps/atlas-app`
-**Description:** AGPL §7 permits adding attribution requirements. Atlasdraw may add a "Powered
-by Atlasdraw" requirement to the embed SDK. If a self-hoster removes attribution, they violate
-the license terms.
+### Cluster C: Fork Rot
 
-**Current mitigation:** No phase plan explicitly adds an attribution requirement to the embed
-SDK or app. This risk materializes only if such a requirement is added later.
+Risks that compound: delay increases cost monotonically.
 
-**Residual risk:** Low — no current attribution requirement planned. [CONFIDENCE: low]
+```
+F6 (Excalidraw fork, no git remote)
+  +-- W10 (Yarn Classic v1 EOL) blocks installing newer Excalidraw deps
+       +-- W1 (21K any escapes) obscures where the fork patched what
+```
 
----
+**Surface:** Vendored Kernel (30+ inherited deps).  
+**Break-glass:** W10 (Yarn upgrade) unblocks tooling; then F6 (upstream remote) enables the merge.
 
-## Operational Risks
+### Cluster D: Operational Blindness
 
-### R-10: OpenFreeMap / basemap uptime
-**Severity:** Medium
-**Affected subsystems:** `packages/basemap`
-**Description:** Self-hosters without a bundled PMTiles file depend on OpenFreeMap's public
-tile endpoint for basemap rendering. If OpenFreeMap's CDN goes down, the basemap goes blank.
-Protomaps/PMTiles mitigates this for the bundled default (Q3), but the fallback path still
-references OpenFreeMap. (GAP-5: spec §10 has not been updated post-Q3)
+Risks that compound: each creates a gap only the next outage reveals.
 
-**Current mitigation:** Q3 mandates bundled PMTiles as the default (hybrid default). The bundled
-file eliminates the uptime dependency for standard deployments.
+```
+W7 (Sentry vestigial -- zero telemetry)
+  +-- F5 (no DB migration framework) means manual DDL
+       +-- Migration error is invisible because no monitoring
+            +-- F1 (no E2E CI) means pre-deploy validation is manual
+```
 
-**Residual risk:** Operators who use a remote OpenFreeMap URL instead of the bundled file have
-no fallback. The documentation should recommend the bundled path for production deployments.
+**Surface:** Storage Server + CI.  
+**Break-glass:** W7 (Sentry wiring) cheapest; F5 (migration framework) prevents the category.
 
 ---
 
-### R-11: Maintainer bandwidth exhaustion
-**Severity:** Medium
-**Affected subsystems:** All
-**Description:** An 8-phase, 12+ month roadmap for what may initially be a small team. The
-monthly upstream merge ritual (ADR 0004), the E-01 E2EE decision, the Phase 7 milestone bundle
-(six concurrent features), and the hosted-flagship operations are all simultaneous obligations.
-If maintainer capacity contracts, phases will slip and the upstream merge ritual will lapse.
+## 4. Mitigation Difficulty vs Impact Matrix
 
-**Current mitigation:** Hard-exit threshold in ADR 0004 allows graceful abandonment of upstream
-tracking. Phase 7 features are explicitly a "milestone bundle, not a single release" — each has
-an independent ship gate. (plan-7)
+```
+                    HIGH IMPACT
+                        |
+          F1 (E2E CI)   |   W5 (Husky), W4 (env prune)
+          F2 (MapEditor)|   W8 (CollabWrapper), W11 (pool.end)
+          F6 (fork)     |   W7 (Sentry), F4 (remoteSave)
+          W10 (Yarn)    |   W12 (rate limit)
+          ------------- | -----------------------------
+          HARD          |   EASY
+          ------------- | -----------------------------
+          W1 (21K any)  |   W6 (IDB identity leak)
+          F3 (quota)    |   W3 (Stripe Redis)
+          W13 (realtime)|   F5 (migration framework)
+          W14 (rooms)   |   W17 (layer rollback)
+                        |   W2 (blob transactions)
+                        |   I4/I5 (dedup)
+                    LOW IMPACT
+```
 
-**Residual risk:** No mitigation for hosted-flagship operations cost. If the flagship does not
-generate revenue (Stripe billing), maintenance incentive weakens. [CONFIDENCE: low]
+**Top-right quadrant (high impact, easy fix) -- do these first:**
+W5, W4, W8, W11, W7, F4, I4/I5.
+
+**Top-left quadrant (high impact, hard fix) -- plan structural work:**
+F1 (E2E CI), F2 (MapEditor), F6 (fork), W10 (Yarn).
+
+**Bottom-right quadrant (low impact, easy fix) -- do when convenient:**
+I6 (ignoreDeprecations), I10 (token cleanup docs).
+
+**Bottom-left quadrant (low impact, hard fix) -- defer or live with:**
+W1 (full `any` cleanup months of work), W13/W14 (acceptable for v1
 
 ---
 
-### R-14: Observability gap on hosted instance
-**Severity:** Medium
-**Affected subsystems:** `apps/storage`, `apps/realtime`
-**Description:** GAP-6 in the cross-phase audit notes that no phase plan adds structured error
-logging, distributed tracing, or health endpoints beyond basic Docker healthchecks. The hosted
-flagship will run with no error visibility. GAP-9 notes the telemetry endpoint
-`telemetry.atlasdraw.org` is referenced in ADR 0006 but no phase plan includes a task to
-deploy or test it.
+## 5. Risk Distribution Summary
 
-**Current mitigation:** Phase 6 ADR 0006 defines the telemetry policy. pino logging is
-mentioned in Phase 4 tech stack context. `/health` endpoint is implied by Docker healthchecks.
+### By Subsystem
 
-**Residual risk:** A hosted-flagship production incident (storage data loss, relay memory leak)
-will be investigated without structured logs or traces. This is a known gap that should be
-addressed before Phase 6 "Hosted Mode" ships to real users.
+| Subsystem | Fatal | Warning | Info | Total |
+|-----------|-------|---------|------|-------|
+| Editor SPA (atlas-app) | 2 (F2, F4) | 6 (W1, W6, W8, W15, W17, W18) | 4 (I1, I2, I3, I7) | 14 |
+| Storage Server | 2 (F3, F5) | 5 (W2, W3, W7, W9, W11, W12) | 5 (I4, I5, I6, I8, I10) | 14 |
+| Vendored Excalidraw Kernel | 1 (F6) | 1 (W1) | 0 | 2 |
+| Geospatial Engine | 0 | 1 (W15) | 0 | 1 |
+| Map Renderer (basemap) | 0 | 1 (W17) | 0 | 1 |
+| Collaboration Relay | 0 | 2 (W13, W14) | 0 | 2 |
+| Data Interchange | 0 | 1 (W16) | 0 | 1 |
+| Root (CI/toolchain) | 0 | 2 (W5, W10) | 0 | 2 |
+
+### By Dimension
+
+| Dimension | Count | Examples |
+|-----------|-------|---------|
+| **Spatial** (where located) | 8 | MapEditor, storage, fork boundary |
+| **Temporal: fossil** (inherited) | 5 | Excalidraw fork, Yarn Classic, dead env vars, Husky disabled, `var` declarations |
+| **Temporal: contemporary** (shipped this cycle) | 21 | remoteSave gap, quota race, blob tx, Stripe idempotency |
+| **Temporal: emerging** (Phase 7+) | 0 | (covered by Phase 7 planning) |
+| **Flow Impact** | 10 | remoteSave, blob tx, quota race, realtime ephemeral |
+| **Tangle Complexity** | 6 | MapEditor, any escapes, CoordinateSync, ID systems |
+| **Readiness** (test/interface coverage) | 10 | No E2E, no migration, Sentry, Husky, rate limiting, dedup |
+| **Constraint Ordering** | 2 | Stripe idempotency, realtime single-instance |
 
 ---
 
-## Market Risks
+## 6. Acceptable & Partially-Mitigated Risks
 
-### R-12: Atlas.co competition
-**Severity:** Medium
-**Affected subsystems:** All (strategic)
-**Description:** Atlas.co is identified in the PRD as the closest feature-comparable competitor.
-Atlasdraw's differentiation depends on OSS permanence, self-host first-class, and AGPL licensing.
-If Atlas.co open-sources (or closes down), the positioning changes.
+### Acceptable (documented trade-offs)
 
-**Current mitigation:** Atlasdraw is designed as an OSS-first product. The self-host path
-(Phase 4 Show HN) and the MIT-licensed embed SDK (Phase 6) create distribution moats that a
-SaaS-only competitor cannot easily replicate.
+- **W1 (21K `any` escapes)** -- accepted cost of Excalidraw fork. Systemic reduction is a v2.0 goal.
+- **W10 (Yarn Classic EOL)** -- acceptable while `--frozen-lockfile` works in CI.
+- **W13 (realtime single-instance default)** -- Redis path exists; document when to enable.
+- **W14 (ephemeral rooms)** -- acceptable for v1; persistence is Phase 7 scope.
 
-**Residual risk:** If Atlas.co open-sources with a permissive license, Atlasdraw's AGPL
-copyleft may be a disadvantage for developer adoption. [CONFIDENCE: low — market speculation]
+### Partially Mitigated
+
+| Risk | Existing mitigation | Gap |
+|------|-------------------|-----|
+| W3 Stripe idempotency | In-memory Set with 30-day TTL | Lost on restart; multi-replica unsafe |
+| W4 dead env vars | `VITE_BUILD_TARGET=hosted` build arg | `excalidraw-app` may still read them |
+| W7 Sentry | `Sentry.init()` runs, DSN respected, auth-header scrubbed | No `captureException` wiring |
+| W6 IDB identity leak | Single key overwrite prevents unbounded growth | No namespace isolation between documents |
