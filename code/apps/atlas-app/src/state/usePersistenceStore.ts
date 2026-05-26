@@ -33,6 +33,8 @@ export type PersistenceState = {
   isDraining: boolean;
   /** T13: ms-since-epoch of the last successful local save. */
   lastSavedAt: number | null;
+  /** True when the last remoteSave failed (IDB ok, server stale). */
+  remoteSaveFailed: boolean;
   autosaveDispose: (() => void) | null;
   /**
    * T13: Imperative flush wired by MapEditor when it instantiates the
@@ -48,6 +50,7 @@ export type PersistenceState = {
   setLastSavedAt: (ts: number | null) => void;
   setAutosaveDispose: (fn: (() => void) | null) => void;
   setForceSave: (fn: () => Promise<void>) => void;
+  setRemoteSaveFailed: (v: boolean) => void;
 };
 
 export const usePersistenceStore = create<PersistenceState>()(
@@ -56,6 +59,7 @@ export const usePersistenceStore = create<PersistenceState>()(
     isDirty: false,
     isDraining: false,
     lastSavedAt: null,
+    remoteSaveFailed: false,
     autosaveDispose: null,
     // Default no-op so calling forceSave() before MapEditor wires it is safe.
     forceSave: () => Promise.resolve(),
@@ -70,7 +74,9 @@ export const usePersistenceStore = create<PersistenceState>()(
       // starts before any React re-render the isDirty flip might trigger.
       // Reading via get() avoids capturing a stale closure.
       const underlying = get().persistenceStore;
-      if (underlying) underlying.markDirty();
+      if (underlying) {
+        underlying.markDirty();
+      }
       set((s) => {
         s.isDirty = true;
         // Observably synchronous: by the time the React tree sees the
@@ -103,6 +109,11 @@ export const usePersistenceStore = create<PersistenceState>()(
     setForceSave: (fn) =>
       set((s) => {
         s.forceSave = fn;
+      }),
+
+    setRemoteSaveFailed: (v) =>
+      set((s) => {
+        s.remoteSaveFailed = v;
       }),
   })),
 );

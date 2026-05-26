@@ -18,9 +18,15 @@
  *                builds the DOM stack; tasks 12+13 wire the dynamic behaviour.
  */
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import { MapCanvas } from "@atlasdraw/basemap";
-import type { MapCanvasInitialView } from "@atlasdraw/basemap";
+
 import {
   compileLayer,
   defaultLayerStyle,
@@ -29,25 +35,36 @@ import {
   registerPmtilesProtocol,
   BasemapRemoteGatedError,
 } from "@atlasdraw/basemap";
-import type { BasemapConfig } from "@atlasdraw/basemap";
+
 import {
   parse,
   GeoJSONParseError,
   requireHomogeneousGeometry,
 } from "@atlasdraw/data";
-import { Excalidraw, MainMenu, setExportElementTransformer } from "@excalidraw/excalidraw";
-import type { ExcalidrawElement, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import {
+  Excalidraw,
+  MainMenu,
+  setExportElementTransformer,
+} from "@excalidraw/excalidraw";
+
 import { DEFAULT_SIDEBAR } from "@excalidraw/common";
-import type { Feature, FeatureCollection, Geometry } from "geojson";
-import type maplibregl from "maplibre-gl";
+
 import {
   PinTool,
   annotationToFeatureCollection,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "@atlasdraw/tools";
+
 import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
-import type { GeoAnchor } from "@atlasdraw/geo";
+
+import { openDB } from "idb";
+
+import type {
+  ExcalidrawElement,
+  ExcalidrawImperativeAPI,
+} from "@excalidraw/excalidraw";
+
 import { useMapRef } from "../hooks/useMapRef";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
@@ -60,19 +77,9 @@ import { useCollab } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
 import { CollabState } from "../state/collab";
-import { useAnnounce } from "./AriaAnnouncer";
-import { LayerPanel } from "./LayerPanel";
-import { CommentsPanelHost } from "./CommentsPanelHost";
-import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
-import { BasemapPickerDialog } from "./BasemapPickerDialog";
-import { MaputnikDialog } from "./MaputnikDialog";
-import { AssetLibraryPanel } from "./AssetLibraryPanel";
-import { AboutDialog } from "./AboutDialog";
-import { ShareDialog } from "./ShareDialog";
-import { PrintDialog } from "./PrintDialog";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+
 import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
-import type { LayerLegendEntry } from "../lib/print-pdf";
+
 import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -86,8 +93,29 @@ import {
   type HttpStorageClient,
   type StorageClient,
 } from "../services/createHttpStorageClient";
-import { openDB } from "idb";
+
 import styles from "../styles/MapEditor.module.css";
+
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { PrintDialog } from "./PrintDialog";
+import { ShareDialog } from "./ShareDialog";
+import { AboutDialog } from "./AboutDialog";
+import { AssetLibraryPanel } from "./AssetLibraryPanel";
+import { MaputnikDialog } from "./MaputnikDialog";
+import { BasemapPickerDialog } from "./BasemapPickerDialog";
+import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
+import { CommentsPanelHost } from "./CommentsPanelHost";
+import { LayerPanel } from "./LayerPanel";
+import { useAnnounce } from "./AriaAnnouncer";
+
+import type { LayerLegendEntry } from "../lib/print-pdf";
+
+import type { GeoAnchor } from "@atlasdraw/geo";
+import type maplibregl from "maplibre-gl";
+import type { Feature, FeatureCollection, Geometry } from "geojson";
+
+import type { BasemapConfig } from "@atlasdraw/basemap";
+import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
 /**
  * Pick a MapLibre layer kind for the FeatureCollection's first feature.
@@ -98,8 +126,12 @@ import styles from "../styles/MapEditor.module.css";
  */
 function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
   const t = fc.features[0]?.geometry?.type;
-  if (t === "Polygon" || t === "MultiPolygon") return "fill";
-  if (t === "LineString" || t === "MultiLineString") return "line";
+  if (t === "Polygon" || t === "MultiPolygon") {
+    return "fill";
+  }
+  if (t === "LineString" || t === "MultiLineString") {
+    return "line";
+  }
   return "circle";
 }
 
@@ -180,7 +212,9 @@ function buildRemoteSaveCallback(
   })();
 
   return async (blob: Blob): Promise<void> => {
-    if (!idLoaded) await idLoad;
+    if (!idLoaded) {
+      await idLoad;
+    }
     if (mapId === null) {
       const record = await client.createMap(blob);
       mapId = record.id;
@@ -200,10 +234,18 @@ function buildRemoteSaveCallback(
 function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
   const features: Feature[] = [];
   for (const el of elements) {
-    if (typeof el !== "object" || el === null) continue;
+    if (typeof el !== "object" || el === null) {
+      continue;
+    }
     const cd = (el as { customData?: unknown }).customData;
-    if (!isGeoCustomData(cd)) continue;
-    features.push({ type: "Feature", geometry: geoAnchorToGeometry(cd.geo), properties: {} });
+    if (!isGeoCustomData(cd)) {
+      continue;
+    }
+    features.push({
+      type: "Feature",
+      geometry: geoAnchorToGeometry(cd.geo),
+      properties: {},
+    });
   }
   return { type: "FeatureCollection", features };
 }
@@ -301,7 +343,9 @@ function renderAtlasdrawSaveCard(
         aria-label="Save .atlasdraw"
         onClick={async () => {
           const store = usePersistenceStore.getState().persistenceStore;
-          if (!store) return;
+          if (!store) {
+            return;
+          }
           try {
             await store.saveToDisk(
               selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
@@ -344,7 +388,9 @@ function renderAtlasdrawOpenCard(
         aria-label="Open .atlasdraw"
         onClick={async () => {
           const store = usePersistenceStore.getState().persistenceStore;
-          if (!store) return;
+          if (!store) {
+            return;
+          }
           try {
             const loaded = await store.openFromDisk();
             if (loaded) {
@@ -404,11 +450,9 @@ function buildExportOpts(excalidrawAPI: ExcalidrawImperativeAPI | null) {
   return {
     saveFileToDisk: true,
     renderCustomUI: (elements: readonly unknown[]) =>
-      excalidrawAPI ? (
-        renderAtlasdrawExportCards(elements, excalidrawAPI)
-      ) : (
-        renderGeoJsonCard(elements)
-      ),
+      excalidrawAPI
+        ? renderAtlasdrawExportCards(elements, excalidrawAPI)
+        : renderGeoJsonCard(elements),
   };
 }
 
@@ -512,8 +556,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // when the relay elects us; setSceneReceiver applies an inbound
   // SCENE_SNAPSHOT to the local Excalidraw scene.
   useEffect(() => {
-    if (!excalidrawAPI) return;
-    collabState.setSceneAccessor(() => excalidrawAPI.getSceneElements() as ExcalidrawElement[]);
+    if (!excalidrawAPI) {
+      return;
+    }
+    collabState.setSceneAccessor(
+      () => excalidrawAPI.getSceneElements() as ExcalidrawElement[],
+    );
     collabState.setSceneReceiver((elements) =>
       excalidrawAPI.updateScene({ elements }),
     );
@@ -584,11 +632,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
   // retrigger the callback.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (map && excalidrawAPI) {
       onMount?.(map, excalidrawAPI);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
 
   // Phase 4 T6/T7 — apply basemap style when the map is ready or the user
@@ -600,7 +648,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // transforms in the app's compile pipeline — moving the read out of the
   // basemap package was the fix for atlasdraw-bff1.
   useEffect(() => {
-    if (!map) return;
+    if (!map) {
+      return;
+    }
     registerPmtilesProtocol();
     const apply = async () => {
       try {
@@ -630,13 +680,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // a non-null API once available; before that the GeoJSON-only fallback
   // is harmless (Save/Open cards aren't rendered until the API is ready).
   // See `buildExportOpts` above for the wiring rationale.
-  const exportOpts = useMemo(() => buildExportOpts(excalidrawAPI), [excalidrawAPI]);
+  const exportOpts = useMemo(
+    () => buildExportOpts(excalidrawAPI),
+    [excalidrawAPI],
+  );
 
   // Normalize geo-anchored element coords to canonical Web Mercator (zoom 0)
   // before .excalidraw file saves so saved files are viewport-independent.
   useEffect(() => {
     setExportElementTransformer(
-      normalizeElementsForExport as Parameters<typeof setExportElementTransformer>[0],
+      normalizeElementsForExport as Parameters<
+        typeof setExportElementTransformer
+      >[0],
     );
     return () => setExportElementTransformer(null);
   }, []);
@@ -645,8 +700,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // branch via `import.meta.env.DEV` (Vite replaces it with `false` in prod,
   // making the whole block dead code that gets tree-shaken).
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
-    if (!map || !excalidrawAPI) return;
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    if (!map || !excalidrawAPI) {
+      return;
+    }
     const w = window as unknown as { __atlasdraw__?: unknown };
     w.__atlasdraw__ = { map, excalidrawAPI };
     return () => {
@@ -665,7 +724,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // observe-only stub left a refreshed page with a blank canvas even when an
   // IDB doc existed; this closes the round-trip gate.
   useEffect(() => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
 
     // T13 — backend persistence wire-up. Only constructed when the build
     // target opts in (hosted edition); local-only/pages tiers run the IDB
@@ -679,7 +740,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           createHttpStorageClient({ baseUrl: cfg.storageBaseUrl }),
         )
       : undefined;
-    const store = createPersistenceStore({ remoteSave });
+    const store = createPersistenceStore({
+      remoteSave,
+      onRemoteSaveFailed: () =>
+        usePersistenceStore.getState().setRemoteSaveFailed(true),
+    });
     usePersistenceStore.getState().setPersistenceStore(store);
 
     // T13: register an imperative `forceSave` that bypasses the debounce
@@ -706,7 +771,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     void (async () => {
       try {
         const loaded = await store.load();
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (loaded) {
           await hydrate(loaded, excalidrawAPI);
           // eslint-disable-next-line no-console
@@ -730,17 +797,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       usePersistenceStore.setState({ isDirty: true, isDraining: true });
     });
 
-    const dispose = startAutoSave(
-      store,
-      getDoc,
-      undefined,
-      undefined,
-      () => {
-        usePersistenceStore.getState().clearDirty();
-        usePersistenceStore.getState().setDraining(false);
-        usePersistenceStore.getState().setLastSavedAt(Date.now());
-      },
-    );
+    const dispose = startAutoSave(store, getDoc, undefined, undefined, () => {
+      usePersistenceStore.getState().clearDirty();
+      usePersistenceStore.getState().setDraining(false);
+      usePersistenceStore.getState().setLastSavedAt(Date.now());
+      if (!store.remoteSaveFailed()) {
+        usePersistenceStore.getState().setRemoteSaveFailed(false);
+      }
+    });
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 
     return () => {
@@ -799,7 +863,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const registry = useLayerRegistry();
   const processGeoJsonDrop = useCallback(
     async (file: File) => {
-      if (!map) return;
+      if (!map) {
+        return;
+      }
       try {
         // parse() accepts a Blob; File extends Blob, so we pass it directly.
         const fc = await parse(file);
@@ -841,10 +907,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root) return;
+    if (!root) {
+      return;
+    }
     const onDropCapture = (e: DragEvent) => {
       const file = e.dataTransfer?.files?.[0];
-      if (!file || !file.name.endsWith(".geojson")) return;
+      if (!file || !file.name.endsWith(".geojson")) {
+        return;
+      }
       // Block Excalidraw's bubble-phase handler from also processing this.
       e.preventDefault();
       e.stopPropagation();
@@ -860,7 +930,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     root.addEventListener("dragover", onDragOverCapture, { capture: true });
     return () => {
       root.removeEventListener("drop", onDropCapture, { capture: true });
-      root.removeEventListener("dragover", onDragOverCapture, { capture: true });
+      root.removeEventListener("dragover", onDragOverCapture, {
+        capture: true,
+      });
     };
   }, [processGeoJsonDrop]);
 
@@ -869,10 +941,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // ---------------------------------------------------------------------------
 
   const COLLAB_DATA_ID = "collab-data";
+  const hasCollabFeatures = !!yjsLayer.features;
 
   // Effect 1: add/remove the map source+layer when collab activates/deactivates.
   useEffect(() => {
-    if (!map) return;
+    if (!map) {
+      return;
+    }
 
     if (yjsLayer.features) {
       if (!map.getSource(COLLAB_DATA_ID)) {
@@ -892,10 +967,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     } else {
       // Collab deactivated — remove source and layer.
       try {
-        if (map.getLayer(COLLAB_DATA_ID))
+        if (map.getLayer(COLLAB_DATA_ID)) {
           map.removeLayer(COLLAB_DATA_ID);
-        if (map.getSource(COLLAB_DATA_ID))
+        }
+        if (map.getSource(COLLAB_DATA_ID)) {
           map.removeSource(COLLAB_DATA_ID);
+        }
       } catch {
         /* Guard against redundant cleanup */
       }
@@ -903,19 +980,24 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
     return () => {
       try {
-        if (map.getLayer(COLLAB_DATA_ID))
+        if (map.getLayer(COLLAB_DATA_ID)) {
           map.removeLayer(COLLAB_DATA_ID);
-        if (map.getSource(COLLAB_DATA_ID))
+        }
+        if (map.getSource(COLLAB_DATA_ID)) {
           map.removeSource(COLLAB_DATA_ID);
+        }
       } catch {
         /* Guard against redundant cleanup on unmount */
       }
     };
-  }, [map, !!yjsLayer.features]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, hasCollabFeatures]);
 
   // Effect 2: push GeoJSON data updates to the existing map source.
   useEffect(() => {
-    if (!map || !yjsLayer.features) return;
+    if (!map || !yjsLayer.features) {
+      return;
+    }
     const src = map.getSource(COLLAB_DATA_ID) as
       | maplibregl.GeoJSONSource
       | undefined;
@@ -945,15 +1027,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // annotation entry. Same end state, with id ownership at the call site.
   const currentConvertibleSelection =
     useCallback((): ConvertibleElement | null => {
-      if (!excalidrawAPI) return null;
+      if (!excalidrawAPI) {
+        return null;
+      }
       const appState = excalidrawAPI.getAppState();
       const ids = Object.keys(appState.selectedElementIds ?? {});
-      if (ids.length !== 1) return null;
+      if (ids.length !== 1) {
+        return null;
+      }
       const el = excalidrawAPI.getSceneElements().find((x) => x.id === ids[0]);
-      if (!el || !isGeoCustomData(el.customData)) return null;
+      if (!el || !isGeoCustomData(el.customData)) {
+        return null;
+      }
       // text elements carry geo but aren't convertible. Filter at the gate
       // so the menu item shows enabled only when the conversion will succeed.
-      if (el.type === "text") return null;
+      if (el.type === "text") {
+        return null;
+      }
       return {
         id: el.id,
         type: el.type,
@@ -963,7 +1053,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   const handleConvert = useCallback(
     (el: ConvertibleElement) => {
-      if (!map || !excalidrawAPI) return;
+      if (!map || !excalidrawAPI) {
+        return;
+      }
       try {
         // Step 1 — pure computation, no side effects.
         const fc = annotationToFeatureCollection(el);
@@ -1009,7 +1101,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // surface. The MainMenu "Layers panel" item below addresses this
   // tab via `toggleSidebar({name: DEFAULT_SIDEBAR.name, tab: "layers"})`.
   useEffect(() => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
     return excalidrawAPI.registerSidebarTab({
       name: "layers",
       label: "Layers",
@@ -1022,7 +1116,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // "comments"}). CommentsPanelHost wires useCollab().commentsLayer
   // internally and renders body markup only.
   useEffect(() => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
     return excalidrawAPI.registerSidebarTab({
       name: "comments",
       label: "Comments",
@@ -1038,7 +1134,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // handleConvert identity change; the unregister fn returned by the
   // API removes the prior closure so we don't accumulate stale items.
   useEffect(() => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
     const unregister = excalidrawAPI.registerContextMenuItem({
       name: "atlasConvertToDataLayer",
       label: "Convert selection to data layer",
@@ -1048,10 +1146,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       // without us subscribing to onChange.
       predicate: (elements, appState) => {
         const ids = Object.keys(appState.selectedElementIds ?? {});
-        if (ids.length !== 1) return false;
+        if (ids.length !== 1) {
+          return false;
+        }
         const el = elements.find((x) => x.id === ids[0]);
-        if (!el || !isGeoCustomData(el.customData)) return false;
-        if (el.type === "text") return false;
+        if (!el || !isGeoCustomData(el.customData)) {
+          return false;
+        }
+        if (el.type === "text") {
+          return false;
+        }
         return true;
       },
       perform: () => {
@@ -1060,7 +1164,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         // reuse currentConvertibleSelection's exact ConvertibleElement
         // contract without duplicating the type narrowing.
         const el = currentConvertibleSelection();
-        if (el) handleConvert(el);
+        if (el) {
+          handleConvert(el);
+        }
         // handleConvert performs the scene mutation directly via
         // excalidrawAPI.updateScene; return false so the
         // ContextMenu/actionManager updater doesn't try to re-apply
@@ -1075,10 +1181,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // forgets; MainMenu.Item.onSelect is sync (event handler signature) and
   // the menu closes synchronously after handler returns.
   const handleExportPNG = useCallback(() => {
-    if (!map || !excalidrawAPI) return;
+    if (!map || !excalidrawAPI) {
+      return;
+    }
     void (async () => {
       try {
-        const blob = await exportPNG(map, excalidrawAPI, { backgroundColor: mapBg });
+        const blob = await exportPNG(map, excalidrawAPI, {
+          backgroundColor: mapBg,
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -1087,7 +1197,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         URL.revokeObjectURL(url);
       } catch (err) {
         window.alert(
-          `PNG export failed: ${err instanceof Error ? err.message : String(err)}`,
+          `PNG export failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
       }
     })();
@@ -1143,7 +1255,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       // scrollX/Y. With non-zero scroll, `el.x + scrollX` ≠ `map.project(anchor).x`
       // so elements appear shifted from their geo positions and reanchorIfMoved
       // picks up false user-drag deltas. Reset to identity; geo sync runs next tick.
-      if (appState.scrollX !== 0 || appState.scrollY !== 0 || appState.zoom.value !== 1) {
+      if (
+        appState.scrollX !== 0 ||
+        appState.scrollY !== 0 ||
+        appState.zoom.value !== 1
+      ) {
         excalidrawAPI?.updateScene({
           appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
         });
@@ -1154,15 +1270,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (map && syncNow) {
         for (const el of elements) {
           const cd = (el as { customData?: unknown }).customData;
-          if (!isGeoCustomData(cd)) continue;
+          if (!isGeoCustomData(cd)) {
+            continue;
+          }
           const anchor = cd.geo;
           const ref =
             anchor.kind === "point"
               ? map.project([anchor.lng, anchor.lat] as [number, number])
               : anchor.kind === "bbox"
-                ? map.project([anchor.west, anchor.north] as [number, number])
-                : map.project(anchor.coordinates[0] as [number, number]);
-          if (Math.abs((el as { x: number }).x - ref.x) > 10 || Math.abs((el as { y: number }).y - ref.y) > 10) {
+              ? map.project([anchor.west, anchor.north] as [number, number])
+              : map.project(anchor.coordinates[0] as [number, number]);
+          if (
+            Math.abs((el as { x: number }).x - ref.x) > 10 ||
+            Math.abs((el as { y: number }).y - ref.y) > 10
+          ) {
             syncNow();
           }
           break; // O(1): only inspect the first geo element
@@ -1199,9 +1320,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           lastSelectionAnnounceAtRef.current = now;
           const ids = selectedIds.split(",");
           if (ids.length === 1) {
-            const el = elements.find(
-              (e: { id: string }) => e.id === ids[0],
-            ) as { type?: string } | undefined;
+            const el = elements.find((e: { id: string }) => e.id === ids[0]) as
+              | { type?: string }
+              | undefined;
             announceMapEditor(`Selected: ${el?.type ?? "element"}`);
           } else {
             announceMapEditor(`Selected: ${ids.length} elements`);
@@ -1220,7 +1341,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   );
 
   return (
-    <div ref={rootRef} className={styles.root} style={{ backgroundColor: mapBg }}>
+    <div
+      ref={rootRef}
+      className={styles.root}
+      style={{ backgroundColor: mapBg }}
+    >
       {/* Bottom layer: MapLibre GL map */}
       <div className={styles.mapLayer}>
         <MapCanvas
@@ -1345,7 +1470,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               {(() => {
                 const active = getBasemap(activeBasemapId);
-                if (!active) return "🗺 Basemap";
+                if (!active) {
+                  return "🗺 Basemap";
+                }
                 const source = active.requiresRemote ? "Remote" : "Local";
                 return `🗺 Basemap: ${active.label} · ${source}`;
               })()}
@@ -1449,20 +1576,21 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           level (same pattern as the basemap picker) so MainMenu auto-close
           doesn't unmount it. Iframe sandbox is intentionally restrictive —
           see MaputnikDialog header comment for security posture. */}
-      {maputnikOpen && (() => {
-        const active = getBasemap(activeBasemapId);
-        const styleFile = active?.styleFile ?? "protomaps-light.json";
-        const origin =
-          typeof window !== "undefined" ? window.location.origin : "";
-        const activeStyleUrl = `${origin}/styles/${styleFile}`;
-        return (
-          <MaputnikDialog
-            activeStyleUrl={activeStyleUrl}
-            maputnikUrl={getAppConfig().maputnikUrl}
-            onCloseRequest={() => setMaputnikOpen(false)}
-          />
-        );
-      })()}
+      {maputnikOpen &&
+        (() => {
+          const active = getBasemap(activeBasemapId);
+          const styleFile = active?.styleFile ?? "protomaps-light.json";
+          const origin =
+            typeof window !== "undefined" ? window.location.origin : "";
+          const activeStyleUrl = `${origin}/styles/${styleFile}`;
+          return (
+            <MaputnikDialog
+              activeStyleUrl={activeStyleUrl}
+              maputnikUrl={getAppConfig().maputnikUrl}
+              onCloseRequest={() => setMaputnikOpen(false)}
+            />
+          );
+        })()}
 
       {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
           picker so MainMenu auto-close doesn't unmount it. */}
@@ -1501,8 +1629,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             .entries.map<LayerLegendEntry>((e) => ({
               id: e.id,
               name: e.label,
-              color:
-                e.kind === "data" ? e.style.fillColor : "#868e96",
+              color: e.kind === "data" ? e.style.fillColor : "#868e96",
             }))}
           onCloseRequest={() => setShowPrintDialog(false)}
         />

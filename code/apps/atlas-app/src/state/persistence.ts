@@ -12,11 +12,7 @@
 // the Phase 3 Open Question Q3 (5s trailing-edge debounce + 30s ceiling).
 
 import { openDB, type IDBPDatabase } from "idb";
-import {
-  read,
-  write,
-  type AtlasdrawDocument,
-} from "@atlasdraw/data";
+import { read, write, type AtlasdrawDocument } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
 // IndexedDB schema
@@ -41,7 +37,10 @@ interface StoredBlob {
 // jsdom 22 (the test environment) ships a stub Blob without it. FileReader
 // is present in both, so we use it as a portable fallback.
 const blobToBytes = (blob: Blob): Promise<Uint8Array> => {
-  if (typeof (blob as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === "function") {
+  if (
+    typeof (blob as { arrayBuffer?: () => Promise<ArrayBuffer> })
+      .arrayBuffer === "function"
+  ) {
     return blob.arrayBuffer().then((buf) => new Uint8Array(buf));
   }
   return new Promise((resolve, reject) => {
@@ -54,7 +53,8 @@ const blobToBytes = (blob: Blob): Promise<Uint8Array> => {
         reject(new Error("FileReader returned non-ArrayBuffer result"));
       }
     };
-    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("FileReader failed"));
     reader.readAsArrayBuffer(blob);
   });
 };
@@ -143,6 +143,8 @@ export interface PersistenceStore {
   markDirty(): void;
   /** True if dirty (in-memory state diverges from last persisted). */
   isDirty(): boolean;
+  /** True if the last remoteSave failed (IDB succeeded, server did not). */
+  remoteSaveFailed(): boolean;
   /** Internal: dispose IDB connection + clear listeners (test helper). */
   close(): Promise<void>;
 }
@@ -152,15 +154,12 @@ export interface CreatePersistenceStoreOptions {
   dbName?: string;
   /**
    * T13 (Phase 4): optional best-effort push to the storage HTTP API. Fires
-   * AFTER the IDB write resolves. Failures are logged but do not propagate —
-   * IDB is the local source of truth; the dirty bit clearing logic at the
-   * end of `save()` is bound to the IDB write, not to remoteSave. A failed
-   * remote write therefore looks observably identical to "no remoteSave
-   * configured" from the autosave pump's perspective; the caller is
-   * responsible for surfacing remote-state divergence elsewhere (e.g. a
-   * background reconciliation task or an offline indicator).
+   * AFTER the IDB write resolves. Failures set `remoteSaveFailed()` to true
+   * and fire `onRemoteSaveFailed` if configured.
    */
   remoteSave?: (blob: Blob) => Promise<void>;
+  /** Callback when remoteSave fails (IDB ok, server not). */
+  onRemoteSaveFailed?: () => void;
 }
 
 /**
@@ -192,6 +191,12 @@ export function createPersistenceStore(
   // Dirty bit + listener set.
   let dirty = false;
   const dirtyListeners = new Set<() => void>();
+
+  // Remote save failure tracking — set on failed remoteSave, cleared on
+  // successful remoteSave. IDB is always the local source of truth; this
+  // flag lets the UI surface "server out of sync" without blocking the
+  // dirty-bit clearing at the end of save().
+  let _remoteSaveFailed = false;
 
   // Snapshot race guard: every `markDirty` after a save begins bumps this.
   // `save()` captures the value at start; if it differs at await-resolve, the
@@ -243,9 +248,15 @@ export function createPersistenceStore(
       if (options.remoteSave) {
         try {
           await options.remoteSave(blob);
+          _remoteSaveFailed = false;
         } catch (err) {
+          _remoteSaveFailed = true;
           // eslint-disable-next-line no-console
-          console.error("[persistence] remoteSave failed (local IDB write succeeded)", err);
+          console.error(
+            "[persistence] remoteSave failed (local IDB write succeeded)",
+            err,
+          );
+          options.onRemoteSaveFailed?.();
         }
       }
     });
@@ -256,7 +267,9 @@ export function createPersistenceStore(
     const stored = (await database.get(STORE, KEY_CURRENT)) as
       | StoredBlob
       | undefined;
-    if (!stored) return null;
+    if (!stored) {
+      return null;
+    }
     return read(storedToBlob(stored));
   };
 
@@ -289,7 +302,9 @@ export function createPersistenceStore(
   };
 
   const fallbackDownload = (blob: Blob): void => {
-    if (typeof document === "undefined") return; // SSR/Node — no-op.
+    if (typeof document === "undefined") {
+      return;
+    } // SSR/Node — no-op.
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -302,7 +317,9 @@ export function createPersistenceStore(
   };
 
   const fallbackOpen = (): Promise<Blob | null> => {
-    if (typeof document === "undefined") return Promise.resolve(null);
+    if (typeof document === "undefined") {
+      return Promise.resolve(null);
+    }
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
@@ -310,9 +327,13 @@ export function createPersistenceStore(
       input.style.display = "none";
       let settled = false;
       const settle = (val: Blob | null): void => {
-        if (settled) return;
+        if (settled) {
+          return;
+        }
         settled = true;
-        if (input.parentNode) input.parentNode.removeChild(input);
+        if (input.parentNode) {
+          input.parentNode.removeChild(input);
+        }
         resolve(val);
       };
       input.addEventListener("change", () => {
@@ -392,7 +413,9 @@ export function createPersistenceStore(
       );
       blob = await fallbackOpen();
     }
-    if (!blob) return null;
+    if (!blob) {
+      return null;
+    }
     return read(blob);
   };
 
@@ -405,8 +428,11 @@ export function createPersistenceStore(
 
   const isDirty = (): boolean => dirty;
 
+  const remoteSaveFailed = (): boolean => _remoteSaveFailed;
+
   const close = async (): Promise<void> => {
     dirtyListeners.clear();
+    _remoteSaveFailed = false;
     if (dbPromise) {
       const database = await dbPromise;
       database.close();
@@ -422,6 +448,7 @@ export function createPersistenceStore(
     onDirty,
     markDirty,
     isDirty,
+    remoteSaveFailed,
     close,
   };
 }
@@ -490,7 +517,9 @@ export function startAutoSave(
 
   const unsubscribe = store.onDirty(() => {
     // Reset the trailing-edge debounce on every edit.
-    if (debounceTimer !== null) clearTimeout(debounceTimer);
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
     debounceTimer = setTimeout(flush, intervalMs);
     // Start the ceiling timer once on the first edit since the last flush.
     if (ceilingTimer === null) {
