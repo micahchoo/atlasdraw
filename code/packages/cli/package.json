@@ -3,14 +3,16 @@
   "version": "0.0.0",
   "description": "Headless tooling: lint, convert, render",
   "license": "MIT",
-  "private": false,
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "bin": {
     "atlasdraw": "src/atlasdraw.ts"
   },
-  "files": ["src", "README.md"],
+  "files": [
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "build": "echo 'TODO: build (target: Phase 3 T10/T11)' && exit 0",
     "test": "vitest run",

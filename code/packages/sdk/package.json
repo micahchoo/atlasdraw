@@ -3,15 +3,16 @@
   "version": "0.0.0",
   "description": "Embed widget — postMessage-safe AtlasdrawAPI surface",
   "license": "MIT",
-  "private": false,
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "files": ["src", "README.md"],
+  "files": [
+    "src",
+    "README.md"
+  ],
   "scripts": {
     "build": "echo 'TODO: build (target: Phase 6+)' && exit 0",
     "test:typecheck": "tsc --noEmit"
   },
-  "dependencies": {},
   "devDependencies": {
     "typescript": "*"
   }

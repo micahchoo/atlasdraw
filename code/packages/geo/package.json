@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Atlasdraw geo math: GeoAnchor types, projection, CoordinateSync, Turf wrappers — pure functions",
   "license": "MIT",
-  "private": false,
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -23,7 +22,6 @@
     "test:typecheck": "tsc --noEmit",
     "bench": "vitest run --config bench/vitest.config.ts"
   },
-  "dependencies": {},
   "peerDependencies": {
     "maplibre-gl": ">=4.0.0"
   },
