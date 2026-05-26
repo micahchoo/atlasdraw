@@ -51,6 +51,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a" }, { id: "b" }]);
@@ -70,6 +71,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a" }, { id: "b" }]);
@@ -88,6 +90,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a" }, { id: "b" }]);
@@ -105,6 +108,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a" }]);
@@ -122,6 +126,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     // Simulating a drag/resize: same id, different element fields.
@@ -139,6 +144,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a", isDeleted: true }]);
@@ -155,6 +161,7 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
       knownIds,
       registerAnnotation,
       remove,
+      existsInRegistry: () => false,
     });
 
     handler([{ id: "a", isDeleted: true }]);

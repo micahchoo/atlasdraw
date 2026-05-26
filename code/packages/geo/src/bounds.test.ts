@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { computeSceneBounds } from "./bounds.js";
 
-import type { ExcalidrawElementLike } from "./CoordinateSync.js";
+import type { ExcalidrawElementLike } from "./excalidrawTypes.js";
 import type { GeoCustomData } from "./types.js";
 
 function geoEl(id: string, geo: GeoCustomData["geo"]): ExcalidrawElementLike {

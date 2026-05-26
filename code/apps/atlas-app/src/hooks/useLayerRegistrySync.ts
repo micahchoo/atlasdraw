@@ -64,6 +64,13 @@ export interface SceneDiffDeps {
   /** Registry actions (a thin slice — we don't need the whole store). */
   registerAnnotation: (elementId: string, label?: string) => void;
   remove: (id: string) => void;
+  /**
+   * Check whether an id already exists in the registry. Used as a
+   * belt-and-suspenders guard against hydrate() races: hydrate adds
+   * entries to the registry between knownIds seed and the first
+   * onChange, so knownIds alone can't prevent duplicates.
+   */
+  existsInRegistry: (id: string) => boolean;
 }
 
 /**
@@ -94,9 +101,12 @@ export function buildSceneDiffHandler(
       incoming.add(el.id);
     }
 
-    // Additions — in incoming but not known.
+    // Additions — in incoming but not known AND not already in registry.
+    // The registry check guards against hydrate() races: hydrate adds entries
+    // between the knownIds seed and the first onChange, so knownIds alone
+    // can be stale.
     for (const id of incoming) {
-      if (!knownIds.has(id)) {
+      if (!knownIds.has(id) && !deps.existsInRegistry(id)) {
         registerAnnotation(id);
         knownIds.add(id);
       }
@@ -278,6 +288,8 @@ export function useLayerRegistrySync(
       registerAnnotation: (id, label) =>
         useLayerRegistryStore.getState().registerAnnotation(id, label),
       remove: (id) => useLayerRegistryStore.getState().remove(id),
+      existsInRegistry: (id) =>
+        useLayerRegistryStore.getState().entries.some((e) => e.id === id),
     });
 
     const unsub = excalidrawAPI.onChange(

@@ -4,7 +4,7 @@ import {
   CoordinateSync,
   type ExcalidrawAPI,
   type ExcalidrawElementLike,
-} from "./CoordinateSync.js";
+} from "./CoordinateSync";
 
 import type { GeoCustomData } from "./types.js";
 

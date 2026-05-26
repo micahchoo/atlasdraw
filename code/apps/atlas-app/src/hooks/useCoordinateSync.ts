@@ -23,7 +23,7 @@
 
 import { useEffect, useMemo } from "react";
 import throttle from "lodash.throttle";
-import { CoordinateSync } from "@atlasdraw/geo";
+import { CoordinateSync } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 

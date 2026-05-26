@@ -8,14 +8,15 @@ import {
   clampHybridFactor,
   HYBRID_FACTOR_MIN,
   HYBRID_FACTOR_MAX,
-} from "./scaleMode.js";
+} from "@atlasdraw/geo";
+
 import {
   CoordinateSync,
   type ExcalidrawAPI,
   type ExcalidrawElementLike,
-} from "./CoordinateSync.js";
+} from "./CoordinateSync";
 
-import type { GeoCustomData } from "./types.js";
+import type { GeoCustomData } from "@atlasdraw/geo";
 
 // ---------------------------------------------------------------------------
 // Unit: computeScaleFactor

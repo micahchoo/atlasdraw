@@ -1,12 +1,10 @@
 // @atlasdraw/geo — public surface.
 export * from "./types.js";
-// Phase 1 Wave 1 Task 4
-export { CoordinateSync } from "./CoordinateSync.js";
+// CoordinateSync moved to @atlasdraw/basemap (2026-05-25).
 export type {
-  CoordinateSyncOptions,
-  ExcalidrawAPI,
   ExcalidrawElementLike,
-} from "./CoordinateSync.js";
+  ExcalidrawAPI,
+} from "./excalidrawTypes.js";
 export { projectPoint, unprojectPoint, normalizeLng } from "./projection.js";
 // Phase 1 Wave 2 Task 10
 export { geoToExcalidraw } from "./geoToExcalidraw.js";
@@ -20,3 +18,11 @@ export {
   GeoCustomDataParseError,
 } from "./parseGeoCustomData.js";
 export { normalizeElementsForExport } from "./canonicalExport.js";
+// Scale-mode utilities — consumed by @atlasdraw/basemap's CoordinateSync
+// (see docs/superpowers/plans/2026-05-25-remaining-debt-approach.md §5).
+export {
+  computeScaleFactor,
+  clampHybridFactor,
+  HYBRID_FACTOR_MIN,
+  HYBRID_FACTOR_MAX,
+} from "./scaleMode.js";

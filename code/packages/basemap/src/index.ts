@@ -23,3 +23,6 @@ export type { BuildStyleOptions } from "./style-builder";
 // not read environment variables.
 export { resolveStyle, BasemapRemoteGatedError } from "./resolver";
 export type { ResolveStyleOptions } from "./resolver";
+
+export { CoordinateSync } from "./CoordinateSync";
+export type { CoordinateSyncOptions } from "./CoordinateSync";
