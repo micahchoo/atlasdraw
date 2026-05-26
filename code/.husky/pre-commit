@@ -1,2 +1,2 @@
 #!/bin/sh
-# yarn lint-staged
+cd code && yarn lint-staged
