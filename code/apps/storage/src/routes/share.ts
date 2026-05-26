@@ -17,6 +17,7 @@
 // and enforces expiry/orphaned-token semantics.
 
 import { ID_RE } from "../constants";
+import { isNotFoundError } from "../lib/errors";
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { StorageClient } from "../types";
@@ -27,10 +28,6 @@ interface IdParams {
 
 interface TokenParams {
   token: string;
-}
-
-function isNotFoundError(err: unknown): boolean {
-  return err instanceof Error && err.message.startsWith("not found:");
 }
 
 export function registerShareRoutes(
