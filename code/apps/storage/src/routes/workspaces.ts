@@ -11,6 +11,7 @@
 //                           `workspace_created` per ADR-0011.
 
 import { nanoid } from "nanoid";
+
 import type { FastifyInstance } from "fastify";
 import type { StorageClient } from "../types";
 

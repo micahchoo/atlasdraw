@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useShareLink } from "../useShareLink";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 
@@ -115,7 +116,9 @@ function Harness({
 }: {
   getDoc: () => AtlasdrawDocument;
   client: HttpStorageClient;
-  onCapture: (s: CapturedState & { generate: () => Promise<string | null> }) => void;
+  onCapture: (
+    s: CapturedState & { generate: () => Promise<string | null> },
+  ) => void;
   drainTimeoutMs?: number;
   drainPollMs?: number;
 }): React.ReactElement {
@@ -160,8 +163,9 @@ describe("useShareLink", () => {
   it("hash mode: tiny doc → URL contains compressed payload that round-trips", async () => {
     const doc = tinyDoc();
     const client = makeMockClient();
-    let captured: (CapturedState & { generate: () => Promise<string | null> }) | null =
-      null;
+    let captured:
+      | (CapturedState & { generate: () => Promise<string | null> })
+      | null = null;
 
     render(
       <Harness
@@ -195,8 +199,9 @@ describe("useShareLink", () => {
   it("upload mode: large doc → POSTs to /maps then mints a token", async () => {
     const doc = bulkyDoc();
     const client = makeMockClient();
-    let captured: (CapturedState & { generate: () => Promise<string | null> }) | null =
-      null;
+    let captured:
+      | (CapturedState & { generate: () => Promise<string | null> })
+      | null = null;
 
     render(
       <Harness
@@ -226,8 +231,9 @@ describe("useShareLink", () => {
   it("drain block: waits for isDraining=false before snapshotting", async () => {
     const doc = tinyDoc();
     const client = makeMockClient();
-    let captured: (CapturedState & { generate: () => Promise<string | null> }) | null =
-      null;
+    let captured:
+      | (CapturedState & { generate: () => Promise<string | null> })
+      | null = null;
 
     // Start in a draining state.
     usePersistenceStore.setState({ isDraining: true });
@@ -263,8 +269,9 @@ describe("useShareLink", () => {
   it("drain timeout: surfaces error when autosave never finishes", async () => {
     const doc = tinyDoc();
     const client = makeMockClient();
-    let captured: (CapturedState & { generate: () => Promise<string | null> }) | null =
-      null;
+    let captured:
+      | (CapturedState & { generate: () => Promise<string | null> })
+      | null = null;
 
     usePersistenceStore.setState({ isDraining: true });
 

@@ -5,20 +5,14 @@
 // implementation so the `idb` package can run unmodified under jsdom.
 
 import "fake-indexeddb/auto";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createPersistenceStore,
   startAutoSave,
   type PersistenceStore,
 } from "../state/persistence";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
@@ -295,8 +289,12 @@ describe("saveToDisk / openFromDisk — fallback path", () => {
       );
     } finally {
       infoSpy.mockRestore();
-      if (!hadCreate) delete urlAny.createObjectURL;
-      if (!hadRevoke) delete urlAny.revokeObjectURL;
+      if (!hadCreate) {
+        delete urlAny.createObjectURL;
+      }
+      if (!hadRevoke) {
+        delete urlAny.revokeObjectURL;
+      }
     }
   });
 });

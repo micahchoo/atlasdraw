@@ -42,9 +42,11 @@
 
 import { useEffect } from "react";
 import { unprojectPoint, projectPoint, isGeoCustomData } from "@atlasdraw/geo";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import type { GeoCustomData, GeoAnchor } from "@atlasdraw/geo";
 import type maplibregl from "maplibre-gl";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 /** Bbox-shaped tools — anchored as `kind:"bbox"` with `scaleMode:"geographic"`. */
 const BBOX_TOOL_TYPES = new Set([
@@ -134,7 +136,9 @@ function buildGeoCustomData(
 
   if (POLYLINE_TOOL_TYPES.has(el.type)) {
     const pts = el.points;
-    if (!pts || pts.length === 0) return null;
+    if (!pts || pts.length === 0) {
+      return null;
+    }
     const coordinates: Array<[number, number]> = pts.map(([dx, dy]) => {
       const ll = unprojectPoint(map, el.x + dx, el.y + dy);
       return [ll.lng, ll.lat];
@@ -189,7 +193,9 @@ function buildGeoCustomData(
 function reanchorIfMoved(
   el: ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown },
   map: maplibregl.Map,
-): (ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown }) | null {
+):
+  | (ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown })
+  | null {
   const existingGeo = el.customData.geo;
   const lastSync = (el.customData as { _lastSync?: LastSync })._lastSync;
 
@@ -209,12 +215,21 @@ function reanchorIfMoved(
           Math.abs(cur.lng - existingGeo.lng) > GEO_TOLERANCE ||
           Math.abs(cur.lat - existingGeo.lat) > GEO_TOLERANCE;
       }
-      if (!moved) return null;
+      if (!moved) {
+        return null;
+      }
       // Re-anchor: unproject current screen position → new geo anchor.
       const cur = unprojectPoint(map, el.x, el.y);
-      const newAnchor: GeoAnchor = { ...existingGeo, lng: cur.lng, lat: cur.lat };
+      const newAnchor: GeoAnchor = {
+        ...existingGeo,
+        lng: cur.lng,
+        lat: cur.lat,
+      };
       // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
-      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+      return {
+        ...el,
+        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+      };
     }
     case "bbox": {
       // Compare in screen space, not geo space, to handle the Math.max(1, ...)
@@ -249,7 +264,9 @@ function reanchorIfMoved(
           Math.abs(el.height - expectedH) <= SCREEN_TOL
         );
       }
-      if (!moved) return null;
+      if (!moved) {
+        return null;
+      }
       // User moved or resized — re-anchor from current screen position.
       const nw = unprojectPoint(map, el.x, el.y);
       const se = unprojectPoint(map, el.x + el.width, el.y + el.height);
@@ -259,11 +276,16 @@ function reanchorIfMoved(
       const south = Math.min(nw.lat, se.lat);
       const newAnchor: GeoAnchor = { ...existingGeo, west, east, north, south };
       // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
-      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+      return {
+        ...el,
+        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+      };
     }
     case "polyline": {
       const pts = el.points;
-      if (!pts || pts.length === 0) return null;
+      if (!pts || pts.length === 0) {
+        return null;
+      }
       if (lastSync?.pts && lastSync.pts.length === pts.length) {
         // Primary path: compare screen-space points against _lastSync snapshot.
         // Timing-immune — no map projection call needed for detection.
@@ -272,7 +294,9 @@ function reanchorIfMoved(
             Math.abs(dx - lastSync.pts![i][0]) <= GEO_TOLERANCE &&
             Math.abs(dy - lastSync.pts![i][1]) <= GEO_TOLERANCE,
         );
-        if (unchanged) return null;
+        if (unchanged) {
+          return null;
+        }
         // Points moved — compute new geo coords and re-anchor.
         const newCoords: Array<[number, number]> = pts.map(([dx, dy]) => {
           const ll = unprojectPoint(map, el.x + dx, el.y + dy);
@@ -280,7 +304,14 @@ function reanchorIfMoved(
         });
         const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
         // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
-        return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+        return {
+          ...el,
+          customData: {
+            ...el.customData,
+            geo: newAnchor,
+            _lastSync: undefined,
+          },
+        };
       }
       // Fallback: element predates _lastSync (or screen mode) — use geo-space
       // comparison against existingGeo.coordinates (existing behaviour).
@@ -296,9 +327,14 @@ function reanchorIfMoved(
             Math.abs(lng - existing[i][0]) <= GEO_TOLERANCE &&
             Math.abs(lat - existing[i][1]) <= GEO_TOLERANCE,
         );
-      if (unchanged) return null;
+      if (unchanged) {
+        return null;
+      }
       const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
-      return { ...el, customData: { ...el.customData, geo: newAnchor, _lastSync: undefined } };
+      return {
+        ...el,
+        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+      };
     }
   }
 }
@@ -313,18 +349,26 @@ export function buildGeoAnchorHandler(
   map: maplibregl.Map,
   excalidrawAPI: ExcalidrawImperativeAPI,
 ): (
-  elements: readonly { isDeleted?: boolean; customData?: unknown; type: string }[],
+  elements: readonly {
+    isDeleted?: boolean;
+    customData?: unknown;
+    type: string;
+  }[],
   appState: { newElement: unknown | null },
 ) => void {
   return (elements, appState) => {
     // Skip while user is actively drawing — wait for pointerUp to finalize geometry.
-    if (appState.newElement) return;
+    if (appState.newElement) {
+      return;
+    }
 
     const zRef = map.getZoom();
     let dirty = false;
 
     const next = elements.map((el) => {
-      if (el.isDeleted) return el;
+      if (el.isDeleted) {
+        return el;
+      }
 
       if (isGeoCustomData(el.customData)) {
         // Already anchored — re-anchor if the user moved or resized the element.
@@ -351,12 +395,17 @@ export function buildGeoAnchorHandler(
         map,
         zRef,
       );
-      if (!geoCustomData) return el;
+      if (!geoCustomData) {
+        return el;
+      }
 
       dirty = true;
       return {
         ...el,
-        customData: { ...(el.customData as object | undefined), ...geoCustomData },
+        customData: {
+          ...(el.customData as object | undefined),
+          ...geoCustomData,
+        },
       };
     });
 
@@ -378,7 +427,9 @@ export function useGeoAnchor(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
 ): void {
   useEffect(() => {
-    if (!map || !excalidrawAPI) return;
+    if (!map || !excalidrawAPI) {
+      return;
+    }
     const handler = buildGeoAnchorHandler(map, excalidrawAPI);
     const unsub = excalidrawAPI.onChange(
       handler as Parameters<ExcalidrawImperativeAPI["onChange"]>[0],

@@ -9,6 +9,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { createSqliteFsAdapter } from "../../adapters/sqlite-fs";
 import { registerBillingRoutes, type StripeLike } from "../billing";
 
@@ -83,7 +84,9 @@ describe("registerBillingRoutes", () => {
     scratch = tmp.dirSync({ unsafeCleanup: true });
   });
   afterEach(async () => {
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     scratch.removeCallback();
     vi.restoreAllMocks();
   });

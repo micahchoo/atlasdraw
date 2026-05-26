@@ -15,7 +15,9 @@
 //      verify by asserting the only excalidraw method touched was addElement.
 
 import { describe, it, expect, vi } from "vitest";
+
 import { TextLabelTool } from "./TextLabelTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,

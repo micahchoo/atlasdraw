@@ -36,8 +36,6 @@ export const BASEMAPS: ReadonlyArray<BasemapConfig> = [
   },
 ] as const;
 
-export function getBasemap(
-  id: BasemapConfig["id"],
-): BasemapConfig | undefined {
+export function getBasemap(id: BasemapConfig["id"]): BasemapConfig | undefined {
   return BASEMAPS.find((b) => b.id === id);
 }

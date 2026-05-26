@@ -17,12 +17,14 @@ import {
   waitFor,
 } from "@testing-library/react";
 
+import * as protocol from "@atlasdraw/protocol";
+
 import { ShareDialog } from "../ShareDialog";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 import type { CollabState } from "../../state/collab";
-import * as protocol from "@atlasdraw/protocol";
 
 function tinyDoc(): AtlasdrawDocument {
   return {
@@ -137,9 +139,8 @@ describe("ShareDialog", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("share-dialog-url")).not.toBeNull();
     });
-    const url = (
-      screen.getByTestId("share-dialog-url") as HTMLInputElement
-    ).value;
+    const url = (screen.getByTestId("share-dialog-url") as HTMLInputElement)
+      .value;
 
     await act(async () => {
       fireEvent.click(screen.getByTestId("share-dialog-copy"));

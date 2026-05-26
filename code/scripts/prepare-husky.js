@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-console */
 // scripts/prepare-husky.js
 //
 // Closes atlasdraw-0c97. The Excalidraw monorepo's `code/` lived as a git
@@ -34,7 +35,10 @@ try {
 }
 
 const huskyBin = path.join(__dirname, "..", "node_modules", ".bin", "husky");
-const huskyDirRel = path.relative(gitRoot, path.join(__dirname, "..", ".husky"));
+const huskyDirRel = path.relative(
+  gitRoot,
+  path.join(__dirname, "..", ".husky"),
+);
 
 try {
   run(huskyBin, ["install", huskyDirRel], { cwd: gitRoot });

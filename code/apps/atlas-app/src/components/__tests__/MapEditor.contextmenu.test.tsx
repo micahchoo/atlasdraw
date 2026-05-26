@@ -24,6 +24,14 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, cleanup } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// SUT
+// ---------------------------------------------------------------------------
+
+import { MapEditor } from "../MapEditor";
+import { useLayerRegistryStore } from "../../state/layerRegistry";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -46,17 +54,44 @@ vi.mock("@atlasdraw/basemap", () => ({
     opacity: 0.5,
   })),
   registerPmtilesProtocol: vi.fn(),
-  getBasemap: vi.fn((id: string) =>
-    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  getBasemap: vi.fn((id: string) => ({
+    id,
+    label: id,
+    styleFile: `${id}.json`,
+    requiresRemote: false,
+  })),
+  buildStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
   ),
-  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
   BASEMAPS: [
-    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
-    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
-    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+    {
+      id: "protomaps-light",
+      label: "Light",
+      styleFile: "protomaps-light.json",
+      requiresRemote: false,
+    },
+    {
+      id: "protomaps-dark",
+      label: "Dark",
+      styleFile: "protomaps-dark.json",
+      requiresRemote: false,
+    },
+    {
+      id: "openfreemap-bright",
+      label: "Bright",
+      styleFile: "openfreemap-bright.json",
+      requiresRemote: true,
+    },
   ],
-  resolveStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
-  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error { constructor(public readonly basemapId: string) { super(`Basemap ${basemapId} requires allow_remote=true`); this.name = "BasemapRemoteGatedError"; } },
+  resolveStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
+  ),
+  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
+    constructor(public readonly basemapId: string) {
+      super(`Basemap ${basemapId} requires allow_remote=true`);
+      this.name = "BasemapRemoteGatedError";
+    }
+  },
 }));
 
 // Fake selected element — a rectangle with valid bbox geo. Mutated per-test.
@@ -98,15 +133,17 @@ const capturedContextMenuItems: Array<{
   perform: (elements: unknown, appState: unknown) => unknown;
 }> = [];
 
-const registerContextMenuItemSpy = vi.fn((item: {
-  name: string;
-  label: string;
-  predicate: (elements: unknown, appState: unknown) => boolean;
-  perform: (elements: unknown, appState: unknown) => unknown;
-}) => {
-  capturedContextMenuItems.push(item);
-  return registerContextMenuItemUnregister;
-});
+const registerContextMenuItemSpy = vi.fn(
+  (item: {
+    name: string;
+    label: string;
+    predicate: (elements: unknown, appState: unknown) => boolean;
+    perform: (elements: unknown, appState: unknown) => unknown;
+  }) => {
+    capturedContextMenuItems.push(item);
+    return registerContextMenuItemUnregister;
+  },
+);
 
 // `mock` prefix lets these top-level consts survive Vitest's vi.mock hoisting.
 const mockFakeExcalidrawAPI = {
@@ -249,13 +286,6 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
   }),
 }));
 
-// ---------------------------------------------------------------------------
-// SUT
-// ---------------------------------------------------------------------------
-
-import { MapEditor } from "../MapEditor";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-
 beforeEach(() => {
   vi.clearAllMocks();
   useLayerRegistryStore.setState({ entries: [] });
@@ -281,7 +311,9 @@ const awaitConvertItem = async () => {
   const item = capturedContextMenuItems.find(
     (i) => i.name === "atlasConvertToDataLayer",
   );
-  if (!item) throw new Error("convert item not registered");
+  if (!item) {
+    throw new Error("convert item not registered");
+  }
   return item;
 };
 

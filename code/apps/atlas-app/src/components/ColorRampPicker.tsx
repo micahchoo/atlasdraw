@@ -39,8 +39,12 @@ const RAMP_NAMES = Object.keys(RAMPS);
  * stretch (preview-quality — caller chooses real stops elsewhere).
  */
 function resample(ramp: string[], stops: number): string[] {
-  if (stops === ramp.length) return ramp.slice();
-  if (stops <= 1) return [ramp[0]];
+  if (stops === ramp.length) {
+    return ramp.slice();
+  }
+  if (stops <= 1) {
+    return [ramp[0]];
+  }
   const out: string[] = [];
   for (let i = 0; i < stops; i++) {
     const t = i / (stops - 1);
@@ -51,8 +55,12 @@ function resample(ramp: string[], stops: number): string[] {
 }
 
 function gradientCss(colors: string[]): string {
-  if (colors.length === 0) return "transparent";
-  if (colors.length === 1) return colors[0];
+  if (colors.length === 0) {
+    return "transparent";
+  }
+  if (colors.length === 1) {
+    return colors[0];
+  }
   return `linear-gradient(to right, ${colors.join(", ")})`;
 }
 

@@ -21,15 +21,18 @@
 import React from "react";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+
+import styles from "../styles/LayerPanel.module.css";
+
+import { useAnnounce } from "./AriaAnnouncer";
+import { StylePanel } from "./StylePanel";
+
 import type {
   LayerRegistryEntry,
   AnnotationLayerEntry,
   DataLayerEntry,
   LayerStyle,
 } from "../state/layerRegistry";
-import styles from "../styles/LayerPanel.module.css";
-import { useAnnounce } from "./AriaAnnouncer";
-import { StylePanel } from "./StylePanel";
 
 // ---------------------------------------------------------------------------
 // Inline SVG icons — atlasdraw-ui-conventions §Icons:
@@ -249,9 +252,7 @@ function DataLayerRow({
           step={0.05}
           value={style.opacity ?? 1}
           data-testid={`layer-opacity-${id}`}
-          onChange={(e) =>
-            updateStyle(id, { opacity: Number(e.target.value) })
-          }
+          onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
     </div>

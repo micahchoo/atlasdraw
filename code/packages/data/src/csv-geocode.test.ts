@@ -79,9 +79,9 @@ describe("parseCSV — geocoder ON", () => {
       type: "Point",
       coordinates: [10, 20],
     });
-    expect((fc.features[0]!.properties as Record<string, unknown>)._geocoded_v1).toBe(
-      true,
-    );
+    expect(
+      (fc.features[0]!.properties as Record<string, unknown>)._geocoded_v1,
+    ).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -125,10 +125,9 @@ describe("parseCSV — geocoder ON", () => {
       { endpoint: "https://photon.example" },
       fetchMock as unknown as typeof fetch,
     );
-    const fc = await parseCSV(
-      csvBlob("address,name\nbogus,Foo\nfake,Bar"),
-      { geocoder: g },
-    );
+    const fc = await parseCSV(csvBlob("address,name\nbogus,Foo\nfake,Bar"), {
+      geocoder: g,
+    });
     expect(fc.features).toHaveLength(0);
   });
 
@@ -136,17 +135,18 @@ describe("parseCSV — geocoder ON", () => {
     let i = 0;
     const fetchMock = vi.fn(async () => {
       i++;
-      if (i === 1) throw new TypeError("ECONNREFUSED");
+      if (i === 1) {
+        throw new TypeError("ECONNREFUSED");
+      }
       return photonOk([10, 20]);
     });
     const g = new PhotonGeocoder(
       { endpoint: "https://photon.example" },
       fetchMock as unknown as typeof fetch,
     );
-    const fc = await parseCSV(
-      csvBlob("address,name\nfails,A\nworks,B"),
-      { geocoder: g },
-    );
+    const fc = await parseCSV(csvBlob("address,name\nfails,A\nworks,B"), {
+      geocoder: g,
+    });
     // With max-concurrency 5 and 2 rows, both fire in parallel; the failing
     // one drops, the other succeeds. Order is preserved by runWithConcurrency.
     expect(fc.features).toHaveLength(1);
@@ -183,11 +183,12 @@ describe("parseCSV — geocoder ON", () => {
     );
     // 20 unique rows → 20 fetches required, must not exceed cap of 5.
     const rows: string[] = [];
-    for (let i = 0; i < 20; i++) rows.push(`addr-${i},name${i}`);
-    const fc = await parseCSV(
-      csvBlob(`address,name\n${rows.join("\n")}`),
-      { geocoder: g },
-    );
+    for (let i = 0; i < 20; i++) {
+      rows.push(`addr-${i},name${i}`);
+    }
+    const fc = await parseCSV(csvBlob(`address,name\n${rows.join("\n")}`), {
+      geocoder: g,
+    });
     expect(fc.features).toHaveLength(20);
     expect(fetchMock).toHaveBeenCalledTimes(20);
     expect(peak).toBeLessThanOrEqual(5);

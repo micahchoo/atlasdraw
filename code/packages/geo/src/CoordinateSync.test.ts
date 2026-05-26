@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { CoordinateSync, type ExcalidrawAPI, type ExcalidrawElementLike } from "./CoordinateSync.js";
+
+import {
+  CoordinateSync,
+  type ExcalidrawAPI,
+  type ExcalidrawElementLike,
+} from "./CoordinateSync.js";
+
 import type { GeoCustomData } from "./types.js";
 
 // MapLibre Map test double — only the methods CoordinateSync touches.
@@ -21,12 +27,16 @@ function makeMap(project = vi.fn().mockReturnValue({ x: 100, y: 200 })) {
  * when a worker forgets to mock a coordinate the impl actually projects.
  */
 function makeProjectByLngLat(
-  table: ReadonlyArray<readonly [readonly [number, number], { x: number; y: number }]>,
+  table: ReadonlyArray<
+    readonly [readonly [number, number], { x: number; y: number }]
+  >,
 ) {
   return vi.fn((coord: [number, number]) => {
     const key = JSON.stringify(coord);
     const hit = table.find(([k]) => JSON.stringify(k) === key);
-    if (!hit) throw new Error(`Unmocked project call: ${key}`);
+    if (!hit) {
+      throw new Error(`Unmocked project call: ${key}`);
+    }
     return hit[1];
   });
 }
@@ -60,14 +70,29 @@ const bboxCustomData: GeoCustomData = {
 // T17 (was an arbitrary placeholder when scaleMode was unread; now load-bearing
 // because polyline+screen preserves el.points instead of projecting).
 const polylineTwoPoint: GeoCustomData = {
-  geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
+  geo: {
+    kind: "polyline",
+    coordinates: [
+      [0, 0],
+      [1, 1],
+    ],
+    zRef: 12,
+  },
   scaleMode: "geographic",
   projection: "mercator",
   schemaVersion: 1,
 };
 
 const polylineThreePoint: GeoCustomData = {
-  geo: { kind: "polyline", coordinates: [[0, 0], [1, 0], [-1, 0]], zRef: 12 },
+  geo: {
+    kind: "polyline",
+    coordinates: [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+    ],
+    zRef: 12,
+  },
   scaleMode: "geographic",
   projection: "mercator",
   schemaVersion: 1,
@@ -93,7 +118,8 @@ describe("CoordinateSync.syncMapToScene", () => {
 
     expect(updateScene).toHaveBeenCalledOnce();
     expect(project).not.toHaveBeenCalled();
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed).toHaveLength(1);
     expect(passed[0]).toBe(plainEl); // same reference, untouched
   });
@@ -116,11 +142,20 @@ describe("CoordinateSync.syncMapToScene", () => {
     sync.syncMapToScene();
 
     expect(project).toHaveBeenCalledWith([-122.4194, 37.7749]);
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
-    expect(passed[0]).toMatchObject({ id: "p1", x: 500, y: 400, width: 8, height: 8 });
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
+    expect(passed[0]).toMatchObject({
+      id: "p1",
+      x: 500,
+      y: 400,
+      width: 8,
+      height: 8,
+    });
     // Invariant: customData.geo value preserved; customData is a NEW object
     // (_projectElement shallow-spreads customData and adds _lastSync for reanchorIfMoved).
-    const resultData = passed[0].customData as GeoCustomData & { _lastSync?: unknown };
+    const resultData = passed[0].customData as GeoCustomData & {
+      _lastSync?: unknown;
+    };
     expect(resultData.geo).toEqual(pointCustomData.geo);
     expect(resultData._lastSync).toEqual({ x: 500, y: 400 });
   });
@@ -159,7 +194,8 @@ describe("CoordinateSync.syncMapToScene", () => {
     sync.syncMapToScene();
 
     expect(project).toHaveBeenCalledTimes(2);
-    const second = updateScene.mock.calls[1][0].elements as ExcalidrawElementLike[];
+    const second = updateScene.mock.calls[1][0]
+      .elements as ExcalidrawElementLike[];
     expect(second[0]).toMatchObject({ x: 250, y: 333 });
   });
 });
@@ -167,8 +203,8 @@ describe("CoordinateSync.syncMapToScene", () => {
 describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
   it("projects NW + SE corners → x/y/width/height", () => {
     const project = makeProjectByLngLat([
-      [[-1, 1], { x: 100, y: 100 }],   // NW = (west, north)
-      [[1, -1], { x: 300, y: 250 }],   // SE = (east, south)
+      [[-1, 1], { x: 100, y: 100 }], // NW = (west, north)
+      [[1, -1], { x: 300, y: 250 }], // SE = (east, south)
     ]);
     const map = makeMap(project);
     const bboxEl: ExcalidrawElementLike = {
@@ -185,11 +221,20 @@ describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
-    expect(passed[0]).toMatchObject({ id: "b1", x: 100, y: 100, width: 200, height: 150 });
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
+    expect(passed[0]).toMatchObject({
+      id: "b1",
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
     // Invariant: customData.geo value preserved; customData is a NEW object
     // (_projectElement shallow-spreads customData and adds _lastSync).
-    const resultData = passed[0].customData as GeoCustomData & { _lastSync?: unknown };
+    const resultData = passed[0].customData as GeoCustomData & {
+      _lastSync?: unknown;
+    };
     expect(resultData.geo).toEqual(bboxCustomData.geo);
     expect(resultData._lastSync).toEqual({ x: 100, y: 100, w: 200, h: 150 });
   });
@@ -213,7 +258,8 @@ describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBe(1);
     expect(passed[0].height).toBe(1);
   });
@@ -239,7 +285,8 @@ describe("CoordinateSync.syncMapToScene — polyline anchor (Task 7)", () => {
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0]).toMatchObject({
       id: "l1",
       x: 10,
@@ -272,7 +319,8 @@ describe("CoordinateSync.syncMapToScene — polyline anchor (Task 7)", () => {
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0]).toMatchObject({
       id: "l3",
       x: 50,
@@ -319,7 +367,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBe(60);
     expect(passed[0].height).toBe(1); // clamped from 0
   });
@@ -348,7 +397,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBe(240); // 4× the 60 from creation zoom
     expect(passed[0].height).toBe(1);
     // Sanity: x/y match the projected first coord.
@@ -378,7 +428,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBe(15); // 1/4× the 60 from creation zoom
     expect(passed[0].height).toBe(1);
   });
@@ -390,7 +441,15 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
     // After multiplying offsets by 0.25, on-screen width = 960 * 0.25 = 240.
     // That's exactly 4× the creation width of 60 — the clamp ceiling.
     const polylineHybrid: GeoCustomData = {
-      geo: { kind: "polyline", coordinates: [[0, 0], [1, 0], [-1, 0]], zRef: 12 },
+      geo: {
+        kind: "polyline",
+        coordinates: [
+          [0, 0],
+          [1, 0],
+          [-1, 0],
+        ],
+        zRef: 12,
+      },
       scaleMode: "hybrid",
       projection: "mercator",
       schemaVersion: 1,
@@ -417,7 +476,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     // Plateaued at 4× the creation width of 60 = 240, regardless of zoom delta.
     expect(passed[0].width).toBeCloseTo(240, 5);
     expect(passed[0].height).toBe(1);
@@ -427,7 +487,14 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
     // screen mode preserves stored el.points unchanged. Width/height derive
     // from THAT bbox, not from re-projected coordinates.
     const polylineScreen: GeoCustomData = {
-      geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
+      geo: {
+        kind: "polyline",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+        zRef: 12,
+      },
       scaleMode: "screen",
       projection: "mercator",
       schemaVersion: 1,
@@ -454,7 +521,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0]).toMatchObject({
       id: "l-screen",
       x: 200,
@@ -489,7 +557,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBeGreaterThanOrEqual(1);
     expect(passed[0].height).toBeGreaterThanOrEqual(1);
   });
@@ -498,7 +567,14 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
     // Two coords projecting to the same pixel (degenerate / extreme zoom-out).
     // Use integer degrees so normalizeLng maps cleanly to the same value.
     const polylineGeo: GeoCustomData = {
-      geo: { kind: "polyline", coordinates: [[0, 0], [1, 1]], zRef: 12 },
+      geo: {
+        kind: "polyline",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+        zRef: 12,
+      },
       scaleMode: "geographic",
       projection: "mercator",
       schemaVersion: 1,
@@ -521,7 +597,8 @@ describe("CoordinateSync — polyline width/height projection (atlasdraw-76b2)",
 
     sync.syncMapToScene();
 
-    const passed = updateScene.mock.calls[0][0].elements as ExcalidrawElementLike[];
+    const passed = updateScene.mock.calls[0][0]
+      .elements as ExcalidrawElementLike[];
     expect(passed[0].width).toBe(1);
     expect(passed[0].height).toBe(1);
   });

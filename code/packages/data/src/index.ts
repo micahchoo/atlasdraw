@@ -64,7 +64,14 @@ export { parseShapefile, ShapefileParseError } from "./shapefile";
 export { generateThumbnail } from "./thumbnail";
 
 // Phase 5 Task 4 — Yjs CRDT type model for real-time data layers.
-export { YjsLayer, addFeature, deleteFeature, setProperty, appendVertex, deleteVertex } from "./yjs-layer";
+export {
+  YjsLayer,
+  addFeature,
+  deleteFeature,
+  setProperty,
+  appendVertex,
+  deleteVertex,
+} from "./yjs-layer";
 export { toGeoJSON, observeLayer } from "./yjs-snapshot";
 
 // Phase 5 Task 8 — Yjs AES-GCM Encryption Layer (stub, not wired).

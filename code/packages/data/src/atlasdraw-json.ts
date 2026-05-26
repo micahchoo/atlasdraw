@@ -6,13 +6,13 @@
 // variant (`atlasdraw.ts`) is the canonical container; this JSON form trades
 // binary capability for embeddability (URL hash, single-string transport).
 
-import type { FeatureCollection } from "geojson";
-
 import {
   ManifestSchema,
   type AtlasdrawDocument,
   type SceneElement,
 } from "./manifest-schema.js";
+
+import type { FeatureCollection } from "geojson";
 
 export type AtlasdrawJSONErrorCode =
   | "HAS_BINARY_ATTACHMENTS"

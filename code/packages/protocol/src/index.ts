@@ -18,7 +18,11 @@ export type {
 
 export type { AwarenessState } from "./realtime-events";
 export type { RoomKey } from "./room-key";
-export { parseRoomFragment, generateRoomKey, buildRoomFragment } from "./room-key";
+export {
+  parseRoomFragment,
+  generateRoomKey,
+  buildRoomFragment,
+} from "./room-key";
 
 // Phase 6 A2 — anchored-comment Yjs schema (separate Y.Doc from data layer).
 export type { CommentAnchor, CommentSchemaV1 } from "./comment-schema";

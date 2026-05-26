@@ -24,7 +24,9 @@
 // switcher is testable in jsdom without depending on CSS-module pipeline.
 
 import React, { useEffect, useRef, useState } from "react";
+
 import { getAppConfig } from "../config/app-config";
+
 import type {
   HttpStorageClient,
   WorkspaceSummary,
@@ -89,16 +91,22 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   // Self-host: render nothing. The hook order matters — call hooks before
   // bailing so React's call-order invariant holds across renders.
   useEffect(() => {
-    if (!cfg.managed) return;
+    if (!cfg.managed) {
+      return;
+    }
     let cancelled = false;
     client
       .listWorkspaces()
       .then((list) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setWorkspaces(list);
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setLoadError(err instanceof Error ? err.message : String(err));
       });
     return () => {
@@ -109,7 +117,9 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   // Close on outside click — same defer-attach pattern as the dialogs so the
   // open-click doesn't immediately close us.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const handleClick = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -124,7 +134,9 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
     };
   }, [open]);
 
-  if (!cfg.managed) return null;
+  if (!cfg.managed) {
+    return null;
+  }
 
   const active =
     workspaces.find((w) => w.id === activeId) ?? workspaces[0] ?? null;
@@ -132,8 +144,8 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   const triggerLabel = active
     ? active.name
     : loadError
-      ? "Workspaces unavailable"
-      : "Loading workspaces…";
+    ? "Workspaces unavailable"
+    : "Loading workspaces…";
 
   const goBilling = (workspaceId: string) => {
     if (navigateToBilling) {
@@ -281,7 +293,9 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     </span>
                     {ws.plan === "free" && (
                       <a
-                        href={`/billing?workspaceId=${encodeURIComponent(ws.id)}`}
+                        href={`/billing?workspaceId=${encodeURIComponent(
+                          ws.id,
+                        )}`}
                         data-testid={`workspace-switcher-upgrade-${ws.id}`}
                         onClick={(e) => {
                           // Use the navigate hook so tests can intercept.

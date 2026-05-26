@@ -14,7 +14,9 @@
 // returns scripted (lng,lat) per call so we can drive a deterministic gesture.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
 import { CircleTool } from "./CircleTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
@@ -58,9 +60,7 @@ function makeCtx(points: Array<{ lng: number; lat: number }>): MockCtx {
   });
 
   let nextId = 1;
-  const addElement = vi.fn(
-    (_seed: AtlasdrawElementSeed) => `el-${nextId++}`,
-  );
+  const addElement = vi.fn((_seed: AtlasdrawElementSeed) => `el-${nextId++}`);
   const updateElement = vi.fn();
 
   const ctx: ToolContext = {

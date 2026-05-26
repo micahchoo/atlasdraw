@@ -3,14 +3,13 @@
 // Phase 3 Wave 1 T2 + T3 — colocated tests for the .atlasdraw zip writer/reader.
 
 import JSZip from "jszip";
-import type { FeatureCollection } from "geojson";
+
 import { describe, expect, it } from "vitest";
 
 import { AtlasdrawFormatError, read, write } from "./atlasdraw.js";
-import type {
-  AtlasdrawDocument,
-  Manifest,
-} from "./manifest-schema.js";
+
+import type { FeatureCollection } from "geojson";
+import type { AtlasdrawDocument, Manifest } from "./manifest-schema.js";
 
 // ---------------------------------------------------------------------------
 // fixture builder
@@ -132,10 +131,13 @@ describe("atlasdraw.write + read — round-trip", () => {
     // JSZip exposes the internal compression option on the entry as `_data.compression`
     // OR via the `options.compression` field on older builds. Read defensively.
     const layerCompression =
-      (layerEntry as unknown as { _data?: { compression?: { magic?: string } } })
-        ._data?.compression?.magic ??
-      (layerEntry as unknown as { options?: { compression?: string } })
-        .options?.compression;
+      (
+        layerEntry as unknown as {
+          _data?: { compression?: { magic?: string } };
+        }
+      )._data?.compression?.magic ??
+      (layerEntry as unknown as { options?: { compression?: string } }).options
+        ?.compression;
     // DEFLATE magic in JSZip is "\x08\x00"; the named "DEFLATE" string is also accepted.
     expect(["\x08\x00", "DEFLATE"]).toContain(layerCompression);
 
@@ -144,8 +146,8 @@ describe("atlasdraw.write + read — round-trip", () => {
     const fileCompression =
       (fileEntry as unknown as { _data?: { compression?: { magic?: string } } })
         ._data?.compression?.magic ??
-      (fileEntry as unknown as { options?: { compression?: string } })
-        .options?.compression;
+      (fileEntry as unknown as { options?: { compression?: string } }).options
+        ?.compression;
     // STORE magic is "\x00\x00".
     expect(["\x00\x00", "STORE"]).toContain(fileCompression);
   });

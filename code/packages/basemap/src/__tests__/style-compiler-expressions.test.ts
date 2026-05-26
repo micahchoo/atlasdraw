@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { compileLayer } from "../style-compiler";
+
 import type { LayerStyle } from "../style";
 
 describe("compileLayer — expressions (A6)", () => {

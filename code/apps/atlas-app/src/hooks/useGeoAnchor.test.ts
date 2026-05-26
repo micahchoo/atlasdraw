@@ -6,9 +6,12 @@
 // @testing-library/react dep needed).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type maplibregl from "maplibre-gl";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import { buildGeoAnchorHandler } from "./useGeoAnchor";
+
+import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -43,8 +46,7 @@ function makeMockMap(opts?: {
   projectImpl?: ([lng, lat]: [number, number]) => { x: number; y: number };
 }): maplibregl.Map {
   const unproject = vi.fn(
-    opts?.unprojectImpl ??
-      (([x, y]: [number, number]) => ({ lng: x, lat: y })),
+    opts?.unprojectImpl ?? (([x, y]: [number, number]) => ({ lng: x, lat: y })),
   );
   // Identity project: project(unproject([x,y])) = [x,y]. For bbox reanchor tests,
   // use geo fixtures where north < south numerically so seProj.y - nwProj.y > 0
@@ -264,7 +266,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
             kind: "bbox",
             west: 0,
             east: 10,
-            north: 0,  // north=0, south=10 so seProj.y - nwProj.y = 10 > 0
+            north: 0, // north=0, south=10 so seProj.y - nwProj.y = 10 > 0
             south: 10,
             zRef: 10,
           },
@@ -338,7 +340,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
       type: "rectangle",
       x: 100,
       y: 100,
-      width: 1,  // clamped by _projectElement
+      width: 1, // clamped by _projectElement
       height: 1, // clamped by _projectElement
       customData: {
         geo: ORIGINAL_GEO,
@@ -397,33 +399,64 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     ]);
     expect(updateScene).toHaveBeenCalledTimes(1);
     const els = updateScene.mock.calls[0][0].elements as SceneElement[];
-    expect(els[0].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
-    expect(els[1].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+    expect(els[0].customData).toMatchObject({
+      geo: { kind: "bbox" },
+      scaleMode: "geographic",
+    });
+    expect(els[1].customData).toMatchObject({
+      geo: { kind: "bbox" },
+      scaleMode: "geographic",
+    });
   });
 
   it("frame and magicframe stamp bbox + geographic", () => {
     const { updateScene, trigger } = setup();
     trigger([
       { id: "frame-1", type: "frame", x: 0, y: 0, width: 100, height: 50 },
-      { id: "mframe-1", type: "magicframe", x: 0, y: 0, width: 100, height: 50 },
+      {
+        id: "mframe-1",
+        type: "magicframe",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 50,
+      },
     ]);
     expect(updateScene).toHaveBeenCalledTimes(1);
     const els = updateScene.mock.calls[0][0].elements as SceneElement[];
-    expect(els[0].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
-    expect(els[1].customData).toMatchObject({ geo: { kind: "bbox" }, scaleMode: "geographic" });
+    expect(els[0].customData).toMatchObject({
+      geo: { kind: "bbox" },
+      scaleMode: "geographic",
+    });
+    expect(els[1].customData).toMatchObject({
+      geo: { kind: "bbox" },
+      scaleMode: "geographic",
+    });
   });
 
   it("polyline element with missing points array is not stamped", () => {
     const { updateScene, trigger } = setup();
     // `line` is in POLYLINE_TOOL_TYPES but buildGeoCustomData requires points
     // to be present and non-empty; absent points → null → element passes through.
-    trigger([{ id: "line-nopts", type: "line", x: 0, y: 0, width: 0, height: 0 }]);
+    trigger([
+      { id: "line-nopts", type: "line", x: 0, y: 0, width: 0, height: 0 },
+    ]);
     expect(updateScene).not.toHaveBeenCalled();
   });
 
   it("polyline element with empty points array is not stamped", () => {
     const { updateScene, trigger } = setup();
-    trigger([{ id: "line-empty", type: "line", x: 0, y: 0, width: 0, height: 0, points: [] }]);
+    trigger([
+      {
+        id: "line-empty",
+        type: "line",
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        points: [],
+      },
+    ]);
     expect(updateScene).not.toHaveBeenCalled();
   });
 

@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 A13a — BillingPage tests.
 
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   render,
@@ -19,10 +12,9 @@ import {
 
 import { BillingPage } from "../BillingPage";
 import * as appConfig from "../../config/app-config";
+
 import type { AppConfig } from "../../config/app-config";
-import type {
-  HttpStorageClient,
-} from "../../services/createHttpStorageClient";
+import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 
 function makeClient(
   overrides: Partial<HttpStorageClient> = {},
@@ -215,9 +207,7 @@ describe("BillingPage", () => {
       const hint = screen.getByTestId("billing-page-self-host");
       expect(hint).toBeTruthy();
       expect(hint.textContent ?? "").toMatch(/Q-P6-1/);
-      expect(
-        screen.getByTestId("billing-page-self-host-docs"),
-      ).toBeTruthy();
+      expect(screen.getByTestId("billing-page-self-host-docs")).toBeTruthy();
     });
 
     it("does NOT render upgrade buttons", () => {
@@ -229,9 +219,7 @@ describe("BillingPage", () => {
         />,
       );
       expect(screen.queryByTestId("billing-tier-pro-upgrade")).toBeNull();
-      expect(
-        screen.queryByTestId("billing-tier-pro-plus-upgrade"),
-      ).toBeNull();
+      expect(screen.queryByTestId("billing-tier-pro-plus-upgrade")).toBeNull();
     });
   });
 });

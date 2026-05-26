@@ -13,8 +13,10 @@ import {
   act,
 } from "@testing-library/react";
 import * as Y from "yjs";
+
 import { CommentsPanel } from "../CommentsPanel";
 import { CommentsLayer } from "../../state/comments";
+
 import type { CommentAnchor } from "@atlasdraw/protocol";
 
 function makeLayer(doc?: Y.Doc): CommentsLayer {
@@ -100,9 +102,7 @@ describe("CommentsPanel", () => {
         authorName="Alice"
       />,
     );
-    const submit = screen.getByTestId(
-      "comments-submit",
-    ) as HTMLButtonElement;
+    const submit = screen.getByTestId("comments-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
     // Add text — still disabled (no anchor).
@@ -197,12 +197,8 @@ describe("CommentsPanel", () => {
         authorName="Alice"
       />,
     );
-    expect(
-      screen.queryByTestId(`comments-row-delete-${ownId}`),
-    ).toBeTruthy();
-    expect(
-      screen.queryByTestId(`comments-row-delete-${otherId}`),
-    ).toBeNull();
+    expect(screen.queryByTestId(`comments-row-delete-${ownId}`)).toBeTruthy();
+    expect(screen.queryByTestId(`comments-row-delete-${otherId}`)).toBeNull();
   });
 
   it("onRequestAnchor fires when the anchor toggle is clicked", () => {
@@ -229,9 +225,7 @@ describe("CommentsPanel", () => {
         pendingAnchor={mapAnchor}
       />,
     );
-    const submit = screen.getByTestId(
-      "comments-submit",
-    ) as HTMLButtonElement;
+    const submit = screen.getByTestId("comments-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     expect(screen.getByTestId("comments-empty")).toBeTruthy();
   });

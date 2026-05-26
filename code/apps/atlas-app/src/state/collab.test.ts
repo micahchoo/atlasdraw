@@ -24,7 +24,16 @@ import {
   vi,
   type Mock,
 } from "vitest";
+
 import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+
+// ---------------------------------------------------------------------------
+// Import after mocks are in place.
+// ---------------------------------------------------------------------------
+
+import { encryptScene } from "../collab/scene-crypto";
+
+import { CollabState } from "./collab";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be declared before importing the module under test.
@@ -73,6 +82,7 @@ vi.mock("@atlasdraw/data", () => ({
     doc = { destroy: () => undefined };
   },
   CollabUndoManager: class {
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor(_doc: unknown, _origin: string) {}
   },
 }));
@@ -112,7 +122,9 @@ function makeFakeSocket(id = "joiner-socket-id"): FakeSocket {
       const arr = listeners.get(eventName) ?? [];
       // Snapshot the listener list so a handler that registers a new listener
       // mid-fire (or clears one) doesn't perturb this invocation.
-      for (const cb of [...arr]) cb(payload as unknown);
+      for (const cb of [...arr]) {
+        cb(payload as unknown);
+      }
     },
     _listeners: listeners,
   };
@@ -132,6 +144,7 @@ class FakeWebSocket {
   onerror: (() => void) | null = null;
   onclose: (() => void) | null = null;
   readyState = 0;
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(_url: string) {}
   close(): void {
     this.readyState = 3;
@@ -150,24 +163,16 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Import after mocks are in place.
-// ---------------------------------------------------------------------------
-
-import { CollabState } from "./collab";
-import { encryptScene } from "../collab/scene-crypto";
-
-// ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
 const ROOM_ID = "room-test-1";
 
 function makeKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
+  return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
+    "encrypt",
+    "decrypt",
+  ]);
 }
 
 function makeElement(id: string): ExcalidrawElement {
@@ -176,6 +181,7 @@ function makeElement(id: string): ExcalidrawElement {
 }
 
 // Find the listener registered for an event via socket.on(name, cb).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function listenersFor(name: string): Listener[] {
   return currentFakeSocket._listeners.get(name) ?? [];
 }
@@ -184,7 +190,9 @@ function listenersFor(name: string): Listener[] {
 function lastEmit(name: string): unknown {
   const calls = currentFakeSocket.emit.mock.calls;
   for (let i = calls.length - 1; i >= 0; i--) {
-    if (calls[i][0] === name) return calls[i][1];
+    if (calls[i][0] === name) {
+      return calls[i][1];
+    }
   }
   return null;
 }

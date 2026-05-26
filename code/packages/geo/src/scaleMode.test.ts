@@ -2,6 +2,7 @@
 // Tests for scaleMode helpers (Phase 2 Wave 4 Task T17).
 
 import { describe, it, expect, vi } from "vitest";
+
 import {
   computeScaleFactor,
   clampHybridFactor,
@@ -13,6 +14,7 @@ import {
   type ExcalidrawAPI,
   type ExcalidrawElementLike,
 } from "./CoordinateSync.js";
+
 import type { GeoCustomData } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ function makeProjectByLngLat(
   return vi.fn((coord: [number, number]) => {
     const key = JSON.stringify(coord);
     const hit = table.find(([k]) => JSON.stringify(k) === key);
-    if (!hit) throw new Error(`Unmocked project call: ${key}`);
+    if (!hit) {throw new Error(`Unmocked project call: ${key}`);}
     return hit[1];
   });
 }
@@ -144,6 +146,7 @@ describe("_projectElement: point + geographic", () => {
         scaleMode: "geographic",
         projection: "mercator",
         schemaVersion: 1,
+        // eslint-disable-next-line prettier/prettier
       } satisfies GeoCustomData,
     };
     const out = runSync(map, el);

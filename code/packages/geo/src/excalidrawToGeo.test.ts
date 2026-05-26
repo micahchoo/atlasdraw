@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+
 import { excalidrawToGeo } from "./excalidrawToGeo.js";
+
 import type { ExcalidrawElementLike } from "./CoordinateSync.js";
 import type { GeoCustomData } from "./types.js";
 

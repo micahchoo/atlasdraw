@@ -17,6 +17,7 @@
  */
 
 import { useRef, useState, useCallback } from "react";
+
 import type maplibregl from "maplibre-gl";
 
 export interface UseMapRefReturn {

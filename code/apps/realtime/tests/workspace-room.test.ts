@@ -6,12 +6,15 @@
 // JOIN_ROOM without `workspaceId` keeps the legacy single-tenant room key —
 // so Phase 5 collab flows continue to work for self-host.
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "http";
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Server as SocketIOServer } from "socket.io";
 import { io as ioc } from "socket.io-client";
-import type { Socket as ClientSocket } from "socket.io-client";
+
 import { registerSocketIOHandlers } from "../src/socket-io-server";
+
+import type { Socket as ClientSocket } from "socket.io-client";
 
 let server: http.Server;
 let io: SocketIOServer;
@@ -74,6 +77,7 @@ describe("JOIN_ROOM workspace namespacing (Phase 6 A9)", () => {
     client.disconnect();
   });
 
+  // eslint-disable-next-line no-template-curly-in-string
   it("with workspaceId, room key becomes ${workspaceId}/${roomId}", async () => {
     const WS = "ws-alpha";
     const ROOM = "room-with-ws";

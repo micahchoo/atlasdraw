@@ -19,6 +19,7 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { MercatorCoordinate } from "maplibre-gl";
+
 import { projectPoint, unprojectPoint } from "./projection.js";
 
 /**
@@ -34,7 +35,10 @@ function makeFakeMap(zoom: number) {
       return { x: m.x * worldSize, y: m.y * worldSize };
     },
     unproject(point: [number, number]) {
-      const mc = new MercatorCoordinate(point[0] / worldSize, point[1] / worldSize);
+      const mc = new MercatorCoordinate(
+        point[0] / worldSize,
+        point[1] / worldSize,
+      );
       const ll = mc.toLngLat();
       return { lng: ll.lng, lat: ll.lat };
     },
@@ -46,7 +50,12 @@ describe("projection round-trip — property test (Task 9)", () => {
     const map = makeFakeMap(12);
     fc.assert(
       fc.property(
-        fc.double({ min: -179, max: 179, noNaN: true, noDefaultInfinity: true }),
+        fc.double({
+          min: -179,
+          max: 179,
+          noNaN: true,
+          noDefaultInfinity: true,
+        }),
         fc.double({ min: -85, max: 85, noNaN: true, noDefaultInfinity: true }),
         (lng, lat) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,8 +75,18 @@ describe("projection round-trip — property test (Task 9)", () => {
       const map = makeFakeMap(zoom);
       fc.assert(
         fc.property(
-          fc.double({ min: -179, max: 179, noNaN: true, noDefaultInfinity: true }),
-          fc.double({ min: -85, max: 85, noNaN: true, noDefaultInfinity: true }),
+          fc.double({
+            min: -179,
+            max: 179,
+            noNaN: true,
+            noDefaultInfinity: true,
+          }),
+          fc.double({
+            min: -85,
+            max: 85,
+            noNaN: true,
+            noDefaultInfinity: true,
+          }),
           (lng, lat) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { x, y } = projectPoint(map as any, lng, lat);

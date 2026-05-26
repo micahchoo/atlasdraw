@@ -91,8 +91,7 @@ const SEED_WORKSPACES: WorkspaceSummaryFixture[] = [
   },
 ];
 
-const STRIPE_FAKE_CHECKOUT_URL =
-  "https://checkout.stripe.com/test-xyz";
+const STRIPE_FAKE_CHECKOUT_URL = "https://checkout.stripe.com/test-xyz";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -267,9 +266,7 @@ test.describe("Phase 6 Wave 4 A15 — hosted-mode smoke", () => {
     // BillingPage in self-host shows the FOSS-hint section instead of
     // upgrade buttons.
     await page.goto("/billing");
-    await expect(
-      page.locator('[data-testid="billing-page"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="billing-page"]')).toBeVisible();
     await expect(
       page.locator('[data-testid="billing-page-self-host"]'),
     ).toBeVisible();
@@ -393,17 +390,13 @@ test.describe("Phase 6 Wave 4 A15 — hosted-mode smoke", () => {
       return;
     }
 
-    await expect(
-      page.locator('[data-testid="billing-page"]'),
-    ).toBeVisible();
+    await expect(page.locator('[data-testid="billing-page"]')).toBeVisible();
     await expect(
       page.locator('[data-testid="billing-page-self-host"]'),
     ).toHaveCount(0);
 
     // Click Upgrade-to-Pro.
-    await page
-      .locator('[data-testid="billing-tier-pro-upgrade"]')
-      .click();
+    await page.locator('[data-testid="billing-tier-pro-upgrade"]').click();
 
     // Assert location.assign was called with the stubbed Stripe URL.
     // Use waitForFunction-style polling so we don't race the click handler.
@@ -415,18 +408,14 @@ test.describe("Phase 6 Wave 4 A15 — hosted-mode smoke", () => {
     // intercepted location.assign. The test stops here.
   });
 
-  test.skip(
-    "managed: webhook idempotency (server-only)",
-    // Reason recorded inline so a reviewer can verify the cut without
-    // re-reading the plan.
-    async () => {
-      // SKIP — duplicate of the unit test at
-      // code/apps/storage/src/routes/__tests__/billing.test.ts which
-      // covers Stripe webhook signature verification + idempotency
-      // bookkeeping in isolation. There is no end-to-end browser path
-      // for a Stripe webhook (the request originates from Stripe's
-      // servers, never the atlas-app), so duplicating it here would
-      // exercise zero additional code.
-    },
-  );
+  test.skip("managed: webhook idempotency (server-only)", async () => {
+    // re-reading the plan. // Reason recorded inline so a reviewer can verify the cut without
+    // SKIP — duplicate of the unit test at
+    // code/apps/storage/src/routes/__tests__/billing.test.ts which
+    // covers Stripe webhook signature verification + idempotency
+    // bookkeeping in isolation. There is no end-to-end browser path
+    // for a Stripe webhook (the request originates from Stripe's
+    // servers, never the atlas-app), so duplicating it here would
+    // exercise zero additional code.
+  });
 });

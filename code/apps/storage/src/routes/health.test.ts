@@ -2,6 +2,7 @@
 
 import Fastify from "fastify";
 import { describe, it, expect } from "vitest";
+
 import { registerHealthRoute } from "./health";
 
 describe("registerHealthRoute", () => {

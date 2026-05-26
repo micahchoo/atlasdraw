@@ -84,7 +84,9 @@ async function createTestPolygon(
   await page.evaluate(
     async ({ fid, vtxCount }) => {
       const cs = (window as any).__atlasdraw__.collabState;
-      if (!cs?.yjsDoc) throw new Error("Collab not active");
+      if (!cs?.yjsDoc) {
+        throw new Error("Collab not active");
+      }
 
       // Build initial ring vertices.
       const ring: Array<[number, number]> = [];
@@ -115,21 +117,31 @@ async function getRingVertexCount(
 ): Promise<number> {
   return page.evaluate((fid) => {
     const cs = (window as any).__atlasdraw__?.collabState;
-    if (!cs?.yjsDoc) return -1;
+    if (!cs?.yjsDoc) {
+      return -1;
+    }
 
     const layers = cs.yjsDoc.getMap("layers");
     const defaultLayer = layers.get("default");
-    if (!defaultLayer) return -1;
+    if (!defaultLayer) {
+      return -1;
+    }
 
     const feature = defaultLayer.get(fid);
-    if (!feature) return -1;
+    if (!feature) {
+      return -1;
+    }
 
     const geometry = feature.get("geometry");
-    if (!geometry) return -1;
+    if (!geometry) {
+      return -1;
+    }
 
     const coords = geometry.get("coordinates");
     const ring = coords?.get(0);
-    if (!ring) return -1;
+    if (!ring) {
+      return -1;
+    }
 
     return ring.length;
   }, featureId);
@@ -144,21 +156,31 @@ async function getRingVertices(
 ): Promise<Array<[number, number]>> {
   return page.evaluate((fid) => {
     const cs = (window as any).__atlasdraw__?.collabState;
-    if (!cs?.yjsDoc) return [];
+    if (!cs?.yjsDoc) {
+      return [];
+    }
 
     const layers = cs.yjsDoc.getMap("layers");
     const defaultLayer = layers.get("default");
-    if (!defaultLayer) return [];
+    if (!defaultLayer) {
+      return [];
+    }
 
     const feature = defaultLayer.get(fid);
-    if (!feature) return [];
+    if (!feature) {
+      return [];
+    }
 
     const geometry = feature.get("geometry");
-    if (!geometry) return [];
+    if (!geometry) {
+      return [];
+    }
 
     const coords = geometry.get("coordinates");
     const ring = coords?.get(0);
-    if (!ring) return [];
+    if (!ring) {
+      return [];
+    }
 
     const vertices: Array<[number, number]> = [];
     for (let i = 0; i < ring.length; i++) {
@@ -204,10 +226,14 @@ test.describe("Phase 5 — CRDT convergence (Task 16)", () => {
     await pageB.waitForFunction(
       ({ fid }) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) return false;
+        if (!cs?.yjsDoc) {
+          return false;
+        }
         const layers = cs.yjsDoc.getMap("layers");
         const defaultLayer = layers.get("default");
-        if (!defaultLayer) return false;
+        if (!defaultLayer) {
+          return false;
+        }
         return defaultLayer.get(fid) != null;
       },
       { fid: FEATURE_ID },
@@ -229,7 +255,9 @@ test.describe("Phase 5 — CRDT convergence (Task 16)", () => {
     const appendTaskA = pageA.evaluate(
       async ({ fid, vertex }) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) throw new Error("Collab not active on context A");
+        if (!cs?.yjsDoc) {
+          throw new Error("Collab not active on context A");
+        }
         const data = await import("@atlasdraw/data");
         const layer = new data.YjsLayer(cs.yjsDoc).getOrCreateLayer("default");
         data.appendVertex(layer, fid, 0, vertex);
@@ -240,7 +268,9 @@ test.describe("Phase 5 — CRDT convergence (Task 16)", () => {
     const appendTaskB = pageB.evaluate(
       async ({ fid, vertex }) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) throw new Error("Collab not active on context B");
+        if (!cs?.yjsDoc) {
+          throw new Error("Collab not active on context B");
+        }
         const data = await import("@atlasdraw/data");
         const layer = new data.YjsLayer(cs.yjsDoc).getOrCreateLayer("default");
         data.appendVertex(layer, fid, 0, vertex);
@@ -257,12 +287,18 @@ test.describe("Phase 5 — CRDT convergence (Task 16)", () => {
     await pageA.waitForFunction(
       ({ fid, expected }) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) return false;
+        if (!cs?.yjsDoc) {
+          return false;
+        }
         const layers = cs.yjsDoc.getMap("layers");
         const defaultLayer = layers.get("default");
-        if (!defaultLayer) return false;
+        if (!defaultLayer) {
+          return false;
+        }
         const feature = defaultLayer.get(fid);
-        if (!feature) return false;
+        if (!feature) {
+          return false;
+        }
         const geometry = feature.get("geometry");
         const coords = geometry?.get("coordinates");
         const ring = coords?.get(0);
@@ -275,12 +311,18 @@ test.describe("Phase 5 — CRDT convergence (Task 16)", () => {
     await pageB.waitForFunction(
       ({ fid, expected }) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) return false;
+        if (!cs?.yjsDoc) {
+          return false;
+        }
         const layers = cs.yjsDoc.getMap("layers");
         const defaultLayer = layers.get("default");
-        if (!defaultLayer) return false;
+        if (!defaultLayer) {
+          return false;
+        }
         const feature = defaultLayer.get(fid);
-        if (!feature) return false;
+        if (!feature) {
+          return false;
+        }
         const geometry = feature.get("geometry");
         const coords = geometry?.get("coordinates");
         const ring = coords?.get(0);

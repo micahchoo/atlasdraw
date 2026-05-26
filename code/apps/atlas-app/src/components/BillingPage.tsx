@@ -16,7 +16,9 @@
 // mount, no Excalidraw provider dependency, fully testable in jsdom.
 
 import React, { useState } from "react";
+
 import { getAppConfig } from "../config/app-config";
+
 import type {
   CheckoutPriceTier,
   HttpStorageClient,
@@ -76,11 +78,7 @@ const TIERS: PlanTier[] = [
     name: "Pro+",
     price: "$19 / mo",
     description: "Per workspace, up to 25 members.",
-    features: [
-      "Everything in Pro",
-      "Priority support",
-      "Per-workspace quotas",
-    ],
+    features: ["Everything in Pro", "Priority support", "Per-workspace quotas"],
     upgradeTier: "pro-plus",
   },
 ];
@@ -105,7 +103,9 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   };
 
   const handleUpgrade = async (tier: CheckoutPriceTier) => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      return;
+    }
     setPending(tier);
     setError(null);
     try {
@@ -178,8 +178,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               Self-hosting Atlasdraw
             </h2>
             <p style={{ margin: "0 0 0.5rem 0" }}>
-              You're running the FOSS edition — there is no Stripe billing
-              here. Self-hosting?{" "}
+              You're running the FOSS edition — there is no Stripe billing here.
+              Self-hosting?{" "}
               <a
                 href="/docs/self-host/README.md"
                 data-testid="billing-page-self-host-docs"
@@ -197,8 +197,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               }}
             >
               Citation: Q-P6-1 — v1.0 ships the standalone app; managed-mode
-              (Stripe + workspace quotas) is the maintainer-hosted overlay,
-              not the FOSS surface.
+              (Stripe + workspace quotas) is the maintainer-hosted overlay, not
+              the FOSS surface.
             </p>
           </section>
         ) : null}
@@ -284,8 +284,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                       !workspaceId
                         ? "Pick a workspace first."
                         : pending !== null
-                          ? "Already redirecting…"
-                          : undefined
+                        ? "Already redirecting…"
+                        : undefined
                     }
                     onClick={() => handleUpgrade(tier.upgradeTier!)}
                     style={{

@@ -79,19 +79,25 @@ export function geoToExcalidraw(
       const rings = geometry.coordinates as Array<Array<[number, number]>>;
       const outer = rings[0];
       if (!outer || outer.length === 0) {
-        throw new Error(
-          "geoToExcalidraw: polygon has empty outer ring",
-        );
+        throw new Error("geoToExcalidraw: polygon has empty outer ring");
       }
       let west = Infinity;
       let east = -Infinity;
       let south = Infinity;
       let north = -Infinity;
       for (const [lng, lat] of outer) {
-        if (lng < west) west = lng;
-        if (lng > east) east = lng;
-        if (lat < south) south = lat;
-        if (lat > north) north = lat;
+        if (lng < west) {
+          west = lng;
+        }
+        if (lng > east) {
+          east = lng;
+        }
+        if (lat < south) {
+          south = lat;
+        }
+        if (lat > north) {
+          north = lat;
+        }
       }
       const customData: GeoCustomData = {
         geo: { kind: "bbox", west, south, east, north, zRef },
@@ -114,7 +120,9 @@ export function geoToExcalidraw(
         geo: {
           kind: "polyline",
           // Defensive copy — caller's array won't be aliased into customData.
-          coordinates: coords.map(([lng, lat]) => [lng, lat] as [number, number]),
+          coordinates: coords.map(
+            ([lng, lat]) => [lng, lat] as [number, number],
+          ),
           zRef,
         },
         scaleMode: "hybrid",

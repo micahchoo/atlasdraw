@@ -8,11 +8,12 @@
 // directly without a renderer (no @testing-library/react dep added).
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type maplibregl from "maplibre-gl";
-import type {
-  ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import { buildToolContext } from "./useAtlasdrawTool";
+
+import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -108,11 +109,9 @@ describe("buildToolContext().excalidraw.updateElement", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    warnSpy = vi
-      .spyOn(console, "warn")
-      .mockImplementation(() => {
-        /* swallow */
-      });
+    warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+      /* swallow */
+    });
   });
 
   it("re-projects to new scene coords when patch.geo is supplied", () => {

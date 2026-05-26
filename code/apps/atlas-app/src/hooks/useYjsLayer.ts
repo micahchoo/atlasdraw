@@ -11,8 +11,7 @@
 // Downstream contract: produces {features, mutate} consumed by MapEditor.
 
 import { useState, useEffect, useRef } from "react";
-import * as Y from "yjs";
-import type { FeatureCollection } from "geojson";
+
 import {
   YjsLayer,
   observeLayer,
@@ -22,6 +21,10 @@ import {
   appendVertex as yjsAppendVertex,
   deleteVertex as yjsDeleteVertex,
 } from "@atlasdraw/data";
+
+import type * as Y from "yjs";
+
+import type { FeatureCollection } from "geojson";
 
 // ---------------------------------------------------------------------------
 // Public types

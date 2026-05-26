@@ -5,13 +5,16 @@
 // automated adversarial probes: oversized payloads, room-size limits, rate-limit
 // flak-avoidance, and health-check survivability.
 
-import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import http from "http";
+
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { Server as SocketIOServer } from "socket.io";
 import { io as ioc } from "socket.io-client";
-import type { Socket as ClientSocket } from "socket.io-client";
+
 import { registerSocketIOHandlers } from "../src/socket-io-server";
 import { registerHealth } from "../src/health";
+
+import type { Socket as ClientSocket } from "socket.io-client";
 
 // ---------------------------------------------------------------------------
 // Test server lifecycle
@@ -100,22 +103,19 @@ afterAll(() => {
 /** Fetch the health endpoint and parse JSON. */
 async function healthCheck(): Promise<Record<string, unknown>> {
   return new Promise<Record<string, unknown>>((resolve, reject) => {
-    const req = http.get(
-      `http://localhost:${port}/health`,
-      (res) => {
-        let data = "";
-        res.on("data", (chunk: string) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(data) as Record<string, unknown>);
-          } catch (e) {
-            reject(e);
-          }
-        });
-      },
-    );
+    const req = http.get(`http://localhost:${port}/health`, (res) => {
+      let data = "";
+      res.on("data", (chunk: string) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(data) as Record<string, unknown>);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
     req.on("error", reject);
   });
 }
@@ -206,7 +206,9 @@ describe("adversarial relay hardening", () => {
 
     // Cleanup
     fifth.close();
-    for (const c of clients) c.close();
+    for (const c of clients) {
+      c.close();
+    }
   });
 
   // -----------------------------------------------------------------------

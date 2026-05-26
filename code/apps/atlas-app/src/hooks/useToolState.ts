@@ -16,8 +16,10 @@
  */
 
 import { useEffect, useState } from "react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import { classifyTool } from "@atlasdraw/tools";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,7 +53,9 @@ export function useToolState(api: ExcalidrawImperativeAPI | null): ToolState {
   });
 
   useEffect(() => {
-    if (!api) return;
+    if (!api) {
+      return;
+    }
 
     // Seed initial state immediately — avoids a null activeTool on the first
     // render after the API becomes available. getAppState() is synchronous.
@@ -68,7 +72,9 @@ export function useToolState(api: ExcalidrawImperativeAPI | null): ToolState {
       setState((prev) => {
         // Bail early — onChange fires on every pointer move during a drag.
         // Only update when the tool type actually changes.
-        if (prev.activeTool?.type === nextType) return prev;
+        if (prev.activeTool?.type === nextType) {
+          return prev;
+        }
         return {
           activeTool: { type: nextType },
           isDrawingMode: classifyTool(nextType),

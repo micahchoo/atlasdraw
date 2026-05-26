@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { loadConfig } from "./config";
 
 describe("loadConfig", () => {
@@ -35,9 +36,7 @@ describe("loadConfig", () => {
           BLOB_ACCESS_KEY: "x",
           BLOB_SECRET_KEY: "x",
         }),
-      ).toThrow(
-        /Missing required env var: DATABASE_URL.*postgres-minio/,
-      );
+      ).toThrow(/Missing required env var: DATABASE_URL.*postgres-minio/);
     });
   });
 

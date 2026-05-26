@@ -16,7 +16,6 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { FocusTrap } from "./FocusTrap";
 import {
   exportPDF,
   type LayerLegendEntry,
@@ -24,6 +23,8 @@ import {
   type PageSize,
   type PrintOptions,
 } from "../lib/print-pdf";
+
+import { FocusTrap } from "./FocusTrap";
 
 export interface PrintDialogProps {
   /**
@@ -67,7 +68,9 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   // Focus trap + Escape (mirrors MaputnikDialog).
   useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel) {
+      return;
+    }
     submitBtnRef.current?.focus();
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -81,7 +84,9 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
             'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
           ),
         ).filter((el) => !el.hasAttribute("disabled"));
-        if (focusables.length === 0) return;
+        if (focusables.length === 0) {
+          return;
+        }
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
         if (e.shiftKey && document.activeElement === first) {
@@ -118,7 +123,9 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (exporting) return;
+      if (exporting) {
+        return;
+      }
       const canvas = getMapCanvas();
       if (!canvas) {
         setError("Map is not ready yet — try again in a moment.");
@@ -134,8 +141,10 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
           mapCanvas: canvas,
           layers,
         });
-        const safeName =
-          (title.trim() || "Untitled map").replace(/[^\w\- ]+/g, "_") + ".pdf";
+        const safeName = `${(title.trim() || "Untitled map").replace(
+          /[^\w\- ]+/g,
+          "_",
+        )}.pdf`;
         const url = URL.createObjectURL(blob);
         try {
           const a = document.createElement("a");
@@ -178,196 +187,196 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
       data-testid="print-dialog-overlay"
     >
       <FocusTrap>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Export PDF"
-        style={{
-          background: "var(--color-surface, #fff)",
-          borderRadius: "0.5rem",
-          padding: "1rem",
-          minWidth: 360,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-        }}
-      >
-        <h3
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Export PDF"
           style={{
-            margin: "0 0 0.75rem 0",
-            fontSize: "1rem",
-            fontWeight: 600,
+            background: "var(--color-surface, #fff)",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+            minWidth: 360,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
           }}
         >
-          Export PDF
-        </h3>
-
-        <form id={formId} onSubmit={handleSubmit}>
-          {/* Page size */}
-          <fieldset
+          <h3
             style={{
-              border: "1px solid #ddd",
-              borderRadius: "0.25rem",
-              padding: "0.5rem 0.75rem",
               margin: "0 0 0.75rem 0",
+              fontSize: "1rem",
+              fontWeight: 600,
             }}
-            data-testid="print-dialog-page-size"
           >
-            <legend style={{ fontSize: "0.75rem", color: "#555" }}>
-              Page size
-            </legend>
-            {PAGE_SIZE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: "0.8125rem",
-                  cursor: "pointer",
-                  padding: "2px 0",
-                }}
-              >
-                <input
-                  type="radio"
-                  name="pageSize"
-                  value={opt.value}
-                  checked={pageSize === opt.value}
-                  onChange={() => setPageSize(opt.value)}
-                  data-testid={`print-dialog-page-size-${opt.value}`}
-                />
-                {opt.label}
-              </label>
-            ))}
-          </fieldset>
+            Export PDF
+          </h3>
 
-          {/* Orientation */}
-          <fieldset
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: "0.25rem",
-              padding: "0.5rem 0.75rem",
-              margin: "0 0 0.75rem 0",
-            }}
-            data-testid="print-dialog-orientation"
-          >
-            <legend style={{ fontSize: "0.75rem", color: "#555" }}>
-              Orientation
-            </legend>
-            <div style={{ display: "flex", gap: 12 }}>
-              {(["portrait", "landscape"] as const).map((o) => (
+          <form id={formId} onSubmit={handleSubmit}>
+            {/* Page size */}
+            <fieldset
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: "0.25rem",
+                padding: "0.5rem 0.75rem",
+                margin: "0 0 0.75rem 0",
+              }}
+              data-testid="print-dialog-page-size"
+            >
+              <legend style={{ fontSize: "0.75rem", color: "#555" }}>
+                Page size
+              </legend>
+              {PAGE_SIZE_OPTIONS.map((opt) => (
                 <label
-                  key={o}
+                  key={opt.value}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 4,
+                    gap: 6,
                     fontSize: "0.8125rem",
                     cursor: "pointer",
+                    padding: "2px 0",
                   }}
                 >
                   <input
                     type="radio"
-                    name="orientation"
-                    value={o}
-                    checked={orientation === o}
-                    onChange={() => setOrientation(o)}
-                    data-testid={`print-dialog-orientation-${o}`}
+                    name="pageSize"
+                    value={opt.value}
+                    checked={pageSize === opt.value}
+                    onChange={() => setPageSize(opt.value)}
+                    data-testid={`print-dialog-page-size-${opt.value}`}
                   />
-                  {o === "portrait" ? "Portrait" : "Landscape"}
+                  {opt.label}
                 </label>
               ))}
-            </div>
-          </fieldset>
+            </fieldset>
 
-          {/* Title */}
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.75rem",
-              color: "#555",
-              margin: "0 0 0.25rem 0",
-            }}
-            htmlFor={`${formId}-title`}
-          >
-            Title
-          </label>
-          <input
-            id={`${formId}-title`}
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            data-testid="print-dialog-title-input"
-            style={{
-              width: "100%",
-              padding: "6px 8px",
-              border: "1px solid #adb5bd",
-              borderRadius: 4,
-              fontSize: "0.875rem",
-              boxSizing: "border-box",
-              marginBottom: "0.75rem",
-            }}
-          />
-
-          {error && (
-            <div
-              role="alert"
-              data-testid="print-dialog-error"
+            {/* Orientation */}
+            <fieldset
               style={{
-                color: "#c92a2a",
-                fontSize: "0.8125rem",
-                margin: "0 0 0.5rem 0",
+                border: "1px solid #ddd",
+                borderRadius: "0.25rem",
+                padding: "0.5rem 0.75rem",
+                margin: "0 0 0.75rem 0",
               }}
+              data-testid="print-dialog-orientation"
             >
-              {error}
-            </div>
-          )}
+              <legend style={{ fontSize: "0.75rem", color: "#555" }}>
+                Orientation
+              </legend>
+              <div style={{ display: "flex", gap: 12 }}>
+                {(["portrait", "landscape"] as const).map((o) => (
+                  <label
+                    key={o}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: "0.8125rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="orientation"
+                      value={o}
+                      checked={orientation === o}
+                      onChange={() => setOrientation(o)}
+                      data-testid={`print-dialog-orientation-${o}`}
+                    />
+                    {o === "portrait" ? "Portrait" : "Landscape"}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: 8,
-              marginTop: "0.5rem",
-            }}
-          >
-            <button
-              type="button"
-              onClick={onCloseRequest}
-              data-testid="print-dialog-cancel"
+            {/* Title */}
+            <label
               style={{
-                padding: "6px 12px",
+                display: "block",
+                fontSize: "0.75rem",
+                color: "#555",
+                margin: "0 0 0.25rem 0",
+              }}
+              htmlFor={`${formId}-title`}
+            >
+              Title
+            </label>
+            <input
+              id={`${formId}-title`}
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              data-testid="print-dialog-title-input"
+              style={{
+                width: "100%",
+                padding: "6px 8px",
                 border: "1px solid #adb5bd",
                 borderRadius: 4,
-                background: "#fff",
-                color: "#212529",
-                fontSize: 14,
-                cursor: "pointer",
+                fontSize: "0.875rem",
+                boxSizing: "border-box",
+                marginBottom: "0.75rem",
               }}
-            >
-              Cancel
-            </button>
-            <button
-              ref={submitBtnRef}
-              type="submit"
-              disabled={exporting}
-              aria-disabled={exporting}
-              data-testid="print-dialog-submit"
+            />
+
+            {error && (
+              <div
+                role="alert"
+                data-testid="print-dialog-error"
+                style={{
+                  color: "#c92a2a",
+                  fontSize: "0.8125rem",
+                  margin: "0 0 0.5rem 0",
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <div
               style={{
-                padding: "6px 12px",
-                border: "1px solid #1971c2",
-                borderRadius: 4,
-                background: exporting ? "#74c0fc" : "#1971c2",
-                color: "#ffffff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: exporting ? "wait" : "pointer",
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                marginTop: "0.5rem",
               }}
             >
-              {exporting ? "Exporting…" : "Export PDF"}
-            </button>
-          </div>
-        </form>
-      </div>
+              <button
+                type="button"
+                onClick={onCloseRequest}
+                data-testid="print-dialog-cancel"
+                style={{
+                  padding: "6px 12px",
+                  border: "1px solid #adb5bd",
+                  borderRadius: 4,
+                  background: "#fff",
+                  color: "#212529",
+                  fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                ref={submitBtnRef}
+                type="submit"
+                disabled={exporting}
+                aria-disabled={exporting}
+                data-testid="print-dialog-submit"
+                style={{
+                  padding: "6px 12px",
+                  border: "1px solid #1971c2",
+                  borderRadius: 4,
+                  background: exporting ? "#74c0fc" : "#1971c2",
+                  color: "#ffffff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: exporting ? "wait" : "pointer",
+                }}
+              >
+                {exporting ? "Exporting…" : "Export PDF"}
+              </button>
+            </div>
+          </form>
+        </div>
       </FocusTrap>
     </div>
   );

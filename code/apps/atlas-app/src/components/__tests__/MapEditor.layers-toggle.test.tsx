@@ -14,6 +14,14 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// SUT
+// ---------------------------------------------------------------------------
+
+import { MapEditor } from "../MapEditor";
+import { useLayerRegistryStore } from "../../state/layerRegistry";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -26,17 +34,44 @@ vi.mock("@atlasdraw/basemap", () => ({
   compileLayer: vi.fn(),
   defaultLayerStyle: vi.fn(),
   registerPmtilesProtocol: vi.fn(),
-  getBasemap: vi.fn((id: string) =>
-    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  getBasemap: vi.fn((id: string) => ({
+    id,
+    label: id,
+    styleFile: `${id}.json`,
+    requiresRemote: false,
+  })),
+  buildStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
   ),
-  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
   BASEMAPS: [
-    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
-    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
-    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+    {
+      id: "protomaps-light",
+      label: "Light",
+      styleFile: "protomaps-light.json",
+      requiresRemote: false,
+    },
+    {
+      id: "protomaps-dark",
+      label: "Dark",
+      styleFile: "protomaps-dark.json",
+      requiresRemote: false,
+    },
+    {
+      id: "openfreemap-bright",
+      label: "Bright",
+      styleFile: "openfreemap-bright.json",
+      requiresRemote: true,
+    },
   ],
-  resolveStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
-  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error { constructor(public readonly basemapId: string) { super(`Basemap ${basemapId} requires allow_remote=true`); this.name = "BasemapRemoteGatedError"; } },
+  resolveStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
+  ),
+  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
+    constructor(public readonly basemapId: string) {
+      super(`Basemap ${basemapId} requires allow_remote=true`);
+      this.name = "BasemapRemoteGatedError";
+    }
+  },
 }));
 
 const mockToggleSidebarSpy = vi.fn();
@@ -193,13 +228,6 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
   }),
 }));
 
-// ---------------------------------------------------------------------------
-// SUT
-// ---------------------------------------------------------------------------
-
-import { MapEditor } from "../MapEditor";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-
 beforeEach(() => {
   vi.clearAllMocks();
   useLayerRegistryStore.setState({ entries: [] });
@@ -263,9 +291,9 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     await waitFor(() => {
       expect(mockFakeExcalidrawAPI.registerSidebarTab).toHaveBeenCalled();
     });
-    const arg = (mockFakeExcalidrawAPI.registerSidebarTab as ReturnType<
-      typeof vi.fn
-    >).mock.calls[0][0];
+    const arg = (
+      mockFakeExcalidrawAPI.registerSidebarTab as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0];
     expect(arg.name).toBe("layers");
     expect(arg.label).toBe("Layers");
     expect(arg.content).toBeTruthy();

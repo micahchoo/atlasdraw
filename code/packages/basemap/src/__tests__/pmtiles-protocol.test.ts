@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import maplibregl from "maplibre-gl";
+
+import {
+  __resetPmtilesProtocolForTests,
+  registerPmtilesProtocol,
+} from "../pmtiles-protocol";
+
 // Mock maplibre-gl BEFORE importing the module under test so the import-time
 // reference to `addProtocol` resolves to our spy.
 vi.mock("maplibre-gl", () => {
@@ -18,13 +25,6 @@ vi.mock("pmtiles", () => {
     },
   };
 });
-
-import maplibregl from "maplibre-gl";
-
-import {
-  __resetPmtilesProtocolForTests,
-  registerPmtilesProtocol,
-} from "../pmtiles-protocol";
 
 describe("registerPmtilesProtocol", () => {
   beforeEach(() => {

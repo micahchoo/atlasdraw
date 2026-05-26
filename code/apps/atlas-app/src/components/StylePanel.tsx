@@ -14,13 +14,19 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-import { FocusTrap } from "./FocusTrap";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
-import type { DataLayerEntry } from "../state/layerRegistry";
+
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
-import type { StyleExpression } from "@atlasdraw/basemap";
-import { ColorRampPicker } from "./ColorRampPicker";
+
 import styles from "../styles/StylePanel.module.css";
+
+import { FocusTrap } from "./FocusTrap";
+
+import { ColorRampPicker } from "./ColorRampPicker";
+
+import type { DataLayerEntry } from "../state/layerRegistry";
+
+import type { StyleExpression } from "@atlasdraw/basemap";
 
 // ---- stop-computation helpers (kept inline per Phase 6 constraint) ----------
 
@@ -28,10 +34,14 @@ import styles from "../styles/StylePanel.module.css";
  * Linear stops: N evenly-spaced breakpoints from min..max.
  */
 function linearStops(values: number[], count: number): number[] {
-  if (values.length === 0 || count < 2) return [];
+  if (values.length === 0 || count < 2) {
+    return [];
+  }
   const min = Math.min(...values);
   const max = Math.max(...values);
-  if (min === max) return [min];
+  if (min === max) {
+    return [min];
+  }
   const step = (max - min) / (count - 1);
   return Array.from({ length: count }, (_, i) => +(min + step * i).toFixed(6));
 }
@@ -41,12 +51,17 @@ function linearStops(values: number[], count: number): number[] {
  * For count=5 this yields 0%, 25%, 50%, 75%, 100% — i.e. min, Q1, median, Q3, max.
  */
 function quantileStops(values: number[], count: number): number[] {
-  if (values.length === 0 || count < 2) return [];
+  if (values.length === 0 || count < 2) {
+    return [];
+  }
   const sorted = values.slice().sort((a, b) => a - b);
   const out: number[] = [];
   for (let i = 0; i < count; i++) {
     const t = i / (count - 1);
-    const idx = Math.min(sorted.length - 1, Math.round(t * (sorted.length - 1)));
+    const idx = Math.min(
+      sorted.length - 1,
+      Math.round(t * (sorted.length - 1)),
+    );
     out.push(+sorted[idx].toFixed(6));
   }
   return out;
@@ -109,7 +124,9 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
   // Escape-to-close — wire once. Keyed on onClose so callers can swap handlers.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -156,68 +173,83 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
 
   return (
     <FocusTrap>
-    <div
-      role="dialog"
-      aria-label="Style editor"
-      className={styles.panel}
-      data-testid="style-panel"
-    >
-      <div className={styles.header}>
-        <span className={styles.title}>Style: {entry.label}</span>
-        <button
-          type="button"
-          className={styles.closeBtn}
-          aria-label="Close"
-          data-testid="style-close"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      </div>
+      <div
+        role="dialog"
+        aria-label="Style editor"
+        className={styles.panel}
+        data-testid="style-panel"
+      >
+        <div className={styles.header}>
+          <span className={styles.title}>Style: {entry.label}</span>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            aria-label="Close"
+            data-testid="style-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
 
-      <div role="tablist" className={styles.tabStrip}>
-        <TabButton tab="single" active={tab} onClick={setTab} label="Single color" />
-        <TabButton tab="categorical" active={tab} onClick={setTab} label="Categorical" />
-        <TabButton tab="graduated" active={tab} onClick={setTab} label="Graduated" />
-      </div>
+        <div role="tablist" className={styles.tabStrip}>
+          <TabButton
+            tab="single"
+            active={tab}
+            onClick={setTab}
+            label="Single color"
+          />
+          <TabButton
+            tab="categorical"
+            active={tab}
+            onClick={setTab}
+            label="Categorical"
+          />
+          <TabButton
+            tab="graduated"
+            active={tab}
+            onClick={setTab}
+            label="Graduated"
+          />
+        </div>
 
-      <div className={styles.body}>
-        {tab === "single" && (
-          <SingleColorTab
-            entry={entry}
-            onApply={(hex) =>
-              registry.updateStyle(layerId, {
-                fillColor: hex,
-                expression: undefined,
-              })
-            }
-          />
-        )}
-        {tab === "categorical" && (
-          <CategoricalTab
-            entry={entry}
-            allProps={allProps}
-            onApply={(expr) =>
-              registry.updateStyle(layerId, { expression: expr })
-            }
-          />
-        )}
-        {tab === "graduated" && (
-          <GraduatedTab
-            entry={entry}
-            numericProps={numericProps}
-            fcValues={(prop: string) =>
-              (fc?.features ?? [])
-                .map((f) => f.properties?.[prop])
-                .filter((v): v is number => typeof v === "number")
-            }
-            onApply={(expr) =>
-              registry.updateStyle(layerId, { expression: expr })
-            }
-          />
-        )}
+        <div className={styles.body}>
+          {tab === "single" && (
+            <SingleColorTab
+              entry={entry}
+              onApply={(hex) =>
+                registry.updateStyle(layerId, {
+                  fillColor: hex,
+                  expression: undefined,
+                })
+              }
+            />
+          )}
+          {tab === "categorical" && (
+            <CategoricalTab
+              entry={entry}
+              allProps={allProps}
+              onApply={(expr) =>
+                registry.updateStyle(layerId, { expression: expr })
+              }
+            />
+          )}
+          {tab === "graduated" && (
+            <GraduatedTab
+              entry={entry}
+              numericProps={numericProps}
+              fcValues={(prop: string) =>
+                (fc?.features ?? [])
+                  .map((f) => f.properties?.[prop])
+                  .filter((v): v is number => typeof v === "number")
+              }
+              onApply={(expr) =>
+                registry.updateStyle(layerId, { expression: expr })
+              }
+            />
+          )}
+        </div>
       </div>
-    </div>
     </FocusTrap>
   );
 }
@@ -311,7 +343,9 @@ function CategoricalTab({
       ? existing.stops.map((s) => ({ value: String(s.value), color: s.color }))
       : [{ value: "", color: "#1971c2" }],
   );
-  const [fallback, setFallback] = useState<string>(existing?.fallback ?? "#cccccc");
+  const [fallback, setFallback] = useState<string>(
+    existing?.fallback ?? "#cccccc",
+  );
 
   const updateStop = (idx: number, patch: Partial<CatStop>) => {
     setStopsState((prev) =>
@@ -426,9 +460,9 @@ function GraduatedTab({
   const [property, setProperty] = useState<string>(
     existing?.property ?? numericProps[0] ?? "",
   );
-  const [method, setMethod] = useState<"linear" | "quantile" | "equal-interval">(
-    existing?.method ?? "linear",
-  );
+  const [method, setMethod] = useState<
+    "linear" | "quantile" | "equal-interval"
+  >(existing?.method ?? "linear");
   const [stopCount, setStopCount] = useState<number>(
     existing?.stops.length && existing.stops.length >= 3
       ? existing.stops.length
@@ -440,10 +474,14 @@ function GraduatedTab({
   const [computedStops, setComputedStops] = useState<number[]>(
     existing?.stops.map((s) => s.stop) ?? [],
   );
-  const [fallback, setFallback] = useState<string>(existing?.fallback ?? "#cccccc");
+  const [fallback, setFallback] = useState<string>(
+    existing?.fallback ?? "#cccccc",
+  );
 
   const compute = () => {
-    if (!property) return;
+    if (!property) {
+      return;
+    }
     const values = fcValues(property);
     const next = computeStops(method, values, stopCount);
     setComputedStops(next);
@@ -500,7 +538,9 @@ function GraduatedTab({
           value={method}
           data-testid="grad-method"
           onChange={(e) =>
-            setMethod(e.target.value as "linear" | "quantile" | "equal-interval")
+            setMethod(
+              e.target.value as "linear" | "quantile" | "equal-interval",
+            )
           }
         >
           <option value="linear">linear</option>
@@ -517,17 +557,11 @@ function GraduatedTab({
           value={stopCount}
           data-testid="grad-stop-count"
           onChange={(e) =>
-            setStopCount(
-              Math.max(3, Math.min(9, Number(e.target.value) || 5)),
-            )
+            setStopCount(Math.max(3, Math.min(9, Number(e.target.value) || 5)))
           }
         />
       </label>
-      <ColorRampPicker
-        value={colors}
-        stops={stopCount}
-        onChange={setColors}
-      />
+      <ColorRampPicker value={colors} stops={stopCount} onChange={setColors} />
       <button
         type="button"
         className={styles.secondaryBtn}

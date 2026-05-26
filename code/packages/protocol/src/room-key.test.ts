@@ -4,6 +4,7 @@
 // `generateRoomKey` (Phase 5 collab-integration plan 2026-05-15 § Step 1).
 
 import { describe, expect, it } from "vitest";
+
 import {
   buildRoomFragment,
   generateRoomKey,
@@ -13,7 +14,9 @@ import {
 /** Base64url-encode a Uint8Array (no padding). Test-only helper. */
 function bytesToBase64url(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
   return btoa(binary)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -22,7 +25,7 @@ function bytesToBase64url(bytes: Uint8Array): string {
 
 /** Build a `#room:<id>,<key>` fragment from raw bytes for tests. */
 function fragmentFromBytes(roomId: string, keyBytes: Uint8Array): string {
-  return "#room:" + roomId + "," + bytesToBase64url(keyBytes);
+  return `#room:${roomId},${bytesToBase64url(keyBytes)}`;
 }
 
 describe("generateRoomKey", () => {
@@ -32,7 +35,7 @@ describe("generateRoomKey", () => {
     expect(result.key).toBeDefined();
     expect(result.key.algorithm).toMatchObject({ name: "AES-GCM" });
     expect(result.fragment.startsWith("#room:")).toBe(true);
-    expect(result.fragment).toContain(result.roomId + ",");
+    expect(result.fragment).toContain(`${result.roomId},`);
   });
 
   it("round-trips through parseRoomFragment", async () => {
@@ -71,14 +74,14 @@ describe("parseRoomFragment", () => {
 
   it("rejects the legacy un-prefixed shape (Q-P5-2)", async () => {
     // Legacy form: `#<roomId>,<key>` — the `room:` prefix is now mandatory.
-    const legacy = "#abc-123," + bytesToBase64url(validKey);
+    const legacy = `#abc-123,${bytesToBase64url(validKey)}`;
     const result = await parseRoomFragment(legacy);
     expect(result).toBeNull();
   });
 
   it("rejects a fragment missing the comma separator", async () => {
     const result = await parseRoomFragment(
-      "#room:abc-123" + bytesToBase64url(validKey),
+      `#room:abc-123${bytesToBase64url(validKey)}`,
     );
     expect(result).toBeNull();
   });
@@ -90,7 +93,7 @@ describe("parseRoomFragment", () => {
 
   it("rejects an empty roomId", async () => {
     const result = await parseRoomFragment(
-      "#room:," + bytesToBase64url(validKey),
+      `#room:,${bytesToBase64url(validKey)}`,
     );
     expect(result).toBeNull();
   });

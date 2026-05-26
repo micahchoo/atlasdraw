@@ -12,10 +12,11 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
-import type { FeatureCollection } from "geojson";
 
 import { LayerPanel } from "../LayerPanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
+
+import type { FeatureCollection } from "geojson";
 
 const emptyFc = (count: number): FeatureCollection => ({
   type: "FeatureCollection",

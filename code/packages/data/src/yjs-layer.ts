@@ -179,7 +179,9 @@ export function appendVertex(
     throw new Error(`Feature "${featureId}" has no geometry`);
   }
 
-  const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+  const coords = geometry.get("coordinates") as Y.Array<
+    Y.Array<Y.Array<number>>
+  >;
   const ring = coords.get(ringIndex);
   if (!ring) {
     throw new Error(`Ring index ${ringIndex} not found`);
@@ -215,7 +217,9 @@ export function deleteVertex(
     throw new Error(`Feature "${featureId}" has no geometry`);
   }
 
-  const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+  const coords = geometry.get("coordinates") as Y.Array<
+    Y.Array<Y.Array<number>>
+  >;
   const ring = coords.get(ringIndex);
   if (!ring) {
     throw new Error(`Ring index ${ringIndex} not found`);

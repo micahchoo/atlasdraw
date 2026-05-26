@@ -72,8 +72,8 @@ describe("createHttpStorageClient", () => {
   });
 
   it("getMap returns the MapRecord on 200", async () => {
-    const fetchSpy = vi.fn(
-      async () => jsonResponse(200, SAMPLE_MAP),
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, SAMPLE_MAP),
     ) as unknown as typeof fetch;
     const client = createHttpStorageClient({
       baseUrl: "http://localhost:4000",
@@ -84,8 +84,8 @@ describe("createHttpStorageClient", () => {
   });
 
   it("getMap returns null on 404 (missing is not an error)", async () => {
-    const fetchSpy = vi.fn(
-      async () => emptyResponse(404),
+    const fetchSpy = vi.fn(async () =>
+      emptyResponse(404),
     ) as unknown as typeof fetch;
     const client = createHttpStorageClient({
       baseUrl: "http://localhost:4000",
@@ -104,9 +104,9 @@ describe("createHttpStorageClient", () => {
       baseUrl: "http://localhost:4000",
       fetch: fetchSpy,
     });
-    await expect(
-      client.createMap(new Blob([new Uint8Array(4)])),
-    ).rejects.toBe(boom);
+    await expect(client.createMap(new Blob([new Uint8Array(4)]))).rejects.toBe(
+      boom,
+    );
   });
 
   it("createMap throws on 5xx with status code in the message", async () => {
@@ -160,8 +160,8 @@ describe("createHttpStorageClient", () => {
     });
 
     it("returns null on 404 (token never existed)", async () => {
-      const fetchSpy = vi.fn(
-        async () => emptyResponse(404),
+      const fetchSpy = vi.fn(async () =>
+        emptyResponse(404),
       ) as unknown as typeof fetch;
       const client = createHttpStorageClient({
         baseUrl: "http://localhost:4000",
@@ -171,8 +171,8 @@ describe("createHttpStorageClient", () => {
     });
 
     it("throws ShareExpiredError on 410", async () => {
-      const fetchSpy = vi.fn(
-        async () => emptyResponse(410),
+      const fetchSpy = vi.fn(async () =>
+        emptyResponse(410),
       ) as unknown as typeof fetch;
       const client = createHttpStorageClient({
         baseUrl: "http://localhost:4000",

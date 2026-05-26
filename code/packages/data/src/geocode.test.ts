@@ -67,6 +67,7 @@ describe("PhotonGeocoder — construction", () => {
 });
 
 describe("PhotonGeocoder.geocode — request shape", () => {
+  // eslint-disable-next-line no-template-curly-in-string
   it("hits ${endpoint}/api with q + limit, URL-encoding the query", async () => {
     const fetchMock = vi.fn(async () =>
       okResponse(photonFC([{ coords: [-74, 40.7], city: "New York" }])),
@@ -144,7 +145,9 @@ describe("PhotonGeocoder — confidence heuristic", () => {
   ];
 
   for (const [osmValue, expected, mode] of cases) {
-    it(`osm_value=${osmValue} → confidence ${mode === "≥" ? "≥" : "~"} ${expected}`, async () => {
+    it(`osm_value=${osmValue} → confidence ${
+      mode === "≥" ? "≥" : "~"
+    } ${expected}`, async () => {
       const fetchMock = vi.fn(async () =>
         okResponse(photonFC([{ coords: [0, 0], osm_value: osmValue }])),
       );
@@ -154,8 +157,11 @@ describe("PhotonGeocoder — confidence heuristic", () => {
       );
       const r = await g.geocode(`q-${osmValue}`);
       expect(r).not.toBeNull();
-      if (mode === "≥") expect(r!.confidence).toBeGreaterThanOrEqual(expected);
-      else expect(r!.confidence).toBeCloseTo(expected, 5);
+      if (mode === "≥") {
+        expect(r!.confidence).toBeGreaterThanOrEqual(expected);
+      } else {
+        expect(r!.confidence).toBeCloseTo(expected, 5);
+      }
     });
   }
 });
@@ -242,8 +248,7 @@ describe("PhotonGeocoder — error paths", () => {
 
   it("throws GeocoderResponseError on non-2xx response", async () => {
     const fetchMock = vi.fn(
-      async () =>
-        new Response("Bad Request", { status: 400 }),
+      async () => new Response("Bad Request", { status: 400 }),
     );
     const g = new PhotonGeocoder(
       { endpoint: "https://photon.example" },

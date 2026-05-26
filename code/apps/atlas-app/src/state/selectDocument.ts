@@ -18,15 +18,14 @@
 
 import { ulid } from "ulid";
 
-import type {
-  AtlasdrawDocument,
-  Manifest,
-} from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
+import { useDataLayerFCStore } from "./useDataLayerFCStore";
+
+import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
-import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
 export type SelectDocumentOptions = {
   /**
@@ -123,13 +122,16 @@ export function selectDocument(
   // claims is a data layer (race / load-in-flight), we omit it from the Map
   // rather than insert a stub — the manifest layer list still records it, and
   // a future tick will pick it up.
-  const fcSource =
-    options.fcMap ?? useDataLayerFCStore.getState().getAll();
+  const fcSource = options.fcMap ?? useDataLayerFCStore.getState().getAll();
   const layers: Map<string, FeatureCollection> = new Map();
   for (const entry of layerRegistryState.entries) {
-    if (entry.kind !== "data") continue;
+    if (entry.kind !== "data") {
+      continue;
+    }
     const fc = fcSource[entry.id];
-    if (fc) layers.set(entry.id, fc);
+    if (fc) {
+      layers.set(entry.id, fc);
+    }
   }
 
   // Excalidraw's embedded files (images). API surface returns BinaryFiles
@@ -151,7 +153,9 @@ export function selectDocument(
         continue;
       }
       const blob = dataUrlToBlob(file.dataURL, file.mimeType);
-      if (blob) files.set(id, blob);
+      if (blob) {
+        files.set(id, blob);
+      }
     }
   }
 
@@ -170,9 +174,13 @@ export function selectDocument(
  * shouldn't kill the auto-save.
  */
 function dataUrlToBlob(dataURL: string, mimeType: string): Blob | null {
-  if (typeof dataURL !== "string" || !dataURL.startsWith("data:")) return null;
+  if (typeof dataURL !== "string" || !dataURL.startsWith("data:")) {
+    return null;
+  }
   const commaIdx = dataURL.indexOf(",");
-  if (commaIdx < 0) return null;
+  if (commaIdx < 0) {
+    return null;
+  }
   const meta = dataURL.slice(5, commaIdx); // strip leading "data:"
   const payload = dataURL.slice(commaIdx + 1);
   const isBase64 = meta.includes(";base64");
@@ -180,7 +188,9 @@ function dataUrlToBlob(dataURL: string, mimeType: string): Blob | null {
     if (isBase64) {
       const binary = atob(payload);
       const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
       return new Blob([bytes], { type: mimeType });
     }
     return new Blob([decodeURIComponent(payload)], { type: mimeType });

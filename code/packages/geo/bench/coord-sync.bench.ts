@@ -22,11 +22,17 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { describe, test, expect } from "vitest";
 
 import { CoordinateSync } from "../src/CoordinateSync.js";
-import type { ExcalidrawElementLike, ExcalidrawAPI } from "../src/CoordinateSync.js";
+
 import { generateScene } from "./synthetic-scene-gen.js";
+
+import type {
+  ExcalidrawElementLike,
+  ExcalidrawAPI,
+} from "../src/CoordinateSync.js";
 
 // ---------------------------------------------------------------------------
 // Mock map: pure Web-Mercator over a virtual 800x600 viewport.
@@ -46,7 +52,11 @@ interface MockMap {
   unproject: (point: [number, number]) => { lng: number; lat: number };
 }
 
-function makeMockMap(_centerLng: number, _centerLat: number, zoom: number): MockMap {
+function makeMockMap(
+  _centerLng: number,
+  _centerLat: number,
+  zoom: number,
+): MockMap {
   return {
     getZoom: () => zoom,
     getBounds: () => ({
@@ -70,7 +80,8 @@ function makeMockMap(_centerLng: number, _centerLat: number, zoom: number): Mock
       const scale = 256 * Math.pow(2, zoom);
       const lng = (point[0] / scale) * 360 - 180;
       const n = Math.PI - (2 * Math.PI * point[1]) / scale;
-      const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      const lat =
+        (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
       return { lng, lat };
     },
   };
@@ -92,7 +103,9 @@ function makeMockExcalidrawAPI(scene: ExcalidrawElementLike[]): ExcalidrawAPI {
 // ---------------------------------------------------------------------------
 
 function percentile(sortedAsc: number[], p: number): number {
-  if (sortedAsc.length === 0) return NaN;
+  if (sortedAsc.length === 0) {
+    return NaN;
+  }
   // Nearest-rank method (1-indexed): rank = ceil(p/100 * N).
   const rank = Math.ceil((p / 100) * sortedAsc.length);
   const idx = Math.min(sortedAsc.length - 1, Math.max(0, rank - 1));
@@ -204,17 +217,25 @@ describe("coord-sync 5k-element baseline", () => {
 
       // Dominant segment: >=60% of total p99.
       let dominantSegment: "project" | "updateScene" | "balanced";
-      if (project.p99ms >= 0.6 * total.p99ms) dominantSegment = "project";
-      else if (updateScene.p99ms >= 0.6 * total.p99ms) dominantSegment = "updateScene";
-      else dominantSegment = "balanced";
+      if (project.p99ms >= 0.6 * total.p99ms) {
+        dominantSegment = "project";
+      } else if (updateScene.p99ms >= 0.6 * total.p99ms) {
+        dominantSegment = "updateScene";
+      } else {
+        dominantSegment = "balanced";
+      }
 
       // Task 20 variant selection — only when failing.
       // Variant A/B target project segment; C/D target updateScene; E balanced.
       let task20Variant: string | undefined;
       if (!pass) {
-        if (dominantSegment === "project") task20Variant = "A-or-B";
-        else if (dominantSegment === "updateScene") task20Variant = "C-or-D";
-        else task20Variant = "E";
+        if (dominantSegment === "project") {
+          task20Variant = "A-or-B";
+        } else if (dominantSegment === "updateScene") {
+          task20Variant = "C-or-D";
+        } else {
+          task20Variant = "E";
+        }
       }
 
       const notes = [
@@ -246,14 +267,18 @@ describe("coord-sync 5k-element baseline", () => {
       const outDir = `${here}/results`;
       const outFile = `${outDir}/phase-1-baseline.json`;
       mkdirSync(outDir, { recursive: true });
-      writeFileSync(outFile, JSON.stringify(result, null, 2) + "\n", "utf8");
+      writeFileSync(outFile, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 
       // Echo a one-line summary to stdout for orchestrator log.
       // eslint-disable-next-line no-console
       console.log(
         `[coord-sync bench] n=${ELEMENT_COUNT} ` +
-          `total p50/p95/p99 = ${total.p50ms.toFixed(3)}/${total.p95ms.toFixed(3)}/${total.p99ms.toFixed(3)} ms ` +
-          `dominant=${dominantSegment} pass=${pass}${task20Variant ? ` task20=${task20Variant}` : ""}`,
+          `total p50/p95/p99 = ${total.p50ms.toFixed(3)}/${total.p95ms.toFixed(
+            3,
+          )}/${total.p99ms.toFixed(3)} ms ` +
+          `dominant=${dominantSegment} pass=${pass}${
+            task20Variant ? ` task20=${task20Variant}` : ""
+          }`,
       );
 
       // Sanity: bench must have produced finite numbers.

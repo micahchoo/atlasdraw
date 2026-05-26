@@ -6,6 +6,7 @@
 // GeoJSON Feature should compose this with a GeoAnchor → Feature converter.
 
 import { isGeoCustomData, type GeoAnchor } from "./types.js";
+
 import type { ExcalidrawElementLike } from "./CoordinateSync.js";
 
 export function excalidrawToGeo(el: ExcalidrawElementLike): GeoAnchor | null {

@@ -7,8 +7,25 @@
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T01
 // Audit: docs/decisions/opus-audit-2026-05-04-post-wave4.md
 
-import type { FeatureCollection } from "geojson";
+// ---------------------------------------------------------------------------
+// T11 — LayerRegistry Zustand store implementation.
+//
+// Phase 2 Wave 2a. Backs LayerPanel (T12), ImportDialog (T13), Convert (T14).
+// Single source of truth for all layer state. Mutations route through the
+// store actions; consumers must not mutate `entries` directly.
+//
+// immer middleware: each action receives a draft and mutates in place. Zustand
+// produces an immutable next state. This keeps action bodies imperative and
+// readable while preserving referential equality where nothing changed.
+// ---------------------------------------------------------------------------
+
+import { create } from "zustand";
+import { immer } from "zustand/middleware/immer";
+
+import { useDataLayerFCStore } from "./useDataLayerFCStore";
+
 import type { LayerStyle } from "@atlasdraw/basemap";
+import type { FeatureCollection } from "geojson";
 
 // Re-exported so atlas-app consumers can keep importing LayerStyle from the
 // registry module. The shape itself lives in @atlasdraw/basemap (Phase 2 Wave
@@ -70,23 +87,6 @@ export interface ILayerRegistry {
   updateStyle(id: string, patch: Partial<LayerStyle>): void;
   remove(id: string): void;
 }
-
-// ---------------------------------------------------------------------------
-// T11 — LayerRegistry Zustand store implementation.
-//
-// Phase 2 Wave 2a. Backs LayerPanel (T12), ImportDialog (T13), Convert (T14).
-// Single source of truth for all layer state. Mutations route through the
-// store actions; consumers must not mutate `entries` directly.
-//
-// immer middleware: each action receives a draft and mutates in place. Zustand
-// produces an immutable next state. This keeps action bodies imperative and
-// readable while preserving referential equality where nothing changed.
-// ---------------------------------------------------------------------------
-
-import { create } from "zustand";
-import { immer } from "zustand/middleware/immer";
-
-import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
 /**
  * Default style applied when an annotation is converted to a data layer (T14).
@@ -152,7 +152,9 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         const idx = s.entries.findIndex(
           (e) => e.kind === "annotation" && e.id === elementId,
         );
-        if (idx === -1) return;
+        if (idx === -1) {
+          return;
+        }
         const annotation = s.entries[idx] as AnnotationLayerEntry;
         const label = annotation.label;
         s.entries.splice(idx, 1);
@@ -178,13 +180,17 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
     setVisibility: (id, visible) =>
       set((s) => {
         const e = s.entries.find((x) => x.id === id);
-        if (e) e.visible = visible;
+        if (e) {
+          e.visible = visible;
+        }
       }),
 
     reorder: (id, newOrder) =>
       set((s) => {
         const e = s.entries.find((x) => x.id === id);
-        if (e) e.order = newOrder;
+        if (e) {
+          e.order = newOrder;
+        }
       }),
 
     updateStyle: (id, patch) =>

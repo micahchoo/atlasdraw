@@ -17,13 +17,15 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import type { FeatureCollection } from "geojson";
+
 import * as Y from "yjs";
 
 import { AriaAnnouncer, useAnnouncerStore } from "../components/AriaAnnouncer";
 import { LayerPanel } from "../components/LayerPanel";
 import { CommentsLayer } from "../state/comments";
 import { useLayerRegistryStore } from "../state/layerRegistry";
+
+import type { FeatureCollection } from "geojson";
 import type { CommentAnchor } from "@atlasdraw/protocol";
 
 const emptyFc = (count: number): FeatureCollection => ({
@@ -72,7 +74,9 @@ describe("aria-live: layer-visibility toggle", () => {
     expect(screen.getByTestId("aria-announcer").textContent).toContain(
       'Layer "Roads"',
     );
-    expect(screen.getByTestId("aria-announcer").textContent).toContain("hidden");
+    expect(screen.getByTestId("aria-announcer").textContent).toContain(
+      "hidden",
+    );
 
     // Click again → show.
     fireEvent.click(screen.getByTestId("layer-visibility-dl:test-1"));

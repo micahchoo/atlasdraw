@@ -98,7 +98,9 @@ export function rdp(
   points: Array<[number, number]>,
   epsilon: number,
 ): Array<[number, number]> {
-  if (points.length < 3) return points.slice();
+  if (points.length < 3) {
+    return points.slice();
+  }
 
   const keep = new Array<boolean>(points.length).fill(false);
   keep[0] = true;
@@ -129,7 +131,9 @@ export function rdp(
 
   const result: Array<[number, number]> = [];
   for (let i = 0; i < points.length; i++) {
-    if (keep[i]) result.push(points[i]!);
+    if (keep[i]) {
+      result.push(points[i]!);
+    }
   }
   return result;
 }
@@ -164,15 +168,23 @@ export const FreehandTool: AtlasdrawTool = {
     // Defend against hover events arriving without a prior down (other
     // pointers, or a host that wires move outside the gesture). Fire-and-
     // forget collection here would silently corrupt the next stroke.
-    if (activeStroke === null) return;
-    if (activeStroke.pointerId !== e.pointerId) return;
+    if (activeStroke === null) {
+      return;
+    }
+    if (activeStroke.pointerId !== e.pointerId) {
+      return;
+    }
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     activeStroke.points.push([lng, lat]);
   },
 
   onPointerUp(e: ToolPointerEvent, ctx: ToolContext) {
-    if (activeStroke === null) return;
-    if (activeStroke.pointerId !== e.pointerId) return;
+    if (activeStroke === null) {
+      return;
+    }
+    if (activeStroke.pointerId !== e.pointerId) {
+      return;
+    }
 
     // Capture the final pointer-up location too — the user's release point
     // is intentional, and the move stream often misses the last few px.
@@ -191,7 +203,9 @@ export const FreehandTool: AtlasdrawTool = {
     // meaningful freehand element — drop it rather than emit a degenerate
     // polyline with one point. Host can decide whether to surface UI
     // feedback for the no-op; the tool stays silent.
-    if (simplified.length < 2) return;
+    if (simplified.length < 2) {
+      return;
+    }
 
     ctx.excalidraw.addElement({
       type: "freedraw",

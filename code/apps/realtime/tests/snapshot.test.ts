@@ -8,12 +8,15 @@
 // no-op, cross-room target rejection, malformed-payload drop, and the
 // SCENE_UPDATE-equivalent size cap.
 
-import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import http from "http";
+
+import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { Server as SocketIOServer } from "socket.io";
 import { io as ioc } from "socket.io-client";
-import type { Socket as ClientSocket } from "socket.io-client";
+
 import { registerSocketIOHandlers } from "../src/socket-io-server";
+
+import type { Socket as ClientSocket } from "socket.io-client";
 
 // ---------------------------------------------------------------------------
 // Test server lifecycle
@@ -162,7 +165,9 @@ describe("REQUEST_SNAPSHOT (joiner-pull, Q-P5-1)", () => {
     expect(receivers[0]).toBe(expectedWinner);
 
     requester.close();
-    for (const c of peers) c.close();
+    for (const c of peers) {
+      c.close();
+    }
   });
 
   it("with no other peers: relay does nothing (no error)", async () => {

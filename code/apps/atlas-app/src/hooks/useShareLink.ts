@@ -19,9 +19,12 @@
 
 import { useCallback, useState } from "react";
 import LZString from "lz-string";
-import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import { write } from "@atlasdraw/data";
+
 import { usePersistenceStore } from "../state/usePersistenceStore";
+
+import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 
 export type ShareMode = "hash" | "upload";
@@ -89,10 +92,14 @@ async function waitForDrain(
 ): Promise<boolean> {
   const start = Date.now();
   // Synchronous initial check — most callers are not mid-save.
-  if (!usePersistenceStore.getState().isDraining) return true;
+  if (!usePersistenceStore.getState().isDraining) {
+    return true;
+  }
   while (Date.now() - start < timeoutMs) {
     await new Promise((r) => setTimeout(r, pollMs));
-    if (!usePersistenceStore.getState().isDraining) return true;
+    if (!usePersistenceStore.getState().isDraining) {
+      return true;
+    }
   }
   return false;
 }

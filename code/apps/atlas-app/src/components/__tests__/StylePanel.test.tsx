@@ -3,11 +3,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { FeatureCollection } from "geojson";
 
 import { StylePanel } from "../StylePanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
+
+import type { FeatureCollection } from "geojson";
 
 // Sample FC with both string and numeric properties for property-introspection.
 const sampleFc: FeatureCollection = {
@@ -88,12 +89,16 @@ describe("StylePanel", () => {
     fireEvent.click(screen.getByTestId("style-tab-categorical"));
 
     // The tab seeds itself with one stop. Fill it.
-    const stopValue = screen.getByTestId("cat-stop-value-0") as HTMLInputElement;
+    const stopValue = screen.getByTestId(
+      "cat-stop-value-0",
+    ) as HTMLInputElement;
     fireEvent.change(stopValue, { target: { value: "park" } });
 
     // Add a second stop.
     fireEvent.click(screen.getByTestId("cat-add-stop"));
-    const stopValue1 = screen.getByTestId("cat-stop-value-1") as HTMLInputElement;
+    const stopValue1 = screen.getByTestId(
+      "cat-stop-value-1",
+    ) as HTMLInputElement;
     fireEvent.change(stopValue1, { target: { value: "water" } });
 
     fireEvent.click(screen.getByTestId("cat-apply"));
@@ -134,7 +139,10 @@ describe("StylePanel", () => {
     const entry = useLayerRegistryStore
       .getState()
       .entries.find((e) => e.id === "dl:t1");
-    if (entry?.kind === "data" && entry.style.expression?.kind === "graduated") {
+    if (
+      entry?.kind === "data" &&
+      entry.style.expression?.kind === "graduated"
+    ) {
       const stops = entry.style.expression.stops.map((s) => s.stop);
       expect(stops).toHaveLength(5);
       expect(stops[0]).toBe(100);

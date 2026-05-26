@@ -17,14 +17,16 @@
 // in response to updateScene. Without the deferral the indicator would
 // re-flip to "dirty" the moment we hand the scene over.
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
+import { syncInvalidIndices } from "@excalidraw/element";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import type { BinaryFileData, FileId, DataURL } from "@excalidraw/excalidraw";
-import { syncInvalidIndices } from "@excalidraw/element";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { usePersistenceStore } from "./usePersistenceStore";
+
+import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 /**
  * Apply a loaded `AtlasdrawDocument` to the live editor state.
@@ -43,7 +45,8 @@ async function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("FileReader failed"));
     reader.readAsDataURL(blob);
   });
 }
@@ -108,9 +111,7 @@ export async function hydrate(
   excalidrawAPI.updateScene({
     elements: syncInvalidIndices(
       loaded.scene as unknown as Parameters<typeof syncInvalidIndices>[0],
-    ) as unknown as Parameters<
-      typeof excalidrawAPI.updateScene
-    >[0]["elements"],
+    ) as unknown as Parameters<typeof excalidrawAPI.updateScene>[0]["elements"],
   });
 
   // Step 4 — binary scene assets (images pasted into canvas).
@@ -124,7 +125,8 @@ export async function hydrate(
         const dataURL = (await blobToDataURL(blob)) as DataURL;
         return {
           id: id as FileId,
-          mimeType: (blob.type || "application/octet-stream") as BinaryFileData["mimeType"],
+          mimeType: (blob.type ||
+            "application/octet-stream") as BinaryFileData["mimeType"],
           dataURL,
           created: Date.now(),
           lastRetrieved: Date.now(),

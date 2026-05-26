@@ -12,10 +12,10 @@
 //     cross-package source files can't rely on its semantics. The caller
 //     (atlas-app) reads VITE_PMTILES_PATH and passes the resolved path in.
 
-import type maplibregl from "maplibre-gl";
-
 import { getBasemap, type BasemapConfig } from "./BasemapRegistry";
 import { buildStyle } from "./style-builder";
+
+import type maplibregl from "maplibre-gl";
 
 /**
  * Thrown by resolveStyle when a basemap config has `requiresRemote: true` and

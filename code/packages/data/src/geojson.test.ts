@@ -3,7 +3,6 @@
 // Phase 2 Wave 1b T10 — colocated tests for geojson parser/writer.
 
 import { describe, expect, it } from "vitest";
-import type { FeatureCollection } from "geojson";
 
 import {
   GeoJSONParseError,
@@ -11,6 +10,8 @@ import {
   requireHomogeneousGeometry,
   write,
 } from "./geojson.js";
+
+import type { FeatureCollection } from "geojson";
 
 const validFC: FeatureCollection = {
   type: "FeatureCollection",
@@ -96,26 +97,62 @@ describe("geojson.write", () => {
 
 describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
   const featureOf = (geometry: unknown) =>
-    ({ type: "Feature", geometry, properties: {} }) as unknown;
+    ({ type: "Feature", geometry, properties: {} } as unknown);
 
   const fcOf = (...geoms: unknown[]): FeatureCollection =>
     ({
       type: "FeatureCollection",
       features: geoms.map(featureOf),
-    }) as FeatureCollection;
+    } as FeatureCollection);
 
   it("accepts an all-Polygon FC", () => {
     const fc = fcOf(
-      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
-      { type: "MultiPolygon", coordinates: [[[[0, 0], [1, 0], [1, 1], [0, 0]]]] },
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+      {
+        type: "MultiPolygon",
+        coordinates: [
+          [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 0],
+            ],
+          ],
+        ],
+      },
     );
     expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
   });
 
   it("accepts an all-LineString FC", () => {
     const fc = fcOf(
-      { type: "LineString", coordinates: [[0, 0], [1, 1]] },
-      { type: "MultiLineString", coordinates: [[[0, 0], [1, 1]]] },
+      {
+        type: "LineString",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
+      {
+        type: "MultiLineString",
+        coordinates: [
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ],
+      },
     );
     expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
   });
@@ -123,7 +160,13 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
   it("accepts an all-Point FC", () => {
     const fc = fcOf(
       { type: "Point", coordinates: [0, 0] },
-      { type: "MultiPoint", coordinates: [[0, 0], [1, 1]] },
+      {
+        type: "MultiPoint",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
     );
     expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
   });
@@ -136,7 +179,17 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
   it("ignores null geometries (RFC-legal, non-rendering)", () => {
     const fc = fcOf(
       null,
-      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
       null,
     );
     expect(() => requireHomogeneousGeometry(fc)).not.toThrow();
@@ -144,11 +197,29 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
 
   it("rejects mixed Polygon + LineString", () => {
     const fc = fcOf(
-      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
-      { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
+      {
+        type: "LineString",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
     );
     expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
-    expect(() => requireHomogeneousGeometry(fc)).toThrow(/mixed geometry kinds/);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(
+      /mixed geometry kinds/,
+    );
     expect(() => requireHomogeneousGeometry(fc)).toThrow(/fill/);
     expect(() => requireHomogeneousGeometry(fc)).toThrow(/line/);
   });
@@ -156,10 +227,22 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
   it("rejects mixed Point + Polygon", () => {
     const fc = fcOf(
       { type: "Point", coordinates: [0, 0] },
-      { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 0],
+          ],
+        ],
+      },
     );
     expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
-    expect(() => requireHomogeneousGeometry(fc)).toThrow(/mixed geometry kinds/);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(
+      /mixed geometry kinds/,
+    );
   });
 
   it("rejects GeometryCollection as unsupported", () => {
@@ -168,7 +251,9 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
       geometries: [{ type: "Point", coordinates: [0, 0] }],
     });
     expect(() => requireHomogeneousGeometry(fc)).toThrow(GeoJSONParseError);
-    expect(() => requireHomogeneousGeometry(fc)).toThrow(/not supported by Atlas/);
+    expect(() => requireHomogeneousGeometry(fc)).toThrow(
+      /not supported by Atlas/,
+    );
   });
 
   it("rejects unknown geometry type", () => {
@@ -186,9 +271,7 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
       throw new Error("expected requireHomogeneousGeometry to throw");
     } catch (e) {
       expect(e).toBeInstanceOf(GeoJSONParseError);
-      expect((e as GeoJSONParseError).field).toBe(
-        "features[1].geometry.type",
-      );
+      expect((e as GeoJSONParseError).field).toBe("features[1].geometry.type");
     }
   });
 });

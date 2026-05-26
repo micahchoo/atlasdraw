@@ -2245,282 +2245,282 @@ class App extends React.Component<AppProps, AppState> {
         onPointerLeave={this.toggleOverscrollBehavior}
       >
         <ExcalidrawAPIContext.Provider value={this.api}>
-         <ProjectSidebarTabsContext.Provider
-           value={this.projectSidebarTabsContextValue}
-         >
-          <AppContext.Provider value={this}>
-            <AppPropsContext.Provider value={this.props}>
-              <ExcalidrawContainerContext.Provider
-                value={this.excalidrawContainerValue}
-              >
-                <EditorInterfaceContext.Provider value={this.editorInterface}>
-                  <ExcalidrawSetAppStateContext.Provider
-                    value={this.setAppState}
-                  >
-                    <ExcalidrawAppStateContext.Provider value={this.state}>
-                      <ExcalidrawElementsContext.Provider
-                        value={this.scene.getNonDeletedElements()}
-                      >
-                        <ExcalidrawActionManagerContext.Provider
-                          value={this.actionManager}
+          <ProjectSidebarTabsContext.Provider
+            value={this.projectSidebarTabsContextValue}
+          >
+            <AppContext.Provider value={this}>
+              <AppPropsContext.Provider value={this.props}>
+                <ExcalidrawContainerContext.Provider
+                  value={this.excalidrawContainerValue}
+                >
+                  <EditorInterfaceContext.Provider value={this.editorInterface}>
+                    <ExcalidrawSetAppStateContext.Provider
+                      value={this.setAppState}
+                    >
+                      <ExcalidrawAppStateContext.Provider value={this.state}>
+                        <ExcalidrawElementsContext.Provider
+                          value={this.scene.getNonDeletedElements()}
                         >
-                          <LayerUI
-                            canvas={this.canvas}
-                            appState={this.state}
-                            files={this.files}
-                            setAppState={this.setAppState}
-                            actionManager={this.actionManager}
-                            elements={this.scene.getNonDeletedElements()}
-                            onLockToggle={this.toggleLock}
-                            onPenModeToggle={this.togglePenMode}
-                            onHandToolToggle={this.onHandToolToggle}
-                            langCode={getLanguage().code}
-                            renderTopLeftUI={renderTopLeftUI}
-                            renderTopRightUI={renderTopRightUI}
-                            renderCustomStats={renderCustomStats}
-                            showExitZenModeBtn={
-                              typeof this.props?.zenModeEnabled ===
-                                "undefined" && this.state.zenModeEnabled
-                            }
-                            UIOptions={this.props.UIOptions}
-                            onExportImage={this.onExportImage}
-                            renderWelcomeScreen={
-                              !this.state.isLoading &&
-                              this.state.showWelcomeScreen &&
-                              this.state.activeTool.type ===
-                                this.state.preferredSelectionTool.type &&
-                              !this.state.zenModeEnabled &&
-                              !this.scene.getElementsIncludingDeleted().length
-                            }
-                            app={this}
-                            isCollaborating={this.props.isCollaborating}
-                            generateLinkForSelection={
-                              this.props.generateLinkForSelection
-                            }
+                          <ExcalidrawActionManagerContext.Provider
+                            value={this.actionManager}
                           >
-                            {this.props.children}
-                          </LayerUI>
+                            <LayerUI
+                              canvas={this.canvas}
+                              appState={this.state}
+                              files={this.files}
+                              setAppState={this.setAppState}
+                              actionManager={this.actionManager}
+                              elements={this.scene.getNonDeletedElements()}
+                              onLockToggle={this.toggleLock}
+                              onPenModeToggle={this.togglePenMode}
+                              onHandToolToggle={this.onHandToolToggle}
+                              langCode={getLanguage().code}
+                              renderTopLeftUI={renderTopLeftUI}
+                              renderTopRightUI={renderTopRightUI}
+                              renderCustomStats={renderCustomStats}
+                              showExitZenModeBtn={
+                                typeof this.props?.zenModeEnabled ===
+                                  "undefined" && this.state.zenModeEnabled
+                              }
+                              UIOptions={this.props.UIOptions}
+                              onExportImage={this.onExportImage}
+                              renderWelcomeScreen={
+                                !this.state.isLoading &&
+                                this.state.showWelcomeScreen &&
+                                this.state.activeTool.type ===
+                                  this.state.preferredSelectionTool.type &&
+                                !this.state.zenModeEnabled &&
+                                !this.scene.getElementsIncludingDeleted().length
+                              }
+                              app={this}
+                              isCollaborating={this.props.isCollaborating}
+                              generateLinkForSelection={
+                                this.props.generateLinkForSelection
+                              }
+                            >
+                              {this.props.children}
+                            </LayerUI>
 
-                          <div className="excalidraw-textEditorContainer" />
-                          <div className="excalidraw-contextMenuContainer" />
-                          <div className="excalidraw-eye-dropper-container" />
-                          <SVGLayer
-                            trails={[
-                              this.laserTrails,
-                              this.lassoTrail,
-                              this.eraserTrail,
-                            ]}
-                          />
-                          {selectedElements.length === 1 &&
-                            this.state.openDialog?.name !==
-                              "elementLinkSelector" &&
-                            this.state.showHyperlinkPopup && (
-                              <Hyperlink
-                                key={firstSelectedElement.id}
-                                element={firstSelectedElement}
-                                scene={this.scene}
-                                setAppState={this.setAppState}
-                                onLinkOpen={this.props.onLinkOpen}
-                                setToast={this.setToast}
-                                updateEmbedValidationStatus={
-                                  this.updateEmbedValidationStatus
-                                }
+                            <div className="excalidraw-textEditorContainer" />
+                            <div className="excalidraw-contextMenuContainer" />
+                            <div className="excalidraw-eye-dropper-container" />
+                            <SVGLayer
+                              trails={[
+                                this.laserTrails,
+                                this.lassoTrail,
+                                this.eraserTrail,
+                              ]}
+                            />
+                            {selectedElements.length === 1 &&
+                              this.state.openDialog?.name !==
+                                "elementLinkSelector" &&
+                              this.state.showHyperlinkPopup && (
+                                <Hyperlink
+                                  key={firstSelectedElement.id}
+                                  element={firstSelectedElement}
+                                  scene={this.scene}
+                                  setAppState={this.setAppState}
+                                  onLinkOpen={this.props.onLinkOpen}
+                                  setToast={this.setToast}
+                                  updateEmbedValidationStatus={
+                                    this.updateEmbedValidationStatus
+                                  }
+                                />
+                              )}
+                            {this.props.aiEnabled !== false &&
+                              selectedElements.length === 1 &&
+                              isMagicFrameElement(firstSelectedElement) && (
+                                <ElementCanvasButtons
+                                  element={firstSelectedElement}
+                                  elementsMap={elementsMap}
+                                >
+                                  <ElementCanvasButton
+                                    title={t("labels.convertToCode")}
+                                    icon={MagicIcon}
+                                    checked={false}
+                                    onChange={() =>
+                                      this.onMagicFrameGenerate(
+                                        firstSelectedElement,
+                                        "button",
+                                      )
+                                    }
+                                  />
+                                </ElementCanvasButtons>
+                              )}
+                            {selectedElements.length === 1 &&
+                              isIframeElement(firstSelectedElement) &&
+                              firstSelectedElement.customData?.generationData
+                                ?.status === "done" && (
+                                <ElementCanvasButtons
+                                  element={firstSelectedElement}
+                                  elementsMap={elementsMap}
+                                >
+                                  <ElementCanvasButton
+                                    title={t("labels.copySource")}
+                                    icon={copyIcon}
+                                    checked={false}
+                                    onChange={() =>
+                                      this.onIframeSrcCopy(firstSelectedElement)
+                                    }
+                                  />
+                                  <ElementCanvasButton
+                                    title="Enter fullscreen"
+                                    icon={fullscreenIcon}
+                                    checked={false}
+                                    onChange={() => {
+                                      const iframe =
+                                        this.getHTMLIFrameElement(
+                                          firstSelectedElement,
+                                        );
+                                      if (iframe) {
+                                        try {
+                                          iframe.requestFullscreen();
+                                          this.setState({
+                                            activeEmbeddable: {
+                                              element: firstSelectedElement,
+                                              state: "active",
+                                            },
+                                            selectedElementIds: {
+                                              [firstSelectedElement.id]: true,
+                                            },
+                                            newElement: null,
+                                            selectionElement: null,
+                                          });
+                                        } catch (err: any) {
+                                          console.warn(err);
+                                          this.setState({
+                                            errorMessage:
+                                              "Couldn't enter fullscreen",
+                                          });
+                                        }
+                                      }
+                                    }}
+                                  />
+                                </ElementCanvasButtons>
+                              )}
+
+                            {this.state.contextMenu && (
+                              <ContextMenu
+                                items={this.state.contextMenu.items}
+                                top={this.state.contextMenu.top}
+                                left={this.state.contextMenu.left}
+                                actionManager={this.actionManager}
+                                onClose={(callback) => {
+                                  this.setState({ contextMenu: null }, () => {
+                                    this.focusContainer();
+                                    callback?.();
+                                  });
+                                }}
                               />
                             )}
-                          {this.props.aiEnabled !== false &&
-                            selectedElements.length === 1 &&
-                            isMagicFrameElement(firstSelectedElement) && (
-                              <ElementCanvasButtons
-                                element={firstSelectedElement}
-                                elementsMap={elementsMap}
-                              >
-                                <ElementCanvasButton
-                                  title={t("labels.convertToCode")}
-                                  icon={MagicIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    this.onMagicFrameGenerate(
-                                      firstSelectedElement,
-                                      "button",
-                                    )
-                                  }
-                                />
-                              </ElementCanvasButtons>
-                            )}
-                          {selectedElements.length === 1 &&
-                            isIframeElement(firstSelectedElement) &&
-                            firstSelectedElement.customData?.generationData
-                              ?.status === "done" && (
-                              <ElementCanvasButtons
-                                element={firstSelectedElement}
-                                elementsMap={elementsMap}
-                              >
-                                <ElementCanvasButton
-                                  title={t("labels.copySource")}
-                                  icon={copyIcon}
-                                  checked={false}
-                                  onChange={() =>
-                                    this.onIframeSrcCopy(firstSelectedElement)
-                                  }
-                                />
-                                <ElementCanvasButton
-                                  title="Enter fullscreen"
-                                  icon={fullscreenIcon}
-                                  checked={false}
-                                  onChange={() => {
-                                    const iframe =
-                                      this.getHTMLIFrameElement(
-                                        firstSelectedElement,
-                                      );
-                                    if (iframe) {
-                                      try {
-                                        iframe.requestFullscreen();
-                                        this.setState({
-                                          activeEmbeddable: {
-                                            element: firstSelectedElement,
-                                            state: "active",
-                                          },
-                                          selectedElementIds: {
-                                            [firstSelectedElement.id]: true,
-                                          },
-                                          newElement: null,
-                                          selectionElement: null,
-                                        });
-                                      } catch (err: any) {
-                                        console.warn(err);
-                                        this.setState({
-                                          errorMessage:
-                                            "Couldn't enter fullscreen",
-                                        });
-                                      }
-                                    }
-                                  }}
-                                />
-                              </ElementCanvasButtons>
-                            )}
-
-                          {this.state.contextMenu && (
-                            <ContextMenu
-                              items={this.state.contextMenu.items}
-                              top={this.state.contextMenu.top}
-                              left={this.state.contextMenu.left}
-                              actionManager={this.actionManager}
-                              onClose={(callback) => {
-                                this.setState({ contextMenu: null }, () => {
-                                  this.focusContainer();
-                                  callback?.();
-                                });
-                              }}
-                            />
-                          )}
-                          <StaticCanvas
-                            canvas={this.canvas}
-                            rc={this.rc}
-                            elementsMap={elementsMap}
-                            allElementsMap={allElementsMap}
-                            visibleElements={visibleElements}
-                            sceneNonce={sceneNonce}
-                            selectionNonce={
-                              this.state.selectionElement?.versionNonce
-                            }
-                            scale={window.devicePixelRatio}
-                            appState={this.state}
-                            renderConfig={{
-                              imageCache: this.imageCache,
-                              isExporting: false,
-                              renderGrid: isGridModeEnabled(this),
-                              canvasBackgroundColor:
-                                this.state.viewBackgroundColor,
-                              embedsValidationStatus:
-                                this.embedsValidationStatus,
-                              elementsPendingErasure:
-                                this.elementsPendingErasure,
-                              pendingFlowchartNodes:
-                                this.flowChartCreator.pendingNodes,
-                              theme: this.state.theme,
-                            }}
-                          />
-                          {this.state.newElement && (
-                            <NewElementCanvas
-                              appState={this.state}
-                              scale={window.devicePixelRatio}
+                            <StaticCanvas
+                              canvas={this.canvas}
                               rc={this.rc}
                               elementsMap={elementsMap}
                               allElementsMap={allElementsMap}
+                              visibleElements={visibleElements}
+                              sceneNonce={sceneNonce}
+                              selectionNonce={
+                                this.state.selectionElement?.versionNonce
+                              }
+                              scale={window.devicePixelRatio}
+                              appState={this.state}
                               renderConfig={{
                                 imageCache: this.imageCache,
                                 isExporting: false,
-                                renderGrid: false,
+                                renderGrid: isGridModeEnabled(this),
                                 canvasBackgroundColor:
                                   this.state.viewBackgroundColor,
                                 embedsValidationStatus:
                                   this.embedsValidationStatus,
                                 elementsPendingErasure:
                                   this.elementsPendingErasure,
-                                pendingFlowchartNodes: null,
+                                pendingFlowchartNodes:
+                                  this.flowChartCreator.pendingNodes,
                                 theme: this.state.theme,
                               }}
                             />
-                          )}
-                          <InteractiveCanvas
-                            app={this}
-                            containerRef={this.excalidrawContainerRef}
-                            canvas={this.interactiveCanvas}
-                            elementsMap={elementsMap}
-                            visibleElements={visibleElements}
-                            allElementsMap={allElementsMap}
-                            selectedElements={selectedElements}
-                            sceneNonce={sceneNonce}
-                            selectionNonce={
-                              this.state.selectionElement?.versionNonce
-                            }
-                            scale={window.devicePixelRatio}
-                            appState={this.state}
-                            renderScrollbars={
-                              this.props.renderScrollbars === true
-                            }
-                            editorInterface={this.editorInterface}
-                            renderInteractiveSceneCallback={
-                              this.renderInteractiveSceneCallback
-                            }
-                            handleCanvasRef={this.handleInteractiveCanvasRef}
-                            onContextMenu={this.handleCanvasContextMenu}
-                            onClick={this.handleCanvasClick}
-                            onPointerMove={this.handleCanvasPointerMove}
-                            onPointerUp={this.handleCanvasPointerUp}
-                            onPointerCancel={this.removePointer}
-                            onTouchMove={this.handleTouchMove}
-                            onPointerDown={this.handleCanvasPointerDown}
-                            onDoubleClick={this.handleCanvasDoubleClick}
-                          />
-                          {this.state.userToFollow && (
-                            <FollowMode
-                              width={this.state.width}
-                              height={this.state.height}
-                              userToFollow={this.state.userToFollow}
-                              onDisconnect={this.maybeUnfollowRemoteUser}
-                            />
-                          )}
-                          {this.renderFrameNames()}
-                          {this.state.activeLockedId && (
-                            <UnlockPopup
+                            {this.state.newElement && (
+                              <NewElementCanvas
+                                appState={this.state}
+                                scale={window.devicePixelRatio}
+                                rc={this.rc}
+                                elementsMap={elementsMap}
+                                allElementsMap={allElementsMap}
+                                renderConfig={{
+                                  imageCache: this.imageCache,
+                                  isExporting: false,
+                                  renderGrid: false,
+                                  canvasBackgroundColor:
+                                    this.state.viewBackgroundColor,
+                                  embedsValidationStatus:
+                                    this.embedsValidationStatus,
+                                  elementsPendingErasure:
+                                    this.elementsPendingErasure,
+                                  pendingFlowchartNodes: null,
+                                  theme: this.state.theme,
+                                }}
+                              />
+                            )}
+                            <InteractiveCanvas
                               app={this}
-                              activeLockedId={this.state.activeLockedId}
+                              containerRef={this.excalidrawContainerRef}
+                              canvas={this.interactiveCanvas}
+                              elementsMap={elementsMap}
+                              visibleElements={visibleElements}
+                              allElementsMap={allElementsMap}
+                              selectedElements={selectedElements}
+                              sceneNonce={sceneNonce}
+                              selectionNonce={
+                                this.state.selectionElement?.versionNonce
+                              }
+                              scale={window.devicePixelRatio}
+                              appState={this.state}
+                              renderScrollbars={
+                                this.props.renderScrollbars === true
+                              }
+                              editorInterface={this.editorInterface}
+                              renderInteractiveSceneCallback={
+                                this.renderInteractiveSceneCallback
+                              }
+                              handleCanvasRef={this.handleInteractiveCanvasRef}
+                              onContextMenu={this.handleCanvasContextMenu}
+                              onClick={this.handleCanvasClick}
+                              onPointerMove={this.handleCanvasPointerMove}
+                              onPointerUp={this.handleCanvasPointerUp}
+                              onPointerCancel={this.removePointer}
+                              onTouchMove={this.handleTouchMove}
+                              onPointerDown={this.handleCanvasPointerDown}
+                              onDoubleClick={this.handleCanvasDoubleClick}
                             />
-                          )}
-                          {showShapeSwitchPanel && (
-                            <ConvertElementTypePopup app={this} />
-                          )}
-                        </ExcalidrawActionManagerContext.Provider>
-                        {this.renderEmbeddables()}
-                      </ExcalidrawElementsContext.Provider>
-                    </ExcalidrawAppStateContext.Provider>
-                  </ExcalidrawSetAppStateContext.Provider>
-                </EditorInterfaceContext.Provider>
-              </ExcalidrawContainerContext.Provider>
-            </AppPropsContext.Provider>
-          </AppContext.Provider>
-         </ProjectSidebarTabsContext.Provider>
+                            {this.state.userToFollow && (
+                              <FollowMode
+                                width={this.state.width}
+                                height={this.state.height}
+                                userToFollow={this.state.userToFollow}
+                                onDisconnect={this.maybeUnfollowRemoteUser}
+                              />
+                            )}
+                            {this.renderFrameNames()}
+                            {this.state.activeLockedId && (
+                              <UnlockPopup
+                                app={this}
+                                activeLockedId={this.state.activeLockedId}
+                              />
+                            )}
+                            {showShapeSwitchPanel && (
+                              <ConvertElementTypePopup app={this} />
+                            )}
+                          </ExcalidrawActionManagerContext.Provider>
+                          {this.renderEmbeddables()}
+                        </ExcalidrawElementsContext.Provider>
+                      </ExcalidrawAppStateContext.Provider>
+                    </ExcalidrawSetAppStateContext.Provider>
+                  </EditorInterfaceContext.Provider>
+                </ExcalidrawContainerContext.Provider>
+              </AppPropsContext.Provider>
+            </AppContext.Provider>
+          </ProjectSidebarTabsContext.Provider>
         </ExcalidrawAPIContext.Provider>
       </div>
     );

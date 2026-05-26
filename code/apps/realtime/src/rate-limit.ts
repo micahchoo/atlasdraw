@@ -82,7 +82,10 @@ const RATE_LIMITS: Record<RateLimitedEvent, RateLimitConfig> = {
 // Per-socket state (WeakMap — auto-GC when socket is disposed)
 // ---------------------------------------------------------------------------
 
-const rateLimitMap = new WeakMap<Socket, Map<RateLimitedEvent, RateLimitEntry>>();
+const rateLimitMap = new WeakMap<
+  Socket,
+  Map<RateLimitedEvent, RateLimitEntry>
+>();
 
 function getEntry(socket: Socket, eventType: RateLimitedEvent): RateLimitEntry {
   let eventMap = rateLimitMap.get(socket);
@@ -116,7 +119,9 @@ export function checkRateLimit(
   payload: unknown,
 ): CheckRateLimitResult {
   const config = RATE_LIMITS[eventType];
-  if (!config) return { pass: true }; // unknown event type — allow (safety net)
+  if (!config) {
+    return { pass: true };
+  } // unknown event type — allow (safety net)
 
   // --- Payload size check ---
   const payloadSize = Buffer.byteLength(JSON.stringify(payload));

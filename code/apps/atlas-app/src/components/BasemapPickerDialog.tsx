@@ -8,8 +8,10 @@
 
 import React, { useEffect, useRef } from "react";
 import { BASEMAPS, getBasemap } from "@atlasdraw/basemap";
-import type { BasemapConfig } from "@atlasdraw/basemap";
+
 import { FocusTrap } from "./FocusTrap";
+
+import type { BasemapConfig } from "@atlasdraw/basemap";
 
 export interface BasemapPickerDialogProps {
   activeId: BasemapConfig["id"];
@@ -28,7 +30,9 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
   // Focus trap + Escape to close.
   useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel) {
+      return;
+    }
 
     // Auto-focus the first button.
     const firstBtn = panel.querySelector<HTMLButtonElement>("button");
@@ -42,7 +46,9 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
         const buttons = Array.from(
           panel.querySelectorAll<HTMLButtonElement>("button"),
         );
-        if (buttons.length === 0) return;
+        if (buttons.length === 0) {
+          return;
+        }
         const first = buttons[0];
         const last = buttons[buttons.length - 1];
         if (e.shiftKey && document.activeElement === first) {
@@ -90,110 +96,108 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
       data-testid="basemap-picker-overlay"
     >
       <FocusTrap>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Basemap picker"
-        style={{
-          background: "var(--color-surface, #fff)",
-          borderRadius: "0.5rem",
-          padding: "1rem",
-          minWidth: "280px",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-        }}
-      >
-        <h3
-          style={{
-            margin: "0 0 0.75rem 0",
-            fontSize: "1rem",
-            fontWeight: 600,
-          }}
-        >
-          Basemap
-        </h3>
         <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Basemap picker"
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "0.75rem",
+            background: "var(--color-surface, #fff)",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+            minWidth: "280px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
           }}
         >
-          {BASEMAPS.map((b) => {
-            const isActive = b.id === activeId;
-            return (
-              <button
-                key={b.id}
-                type="button"
-                data-testid={`basemap-option-${b.id}`}
-                aria-pressed={isActive}
-                onClick={() => {
-                  onSelect(b.id);
-                  onCloseRequest();
-                }}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.75rem",
-                  borderRadius: "0.5rem",
-                  border: isActive
-                    ? "2px solid #0aa"
-                    : "1px solid #ddd",
-                  background: isActive ? "#e6f7ff" : "#fff",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  color: "#333",
-                }}
-              >
-                <div
-                  style={{
-                    width: "3rem",
-                    height: "3rem",
-                    borderRadius: "0.25rem",
-                    background:
-                      b.id === "protomaps-dark"
-                        ? "#1a1a1a"
-                        : b.id === "openfreemap-bright"
-                          ? "#f0f0f0"
-                          : "#ffffff",
-                    border: "1px solid #ddd",
+          <h3
+            style={{
+              margin: "0 0 0.75rem 0",
+              fontSize: "1rem",
+              fontWeight: 600,
+            }}
+          >
+            Basemap
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: "0.75rem",
+            }}
+          >
+            {BASEMAPS.map((b) => {
+              const isActive = b.id === activeId;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  data-testid={`basemap-option-${b.id}`}
+                  aria-pressed={isActive}
+                  onClick={() => {
+                    onSelect(b.id);
+                    onCloseRequest();
                   }}
-                />
-                <span style={{ fontWeight: isActive ? 600 : 400 }}>
-                  {b.label}
-                </span>
-                <span
-                  data-testid={`basemap-source-${b.id}`}
                   style={{
-                    fontSize: "0.6875rem",
-                    fontWeight: 400,
-                    color: b.requiresRemote ? "#92400e" : "#1e3a8a",
-                    background: b.requiresRemote ? "#fef3c7" : "#dbeafe",
-                    padding: "1px 6px",
-                    borderRadius: "3px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.75rem",
+                    borderRadius: "0.5rem",
+                    border: isActive ? "2px solid #0aa" : "1px solid #ddd",
+                    background: isActive ? "#e6f7ff" : "#fff",
+                    cursor: "pointer",
+                    fontSize: "0.875rem",
+                    color: "#333",
                   }}
                 >
-                  {b.requiresRemote ? "Remote" : "Local"}
-                </span>
-              </button>
-            );
-          })}
+                  <div
+                    style={{
+                      width: "3rem",
+                      height: "3rem",
+                      borderRadius: "0.25rem",
+                      background:
+                        b.id === "protomaps-dark"
+                          ? "#1a1a1a"
+                          : b.id === "openfreemap-bright"
+                          ? "#f0f0f0"
+                          : "#ffffff",
+                      border: "1px solid #ddd",
+                    }}
+                  />
+                  <span style={{ fontWeight: isActive ? 600 : 400 }}>
+                    {b.label}
+                  </span>
+                  <span
+                    data-testid={`basemap-source-${b.id}`}
+                    style={{
+                      fontSize: "0.6875rem",
+                      fontWeight: 400,
+                      color: b.requiresRemote ? "#92400e" : "#1e3a8a",
+                      background: b.requiresRemote ? "#fef3c7" : "#dbeafe",
+                      padding: "1px 6px",
+                      borderRadius: "3px",
+                    }}
+                  >
+                    {b.requiresRemote ? "Remote" : "Local"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            style={{
+              marginTop: "0.75rem",
+              fontSize: "0.75rem",
+              color: "#666",
+              textAlign: "center",
+            }}
+          >
+            {active?.requiresRemote
+              ? "This basemap loads tiles from the internet."
+              : "This basemap uses offline PMTiles — no network required."}
+          </div>
         </div>
-        <div
-          style={{
-            marginTop: "0.75rem",
-            fontSize: "0.75rem",
-            color: "#666",
-            textAlign: "center",
-          }}
-        >
-          {active?.requiresRemote
-            ? "This basemap loads tiles from the internet."
-            : "This basemap uses offline PMTiles — no network required."}
-        </div>
-      </div>
       </FocusTrap>
     </div>
   );

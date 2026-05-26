@@ -4,6 +4,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { createSqliteFsAdapter } from "../../adapters/sqlite-fs";
 import { registerMapRoutes } from "../../routes/maps";
 import { registerQuotaMiddleware } from "../quota";
@@ -46,13 +47,19 @@ describe("registerQuotaMiddleware", () => {
     scratch = tmp.dirSync({ unsafeCleanup: true });
   });
   afterEach(async () => {
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     scratch.removeCallback();
   });
 
   describe("self-host mode", () => {
     it("never enforces a quota — POST /maps stays open", async () => {
-      const built = buildApp({ managed: false, dataDir: scratch.name, free: 1 });
+      const built = buildApp({
+        managed: false,
+        dataDir: scratch.name,
+        free: 1,
+      });
       app = built.app;
       await app.ready();
       // Even with free=1, self-host allows arbitrary creates.

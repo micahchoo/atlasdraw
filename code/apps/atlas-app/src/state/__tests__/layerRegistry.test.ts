@@ -6,10 +6,11 @@
 // component-level tests in their respective waves.
 
 import { beforeEach, describe, expect, it } from "vitest";
-import type { FeatureCollection } from "geojson";
 
 import { useLayerRegistryStore } from "../layerRegistry";
 import { useDataLayerFCStore } from "../useDataLayerFCStore";
+
+import type { FeatureCollection } from "geojson";
 
 const emptyFc = (count: number): FeatureCollection => ({
   type: "FeatureCollection",

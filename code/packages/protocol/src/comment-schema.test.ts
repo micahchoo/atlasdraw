@@ -2,6 +2,7 @@
 // @atlasdraw/protocol — comment-schema unit tests.
 
 import { describe, it, expect } from "vitest";
+
 import {
   buildCommentsDocPath,
   COMMENT_SCHEMA_VERSION,

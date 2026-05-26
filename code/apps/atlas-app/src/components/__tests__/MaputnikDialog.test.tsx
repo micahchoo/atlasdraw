@@ -2,12 +2,7 @@
 // Phase 6 A4 — MaputnikDialog tests.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  render,
-  screen,
-  fireEvent,
-} from "@testing-library/react";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
 import { MaputnikDialog } from "../MaputnikDialog";
 
@@ -22,12 +17,7 @@ const DEFAULT_PROPS = {
 
 describe("MaputnikDialog", () => {
   it("renders with role=dialog and the documented aria-label", () => {
-    render(
-      <MaputnikDialog
-        {...DEFAULT_PROPS}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={() => {}} />);
     const dialog = screen.getByRole("dialog");
     expect(dialog).toBeTruthy();
     expect(dialog.getAttribute("aria-modal")).toBe("true");
@@ -37,12 +27,7 @@ describe("MaputnikDialog", () => {
   });
 
   it("passes the active style URL to Maputnik as an encoded query parameter", () => {
-    render(
-      <MaputnikDialog
-        {...DEFAULT_PROPS}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={() => {}} />);
     const iframe = screen.getByTestId(
       "maputnik-dialog-iframe",
     ) as HTMLIFrameElement;
@@ -67,12 +52,7 @@ describe("MaputnikDialog", () => {
   });
 
   it("applies a restrictive sandbox (no top-navigation) on the iframe", () => {
-    render(
-      <MaputnikDialog
-        {...DEFAULT_PROPS}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={() => {}} />);
     const iframe = screen.getByTestId(
       "maputnik-dialog-iframe",
     ) as HTMLIFrameElement;
@@ -87,27 +67,21 @@ describe("MaputnikDialog", () => {
 
   it("Escape key triggers onCloseRequest", () => {
     const onClose = vi.fn();
-    render(
-      <MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("X button triggers onCloseRequest", () => {
     const onClose = vi.fn();
-    render(
-      <MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />);
     fireEvent.click(screen.getByTestId("maputnik-dialog-close"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("clicking outside the panel triggers onCloseRequest", async () => {
     const onClose = vi.fn();
-    render(
-      <MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />);
     const overlay = screen.getByTestId("maputnik-dialog-overlay");
     // Wait one tick — click listener is attached via setTimeout(…, 0) to
     // avoid eating the click that opened the dialog.
@@ -118,9 +92,7 @@ describe("MaputnikDialog", () => {
 
   it("Reset to defaults remounts the iframe (key changes) without closing the dialog", () => {
     const onClose = vi.fn();
-    render(
-      <MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={onClose} />);
     const before = screen.getByTestId(
       "maputnik-dialog-iframe",
     ) as HTMLIFrameElement;
@@ -135,9 +107,7 @@ describe("MaputnikDialog", () => {
   });
 
   it("renders the read-only-from-our-side hint (Maputnik has no postMessage write-back)", () => {
-    render(
-      <MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={() => {}} />,
-    );
+    render(<MaputnikDialog {...DEFAULT_PROPS} onCloseRequest={() => {}} />);
     const hint = screen.getByTestId("maputnik-dialog-hint");
     expect(hint.textContent).toMatch(/not saved back/);
   });

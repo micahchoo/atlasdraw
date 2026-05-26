@@ -36,9 +36,7 @@ const PMTILES_TOKEN = "__PMTILES_PATH__";
 // (atlasdraw-styles-prod-missing, 2026-05-10). `query: '?import'` keeps the
 // JSONs as ES-module imports rather than as URL references. `eager: false`
 // (default) preserves lazy loading per basemap.
-const STYLE_MODULES = import.meta.glob<{ default: unknown }>(
-  "./styles/*.json",
-);
+const STYLE_MODULES = import.meta.glob<{ default: unknown }>("./styles/*.json");
 
 export async function buildStyle(
   config: BasemapConfig,

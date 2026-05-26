@@ -18,6 +18,7 @@ export const isSavedToFirebase = (
   _elements: readonly ExcalidrawElement[],
 ): boolean => true;
 
+// eslint-disable-next-line no-empty-pattern
 export const saveFilesToFirebase = async ({}: {
   prefix: string;
   files: { id: FileId; buffer: Uint8Array }[];
@@ -42,7 +43,10 @@ export const loadFilesFromFirebase = async (
   _prefix: string,
   _decryptionKey: string,
   _filesIds: readonly FileId[],
-): Promise<{ loadedFiles: BinaryFileData[]; erroredFiles: Map<FileId, true> }> => ({
+): Promise<{
+  loadedFiles: BinaryFileData[];
+  erroredFiles: Map<FileId, true>;
+}> => ({
   loadedFiles: [],
   erroredFiles: new Map(),
 });

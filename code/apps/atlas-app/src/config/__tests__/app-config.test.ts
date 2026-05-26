@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { loadAppConfig } from "../app-config";
 
 describe("loadAppConfig", () => {
@@ -14,7 +15,12 @@ describe("loadAppConfig", () => {
   });
 
   it("enables realtime on hosted when VITE_REALTIME_ENABLED=true", () => {
-    const cfg = loadAppConfig("hosted", undefined, "true", "ws://localhost:4001");
+    const cfg = loadAppConfig(
+      "hosted",
+      undefined,
+      "true",
+      "ws://localhost:4001",
+    );
     expect(cfg.realtime.enabled).toBe(true);
     expect(cfg.realtime.wsUrl).toBe("ws://localhost:4001");
   });
@@ -26,12 +32,22 @@ describe("loadAppConfig", () => {
   });
 
   it("realtime stays disabled on pages even when env says true", () => {
-    const cfg = loadAppConfig("pages", undefined, "true", "ws://localhost:4001");
+    const cfg = loadAppConfig(
+      "pages",
+      undefined,
+      "true",
+      "ws://localhost:4001",
+    );
     expect(cfg.realtime.enabled).toBe(false);
   });
 
   it("realtime stays disabled on local-only even when env says true", () => {
-    const cfg = loadAppConfig("local-only", undefined, "true", "ws://localhost:4001");
+    const cfg = loadAppConfig(
+      "local-only",
+      undefined,
+      "true",
+      "ws://localhost:4001",
+    );
     expect(cfg.realtime.enabled).toBe(false);
   });
 
@@ -84,7 +100,13 @@ describe("loadAppConfig", () => {
 
   // Phase 6 A4 — VITE_MAPUTNIK_URL.
   it("defaults maputnikUrl to the public Maputnik instance when env is unset", () => {
-    const cfg = loadAppConfig("local-only", undefined, undefined, undefined, undefined);
+    const cfg = loadAppConfig(
+      "local-only",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(cfg.maputnikUrl).toBe("https://maputnik.github.io/editor/");
   });
 
@@ -101,12 +123,26 @@ describe("loadAppConfig", () => {
 
   // Phase 6 A8 — VITE_GEOCODER_ENDPOINT.
   it("leaves geocoder undefined when VITE_GEOCODER_ENDPOINT is unset (zero call-home)", () => {
-    const cfg = loadAppConfig("hosted", undefined, undefined, undefined, undefined, undefined);
+    const cfg = loadAppConfig(
+      "hosted",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    );
     expect(cfg.geocoder).toBeUndefined();
   });
 
   it("leaves geocoder undefined when VITE_GEOCODER_ENDPOINT is empty / whitespace", () => {
-    const cfg = loadAppConfig("hosted", undefined, undefined, undefined, undefined, "   ");
+    const cfg = loadAppConfig(
+      "hosted",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "   ",
+    );
     expect(cfg.geocoder).toBeUndefined();
   });
 

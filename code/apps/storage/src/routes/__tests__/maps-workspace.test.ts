@@ -9,6 +9,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { createSqliteFsAdapter } from "../../adapters/sqlite-fs";
 import { registerWorkspaceMiddleware } from "../../middleware/workspace";
 import { registerMapRoutes } from "../maps";
@@ -37,7 +38,9 @@ describe("workspace-scoped persistence", () => {
   });
 
   afterEach(async () => {
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
     scratch.removeCallback();
   });
 

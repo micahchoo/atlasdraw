@@ -18,6 +18,7 @@ import React, { useEffect, useState } from "react";
 import LZString from "lz-string";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import { read, type AtlasdrawDocument } from "@atlasdraw/data";
+
 import {
   createHttpStorageClient,
   ShareExpiredError,
@@ -47,7 +48,9 @@ function decodeHashDoc(hash: string): AtlasdrawDocument {
   }
   const enc = stripped.slice("v1:".length);
   const json = LZString.decompressFromBase64(enc);
-  if (!json) throw new Error("Corrupted share-link payload.");
+  if (!json) {
+    throw new Error("Corrupted share-link payload.");
+  }
   return JSON.parse(json) as AtlasdrawDocument;
 }
 
@@ -72,7 +75,9 @@ export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
       if (loc.pathname === "/m" && loc.hash.startsWith("#v1:")) {
         try {
           const doc = decodeHashDoc(loc.hash);
-          if (!cancelled) setState({ kind: "ready", doc });
+          if (!cancelled) {
+            setState({ kind: "ready", doc });
+          }
         } catch (err) {
           if (!cancelled) {
             setState({
@@ -95,18 +100,25 @@ export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
 
       const cfg = getAppConfig();
       const httpClient =
-        client ?? createHttpStorageClient({ baseUrl: cfg.storageBaseUrl ?? "" });
+        client ??
+        createHttpStorageClient({ baseUrl: cfg.storageBaseUrl ?? "" });
       try {
         const buf = await httpClient.getShareBlob(token);
         if (!buf) {
-          if (!cancelled) setState({ kind: "not-found" });
+          if (!cancelled) {
+            setState({ kind: "not-found" });
+          }
           return;
         }
         const doc = await read(new Blob([buf]));
-        if (!cancelled) setState({ kind: "ready", doc });
+        if (!cancelled) {
+          setState({ kind: "ready", doc });
+        }
       } catch (err) {
         if (err instanceof ShareExpiredError) {
-          if (!cancelled) setState({ kind: "expired" });
+          if (!cancelled) {
+            setState({ kind: "expired" });
+          }
           return;
         }
         if (!cancelled) {
@@ -218,11 +230,15 @@ const MessageScreen: React.FC<{
       textAlign: "center",
     }}
   >
-    <h2 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 600 }}>
+    <h2
+      style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 600 }}
+    >
       {title}
     </h2>
     {body && (
-      <p style={{ margin: 0, color: "#495057", fontSize: "0.875rem" }}>{body}</p>
+      <p style={{ margin: 0, color: "#495057", fontSize: "0.875rem" }}>
+        {body}
+      </p>
     )}
   </div>
 );

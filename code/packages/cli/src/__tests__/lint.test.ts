@@ -11,14 +11,16 @@
 // and `fs.readFile` failure modes (ENOENT) are part of the test matrix. A
 // memfs-backed reader would skip the path that's actually shipped.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import JSZip from "jszip";
 
 import { write, ManifestSchema, type AtlasdrawDocument } from "@atlasdraw/data";
+
 import { runLint } from "../commands/lint.js";
 
 /** Capture-and-assert stdio adapter. */
@@ -44,7 +46,12 @@ function makeManifest(overrides: Record<string, unknown> = {}) {
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-02T00:00:00.000Z",
     basemap: { type: "registry" as const, id: "default" },
-    camera: { center: [0, 0] as [number, number], zoom: 1, bearing: 0, pitch: 0 },
+    camera: {
+      center: [0, 0] as [number, number],
+      zoom: 1,
+      bearing: 0,
+      pitch: 0,
+    },
     layers: [],
     permissions: { publicView: false },
     ...overrides,
@@ -71,7 +78,9 @@ function makeDoc(): AtlasdrawDocument {
  * Sidesteps `write()`'s own validation (it accepts a parsed Manifest, so we
  * can't ask it to emit version=2 directly).
  */
-async function buildFixtureWithRawManifest(rawManifest: unknown): Promise<Buffer> {
+async function buildFixtureWithRawManifest(
+  rawManifest: unknown,
+): Promise<Buffer> {
   const blob = await write(makeDoc());
   const buf = Buffer.from(await blob.arrayBuffer());
   const zip = await JSZip.loadAsync(buf);

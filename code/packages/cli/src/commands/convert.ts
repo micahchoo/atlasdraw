@@ -17,9 +17,10 @@
 import { promises as fs } from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
+
 import { Command } from "commander";
 import { ulid } from "ulid";
-import type { FeatureCollection } from "geojson";
+
 import {
   parse,
   parseCSV,
@@ -38,16 +39,15 @@ import {
   type Manifest,
 } from "@atlasdraw/data";
 
+import type { FeatureCollection } from "geojson";
+
 export interface ConvertStreams {
   stdout: { write: (s: string) => void };
   stderr: { write: (s: string) => void };
 }
 
 /** Extension pair → converter. Keys are literal `'<inExt>→<outExt>'`. */
-type ConvertFn = (
-  buf: Buffer,
-  outPath: string,
-) => Promise<void>;
+type ConvertFn = (buf: Buffer, outPath: string) => Promise<void>;
 
 /**
  * Run the convert workflow. Returns numeric exit code instead of calling
@@ -99,7 +99,9 @@ export async function runConvert(
       return 1;
     }
     streams.stderr.write(
-      `${(err as Error).name ?? "Error"}: ${(err as Error).message ?? String(err)}\n`,
+      `${(err as Error).name ?? "Error"}: ${
+        (err as Error).message ?? String(err)
+      }\n`,
     );
     return 1;
   }
@@ -114,7 +116,9 @@ export async function runConvert(
  */
 function getExt(p: string): string {
   const lower = p.toLowerCase();
-  if (lower.endsWith(".atlasdraw.json")) return ".atlasdraw.json";
+  if (lower.endsWith(".atlasdraw.json")) {
+    return ".atlasdraw.json";
+  }
   return path.extname(lower);
 }
 
@@ -250,9 +254,9 @@ export const convertCommand = new Command("convert")
   .argument("<in>", "input file path")
   .argument("<out>", "output file path")
   .action(async (inArg: string, outArg: string) => {
-    const code = await runConvert(
-      [inArg, outArg],
-      { stdout: process.stdout, stderr: process.stderr },
-    );
+    const code = await runConvert([inArg, outArg], {
+      stdout: process.stdout,
+      stderr: process.stderr,
+    });
     process.exit(code);
   });

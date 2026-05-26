@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { usePersistenceStore } from "./usePersistenceStore";
+
 import type { PersistenceStore } from "./persistence";
 
 const makeFakePersistenceStore = (): PersistenceStore & {

@@ -6,17 +6,15 @@
 // `bench` mode targets micro-benchmark stats with hidden warmup loops; we
 // want a small, reproducible, auditable timing record.
 
-import { describe, expect, it } from "vitest";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { platform, version as nodeVersion } from "node:process";
 
-import {
-  parse,
-  requireHomogeneousGeometry,
-} from "@atlasdraw/data";
+import { describe, expect, it } from "vitest";
+
+import { parse, requireHomogeneousGeometry } from "@atlasdraw/data";
 
 import { synthPointFC } from "../fixtures/synth.js";
 
@@ -32,7 +30,9 @@ const WARMUP = 3;
 const ITERS = 20;
 
 function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
+  if (sorted.length === 0) {
+    return 0;
+  }
   const idx = Math.min(
     sorted.length - 1,
     Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
@@ -127,7 +127,7 @@ describe("phase-1 baseline", () => {
       iterations: ITERS,
       scenarios,
     };
-    await writeFile(out, JSON.stringify(payload, null, 2) + "\n", "utf8");
+    await writeFile(out, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 
     // Surface the result in the test output so a human reading the run
     // can sanity-check timings without opening the file.

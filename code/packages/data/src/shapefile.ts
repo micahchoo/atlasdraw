@@ -13,8 +13,9 @@
 // to `parseZip` and resolves to either a single FeatureCollection (one .shp
 // in the zip) or an array of FeatureCollections (multiple .shp siblings).
 
-import type { Feature, FeatureCollection } from "geojson";
 import shp from "shpjs";
+
+import type { Feature, FeatureCollection } from "geojson";
 
 /** Machine-readable failure modes for `parseShapefile`. */
 export type ShapefileParseErrorCode =

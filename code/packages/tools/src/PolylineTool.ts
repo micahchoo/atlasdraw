@@ -87,7 +87,9 @@ export const PolylineTool: AtlasdrawTool = {
   },
 };
 
-function commit(ctx: Parameters<NonNullable<AtlasdrawTool["onPointerDown"]>>[1]): void {
+function commit(
+  ctx: Parameters<NonNullable<AtlasdrawTool["onPointerDown"]>>[1],
+): void {
   const zRef = ctx.map.getZoom();
   // OPEN path: emit vertices as-is. Do NOT append vertices[0] at the end —
   // that closure is PolygonTool's contract, not PolylineTool's.

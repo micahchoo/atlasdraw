@@ -99,7 +99,9 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      return;
+    }
 
     // Guard against React StrictMode double-mount. If a map was already
     // created (from the first mount in dev), remove it before re-creating.

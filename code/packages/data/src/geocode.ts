@@ -82,9 +82,13 @@ export class GeocoderResponseError extends Error {
  * Not standardized — consumers should treat the score as advisory.
  */
 function confidenceFromOsmValue(osmValue: unknown): number {
-  if (typeof osmValue !== "string") return 0.4;
+  if (typeof osmValue !== "string") {
+    return 0.4;
+  }
   const v = osmValue.toLowerCase();
-  if (v === "yes") return 0.9; // Photon's catch-all for high-confidence POIs
+  if (v === "yes") {
+    return 0.9;
+  } // Photon's catch-all for high-confidence POIs
   if (
     v === "city" ||
     v === "town" ||
@@ -108,7 +112,9 @@ function confidenceFromOsmValue(osmValue: unknown): number {
 }
 
 function buildDisplayName(props: Record<string, unknown> | undefined): string {
-  if (!props) return "";
+  if (!props) {
+    return "";
+  }
   const parts: string[] = [];
   for (const key of ["name", "city", "country"] as const) {
     const v = props[key];
@@ -148,11 +154,15 @@ class LruCache<V> {
   }
 
   set(key: string, value: V): void {
-    if (this.map.has(key)) this.map.delete(key);
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    }
     this.map.set(key, value);
     if (this.map.size > this.cap) {
       const oldest = this.map.keys().next().value;
-      if (oldest !== undefined) this.map.delete(oldest);
+      if (oldest !== undefined) {
+        this.map.delete(oldest);
+      }
     }
   }
 
@@ -203,15 +213,21 @@ export class PhotonGeocoder {
    */
   async geocode(query: string): Promise<GeocodeResult | null> {
     const key = query.toLowerCase().trim();
-    if (key === "") return null;
+    if (key === "") {
+      return null;
+    }
 
     const cached = this.cache.get(key);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached;
+    }
 
     // Note: the operator-configured endpoint is the only outbound URL.
     // See ADR-0006 / ADR-0011 — atlasdraw never calls home; this fetch
     // only fires when an operator has opted in by supplying `endpoint`.
-    const url = `${this.endpoint}/api?q=${encodeURIComponent(query)}&limit=${this.limitPerQuery}`;
+    const url = `${this.endpoint}/api?q=${encodeURIComponent(query)}&limit=${
+      this.limitPerQuery
+    }`;
 
     let res: Response;
     try {
@@ -268,17 +284,27 @@ interface PhotonFeature {
 }
 
 function parsePhotonResponse(body: unknown): GeocodeResult | null {
-  if (!body || typeof body !== "object") return null;
+  if (!body || typeof body !== "object") {
+    return null;
+  }
   const features = (body as { features?: unknown }).features;
-  if (!Array.isArray(features) || features.length === 0) return null;
+  if (!Array.isArray(features) || features.length === 0) {
+    return null;
+  }
 
   const first = features[0] as PhotonFeature;
   const coords = first.geometry?.coordinates;
-  if (!Array.isArray(coords) || coords.length < 2) return null;
+  if (!Array.isArray(coords) || coords.length < 2) {
+    return null;
+  }
   const lng = coords[0];
   const lat = coords[1];
-  if (typeof lng !== "number" || typeof lat !== "number") return null;
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  if (typeof lng !== "number" || typeof lat !== "number") {
+    return null;
+  }
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return null;
+  }
 
   return {
     lng,

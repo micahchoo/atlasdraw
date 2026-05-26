@@ -13,16 +13,16 @@ import type { Server as SocketIOServer } from "socket.io";
  * currently connected Socket.IO clients (`io.engine.clientsCount`). When `io`
  * is omitted (e.g. during testing), `connections` defaults to 0.
  */
-export function registerHealth(
-  server: http.Server,
-  io?: SocketIOServer,
-): void {
-  server.on("request", (req: http.IncomingMessage, res: http.ServerResponse) => {
-    if (req.url === "/health" && req.method === "GET") {
-      const connections = io?.engine?.clientsCount ?? 0;
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", connections }));
-    }
-    // For non-/health paths, do nothing — Socket.IO processes them.
-  });
+export function registerHealth(server: http.Server, io?: SocketIOServer): void {
+  server.on(
+    "request",
+    (req: http.IncomingMessage, res: http.ServerResponse) => {
+      if (req.url === "/health" && req.method === "GET") {
+        const connections = io?.engine?.clientsCount ?? 0;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok", connections }));
+      }
+      // For non-/health paths, do nothing — Socket.IO processes them.
+    },
+  );
 }

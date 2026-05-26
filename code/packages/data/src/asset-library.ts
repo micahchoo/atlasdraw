@@ -74,7 +74,9 @@ export function parseLibraryFile(
   const obj = parsed as Record<string, unknown>;
   if (obj.type !== "excalidrawlib") {
     return {
-      error: `parse error: type field is ${JSON.stringify(obj.type)}, expected "excalidrawlib"`,
+      error: `parse error: type field is ${JSON.stringify(
+        obj.type,
+      )}, expected "excalidrawlib"`,
       raw: json,
     };
   }
@@ -124,7 +126,9 @@ export function getBuiltInLibraries(): ExcalidrawLibrary[] {
       // Skip malformed fixtures rather than throwing — the license-check
       // script is the gate for fixture correctness; this is a read path.
       // eslint-disable-next-line no-console
-      console.warn(`asset-library: skipping malformed fixture ${path}: ${parsed.error}`);
+      console.warn(
+        `asset-library: skipping malformed fixture ${path}: ${parsed.error}`,
+      );
       continue;
     }
     libs.push(parsed);
@@ -145,12 +149,14 @@ function loadFixtureSources(): Array<[string, string]> {
   // Context 1: Vite with `import.meta.glob` available.
   // We feature-detect rather than gate on `import.meta.env` because vitest
   // also defines `import.meta.env` but does NOT rewrite globs in node env.
-  const maybeGlob = (import.meta as unknown as {
-    glob?: (
-      pattern: string,
-      opts: { eager: true; query: string; import: string },
-    ) => Record<string, string>;
-  }).glob;
+  const maybeGlob = (
+    import.meta as unknown as {
+      glob?: (
+        pattern: string,
+        opts: { eager: true; query: string; import: string },
+      ) => Record<string, string>;
+    }
+  ).glob;
   if (typeof maybeGlob === "function") {
     try {
       const modules = maybeGlob("../fixtures/libraries/*.excalidrawlib", {
@@ -175,11 +181,18 @@ function loadFixtureSources(): Array<[string, string]> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const url = require("node:url") as typeof import("node:url");
     const here = url.fileURLToPath(import.meta.url);
-    const fixturesDir = path.resolve(path.dirname(here), "../fixtures/libraries");
-    if (!fs.existsSync(fixturesDir)) return [];
+    const fixturesDir = path.resolve(
+      path.dirname(here),
+      "../fixtures/libraries",
+    );
+    if (!fs.existsSync(fixturesDir)) {
+      return [];
+    }
     const out: Array<[string, string]> = [];
     for (const entry of fs.readdirSync(fixturesDir)) {
-      if (!entry.endsWith(".excalidrawlib")) continue;
+      if (!entry.endsWith(".excalidrawlib")) {
+        continue;
+      }
       const full = path.join(fixturesDir, entry);
       out.push([entry, fs.readFileSync(full, "utf8")]);
     }

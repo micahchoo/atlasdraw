@@ -24,9 +24,11 @@
 import { useEffect, useMemo } from "react";
 import throttle from "lodash.throttle";
 import { CoordinateSync } from "@atlasdraw/geo";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import type { ExcalidrawAPI } from "@atlasdraw/geo";
 import type maplibregl from "maplibre-gl";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 /** Camera event types that trigger a re-projection of geo-anchored elements. */
 const CAMERA_EVENTS = ["move", "zoom", "rotate", "pitch"] as const;
@@ -48,14 +50,21 @@ export function useCoordinateSync(
   // ExcalidrawImperativeAPI is structurally compatible with geo's ExcalidrawAPI
   // interface (getSceneElements + updateScene with captureUpdate).
   const sync = useMemo(() => {
-    if (!map || !excalidrawAPI) return null;
+    if (!map || !excalidrawAPI) {
+      return null;
+    }
     // Structural cast: ExcalidrawImperativeAPI satisfies the geo ExcalidrawAPI
     // interface. The geo package is intentionally decoupled from @excalidraw.
-    return new CoordinateSync({ map, excalidrawAPI: excalidrawAPI as ExcalidrawAPI });
+    return new CoordinateSync({
+      map,
+      excalidrawAPI: excalidrawAPI as ExcalidrawAPI,
+    });
   }, [map, excalidrawAPI]);
 
   useEffect(() => {
-    if (!map || !sync) return;
+    if (!map || !sync) {
+      return;
+    }
 
     // Activate the sync seam (flip _attached; documented lifecycle per contracts.md).
     sync.attach();

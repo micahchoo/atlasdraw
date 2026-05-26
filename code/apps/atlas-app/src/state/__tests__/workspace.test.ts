@@ -2,6 +2,7 @@
 // atlas-app — Phase 6 A9 workspace state + HTTP client wiring tests.
 
 import { describe, expect, it, vi } from "vitest";
+
 import {
   asWorkspaceId,
   resolveWorkspaceFromEnv,
@@ -29,15 +30,15 @@ describe("workspace state", () => {
     });
 
     it("reads VITE_WORKSPACE_ID first", () => {
-      expect(
-        resolveWorkspaceFromEnv({ VITE_WORKSPACE_ID: "ws-vite" }),
-      ).toEqual({ id: "ws-vite" });
+      expect(resolveWorkspaceFromEnv({ VITE_WORKSPACE_ID: "ws-vite" })).toEqual(
+        { id: "ws-vite" },
+      );
     });
 
     it("falls back to WORKSPACE_ID", () => {
-      expect(
-        resolveWorkspaceFromEnv({ WORKSPACE_ID: "ws-fallback" }),
-      ).toEqual({ id: "ws-fallback" });
+      expect(resolveWorkspaceFromEnv({ WORKSPACE_ID: "ws-fallback" })).toEqual({
+        id: "ws-fallback",
+      });
     });
   });
 
@@ -58,17 +59,18 @@ describe("HTTP client workspace wiring", () => {
   function makeFetchSpy(): ReturnType<typeof vi.fn> {
     // Default OK JSON body — every call resolves with a valid MapRecord
     // shape so error paths don't fire.
-    return vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          id: "abcdefghij1234567890K",
-          created_at: "2026-05-15T00:00:00.000Z",
-          updated_at: "2026-05-15T00:00:00.000Z",
-          blob_ref: "x",
-          byte_size: 4,
-        }),
-        { status: 201, headers: { "Content-Type": "application/json" } },
-      ),
+    return vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            id: "abcdefghij1234567890K",
+            created_at: "2026-05-15T00:00:00.000Z",
+            updated_at: "2026-05-15T00:00:00.000Z",
+            blob_ref: "x",
+            byte_size: 4,
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
     );
   }
 
@@ -140,11 +142,12 @@ describe("HTTP client workspace wiring", () => {
   });
 
   it("attaches header on GET-only routes (getMap, resolveToken, getShareBlob)", async () => {
-    const fetchSpy = vi.fn(async () =>
-      new Response("{}", {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      }),
+    const fetchSpy = vi.fn(
+      async () =>
+        new Response("{}", {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
     const client = createHttpStorageClient({
       baseUrl: "http://localhost:4000",

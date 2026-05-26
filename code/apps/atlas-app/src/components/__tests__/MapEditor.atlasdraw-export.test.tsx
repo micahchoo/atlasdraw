@@ -15,11 +15,16 @@
 // open in a unit test. Test pyramid: this file covers the contract; an e2e
 // test (Playwright) covers the dialog plumbing.
 
-import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
+import { renderAtlasdrawExportCards } from "../MapEditor";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
+
+// SUT — imported AFTER all vi.mock declarations so the mocks are wired.
 
 // ---------------------------------------------------------------------------
 // Mocks — Excalidraw is imported by MapEditor.tsx but renderAtlasdrawExport
@@ -48,17 +53,44 @@ vi.mock("@atlasdraw/basemap", () => ({
   compileLayer: vi.fn(),
   defaultLayerStyle: vi.fn(),
   registerPmtilesProtocol: vi.fn(),
-  getBasemap: vi.fn((id: string) =>
-    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  getBasemap: vi.fn((id: string) => ({
+    id,
+    label: id,
+    styleFile: `${id}.json`,
+    requiresRemote: false,
+  })),
+  buildStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
   ),
-  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
   BASEMAPS: [
-    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
-    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
-    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+    {
+      id: "protomaps-light",
+      label: "Light",
+      styleFile: "protomaps-light.json",
+      requiresRemote: false,
+    },
+    {
+      id: "protomaps-dark",
+      label: "Dark",
+      styleFile: "protomaps-dark.json",
+      requiresRemote: false,
+    },
+    {
+      id: "openfreemap-bright",
+      label: "Bright",
+      styleFile: "openfreemap-bright.json",
+      requiresRemote: true,
+    },
   ],
-  resolveStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
-  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error { constructor(public readonly basemapId: string) { super(`Basemap ${basemapId} requires allow_remote=true`); this.name = "BasemapRemoteGatedError"; } },
+  resolveStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
+  ),
+  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
+    constructor(public readonly basemapId: string) {
+      super(`Basemap ${basemapId} requires allow_remote=true`);
+      this.name = "BasemapRemoteGatedError";
+    }
+  },
 }));
 
 vi.mock("@atlasdraw/data", () => ({
@@ -80,7 +112,9 @@ vi.mock("@atlasdraw/geo", () => ({
 
 // hydrate is called from the Open card. Spy on it.
 const hydrateSpy = vi.fn();
-vi.mock("../../state/hydrate", () => ({ hydrate: (...args: unknown[]) => hydrateSpy(...args) }));
+vi.mock("../../state/hydrate", () => ({
+  hydrate: (...args: unknown[]) => hydrateSpy(...args),
+}));
 
 // selectDocument is called from the Save card. Returns a sentinel doc.
 const sentinelDoc = {
@@ -94,7 +128,9 @@ vi.mock("../../state/selectDocument", () => ({
 
 // usePersistenceStore — only `getState()` is used inside the cards.
 const saveToDiskMock = vi.fn(async (_doc: AtlasdrawDocument) => undefined);
-const openFromDiskMock = vi.fn(async (): Promise<AtlasdrawDocument | null> => null);
+const openFromDiskMock = vi.fn(
+  async (): Promise<AtlasdrawDocument | null> => null,
+);
 const clearDirtyMock = vi.fn();
 vi.mock("../../state/usePersistenceStore", () => ({
   usePersistenceStore: {
@@ -114,13 +150,12 @@ vi.mock("../../state/layerRegistry", () => ({
   useLayerRegistryStore: { getState: () => ({}) },
 }));
 
-// SUT — imported AFTER all vi.mock declarations so the mocks are wired.
-import { renderAtlasdrawExportCards } from "../MapEditor";
-
 // Fake imperative API — the cards capture this in their closures and pass
 // it to selectDocument / hydrate. Identity is what matters; the methods are
 // only called by selectDocument (mocked) so a bare object suffices.
-const fakeAPI = { id: "fake-excalidraw-api" } as unknown as ExcalidrawImperativeAPI;
+const fakeAPI = {
+  id: "fake-excalidraw-api",
+} as unknown as ExcalidrawImperativeAPI;
 
 describe("renderAtlasdrawExportCards (atlasdraw-9078)", () => {
   beforeEach(() => {

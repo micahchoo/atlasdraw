@@ -42,8 +42,7 @@ class StubOffscreenCanvas {
       drawImage: vi.fn(),
       fillRect: vi.fn(),
     };
-    this.ctx =
-      nextContextOverride === undefined ? ctx : nextContextOverride;
+    this.ctx = nextContextOverride === undefined ? ctx : nextContextOverride;
     this.getContext = vi.fn(() => this.ctx);
     this.convertToBlob = vi.fn(
       async ({ type }: { type: string }) => new Blob([], { type }),
@@ -76,9 +75,7 @@ function makeMap(opts: {
   };
 }
 
-function makeExcalidrawAPI(
-  appStateOverrides: Record<string, unknown> = {},
-) {
+function makeExcalidrawAPI(appStateOverrides: Record<string, unknown> = {}) {
   // exportToCanvas mock returns this; tests use it to identify the
   // second drawImage argument.
   const fakeExcalidrawCanvas = { __isExcalidrawCanvas: true };
@@ -219,7 +216,13 @@ describe("exportPNG", () => {
     await exportPNG(map, api);
 
     const opts = exportToCanvasMock.mock.calls[0][0] as {
-      viewport?: { scrollX: number; scrollY: number; zoom: { value: number }; width: number; height: number };
+      viewport?: {
+        scrollX: number;
+        scrollY: number;
+        zoom: { value: number };
+        width: number;
+        height: number;
+      };
     };
     expect(opts.viewport).toMatchObject({
       width: 800,

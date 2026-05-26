@@ -8,12 +8,12 @@
 // stream writes, and — for round-trip cases — re-read the output via the
 // matching reader from @atlasdraw/data.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
-import type { FeatureCollection } from "geojson";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   read,
@@ -22,7 +22,10 @@ import {
   ManifestSchema,
   type AtlasdrawDocument,
 } from "@atlasdraw/data";
+
 import { runConvert } from "../commands/convert.js";
+
+import type { FeatureCollection } from "geojson";
 
 /** Capture-and-assert stdio adapter. */
 function makeStreams() {
@@ -174,10 +177,8 @@ describe("atlasdraw convert", () => {
   });
 
   it(".csv → .geojson parses lat/lng columns into Point features", async () => {
-    const csv =
-      "id,name,lat,lng\n" +
-      "1,alpha,0,0\n" +
-      "2,beta,1,1\n";
+    // eslint-disable-next-line no-useless-concat
+    const csv = "id,name,lat,lng\n" + "1,alpha,0,0\n" + "2,beta,1,1\n";
     const inPath = path.join(tmpDir, "in.csv");
     const outPath = path.join(tmpDir, "out.geojson");
     await fs.writeFile(inPath, csv, "utf8");

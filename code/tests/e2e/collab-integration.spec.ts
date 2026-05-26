@@ -151,7 +151,10 @@ async function getSceneElementIds(page: Page): Promise<string[]> {
       window as unknown as {
         __atlasdraw__: {
           excalidrawAPI: {
-            getSceneElements: () => readonly { id: string; isDeleted?: boolean }[];
+            getSceneElements: () => readonly {
+              id: string;
+              isDeleted?: boolean;
+            }[];
           };
         };
       }
@@ -181,15 +184,18 @@ async function waitForElement(
         window as unknown as {
           __atlasdraw__?: {
             excalidrawAPI?: {
-              getSceneElements: () => readonly { id: string; isDeleted?: boolean }[];
+              getSceneElements: () => readonly {
+                id: string;
+                isDeleted?: boolean;
+              }[];
             };
           };
         }
       ).__atlasdraw__?.excalidrawAPI;
-      if (!api) return false;
-      return api
-        .getSceneElements()
-        .some((el) => el.id === id && !el.isDeleted);
+      if (!api) {
+        return false;
+      }
+      return api.getSceneElements().some((el) => el.id === id && !el.isDeleted);
     },
     expectedId,
     { timeout: timeoutMs },
@@ -216,9 +222,7 @@ async function openCollabAndCaptureUrl(page: Page): Promise<string> {
   await page.getByRole("button", { name: /share/i }).first().click();
 
   // Wait for the dialog to render its mode picker (Collaborate + Read-only).
-  const collabButton = page.locator(
-    '[data-testid="share-dialog-pick-collab"]',
-  );
+  const collabButton = page.locator('[data-testid="share-dialog-pick-collab"]');
   await collabButton.waitFor({ state: "visible", timeout: 5_000 });
   await collabButton.click();
 
@@ -314,8 +318,12 @@ test.describe("Phase 5 Step 10 — collab integration smoke (Wave D)", () => {
       // 3. Both tabs converge on the same set of 3 element ids.
       const idsA = await getSceneElementIds(pageA);
       const idsB = await getSceneElementIds(pageB);
-      expect(idsA).toEqual(expect.arrayContaining([rectId, ellipseId, diamondId]));
-      expect(idsB).toEqual(expect.arrayContaining([rectId, ellipseId, diamondId]));
+      expect(idsA).toEqual(
+        expect.arrayContaining([rectId, ellipseId, diamondId]),
+      );
+      expect(idsB).toEqual(
+        expect.arrayContaining([rectId, ellipseId, diamondId]),
+      );
     } finally {
       await ctxA.close();
       await ctxB.close();

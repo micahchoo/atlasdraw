@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Phase 5 Task 17 — 5MB Yjs Stress Test (TCP Split).
  *
@@ -78,10 +79,7 @@ function createLargeDoc(): Y.Doc {
 
     for (let j = 0; j < 10; j++) {
       const pt = new Y.Array<number>();
-      pt.push([
-        Math.random() * 360 - 180,
-        Math.random() * 180 - 90,
-      ]);
+      pt.push([Math.random() * 360 - 180, Math.random() * 180 - 90]);
       ring.push([pt as unknown as Y.Array<number>]);
     }
 
@@ -89,10 +87,7 @@ function createLargeDoc(): Y.Doc {
     geometry.set("coordinates", coordsArray);
     feature.set("geometry", geometry);
 
-    defaultLayer.set(
-      `feature-${i}`,
-      feature as Y.Map<unknown>,
-    );
+    defaultLayer.set(`feature-${i}`, feature as Y.Map<unknown>);
   }
 
   return doc;
@@ -113,7 +108,9 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
     const doc = createLargeDoc();
     const encodedState = Y.encodeStateAsUpdate(doc);
     const sizeMB = (encodedState.byteLength / (1024 * 1024)).toFixed(1);
-    console.log(`[preload] Encoded state: ${sizeMB} MB (${encodedState.byteLength} bytes)`);
+    console.log(
+      `[preload] Encoded state: ${sizeMB} MB (${encodedState.byteLength} bytes)`,
+    );
 
     // Step 2: open a temporary page to sync this state to the relay.
     const setupCtx = await browser.newContext();
@@ -131,18 +128,16 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
 
     // Step 4: apply the encoded state to the collab Y.Doc.  The y-websocket
     // connection will detect the local changes and push them to the relay.
-    await setupPage.evaluate(
-      (state: Uint8Array) => {
-        const cs = (window as any).__atlasdraw__.collabState;
-        if (!cs?.yjsDoc)
-          throw new Error("Collab Y.Doc not available");
-        // yjs is loaded by the app — import from the module cache.
-        return import("yjs").then((Ymod: any) => {
-          Ymod.applyUpdate(cs.yjsDoc, state);
-        });
-      },
-      encodedState,
-    );
+    await setupPage.evaluate((state: Uint8Array) => {
+      const cs = (window as any).__atlasdraw__.collabState;
+      if (!cs?.yjsDoc) {
+        throw new Error("Collab Y.Doc not available");
+      }
+      // yjs is loaded by the app — import from the module cache.
+      return import("yjs").then((Ymod: any) => {
+        Ymod.applyUpdate(cs.yjsDoc, state);
+      });
+    }, encodedState);
 
     // Step 5: allow time for the Yjs WebSocket to flush the ~5 MB update
     // to the relay.  Localhost WebSocket is fast (< 1 s for 5 MB), but we
@@ -190,9 +185,7 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
       async ({ roomId, cursorCount, intervalMs, relayHost }) => {
         // Dynamic import — socket.io-client is already loaded by the app,
         // so Vite serves this from the module cache.
-        const { io } = (await import(
-          "socket.io-client"
-        )) as any;
+        const { io } = (await import("socket.io-client")) as any;
 
         const recorded: number[] = [];
 
@@ -257,10 +250,14 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
     await pageA.waitForFunction(
       (expected: number) => {
         const cs = (window as any).__atlasdraw__?.collabState;
-        if (!cs?.yjsDoc) return false;
+        if (!cs?.yjsDoc) {
+          return false;
+        }
         const layers = cs.yjsDoc.getMap("layers");
         const defaultLayer = layers.get("default");
-        if (!defaultLayer) return false;
+        if (!defaultLayer) {
+          return false;
+        }
         return defaultLayer.size >= expected;
       },
       FEATURE_COUNT,
@@ -274,11 +271,12 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
     }
 
     console.log(
-      `[stress-test] Received ${timestamps.length} cursors` +
-        (gaps.length > 0
+      `[stress-test] Received ${timestamps.length} cursors${
+        gaps.length > 0
           ? ` | min gap: ${Math.min(...gaps).toFixed(2)} ms` +
             ` | median gap: ${median(gaps).toFixed(2)} ms`
-          : " | no gaps (single cursor received)"),
+          : " | no gaps (single cursor received)"
+      }`,
     );
 
     // 6. Assert: minimum inter-event gap is ≤ 33 ms, demonstrating that
@@ -311,7 +309,9 @@ test.describe("Phase 5 — Yjs stress test (Task 17)", () => {
 // ---------------------------------------------------------------------------
 
 function median(values: number[]): number {
-  if (values.length === 0) return 0;
+  if (values.length === 0) {
+    return 0;
+  }
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 !== 0

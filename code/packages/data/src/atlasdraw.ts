@@ -15,13 +15,14 @@
 // `AtlasdrawDocument`. Higher layers translate to/from Yjs and Excalidraw.
 
 import JSZip from "jszip";
-import type { FeatureCollection } from "geojson";
 
 import {
   ManifestSchema,
   type AtlasdrawDocument,
   type SceneElement,
 } from "./manifest-schema.js";
+
+import type { FeatureCollection } from "geojson";
 
 export const ATLASDRAW_MIME = "application/vnd.atlasdraw+zip";
 
@@ -134,7 +135,9 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   } catch (err) {
     throw new AtlasdrawFormatError(
       "BAD_ZIP",
-      `failed to open .atlasdraw archive: ${(err as Error).message ?? String(err)}`,
+      `failed to open .atlasdraw archive: ${
+        (err as Error).message ?? String(err)
+      }`,
     );
   }
 
@@ -153,7 +156,9 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   } catch (err) {
     throw new AtlasdrawFormatError(
       "INVALID_MANIFEST",
-      `manifest.json is not valid JSON: ${(err as Error).message ?? String(err)}`,
+      `manifest.json is not valid JSON: ${
+        (err as Error).message ?? String(err)
+      }`,
     );
   }
   const parsed = ManifestSchema.safeParse(manifestJson);
@@ -180,16 +185,20 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   } catch (err) {
     throw new AtlasdrawFormatError(
       "MISSING_SCENE",
-      `scene.excalidraw.json is not valid JSON: ${(err as Error).message ?? String(err)}`,
+      `scene.excalidraw.json is not valid JSON: ${
+        (err as Error).message ?? String(err)
+      }`,
     );
   }
   // Reader stays liberal in what it accepts: persisted JSON could come from a
   // future schema variant, so we don't validate per-element shape here. Cast
   // to SceneElement[] is a structural assertion the writer's invariants held.
   const sceneElements: ReadonlyArray<SceneElement> =
-    sceneJson && typeof sceneJson === "object" &&
+    sceneJson &&
+    typeof sceneJson === "object" &&
     Array.isArray((sceneJson as { elements?: unknown }).elements)
-      ? ((sceneJson as { elements: unknown[] }).elements as ReadonlyArray<SceneElement>)
+      ? ((sceneJson as { elements: unknown[] })
+          .elements as ReadonlyArray<SceneElement>)
       : [];
 
   // --- data/layer-<id>.geojson ---------------------------------------------
@@ -200,7 +209,9 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   // Iterate every entry once. `zip.files` is the canonical bag of entries.
   const entries = Object.entries(zip.files);
   for (const [path, entry] of entries) {
-    if (entry.dir) continue;
+    if (entry.dir) {
+      continue;
+    }
 
     const layerMatch = path.match(LAYER_PATH_RE);
     if (layerMatch) {
@@ -216,7 +227,9 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
     if (path.startsWith(FILES_PREFIX) && path !== FILES_PREFIX) {
       const basename = path.slice(FILES_PREFIX.length);
       // Skip nested-dir names just in case — flat namespace is the contract.
-      if (basename.includes("/")) continue;
+      if (basename.includes("/")) {
+        continue;
+      }
       const blob = await entry.async("blob");
       files.set(basename, blob);
       continue;

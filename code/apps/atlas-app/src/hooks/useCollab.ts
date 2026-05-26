@@ -16,8 +16,11 @@
 //   (Task 11) and useYjsLayer (Task 9).
 
 import { createContext, useContext, useRef } from "react";
-import * as Y from "yjs";
+
 import { CollabState } from "../state/collab";
+
+import type * as Y from "yjs";
+
 import type { PeerMeta, CursorState } from "../state/collab";
 import type { CommentsLayer } from "../state/comments";
 
@@ -65,7 +68,9 @@ export const CollabContext = createContext<CollabContextValue | null>(null);
  */
 export function useCollab(): CollabContextValue {
   const ctx = useContext(CollabContext);
-  if (ctx) return ctx;
+  if (ctx) {
+    return ctx;
+  }
 
   // No provider — create a fallback CollabState (inactive when realtime is
   // disabled; otherwise available but unconnected until connect() is called).

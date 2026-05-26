@@ -7,7 +7,9 @@
 // contract (min/max regardless of drag direction).
 
 import { describe, it, expect, vi } from "vitest";
+
 import { RectangleTool } from "./RectangleTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
@@ -157,10 +159,7 @@ describe("RectangleTool", () => {
 
     const finalCall = updateElement.mock.calls.at(-1);
     expect(finalCall).toBeDefined();
-    const [, finalPatch] = finalCall as [
-      string,
-      Partial<AtlasdrawElementSeed>,
-    ];
+    const [, finalPatch] = finalCall as [string, Partial<AtlasdrawElementSeed>];
     expect(finalPatch.geo?.kind).toBe("bbox");
     if (finalPatch.geo && finalPatch.geo.kind === "bbox") {
       // Regardless of drag direction, west < east and south < north.

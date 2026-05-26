@@ -18,8 +18,10 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useState } from "react";
-import type { Comment } from "../state/comments";
+
 import styles from "../styles/CommentAnchor.module.css";
+
+import type { Comment } from "../state/comments";
 
 export interface CommentAnchorProps {
   comment: Comment;

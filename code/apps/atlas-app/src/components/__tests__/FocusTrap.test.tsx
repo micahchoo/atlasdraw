@@ -8,12 +8,7 @@
 //   - contain={false} disables the trap.
 
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { FocusTrap } from "../FocusTrap";
 

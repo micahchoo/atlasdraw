@@ -4,15 +4,17 @@
 // Re-running Phase 1 labels with identical label strings lets ci-gate.ts
 // compare this file's output against the baseline and catch regressions.
 
-import { describe, expect, it } from "vitest";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { platform, version as nodeVersion } from "node:process";
 
+import { describe, expect, it } from "vitest";
+
 import { parse, requireHomogeneousGeometry } from "@atlasdraw/data";
 import { isValidZRef } from "@atlasdraw/geo";
+
 import { synthPointFC } from "../fixtures/synth.js";
 
 interface ScenarioResult {
@@ -27,7 +29,9 @@ const WARMUP = 3;
 const ITERS = 20;
 
 function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
+  if (sorted.length === 0) {
+    return 0;
+  }
   const idx = Math.min(
     sorted.length - 1,
     Math.max(0, Math.ceil((p / 100) * sorted.length) - 1),
@@ -75,7 +79,7 @@ function fcBlob(n: number): Blob {
 function annotationsBlob(n: number): Blob {
   const items = Array.from({ length: n }, (_, i) => ({
     id: i,
-    zRef: (i % 25) + ((i % 10) * 0.1),
+    zRef: (i % 25) + (i % 10) * 0.1,
   }));
   return new Blob([JSON.stringify(items)], { type: "application/json" });
 }
@@ -147,12 +151,7 @@ describe("phase-2 with data layers", () => {
     expect(scenarios.length).toBeGreaterThan(0);
 
     const here = dirname(fileURLToPath(import.meta.url));
-    const out = resolve(
-      here,
-      "..",
-      "results",
-      "phase-2-with-data-layers.json",
-    );
+    const out = resolve(here, "..", "results", "phase-2-with-data-layers.json");
     await mkdir(dirname(out), { recursive: true });
 
     const payload = {
@@ -163,7 +162,7 @@ describe("phase-2 with data layers", () => {
       iterations: ITERS,
       scenarios,
     };
-    await writeFile(out, JSON.stringify(payload, null, 2) + "\n", "utf8");
+    await writeFile(out, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 
     // eslint-disable-next-line no-console
     console.log("[bench] wrote", out);

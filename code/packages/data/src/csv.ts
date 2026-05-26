@@ -33,6 +33,7 @@
 // is absent the reader's behaviour is identical to pre-A8.
 
 import Papa from "papaparse";
+
 import type { Feature, FeatureCollection } from "geojson";
 
 import type { PhotonGeocoder } from "./geocode.js";
@@ -105,10 +106,7 @@ export async function parseCSV(
 
   const rows = parsed.data ?? [];
   if (rows.length === 0) {
-    throw new CSVParseError(
-      "EMPTY_FILE",
-      "CSV has a header but no data rows.",
-    );
+    throw new CSVParseError("EMPTY_FILE", "CSV has a header but no data rows.");
   }
 
   // Detection order matters: lng has the wider [-180, 180] range and would
@@ -126,8 +124,7 @@ export async function parseCSV(
     lngNamed ?? pickColumnByValue(headers, rows, -180, 180, [latCol]);
 
   const addressCol = headers.find((h) => ADDRESS_NAME_RE.test(h));
-  const hasCoordCols =
-    latCol !== null && lngCol !== null && latCol !== lngCol;
+  const hasCoordCols = latCol !== null && lngCol !== null && latCol !== lngCol;
 
   // A8: if there are no coord columns but a geocoder + address column are
   // available, fall through to the geocoder pass instead of throwing.
@@ -158,11 +155,13 @@ export async function parseCSV(
 
     const properties: Record<string, unknown> = {};
     for (const key of headers) {
-      if (hasCoordCols && (key === latCol || key === lngCol)) continue;
+      if (hasCoordCols && (key === latCol || key === lngCol)) {
+        continue;
+      }
       properties[key] = row[key];
     }
     if (addressCol !== undefined) {
-      properties["_addressColumn_v1"] = addressCol;
+      properties._addressColumn_v1 = addressCol;
     }
 
     if (latOk && lngOk) {
@@ -196,7 +195,9 @@ export async function parseCSV(
       async (p) => {
         try {
           const r = await opts.geocoder!.geocode(p.address);
-          if (!r) return null;
+          if (!r) {
+            return null;
+          }
           const feat: Feature = {
             type: "Feature",
             geometry: { type: "Point", coordinates: [r.lng, r.lat] },
@@ -214,7 +215,9 @@ export async function parseCSV(
       },
     );
     for (const feat of resolved) {
-      if (feat) features.push(feat);
+      if (feat) {
+        features.push(feat);
+      }
     }
   }
 
@@ -237,10 +240,13 @@ async function runWithConcurrency<T, R>(
   const workers = Math.max(1, Math.min(cap, items.length));
   for (let w = 0; w < workers; w++) {
     runners.push(
+      // eslint-disable-next-line no-loop-func
       (async () => {
         while (true) {
           const i = next++;
-          if (i >= items.length) return;
+          if (i >= items.length) {
+            return;
+          }
           results[i] = await worker(items[i]!);
         }
       })(),
@@ -268,12 +274,18 @@ function pickColumnByValue(
 
   let best: { col: string; score: number } | null = null;
   for (const col of headers) {
-    if (exclude.has(col)) continue;
+    if (exclude.has(col)) {
+      continue;
+    }
     let inRange = 0;
     for (const row of rows) {
       const n = toFiniteNumber(row[col]);
-      if (n === null) continue;
-      if (n >= min && n <= max) inRange++;
+      if (n === null) {
+        continue;
+      }
+      if (n >= min && n <= max) {
+        inRange++;
+      }
     }
     const score = inRange / rows.length;
     if (score >= threshold && (best === null || score > best.score)) {
@@ -284,14 +296,22 @@ function pickColumnByValue(
 }
 
 function toFiniteNumber(v: unknown): number | null {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (typeof v !== "string") return null;
+  if (typeof v === "number") {
+    return Number.isFinite(v) ? v : null;
+  }
+  if (typeof v !== "string") {
+    return null;
+  }
   const trimmed = v.trim();
-  if (trimmed === "") return null;
+  if (trimmed === "") {
+    return null;
+  }
   const n = Number.parseFloat(trimmed);
   // parseFloat("12abc") === 12. Reject strings whose entire trimmed body
   // isn't a numeric literal — otherwise "United States" might score as 0
   // but "32 St" would score as 32 and corrupt the lat detector.
-  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(trimmed)) return null;
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(trimmed)) {
+    return null;
+  }
   return Number.isFinite(n) ? n : null;
 }

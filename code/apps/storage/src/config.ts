@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import type { StorageMode } from "./types";
 
 // @atlasdraw/storage — Phase 4 T2: startup config + StorageMode detection.
@@ -30,8 +31,12 @@ const BaseSchema = z.object({
     .union([z.boolean(), z.string()])
     .optional()
     .transform((v) => {
-      if (typeof v === "boolean") return v;
-      if (typeof v !== "string") return false;
+      if (typeof v === "boolean") {
+        return v;
+      }
+      if (typeof v !== "string") {
+        return false;
+      }
       return v.toLowerCase() === "true" || v === "1";
     }),
   // ─── Phase 6 A13b: per-workspace quotas ─────────────────────────────
@@ -81,10 +86,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return parsed.data;
 }
 
-function formatZodError(
-  err: z.ZodError,
-  env: NodeJS.ProcessEnv,
-): string {
+function formatZodError(err: z.ZodError, env: NodeJS.ProcessEnv): string {
   const mode = env.STORAGE_MODE as StorageMode | undefined;
   const issue = err.issues[0];
   const varName = String(issue.path[issue.path.length - 1] ?? "<unknown>");
@@ -97,7 +99,9 @@ function formatZodError(
     issue.code === "invalid_enum_value" ||
     issue.code === "invalid_union_discriminator"
   ) {
-    return `Invalid env var STORAGE_MODE: ${JSON.stringify(env.STORAGE_MODE)}. Expected one of "postgres-minio" | "sqlite-fs".`;
+    return `Invalid env var STORAGE_MODE: ${JSON.stringify(
+      env.STORAGE_MODE,
+    )}. Expected one of "postgres-minio" | "sqlite-fs".`;
   }
   return `Invalid env var ${varName}: ${issue.message}`;
 }

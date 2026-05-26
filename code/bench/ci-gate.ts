@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // SPDX-License-Identifier: MIT
 // Phase 2 CI gate — reads bench artifacts and asserts no performance regressions.
 //
@@ -25,12 +26,13 @@ const SLACK = 1.2;
 // 8× gives adequate CI headroom without being trivially loose.
 const SCALE_50K = 8;
 
-const SCALE_ADJUSTED_LABEL =
-  "parse + requireHomogeneousGeometry 50k points";
+const SCALE_ADJUSTED_LABEL = "parse + requireHomogeneousGeometry 50k points";
 const SCALE_ADJUSTED_BASELINE_LABEL =
   "parse + requireHomogeneousGeometry 10k points";
 
-async function loadArtifact(path: string): Promise<Map<string, ScenarioResult>> {
+async function loadArtifact(
+  path: string,
+): Promise<Map<string, ScenarioResult>> {
   const text = await readFile(path, "utf8");
   const artifact: BenchArtifact = JSON.parse(text);
   return new Map(artifact.scenarios.map((s) => [s.label, s]));
@@ -46,10 +48,14 @@ const phase2 = await loadArtifact(phase2Path);
 let failures = 0;
 
 for (const [label, p2] of phase2) {
-  if (label === SCALE_ADJUSTED_LABEL) continue; // handled below
+  if (label === SCALE_ADJUSTED_LABEL) {
+    continue;
+  } // handled below
 
   const base = baseline.get(label);
-  if (!base) continue; // new scenario, no baseline to gate against
+  if (!base) {
+    continue;
+  } // new scenario, no baseline to gate against
 
   const limit = base.p95_ms * SLACK;
   const pass = p2.p95_ms <= limit;
@@ -59,7 +65,9 @@ for (const [label, p2] of phase2) {
       `\n      p95=${p2.p95_ms}ms  limit=${limit.toFixed(3)}ms` +
       `  (baseline=${base.p95_ms}ms × ${SLACK})`,
   );
-  if (!pass) failures++;
+  if (!pass) {
+    failures++;
+  }
 }
 
 // Scale-adjusted gate for the 50k scenario.
@@ -75,9 +83,13 @@ if (p2_50k && base_10k) {
       `\n      p95=${p2_50k.p95_ms}ms  limit=${limit.toFixed(3)}ms` +
       `  (baseline_10k=${base_10k.p95_ms}ms × ${SCALE_50K} × ${SLACK})`,
   );
-  if (!pass) failures++;
+  if (!pass) {
+    failures++;
+  }
 } else {
-  console.warn(`SKIP  ${SCALE_ADJUSTED_LABEL}: missing from artifact or baseline`);
+  console.warn(
+    `SKIP  ${SCALE_ADJUSTED_LABEL}: missing from artifact or baseline`,
+  );
 }
 
 if (failures > 0) {

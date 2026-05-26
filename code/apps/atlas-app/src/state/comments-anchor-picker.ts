@@ -16,6 +16,7 @@
 // instance per app — module-level state matches the lifetime of MapEditor.
 
 import { useSyncExternalStore } from "react";
+
 import type { CommentAnchor } from "@atlasdraw/protocol";
 
 export type AnchorMode = "map" | "element" | null;
@@ -29,7 +30,9 @@ let _state: PickerState = { mode: null, anchor: null };
 const _listeners = new Set<() => void>();
 
 function _emit(): void {
-  for (const l of _listeners) l();
+  for (const l of _listeners) {
+    l();
+  }
 }
 
 function _subscribe(listener: () => void): () => void {

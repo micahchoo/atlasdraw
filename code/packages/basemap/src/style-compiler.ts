@@ -125,5 +125,10 @@ export function compileLayer(
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function defaultLayerStyle(_fc: FeatureCollection): LayerStyle {
-  return { fillColor: "#0aa", strokeColor: "#077", strokeWidth: 1, opacity: 0.5 };
+  return {
+    fillColor: "#0aa",
+    strokeColor: "#077",
+    strokeWidth: 1,
+    opacity: 0.5,
+  };
 }

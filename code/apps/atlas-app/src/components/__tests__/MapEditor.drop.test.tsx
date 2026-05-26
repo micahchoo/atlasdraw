@@ -16,6 +16,14 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// SUT import — must come AFTER vi.mock declarations.
+// ---------------------------------------------------------------------------
+
+import { MapEditor } from "../MapEditor";
+import { useLayerRegistryStore } from "../../state/layerRegistry";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -31,7 +39,8 @@ import type maplibregl from "maplibre-gl";
 //   - compileLayer (called → returns a LayerSpecification)
 //   - defaultLayerStyle (called → returns a LayerStyle)
 vi.mock("@atlasdraw/basemap", () => ({
-  MapCanvas: () => React.createElement("div", { "data-testid": "map-canvas-stub" }),
+  MapCanvas: () =>
+    React.createElement("div", { "data-testid": "map-canvas-stub" }),
   compileLayer: vi.fn((id: string, _style: unknown, geomType: string) => ({
     id,
     type: geomType, // "fill" | "line" | "circle"
@@ -45,17 +54,44 @@ vi.mock("@atlasdraw/basemap", () => ({
     opacity: 0.5,
   })),
   registerPmtilesProtocol: vi.fn(),
-  getBasemap: vi.fn((id: string) =>
-    ({ id, label: id, styleFile: `${id}.json`, requiresRemote: false }),
+  getBasemap: vi.fn((id: string) => ({
+    id,
+    label: id,
+    styleFile: `${id}.json`,
+    requiresRemote: false,
+  })),
+  buildStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
   ),
-  buildStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
   BASEMAPS: [
-    { id: "protomaps-light", label: "Light", styleFile: "protomaps-light.json", requiresRemote: false },
-    { id: "protomaps-dark", label: "Dark", styleFile: "protomaps-dark.json", requiresRemote: false },
-    { id: "openfreemap-bright", label: "Bright", styleFile: "openfreemap-bright.json", requiresRemote: true },
+    {
+      id: "protomaps-light",
+      label: "Light",
+      styleFile: "protomaps-light.json",
+      requiresRemote: false,
+    },
+    {
+      id: "protomaps-dark",
+      label: "Dark",
+      styleFile: "protomaps-dark.json",
+      requiresRemote: false,
+    },
+    {
+      id: "openfreemap-bright",
+      label: "Bright",
+      styleFile: "openfreemap-bright.json",
+      requiresRemote: true,
+    },
   ],
-  resolveStyle: vi.fn(() => Promise.resolve({ version: 8, sources: {}, layers: [] })),
-  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error { constructor(public readonly basemapId: string) { super(`Basemap ${basemapId} requires allow_remote=true`); this.name = "BasemapRemoteGatedError"; } },
+  resolveStyle: vi.fn(() =>
+    Promise.resolve({ version: 8, sources: {}, layers: [] }),
+  ),
+  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
+    constructor(public readonly basemapId: string) {
+      super(`Basemap ${basemapId} requires allow_remote=true`);
+      this.name = "BasemapRemoteGatedError";
+    }
+  },
 }));
 
 // Stub <Excalidraw> — renders children (LayerPanel + MainMenu items) but
@@ -71,18 +107,10 @@ vi.mock("@excalidraw/excalidraw", () => ({
     onExcalidrawAPI?: unknown;
     children?: React.ReactNode;
   }) =>
-    React.createElement(
-      "div",
-      { "data-testid": "excalidraw-stub" },
-      children,
-    ),
+    React.createElement("div", { "data-testid": "excalidraw-stub" }, children),
   MainMenu: Object.assign(
     ({ children }: { children?: React.ReactNode }) =>
-      React.createElement(
-        "div",
-        { "data-testid": "main-menu-stub" },
-        children,
-      ),
+      React.createElement("div", { "data-testid": "main-menu-stub" }, children),
     {
       Item: ({
         children,
@@ -109,11 +137,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
   ),
   Sidebar: Object.assign(
     ({ children }: { children?: React.ReactNode }) =>
-      React.createElement(
-        "div",
-        { "data-testid": "sidebar-stub" },
-        children,
-      ),
+      React.createElement("div", { "data-testid": "sidebar-stub" }, children),
     {
       Header: ({ children }: { children?: React.ReactNode }) =>
         React.createElement(
@@ -178,13 +202,6 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
     dispatchPointerDown: vi.fn(),
   }),
 }));
-
-// ---------------------------------------------------------------------------
-// SUT import — must come AFTER vi.mock declarations.
-// ---------------------------------------------------------------------------
-
-import { MapEditor } from "../MapEditor";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -259,13 +276,15 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(callArg.fc.features).toHaveLength(1);
 
     expect(mockMap.addSource).toHaveBeenCalledTimes(1);
-    const [sourceId, sourceSpec] = (mockMap.addSource as ReturnType<typeof vi.fn>)
-      .mock.calls[0];
+    const [sourceId, sourceSpec] = (
+      mockMap.addSource as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
     expect(sourceId).toBe(callArg.id);
     expect(sourceSpec).toMatchObject({ type: "geojson" });
 
     expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
-    const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
     expect(layerSpec.id).toBe(callArg.id);
     // Polygon → "fill" (see inferGeometryType in MapEditor.tsx).
     expect(layerSpec.type).toBe("fill");

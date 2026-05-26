@@ -15,20 +15,18 @@
 //   5. Empty-doc round-trip (empty layers, empty files, minimal scene).
 
 import JSZip from "jszip";
-import type { FeatureCollection } from "geojson";
+
 import { describe, expect, it } from "vitest";
 
 import { AtlasdrawFormatError, read, write } from "./atlasdraw.js";
-import {
-  AtlasdrawJSONError,
-  readJSON,
-  writeJSON,
-} from "./atlasdraw-json.js";
+import { AtlasdrawJSONError, readJSON, writeJSON } from "./atlasdraw-json.js";
 import {
   ManifestSchema,
   type AtlasdrawDocument,
   type Manifest,
 } from "./manifest-schema.js";
+
+import type { FeatureCollection } from "geojson";
 
 // ---------------------------------------------------------------------------
 // constants — fixed so equality checks are deterministic.
@@ -44,7 +42,14 @@ const FIXED_UPDATED_AT = "2025-01-02T00:00:00.000Z";
 // (Blob.type only round-trips because both writer and reader preserve the
 // stored mimeType, and content only because zip STORE'd files don't transcode).
 const FILE_BYTES = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG magic + header
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a, // PNG magic + header
   ...Array.from({ length: 42 }, (_, i) => i & 0xff),
 ]);
 const FILE_NAME = "asset.png";
@@ -247,9 +252,7 @@ describe("T12 round-trip — write (zip) → read", () => {
 
     // files — size match, name match, bytes match.
     expect(back.files.size).toBe(doc.files.size);
-    expect([...back.files.keys()].sort()).toEqual(
-      [...doc.files.keys()].sort(),
-    );
+    expect([...back.files.keys()].sort()).toEqual([...doc.files.keys()].sort());
     const origBlob = doc.files.get(FILE_NAME)!;
     const roundBlob = back.files.get(FILE_NAME)!;
     expect(await blobBytes(roundBlob)).toEqual(await blobBytes(origBlob));

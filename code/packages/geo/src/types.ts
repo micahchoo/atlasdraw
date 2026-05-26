@@ -15,7 +15,14 @@
  */
 export type GeoAnchor =
   | { kind: "point"; lng: number; lat: number; zRef: number }
-  | { kind: "bbox"; west: number; south: number; east: number; north: number; zRef: number }
+  | {
+      kind: "bbox";
+      west: number;
+      south: number;
+      east: number;
+      north: number;
+      zRef: number;
+    }
   | { kind: "polyline"; coordinates: Array<[number, number]>; zRef: number };
 
 /**
@@ -54,7 +61,9 @@ export const isValidZRef = (v: unknown): v is number =>
 
 /** Type guard: is this element's customData a GeoCustomData? */
 export function isGeoCustomData(value: unknown): value is GeoCustomData {
-  if (typeof value !== "object" || value === null) return false;
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
   const v = value as Record<string, unknown>;
   return (
     typeof v.schemaVersion === "number" &&

@@ -1,12 +1,17 @@
+import * as path from "node:path";
+
 import Database from "better-sqlite3";
 import Fastify, { type FastifyInstance } from "fastify";
-import * as path from "node:path";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
-import type { ShareToken, StorageClient } from "../types";
+
 import { registerMapRoutes } from "./maps";
+
 import { registerShareRoutes } from "./share";
+
+import type { ShareToken, StorageClient } from "../types";
 
 // Spy-wrapping StorageClient — increments counters on the methods the
 // share routes touch so we can assert that route-level validation rejects
@@ -248,9 +253,7 @@ describe("/share routes", () => {
       // orphaned state (e.g. operator-level delete, future Phase work).
       const db = new Database(dbPath);
       db.pragma("foreign_keys = OFF");
-      const result = db
-        .prepare("DELETE FROM maps WHERE id = ?")
-        .run(mapId);
+      const result = db.prepare("DELETE FROM maps WHERE id = ?").run(mapId);
       expect(result.changes).toBe(1);
       db.close();
 
@@ -347,9 +350,7 @@ describe("/share routes", () => {
       const { mapId, token } = await mintTokenForFreshMap(Buffer.from("x"));
       const db = new Database(dbPath);
       db.pragma("foreign_keys = OFF");
-      const result = db
-        .prepare("DELETE FROM maps WHERE id = ?")
-        .run(mapId);
+      const result = db.prepare("DELETE FROM maps WHERE id = ?").run(mapId);
       expect(result.changes).toBe(1);
       db.close();
 

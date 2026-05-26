@@ -8,6 +8,7 @@
 // is throw + named error.
 
 import { isValidZRef, MAX_ZREF } from "./types.js";
+
 import type { GeoAnchor, GeoCustomData, ScaleMode } from "./types.js";
 
 /**
@@ -40,7 +41,9 @@ const fail = (reason: string): never => {
 };
 
 function parseGeoAnchor(g: unknown): GeoAnchor {
-  if (!isObject(g)) fail("geo: not an object");
+  if (!isObject(g)) {
+    fail("geo: not an object");
+  }
   const obj = g as Record<string, unknown>;
   const kind = obj.kind;
   if (typeof kind !== "string" || !ANCHOR_KINDS.has(kind as never)) {
@@ -48,10 +51,15 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
   }
 
   if (kind === "point") {
-    if (!isFiniteNumber(obj.lng)) fail("geo.lng: must be a finite number");
-    if (!isFiniteNumber(obj.lat)) fail("geo.lat: must be a finite number");
-    if (!isValidZRef(obj.zRef))
+    if (!isFiniteNumber(obj.lng)) {
+      fail("geo.lng: must be a finite number");
+    }
+    if (!isFiniteNumber(obj.lat)) {
+      fail("geo.lat: must be a finite number");
+    }
+    if (!isValidZRef(obj.zRef)) {
       fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
+    }
     return {
       kind: "point",
       lng: obj.lng as number,
@@ -61,18 +69,31 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
   }
 
   if (kind === "bbox") {
-    if (!isFiniteNumber(obj.west)) fail("geo.west: must be a finite number");
-    if (!isFiniteNumber(obj.south)) fail("geo.south: must be a finite number");
-    if (!isFiniteNumber(obj.east)) fail("geo.east: must be a finite number");
-    if (!isFiniteNumber(obj.north)) fail("geo.north: must be a finite number");
-    if (!isValidZRef(obj.zRef))
+    if (!isFiniteNumber(obj.west)) {
+      fail("geo.west: must be a finite number");
+    }
+    if (!isFiniteNumber(obj.south)) {
+      fail("geo.south: must be a finite number");
+    }
+    if (!isFiniteNumber(obj.east)) {
+      fail("geo.east: must be a finite number");
+    }
+    if (!isFiniteNumber(obj.north)) {
+      fail("geo.north: must be a finite number");
+    }
+    if (!isValidZRef(obj.zRef)) {
       fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
+    }
     const west = obj.west as number;
     const east = obj.east as number;
     const south = obj.south as number;
     const north = obj.north as number;
-    if (!(west < east)) fail(`geo bbox: west (${west}) must be < east (${east})`);
-    if (!(south < north)) fail(`geo bbox: south (${south}) must be < north (${north})`);
+    if (!(west < east)) {
+      fail(`geo bbox: west (${west}) must be < east (${east})`);
+    }
+    if (!(south < north)) {
+      fail(`geo bbox: south (${south}) must be < north (${north})`);
+    }
     return { kind: "bbox", west, south, east, north, zRef: obj.zRef as number };
   }
 
@@ -96,13 +117,16 @@ function parseGeoAnchor(g: unknown): GeoAnchor {
     }
     validated.push([tuple[0] as number, tuple[1] as number]);
   }
-  if (!isValidZRef(obj.zRef))
+  if (!isValidZRef(obj.zRef)) {
     fail(`geo.zRef: must be a finite number in [0, ${MAX_ZREF}]`);
+  }
   return { kind: "polyline", coordinates: validated, zRef: obj.zRef as number };
 }
 
 function parseValidatedV1(value: unknown): GeoCustomData {
-  if (!isObject(value)) fail("top-level: not an object");
+  if (!isObject(value)) {
+    fail("top-level: not an object");
+  }
   const v = value as Record<string, unknown>;
 
   if (typeof v.schemaVersion !== "number") {
@@ -116,8 +140,15 @@ function parseValidatedV1(value: unknown): GeoCustomData {
     fail(`projection: expected "mercator", got ${String(v.projection)}`);
   }
 
-  if (typeof v.scaleMode !== "string" || !SCALE_MODES.has(v.scaleMode as ScaleMode)) {
-    fail(`scaleMode: must be one of geographic|screen|hybrid, got ${String(v.scaleMode)}`);
+  if (
+    typeof v.scaleMode !== "string" ||
+    !SCALE_MODES.has(v.scaleMode as ScaleMode)
+  ) {
+    fail(
+      `scaleMode: must be one of geographic|screen|hybrid, got ${String(
+        v.scaleMode,
+      )}`,
+    );
   }
 
   const geo = parseGeoAnchor(v.geo);
@@ -139,7 +170,9 @@ function parseValidatedV1(value: unknown): GeoCustomData {
  * already trusted by construction.
  */
 export function parseGeoCustomData(value: unknown): GeoCustomData {
-  if (!isObject(value)) fail("top-level: not an object");
+  if (!isObject(value)) {
+    fail("top-level: not an object");
+  }
   const v = value as Record<string, unknown>;
 
   if (typeof v.schemaVersion !== "number") {

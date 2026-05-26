@@ -8,7 +8,9 @@
 // the second drag works independently to prove state-clear on up.
 
 import { describe, it, expect, vi } from "vitest";
+
 import { ArrowTool } from "./ArrowTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
@@ -102,14 +104,23 @@ describe("ArrowTool", () => {
     const tail = { lng: -73.98, lat: 40.75 };
     const mid = { lng: -73.97, lat: 40.76 };
     const head = { lng: -73.96, lat: 40.77 };
-    const { ctx, addElement, updateElement } = makeCtx(
-      [tail, mid, head],
-      { zoom: 12, addElementId: "arrow-elem-1" },
-    );
+    const { ctx, addElement, updateElement } = makeCtx([tail, mid, head], {
+      zoom: 12,
+      addElementId: "arrow-elem-1",
+    });
 
-    ArrowTool.onPointerDown!(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
-    ArrowTool.onPointerMove!(makePointerEvent({ clientX: 150, clientY: 150 }), ctx);
-    ArrowTool.onPointerUp!(makePointerEvent({ clientX: 200, clientY: 200 }), ctx);
+    ArrowTool.onPointerDown!(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
+    ArrowTool.onPointerMove!(
+      makePointerEvent({ clientX: 150, clientY: 150 }),
+      ctx,
+    );
+    ArrowTool.onPointerUp!(
+      makePointerEvent({ clientX: 200, clientY: 200 }),
+      ctx,
+    );
 
     // Exactly one addElement (at down).
     expect(addElement).toHaveBeenCalledTimes(1);

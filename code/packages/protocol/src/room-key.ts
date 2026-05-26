@@ -28,7 +28,9 @@ const ROOM_PREFIX = "room:";
 /** Raw bytes → base64url (no padding). '+' → '-', '/' → '_', strip trailing '='. */
 function bytesToBase64url(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
   return btoa(binary)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -38,17 +40,22 @@ function bytesToBase64url(bytes: Uint8Array): string {
 /** Base64url → ArrayBuffer. Returns null on malformed input. */
 function base64urlToBytes(s: string): Uint8Array<ArrayBuffer> | null {
   // Reject characters that are not valid in base64url before padding.
-  if (!/^[A-Za-z0-9_-]*$/.test(s)) return null;
+  if (!/^[A-Za-z0-9_-]*$/.test(s)) {
+    return null;
+  }
   // base64url: '-' → '+', '_' → '/'; pad with '=' to multiple of 4.
   const padded = s.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  const pad =
+    padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
   try {
     const binary = atob(padded + pad);
     // Allocate an explicit ArrayBuffer (not SharedArrayBuffer) so the
     // result is a strict BufferSource for crypto.subtle.importKey.
     const buf = new ArrayBuffer(binary.length);
     const out = new Uint8Array(buf);
-    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    for (let i = 0; i < binary.length; i++) {
+      out[i] = binary.charCodeAt(i);
+    }
     return out;
   } catch {
     return null;
@@ -65,7 +72,7 @@ function base64urlToBytes(s: string): Uint8Array<ArrayBuffer> | null {
  * @returns The fragment string, including the leading `#`.
  */
 export function buildRoomFragment(roomId: string, keyB64: string): string {
-  return "#" + ROOM_PREFIX + roomId + "," + keyB64;
+  return `#${ROOM_PREFIX}${roomId},${keyB64}`;
 }
 
 /**
@@ -116,18 +123,26 @@ export async function generateRoomKey(): Promise<{
  */
 export async function parseRoomFragment(hash: string): Promise<RoomKey | null> {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
-  if (!raw.startsWith(ROOM_PREFIX)) return null;
+  if (!raw.startsWith(ROOM_PREFIX)) {
+    return null;
+  }
   const body = raw.slice(ROOM_PREFIX.length);
 
   const commaIdx = body.indexOf(",");
-  if (commaIdx < 0) return null;
+  if (commaIdx < 0) {
+    return null;
+  }
 
   const roomId = body.slice(0, commaIdx);
   const keyB64 = body.slice(commaIdx + 1);
-  if (!roomId || !keyB64) return null;
+  if (!roomId || !keyB64) {
+    return null;
+  }
 
   const keyBytes = base64urlToBytes(keyB64);
-  if (!keyBytes || keyBytes.length !== 32) return null;
+  if (!keyBytes || keyBytes.length !== 32) {
+    return null;
+  }
 
   try {
     const key = await crypto.subtle.importKey(

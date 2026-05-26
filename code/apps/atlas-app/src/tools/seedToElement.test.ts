@@ -19,9 +19,11 @@
 // includes `apps/atlas-app/src/**/*.test.ts`.
 
 import { describe, it, expect, vi, beforeAll } from "vitest";
+
+import { seedToElement } from "./seedToElement.js";
+
 import type maplibregl from "maplibre-gl";
 import type { AtlasdrawElementSeed } from "@atlasdraw/tools";
-import { seedToElement } from "./seedToElement.js";
 
 // jsdom does not implement canvas. Excalidraw's `newTextElement` calls
 // measureText via canvas getContext("2d"). Stub a minimal 2d context so the
@@ -32,7 +34,9 @@ beforeAll(() => {
     (HTMLCanvasElement.prototype as any).getContext = function (
       kind: string,
     ): unknown {
-      if (kind !== "2d") return null;
+      if (kind !== "2d") {
+        return null;
+      }
       return {
         font: "",
         measureText: (text: string) => ({

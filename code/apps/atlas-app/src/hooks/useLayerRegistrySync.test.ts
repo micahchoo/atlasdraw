@@ -19,6 +19,7 @@ import {
   type SyncSceneElement,
   type MapLayoutSurface,
 } from "./useLayerRegistrySync";
+
 import type { LayerRegistryEntry } from "../state/layerRegistry";
 
 // ---------------------------------------------------------------------------

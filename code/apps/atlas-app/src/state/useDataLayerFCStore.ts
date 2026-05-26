@@ -28,6 +28,7 @@
 // rehydrated from the .atlasdraw zip on load).
 
 import { create } from "zustand";
+
 import type { FeatureCollection } from "geojson";
 
 export type DataLayerFCState = {
@@ -60,15 +61,16 @@ export type DataLayerFCState = {
 export const useDataLayerFCStore = create<DataLayerFCState>()((set, get) => ({
   fcs: {},
 
-  set: (id, fc) =>
-    set((s) => ({ fcs: { ...s.fcs, [id]: fc } })),
+  set: (id, fc) => set((s) => ({ fcs: { ...s.fcs, [id]: fc } })),
 
   delete: (id) =>
     set((s) => {
       // Skip the allocation if we have nothing to remove. Both `remove(id)` on
       // an annotation id and `convertAnnotationToDataLayer`'s old-id wipe
       // exercise this branch.
-      if (!(id in s.fcs)) return s;
+      if (!(id in s.fcs)) {
+        return s;
+      }
       const next = { ...s.fcs };
       delete next[id];
       return { fcs: next };

@@ -36,12 +36,8 @@
 //   text                → throw UnsupportedConvertElementError
 
 import circle from "@turf/circle";
-import type {
-  FeatureCollection,
-  Polygon,
-  LineString,
-  Position,
-} from "geojson";
+
+import type { FeatureCollection, Polygon, LineString, Position } from "geojson";
 import type { GeoCustomData } from "@atlasdraw/geo";
 
 /**
@@ -71,7 +67,9 @@ export type ConvertibleElement = {
 export class UnsupportedConvertElementError extends Error {
   constructor(elementType: string) {
     super(
-      `Element type ${JSON.stringify(elementType)} cannot be converted to a data layer`,
+      `Element type ${JSON.stringify(
+        elementType,
+      )} cannot be converted to a data layer`,
     );
     this.name = "UnsupportedConvertElementError";
   }
@@ -83,18 +81,26 @@ export class UnsupportedConvertElementError extends Error {
  */
 function readRadiusKm(el: ConvertibleElement): number | undefined {
   const direct = el.customData?.radiusKm;
-  if (typeof direct === "number") return direct;
+  if (typeof direct === "number") {
+    return direct;
+  }
   const nested = el.customData?._data?.radiusKm;
-  if (typeof nested === "number") return nested;
+  if (typeof nested === "number") {
+    return nested;
+  }
   return undefined;
 }
 
 /** Close a ring if its first and last positions are not already equal. */
 function closeRing(coords: Position[]): Position[] {
-  if (coords.length === 0) return coords;
+  if (coords.length === 0) {
+    return coords;
+  }
   const first = coords[0];
   const last = coords[coords.length - 1];
-  if (first[0] === last[0] && first[1] === last[1]) return coords;
+  if (first[0] === last[0] && first[1] === last[1]) {
+    return coords;
+  }
   return [...coords, first];
 }
 

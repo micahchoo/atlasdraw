@@ -8,6 +8,7 @@
 
 import Fastify, { type FastifyInstance } from "fastify";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+
 import { registerWorkspaceMiddleware } from "../workspace";
 
 function makeApp(managed: boolean): FastifyInstance {
@@ -24,7 +25,9 @@ describe("registerWorkspaceMiddleware", () => {
   let app: FastifyInstance;
 
   afterEach(async () => {
-    if (app) await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe("managed mode", () => {

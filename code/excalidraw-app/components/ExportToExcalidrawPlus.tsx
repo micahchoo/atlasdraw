@@ -11,14 +11,8 @@ import { ExcalidrawLogo } from "@excalidraw/excalidraw/components/ExcalidrawLogo
 import { ToolButton } from "@excalidraw/excalidraw/components/ToolButton";
 import { useI18n } from "@excalidraw/excalidraw/i18n";
 
-import type {
-  NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
-import type {
-  AppState,
-  BinaryFileData,
-  BinaryFiles,
-} from "@excalidraw/excalidraw/types";
+import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
 
 export const exportToExcalidrawPlus = async (
   _elements: readonly NonDeletedExcalidrawElement[],

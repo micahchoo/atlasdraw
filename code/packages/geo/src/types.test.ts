@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { isGeoCustomData, type GeoAnchor } from "./types.js";
+
+import { isGeoCustomData } from "./types.js";
 
 describe("GeoCustomData type guard", () => {
   it("accepts a valid point GeoCustomData", () => {
@@ -16,7 +17,14 @@ describe("GeoCustomData type guard", () => {
   it("accepts a valid bbox GeoCustomData", () => {
     expect(
       isGeoCustomData({
-        geo: { kind: "bbox", west: -74, south: 40, east: -73, north: 41, zRef: 10 },
+        geo: {
+          kind: "bbox",
+          west: -74,
+          south: 40,
+          east: -73,
+          north: 41,
+          zRef: 10,
+        },
         scaleMode: "geographic",
         projection: "mercator",
         schemaVersion: 1,

@@ -22,7 +22,9 @@ vi.mock("@excalidraw/excalidraw", () => ({
   MainMenu: () => null,
 }));
 
-function stubClient(overrides: Partial<HttpStorageClient> = {}): HttpStorageClient {
+function stubClient(
+  overrides: Partial<HttpStorageClient> = {},
+): HttpStorageClient {
   return {
     createMap: vi.fn(),
     getMap: vi.fn(),

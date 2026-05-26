@@ -16,13 +16,10 @@
 // calls `process.exit()`.
 
 import { promises as fs } from "node:fs";
+
 import { Command } from "commander";
 import JSZip from "jszip";
-import {
-  read,
-  AtlasdrawFormatError,
-  ManifestSchema,
-} from "@atlasdraw/data";
+import { read, AtlasdrawFormatError, ManifestSchema } from "@atlasdraw/data";
 
 export interface LintStreams {
   stdout: { write: (s: string) => void };
@@ -75,7 +72,9 @@ export async function runLint(
       // Unknown error — surface verbatim. Should be rare; `read()` wraps its
       // own failure modes in `AtlasdrawFormatError`.
       streams.stderr.write(
-        `${(err as Error).name ?? "Error"}: ${(err as Error).message ?? String(err)}\n`,
+        `${(err as Error).name ?? "Error"}: ${
+          (err as Error).message ?? String(err)
+        }\n`,
       );
       return 1;
     }

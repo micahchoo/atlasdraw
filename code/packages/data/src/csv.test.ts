@@ -11,8 +11,7 @@ import {
   parseCSV,
 } from "./csv.js";
 
-const csvBlob = (text: string): Blob =>
-  new Blob([text], { type: "text/csv" });
+const csvBlob = (text: string): Blob => new Blob([text], { type: "text/csv" });
 
 describe("parseCSV — header-name detection", () => {
   it("detects lat/lng headers", async () => {
@@ -27,9 +26,7 @@ describe("parseCSV — header-name detection", () => {
   });
 
   it("detects latitude/longitude headers", async () => {
-    const fc = await parseCSV(
-      csvBlob("latitude,longitude,city\n40.7,-74,NYC"),
-    );
+    const fc = await parseCSV(csvBlob("latitude,longitude,city\n40.7,-74,NYC"));
     expect(fc.features).toHaveLength(1);
     expect(fc.features[0]!.geometry).toEqual({
       type: "Point",
@@ -54,9 +51,7 @@ describe("parseCSV — header-name detection", () => {
   it("name-based detection wins over sparse values", async () => {
     // lat column has 1 valid row out of 3 — would fail value heuristic, but
     // name-match should still pick it up.
-    const fc = await parseCSV(
-      csvBlob("lat,lng\n40.7,-74\n,\nfoo,bar"),
-    );
+    const fc = await parseCSV(csvBlob("lat,lng\n40.7,-74\n,\nfoo,bar"));
     expect(fc.features).toHaveLength(1);
     expect(fc.features[0]!.geometry).toEqual({
       type: "Point",
@@ -92,7 +87,9 @@ describe("parseCSV — value-range detection", () => {
   it("80% threshold accepts ≥10 rows with 8/10 valid", async () => {
     // 10 rows, 8 with valid lat/lng, 2 with non-numeric in BOTH coord cols.
     const rows: string[] = [];
-    for (let i = 0; i < 8; i++) rows.push(`${40 + i * 0.1},${-74 - i * 0.1}`);
+    for (let i = 0; i < 8; i++) {
+      rows.push(`${40 + i * 0.1},${-74 - i * 0.1}`);
+    }
     rows.push("foo,bar");
     rows.push("baz,qux");
     const fc = await parseCSV(csvBlob(`a,b\n${rows.join("\n")}`));
@@ -101,8 +98,12 @@ describe("parseCSV — value-range detection", () => {
 
   it("80% threshold rejects ≥10 rows with only 7/10 valid", async () => {
     const rows: string[] = [];
-    for (let i = 0; i < 7; i++) rows.push(`${40 + i * 0.1},${-74 - i * 0.1}`);
-    for (let i = 0; i < 3; i++) rows.push(`foo${i},bar${i}`);
+    for (let i = 0; i < 7; i++) {
+      rows.push(`${40 + i * 0.1},${-74 - i * 0.1}`);
+    }
+    for (let i = 0; i < 3; i++) {
+      rows.push(`foo${i},bar${i}`);
+    }
     await expect(parseCSV(csvBlob(`a,b\n${rows.join("\n")}`))).rejects.toThrow(
       CSVParseError,
     );
@@ -118,16 +119,10 @@ describe("parseCSV — value-range detection", () => {
   });
 
   it("100% threshold for <10 rows rejects 1-of-5 non-numeric", async () => {
-    const rows = [
-      "40.7,-74",
-      "34.0,-118",
-      "41.8,-87",
-      "29.7,-95",
-      "foo,bar",
-    ];
-    await expect(parseCSV(csvBlob(`a,b\n${rows.join("\n")}`))).rejects.toMatchObject(
-      { code: "NO_COORD_COLUMNS" },
-    );
+    const rows = ["40.7,-74", "34.0,-118", "41.8,-87", "29.7,-95", "foo,bar"];
+    await expect(
+      parseCSV(csvBlob(`a,b\n${rows.join("\n")}`)),
+    ).rejects.toMatchObject({ code: "NO_COORD_COLUMNS" });
   });
 
   it("threshold constants are 0.8 / 1.0", () => {
@@ -167,18 +162,22 @@ describe("parseCSV — coordinate edge cases", () => {
     // 5 rows where col b has 1 out-of-range (180.01). With strict <10 row
     // threshold of 100%, that single out-of-range value should disqualify
     // the column (4/5 = 0.8 < 1.0).
-    const rows = ["40.7,-74", "34.0,-118", "41.8,-87", "29.7,-95", "33.4,180.01"];
-    await expect(parseCSV(csvBlob(`a,b\n${rows.join("\n")}`))).rejects.toMatchObject(
-      { code: "NO_COORD_COLUMNS" },
-    );
+    const rows = [
+      "40.7,-74",
+      "34.0,-118",
+      "41.8,-87",
+      "29.7,-95",
+      "33.4,180.01",
+    ];
+    await expect(
+      parseCSV(csvBlob(`a,b\n${rows.join("\n")}`)),
+    ).rejects.toMatchObject({ code: "NO_COORD_COLUMNS" });
   });
 });
 
 describe("parseCSV — properties + address column", () => {
   it("captures address column name in _addressColumn_v1", async () => {
-    const fc = await parseCSV(
-      csvBlob("address,lat,lng\n123 Main,40,-74"),
-    );
+    const fc = await parseCSV(csvBlob("address,lat,lng\n123 Main,40,-74"));
     expect(fc.features).toHaveLength(1);
     expect(fc.features[0]!.properties).toMatchObject({
       address: "123 Main",
@@ -188,9 +187,7 @@ describe("parseCSV — properties + address column", () => {
 
   it("recognises location/street/addr as address columns", async () => {
     for (const name of ["location", "street", "addr", "Address", "STREET"]) {
-      const fc = await parseCSV(
-        csvBlob(`${name},lat,lng\nfoo,40,-74`),
-      );
+      const fc = await parseCSV(csvBlob(`${name},lat,lng\nfoo,40,-74`));
       expect(fc.features[0]!.properties).toMatchObject({
         _addressColumn_v1: name,
       });
@@ -201,7 +198,7 @@ describe("parseCSV — properties + address column", () => {
     const fc = await parseCSV(csvBlob("lat,lng,name\n40,-74,NYC"));
     const props = fc.features[0]!.properties as Record<string, unknown>;
     expect("_addressColumn_v1" in props).toBe(false);
-    expect(props["name"]).toBe("NYC");
+    expect(props.name).toBe("NYC");
   });
 
   it("preserves all non-coord columns on properties", async () => {
@@ -231,7 +228,9 @@ describe("parseCSV — error cases", () => {
 
   it("throws NO_COORD_COLUMNS when only text columns", async () => {
     const rows: string[] = [];
-    for (let i = 0; i < 12; i++) rows.push(`name${i},city${i},desc${i}`);
+    for (let i = 0; i < 12; i++) {
+      rows.push(`name${i},city${i},desc${i}`);
+    }
     await expect(
       parseCSV(csvBlob(`name,city,desc\n${rows.join("\n")}`)),
     ).rejects.toMatchObject({ code: "NO_COORD_COLUMNS" });
@@ -255,8 +254,9 @@ describe("parseCSV — malformed-row tolerance", () => {
       csvBlob("lat,lng,name\n40.7,-74,NYC\nabc,xyz,bad\n34.0,-118,LA"),
     );
     expect(fc.features).toHaveLength(2);
-    expect(fc.features.map((f) => (f.properties as { name: string }).name))
-      .toEqual(["NYC", "LA"]);
+    expect(
+      fc.features.map((f) => (f.properties as { name: string }).name),
+    ).toEqual(["NYC", "LA"]);
   });
 
   it("skips rows with empty lat/lng", async () => {

@@ -19,6 +19,8 @@
 // Per ADR-0010 the relay never inspects encrypted payloads — SCENE_UPDATE
 // and COMMENT data are forwarded as opaque { iv, ciphertext } blobs.
 
+import { checkRateLimit } from "./rate-limit";
+
 import type { Server as SocketIOServer, Socket } from "socket.io";
 import type {
   SceneUpdateEvent,
@@ -28,7 +30,6 @@ import type {
   RequestSnapshotEvent,
   SceneSnapshotEvent,
 } from "@atlasdraw/protocol";
-import { checkRateLimit } from "./rate-limit";
 import type { RateLimitedEvent } from "./rate-limit";
 
 // ---------------------------------------------------------------------------
@@ -100,7 +101,7 @@ function trackSender(socket: Socket, senderId: string): void {
  */
 export function registerSocketIOHandlers(io: SocketIOServer): void {
   // Maximum concurrent sockets per room — env-configurable, default 4.
-  const MAX_ROOM_SIZE = parseInt(process.env["MAX_ROOM_SIZE"] ?? "4", 10);
+  const MAX_ROOM_SIZE = parseInt(process.env.MAX_ROOM_SIZE ?? "4", 10);
 
   io.on("connection", (socket: Socket) => {
     // -----------------------------------------------------------------------
@@ -123,132 +124,131 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     // the client passed workspaceId at join time), so room alignment is
     // the client's contract to maintain.
     // -----------------------------------------------------------------------
-    socket.on(
-      "JOIN_ROOM",
-      (payload: unknown) => {
-        if (
-          !payload ||
-          typeof payload !== "object" ||
-          typeof (payload as Record<string, unknown>).roomId !== "string"
-        ) {
-          return;
-        }
-        const obj = payload as Record<string, unknown>;
-        const baseRoomId = obj.roomId as string;
-        if (!baseRoomId) return;
+    socket.on("JOIN_ROOM", (payload: unknown) => {
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as Record<string, unknown>).roomId !== "string"
+      ) {
+        return;
+      }
+      const obj = payload as Record<string, unknown>;
+      const baseRoomId = obj.roomId as string;
+      if (!baseRoomId) {
+        return;
+      }
 
-        // Phase 6 A9: optional workspaceId namespace.
-        const rawWorkspace = obj.workspaceId;
-        const workspaceId =
-          typeof rawWorkspace === "string" && rawWorkspace.length > 0
-            ? rawWorkspace
-            : null;
-        const roomKey = workspaceId
-          ? `${workspaceId}/${baseRoomId}`
-          : baseRoomId;
+      // Phase 6 A9: optional workspaceId namespace.
+      const rawWorkspace = obj.workspaceId;
+      const workspaceId =
+        typeof rawWorkspace === "string" && rawWorkspace.length > 0
+          ? rawWorkspace
+          : null;
+      const roomKey = workspaceId ? `${workspaceId}/${baseRoomId}` : baseRoomId;
 
-        // Room size guard — reject join if room already has MAX_ROOM_SIZE sockets
-        const roomSockets = io.sockets.adapter.rooms.get(roomKey);
-        if (roomSockets && roomSockets.size >= MAX_ROOM_SIZE) {
-          socket.emit("ROOM_FULL", {
-            code: "ROOM_FULL",
-            message: "Room is full",
-            roomId: baseRoomId,
-          });
-          return;
-        }
+      // Room size guard — reject join if room already has MAX_ROOM_SIZE sockets
+      const roomSockets = io.sockets.adapter.rooms.get(roomKey);
+      if (roomSockets && roomSockets.size >= MAX_ROOM_SIZE) {
+        socket.emit("ROOM_FULL", {
+          code: "ROOM_FULL",
+          message: "Room is full",
+          roomId: baseRoomId,
+        });
+        return;
+      }
 
-        currentRoom = roomKey;
-        socket.join(roomKey);
+      currentRoom = roomKey;
+      socket.join(roomKey);
 
-        // Notify existing peers that a new participant joined.
-        socket.to(roomKey).emit("PEER_JOINED", { peerId: socket.id });
-      },
-    );
+      // Notify existing peers that a new participant joined.
+      socket.to(roomKey).emit("PEER_JOINED", { peerId: socket.id });
+    });
 
     // -----------------------------------------------------------------------
     // SCENE_UPDATE – validate encrypted fields, relay blindly
     // -----------------------------------------------------------------------
-    socket.on(
-      "SCENE_UPDATE",
-      (payload: unknown) => {
-        if (!checkRateLimited(socket, "SCENE_UPDATE", payload)) return;
+    socket.on("SCENE_UPDATE", (payload: unknown) => {
+      if (!checkRateLimited(socket, "SCENE_UPDATE", payload)) {
+        return;
+      }
 
-        const evt = payload as Partial<SceneUpdateEvent>;
-        if (
-          !evt.data ||
-          typeof evt.data.iv !== "string" ||
-          typeof evt.data.ciphertext !== "string"
-        ) {
-          return; // malformed — silently drop
-        }
+      const evt = payload as Partial<SceneUpdateEvent>;
+      if (
+        !evt.data ||
+        typeof evt.data.iv !== "string" ||
+        typeof evt.data.ciphertext !== "string"
+      ) {
+        return; // malformed — silently drop
+      }
 
-        trackSender(socket, evt.senderId ?? "");
-        socket.to(evt.roomId ?? "").emit("SCENE_UPDATE", payload);
-      },
-    );
+      trackSender(socket, evt.senderId ?? "");
+      socket.to(evt.roomId ?? "").emit("SCENE_UPDATE", payload);
+    });
 
     // -----------------------------------------------------------------------
     // MAP_CAMERA_UPDATE – LWW by timestamp
     // -----------------------------------------------------------------------
-    socket.on(
-      "MAP_CAMERA_UPDATE",
-      (payload: unknown) => {
-        if (!checkRateLimited(socket, "MAP_CAMERA_UPDATE", payload)) return;
+    socket.on("MAP_CAMERA_UPDATE", (payload: unknown) => {
+      if (!checkRateLimited(socket, "MAP_CAMERA_UPDATE", payload)) {
+        return;
+      }
 
-        const evt = payload as Partial<MapCameraUpdateEvent>;
-        const roomId = evt.roomId ?? "";
-        const senderId = evt.senderId ?? "";
-        if (!roomId || !senderId) return;
+      const evt = payload as Partial<MapCameraUpdateEvent>;
+      const roomId = evt.roomId ?? "";
+      const senderId = evt.senderId ?? "";
+      if (!roomId || !senderId) {
+        return;
+      }
 
-        const state = getLWWState(roomId, senderId);
-        if ((evt.timestamp ?? 0) > state.lastCameraTimestamp) {
-          state.lastCameraTimestamp = evt.timestamp ?? 0;
-          trackSender(socket, senderId);
-          socket.to(roomId).emit("MAP_CAMERA_UPDATE", payload);
-        }
-      },
-    );
+      const state = getLWWState(roomId, senderId);
+      if ((evt.timestamp ?? 0) > state.lastCameraTimestamp) {
+        state.lastCameraTimestamp = evt.timestamp ?? 0;
+        trackSender(socket, senderId);
+        socket.to(roomId).emit("MAP_CAMERA_UPDATE", payload);
+      }
+    });
 
     // -----------------------------------------------------------------------
     // CURSOR – relay immediately, no LWW
     // -----------------------------------------------------------------------
-    socket.on(
-      "CURSOR",
-      (payload: unknown) => {
-        if (!checkRateLimited(socket, "CURSOR", payload)) return;
+    socket.on("CURSOR", (payload: unknown) => {
+      if (!checkRateLimited(socket, "CURSOR", payload)) {
+        return;
+      }
 
-        const evt = payload as Partial<CursorEvent>;
-        const roomId = evt.roomId ?? "";
-        const senderId = evt.senderId ?? "";
-        if (!roomId || !senderId) return;
+      const evt = payload as Partial<CursorEvent>;
+      const roomId = evt.roomId ?? "";
+      const senderId = evt.senderId ?? "";
+      if (!roomId || !senderId) {
+        return;
+      }
 
-        trackSender(socket, senderId);
-        socket.to(roomId).emit("CURSOR", payload);
-      },
-    );
+      trackSender(socket, senderId);
+      socket.to(roomId).emit("CURSOR", payload);
+    });
 
     // -----------------------------------------------------------------------
     // COMMENT – LWW by version field
     // -----------------------------------------------------------------------
-    socket.on(
-      "COMMENT",
-      (payload: unknown) => {
-        if (!checkRateLimited(socket, "COMMENT", payload)) return;
+    socket.on("COMMENT", (payload: unknown) => {
+      if (!checkRateLimited(socket, "COMMENT", payload)) {
+        return;
+      }
 
-        const evt = payload as Partial<CommentEvent>;
-        const roomId = evt.roomId ?? "";
-        const senderId = evt.senderId ?? "";
-        if (!roomId || !senderId || !evt.data) return;
+      const evt = payload as Partial<CommentEvent>;
+      const roomId = evt.roomId ?? "";
+      const senderId = evt.senderId ?? "";
+      if (!roomId || !senderId || !evt.data) {
+        return;
+      }
 
-        const state = getLWWState(roomId, senderId);
-        if ((evt.data.version ?? 0) > state.lastCommentVersion) {
-          state.lastCommentVersion = evt.data.version ?? 0;
-          trackSender(socket, senderId);
-          socket.to(roomId).emit("COMMENT", payload);
-        }
-      },
-    );
+      const state = getLWWState(roomId, senderId);
+      if ((evt.data.version ?? 0) > state.lastCommentVersion) {
+        state.lastCommentVersion = evt.data.version ?? 0;
+        trackSender(socket, senderId);
+        socket.to(roomId).emit("COMMENT", payload);
+      }
+    });
 
     // -----------------------------------------------------------------------
     // REQUEST_SNAPSHOT — joiner-pull (Q-P5-1)
@@ -263,41 +263,48 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     // it as senderId in the routed envelope, so the elected peer knows
     // whom to address its SCENE_SNAPSHOT reply to.
     // -----------------------------------------------------------------------
-    socket.on(
-      "REQUEST_SNAPSHOT",
-      (payload: unknown) => {
-        if (
-          !payload ||
-          typeof payload !== "object" ||
-          typeof (payload as Record<string, unknown>).roomId !== "string"
-        ) {
-          return; // malformed — silently drop
+    socket.on("REQUEST_SNAPSHOT", (payload: unknown) => {
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as Record<string, unknown>).roomId !== "string"
+      ) {
+        return; // malformed — silently drop
+      }
+      const { roomId } = payload as { roomId: string };
+      if (!roomId || roomId !== currentRoom) {
+        return;
+      }
+
+      const roomSockets = io.sockets.adapter.rooms.get(roomId);
+      if (!roomSockets) {
+        return;
+      }
+
+      // Election: lexicographically-smallest socket.id excluding requester.
+      // Deterministic & churn-resilient — same id wins across re-requests
+      // unless the prior winner disconnected.
+      let elected: string | null = null;
+      for (const id of roomSockets) {
+        if (id === socket.id) {
+          continue;
         }
-        const { roomId } = payload as { roomId: string };
-        if (!roomId || roomId !== currentRoom) return;
-
-        const roomSockets = io.sockets.adapter.rooms.get(roomId);
-        if (!roomSockets) return;
-
-        // Election: lexicographically-smallest socket.id excluding requester.
-        // Deterministic & churn-resilient — same id wins across re-requests
-        // unless the prior winner disconnected.
-        let elected: string | null = null;
-        for (const id of roomSockets) {
-          if (id === socket.id) continue;
-          if (elected === null || id < elected) elected = id;
+        if (elected === null || id < elected) {
+          elected = id;
         }
-        if (elected === null) return; // requester is alone — no-op
+      }
+      if (elected === null) {
+        return;
+      } // requester is alone — no-op
 
-        const envelope: RequestSnapshotEvent = {
-          type: "REQUEST_SNAPSHOT",
-          roomId,
-          senderId: socket.id,
-          timestamp: Date.now(),
-        };
-        io.to(elected).emit("REQUEST_SNAPSHOT", envelope);
-      },
-    );
+      const envelope: RequestSnapshotEvent = {
+        type: "REQUEST_SNAPSHOT",
+        roomId,
+        senderId: socket.id,
+        timestamp: Date.now(),
+      };
+      io.to(elected).emit("REQUEST_SNAPSHOT", envelope);
+    });
 
     // -----------------------------------------------------------------------
     // SCENE_SNAPSHOT — encrypted reply to a joiner-pull (Q-P5-1)
@@ -307,39 +314,42 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     // strings), confirms target is in the same room (no cross-room leakage),
     // applies the same byte cap as SCENE_UPDATE (256 KB).
     // -----------------------------------------------------------------------
-    socket.on(
-      "SCENE_SNAPSHOT",
-      (payload: unknown) => {
-        if (!checkRateLimited(socket, "SCENE_SNAPSHOT", payload)) return;
+    socket.on("SCENE_SNAPSHOT", (payload: unknown) => {
+      if (!checkRateLimited(socket, "SCENE_SNAPSHOT", payload)) {
+        return;
+      }
 
-        const evt = payload as Partial<SceneSnapshotEvent>;
-        if (
-          typeof evt.roomId !== "string" ||
-          typeof evt.targetId !== "string" ||
-          !evt.data ||
-          typeof evt.data.iv !== "string" ||
-          typeof evt.data.ciphertext !== "string"
-        ) {
-          return; // malformed — silently drop
-        }
+      const evt = payload as Partial<SceneSnapshotEvent>;
+      if (
+        typeof evt.roomId !== "string" ||
+        typeof evt.targetId !== "string" ||
+        !evt.data ||
+        typeof evt.data.iv !== "string" ||
+        typeof evt.data.ciphertext !== "string"
+      ) {
+        return; // malformed — silently drop
+      }
 
-        // Sender must be in the room they claim, and target must be in the
-        // same room — prevents cross-room snapshot leakage.
-        if (evt.roomId !== currentRoom) return;
-        const targetSocket = io.sockets.sockets.get(evt.targetId);
-        if (!targetSocket || !targetSocket.rooms.has(evt.roomId)) return;
+      // Sender must be in the room they claim, and target must be in the
+      // same room — prevents cross-room snapshot leakage.
+      if (evt.roomId !== currentRoom) {
+        return;
+      }
+      const targetSocket = io.sockets.sockets.get(evt.targetId);
+      if (!targetSocket || !targetSocket.rooms.has(evt.roomId)) {
+        return;
+      }
 
-        const envelope: SceneSnapshotEvent = {
-          type: "SCENE_SNAPSHOT",
-          roomId: evt.roomId,
-          senderId: socket.id,
-          timestamp: Date.now(),
-          targetId: evt.targetId,
-          data: evt.data,
-        };
-        io.to(evt.targetId).emit("SCENE_SNAPSHOT", envelope);
-      },
-    );
+      const envelope: SceneSnapshotEvent = {
+        type: "SCENE_SNAPSHOT",
+        roomId: evt.roomId,
+        senderId: socket.id,
+        timestamp: Date.now(),
+        targetId: evt.targetId,
+        data: evt.data,
+      };
+      io.to(evt.targetId).emit("SCENE_SNAPSHOT", envelope);
+    });
 
     // -----------------------------------------------------------------------
     // LEAVE_ROOM

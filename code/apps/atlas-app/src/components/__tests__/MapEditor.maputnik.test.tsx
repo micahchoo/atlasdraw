@@ -9,6 +9,14 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// SUT
+// ---------------------------------------------------------------------------
+
+import { MapEditor } from "../MapEditor";
+import { useLayerRegistryStore } from "../../state/layerRegistry";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -198,13 +206,6 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
     dispatchPointerDown: vi.fn(),
   }),
 }));
-
-// ---------------------------------------------------------------------------
-// SUT
-// ---------------------------------------------------------------------------
-
-import { MapEditor } from "../MapEditor";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 beforeEach(() => {
   vi.clearAllMocks();

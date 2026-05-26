@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 import { describe, expect, it } from "vitest";
 
-import type { BasemapConfig } from "../BasemapRegistry";
 import { buildStyle } from "../style-builder";
+
+import type { BasemapConfig } from "../BasemapRegistry";
 
 const localConfig: BasemapConfig = {
   id: "protomaps-light",

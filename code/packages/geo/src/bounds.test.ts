@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+
 import { computeSceneBounds } from "./bounds.js";
+
 import type { ExcalidrawElementLike } from "./CoordinateSync.js";
 import type { GeoCustomData } from "./types.js";
 
@@ -13,6 +15,7 @@ function geoEl(id: string, geo: GeoCustomData["geo"]): ExcalidrawElementLike {
       scaleMode: "geographic",
       projection: "mercator",
       schemaVersion: 1,
+      // eslint-disable-next-line prettier/prettier
     } satisfies GeoCustomData,
   };
 }

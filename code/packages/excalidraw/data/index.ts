@@ -179,7 +179,9 @@ export const exportCanvas = async (
   // Frame exports use element-bounds, not viewport — skip compositing.
   // SVG exports fall through the early-return above and are never reached here.
   const tempCanvas: Promise<HTMLCanvasElement> =
-    backgroundCanvas != null && !exportingFrame && (type === "png" || type === "clipboard")
+    backgroundCanvas != null &&
+    !exportingFrame &&
+    (type === "png" || type === "clipboard")
       ? (async () => {
           // DPR: background canvas is in device pixels; appState.width is CSS px
           const dpr = backgroundCanvas.width / appState.width;

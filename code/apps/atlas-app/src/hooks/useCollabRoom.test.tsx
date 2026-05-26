@@ -10,8 +10,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, cleanup } from "@testing-library/react";
 
-import { useCollabRoom } from "./useCollabRoom";
 import * as protocol from "@atlasdraw/protocol";
+
+import { useCollabRoom } from "./useCollabRoom";
 
 type FakeCollab = {
   active: boolean;

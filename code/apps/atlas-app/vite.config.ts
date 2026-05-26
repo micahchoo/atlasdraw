@@ -1,8 +1,9 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
+
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // AboutDialog (T14) needs version + build hash. Read from atlas-app's
 // package.json and a short git rev at config time; fall back to "unknown"
@@ -37,13 +38,19 @@ const GIT_HASH = ((): string => {
 const pmtilesNotFoundPlugin = {
   name: "atlasdraw-pmtiles-404",
   configureServer(server: { middlewares: { use: (fn: unknown) => void } }) {
-    (server.middlewares.use as (
-      fn: (req: { url?: string }, res: {
-        statusCode: number;
-        setHeader: (k: string, v: string) => void;
-        end: (body: string) => void;
-      }, next: () => void) => void,
-    ) => void)((req, res, next) => {
+    (
+      server.middlewares.use as (
+        fn: (
+          req: { url?: string },
+          res: {
+            statusCode: number;
+            setHeader: (k: string, v: string) => void;
+            end: (body: string) => void;
+          },
+          next: () => void,
+        ) => void,
+      ) => void
+    )((req, res, next) => {
       if (req.url && /^\/data\/.+\.pmtiles(\?.*)?$/.test(req.url)) {
         const filename = req.url.replace(/\?.*$/, "").slice("/data/".length);
         const fullPath = path.resolve(__dirname, "public", "data", filename);
@@ -79,9 +86,13 @@ const cleanupPublicDataPlugin = {
   apply: "build" as const,
   closeBundle() {
     const distData = path.resolve(__dirname, "dist", "data");
-    if (!fs.existsSync(distData)) return;
+    if (!fs.existsSync(distData)) {
+      return;
+    }
     for (const entry of fs.readdirSync(distData)) {
-      if (ALLOWED_DATA_FILES.has(entry)) continue;
+      if (ALLOWED_DATA_FILES.has(entry)) {
+        continue;
+      }
       const full = path.join(distData, entry);
       fs.rmSync(full, { recursive: true, force: true });
       // eslint-disable-next-line no-console
@@ -101,10 +112,7 @@ export default defineConfig({
   server: {
     port: 5174,
     fs: {
-      allow: [
-        path.resolve(__dirname),
-        path.resolve(__dirname, "../.."),
-      ],
+      allow: [path.resolve(__dirname), path.resolve(__dirname, "../..")],
     },
   },
   resolve: {

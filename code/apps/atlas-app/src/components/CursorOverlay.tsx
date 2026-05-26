@@ -13,6 +13,7 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useRef } from "react";
+
 import { useCollab } from "../hooks/useCollab";
 import styles from "../styles/CursorOverlay.module.css";
 
@@ -49,10 +50,14 @@ export function CursorOverlay() {
   // through React reconciliation on every frame.
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg) return;
+    if (!svg) {
+      return;
+    }
 
     for (const [id, peer] of peers) {
-      if (!peer.cursor) continue;
+      if (!peer.cursor) {
+        continue;
+      }
       const prev = lastPositions.current.get(id);
 
       if (!prev || prev.x !== peer.cursor.x || prev.y !== peer.cursor.y) {
@@ -63,9 +68,7 @@ export function CursorOverlay() {
         });
 
         // Mark the group element as bouncing.
-        const group = svg.querySelector<SVGGElement>(
-          `[data-peer-id="${id}"]`,
-        );
+        const group = svg.querySelector<SVGGElement>(`[data-peer-id="${id}"]`);
         if (group) {
           group.classList.add(styles.bouncing);
           bouncingRef.current.add(id);
@@ -73,13 +76,13 @@ export function CursorOverlay() {
 
         // Clear any existing bounce timer for this peer.
         const existing = bounceTimers.current.get(id);
-        if (existing) clearTimeout(existing);
+        if (existing) {
+          clearTimeout(existing);
+        }
 
         // Remove bounce class after animation completes.
         const timer = setTimeout(() => {
-          const g = svg.querySelector<SVGGElement>(
-            `[data-peer-id="${id}"]`,
-          );
+          const g = svg.querySelector<SVGGElement>(`[data-peer-id="${id}"]`);
           if (g) {
             g.classList.remove(styles.bouncing);
           }
@@ -95,7 +98,9 @@ export function CursorOverlay() {
   useEffect(() => {
     const timers = bounceTimers.current;
     return () => {
-      for (const timer of timers.values()) clearTimeout(timer);
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
       timers.clear();
     };
   }, []);
@@ -103,13 +108,11 @@ export function CursorOverlay() {
   const entries = Array.from(peers.entries());
 
   return (
-    <svg
-      ref={svgRef}
-      className={styles.overlay}
-      data-testid="cursor-overlay"
-    >
+    <svg ref={svgRef} className={styles.overlay} data-testid="cursor-overlay">
       {entries.map(([id, peer]) => {
-        if (!peer.cursor) return null;
+        if (!peer.cursor) {
+          return null;
+        }
         return (
           <g key={id} data-peer-id={id}>
             <circle

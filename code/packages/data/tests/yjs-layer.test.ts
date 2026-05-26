@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
+
 import {
   YjsLayer,
   addFeature,
@@ -40,9 +41,21 @@ describe("addFeature", () => {
     const yl = new YjsLayer();
     const layer = yl.getOrCreateLayer("test-layer");
 
-    addFeature(layer, "feat-1", "LineString", [[[0, 0], [1, 1], [2, 2]]], {
-      name: "test feature",
-    });
+    addFeature(
+      layer,
+      "feat-1",
+      "LineString",
+      [
+        [
+          [0, 0],
+          [1, 1],
+          [2, 2],
+        ],
+      ],
+      {
+        name: "test feature",
+      },
+    );
 
     expect(layer.has("feat-1")).toBe(true);
 
@@ -53,7 +66,9 @@ describe("addFeature", () => {
     expect(geometry).toBeDefined();
     expect(geometry.get("type")).toBe("LineString");
 
-    const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coords = geometry.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
     expect(coords).toBeDefined();
     expect(coords.length).toBe(1); // one ring
     const ring = coords.get(0);
@@ -75,13 +90,27 @@ describe("addFeature", () => {
 
     // Polygon with exterior ring + hole
     addFeature(layer, "poly-1", "Polygon", [
-      [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],     // exterior
-      [[2, 2], [8, 2], [8, 8], [2, 8], [2, 2]],          // hole
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+        [0, 0],
+      ], // exterior
+      [
+        [2, 2],
+        [8, 2],
+        [8, 8],
+        [2, 8],
+        [2, 2],
+      ], // hole
     ]);
 
     const featMap = layer.get("poly-1") as Y.Map<unknown>;
     const geometry = featMap.get("geometry") as Y.Map<unknown>;
-    const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coords = geometry.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
 
     expect(coords.length).toBe(2); // two rings
     expect(coords.get(0).length).toBe(5); // 5 vertices in outer ring
@@ -106,7 +135,12 @@ describe("deleteFeature", () => {
     const yl = new YjsLayer();
     const layer = yl.getOrCreateLayer("data");
 
-    addFeature(layer, "feat-1", "LineString", [[[0, 0], [1, 1]]]);
+    addFeature(layer, "feat-1", "LineString", [
+      [
+        [0, 0],
+        [1, 1],
+      ],
+    ]);
     expect(layer.has("feat-1")).toBe(true);
 
     deleteFeature(layer, "feat-1");
@@ -127,13 +161,20 @@ describe("appendVertex", () => {
     const yl = new YjsLayer();
     const layer = yl.getOrCreateLayer("lines");
 
-    addFeature(layer, "line-1", "LineString", [[[0, 0], [1, 1]]]);
+    addFeature(layer, "line-1", "LineString", [
+      [
+        [0, 0],
+        [1, 1],
+      ],
+    ]);
 
     appendVertex(layer, "line-1", 0, [2, 2]);
 
     const featMap = layer.get("line-1") as Y.Map<unknown>;
     const geometry = featMap.get("geometry") as Y.Map<unknown>;
-    const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coords = geometry.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
     const ring = coords.get(0);
 
     expect(ring.length).toBe(3);
@@ -153,7 +194,15 @@ describe("appendVertex", () => {
   it("throws when ring index is out of range", () => {
     const yl = new YjsLayer();
     const layer = yl.getOrCreateLayer("data");
-    addFeature(layer, "f1", "Polygon", [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]);
+    addFeature(layer, "f1", "Polygon", [
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+        [0, 0],
+      ],
+    ]);
 
     expect(() => appendVertex(layer, "f1", 99, [5, 5])).toThrow(
       "Ring index 99 not found",
@@ -166,13 +215,21 @@ describe("deleteVertex", () => {
     const yl = new YjsLayer();
     const layer = yl.getOrCreateLayer("lines");
 
-    addFeature(layer, "line-1", "LineString", [[[0, 0], [1, 1], [2, 2]]]);
+    addFeature(layer, "line-1", "LineString", [
+      [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+      ],
+    ]);
 
     deleteVertex(layer, "line-1", 0, 1); // remove middle vertex
 
     const featMap = layer.get("line-1") as Y.Map<unknown>;
     const geometry = featMap.get("geometry") as Y.Map<unknown>;
-    const coords = geometry.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coords = geometry.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
     const ring = coords.get(0);
 
     expect(ring.length).toBe(2);
@@ -213,7 +270,13 @@ describe("CRDT concurrent appendVertex", () => {
     const ylA = new YjsLayer();
     const layerA = ylA.getOrCreateLayer("shapes");
     addFeature(layerA, "poly-1", "Polygon", [
-      [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+        [0, 0],
+      ],
     ]);
 
     // Serialize docA state and apply to docB
@@ -236,10 +299,14 @@ describe("CRDT concurrent appendVertex", () => {
     // --- Assert docA ---
     const featA = layerA.get("poly-1") as Y.Map<unknown>;
     const geoA = featA.get("geometry") as Y.Map<unknown>;
-    const coordsA = geoA.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coordsA = geoA.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
     const ringA = coordsA.get(0);
 
-    const verticesA = ringA.toArray().map((p) => p.toArray() as [number, number]);
+    const verticesA = ringA
+      .toArray()
+      .map((p) => p.toArray() as [number, number]);
     expect(verticesA).toContainEqual([20, 20]);
     expect(verticesA).toContainEqual([-10, -10]);
     // Original vertices preserved
@@ -253,10 +320,14 @@ describe("CRDT concurrent appendVertex", () => {
     // --- Assert docB (identical result) ---
     const featB = layerB.get("poly-1") as Y.Map<unknown>;
     const geoB = featB.get("geometry") as Y.Map<unknown>;
-    const coordsB = geoB.get("coordinates") as Y.Array<Y.Array<Y.Array<number>>>;
+    const coordsB = geoB.get("coordinates") as Y.Array<
+      Y.Array<Y.Array<number>>
+    >;
     const ringB = coordsB.get(0);
 
-    const verticesB = ringB.toArray().map((p) => p.toArray() as [number, number]);
+    const verticesB = ringB
+      .toArray()
+      .map((p) => p.toArray() as [number, number]);
     expect(verticesB).toEqual(verticesA);
   });
 });

@@ -7,7 +7,9 @@
 // `AtlasdrawElementSeed` whose geo / scaleMode / data fields match the spec.
 
 import { describe, it, expect, vi } from "vitest";
+
 import { PinTool } from "./PinTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,

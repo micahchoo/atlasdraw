@@ -4,12 +4,19 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Imported AFTER mocks so the adapter sees the mocked modules.
+import {
+  __postgresMinioInternals,
+  createPostgresMinioAdapter,
+} from "./postgres-minio";
+
 const queryMock = vi.fn();
 const s3SendMock = vi.fn();
 
 vi.mock("pg", () => {
   class Pool {
     query = queryMock;
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor(_opts?: unknown) {}
   }
   return { Pool };
@@ -18,6 +25,7 @@ vi.mock("pg", () => {
 vi.mock("@aws-sdk/client-s3", () => {
   class S3Client {
     send = s3SendMock;
+    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor(_opts?: unknown) {}
   }
   class PutObjectCommand {
@@ -45,12 +53,6 @@ vi.mock("@aws-sdk/client-s3", () => {
     CreateBucketCommand,
   };
 });
-
-// Imported AFTER mocks so the adapter sees the mocked modules.
-import {
-  __postgresMinioInternals,
-  createPostgresMinioAdapter,
-} from "./postgres-minio";
 
 function makeAdapter() {
   return createPostgresMinioAdapter({
@@ -93,9 +95,9 @@ describe("postgres-minio adapter", () => {
 
     // Postgres INSERT after schema creation.
     const queries = queryMock.mock.calls.map(([sql]) => sql as string);
-    expect(queries.some((q) => /CREATE TABLE IF NOT EXISTS maps/i.test(q))).toBe(
-      true,
-    );
+    expect(
+      queries.some((q) => /CREATE TABLE IF NOT EXISTS maps/i.test(q)),
+    ).toBe(true);
     const insertCall = queryMock.mock.calls.find(([sql]) =>
       /INSERT INTO maps/i.test(sql as string),
     );

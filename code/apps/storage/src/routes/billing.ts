@@ -17,11 +17,7 @@
 // Redis is the proper home for production multi-instance deploys — TODO
 // post-v1. v1 single-instance hosting accepts the loss-on-restart window.
 
-import type {
-  FastifyInstance,
-  FastifyReply,
-  FastifyRequest,
-} from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { StorageClient, WorkspacePlan } from "../types";
 
 // Subset of Stripe's types we actually use. Avoids a top-level
@@ -94,7 +90,9 @@ class IdempotencyStore {
   private gc(): void {
     const cutoff = Date.now() - IDEMPOTENCY_TTL_MS;
     for (const [id, ts] of this.entries) {
-      if (ts < cutoff) this.entries.delete(id);
+      if (ts < cutoff) {
+        this.entries.delete(id);
+      }
     }
   }
 }
@@ -114,15 +112,21 @@ function getStripe(opts: BillingRoutesOptions): StripeLike {
     key: string,
     opts?: Record<string, unknown>,
   ) => StripeLike;
-  return new StripeCtor(opts.stripeSecretKey, { apiVersion: "2024-12-18.acacia" });
+  return new StripeCtor(opts.stripeSecretKey, {
+    apiVersion: "2024-12-18.acacia",
+  });
 }
 
 function priceIdForTier(
   tier: WorkspacePlan,
   opts: BillingRoutesOptions,
 ): string | undefined {
-  if (tier === "pro") return opts.stripePricePro;
-  if (tier === "pro_25") return opts.stripePricePro25;
+  if (tier === "pro") {
+    return opts.stripePricePro;
+  }
+  if (tier === "pro_25") {
+    return opts.stripePricePro25;
+  }
   return undefined;
 }
 
@@ -168,9 +172,7 @@ export function registerBillingRoutes(
       return reply.code(404).send({ error: "not found" });
     }
     if (!opts.stripeSecretKey) {
-      return reply
-        .code(503)
-        .send({ error: "stripe_not_configured" });
+      return reply.code(503).send({ error: "stripe_not_configured" });
     }
     const body = (request.body ?? {}) as {
       workspaceId?: string;
@@ -211,9 +213,7 @@ export function registerBillingRoutes(
         return reply.code(404).send({ error: "not found" });
       }
       if (!opts.stripeSecretKey || !opts.stripeWebhookSecret) {
-        return reply
-          .code(503)
-          .send({ error: "stripe_not_configured" });
+        return reply.code(503).send({ error: "stripe_not_configured" });
       }
       const sig = request.headers["stripe-signature"];
       if (!sig) {
@@ -243,9 +243,7 @@ export function registerBillingRoutes(
       }
 
       if (idempotency.has(event.id)) {
-        return reply
-          .code(200)
-          .send({ status: "already_processed" });
+        return reply.code(200).send({ status: "already_processed" });
       }
       idempotency.add(event.id);
 
@@ -289,8 +287,12 @@ async function dispatchEvent(
       };
       const workspaceId = obj.metadata?.workspaceId;
       const priceTier = obj.metadata?.priceTier;
-      if (!workspaceId || !priceTier) return;
-      if (priceTier !== "pro" && priceTier !== "pro_25") return;
+      if (!workspaceId || !priceTier) {
+        return;
+      }
+      if (priceTier !== "pro" && priceTier !== "pro_25") {
+        return;
+      }
       await opts.client.updateWorkspacePlan(
         workspaceId,
         priceTier,
@@ -298,20 +300,24 @@ async function dispatchEvent(
       );
       return;
     }
-    case "customer.subscription.deleted": {
-      const obj = event.data.object as { customer?: string };
-      const customerId = obj.customer;
-      if (!customerId) return;
-      const ws = await opts.client.findWorkspaceByStripeCustomerId(
-        customerId,
-      );
-      if (!ws) return;
-      await opts.client.updateWorkspacePlan(ws.id, "free");
-      return;
-    }
+    case "customer.subscription.deleted":
+      {
+        const obj = event.data.object as { customer?: string };
+        const customerId = obj.customer;
+        if (!customerId) {
+          return;
+        }
+        const ws = await opts.client.findWorkspaceByStripeCustomerId(
+          customerId,
+        );
+        if (!ws) {
+          return;
+        }
+        await opts.client.updateWorkspacePlan(ws.id, "free");
+      }
+      break;
     default:
-      // Forward-compat: unknown event types are 200-OK no-ops.
-      return;
+    // Forward-compat: unknown event types are 200-OK no-ops.
   }
 }
 

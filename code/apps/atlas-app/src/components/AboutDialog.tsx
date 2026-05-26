@@ -6,7 +6,9 @@
 // Excalidraw provider tree.
 
 import React, { useEffect, useRef } from "react";
+
 import { getAppConfig } from "../config/app-config";
+
 import type { BuildTarget } from "../config/app-config";
 
 export interface AboutDialogProps {
@@ -27,10 +29,14 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
 
   useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel) {
+      return;
+    }
     panel.querySelector<HTMLButtonElement>("button")?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRequest();
+      if (e.key === "Escape") {
+        onCloseRequest();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -133,10 +139,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
             </span>
           </dd>
           <dt style={{ color: "#868e96" }}>Edition</dt>
-          <dd
-            data-testid="about-dialog-build-target"
-            style={{ margin: 0 }}
-          >
+          <dd data-testid="about-dialog-build-target" style={{ margin: 0 }}>
             {BUILD_TARGET_LABEL[cfg.buildTarget]}
           </dd>
         </dl>

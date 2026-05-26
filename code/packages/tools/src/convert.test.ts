@@ -17,11 +17,13 @@
 //   9.  ellipse missing radius    → throws (clear message)
 
 import { describe, it, expect } from "vitest";
+
 import {
   annotationToFeatureCollection,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "./convert.js";
+
 import type { GeoCustomData } from "@atlasdraw/geo";
 
 // ---------------------------------------------------------------------------
@@ -78,7 +80,9 @@ describe("annotationToFeatureCollection", () => {
     expect(fc.features).toHaveLength(1);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     expect(ring).toHaveLength(5);
     expect(ring[0]).toEqual(ring[4]); // closed
@@ -96,7 +100,9 @@ describe("annotationToFeatureCollection", () => {
     expect(fc.features).toHaveLength(1);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     // turf/circle with steps:64 produces 65 positions (closed ring).
     expect(ring.length).toBeGreaterThan(4);
@@ -126,7 +132,9 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     expect(ring).toHaveLength(4);
     expect(ring[0]).toEqual(ring[3]);
@@ -147,7 +155,9 @@ describe("annotationToFeatureCollection", () => {
     };
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     // Should be exactly 4 elements (not 5 — no extra closure appended).
     expect(ring).toHaveLength(4);
@@ -168,7 +178,9 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") throw new Error("unreachable");
+    if (g.type !== "LineString") {
+      throw new Error("unreachable");
+    }
     expect(g.coordinates).toEqual(coords);
   });
 
@@ -216,7 +228,9 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") throw new Error("unreachable");
+    if (g.type !== "LineString") {
+      throw new Error("unreachable");
+    }
     expect(g.coordinates).toEqual(coords);
   });
 
@@ -230,14 +244,16 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     expect(ring).toHaveLength(5); // 4 vertices + close
-    expect(ring[0]).toEqual([0, 5]);    // North
-    expect(ring[1]).toEqual([10, 0]);   // East
-    expect(ring[2]).toEqual([0, -5]);   // South
-    expect(ring[3]).toEqual([-10, 0]);  // West
-    expect(ring[4]).toEqual(ring[0]);   // closed
+    expect(ring[0]).toEqual([0, 5]); // North
+    expect(ring[1]).toEqual([10, 0]); // East
+    expect(ring[2]).toEqual([0, -5]); // South
+    expect(ring[3]).toEqual([-10, 0]); // West
+    expect(ring[4]).toEqual(ring[0]); // closed
   });
 
   it("ellipse with bbox → Polygon approximating ellipse (ring > 5 pts, touches bbox extents)", () => {
@@ -250,7 +266,9 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") throw new Error("unreachable");
+    if (g.type !== "Polygon") {
+      throw new Error("unreachable");
+    }
     const ring = g.coordinates[0];
     expect(ring.length).toBeGreaterThan(5);
     expect(ring[0]).toEqual(ring[ring.length - 1]); // closed
@@ -275,7 +293,9 @@ describe("annotationToFeatureCollection", () => {
     const fc = annotationToFeatureCollection(el);
     const g = fc.features[0].geometry;
     expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") throw new Error("unreachable");
+    if (g.type !== "LineString") {
+      throw new Error("unreachable");
+    }
     expect(g.coordinates).toEqual(coords);
   });
 

@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import * as Y from "yjs";
+
 import { CommentsLayer } from "../comments";
 
 function makeLayer(doc: Y.Doc): CommentsLayer {
@@ -38,10 +39,14 @@ describe("CommentsLayer", () => {
     layerB = makeLayer(docB);
     // Two-way bridge: whenever one doc updates, broadcast to the other.
     docA.on("update", (u: Uint8Array, origin: unknown) => {
-      if (origin !== "bridge") Y.applyUpdate(docB, u, "bridge");
+      if (origin !== "bridge") {
+        Y.applyUpdate(docB, u, "bridge");
+      }
     });
     docB.on("update", (u: Uint8Array, origin: unknown) => {
-      if (origin !== "bridge") Y.applyUpdate(docA, u, "bridge");
+      if (origin !== "bridge") {
+        Y.applyUpdate(docA, u, "bridge");
+      }
     });
   });
 

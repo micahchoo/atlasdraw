@@ -14,11 +14,15 @@
 // are stored as peer viewport overlays only — local camera is never updated.
 
 import { io, type Socket } from "socket.io-client";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import * as Y from "yjs";
 import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
-import { getAppConfig } from "../config/app-config";
+
 import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+
+import { getAppConfig } from "../config/app-config";
 import { encryptScene, decryptScene } from "../collab/scene-crypto";
+
 import { CommentsLayer } from "./comments";
 
 // ---------------------------------------------------------------------------
@@ -63,7 +67,9 @@ export class CollabState {
   private _peers: Map<string, PeerMeta> = new Map();
   private _localCursor: CursorState = { x: 0, y: 0 };
   private _roomKey: CryptoKey | null = null;
-  private _onSceneUpdateCallback: ((elements: ExcalidrawElement[]) => void) | null = null;
+  private _onSceneUpdateCallback:
+    | ((elements: ExcalidrawElement[]) => void)
+    | null = null;
   private _currentRoomId: string = "";
   // Phase 6 A3 — anchored comments live in a separate Y.Doc with its own
   // WebSocket connection (different docName, different ACL granularity).
@@ -78,7 +84,8 @@ export class CollabState {
   // only inside a 5 s post-connect window (`_joiningUntil`) and retry up to
   // 2 more times on 2 s timeouts.
   private _sceneAccessor: (() => ExcalidrawElement[] | null) | null = null;
-  private _sceneReceiver: ((elements: ExcalidrawElement[]) => void) | null = null;
+  private _sceneReceiver: ((elements: ExcalidrawElement[]) => void) | null =
+    null;
   private _joiningUntil: number = 0;
   private _snapshotRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private _snapshotAttempts: number = 0;
@@ -149,7 +156,9 @@ export class CollabState {
    *
    * Set to `null` to unregister.
    */
-  set onSceneUpdate(callback: ((elements: ExcalidrawElement[]) => void) | null) {
+  set onSceneUpdate(
+    callback: ((elements: ExcalidrawElement[]) => void) | null,
+  ) {
     this._onSceneUpdateCallback = callback;
   }
 
@@ -207,12 +216,10 @@ export class CollabState {
    * @param workspaceId  Phase 6 A9 workspace scope; null/undefined for
    *                     self-host / Phase-5-compatible behavior.
    */
-  connect(
-    roomId: string,
-    key?: CryptoKey,
-    workspaceId?: string | null,
-  ): void {
-    if (!this.active) return;
+  connect(roomId: string, key?: CryptoKey, workspaceId?: string | null): void {
+    if (!this.active) {
+      return;
+    }
 
     this._roomKey = key ?? null;
     this._currentRoomId = roomId;
@@ -249,8 +256,7 @@ export class CollabState {
       // interval; relay re-elects on each retry if the prior peer is gone.
       // Stops when (a) snapshot applied, (b) max attempts reached, or
       // (c) joining window closes.
-      this._joiningUntil =
-        Date.now() + CollabState._SNAPSHOT_JOINING_WINDOW_MS;
+      this._joiningUntil = Date.now() + CollabState._SNAPSHOT_JOINING_WINDOW_MS;
       this._snapshotAttempts = 0;
       this._snapshotApplied = false;
       this._sendSnapshotRequest();
@@ -301,7 +307,9 @@ export class CollabState {
         senderId: string;
         data: { iv: string; ciphertext: string };
       }) => {
-        if (!this._roomKey || !this._onSceneUpdateCallback) return;
+        if (!this._roomKey || !this._onSceneUpdateCallback) {
+          return;
+        }
         try {
           const elements = await decryptScene(event.data, this._roomKey);
           this._onSceneUpdateCallback(elements);
@@ -313,12 +321,9 @@ export class CollabState {
     );
 
     // PEER_LEFT — remove the disconnecting peer from the presence map.
-    this._socket.on(
-      "PEER_LEFT",
-      (data: { senderId: string }) => {
-        this._peers.delete(data.senderId);
-      },
-    );
+    this._socket.on("PEER_LEFT", (data: { senderId: string }) => {
+      this._peers.delete(data.senderId);
+    });
 
     // REQUEST_SNAPSHOT — Q-P5-1 sender-side. This client was elected by the
     // relay to serve a joiner. If we cannot (no scene accessor bound yet,
@@ -332,7 +337,9 @@ export class CollabState {
         senderId: string;
         timestamp: number;
       }) => {
-        if (!this._sceneAccessor || !this._roomKey || !this._socket) return;
+        if (!this._sceneAccessor || !this._roomKey || !this._socket) {
+          return;
+        }
         const elements = this._sceneAccessor() ?? [];
         try {
           const encrypted = await encryptScene(elements, this._roomKey);
@@ -363,9 +370,15 @@ export class CollabState {
         targetId: string;
         data: { iv: string; ciphertext: string };
       }) => {
-        if (Date.now() > this._joiningUntil) return; // outside window
-        if (event.targetId !== this._socket?.id) return; // not for us
-        if (!this._roomKey) return;
+        if (Date.now() > this._joiningUntil) {
+          return;
+        } // outside window
+        if (event.targetId !== this._socket?.id) {
+          return;
+        } // not for us
+        if (!this._roomKey) {
+          return;
+        }
         try {
           const elements = await decryptScene(event.data, this._roomKey);
           if (this._sceneReceiver) {
@@ -428,7 +441,9 @@ export class CollabState {
    * @param elements - The full Excalidraw element array to encrypt and emit.
    */
   async emitSceneUpdate(elements: ExcalidrawElement[]): Promise<void> {
-    if (!this._socket?.connected || !this._roomKey) return;
+    if (!this._socket?.connected || !this._roomKey) {
+      return;
+    }
     const encrypted = await encryptScene(elements, this._roomKey);
     this._socket.emit("SCENE_UPDATE", {
       roomId: this._currentRoomId,
@@ -480,10 +495,18 @@ export class CollabState {
    *   - the socket disconnects.
    */
   private _sendSnapshotRequest(): void {
-    if (!this._socket?.connected) return;
-    if (this._snapshotApplied) return;
-    if (Date.now() > this._joiningUntil) return;
-    if (this._snapshotAttempts >= CollabState._SNAPSHOT_MAX_ATTEMPTS) return;
+    if (!this._socket?.connected) {
+      return;
+    }
+    if (this._snapshotApplied) {
+      return;
+    }
+    if (Date.now() > this._joiningUntil) {
+      return;
+    }
+    if (this._snapshotAttempts >= CollabState._SNAPSHOT_MAX_ATTEMPTS) {
+      return;
+    }
 
     this._snapshotAttempts += 1;
     this._socket.emit("REQUEST_SNAPSHOT", {

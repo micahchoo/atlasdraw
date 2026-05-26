@@ -1,6 +1,8 @@
-import type maplibregl from "maplibre-gl";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 import { exportToCanvas } from "@excalidraw/excalidraw";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
+import type maplibregl from "maplibre-gl";
 
 export type ExportOpts = { scale?: number; backgroundColor?: string };
 

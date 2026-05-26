@@ -31,6 +31,7 @@
 // but for v1 the tool object is the preview-state holder.
 
 import distance from "@turf/distance";
+
 import type { AtlasdrawTool } from "./types.js";
 
 interface CirclePreviewState {
@@ -87,7 +88,9 @@ export const CircleTool: AtlasdrawTool = {
   },
 
   onPointerMove(e, ctx) {
-    if (!_state) return;
+    if (!_state) {
+      return;
+    }
     const { lng: edgeLng, lat: edgeLat } = ctx.map.unproject([
       e.clientX,
       e.clientY,
@@ -117,7 +120,9 @@ export const CircleTool: AtlasdrawTool = {
   },
 
   onPointerUp(e, ctx) {
-    if (!_state) return;
+    if (!_state) {
+      return;
+    }
     const { lng: edgeLng, lat: edgeLat } = ctx.map.unproject([
       e.clientX,
       e.clientY,

@@ -10,10 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 
-import {
-  AriaAnnouncer,
-  useAnnouncerStore,
-} from "../AriaAnnouncer";
+import { AriaAnnouncer, useAnnouncerStore } from "../AriaAnnouncer";
 
 beforeEach(() => {
   // Reset store between tests.
@@ -91,6 +88,8 @@ describe("AriaAnnouncer", () => {
     const { unmount } = render(<AriaAnnouncer />);
     unmount();
     // No element to update; announce() must not throw.
-    expect(() => useAnnouncerStore.getState().announce("after-unmount")).not.toThrow();
+    expect(() =>
+      useAnnouncerStore.getState().announce("after-unmount"),
+    ).not.toThrow();
   });
 });

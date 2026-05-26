@@ -37,7 +37,9 @@ function makeMapCanvas(): { toDataURL: (type?: string, q?: number) => string } {
  * (single tick). Buffer fallback covers pure-node runs.
  */
 function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === "function") return blob.arrayBuffer();
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
+  }
   return new Promise<ArrayBuffer>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);

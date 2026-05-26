@@ -41,8 +41,7 @@ interface AnnouncerState {
 export const useAnnouncerStore = create<AnnouncerState>((set) => ({
   message: "",
   seq: 0,
-  announce: (message: string) =>
-    set((s) => ({ message, seq: s.seq + 1 })),
+  announce: (message: string) => set((s) => ({ message, seq: s.seq + 1 })),
 }));
 
 /**
@@ -70,12 +69,16 @@ export const AriaAnnouncer: React.FC = () => {
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     // Clear, then on next microtask set the new message — forces SRs to
     // re-announce even when the text is identical.
     el.textContent = "";
     const id = window.setTimeout(() => {
-      if (ref.current) ref.current.textContent = message;
+      if (ref.current) {
+        ref.current.textContent = message;
+      }
     }, 0);
     return () => window.clearTimeout(id);
   }, [message, seq]);

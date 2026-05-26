@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import type { RealtimeConfig } from "@atlasdraw/protocol";
 
 const BuildTargetSchema = z.enum(["pages", "local-only", "hosted"]);
@@ -11,9 +12,7 @@ const EnvSchema = z.object({
   VITE_STORAGE_BASE_URL: z.string().default(""),
   // Phase 5 T2: realtime feature flag + WebSocket URL. Both are Vite build-time
   // env vars injected by the compose file from config.toml values.
-  VITE_REALTIME_ENABLED: z
-    .enum(["true", "false"])
-    .default("false"),
+  VITE_REALTIME_ENABLED: z.enum(["true", "false"]).default("false"),
   VITE_REALTIME_WS_URL: z.string().default(""),
   // Phase 6 A4: Maputnik base URL for the "Edit basemap style" modal. Default
   // points at the public Maputnik instance; self-hosters who don't want the
@@ -75,7 +74,8 @@ export type AppConfig = {
 export function loadAppConfig(
   rawTarget: string | undefined = import.meta.env.VITE_BUILD_TARGET,
   rawStorageBaseUrl: string | undefined = import.meta.env.VITE_STORAGE_BASE_URL,
-  rawRealtimeEnabled: string | undefined = import.meta.env.VITE_REALTIME_ENABLED,
+  rawRealtimeEnabled: string | undefined = import.meta.env
+    .VITE_REALTIME_ENABLED,
   rawRealtimeWsUrl: string | undefined = import.meta.env.VITE_REALTIME_WS_URL,
   rawMaputnikUrl: string | undefined = import.meta.env.VITE_MAPUTNIK_URL,
   rawGeocoderEndpoint: string | undefined = import.meta.env
@@ -95,7 +95,9 @@ export function loadAppConfig(
     const issue = parsed.error.issues[0];
     throw new Error(
       `Invalid env var ${issue.path.join(".")}: ${issue.message}. ` +
-        `Expected one of "pages" | "local-only" | "hosted" (got ${JSON.stringify(rawTarget)}).`,
+        `Expected one of "pages" | "local-only" | "hosted" (got ${JSON.stringify(
+          rawTarget,
+        )}).`,
     );
   }
   const buildTarget = parsed.data.VITE_BUILD_TARGET;

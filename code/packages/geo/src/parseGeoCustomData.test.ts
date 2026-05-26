@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
+
 import {
   parseGeoCustomData,
   migrate,
   GeoCustomDataParseError,
 } from "./parseGeoCustomData.js";
+
 import type { GeoCustomData } from "./types.js";
 
 const validPoint: GeoCustomData = {
@@ -107,7 +109,14 @@ describe("parseGeoCustomData", () => {
   it("throws when bbox west is greater than east", () => {
     expect(() =>
       parseGeoCustomData({
-        geo: { kind: "bbox", west: 10, south: 0, east: -10, north: 5, zRef: 10 },
+        geo: {
+          kind: "bbox",
+          west: 10,
+          south: 0,
+          east: -10,
+          north: 5,
+          zRef: 10,
+        },
         scaleMode: "geographic",
         projection: "mercator",
         schemaVersion: 1,
@@ -118,7 +127,14 @@ describe("parseGeoCustomData", () => {
   it("throws when bbox south is greater than north", () => {
     expect(() =>
       parseGeoCustomData({
-        geo: { kind: "bbox", west: -10, south: 5, east: 10, north: 0, zRef: 10 },
+        geo: {
+          kind: "bbox",
+          west: -10,
+          south: 5,
+          east: 10,
+          north: 0,
+          zRef: 10,
+        },
         scaleMode: "geographic",
         projection: "mercator",
         schemaVersion: 1,

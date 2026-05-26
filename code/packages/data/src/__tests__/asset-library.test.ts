@@ -2,6 +2,7 @@
 // Phase 6 A11 — asset-library reader tests.
 
 import { describe, it, expect } from "vitest";
+
 import {
   parseLibraryFile,
   getBuiltInLibraries,

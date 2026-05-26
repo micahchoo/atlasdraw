@@ -24,14 +24,15 @@
 // See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 6
 //     docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A2
 
-import http from "http";
 import { WebSocketServer } from "ws";
 import { setupWSConnection, docs } from "y-websocket/bin/utils";
+
+import type http from "http";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const ROOM_TTL_MS = parseInt(process.env["ROOM_TTL_MS"] ?? "300000", 10);
+const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS ?? "300000", 10);
 
 // ---------------------------------------------------------------------------
 // Eviction state — one timer per room key
@@ -52,7 +53,9 @@ function cancelEviction(docName: string): void {
 
 function scheduleEviction(docName: string): void {
   // Guard: don't double-schedule
-  if (evictionTimers.has(docName)) return;
+  if (evictionTimers.has(docName)) {
+    return;
+  }
 
   const timer = setTimeout(() => {
     evictionTimers.delete(docName);

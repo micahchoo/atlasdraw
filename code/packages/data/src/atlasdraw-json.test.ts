@@ -3,13 +3,11 @@
 // Phase 3 Wave 1 Task 4 — colocated tests for the pure-JSON variant.
 
 import { describe, expect, it } from "vitest";
+
+import { AtlasdrawJSONError, readJSON, writeJSON } from "./atlasdraw-json.js";
+
 import type { FeatureCollection } from "geojson";
 
-import {
-  AtlasdrawJSONError,
-  readJSON,
-  writeJSON,
-} from "./atlasdraw-json.js";
 import type { AtlasdrawDocument, Manifest } from "./manifest-schema.js";
 
 // 26-char Crockford base32 ULID — matches /^[0-9A-HJKMNP-TV-Z]{26}$/
@@ -26,7 +24,9 @@ const sampleFC: FeatureCollection = {
   ],
 };
 
-function synthDoc(overrides: Partial<AtlasdrawDocument> = {}): AtlasdrawDocument {
+function synthDoc(
+  overrides: Partial<AtlasdrawDocument> = {},
+): AtlasdrawDocument {
   const manifest: Manifest = {
     id: VALID_ULID,
     version: 1,
@@ -52,7 +52,17 @@ function synthDoc(overrides: Partial<AtlasdrawDocument> = {}): AtlasdrawDocument
 
   return {
     manifest,
-    scene: [{ type: "rectangle", id: "el-1", version: 1, x: 0, y: 0, width: 10, height: 10 }],
+    scene: [
+      {
+        type: "rectangle",
+        id: "el-1",
+        version: 1,
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+      },
+    ],
     layers: new Map<string, FeatureCollection>([["dl:cities", sampleFC]]),
     styleRef: { version: 8, name: "atlas-default" },
     files: new Map<string, Blob>(),
@@ -105,7 +115,9 @@ describe("atlasdraw-json errors", () => {
   });
 
   it("readJSON on garbage body throws INVALID_JSON", async () => {
-    const blob = new Blob(["not json {"], { type: "application/atlasdraw+json" });
+    const blob = new Blob(["not json {"], {
+      type: "application/atlasdraw+json",
+    });
     try {
       await readJSON(blob);
       throw new Error("expected readJSON to reject");

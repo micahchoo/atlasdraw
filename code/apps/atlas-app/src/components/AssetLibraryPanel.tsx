@@ -31,15 +31,15 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@excalidraw/common";
-import { FocusTrap } from "./FocusTrap";
+
+import { getBuiltInLibraries, type ExcalidrawLibrary } from "@atlasdraw/data";
+
 import type {
   ExcalidrawImperativeAPI,
   LibraryItem,
 } from "@excalidraw/excalidraw/types";
-import {
-  getBuiltInLibraries,
-  type ExcalidrawLibrary,
-} from "@atlasdraw/data";
+
+import { FocusTrap } from "./FocusTrap";
 
 export interface AssetLibraryPanelProps {
   /**
@@ -62,7 +62,9 @@ interface LibraryGroup {
 }
 
 function deriveLabel(source: string | undefined): string {
-  if (!source) return "Library";
+  if (!source) {
+    return "Library";
+  }
   // "atlasdraw:wildfire-icons" → "wildfire-icons" → "Wildfire icons"
   const tail = source.split(":").pop() ?? source;
   const spaced = tail.replace(/-/g, " ");
@@ -111,18 +113,26 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   // imported. `updateLibrary` is async — we attach a `.catch` so a malformed
   // fixture surfaces as a console warning rather than an unhandled rejection.
   useEffect(() => {
-    if (!excalidrawAPI) return;
-    if (items.length === 0) return;
+    if (!excalidrawAPI) {
+      return;
+    }
+    if (items.length === 0) {
+      return;
+    }
     excalidrawAPI
       .updateLibrary({ libraryItems: items, merge: true })
       // eslint-disable-next-line no-console
-      .catch((err) => console.warn("AssetLibraryPanel updateLibrary failed:", err));
+      .catch((err) =>
+        console.warn("AssetLibraryPanel updateLibrary failed:", err),
+      );
   }, [excalidrawAPI, items]);
 
   // Focus management + Escape to close. Same pattern as MaputnikDialog.
   useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel) {
+      return;
+    }
     closeBtnRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -134,7 +144,9 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   }, [onCloseRequest]);
 
   const handleViewInLibrary = () => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
     // Addressable form: the Library is a TAB of DEFAULT_SIDEBAR, not a
     // sidebar itself. Confirmed against
     // `code/packages/common/src/constants.ts:432-438` and the precedent in
@@ -149,7 +161,9 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   return (
     <div
       onClick={(e) => {
-        if (e.target === e.currentTarget) onCloseRequest();
+        if (e.target === e.currentTarget) {
+          onCloseRequest();
+        }
       }}
       style={{
         position: "fixed",
@@ -163,145 +177,147 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
       data-testid="asset-library-dialog-overlay"
     >
       <FocusTrap>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Asset library"
-        style={{
-          background: "var(--color-surface, #fff)",
-          borderRadius: "0.5rem",
-          padding: "1rem",
-          width: "min(90vw, 480px)",
-          maxHeight: "85vh",
-          overflowY: "auto",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-          fontFamily:
-            "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-          fontSize: "0.875rem",
-          color: "#1f2937",
-        }}
-        data-testid="asset-library-dialog"
-      >
         <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Asset library"
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "0.75rem",
+            background: "var(--color-surface, #fff)",
+            borderRadius: "0.5rem",
+            padding: "1rem",
+            width: "min(90vw, 480px)",
+            maxHeight: "85vh",
+            overflowY: "auto",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+            fontFamily:
+              "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+            fontSize: "0.875rem",
+            color: "#1f2937",
           }}
+          data-testid="asset-library-dialog"
         >
-          <h2
+          <div
             style={{
-              fontSize: "1rem",
-              margin: 0,
-              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "0.75rem",
             }}
           >
-            Asset library
-          </h2>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            onClick={onCloseRequest}
-            aria-label="Close asset library dialog"
-            data-testid="asset-library-close"
+            <h2
+              style={{
+                fontSize: "1rem",
+                margin: 0,
+                fontWeight: 600,
+              }}
+            >
+              Asset library
+            </h2>
+            <button
+              ref={closeBtnRef}
+              type="button"
+              onClick={onCloseRequest}
+              aria-label="Close asset library dialog"
+              data-testid="asset-library-close"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "0.25rem 0.5rem",
+                fontSize: "1.25rem",
+                lineHeight: 1,
+                color: "#4b5563",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <p
             style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: "0.25rem 0.5rem",
-              fontSize: "1.25rem",
-              lineHeight: 1,
+              marginTop: 0,
+              marginBottom: "0.75rem",
               color: "#4b5563",
             }}
           >
-            ×
-          </button>
-        </div>
+            {items.length} curated items across {groups.length} libraries are
+            available in Excalidraw's built-in library panel.
+          </p>
 
-        <p
-          style={{
-            marginTop: 0,
-            marginBottom: "0.75rem",
-            color: "#4b5563",
-          }}
-        >
-          {items.length} curated items across {groups.length} libraries are
-          available in Excalidraw's built-in library panel.
-        </p>
-
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: "0 0 1rem 0",
-          }}
-          data-testid="asset-library-groups"
-        >
-          {groups.map((group) => (
-            <li
-              key={group.source}
-              data-testid={`asset-library-group-${group.source}`}
-              style={{
-                padding: "0.5rem 0",
-                borderBottom: "1px solid #e5e7eb",
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ fontWeight: 500 }}>{group.label}</span>
-              <span style={{ color: "#6b7280" }}>{group.itemCount} items</span>
-            </li>
-          ))}
-        </ul>
-
-        <button
-          type="button"
-          onClick={handleViewInLibrary}
-          disabled={!excalidrawAPI}
-          aria-label="View in Excalidraw library"
-          data-testid="asset-library-view"
-          style={{
-            width: "100%",
-            padding: "0.5rem 0.75rem",
-            background: "#6965db",
-            color: "#fff",
-            border: "none",
-            borderRadius: "0.25rem",
-            cursor: excalidrawAPI ? "pointer" : "not-allowed",
-            opacity: excalidrawAPI ? 1 : 0.6,
-            fontSize: "0.875rem",
-            marginBottom: "0.75rem",
-          }}
-        >
-          View in Excalidraw library
-        </button>
-
-        <footer
-          style={{
-            fontSize: "0.75rem",
-            color: "#6b7280",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "0.75rem",
-          }}
-          data-testid="asset-library-attribution"
-        >
-          <div style={{ marginBottom: "0.25rem", fontWeight: 500 }}>
-            License attribution
-          </div>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {libraries.map((lib) => (
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: "0 0 1rem 0",
+            }}
+            data-testid="asset-library-groups"
+          >
+            {groups.map((group) => (
               <li
-                key={lib.source ?? "anon"}
-                data-testid={`asset-library-license-${lib.source ?? "anon"}`}
+                key={group.source}
+                data-testid={`asset-library-group-${group.source}`}
+                style={{
+                  padding: "0.5rem 0",
+                  borderBottom: "1px solid #e5e7eb",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
               >
-                {deriveLabel(lib.source)} — MIT (atlasdraw contributors, 2026)
+                <span style={{ fontWeight: 500 }}>{group.label}</span>
+                <span style={{ color: "#6b7280" }}>
+                  {group.itemCount} items
+                </span>
               </li>
             ))}
           </ul>
-        </footer>
-      </div>
+
+          <button
+            type="button"
+            onClick={handleViewInLibrary}
+            disabled={!excalidrawAPI}
+            aria-label="View in Excalidraw library"
+            data-testid="asset-library-view"
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              background: "#6965db",
+              color: "#fff",
+              border: "none",
+              borderRadius: "0.25rem",
+              cursor: excalidrawAPI ? "pointer" : "not-allowed",
+              opacity: excalidrawAPI ? 1 : 0.6,
+              fontSize: "0.875rem",
+              marginBottom: "0.75rem",
+            }}
+          >
+            View in Excalidraw library
+          </button>
+
+          <footer
+            style={{
+              fontSize: "0.75rem",
+              color: "#6b7280",
+              borderTop: "1px solid #e5e7eb",
+              paddingTop: "0.75rem",
+            }}
+            data-testid="asset-library-attribution"
+          >
+            <div style={{ marginBottom: "0.25rem", fontWeight: 500 }}>
+              License attribution
+            </div>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {libraries.map((lib) => (
+                <li
+                  key={lib.source ?? "anon"}
+                  data-testid={`asset-library-license-${lib.source ?? "anon"}`}
+                >
+                  {deriveLabel(lib.source)} — MIT (atlasdraw contributors, 2026)
+                </li>
+              ))}
+            </ul>
+          </footer>
+        </div>
       </FocusTrap>
     </div>
   );

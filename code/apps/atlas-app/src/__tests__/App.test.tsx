@@ -9,6 +9,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { App } from "../App";
+
 vi.mock("../components/MapEditor", () => ({
   MapEditor: () => <div data-testid="route-map-editor" />,
 }));
@@ -26,8 +28,6 @@ vi.mock("../components/BillingPage", () => ({
     />
   ),
 }));
-
-import { App } from "../App";
 
 function setLocation(
   pathname: string,

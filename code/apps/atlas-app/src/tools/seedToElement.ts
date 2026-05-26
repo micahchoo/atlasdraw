@@ -28,10 +28,8 @@
 // + Excalidraw factories directly is fine. The Q11 ban applies to tool code
 // (`packages/tools`), not to the host bridge.
 
-import type maplibregl from "maplibre-gl";
 import { projectPoint } from "@atlasdraw/geo";
-import type { GeoCustomData } from "@atlasdraw/geo";
-import type { AtlasdrawElementSeed } from "@atlasdraw/tools";
+
 import {
   newElement,
   newFreeDrawElement,
@@ -39,13 +37,19 @@ import {
   newArrowElement,
   newTextElement,
 } from "@excalidraw/element";
+
+import { pointFrom } from "@excalidraw/math";
+
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawFreeDrawElement,
 } from "@excalidraw/element/types";
-import { pointFrom } from "@excalidraw/math";
 import type { LocalPoint } from "@excalidraw/math";
+
+import type { AtlasdrawElementSeed } from "@atlasdraw/tools";
+import type { GeoCustomData } from "@atlasdraw/geo";
+import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Visual constants (Phase 2 — temporary defaults; full styling lands Phase 6)
@@ -95,19 +99,25 @@ function buildLinearGeometry(projected: Array<{ x: number; y: number }>): {
   }
   const x = projected[0].x;
   const y = projected[0].y;
-  const points = projected.map((p) =>
-    pointFrom<LocalPoint>(p.x - x, p.y - y),
-  );
+  const points = projected.map((p) => pointFrom<LocalPoint>(p.x - x, p.y - y));
   // Bounding box of relative points (used for element width/height).
   let minX = 0;
   let minY = 0;
   let maxX = 0;
   let maxY = 0;
   for (const p of points) {
-    if (p[0] < minX) minX = p[0];
-    if (p[1] < minY) minY = p[1];
-    if (p[0] > maxX) maxX = p[0];
-    if (p[1] > maxY) maxY = p[1];
+    if (p[0] < minX) {
+      minX = p[0];
+    }
+    if (p[1] < minY) {
+      minY = p[1];
+    }
+    if (p[0] > maxX) {
+      maxX = p[0];
+    }
+    if (p[1] > maxY) {
+      maxY = p[1];
+    }
   }
   return {
     x,
@@ -322,7 +332,7 @@ export function seedToElement(
       typeof seed.data === "object" &&
       seed.data !== null &&
       typeof (seed.data as { text?: unknown }).text === "string"
-        ? ((seed.data as { text: string }).text)
+        ? (seed.data as { text: string }).text
         : "";
     const element = newTextElement({
       x: projected.x,
@@ -339,6 +349,8 @@ export function seedToElement(
   throw new Error(
     `seedToElement: unsupported (type="${seed.type}", customType="${
       seed.customType ?? ""
-    }", geo.kind="${seed.geo.kind}") — extend the bridge before adding new tools.`,
+    }", geo.kind="${
+      seed.geo.kind
+    }") — extend the bridge before adding new tools.`,
   );
 }

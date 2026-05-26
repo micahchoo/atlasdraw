@@ -7,8 +7,9 @@
 // do at dev/build time. Uses `node` environment (no DOM) — current tests are
 // pure ToolContext-shape unit tests that mock map/excalidrawAPI.
 
-import { defineConfig } from "vitest/config";
 import path from "path";
+
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {

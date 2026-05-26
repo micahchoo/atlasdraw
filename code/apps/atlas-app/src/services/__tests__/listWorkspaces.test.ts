@@ -27,8 +27,8 @@ const jsonResponse = (status: number, body: unknown): Response =>
 
 describe("listWorkspaces", () => {
   it("returns [] in self-host without making a network call", async () => {
-    const fetchSpy = vi.fn(
-      async () => jsonResponse(200, SAMPLE),
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, SAMPLE),
     ) as unknown as typeof fetch;
 
     // No getWorkspaceId resolver — emulates the FOSS edition.
@@ -42,8 +42,8 @@ describe("listWorkspaces", () => {
   });
 
   it("returns [] when the resolver yields null (managed off)", async () => {
-    const fetchSpy = vi.fn(
-      async () => jsonResponse(200, SAMPLE),
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, SAMPLE),
     ) as unknown as typeof fetch;
     const client = createHttpStorageClient({
       baseUrl: "http://localhost:4000",
@@ -118,8 +118,8 @@ describe("createCheckoutSession", () => {
   });
 
   it("throws in self-host (no resolver) instead of making a request", async () => {
-    const fetchSpy = vi.fn(
-      async () => jsonResponse(200, { url: "should-not-reach" }),
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(200, { url: "should-not-reach" }),
     ) as unknown as typeof fetch;
     const client = createHttpStorageClient({
       baseUrl: "http://localhost:4000",

@@ -16,9 +16,13 @@
 // explicitly to the user.
 
 import React, { useEffect, useRef, useState } from "react";
-import { FocusTrap } from "./FocusTrap";
-import { useShareLink, type ShareMode } from "../hooks/useShareLink";
+
 import { generateRoomKey } from "@atlasdraw/protocol";
+
+import { useShareLink, type ShareMode } from "../hooks/useShareLink";
+
+import { FocusTrap } from "./FocusTrap";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 import type { CollabState } from "../state/collab";
@@ -52,8 +56,7 @@ const READONLY_MODE_HINT: Record<ShareMode, string> = {
 // Q-P5-2: this hint text surfaces the write-capability semantics of the
 // collab link to the user. Anyone holding the URL can edit; there is no
 // server-side auth in Phase 5.
-const COLLAB_HINT =
-  "Collaborative — anyone with this link can edit.";
+const COLLAB_HINT = "Collaborative — anyone with this link can edit.";
 
 export const ShareDialog: React.FC<ShareDialogProps> = ({
   onCloseRequest,
@@ -70,10 +73,14 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   // Escape to close.
   useEffect(() => {
     const panel = panelRef.current;
-    if (!panel) return;
+    if (!panel) {
+      return;
+    }
     panel.querySelector<HTMLButtonElement>("button")?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRequest();
+      if (e.key === "Escape") {
+        onCloseRequest();
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -136,7 +143,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       : null;
 
   const handleCopy = async () => {
-    if (!currentUrl) return;
+    if (!currentUrl) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(currentUrl);
       setCopied(true);
@@ -160,226 +169,227 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       data-testid="share-dialog-overlay"
     >
       <FocusTrap>
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Share map"
-        style={{
-          background: "#fff",
-          borderRadius: "0.5rem",
-          padding: "1.25rem 1.5rem",
-          maxWidth: "480px",
-          width: "calc(100% - 2rem)",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-          color: "#212529",
-          fontSize: "0.875rem",
-          lineHeight: 1.5,
-        }}
-        data-testid="share-dialog-panel"
-      >
-        <h2
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Share map"
           style={{
-            margin: "0 0 0.75rem 0",
-            fontSize: "1.125rem",
-            fontWeight: 600,
+            background: "#fff",
+            borderRadius: "0.5rem",
+            padding: "1.25rem 1.5rem",
+            maxWidth: "480px",
+            width: "calc(100% - 2rem)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+            color: "#212529",
+            fontSize: "0.875rem",
+            lineHeight: 1.5,
           }}
+          data-testid="share-dialog-panel"
         >
-          Share map
-        </h2>
-
-        {view.kind === "picker" && (
-          <div
-            data-testid="share-dialog-mode-picker"
+          <h2
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
               margin: "0 0 0.75rem 0",
+              fontSize: "1.125rem",
+              fontWeight: 600,
             }}
           >
+            Share map
+          </h2>
+
+          {view.kind === "picker" && (
+            <div
+              data-testid="share-dialog-mode-picker"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+                margin: "0 0 0.75rem 0",
+              }}
+            >
+              <button
+                type="button"
+                onClick={startReadonly}
+                data-testid="share-dialog-pick-readonly"
+                style={{
+                  padding: "10px 14px",
+                  border: "1px solid #adb5bd",
+                  borderRadius: "4px",
+                  background: "#ffffff",
+                  color: "#212529",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                Share read-only
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 400,
+                    color: "#495057",
+                    marginTop: "2px",
+                  }}
+                >
+                  Recipients view a snapshot — no live editing.
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={startCollab}
+                data-testid="share-dialog-pick-collab"
+                style={{
+                  padding: "10px 14px",
+                  border: "1px solid #1971c2",
+                  borderRadius: "4px",
+                  background: "#1971c2",
+                  color: "#ffffff",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                Collaborate
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 400,
+                    color: "#dbeafe",
+                    marginTop: "2px",
+                  }}
+                >
+                  Live editing — anyone with the link can edit.
+                </div>
+              </button>
+            </div>
+          )}
+
+          {(view.kind === "readonly-loading" ||
+            view.kind === "collab-loading") && (
+            <div
+              data-testid="share-dialog-loading"
+              style={{ padding: "0.5rem 0" }}
+            >
+              {view.kind === "collab-loading"
+                ? "Starting collaboration…"
+                : "Generating share link…"}
+            </div>
+          )}
+
+          {view.kind === "error" && (
+            <div
+              data-testid="share-dialog-error"
+              role="alert"
+              style={{
+                background: "#fff5f5",
+                border: "1px solid #ffc9c9",
+                color: "#c92a2a",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "4px",
+                margin: "0 0 0.75rem 0",
+                fontSize: "0.8125rem",
+              }}
+            >
+              {view.message}
+            </div>
+          )}
+
+          {currentUrl && (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <input
+                  ref={inputRef}
+                  type="text"
+                  readOnly
+                  value={currentUrl}
+                  data-testid="share-dialog-url"
+                  onFocus={(e) => e.currentTarget.select()}
+                  style={{
+                    flex: 1,
+                    padding: "6px 8px",
+                    border: "1px solid #ced4da",
+                    borderRadius: "4px",
+                    fontSize: "0.8125rem",
+                    fontFamily: "ui-monospace, monospace",
+                    background: "#f8f9fa",
+                    color: "#212529",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  data-testid="share-dialog-copy"
+                  style={{
+                    padding: "6px 14px",
+                    border: "1px solid #1971c2",
+                    borderRadius: "4px",
+                    background: copied ? "#37b24d" : "#1971c2",
+                    color: "#fff",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+              {view.kind === "readonly-success" && (
+                <p
+                  data-testid="share-dialog-mode-hint"
+                  data-mode={view.mode}
+                  style={{
+                    margin: "0 0 0.75rem 0",
+                    fontSize: "0.75rem",
+                    color: "#495057",
+                  }}
+                >
+                  {READONLY_MODE_HINT[view.mode]}
+                </p>
+              )}
+              {view.kind === "collab-success" && (
+                <p
+                  data-testid="share-dialog-mode-hint"
+                  data-mode="collab"
+                  style={{
+                    margin: "0 0 0.75rem 0",
+                    fontSize: "0.75rem",
+                    color: "#495057",
+                  }}
+                >
+                  {COLLAB_HINT}
+                </p>
+              )}
+            </>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
               type="button"
-              onClick={startReadonly}
-              data-testid="share-dialog-pick-readonly"
+              onClick={onCloseRequest}
+              data-testid="share-dialog-close"
               style={{
-                padding: "10px 14px",
+                padding: "6px 14px",
                 border: "1px solid #adb5bd",
                 borderRadius: "4px",
-                background: "#ffffff",
+                background: "#fff",
                 color: "#212529",
                 fontSize: "0.875rem",
                 fontWeight: 600,
                 cursor: "pointer",
-                textAlign: "left",
               }}
             >
-              Share read-only
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  fontWeight: 400,
-                  color: "#495057",
-                  marginTop: "2px",
-                }}
-              >
-                Recipients view a snapshot — no live editing.
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={startCollab}
-              data-testid="share-dialog-pick-collab"
-              style={{
-                padding: "10px 14px",
-                border: "1px solid #1971c2",
-                borderRadius: "4px",
-                background: "#1971c2",
-                color: "#ffffff",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              Collaborate
-              <div
-                style={{
-                  fontSize: "0.75rem",
-                  fontWeight: 400,
-                  color: "#dbeafe",
-                  marginTop: "2px",
-                }}
-              >
-                Live editing — anyone with the link can edit.
-              </div>
+              Close
             </button>
           </div>
-        )}
-
-        {(view.kind === "readonly-loading" || view.kind === "collab-loading") && (
-          <div
-            data-testid="share-dialog-loading"
-            style={{ padding: "0.5rem 0" }}
-          >
-            {view.kind === "collab-loading"
-              ? "Starting collaboration…"
-              : "Generating share link…"}
-          </div>
-        )}
-
-        {view.kind === "error" && (
-          <div
-            data-testid="share-dialog-error"
-            role="alert"
-            style={{
-              background: "#fff5f5",
-              border: "1px solid #ffc9c9",
-              color: "#c92a2a",
-              padding: "0.5rem 0.75rem",
-              borderRadius: "4px",
-              margin: "0 0 0.75rem 0",
-              fontSize: "0.8125rem",
-            }}
-          >
-            {view.message}
-          </div>
-        )}
-
-        {currentUrl && (
-          <>
-            <div
-              style={{
-                display: "flex",
-                gap: "0.5rem",
-                marginBottom: "0.5rem",
-              }}
-            >
-              <input
-                ref={inputRef}
-                type="text"
-                readOnly
-                value={currentUrl}
-                data-testid="share-dialog-url"
-                onFocus={(e) => e.currentTarget.select()}
-                style={{
-                  flex: 1,
-                  padding: "6px 8px",
-                  border: "1px solid #ced4da",
-                  borderRadius: "4px",
-                  fontSize: "0.8125rem",
-                  fontFamily: "ui-monospace, monospace",
-                  background: "#f8f9fa",
-                  color: "#212529",
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleCopy}
-                data-testid="share-dialog-copy"
-                style={{
-                  padding: "6px 14px",
-                  border: "1px solid #1971c2",
-                  borderRadius: "4px",
-                  background: copied ? "#37b24d" : "#1971c2",
-                  color: "#fff",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                {copied ? "Copied" : "Copy link"}
-              </button>
-            </div>
-            {view.kind === "readonly-success" && (
-              <p
-                data-testid="share-dialog-mode-hint"
-                data-mode={view.mode}
-                style={{
-                  margin: "0 0 0.75rem 0",
-                  fontSize: "0.75rem",
-                  color: "#495057",
-                }}
-              >
-                {READONLY_MODE_HINT[view.mode]}
-              </p>
-            )}
-            {view.kind === "collab-success" && (
-              <p
-                data-testid="share-dialog-mode-hint"
-                data-mode="collab"
-                style={{
-                  margin: "0 0 0.75rem 0",
-                  fontSize: "0.75rem",
-                  color: "#495057",
-                }}
-              >
-                {COLLAB_HINT}
-              </p>
-            )}
-          </>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={onCloseRequest}
-            data-testid="share-dialog-close"
-            style={{
-              padding: "6px 14px",
-              border: "1px solid #adb5bd",
-              borderRadius: "4px",
-              background: "#fff",
-              color: "#212529",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-          >
-            Close
-          </button>
         </div>
-      </div>
       </FocusTrap>
     </div>
   );

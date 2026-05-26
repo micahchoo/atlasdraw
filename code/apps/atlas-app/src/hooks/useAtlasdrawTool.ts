@@ -21,10 +21,17 @@
 // Excalidraw's "one shape, then back to selection" behaviour.
 
 import { useCallback, useMemo, useState } from "react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
 import { syncInvalidIndices } from "@excalidraw/element";
-import type maplibregl from "maplibre-gl";
+
 import { projectPoint } from "@atlasdraw/geo";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
+import { seedToElement } from "../tools/seedToElement";
+
+import type maplibregl from "maplibre-gl";
+
 import type { GeoCustomData } from "@atlasdraw/geo";
 import type {
   AtlasdrawTool,
@@ -32,7 +39,6 @@ import type {
   ToolContext,
   ToolPointerEvent,
 } from "@atlasdraw/tools";
-import { seedToElement } from "../tools/seedToElement";
 
 export interface UseAtlasdrawToolResult {
   /** Currently active tool, or null when no atlas-tool is engaged. */
@@ -121,20 +127,25 @@ export function useAtlasdrawTool(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
 ): UseAtlasdrawToolResult {
-  const [activeAtlasTool, setActiveAtlasTool] =
-    useState<AtlasdrawTool | null>(null);
+  const [activeAtlasTool, setActiveAtlasTool] = useState<AtlasdrawTool | null>(
+    null,
+  );
 
   // ToolContext factory — re-built when (map, api) changes. The context is a
   // thin façade around the live deps; tools call its methods, never the deps
   // directly. This keeps tools postMessage-safe (Q11) for Phase 7 worker plugins.
   const ctx = useMemo<ToolContext | null>(() => {
-    if (!map || !excalidrawAPI) return null;
+    if (!map || !excalidrawAPI) {
+      return null;
+    }
     return buildToolContext(map, excalidrawAPI);
   }, [map, excalidrawAPI]);
 
   const dispatchPointerDown = useCallback(
     (e: ToolPointerEvent) => {
-      if (!activeAtlasTool || !ctx) return;
+      if (!activeAtlasTool || !ctx) {
+        return;
+      }
       activeAtlasTool.onPointerDown(e, ctx);
       // One-shot: deactivate after commit. Click the Pin button again to place
       // another. (See lifecycle docstring above.)
@@ -193,7 +204,7 @@ function applyElementPatch(
   const patched = patchElement(map, target, patch);
 
   const next = elements.slice();
-  next[idx] = patched as (typeof elements)[number];
+  next[idx] = patched as typeof elements[number];
   excalidrawAPI.updateScene({ elements: syncInvalidIndices(next) });
 }
 
@@ -245,10 +256,7 @@ function patchElement(
         next.x = originX;
         next.y = originY;
         // LocalPoint = [x, y] relative to element's (x, y); first is [0, 0].
-        next.points = projected.map((p) => [
-          p.x - originX,
-          p.y - originY,
-        ]);
+        next.points = projected.map((p) => [p.x - originX, p.y - originY]);
       }
     }
 
@@ -306,8 +314,9 @@ function patchElement(
 
   // --- data (free-form metadata, escaped under `_data`) ---------------------
   if (patch.data !== undefined) {
-    const existingCustomData = (next.customData ?? target.customData ?? {}) as
-      Record<string, unknown>;
+    const existingCustomData = (next.customData ??
+      target.customData ??
+      {}) as Record<string, unknown>;
     next.customData = {
       ...existingCustomData,
       _data: patch.data,

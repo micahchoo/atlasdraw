@@ -66,7 +66,9 @@ export function registerQuotaMiddleware(
   fastify.addHook(
     "preHandler",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!opts.managed) return;
+      if (!opts.managed) {
+        return;
+      }
 
       // Only POST /maps is gated in v1. Note: route `routeOptions.url` may
       // be undefined when the hook fires before route matching completes
@@ -84,9 +86,7 @@ export function registerQuotaMiddleware(
         return reply.code(401).send({ error: "WORKSPACE_REQUIRED" });
       }
 
-      const ws: Workspace | null = await opts.client.getWorkspace(
-        workspaceId,
-      );
+      const ws: Workspace | null = await opts.client.getWorkspace(workspaceId);
       if (!ws) {
         // Managed-mode header points at a workspace that doesn't exist
         // in the workspaces table. Reject loudly — better than silently

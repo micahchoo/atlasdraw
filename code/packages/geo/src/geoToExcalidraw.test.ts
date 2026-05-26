@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  geoToExcalidraw,
-  type GeoJSONFeatureLike,
-} from "./geoToExcalidraw.js";
+
+import { geoToExcalidraw, type GeoJSONFeatureLike } from "./geoToExcalidraw.js";
 
 describe("geoToExcalidraw", () => {
   it("converts a Point feature to a screen-mode rectangle skeleton", () => {

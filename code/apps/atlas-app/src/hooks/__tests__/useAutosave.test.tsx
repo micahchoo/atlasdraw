@@ -22,6 +22,7 @@ import { useEffect } from "react";
 import { useAutosave } from "../useAutosave";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
 import { startAutoSave, type PersistenceStore } from "../../state/persistence";
+
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +39,9 @@ function makeFakeStore(saveImpl?: () => Promise<void>): FakeStore {
   const dirtyListeners = new Set<() => void>();
   let resolveCurrent: (() => void) | null = null;
   const saveSpy = vi.fn(() => {
-    if (saveImpl) return saveImpl();
+    if (saveImpl) {
+      return saveImpl();
+    }
     return new Promise<void>((resolve) => {
       resolveCurrent = resolve;
     });
@@ -53,7 +56,9 @@ function makeFakeStore(saveImpl?: () => Promise<void>): FakeStore {
       return () => dirtyListeners.delete(cb);
     },
     markDirty: () => {
-      for (const cb of dirtyListeners) cb();
+      for (const cb of dirtyListeners) {
+        cb();
+      }
     },
     isDirty: () => false,
     close: vi.fn(async () => {}),
@@ -85,11 +90,17 @@ function Harness(): React.ReactElement {
 function Wiring({ store }: { store: PersistenceStore }): React.ReactElement {
   useEffect(() => {
     usePersistenceStore.getState().setPersistenceStore(store);
-    const dispose = startAutoSave(store, () => DOC_STUB, 5000, 30000, () => {
-      usePersistenceStore.getState().clearDirty();
-      usePersistenceStore.getState().setDraining(false);
-      usePersistenceStore.getState().setLastSavedAt(Date.now());
-    });
+    const dispose = startAutoSave(
+      store,
+      () => DOC_STUB,
+      5000,
+      30000,
+      () => {
+        usePersistenceStore.getState().clearDirty();
+        usePersistenceStore.getState().setDraining(false);
+        usePersistenceStore.getState().setLastSavedAt(Date.now());
+      },
+    );
     usePersistenceStore.getState().setForceSave(async () => {
       try {
         await store.save(DOC_STUB);

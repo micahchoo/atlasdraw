@@ -1,6 +1,8 @@
 import { isGeoCustomData } from "./types.js";
-import type { GeoAnchor } from "./types.js";
+
 import { normalizeLng } from "./projection.js";
+
+import type { GeoAnchor } from "./types.js";
 
 // Web Mercator at canonical zoom 0 (world fits in 256 px).
 // Stable reference independent of the live map viewport.
@@ -82,10 +84,14 @@ export function normalizeElementsForExport(
   elements: readonly unknown[],
 ): readonly unknown[] {
   return elements.map((el) => {
-    if (typeof el !== "object" || el === null) return el;
+    if (typeof el !== "object" || el === null) {
+      return el;
+    }
     const e = el as Record<string, unknown>;
     const data = e.customData;
-    if (!isGeoCustomData(data)) return el;
+    if (!isGeoCustomData(data)) {
+      return el;
+    }
     return applyAnchor(e, data.geo);
   });
 }

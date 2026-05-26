@@ -30,13 +30,15 @@
 // useGeoAnchor / useAtlasdrawTool (mx-8e3209).
 
 import { useEffect, useRef } from "react";
-import type maplibregl from "maplibre-gl";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 import {
   useLayerRegistryStore,
   type LayerRegistryEntry,
 } from "../state/layerRegistry";
+
+import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Loose scene-element shape — only the fields we read.
@@ -86,7 +88,9 @@ export function buildSceneDiffHandler(
   return (elements) => {
     const incoming = new Set<string>();
     for (const el of elements) {
-      if (el.isDeleted) continue;
+      if (el.isDeleted) {
+        continue;
+      }
       incoming.add(el.id);
     }
 
@@ -142,7 +146,9 @@ export function applyVisibilityToScene(
 ): readonly SyncSceneElement[] {
   let matched = false;
   const next = elements.map((el) => {
-    if (el.id !== entryId) return el;
+    if (el.id !== entryId) {
+      return el;
+    }
     matched = true;
 
     const customData = { ...(el.customData ?? {}) };
@@ -162,7 +168,9 @@ export function applyVisibilityToScene(
     // Hide: stash current opacity (only if not already stashed) and set to 0.
     if (stashed !== undefined) {
       // Already hidden; preserve original stash.
-      if (currentOpacity === 0) return el;
+      if (currentOpacity === 0) {
+        return el;
+      }
       // Edge case: someone bumped opacity but left the stash. Re-apply 0.
       return { ...el, opacity: 0, customData };
     }
@@ -226,8 +234,12 @@ export function diffVisibility(
   const out: LayerRegistryEntry[] = [];
   for (const entry of next) {
     const prevVisible = prevMap.get(entry.id);
-    if (prevVisible === undefined) continue; // new entry — initial visibility, no flip
-    if (prevVisible !== entry.visible) out.push(entry);
+    if (prevVisible === undefined) {
+      continue;
+    } // new entry — initial visibility, no flip
+    if (prevVisible !== entry.visible) {
+      out.push(entry);
+    }
   }
   return out;
 }
@@ -250,7 +262,9 @@ export function useLayerRegistrySync(
   const knownIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!excalidrawAPI) return;
+    if (!excalidrawAPI) {
+      return;
+    }
 
     // Seed knownIds from the registry at mount so we don't double-register
     // entries that the registry already knows about (e.g. after a hot reload).
@@ -283,17 +297,23 @@ export function useLayerRegistrySync(
   // Subscribe-style still re-fires on those, but we filter via diffVisibility
   // which only reports actual visibility flips.
   useEffect(() => {
-    if (!map && !excalidrawAPI) return;
+    if (!map && !excalidrawAPI) {
+      return;
+    }
 
     let prevEntries = useLayerRegistryStore.getState().entries;
     const unsub = useLayerRegistryStore.subscribe((state) => {
       const flips = diffVisibility(prevEntries, state.entries);
       prevEntries = state.entries;
-      if (flips.length === 0) return;
+      if (flips.length === 0) {
+        return;
+      }
 
       for (const entry of flips) {
         if (entry.kind === "annotation") {
-          if (!excalidrawAPI) continue;
+          if (!excalidrawAPI) {
+            continue;
+          }
           const scene = excalidrawAPI.getSceneElements();
           const next = applyVisibilityToScene(
             scene as readonly SyncSceneElement[],
@@ -314,7 +334,9 @@ export function useLayerRegistrySync(
             });
           }
         } else if (entry.kind === "data") {
-          if (!map) continue;
+          if (!map) {
+            continue;
+          }
           applyVisibilityToMap(map, entry.id, entry.visible);
         }
       }

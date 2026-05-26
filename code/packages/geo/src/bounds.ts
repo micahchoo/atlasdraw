@@ -6,6 +6,7 @@
 // box. Used by viewport "zoom to fit" and persistence camera defaults.
 
 import { isGeoCustomData } from "./types.js";
+
 import type { ExcalidrawElementLike } from "./CoordinateSync.js";
 
 export type LngLatBox = {
@@ -25,7 +26,9 @@ export function computeSceneBounds(
   let any = false;
 
   for (const el of elements) {
-    if (!isGeoCustomData(el.customData)) continue;
+    if (!isGeoCustomData(el.customData)) {
+      continue;
+    }
     const geo = el.customData.geo;
 
     let elWest: number;
@@ -43,26 +46,46 @@ export function computeSceneBounds(
       elNorth = geo.north;
     } else {
       // polyline
-      if (geo.coordinates.length === 0) continue;
+      if (geo.coordinates.length === 0) {
+        continue;
+      }
       elWest = Infinity;
       elEast = -Infinity;
       elSouth = Infinity;
       elNorth = -Infinity;
       for (const [lng, lat] of geo.coordinates) {
-        if (lng < elWest) elWest = lng;
-        if (lng > elEast) elEast = lng;
-        if (lat < elSouth) elSouth = lat;
-        if (lat > elNorth) elNorth = lat;
+        if (lng < elWest) {
+          elWest = lng;
+        }
+        if (lng > elEast) {
+          elEast = lng;
+        }
+        if (lat < elSouth) {
+          elSouth = lat;
+        }
+        if (lat > elNorth) {
+          elNorth = lat;
+        }
       }
     }
 
-    if (elWest < west) west = elWest;
-    if (elEast > east) east = elEast;
-    if (elSouth < south) south = elSouth;
-    if (elNorth > north) north = elNorth;
+    if (elWest < west) {
+      west = elWest;
+    }
+    if (elEast > east) {
+      east = elEast;
+    }
+    if (elSouth < south) {
+      south = elSouth;
+    }
+    if (elNorth > north) {
+      north = elNorth;
+    }
     any = true;
   }
 
-  if (!any) return null;
+  if (!any) {
+    return null;
+  }
   return { west, south, east, north };
 }

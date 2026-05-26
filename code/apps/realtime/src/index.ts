@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — relay server entry point.
 //
@@ -10,14 +11,15 @@
 // See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 3 / Task 5.
 
 import http from "http";
+
 import { Server as SocketIOServer } from "socket.io";
+
 import { registerHealth } from "./health";
 import { registerSocketIOHandlers } from "./socket-io-server";
 import { registerYjsHandler } from "./yjs-server";
 import { attachRedisAdapterIfConfigured } from "./redis-adapter";
-import type { RealtimeConfig } from "@atlasdraw/protocol";
 
-const PORT = parseInt(process.env["PORT"] ?? "4001", 10);
+const PORT = parseInt(process.env.PORT ?? "4001", 10);
 
 // ---------------------------------------------------------------------------
 // HTTP Server

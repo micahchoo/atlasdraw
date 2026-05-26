@@ -75,7 +75,9 @@ export const RectangleTool: AtlasdrawTool = {
   },
 
   onPointerMove(e: ToolPointerEvent, ctx: ToolContext) {
-    if (previewId === null || anchor === null) return;
+    if (previewId === null || anchor === null) {
+      return;
+    }
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     ctx.excalidraw.updateElement(previewId, {
       geo: makeBbox(anchor, { lng, lat }, anchor.zRef),
@@ -83,7 +85,9 @@ export const RectangleTool: AtlasdrawTool = {
   },
 
   onPointerUp(e: ToolPointerEvent, ctx: ToolContext) {
-    if (previewId === null || anchor === null) return;
+    if (previewId === null || anchor === null) {
+      return;
+    }
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     ctx.excalidraw.updateElement(previewId, {
       geo: makeBbox(anchor, { lng, lat }, anchor.zRef),

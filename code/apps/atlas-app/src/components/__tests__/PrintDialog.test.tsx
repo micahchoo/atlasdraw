@@ -6,18 +6,11 @@
 // can assert which PrintOptions the dialog forwards.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { PrintDialog } from "../PrintDialog";
-import type {
-  LayerLegendEntry,
-  PrintOptions,
-} from "../../lib/print-pdf";
+
+import type { LayerLegendEntry, PrintOptions } from "../../lib/print-pdf";
 
 afterEach(() => {
   cleanup();
@@ -27,11 +20,19 @@ afterEach(() => {
 // stub the two so submit can complete without runtime errors. We assign
 // before spying because vi.spyOn requires the property to exist.
 function stubUrlAndAnchorClick() {
-  if (typeof (URL as unknown as { createObjectURL?: unknown }).createObjectURL !== "function") {
-    (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:mock";
+  if (
+    typeof (URL as unknown as { createObjectURL?: unknown }).createObjectURL !==
+    "function"
+  ) {
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL =
+      () => "blob:mock";
   }
-  if (typeof (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL !== "function") {
-    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
+  if (
+    typeof (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL !==
+    "function"
+  ) {
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL =
+      () => {};
   }
   const createUrl = vi
     .spyOn(URL, "createObjectURL")
@@ -121,7 +122,9 @@ describe("PrintDialog", () => {
     const handles = stubUrlAndAnchorClick();
     const exportMock = vi
       .fn<(opts: PrintOptions) => Promise<Blob>>()
-      .mockResolvedValue(new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }));
+      .mockResolvedValue(
+        new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
+      );
     const onClose = vi.fn();
     const canvas = makeCanvas();
     render(

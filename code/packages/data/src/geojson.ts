@@ -36,8 +36,12 @@ export class GeoJSONParseError extends Error {
   constructor(message: string, opts: { line?: number; field?: string } = {}) {
     super(message);
     this.name = "GeoJSONParseError";
-    if (opts.line !== undefined) this.line = opts.line;
-    if (opts.field !== undefined) this.field = opts.field;
+    if (opts.line !== undefined) {
+      this.line = opts.line;
+    }
+    if (opts.field !== undefined) {
+      this.field = opts.field;
+    }
   }
 }
 
@@ -70,23 +74,26 @@ export async function parse(blob: Blob): Promise<FeatureCollection> {
 
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new GeoJSONParseError(
-      "Expected top-level JSON object for FeatureCollection; got " +
-        (raw === null ? "null" : Array.isArray(raw) ? "array" : typeof raw),
+      `Expected top-level JSON object for FeatureCollection; got ${
+        raw === null ? "null" : Array.isArray(raw) ? "array" : typeof raw
+      }`,
       { field: "type" },
     );
   }
 
   const obj = raw as Record<string, unknown>;
-  const topType = obj["type"];
+  const topType = obj.type;
   if (topType !== "FeatureCollection") {
     throw new GeoJSONParseError(
-      `Expected top-level type "FeatureCollection", got ${JSON.stringify(topType)}. ` +
+      `Expected top-level type "FeatureCollection", got ${JSON.stringify(
+        topType,
+      )}. ` +
         `Bare Feature/Geometry inputs are not accepted; wrap them in a FeatureCollection.`,
       { field: "type" },
     );
   }
 
-  const features = obj["features"];
+  const features = obj.features;
   if (!Array.isArray(features)) {
     throw new GeoJSONParseError(
       `FeatureCollection.features must be an array; got ${typeof features}`,
@@ -136,11 +143,15 @@ export function requireHomogeneousGeometry(fc: FeatureCollection): void {
   const seen = new Set<AtlasGeometryKind>();
   for (let i = 0; i < fc.features.length; i++) {
     const g = fc.features[i].geometry;
-    if (g === null) continue;
+    if (g === null) {
+      continue;
+    }
     const kind = atlasKindOf(g.type);
     if (kind === null) {
       throw new GeoJSONParseError(
-        `features[${i}].geometry.type ${JSON.stringify(g.type)} is not supported by Atlas (use Polygon/LineString/Point variants)`,
+        `features[${i}].geometry.type ${JSON.stringify(
+          g.type,
+        )} is not supported by Atlas (use Polygon/LineString/Point variants)`,
         { field: `features[${i}].geometry.type` },
       );
     }
@@ -161,9 +172,15 @@ export function requireHomogeneousGeometry(fc: FeatureCollection): void {
 export type AtlasGeometryKind = "fill" | "line" | "circle";
 
 function atlasKindOf(t: string): AtlasGeometryKind | null {
-  if (t === "Polygon" || t === "MultiPolygon") return "fill";
-  if (t === "LineString" || t === "MultiLineString") return "line";
-  if (t === "Point" || t === "MultiPoint") return "circle";
+  if (t === "Polygon" || t === "MultiPolygon") {
+    return "fill";
+  }
+  if (t === "LineString" || t === "MultiLineString") {
+    return "line";
+  }
+  if (t === "Point" || t === "MultiPoint") {
+    return "circle";
+  }
   return null;
 }
 
@@ -173,15 +190,17 @@ function atlasKindOf(t: string): AtlasGeometryKind | null {
 function validateFeature(feat: unknown, idx: number): asserts feat is Feature {
   if (feat === null || typeof feat !== "object" || Array.isArray(feat)) {
     throw new GeoJSONParseError(
-      `features[${idx}] must be an object; got ${feat === null ? "null" : typeof feat}`,
+      `features[${idx}] must be an object; got ${
+        feat === null ? "null" : typeof feat
+      }`,
       { field: `features[${idx}]` },
     );
   }
   const f = feat as Record<string, unknown>;
 
-  if (f["type"] !== "Feature") {
+  if (f.type !== "Feature") {
     throw new GeoJSONParseError(
-      `features[${idx}].type must be "Feature"; got ${JSON.stringify(f["type"])}`,
+      `features[${idx}].type must be "Feature"; got ${JSON.stringify(f.type)}`,
       { field: `features[${idx}].type` },
     );
   }

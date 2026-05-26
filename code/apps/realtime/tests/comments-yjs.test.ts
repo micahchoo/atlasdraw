@@ -15,18 +15,21 @@
 //
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A2
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "http";
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Server as SocketIOServer } from "socket.io";
 import * as Y from "yjs";
 import { WebSocket } from "ws";
-import { registerYjsHandler } from "../src/yjs-server";
+
 import {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
   buildCommentsDocPath,
   type CommentSchemaV1,
 } from "@atlasdraw/protocol";
+
+import { registerYjsHandler } from "../src/yjs-server";
 
 let server: http.Server;
 let io: SocketIOServer;
@@ -55,7 +58,9 @@ function readVarUint(buf: Uint8Array, offset: number): [number, number] {
   while (true) {
     const byte = buf[i++]!;
     num |= (byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) return [num, i];
+    if ((byte & 0x80) === 0) {
+      return [num, i];
+    }
     shift += 7;
   }
 }
@@ -112,7 +117,9 @@ function openClient(path: string): YClient {
         ? new Uint8Array(buf)
         : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     let [msgType, off] = readVarUint(u8, 0);
-    if (msgType !== MESSAGE_SYNC) return; // ignore awareness etc.
+    if (msgType !== MESSAGE_SYNC) {
+      return;
+    } // ignore awareness etc.
     let subtype: number;
     [subtype, off] = readVarUint(u8, off);
     const [len, payloadOff] = readVarUint(u8, off);
@@ -136,7 +143,9 @@ function openClient(path: string): YClient {
 
   // Local updates → broadcast to server.
   doc.on("update", (update: Uint8Array, origin: unknown) => {
-    if (origin === "remote") return;
+    if (origin === "remote") {
+      return;
+    }
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(encodeSyncMessage(MESSAGE_SYNC_UPDATE, update));
     }
@@ -184,7 +193,9 @@ function appendComment(doc: Y.Doc, c: CommentSchemaV1): void {
   for (const [k, v] of Object.entries(c)) {
     if (k === "anchor") {
       const a = new Y.Map<unknown>();
-      for (const [ak, av] of Object.entries(v as object)) a.set(ak, av);
+      for (const [ak, av] of Object.entries(v as object)) {
+        a.set(ak, av);
+      }
       m.set("anchor", a);
     } else {
       m.set(k, v);
@@ -221,7 +232,11 @@ async function waitFor<T>(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const v = fn();
-    if (v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true)) {
+    if (
+      v !== null &&
+      v !== undefined &&
+      (Array.isArray(v) ? v.length > 0 : true)
+    ) {
       return v;
     }
     await new Promise((r) => setTimeout(r, 25));

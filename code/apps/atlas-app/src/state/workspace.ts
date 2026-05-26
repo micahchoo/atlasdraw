@@ -30,8 +30,12 @@ export interface WorkspaceContext {
  * widening grep-able. Returns `null` for empty input so callers can pipe
  * env / config straight in.
  */
-export function asWorkspaceId(value: string | null | undefined): WorkspaceId | null {
-  if (!value) return null;
+export function asWorkspaceId(
+  value: string | null | undefined,
+): WorkspaceId | null {
+  if (!value) {
+    return null;
+  }
   return value as WorkspaceId;
 }
 
@@ -58,6 +62,8 @@ export function resolveWorkspaceFromEnv(
 export function workspaceHeaders(
   ctx: WorkspaceContext,
 ): Record<string, string> {
-  if (ctx.id === null) return {};
+  if (ctx.id === null) {
+    return {};
+  }
   return { "X-Workspace-ID": ctx.id };
 }

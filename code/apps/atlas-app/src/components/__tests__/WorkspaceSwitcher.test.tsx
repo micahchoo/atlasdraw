@@ -1,14 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 A13a — WorkspaceSwitcher tests.
 
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   render,
@@ -19,9 +12,8 @@ import {
 
 import { WorkspaceSwitcher } from "../WorkspaceSwitcher";
 import * as appConfig from "../../config/app-config";
-import type {
-  AppConfig,
-} from "../../config/app-config";
+
+import type { AppConfig } from "../../config/app-config";
 import type {
   HttpStorageClient,
   WorkspaceSummary,
@@ -88,9 +80,7 @@ describe("WorkspaceSwitcher", () => {
         />,
       );
       expect(container.firstChild).toBeNull();
-      expect(
-        screen.queryByTestId("workspace-switcher"),
-      ).toBeNull();
+      expect(screen.queryByTestId("workspace-switcher")).toBeNull();
     });
 
     it("does not call listWorkspaces in self-host", () => {
@@ -126,15 +116,11 @@ describe("WorkspaceSwitcher", () => {
       );
       // Open the dropdown.
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-trigger"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-trigger")).toBeTruthy();
       });
       fireEvent.click(screen.getByTestId("workspace-switcher-trigger"));
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-list"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-list")).toBeTruthy();
       });
       for (const ws of SAMPLE) {
         expect(
@@ -154,9 +140,7 @@ describe("WorkspaceSwitcher", () => {
         />,
       );
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-trigger"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-trigger")).toBeTruthy();
       });
       fireEvent.click(screen.getByTestId("workspace-switcher-trigger"));
       await waitFor(() => {
@@ -164,9 +148,7 @@ describe("WorkspaceSwitcher", () => {
           screen.getByTestId("workspace-switcher-option-ws-beta"),
         ).toBeTruthy();
       });
-      fireEvent.click(
-        screen.getByTestId("workspace-switcher-option-ws-beta"),
-      );
+      fireEvent.click(screen.getByTestId("workspace-switcher-option-ws-beta"));
       expect(onSelect).toHaveBeenCalledWith("ws-beta");
     });
 
@@ -180,15 +162,11 @@ describe("WorkspaceSwitcher", () => {
         />,
       );
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-trigger"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-trigger")).toBeTruthy();
       });
       fireEvent.click(screen.getByTestId("workspace-switcher-trigger"));
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-list"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-list")).toBeTruthy();
       });
       // Alpha + Gamma are free, Beta is pro. Both free entries get an
       // upgrade link; Beta does not.
@@ -215,9 +193,7 @@ describe("WorkspaceSwitcher", () => {
         />,
       );
       await waitFor(() => {
-        expect(
-          screen.getByTestId("workspace-switcher-trigger"),
-        ).toBeTruthy();
+        expect(screen.getByTestId("workspace-switcher-trigger")).toBeTruthy();
       });
       fireEvent.click(screen.getByTestId("workspace-switcher-trigger"));
       await waitFor(() => {

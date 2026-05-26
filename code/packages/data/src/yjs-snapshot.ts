@@ -6,6 +6,7 @@
 // These functions do NOT mutate the Y.Doc — they are read-only projections.
 
 import * as Y from "yjs";
+
 import type {
   FeatureCollection,
   Feature,
@@ -21,13 +22,13 @@ import type {
  * Convert a Yjs layer (Y.Map of feature id → feature maps) into a plain
  * GeoJSON FeatureCollection.  Every call produces a fresh object tree.
  */
-export function toGeoJSON(
-  layer: Y.Map<Y.Map<unknown>>,
-): FeatureCollection {
+export function toGeoJSON(layer: Y.Map<Y.Map<unknown>>): FeatureCollection {
   const features: Feature[] = [];
 
   layer.forEach((featureMap, featureId) => {
-    if (!featureMap) return;
+    if (!featureMap) {
+      return;
+    }
 
     const f = featureMap as Y.Map<unknown>;
     const geomMap = f.get("geometry") as Y.Map<unknown> | undefined;

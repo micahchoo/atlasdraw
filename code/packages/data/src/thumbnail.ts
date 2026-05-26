@@ -17,13 +17,21 @@ const THUMB_H = 768;
 export async function generateThumbnail(
   canvas: HTMLCanvasElement | null,
 ): Promise<Blob | null> {
-  if (typeof document === "undefined") return null;
-  if (!canvas) return null;
-  if (typeof OffscreenCanvas === "undefined") return null;
+  if (typeof document === "undefined") {
+    return null;
+  }
+  if (!canvas) {
+    return null;
+  }
+  if (typeof OffscreenCanvas === "undefined") {
+    return null;
+  }
 
   const off = new OffscreenCanvas(THUMB_W, THUMB_H);
   const ctx = off.getContext("2d");
-  if (!ctx) return null;
+  if (!ctx) {
+    return null;
+  }
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, THUMB_W, THUMB_H);

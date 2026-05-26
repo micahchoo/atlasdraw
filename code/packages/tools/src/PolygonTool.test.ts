@@ -10,10 +10,9 @@
 // Resets the tool-local singleton draft between tests.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  PolygonTool,
-  __resetPolygonDraftForTests,
-} from "./PolygonTool.js";
+
+import { PolygonTool, __resetPolygonDraftForTests } from "./PolygonTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
@@ -119,20 +118,32 @@ describe("PolygonTool", () => {
     // Three single clicks, well-separated in time so none triggers the
     // double-click window.
     dateSpy.mockReturnValue(1_000);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
 
     dateSpy.mockReturnValue(2_000);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 200, clientY: 100 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 200, clientY: 100 }),
+      ctx,
+    );
 
     dateSpy.mockReturnValue(3_000);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 200, clientY: 200 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 200, clientY: 200 }),
+      ctx,
+    );
 
     // No commit yet.
     expect(addElement).not.toHaveBeenCalled();
 
     // Fourth click within DOUBLE_CLICK_MS (300ms) of the third — closes.
     dateSpy.mockReturnValue(3_100);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 200, clientY: 200 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 200, clientY: 200 }),
+      ctx,
+    );
 
     expect(addElement).toHaveBeenCalledTimes(1);
 
@@ -141,7 +152,9 @@ describe("PolygonTool", () => {
     expect(seed.scaleMode).toBe("geographic");
     expect(seed.geo.kind).toBe("polyline");
 
-    if (seed.geo.kind !== "polyline") throw new Error("unreachable");
+    if (seed.geo.kind !== "polyline") {
+      throw new Error("unreachable");
+    }
     const coords = seed.geo.coordinates;
 
     // Three accumulated vertices + closing copy of v0 = 4 entries.
@@ -167,11 +180,17 @@ describe("PolygonTool", () => {
     const dateSpy = vi.spyOn(Date, "now");
 
     dateSpy.mockReturnValue(1_000);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 50, clientY: 50 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 50, clientY: 50 }),
+      ctx,
+    );
 
     // Second click well outside the 300ms window — must NOT close.
     dateSpy.mockReturnValue(1_500);
-    PolygonTool.onPointerDown(makePointerEvent({ clientX: 60, clientY: 60 }), ctx);
+    PolygonTool.onPointerDown(
+      makePointerEvent({ clientX: 60, clientY: 60 }),
+      ctx,
+    );
 
     expect(addElement).not.toHaveBeenCalled();
 

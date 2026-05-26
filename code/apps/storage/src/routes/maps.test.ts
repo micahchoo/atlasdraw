@@ -1,7 +1,9 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
 import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
+
 import { registerMapRoutes } from "./maps";
 
 describe("/maps routes", () => {

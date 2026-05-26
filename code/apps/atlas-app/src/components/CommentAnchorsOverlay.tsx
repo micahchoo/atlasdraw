@@ -19,17 +19,23 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";
-import type maplibregl from "maplibre-gl";
+
 import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+
 import { useCollab } from "../hooks/useCollab";
-import type { Comment } from "../state/comments";
-import { useAnnounce } from "./AriaAnnouncer";
-import { CommentAnchor } from "./CommentAnchor";
+
 import {
   setPendingAnchor,
   usePendingAnchor,
 } from "../state/comments-anchor-picker";
+
 import styles from "../styles/CommentAnchorsOverlay.module.css";
+
+import { useAnnounce } from "./AriaAnnouncer";
+import { CommentAnchor } from "./CommentAnchor";
+
+import type { Comment } from "../state/comments";
+import type maplibregl from "maplibre-gl";
 
 // ExcalidrawImperativeAPI is not re-exported from @excalidraw/excalidraw in
 // v0.18 (see .claude/rules/excalidraw-api.md). We type-erase here — the
@@ -81,7 +87,9 @@ export function CommentAnchorsOverlay(
   // overlay just routes the addition events into the announcer.
   const announce = useAnnounce();
   useEffect(() => {
-    if (!commentsLayer) return;
+    if (!commentsLayer) {
+      return;
+    }
     return commentsLayer.subscribeAdditions((c) => {
       announce(`New comment from ${c.authorName}`);
     });
@@ -91,7 +99,9 @@ export function CommentAnchorsOverlay(
   // When the panel signals "I want a map anchor", capture the next map click
   // as a {lng, lat} pair and publish it as the pendingAnchor.
   useEffect(() => {
-    if (!map || pickerMode !== "map") return;
+    if (!map || pickerMode !== "map") {
+      return;
+    }
     const handler = (
       e: maplibregl.MapMouseEvent & { lngLat: { lng: number; lat: number } },
     ): void => {
@@ -113,22 +123,32 @@ export function CommentAnchorsOverlay(
   // When the panel signals "I want an element anchor", capture the next
   // single-element Excalidraw selection as its elementId.
   useEffect(() => {
-    if (!excalidrawAPI || pickerMode !== "element") return;
-    if (typeof excalidrawAPI.onChange !== "function") return;
+    if (!excalidrawAPI || pickerMode !== "element") {
+      return;
+    }
+    if (typeof excalidrawAPI.onChange !== "function") {
+      return;
+    }
     let done = false;
-    const unsub = excalidrawAPI.onChange((_elements: unknown, appState: unknown) => {
-      if (done) return;
-      const a = appState as unknown as {
-        selectedElementIds?: Record<string, boolean>;
-      };
-      const ids = Object.keys(a.selectedElementIds ?? {});
-      if (ids.length === 1) {
-        done = true;
-        setPendingAnchor({ kind: "element", elementId: ids[0]! });
-      }
-    });
+    const unsub = excalidrawAPI.onChange(
+      (_elements: unknown, appState: unknown) => {
+        if (done) {
+          return;
+        }
+        const a = appState as unknown as {
+          selectedElementIds?: Record<string, boolean>;
+        };
+        const ids = Object.keys(a.selectedElementIds ?? {});
+        if (ids.length === 1) {
+          done = true;
+          setPendingAnchor({ kind: "element", elementId: ids[0]! });
+        }
+      },
+    );
     return () => {
-      if (typeof unsub === "function") unsub();
+      if (typeof unsub === "function") {
+        unsub();
+      }
     };
   }, [excalidrawAPI, pickerMode]);
 
@@ -137,7 +157,9 @@ export function CommentAnchorsOverlay(
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    if (!map) return;
+    if (!map) {
+      return;
+    }
     const bump = (): void => setTick((t) => t + 1);
     map.on("move", bump);
     map.on("zoom", bump);
@@ -148,17 +170,23 @@ export function CommentAnchorsOverlay(
   }, [map]);
 
   useEffect(() => {
-    if (!excalidrawAPI || typeof excalidrawAPI.onChange !== "function") return;
+    if (!excalidrawAPI || typeof excalidrawAPI.onChange !== "function") {
+      return;
+    }
     const unsubscribe = excalidrawAPI.onChange(() => setTick((t) => t + 1));
     return () => {
       // ExcalidrawImperativeAPI.onChange returns an UnsubscribeCallback in
       // v0.18 (see .claude/rules/excalidraw-api.md). Guard for the function
       // case; older mocks may return void.
-      if (typeof unsubscribe === "function") unsubscribe();
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
     };
   }, [excalidrawAPI]);
 
-  if (!commentsLayer || comments.length === 0) return null;
+  if (!commentsLayer || comments.length === 0) {
+    return null;
+  }
 
   const projected: ProjectedAnchor[] = [];
   // `tick` reads as a dep so the closure here re-runs on each bump.
@@ -171,15 +199,21 @@ export function CommentAnchorsOverlay(
       continue;
     }
     if (c.anchor.kind === "map") {
-      if (!map) continue;
+      if (!map) {
+        continue;
+      }
       const p = map.project([c.anchor.lng, c.anchor.lat]);
       projected.push({ comment: c, screenX: p.x, screenY: p.y });
     } else if (c.anchor.kind === "element") {
-      if (!excalidrawAPI) continue;
+      if (!excalidrawAPI) {
+        continue;
+      }
       const elementId = c.anchor.elementId;
       const elements = excalidrawAPI.getSceneElements();
       const el = elements.find((e: { id: string }) => e.id === elementId);
-      if (!el) continue;
+      if (!el) {
+        continue;
+      }
       // Element top-right corner — using Excalidraw element shape: x,y is
       // top-left scene-coords; width/height are scene units.
       const e = el as unknown as {

@@ -11,6 +11,7 @@
 
 import { describe, it, expect } from "vitest";
 import * as Y from "yjs";
+
 import { CollabUndoManager } from "../src/collab-undo-manager";
 import { addFeature } from "../src/yjs-layer";
 
@@ -29,10 +30,7 @@ function sync(srcDoc: Y.Doc, tgtDoc: Y.Doc): void {
  * Returns the layer Y.Map. Creates with origin null if absent (untracked
  * by any CollabUndoManager that tracks a non-null origin).
  */
-function ensureLayer(
-  doc: Y.Doc,
-  layerName: string,
-): Y.Map<Y.Map<unknown>> {
+function ensureLayer(doc: Y.Doc, layerName: string): Y.Map<Y.Map<unknown>> {
   const layers = doc.getMap("layers") as Y.Map<Y.Map<unknown>>;
   let layer = layers.get(layerName) as Y.Map<Y.Map<unknown>> | undefined;
   if (!layer) {
@@ -52,7 +50,9 @@ function ensureLayer(
 function getFeatureIds(doc: Y.Doc, layerName: string): string[] {
   const layers = doc.getMap("layers") as Y.Map<Y.Map<unknown>>;
   const layer = layers.get(layerName) as Y.Map<unknown> | undefined;
-  if (!layer) return [];
+  if (!layer) {
+    return [];
+  }
   const ids: string[] = [];
   for (const [key] of layer) {
     ids.push(key);
@@ -88,9 +88,21 @@ describe("CollabUndoManager — distributed state scoping", () => {
     // 2. User A adds feat-A (tagged with originA)
     const layerA = docA.getMap("layers").get(LAYER) as Y.Map<Y.Map<unknown>>;
     docA.transact(() => {
-      addFeature(layerA, "feat-A", "Polygon", [
-        [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
-      ], { owner: "A" });
+      addFeature(
+        layerA,
+        "feat-A",
+        "Polygon",
+        [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0],
+          ],
+        ],
+        { owner: "A" },
+      );
     }, originA);
 
     // Sync A -> B so B sees feat-A
@@ -99,9 +111,21 @@ describe("CollabUndoManager — distributed state scoping", () => {
     // 3. User B adds feat-B (tagged with originB on docB)
     const layerB = docB.getMap("layers").get(LAYER) as Y.Map<Y.Map<unknown>>;
     docB.transact(() => {
-      addFeature(layerB, "feat-B", "Polygon", [
-        [[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]],
-      ], { owner: "B" });
+      addFeature(
+        layerB,
+        "feat-B",
+        "Polygon",
+        [
+          [
+            [10, 10],
+            [20, 10],
+            [20, 20],
+            [10, 20],
+            [10, 10],
+          ],
+        ],
+        { owner: "B" },
+      );
     }, originB);
 
     // Sync B -> A so A's doc also contains feat-B
@@ -146,9 +170,21 @@ describe("CollabUndoManager — distributed state scoping", () => {
     // User A adds feat-A (originA)
     const layerA = docA.getMap("layers").get(LAYER) as Y.Map<Y.Map<unknown>>;
     docA.transact(() => {
-      addFeature(layerA, "feat-A", "Polygon", [
-        [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
-      ], { owner: "A" });
+      addFeature(
+        layerA,
+        "feat-A",
+        "Polygon",
+        [
+          [
+            [0, 0],
+            [1, 0],
+            [1, 1],
+            [0, 1],
+            [0, 0],
+          ],
+        ],
+        { owner: "A" },
+      );
     }, originA);
 
     sync(docA, docB);
@@ -156,9 +192,21 @@ describe("CollabUndoManager — distributed state scoping", () => {
     // User B adds feat-B (originB)
     const layerB = docB.getMap("layers").get(LAYER) as Y.Map<Y.Map<unknown>>;
     docB.transact(() => {
-      addFeature(layerB, "feat-B", "Polygon", [
-        [[10, 10], [20, 10], [20, 20], [10, 20], [10, 10]],
-      ], { owner: "B" });
+      addFeature(
+        layerB,
+        "feat-B",
+        "Polygon",
+        [
+          [
+            [10, 10],
+            [20, 10],
+            [20, 20],
+            [10, 20],
+            [10, 10],
+          ],
+        ],
+        { owner: "B" },
+      );
     }, originB);
 
     sync(docB, docA);

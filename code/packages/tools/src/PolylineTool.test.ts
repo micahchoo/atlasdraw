@@ -8,7 +8,9 @@
 // way without ring closure. PolygonTool's closure contract must NOT leak in.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
 import { PolylineTool } from "./PolylineTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
@@ -112,23 +114,47 @@ describe("PolylineTool", () => {
 
     // Three vertex clicks at different coords — each is a distinct pointerdown
     // with a non-double-click gap in between.
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 100, clientY: 200 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 100, clientY: 200 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 100, clientY: 200 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 100, clientY: 200 }),
+      ctx,
+    );
 
     vi.setSystemTime(1000); // > 300ms gap, so this isn't a double-click
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 300, clientY: 400 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 300, clientY: 400 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 300, clientY: 400 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 300, clientY: 400 }),
+      ctx,
+    );
 
     vi.setSystemTime(2000);
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 500, clientY: 600 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 500, clientY: 600 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 500, clientY: 600 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 500, clientY: 600 }),
+      ctx,
+    );
 
     expect(addElement).not.toHaveBeenCalled();
 
     // Double-click: second pointerdown+up within 300ms of the previous up.
     vi.setSystemTime(2050); // 50ms gap < 300ms = double-click
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 500, clientY: 600 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 500, clientY: 600 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 500, clientY: 600 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 500, clientY: 600 }),
+      ctx,
+    );
 
     expect(addElement).toHaveBeenCalledTimes(1);
     const seed = addElement.mock.calls[0][0] as AtlasdrawElementSeed;
@@ -139,7 +165,8 @@ describe("PolylineTool", () => {
 
     // Critical open-path invariant: first and last vertices must differ —
     // PolygonTool would close the ring; PolylineTool must not.
-    const coords = (seed.geo as { coordinates: Array<[number, number]> }).coordinates;
+    const coords = (seed.geo as { coordinates: Array<[number, number]> })
+      .coordinates;
     expect(coords.length).toBeGreaterThanOrEqual(2);
     expect(coords[0]).not.toEqual(coords[coords.length - 1]);
     // First vertex is the very first click.
@@ -149,14 +176,32 @@ describe("PolylineTool", () => {
   it("finalizes on Escape key without closing ring", () => {
     const { ctx, addElement } = makeCtx();
 
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
     vi.setSystemTime(1000);
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 200, clientY: 200 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 200, clientY: 200 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 200, clientY: 200 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 200, clientY: 200 }),
+      ctx,
+    );
     vi.setSystemTime(2000);
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 300, clientY: 300 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 300, clientY: 300 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 300, clientY: 300 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 300, clientY: 300 }),
+      ctx,
+    );
 
     PolylineTool.onKeyDown?.(makeKey("Escape"), ctx);
 
@@ -166,7 +211,8 @@ describe("PolylineTool", () => {
     expect(seed.type).toBe("line");
     expect(seed.geo.kind).toBe("polyline");
 
-    const coords = (seed.geo as { coordinates: Array<[number, number]> }).coordinates;
+    const coords = (seed.geo as { coordinates: Array<[number, number]> })
+      .coordinates;
     expect(coords).toEqual([
       [10, 10],
       [20, 20],
@@ -179,8 +225,14 @@ describe("PolylineTool", () => {
   it("Escape with fewer than 2 vertices abandons without emitting", () => {
     const { ctx, addElement } = makeCtx();
 
-    PolylineTool.onPointerDown(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
-    PolylineTool.onPointerUp?.(makePointerEvent({ clientX: 100, clientY: 100 }), ctx);
+    PolylineTool.onPointerDown(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
+    PolylineTool.onPointerUp?.(
+      makePointerEvent({ clientX: 100, clientY: 100 }),
+      ctx,
+    );
 
     PolylineTool.onKeyDown?.(makeKey("Escape"), ctx);
 

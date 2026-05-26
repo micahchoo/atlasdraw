@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Phase 1 acceptance — "stays glued" smoke.
  *
@@ -21,7 +22,10 @@ interface AtlasdrawWindow {
   __atlasdraw__?: {
     map: {
       isStyleLoaded: () => boolean;
-      panBy: (offset: [number, number], opts?: { duration?: number }) => unknown;
+      panBy: (
+        offset: [number, number],
+        opts?: { duration?: number },
+      ) => unknown;
     };
     excalidrawAPI: {
       getSceneElements: () => ReadonlyArray<SceneElement>;
@@ -124,7 +128,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const pin1 = await getPinElement(page);
     expect(pin1, "pin element should exist after click").toBeDefined();
     expect(pin1!.customData?.geo?.kind).toBe("point");
-    const geo1 = pin1!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo1 = pin1!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
     expect(typeof geo1.lng).toBe("number");
     expect(typeof geo1.lat).toBe("number");
     expect(Number.isFinite(geo1.lng)).toBe(true);
@@ -141,7 +149,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const pin2 = await getPinElement(page);
     expect(pin2, "pin should still exist after pan").toBeDefined();
 
-    const geo2 = pin2!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo2 = pin2!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
     // Source of truth: lat/lng are byte-stable. (load-bearing assertion)
     expect(geo2.lng).toBe(geo1.lng);
     expect(geo2.lat).toBe(geo1.lat);
@@ -187,7 +199,9 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const endY = 450;
     await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, { steps: 5 });
+    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, {
+      steps: 5,
+    });
     await page.mouse.move(endX, endY, { steps: 5 });
     await page.mouse.up();
 
@@ -269,11 +283,15 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     lng: number,
     lat: number,
   ): Promise<{ x: number; y: number; zoom: number }> {
-    return page.evaluate(([lng, lat]) => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
-      const p = (m as any).project([lng, lat]);
-      return { x: p.x, y: p.y, zoom: (m as any).getZoom() };
-    }, [lng, lat] as const);
+    return page.evaluate(
+      ([lng, lat]) => {
+        const m = (window as unknown as { __atlasdraw__?: { map: any } })
+          .__atlasdraw__!.map;
+        const p = (m as any).project([lng, lat]);
+        return { x: p.x, y: p.y, zoom: (m as any).getZoom() };
+      },
+      [lng, lat] as const,
+    );
   }
 
   test("pin stays glued during ZOOM (atlasdraw-5afc, scaleMode:screen)", async ({
@@ -293,25 +311,36 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
 
     const pin1 = await getPinElement(page);
     expect(pin1, "pin should exist after click").toBeDefined();
-    const geo1 = pin1!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo1 = pin1!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
 
     const before = await projectGeo(page, geo1.lng, geo1.lat);
     // Sanity: at zoom 0 (initial map state), element's scene position should
     // match the projected screen position of its lat/lng. Within ~2px of click.
     console.log(
-      `[5afc-zoom-pin] pre: zoom=${before.zoom} scene=(${pin1!.x},${pin1!.y}) projected=(${before.x.toFixed(1)},${before.y.toFixed(1)})`,
+      `[5afc-zoom-pin] pre: zoom=${before.zoom} scene=(${pin1!.x},${
+        pin1!.y
+      }) projected=(${before.x.toFixed(1)},${before.y.toFixed(1)})`,
     );
 
     // Zoom in by 1 level programmatically. duration:0 = synchronous.
     await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       (m as any).zoomTo((m as any).getZoom() + 1, { duration: 0 });
     });
     await page.waitForTimeout(300); // throttle settle + frame
 
     const pin2 = await getPinElement(page);
     expect(pin2, "pin should still exist after zoom").toBeDefined();
-    const geo2 = pin2!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo2 = pin2!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
 
     // Source of truth: geo must be unchanged.
     expect(geo2.lng).toBe(geo1.lng);
@@ -325,7 +354,13 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const driftX = actualX - expectedX;
     const driftY = actualY - expectedY;
     console.log(
-      `[5afc-zoom-pin] post: zoom=${after.zoom} scene=(${actualX},${actualY}) expectedProjected=(${expectedX.toFixed(1)},${expectedY.toFixed(1)}) drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
+      `[5afc-zoom-pin] post: zoom=${
+        after.zoom
+      } scene=(${actualX},${actualY}) expectedProjected=(${expectedX.toFixed(
+        1,
+      )},${expectedY.toFixed(1)}) drift=(${driftX.toFixed(1)},${driftY.toFixed(
+        1,
+      )})`,
     );
 
     // Pin should sit within a few px of where map.project says its lat/lng is.
@@ -334,11 +369,15 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     // top-left = projected-x - 8). Bug presents as drift much larger than 10.
     expect(
       Math.abs(driftX),
-      `pin scene-x drifted ${driftX.toFixed(1)}px from projected lat/lng after zoom`,
+      `pin scene-x drifted ${driftX.toFixed(
+        1,
+      )}px from projected lat/lng after zoom`,
     ).toBeLessThan(10);
     expect(
       Math.abs(driftY),
-      `pin scene-y drifted ${driftY.toFixed(1)}px from projected lat/lng after zoom`,
+      `pin scene-y drifted ${driftY.toFixed(
+        1,
+      )}px from projected lat/lng after zoom`,
     ).toBeLessThan(10);
   });
 
@@ -363,14 +402,19 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const endY = 450;
     await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, { steps: 5 });
+    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, {
+      steps: 5,
+    });
     await page.mouse.move(endX, endY, { steps: 5 });
     await page.mouse.up();
     await page.waitForTimeout(300);
 
     const rect1 = await getRectElement(page);
     if (!rect1 || !rect1.customData?.geo) {
-      test.fixme(true, "Rectangle drag failed in headless — see Test B for context.");
+      test.fixme(
+        true,
+        "Rectangle drag failed in headless — see Test B for context.",
+      );
       return;
     }
     const bbox1 = rect1.customData.geo as {
@@ -383,12 +427,17 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const w1 = rect1.width;
     const h1 = rect1.height;
     console.log(
-      `[5afc-zoom-rect] pre: scene=(${rect1.x},${rect1.y}) wh=(${w1},${h1}) bbox.lng=[${bbox1.west.toFixed(4)},${bbox1.east.toFixed(4)}]`,
+      `[5afc-zoom-rect] pre: scene=(${rect1.x},${
+        rect1.y
+      }) wh=(${w1},${h1}) bbox.lng=[${bbox1.west.toFixed(
+        4,
+      )},${bbox1.east.toFixed(4)}]`,
     );
 
     // Zoom in by 1 level → 2x pixel density per degree.
     await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       (m as any).zoomTo((m as any).getZoom() + 1, { duration: 0 });
     });
     await page.waitForTimeout(300);
@@ -411,7 +460,13 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const driftW = rect2!.width - expectedW;
     const driftH = rect2!.height - expectedH;
     console.log(
-      `[5afc-zoom-rect] post: scene=(${rect2!.x},${rect2!.y}) wh=(${rect2!.width},${rect2!.height}) expectedWH=(${expectedW.toFixed(1)},${expectedH.toFixed(1)}) driftWH=(${driftW.toFixed(1)},${driftH.toFixed(1)})`,
+      `[5afc-zoom-rect] post: scene=(${rect2!.x},${rect2!.y}) wh=(${
+        rect2!.width
+      },${rect2!.height}) expectedWH=(${expectedW.toFixed(
+        1,
+      )},${expectedH.toFixed(1)}) driftWH=(${driftW.toFixed(
+        1,
+      )},${driftH.toFixed(1)})`,
     );
 
     // EXPECTED TO FAIL until Task 8 (atlasdraw-375a) lands width/height
@@ -424,11 +479,15 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     });
     expect(
       Math.abs(driftW),
-      `rectangle width drifted ${driftW.toFixed(1)}px from geographic span after zoom (Task 8 not implemented)`,
+      `rectangle width drifted ${driftW.toFixed(
+        1,
+      )}px from geographic span after zoom (Task 8 not implemented)`,
     ).toBeLessThan(20);
     expect(
       Math.abs(driftH),
-      `rectangle height drifted ${driftH.toFixed(1)}px from geographic span after zoom (Task 8 not implemented)`,
+      `rectangle height drifted ${driftH.toFixed(
+        1,
+      )}px from geographic span after zoom (Task 8 not implemented)`,
     ).toBeLessThan(20);
   });
 
@@ -451,7 +510,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
 
     const pin1 = await getPinElement(page);
     expect(pin1, "pin should exist").toBeDefined();
-    const geo1 = pin1!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo1 = pin1!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
 
     // Switch to HAND tool first so Excalidraw layer goes pointer-events:none.
     await page.evaluate(() => {
@@ -466,20 +529,25 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
       const chain: string[] = [];
       let cur: Element | null = el;
       while (cur && chain.length < 6) {
-        const cls = cur.className && typeof cur.className === "string"
-          ? `.${cur.className.split(/\s+/).slice(0, 2).join(".")}`
-          : "";
+        const cls =
+          cur.className && typeof cur.className === "string"
+            ? `.${cur.className.split(/\s+/).slice(0, 2).join(".")}`
+            : "";
         chain.push(`${cur.tagName.toLowerCase()}${cls.slice(0, 50)}`);
         cur = cur.parentElement;
       }
       const w2 = window as unknown as AtlasdrawWindow;
-      const tool = w2.__atlasdraw__?.excalidrawAPI.getAppState().activeTool.type;
+      const tool =
+        w2.__atlasdraw__?.excalidrawAPI.getAppState().activeTool.type;
       return { tool, chain: chain.join(" > ") };
     });
-    console.log(`[5afc-wheel] tool=${wheelTarget.tool} elFromPt(300,300)=${wheelTarget.chain}`);
+    console.log(
+      `[5afc-wheel] tool=${wheelTarget.tool} elFromPt(300,300)=${wheelTarget.chain}`,
+    );
 
     const beforeZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       return (m as any).getZoom();
     });
 
@@ -495,14 +563,21 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await page.waitForTimeout(500);
 
     const afterZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       return (m as any).getZoom();
     });
-    console.log(`[5afc-wheel] zoom: ${beforeZoom.toFixed(2)} -> ${afterZoom.toFixed(2)}`);
+    console.log(
+      `[5afc-wheel] zoom: ${beforeZoom.toFixed(2)} -> ${afterZoom.toFixed(2)}`,
+    );
 
     const pin2 = await getPinElement(page);
     expect(pin2, "pin should still exist").toBeDefined();
-    const geo2 = pin2!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo2 = pin2!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
 
     // Pre-check: did the zoom level actually change?
     if (Math.abs(afterZoom - beforeZoom) < 0.1) {
@@ -519,15 +594,23 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     const driftX = pin2!.x - projected.x;
     const driftY = pin2!.y - projected.y;
     console.log(
-      `[5afc-wheel] post: scene=(${pin2!.x.toFixed(1)},${pin2!.y.toFixed(1)}) projected=(${projected.x.toFixed(1)},${projected.y.toFixed(1)}) drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
+      `[5afc-wheel] post: scene=(${pin2!.x.toFixed(1)},${pin2!.y.toFixed(
+        1,
+      )}) projected=(${projected.x.toFixed(1)},${projected.y.toFixed(
+        1,
+      )}) drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
     );
     expect(
       Math.abs(driftX),
-      `pin drifted ${driftX.toFixed(1)}px in x from projected lat/lng after wheel zoom`,
+      `pin drifted ${driftX.toFixed(
+        1,
+      )}px in x from projected lat/lng after wheel zoom`,
     ).toBeLessThan(15);
     expect(
       Math.abs(driftY),
-      `pin drifted ${driftY.toFixed(1)}px in y from projected lat/lng after wheel zoom`,
+      `pin drifted ${driftY.toFixed(
+        1,
+      )}px in y from projected lat/lng after wheel zoom`,
     ).toBeLessThan(15);
   });
 
@@ -563,10 +646,15 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await page.waitForTimeout(50);
 
     const pin1 = await getPinElement(page);
-    const geo1 = pin1!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo1 = pin1!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
 
     const beforeZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       return (m as any).getZoom();
     });
 
@@ -579,10 +667,15 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await page.waitForTimeout(500);
 
     const afterZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } }).__atlasdraw__!.map;
+      const m = (window as unknown as { __atlasdraw__?: { map: any } })
+        .__atlasdraw__!.map;
       return (m as any).getZoom();
     });
-    console.log(`[5afc-drawing-wheel] zoom: ${beforeZoom.toFixed(2)} -> ${afterZoom.toFixed(2)}`);
+    console.log(
+      `[5afc-drawing-wheel] zoom: ${beforeZoom.toFixed(
+        2,
+      )} -> ${afterZoom.toFixed(2)}`,
+    );
 
     expect(
       afterZoom - beforeZoom,
@@ -591,15 +684,27 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     ).toBeGreaterThan(0.3);
 
     const pin2 = await getPinElement(page);
-    const geo2 = pin2!.customData!.geo as { kind: "point"; lng: number; lat: number };
+    const geo2 = pin2!.customData!.geo as {
+      kind: "point";
+      lng: number;
+      lat: number;
+    };
     expect(geo2.lng).toBe(geo1.lng);
     expect(geo2.lat).toBe(geo1.lat);
 
     const projected = await projectGeo(page, geo1.lng, geo1.lat);
     const driftX = pin2!.x - projected.x;
     const driftY = pin2!.y - projected.y;
-    console.log(`[5afc-drawing-wheel] drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`);
-    expect(Math.abs(driftX), `drawing-mode wheel drift x = ${driftX.toFixed(1)}`).toBeLessThan(15);
-    expect(Math.abs(driftY), `drawing-mode wheel drift y = ${driftY.toFixed(1)}`).toBeLessThan(15);
+    console.log(
+      `[5afc-drawing-wheel] drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
+    );
+    expect(
+      Math.abs(driftX),
+      `drawing-mode wheel drift x = ${driftX.toFixed(1)}`,
+    ).toBeLessThan(15);
+    expect(
+      Math.abs(driftY),
+      `drawing-mode wheel drift y = ${driftY.toFixed(1)}`,
+    ).toBeLessThan(15);
   });
 });

@@ -3,12 +3,17 @@
 // Phase 4 W0 update (atlasdraw-ad27): adds an FC-store integration test.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeatureCollection } from "geojson";
+
+import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 import { selectDocument } from "./selectDocument";
-import type { LayerRegistryState } from "./layerRegistry";
+
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+
+import type { FeatureCollection } from "geojson";
+
+import type { LayerRegistryState } from "./layerRegistry";
+
 import type { Manifest } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
@@ -44,7 +49,7 @@ const makeRegistry = (
     reorder: vi.fn(),
     updateStyle: vi.fn(),
     remove: vi.fn(),
-  }) as unknown as LayerRegistryState;
+  } as unknown as LayerRegistryState);
 
 // FC store is a module-singleton — reset per test so we can't accidentally
 // inherit fcs registered by another test file in the same vitest worker.
@@ -87,7 +92,10 @@ describe("selectDocument", () => {
 
     const api = makeAPI();
     const reg = makeRegistry();
-    const doc = selectDocument(api, reg, { baseManifest: base, now: () => NOW });
+    const doc = selectDocument(api, reg, {
+      baseManifest: base,
+      now: () => NOW,
+    });
 
     expect(doc.manifest.id).toBe(base.id);
     expect(doc.manifest.title).toBe("My atlas");
@@ -121,7 +129,12 @@ describe("selectDocument", () => {
         visible: false,
         order: 1,
         featureCount: 42,
-        style: { fillColor: "#0aa", strokeColor: "#077", strokeWidth: 1, opacity: 0.5 },
+        style: {
+          fillColor: "#0aa",
+          strokeColor: "#077",
+          strokeWidth: 1,
+          opacity: 0.5,
+        },
       },
     ]);
     const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
@@ -161,7 +174,13 @@ describe("selectDocument", () => {
         {
           type: "Feature",
           properties: { name: "Trail A" },
-          geometry: { type: "LineString", coordinates: [[0, 0], [1, 1]] },
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
         },
       ],
     };
@@ -180,7 +199,12 @@ describe("selectDocument", () => {
         visible: true,
         order: 1,
         featureCount: 1,
-        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+        style: {
+          fillColor: "#000",
+          strokeColor: "#000",
+          strokeWidth: 1,
+          opacity: 1,
+        },
       },
     ]);
 
@@ -213,7 +237,12 @@ describe("selectDocument", () => {
         visible: true,
         order: 0,
         featureCount: 0,
-        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+        style: {
+          fillColor: "#000",
+          strokeColor: "#000",
+          strokeWidth: 1,
+          opacity: 1,
+        },
       },
     ]);
 
@@ -233,7 +262,12 @@ describe("selectDocument", () => {
         visible: true,
         order: 0,
         featureCount: 5,
-        style: { fillColor: "#000", strokeColor: "#000", strokeWidth: 1, opacity: 1 },
+        style: {
+          fillColor: "#000",
+          strokeColor: "#000",
+          strokeWidth: 1,
+          opacity: 1,
+        },
       },
     ]);
 
@@ -262,7 +296,7 @@ describe("selectDocument", () => {
 
   it("survives a malformed dataURL (skips file rather than throwing)", () => {
     const api = makeAPI({
-      files: { "broken": { dataURL: "not-a-data-url", mimeType: "image/png" } },
+      files: { broken: { dataURL: "not-a-data-url", mimeType: "image/png" } },
     });
     const doc = selectDocument(api, makeRegistry(), { now: () => NOW });
     expect(doc.files.size).toBe(0);

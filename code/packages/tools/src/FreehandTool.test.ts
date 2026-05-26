@@ -6,12 +6,14 @@
 // the Wave 1 scrub OQ-W1-4 resolution.
 
 import { describe, it, expect, beforeEach } from "vitest";
+
+import { FreehandTool, rdp } from "./FreehandTool.js";
+
 import type {
   AtlasdrawElementSeed,
   ToolContext,
   ToolPointerEvent,
 } from "./types.js";
-import { FreehandTool, rdp } from "./FreehandTool.js";
 
 /**
  * Build a ToolContext stub that captures addElement seeds for assertion.
@@ -52,11 +54,7 @@ function makeCtx(): {
   return { ctx, added };
 }
 
-function ev(
-  clientX: number,
-  clientY: number,
-  pointerId = 1,
-): ToolPointerEvent {
+function ev(clientX: number, clientY: number, pointerId = 1): ToolPointerEvent {
   return {
     clientX,
     clientY,

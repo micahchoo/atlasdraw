@@ -2,13 +2,7 @@
 // Phase 4 Wave 0 prereq (atlasdraw-3601) — hydrate() unit tests.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeatureCollection } from "geojson";
 
-import type {
-  AtlasdrawDocument,
-  Manifest,
-  SceneElement,
-} from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 import { hydrate } from "./hydrate";
@@ -17,15 +11,21 @@ import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { usePersistenceStore } from "./usePersistenceStore";
 import { selectDocument } from "./selectDocument";
 
+import type {
+  AtlasdrawDocument,
+  Manifest,
+  SceneElement,
+} from "@atlasdraw/data";
+
+import type { FeatureCollection } from "geojson";
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
 const VALID_ULID = "01HZ8KQR5Z3MV7BJ4N6XPYD9TF";
 
-const baseManifest = (
-  overrides: Partial<Manifest> = {},
-): Manifest => ({
+const baseManifest = (overrides: Partial<Manifest> = {}): Manifest => ({
   id: VALID_ULID,
   version: 1,
   title: "hydrate fixture",
@@ -85,7 +85,9 @@ beforeEach(() => {
   useDataLayerFCStore.getState().clear();
   // Registry: drop any entries from prior tests.
   const reg = useLayerRegistryStore.getState();
-  for (const id of reg.entries.map((e) => e.id)) reg.remove(id);
+  for (const id of reg.entries.map((e) => e.id)) {
+    reg.remove(id);
+  }
   usePersistenceStore.setState({ isDirty: false });
 });
 
@@ -96,7 +98,10 @@ beforeEach(() => {
 describe("hydrate", () => {
   it("calls updateScene with the loaded scene elements", async () => {
     const { api } = makeAPI();
-    const scene: ReadonlyArray<SceneElement> = [sceneEl("el-1"), sceneEl("el-2", "text")];
+    const scene: ReadonlyArray<SceneElement> = [
+      sceneEl("el-1"),
+      sceneEl("el-2", "text"),
+    ];
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest(),
       scene,
@@ -163,7 +168,11 @@ describe("hydrate", () => {
 
     const entries = useLayerRegistryStore.getState().entries;
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ kind: "data", id: "dl:cities", label: "Cities" });
+    expect(entries[0]).toMatchObject({
+      kind: "data",
+      id: "dl:cities",
+      label: "Cities",
+    });
     expect(useDataLayerFCStore.getState().get("dl:cities")).toEqual(sampleFC);
   });
 
@@ -287,7 +296,8 @@ describe("hydrate", () => {
     await hydrate(loaded, api);
 
     expect(api.addFiles).toHaveBeenCalledTimes(1);
-    const passed = (api.addFiles as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{
+    const passed = (api.addFiles as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as Array<{
       id: string;
       mimeType: string;
       dataURL: string;
@@ -332,13 +342,17 @@ describe("hydrate ∘ selectDocument round-trip", () => {
 
     const sceneElements: ReadonlyArray<SceneElement> = [sceneEl("el-A")];
     const { api } = makeAPI();
-    (api.getSceneElements as ReturnType<typeof vi.fn>).mockReturnValue(sceneElements);
+    (api.getSceneElements as ReturnType<typeof vi.fn>).mockReturnValue(
+      sceneElements,
+    );
 
     // Snapshot.
     const snap = selectDocument(api, useLayerRegistryStore.getState());
 
     // Wipe live state and rehydrate.
-    for (const id of useLayerRegistryStore.getState().entries.map((e) => e.id)) {
+    for (const id of useLayerRegistryStore
+      .getState()
+      .entries.map((e) => e.id)) {
       useLayerRegistryStore.getState().remove(id);
     }
     expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
@@ -363,8 +377,12 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     // Simulate the post-paste Excalidraw state: getFiles() returns a BinaryFiles
     // record keyed by file id, with the image's bytes as a base64 data URL.
     // PNG signature: 89 50 4E 47 0D 0A 1A 0A — first 8 bytes of any PNG.
-    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const originalDataURL = `data:image/png;base64,${btoa(String.fromCharCode(...pngBytes))}`;
+    const pngBytes = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    const originalDataURL = `data:image/png;base64,${btoa(
+      String.fromCharCode(...pngBytes),
+    )}`;
 
     const { api: api1 } = makeAPI();
     (api1.getFiles as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -389,7 +407,8 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     // addFiles must be invoked with a BinaryFileData whose dataURL byte-equals
     // the original (id, mimeType, bytes all preserved through Blob round-trip).
     expect(api2.addFiles).toHaveBeenCalledTimes(1);
-    const passed = (api2.addFiles as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{
+    const passed = (api2.addFiles as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as Array<{
       id: string;
       mimeType: string;
       dataURL: string;

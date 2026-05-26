@@ -85,7 +85,9 @@ export const ArrowTool: AtlasdrawTool = {
   },
 
   onPointerMove(e, ctx) {
-    if (previewId === null || tail === null) return;
+    if (previewId === null || tail === null) {
+      return;
+    }
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     ctx.excalidraw.updateElement(previewId, {
       geo: {
@@ -100,7 +102,9 @@ export const ArrowTool: AtlasdrawTool = {
   },
 
   onPointerUp(e, ctx) {
-    if (previewId === null || tail === null) return;
+    if (previewId === null || tail === null) {
+      return;
+    }
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     ctx.excalidraw.updateElement(previewId, {
       geo: {

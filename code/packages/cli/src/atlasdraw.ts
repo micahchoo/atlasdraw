@@ -8,6 +8,7 @@
 // `convert` (T11) and `render` (T12) — they should follow the same pattern.
 
 import { Command } from "commander";
+
 import { lintCommand } from "./commands/lint.js";
 import { convertCommand } from "./commands/convert.js";
 
@@ -26,7 +27,9 @@ program.parseAsync(process.argv).catch((err: unknown) => {
   // handler that throws something non-Commander. Surface verbatim with a
   // non-zero exit so the user (or CI) sees something useful.
   process.stderr.write(
-    `${(err as Error).name ?? "Error"}: ${(err as Error).message ?? String(err)}\n`,
+    `${(err as Error).name ?? "Error"}: ${
+      (err as Error).message ?? String(err)
+    }\n`,
   );
   process.exit(1);
 });

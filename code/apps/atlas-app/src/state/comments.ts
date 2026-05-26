@@ -114,12 +114,9 @@ export class CommentsLayer {
       const base = opts.wsUrl.replace(/\/+$/, "");
       // WebsocketProvider's first arg is the base URL; it joins `/${roomname}`.
       // We pass `/yjs` as the base so the final URL is /yjs/<docName>.
-      this._provider = new WebsocketProvider(
-        `${base}/yjs`,
-        docName,
-        this.doc,
-        { connect: true },
-      );
+      this._provider = new WebsocketProvider(`${base}/yjs`, docName, this.doc, {
+        connect: true,
+      });
     } else {
       this._provider = null;
     }
@@ -129,22 +126,32 @@ export class CommentsLayer {
     arr.observeDeep(() => {
       this._cachedSnapshot = this._compute();
       // Fire generic snapshot listeners.
-      for (const l of this._listeners) l(this._cachedSnapshot);
+      for (const l of this._listeners) {
+        l(this._cachedSnapshot);
+      }
       // Phase 6 A14b — addition listeners. We announce only comments
       // we've never seen before AND whose `createdAt` is newer than the
       // sync window (suppresses replay storm of pre-existing comments
       // when the relay sends the initial state).
       if (this._additionListeners.size > 0) {
         for (const c of this._cachedSnapshot) {
-          if (this._announcedIds.has(c.id)) continue;
+          if (this._announcedIds.has(c.id)) {
+            continue;
+          }
           this._announcedIds.add(c.id);
-          if (c.createdAt < this._syncedAt) continue;
-          for (const l of this._additionListeners) l(c);
+          if (c.createdAt < this._syncedAt) {
+            continue;
+          }
+          for (const l of this._additionListeners) {
+            l(c);
+          }
         }
       } else {
         // Even without listeners, mark seen ids so a late-binding listener
         // doesn't suddenly announce a flood of old comments.
-        for (const c of this._cachedSnapshot) this._announcedIds.add(c.id);
+        for (const c of this._cachedSnapshot) {
+          this._announcedIds.add(c.id);
+        }
       }
     });
 
@@ -152,7 +159,9 @@ export class CommentsLayer {
     this._cachedSnapshot = this._compute();
     // Treat any comments present at construction as "already synced" —
     // don't announce them later if an addition listener attaches.
-    for (const c of this._cachedSnapshot) this._announcedIds.add(c.id);
+    for (const c of this._cachedSnapshot) {
+      this._announcedIds.add(c.id);
+    }
   }
 
   /**
@@ -219,7 +228,9 @@ export class CommentsLayer {
     for (const [k, v] of Object.entries(row)) {
       if (k === "anchor") {
         const a = new Y.Map<unknown>();
-        for (const [ak, av] of Object.entries(v as object)) a.set(ak, av);
+        for (const [ak, av] of Object.entries(v as object)) {
+          a.set(ak, av);
+        }
         m.set("anchor", a);
       } else {
         m.set(k, v);
@@ -232,7 +243,9 @@ export class CommentsLayer {
   /** Flip `resolved` to true on the matching id. No-op if id not present. */
   resolve(commentId: string): void {
     const idx = this._indexOf(commentId);
-    if (idx === -1) return;
+    if (idx === -1) {
+      return;
+    }
     const m = this._array().get(idx);
     m.set("resolved", true);
   }
@@ -247,7 +260,9 @@ export class CommentsLayer {
    */
   delete(commentId: string): void {
     const idx = this._indexOf(commentId);
-    if (idx === -1) return;
+    if (idx === -1) {
+      return;
+    }
     this._array().delete(idx, 1);
   }
 
@@ -272,7 +287,9 @@ export class CommentsLayer {
   private _indexOf(commentId: string): number {
     const arr = this._array();
     for (let i = 0; i < arr.length; i++) {
-      if (arr.get(i).get("id") === commentId) return i;
+      if (arr.get(i).get("id") === commentId) {
+        return i;
+      }
     }
     return -1;
   }
@@ -305,7 +322,9 @@ export class CommentsLayer {
     // Lightweight uuid-shape — globally unique enough for Yjs row keys.
     // Avoids a `uuid` dep (constraint: no new deps).
     const rand = (): string =>
-      Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+      Math.floor(Math.random() * 0xffffffff)
+        .toString(16)
+        .padStart(8, "0");
     return `${rand()}-${rand()}`;
   }
 }

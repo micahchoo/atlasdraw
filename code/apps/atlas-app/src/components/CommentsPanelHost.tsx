@@ -16,13 +16,16 @@
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 
 import React, { useCallback } from "react";
+
 import { useCollab } from "../hooks/useCollab";
-import { CommentsPanel } from "./CommentsPanel";
+
 import {
   clearAnchorPicker,
   setAnchorMode,
   usePendingAnchor,
 } from "../state/comments-anchor-picker";
+
+import { CommentsPanel } from "./CommentsPanel";
 
 export function CommentsPanelHost(): React.JSX.Element {
   const { commentsLayer } = useCollab();

@@ -2,6 +2,7 @@
 // Phase 3 Wave 0 Task 1 — schema tests.
 
 import { describe, expect, it } from "vitest";
+
 import { ManifestSchema } from "./manifest-schema";
 
 const VALID_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
@@ -38,9 +39,9 @@ describe("ManifestSchema", () => {
 
   it("rejects ULID with forbidden Crockford characters (I/L/O/U)", () => {
     const bad = "01ARZ3NDEKTSV4RRFFQ69G5FAI"; // ends in I
-    expect(
-      ManifestSchema.safeParse({ ...baseManifest, id: bad }).success,
-    ).toBe(false);
+    expect(ManifestSchema.safeParse({ ...baseManifest, id: bad }).success).toBe(
+      false,
+    );
   });
 
   it("rejects when updatedAt < createdAt", () => {

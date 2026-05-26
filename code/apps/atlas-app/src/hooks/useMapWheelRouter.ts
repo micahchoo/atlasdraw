@@ -36,6 +36,7 @@
  */
 
 import { useEffect } from "react";
+
 import type maplibregl from "maplibre-gl";
 
 /** Canonical scrollZoom math: matches MapLibre's internal wheel-handler at
@@ -48,11 +49,15 @@ export function useMapWheelRouter(
   map: maplibregl.Map | null,
 ): void {
   useEffect(() => {
-    if (!container || !map) return;
+    if (!container || !map) {
+      return;
+    }
 
     const handleWheel = (e: WheelEvent) => {
       // Browser pinch-zoom (ctrl on Windows/Linux, meta on macOS) — let it through.
-      if (e.ctrlKey || e.metaKey) return;
+      if (e.ctrlKey || e.metaKey) {
+        return;
+      }
 
       e.preventDefault();
       e.stopPropagation();
@@ -61,7 +66,10 @@ export function useMapWheelRouter(
       const deltaY = e.deltaY * (e.deltaMode === 1 ? LINE_HEIGHT_PX : 1);
       const zoomDelta = -deltaY * ZOOM_SCALE;
       const rect = map.getCanvas().getBoundingClientRect();
-      const around = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
+      const around = map.unproject([
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+      ]);
       map.easeTo({
         zoom: map.getZoom() + zoomDelta,
         around,

@@ -99,7 +99,9 @@ export function pageDimensions(
 /** Parse `#rgb` or `#rrggbb` into pdf-lib rgb(). Defaults to a mid-grey on bad input. */
 function parseHexColor(hex: string): ReturnType<typeof rgb> {
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return rgb(0.5, 0.5, 0.5);
+  if (!m) {
+    return rgb(0.5, 0.5, 0.5);
+  }
   let body = m[1];
   if (body.length === 3) {
     body = body
@@ -123,7 +125,10 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   const idx = dataUrl.indexOf("base64,");
   if (idx === -1) {
     throw new Error(
-      `print-pdf: mapCanvas.toDataURL did not return a base64 JPEG (got: ${dataUrl.slice(0, 32)}…)`,
+      `print-pdf: mapCanvas.toDataURL did not return a base64 JPEG (got: ${dataUrl.slice(
+        0,
+        32,
+      )}…)`,
     );
   }
   const b64 = dataUrl.slice(idx + "base64,".length);
@@ -133,7 +138,9 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
       ? atob(b64)
       : Buffer.from(b64, "base64").toString("binary");
   const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  for (let i = 0; i < bin.length; i++) {
+    out[i] = bin.charCodeAt(i);
+  }
   return out;
 }
 
@@ -215,7 +222,13 @@ function drawScaleBar(
     borderWidth: 0.75,
   });
   // Tick labels.
-  page.drawText("0", { x, y: y - 10, size: 7, font, color: rgb(0.2, 0.2, 0.2) });
+  page.drawText("0", {
+    x,
+    y: y - 10,
+    size: 7,
+    font,
+    color: rgb(0.2, 0.2, 0.2),
+  });
   page.drawText("scale", {
     x: x + segW * 2 + 4,
     y: y - 2,
@@ -259,7 +272,14 @@ export async function exportPDF(opts: PrintOptions): Promise<Blob> {
   // gate with a structural cast — there's no public method that emits a
   // PDFString (literal) instead of a PDFHexString.
   const info = (
-    pdfDoc as unknown as { getInfoDict(): { set: (k: typeof PDFName.prototype, v: typeof PDFString.prototype) => void } }
+    pdfDoc as unknown as {
+      getInfoDict(): {
+        set: (
+          k: typeof PDFName.prototype,
+          v: typeof PDFString.prototype,
+        ) => void;
+      };
+    }
   ).getInfoDict();
   info.set(
     PDFName.of("Keywords"),
@@ -377,7 +397,9 @@ export async function exportPDF(opts: PrintOptions): Promise<Blob> {
       color: rgb(0.13, 0.13, 0.13),
     });
     row -= 12;
-    if (row < MARGIN) break; // overflow guard for v1
+    if (row < MARGIN) {
+      break;
+    } // overflow guard for v1
   }
 
   // ----- Scale bar (bottom-right) ----------------------------------------

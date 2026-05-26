@@ -157,7 +157,9 @@ const OCTET_STREAM_HEADERS = {
 const WORKSPACE_HEADER = "X-Workspace-ID";
 
 function joinUrl(base: string, path: string): string {
-  if (!base) return path;
+  if (!base) {
+    return path;
+  }
   return `${base.replace(/\/+$/, "")}${path}`;
 }
 
@@ -170,7 +172,9 @@ async function expectJsonOrThrow<T>(res: Response, op: string): Promise<T> {
       /* response body unreadable — surface status only */
     }
     throw new Error(
-      `[storage-http] ${op} failed: ${res.status} ${res.statusText}${detail ? ` — ${detail}` : ""}`,
+      `[storage-http] ${op} failed: ${res.status} ${res.statusText}${
+        detail ? ` — ${detail}` : ""
+      }`,
     );
   }
   return (await res.json()) as T;
@@ -197,7 +201,9 @@ export function createHttpStorageClient(
     extra?: Record<string, string>,
   ): Record<string, string> | undefined {
     const ws = getWorkspaceId();
-    if (!ws) return extra;
+    if (!ws) {
+      return extra;
+    }
     return { ...(extra ?? {}), [WORKSPACE_HEADER]: ws };
   }
 
@@ -212,20 +218,28 @@ export function createHttpStorageClient(
     },
 
     async getMap(id) {
-      const res = await fetchImpl(joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`), {
-        method: "GET",
-        headers: withWorkspaceHeader(),
-      });
-      if (res.status === 404) return null;
+      const res = await fetchImpl(
+        joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`),
+        {
+          method: "GET",
+          headers: withWorkspaceHeader(),
+        },
+      );
+      if (res.status === 404) {
+        return null;
+      }
       return expectJsonOrThrow<MapRecord>(res, "getMap");
     },
 
     async updateMap(id, blob) {
-      const res = await fetchImpl(joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`), {
-        method: "PUT",
-        headers: withWorkspaceHeader(OCTET_STREAM_HEADERS),
-        body: blob as BodyInit,
-      });
+      const res = await fetchImpl(
+        joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`),
+        {
+          method: "PUT",
+          headers: withWorkspaceHeader(OCTET_STREAM_HEADERS),
+          body: blob as BodyInit,
+        },
+      );
       return expectJsonOrThrow<MapRecord>(res, "updateMap");
     },
 
@@ -257,7 +271,9 @@ export function createHttpStorageClient(
         joinUrl(baseUrl, `/share/${encodeURIComponent(token)}`),
         { method: "GET", headers: withWorkspaceHeader() },
       );
-      if (res.status === 404 || res.status === 410) return null;
+      if (res.status === 404 || res.status === 410) {
+        return null;
+      }
       // T13: T8/T9 will consume the { map, mode } body. For autosave we
       // never call resolveToken — the contract surface is here for
       // interface completeness only.
@@ -270,7 +286,8 @@ export function createHttpStorageClient(
         token,
         map_id: body.map.id,
         mode: body.mode,
-        expires_at: body.expires_at ?? new Date(Date.now() + 7 * 86400_000).toISOString(),
+        expires_at:
+          body.expires_at ?? new Date(Date.now() + 7 * 86400_000).toISOString(),
         created_at: body.map.created_at,
       };
     },
@@ -280,8 +297,12 @@ export function createHttpStorageClient(
         joinUrl(baseUrl, `/share/${encodeURIComponent(token)}/blob`),
         { method: "GET", headers: withWorkspaceHeader() },
       );
-      if (res.status === 404) return null;
-      if (res.status === 410) throw new ShareExpiredError();
+      if (res.status === 404) {
+        return null;
+      }
+      if (res.status === 410) {
+        throw new ShareExpiredError();
+      }
       if (!res.ok) {
         throw new Error(
           `[storage-http] getShareBlob failed: ${res.status} ${res.statusText}`,
@@ -295,7 +316,9 @@ export function createHttpStorageClient(
       // is configured (FOSS edition / `getWorkspaceId()` returns nullish),
       // there is no `/api/workspaces` route to call. Returning `[]` keeps
       // the `WorkspaceSwitcher` consumer trivially render-nothing-safe.
-      if (!getWorkspaceId()) return [];
+      if (!getWorkspaceId()) {
+        return [];
+      }
       const res = await fetchImpl(joinUrl(baseUrl, "/api/workspaces"), {
         method: "GET",
         headers: withWorkspaceHeader(),

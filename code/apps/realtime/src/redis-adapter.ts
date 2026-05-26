@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — optional Redis adapter for multi-instance scaling.
 //
@@ -8,9 +9,10 @@
 // Channel prefix: atlasdraw:sio (set via key option on createAdapter).
 // Reserved naming: atlasdraw:yjs:* for Phase 6 Yjs persistence.
 
-import type { Server as SocketIOServer } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { Redis } from "ioredis";
+
+import type { Server as SocketIOServer } from "socket.io";
 
 /**
  * Optionally attach the Redis pub/sub adapter to the Socket.IO server.
@@ -23,7 +25,7 @@ import { Redis } from "ioredis";
  *   process.
  */
 export function attachRedisAdapterIfConfigured(io: SocketIOServer): void {
-  const redisUrl = process.env["REDIS_URL"];
+  const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
     console.log("[realtime] Redis adapter disabled");
     return;
@@ -40,9 +42,9 @@ export function attachRedisAdapterIfConfigured(io: SocketIOServer): void {
     console.warn("[realtime] Redis sub client error:", err.message);
   });
 
-  io.adapter(
-    createAdapter(pubClient, subClient, { key: "atlasdraw:sio" }),
-  );
+  io.adapter(createAdapter(pubClient, subClient, { key: "atlasdraw:sio" }));
 
-  console.log("[realtime] Redis adapter attached — channel prefix atlasdraw:sio");
+  console.log(
+    "[realtime] Redis adapter attached — channel prefix atlasdraw:sio",
+  );
 }

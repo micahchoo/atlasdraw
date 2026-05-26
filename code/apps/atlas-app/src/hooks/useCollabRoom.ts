@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from "react";
 import { parseRoomFragment } from "@atlasdraw/protocol";
+
 import type { CollabState } from "../state/collab";
 
 export interface UseCollabRoomResult {
@@ -44,7 +45,9 @@ export interface UseCollabRoomResult {
  */
 export function useCollabRoom(collabState: CollabState): UseCollabRoomResult {
   const [isConnecting, setIsConnecting] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") {
+      return false;
+    }
     const hash = window.location.hash;
     return hash.startsWith("#room:") && collabState.active;
   });
@@ -52,7 +55,9 @@ export function useCollabRoom(collabState: CollabState): UseCollabRoomResult {
 
   useEffect(() => {
     // SSR guard — no hash, no work.
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const hash = window.location.hash;
     if (!hash.startsWith("#room:")) {
@@ -70,7 +75,9 @@ export function useCollabRoom(collabState: CollabState): UseCollabRoomResult {
     void (async () => {
       try {
         const roomKey = await parseRoomFragment(hash);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         if (roomKey === null) {
           setError("Invalid room link");
           setIsConnecting(false);
@@ -82,7 +89,9 @@ export function useCollabRoom(collabState: CollabState): UseCollabRoomResult {
         collabState.connect(roomKey.roomId, roomKey.key);
         setIsConnecting(false);
       } catch (e) {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setError(e instanceof Error ? e.message : "Failed to join room");
         setIsConnecting(false);
       }

@@ -12,9 +12,11 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";
+
+import styles from "../styles/CommentsPanel.module.css";
+
 import type { CommentAnchor } from "@atlasdraw/protocol";
 import type { Comment, CommentsLayer } from "../state/comments";
-import styles from "../styles/CommentsPanel.module.css";
 
 // ---------------------------------------------------------------------------
 // External controller hook handshake
@@ -103,19 +105,19 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
   const [draftText, setDraftText] = useState("");
   const [anchorMode, setAnchorMode] = useState<"map" | "element">("map");
 
-  const visible = showResolved
-    ? comments
-    : comments.filter((c) => !c.resolved);
+  const visible = showResolved ? comments : comments.filter((c) => !c.resolved);
 
   const canSubmit =
-    !!commentsLayer &&
-    draftText.trim().length > 0 &&
-    pendingAnchor != null;
+    !!commentsLayer && draftText.trim().length > 0 && pendingAnchor != null;
 
   const submit = (): void => {
-    if (!commentsLayer || !pendingAnchor) return;
+    if (!commentsLayer || !pendingAnchor) {
+      return;
+    }
     const text = draftText.trim();
-    if (!text) return;
+    if (!text) {
+      return;
+    }
     commentsLayer.addComment({
       text,
       anchor: pendingAnchor,
@@ -203,9 +205,7 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
               type="button"
               className={[
                 styles.composerToggleBtn,
-                anchorMode === "element"
-                  ? styles.composerToggleBtnActive
-                  : "",
+                anchorMode === "element" ? styles.composerToggleBtnActive : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -278,9 +278,7 @@ function CommentRow(props: CommentRowProps): React.JSX.Element {
     >
       <div className={styles.rowHeader}>
         <span className={styles.authorName}>{c.authorName || "Anon"}</span>
-        <span className={styles.timestamp}>
-          {formatTimestamp(c.createdAt)}
-        </span>
+        <span className={styles.timestamp}>{formatTimestamp(c.createdAt)}</span>
       </div>
       <div className={styles.text}>{c.text}</div>
       <span className={anchorClassName} aria-label="Anchor type">

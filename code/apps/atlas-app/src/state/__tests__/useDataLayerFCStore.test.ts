@@ -6,9 +6,10 @@
 // in `beforeEach` — this also exercises the action.
 
 import { beforeEach, describe, expect, it } from "vitest";
-import type { FeatureCollection } from "geojson";
 
 import { useDataLayerFCStore } from "../useDataLayerFCStore";
+
+import type { FeatureCollection } from "geojson";
 
 const makeFc = (count: number): FeatureCollection => ({
   type: "FeatureCollection",

@@ -14,6 +14,7 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React from "react";
+
 import { useCollab } from "../hooks/useCollab";
 import styles from "../styles/PresenceList.module.css";
 
@@ -21,8 +22,10 @@ import styles from "../styles/PresenceList.module.css";
  * Truncate a string to `max` characters, appending "..." when exceeded.
  */
 function truncate(name: string, max = 12): string {
-  if (name.length <= max) return name;
-  return name.slice(0, max) + "…";
+  if (name.length <= max) {
+    return name;
+  }
+  return `${name.slice(0, max)}…`;
 }
 
 /**
@@ -38,7 +41,9 @@ export function PresenceList() {
   const entries = Array.from(peers.values());
   const count = entries.length;
 
-  if (count === 0) return null;
+  if (count === 0) {
+    return null;
+  }
 
   const compact = count >= 4;
 
@@ -58,8 +63,7 @@ export function PresenceList() {
     );
   }
 
-  const headerText =
-    count === 1 ? "1 collaborator" : `${count} collaborators`;
+  const headerText = count === 1 ? "1 collaborator" : `${count} collaborators`;
 
   return (
     <div className={styles.root} data-testid="presence-list">

@@ -3,11 +3,14 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
-import { CommentAnchor } from "../CommentAnchor";
+
 import {
   COMMENT_SCHEMA_VERSION,
   type CommentAnchor as CommentAnchorKind,
 } from "@atlasdraw/protocol";
+
+import { CommentAnchor } from "../CommentAnchor";
+
 import type { Comment } from "../../state/comments";
 
 function makeComment(
@@ -42,10 +45,7 @@ describe("CommentAnchor", () => {
   });
 
   it("renders with element-anchor data attribute", () => {
-    const c = makeComment(
-      { id: "c2" },
-      { kind: "element", elementId: "el-1" },
-    );
+    const c = makeComment({ id: "c2" }, { kind: "element", elementId: "el-1" });
     render(<CommentAnchor comment={c} screenX={10} screenY={20} />);
     const node = screen.getByTestId(`comment-anchor-${c.id}`) as HTMLElement;
     expect(node.getAttribute("data-anchor-kind")).toBe("element");
@@ -88,8 +88,6 @@ describe("CommentAnchor", () => {
       />,
     );
     fireEvent.click(screen.getByTestId(`comment-anchor-button-${c.id}`));
-    expect(
-      screen.queryByTestId(`comment-popover-resolve-${c.id}`),
-    ).toBeNull();
+    expect(screen.queryByTestId(`comment-popover-resolve-${c.id}`)).toBeNull();
   });
 });

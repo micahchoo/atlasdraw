@@ -3,15 +3,15 @@
 // wrong-key rejection, and ciphertext uniqueness.
 
 import { describe, it, expect } from "vitest";
+
 import { encryptUpdate, decryptUpdate } from "../src/yjs-crypto";
 
 /** Convenience: generate a fresh 256-bit AES-GCM key. */
 async function generateKey(): Promise<CryptoKey> {
-  return crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
+  return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
+    "encrypt",
+    "decrypt",
+  ]);
 }
 
 describe("yjs-crypto", () => {
