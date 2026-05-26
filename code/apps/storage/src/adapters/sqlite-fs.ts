@@ -4,10 +4,15 @@
 // "single-binary" self-host path. All five StorageClient methods land here;
 // share endpoints (T4) will consume createShareToken / resolveToken later.
 
+import * as fs from "node:fs";
+
+import * as path from "node:path";
+
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
-import * as fs from "node:fs";
-import * as path from "node:path";
+
+import { ID_RE, SHARE_TTL_MS } from "../constants";
+
 import type {
   MapRecord,
   ShareToken,
@@ -16,9 +21,6 @@ import type {
   WorkspacePlan,
   WorkspaceScope,
 } from "../types";
-
-const ID_RE = /^[A-Za-z0-9_-]{21}$/;
-const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface MapRow {
   id: string;
@@ -98,7 +100,9 @@ export function createSqliteFsAdapter(opts: {
       db.exec(`ALTER TABLE ${table} ADD COLUMN workspace_id TEXT`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes("duplicate column name")) throw err;
+      if (!msg.includes("duplicate column name")) {
+        throw err;
+      }
     }
   }
 
@@ -121,9 +125,7 @@ export function createSqliteFsAdapter(opts: {
     `INSERT INTO workspaces (id, name, plan, stripe_customer_id, created_at)
      VALUES (?, ?, ?, ?, ?)`,
   );
-  const selectWorkspace = db.prepare(
-    `SELECT * FROM workspaces WHERE id = ?`,
-  );
+  const selectWorkspace = db.prepare(`SELECT * FROM workspaces WHERE id = ?`);
   const selectAllWorkspaces = db.prepare(
     `SELECT * FROM workspaces ORDER BY created_at ASC`,
   );
@@ -174,10 +176,7 @@ export function createSqliteFsAdapter(opts: {
   }
 
   return {
-    async createMap(
-      blob: Buffer,
-      scope?: WorkspaceScope,
-    ): Promise<MapRecord> {
+    async createMap(blob: Buffer, scope?: WorkspaceScope): Promise<MapRecord> {
       const id = nanoid(21);
       const now = new Date().toISOString();
       const blobRef = `blobs/${id}.atlasdraw`;
@@ -334,6 +333,10 @@ export function createSqliteFsAdapter(opts: {
         | WorkspaceRow
         | undefined;
       return row ? rowToWorkspace(row) : null;
+    },
+
+    async close(): Promise<void> {
+      db.close();
     },
   };
 }

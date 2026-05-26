@@ -9,10 +9,10 @@
 // `createMap` is scoped to that workspace and a `workspace_scoped` event
 // emits via the request's pino logger per ADR-0011.
 
+import { ID_RE } from "../constants";
+
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { StorageClient } from "../types";
-
-const ID_RE = /^[A-Za-z0-9_-]{21}$/;
 
 interface IdParams {
   id: string;

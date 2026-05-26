@@ -16,14 +16,10 @@
 // createShareToken). T4 only validates inputs, formats response URLs,
 // and enforces expiry/orphaned-token semantics.
 
+import { ID_RE } from "../constants";
+
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { StorageClient } from "../types";
-
-// nanoid v3 default alphabet: A-Z a-z 0-9 _ -; default size 21. Both map
-// ids and share tokens are minted via nanoid(21), so the same regex
-// gates both. Inline-copy from routes/maps.ts on purpose — see T4 scrub
-// note (do not refactor maps.ts in this task).
-const ID_RE = /^[A-Za-z0-9_-]{21}$/;
 
 interface IdParams {
   id: string;

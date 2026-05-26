@@ -121,4 +121,6 @@ export interface StorageClient {
   findWorkspaceByStripeCustomerId(
     customerId: string,
   ): Promise<Workspace | null>;
+  /** Gracefully close underlying connections (DB pools, blob clients). */
+  close(): Promise<void>;
 }

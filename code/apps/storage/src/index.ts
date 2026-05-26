@@ -6,6 +6,7 @@
 
 import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
+
 import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
@@ -34,8 +35,8 @@ async function main(): Promise<void> {
       dsn: config.SENTRY_DSN,
       beforeSend(event) {
         if (event.request?.headers) {
-          delete event.request.headers["authorization"];
-          delete event.request.headers["Authorization"];
+          delete event.request.headers.authorization;
+          delete event.request.headers.Authorization;
         }
         if (event.user?.ip_address) {
           delete event.user.ip_address;
@@ -106,16 +107,37 @@ async function main(): Promise<void> {
     siteUrl: config.SITE_URL,
   });
 
+  // Wire Sentry into Fastify error handling. Sentry is opt-in (no-op when
+  // SENTRY_DSN is unset); captureException is a no-op if init was skipped.
+  app.setErrorHandler((error, _request, reply) => {
+    Sentry.captureException(error);
+    reply.status(error.statusCode || 500).send({
+      error: error.message || "Internal Server Error",
+    });
+  });
+
   await app.listen({ host: "0.0.0.0", port: config.PORT });
   app.log.info(
     `Storage started in ${config.STORAGE_MODE} mode on :${config.PORT}`,
   );
+
+  // Graceful shutdown: close the adapter (DB pools, blob clients) then
+  // close the HTTP server so in-flight requests drain before exit.
+  const shutdown = async (signal: string) => {
+    app.log.info(`Received ${signal} — shutting down`);
+    await client.close();
+    await app.close();
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 if (require.main === module) {
   main().catch((err) => {
     // eslint-disable-next-line no-console
     console.error(err);
+    Sentry.captureException(err);
     process.exit(1);
   });
 }

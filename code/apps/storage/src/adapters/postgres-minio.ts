@@ -12,6 +12,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { nanoid } from "nanoid";
 import { Pool } from "pg";
+
+import { ID_RE, SHARE_TTL_MS } from "../constants";
+
 import type {
   MapRecord,
   ShareToken,
@@ -22,8 +25,6 @@ import type {
 } from "../types";
 
 const BUCKET = "atlasdraw-maps";
-const ID_RE = /^[A-Za-z0-9_-]{21}$/;
-const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface MapRow {
   id: string;
@@ -186,10 +187,7 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   return {
-    async createMap(
-      blob: Buffer,
-      scope?: WorkspaceScope,
-    ): Promise<MapRecord> {
+    async createMap(blob: Buffer, scope?: WorkspaceScope): Promise<MapRecord> {
       await ensureSchema();
       const id = nanoid(21);
       const blobRef = `maps/${id}.atlasdraw`;
@@ -410,6 +408,10 @@ export function createPostgresMinioAdapter(opts: {
         [customerId],
       );
       return res.rows[0] ? rowToWorkspace(res.rows[0]) : null;
+    },
+
+    async close(): Promise<void> {
+      await pool.end();
     },
   };
 }
