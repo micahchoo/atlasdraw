@@ -1,0 +1,50 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Lines below are suggestions — uncomment to activate.
+# Use ! prefix to force-include something excluded by defaults.
+#
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, *.lock, *.min.js, etc.
+#
+# --- From .gitignore (uncomment to exclude) ---
+
+# .yarn/cache
+# .yarn/unplugged
+# .yarn/build-state.yml
+# .yarn/install-state.gz
+# *.tgz
+# *.tsbuildinfo
+# .env
+# .env.local
+# .env.*.local
+# .envrc
+# logs/
+# .DS_Store
+# .history/
+# .eslintcache
+# .foxhound/
+# .claude/.skill-invocation-log
+# .claude/SUGGESTED_SKILLS.md
+# anti-pattern-report.txt
+# firebase/
+# .vercel/
+# .playwright-cli/
+# .playwright/
+# yarn--*/
+# playwright-transform-cache-*/
+# v8-compile-cache-*/
+# autoresearch-metrics.json
+# hypotheses.jsonl
+# .claude/.deps-index/
+
+# --- Detected directories (uncomment to exclude) ---
+
+# tests/
+# docs/
+# scripts/
+
+# --- Test file patterns (uncomment to exclude) ---
+
+# *.test.*
+# *.spec.*
+# *.snap
