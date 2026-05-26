@@ -240,6 +240,18 @@ export class CommentsLayer {
     return id;
   }
 
+  /** Replace the comment text. No-op if id not present or text is empty. */
+  editComment(commentId: string, newText: string): void {
+    if (!newText.trim()) {
+      return;
+    }
+    const idx = this._indexOf(commentId);
+    if (idx === -1) {
+      return;
+    }
+    this._array().get(idx).set("text", newText.trim());
+  }
+
   /** Flip `resolved` to true on the matching id. No-op if id not present. */
   resolve(commentId: string): void {
     const idx = this._indexOf(commentId);

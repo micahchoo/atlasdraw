@@ -187,10 +187,16 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
 
     reorder: (id, newOrder) =>
       set((s) => {
-        const e = s.entries.find((x) => x.id === id);
-        if (e) {
-          e.order = newOrder;
+        const clamped = Math.max(0, Math.min(newOrder, s.entries.length - 1));
+        const from = s.entries.findIndex((x) => x.id === id);
+        if (from === -1) {
+          return;
         }
+        const [entry] = s.entries.splice(from, 1);
+        s.entries.splice(clamped, 0, entry);
+        s.entries.forEach((e, i) => {
+          e.order = i;
+        });
       }),
 
     updateStyle: (id, patch) =>

@@ -182,8 +182,8 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
           padding: "6px 12px",
           border: "1px solid #adb5bd",
           borderRadius: 4,
-          background: "#ffffff",
-          color: "#212529",
+          background: "var(--ad-surface-raised, #ffffff)",
+          color: "var(--ad-ink, #212529)",
           fontSize: 14,
           fontWeight: 600,
           cursor: "pointer",
@@ -200,7 +200,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             style={{
               display: "inline-block",
               padding: "1px 6px",
-              borderRadius: 3,
+              borderRadius: "var(--ad-radius-sm, 3px)",
               background: PLAN_BADGE_BG[active.plan],
               color: PLAN_BADGE_FG[active.plan],
               fontSize: 11,
@@ -229,11 +229,11 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             overflowY: "auto",
             padding: 4,
             listStyle: "none",
-            background: "#ffffff",
+            background: "var(--ad-surface-raised, #ffffff)",
             border: "1px solid #ccc",
             borderRadius: 4,
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.12)",
-            color: "#212529",
+            color: "var(--ad-ink, #212529)",
           }}
         >
           {loadError && (
@@ -241,7 +241,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
               data-testid="workspace-switcher-error"
               style={{
                 padding: "4px 8px",
-                color: "#868e96",
+                color: "var(--ad-ink-tertiary, #868e96)",
                 fontSize: 13,
               }}
             >
@@ -253,7 +253,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
               data-testid="workspace-switcher-empty"
               style={{
                 padding: "4px 8px",
-                color: "#868e96",
+                color: "var(--ad-ink-tertiary, #868e96)",
                 fontSize: 13,
               }}
             >
@@ -280,11 +280,11 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     padding: "6px 8px",
                     border: "none",
                     background: isActive ? "#f8f9fa" : "transparent",
-                    color: "#212529",
+                    color: "var(--ad-ink, #212529)",
                     fontSize: 13,
                     textAlign: "left",
                     cursor: "pointer",
-                    borderRadius: 3,
+                    borderRadius: "var(--ad-radius-sm, 3px)",
                   }}
                 >
                   <span style={{ display: "flex", flexDirection: "column" }}>
@@ -306,7 +306,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                         }}
                         style={{
                           fontSize: 11,
-                          color: "#1971c2",
+                          color: "var(--ad-accent, #1971c2)",
                           textDecoration: "underline",
                         }}
                       >
@@ -319,7 +319,7 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
                     style={{
                       display: "inline-block",
                       padding: "1px 6px",
-                      borderRadius: 3,
+                      borderRadius: "var(--ad-radius-sm, 3px)",
                       background: PLAN_BADGE_BG[ws.plan],
                       color: PLAN_BADGE_FG[ws.plan],
                       fontSize: 11,

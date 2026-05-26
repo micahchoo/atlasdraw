@@ -1,0 +1,184 @@
+/* ExportDialog — unified export surface. z:100.
+ * Uses --ad-* design tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  width: 500px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ad-space-3) var(--ad-space-4);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.title {
+  font-family: var(--ad-font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ad-ink-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--ad-radius-sm);
+}
+
+.closeBtn:hover {
+  background: var(--ad-surface-inset);
+  color: var(--ad-ink);
+}
+
+/* Format cards */
+.formatRow {
+  display: flex;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-4) var(--ad-space-4) 0;
+}
+
+.formatCard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ad-space-1);
+  padding: var(--ad-space-3);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  cursor: pointer;
+  background: var(--ad-surface-raised);
+}
+
+.formatCard:hover {
+  border-color: var(--ad-accent);
+}
+
+.formatCardActive {
+  border-color: var(--ad-accent);
+  background: var(--ad-accent-subtle);
+}
+
+.formatIcon {
+  font-size: 20px;
+}
+
+.formatLabel {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.formatHint {
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+}
+
+/* Settings area */
+.settings {
+  padding: var(--ad-space-4);
+  border-top: 1px solid var(--ad-hairline);
+  margin-top: var(--ad-space-3);
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ad-space-1) 0;
+}
+
+.settingLabel {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ad-ink);
+}
+
+.settingControl {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+}
+
+.settingHint {
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  color: var(--ad-ink-tertiary);
+  margin-top: 2px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-3) var(--ad-space-4);
+  border-top: 1px solid var(--ad-hairline);
+}
+
+.cancelBtn {
+  padding: var(--ad-space-compact) var(--ad-space-4);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  background: var(--ad-surface-inset);
+}
+
+.exportBtn {
+  padding: var(--ad-space-compact) var(--ad-space-4);
+  border: 1px solid var(--ad-accent);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.exportBtn:hover {
+  background: var(--ad-accent-hover);
+}

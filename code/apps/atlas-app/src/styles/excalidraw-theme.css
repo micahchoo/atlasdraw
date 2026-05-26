@@ -1,0 +1,106 @@
+/* Excalidraw vendored-theme override.
+ *
+ * !important is load-bearing here: Excalidraw dynamically injects its CSS
+ * custom properties at component mount time (via Vite CSS modules), which
+ * lands AFTER our static import in main.tsx. Without !important, Excalidraw's
+ * values win the cascade and our vellum + blueprint palette never appears.
+ *
+ * Target: .excalidraw scoped — only affects Excalidraw's chrome surfaces.
+ * Atlas-side overlays use --ad-* tokens directly from :root.
+ * ------------------------------------------------------------------------- */
+
+.excalidraw {
+  /* --- Surface — warm vellum paper, not cold digital white -------------- */
+  --island-bg-color: var(--ad-surface-raised) !important;
+  --sidebar-bg-color: var(--ad-surface) !important;
+  --popup-bg-color: var(--ad-surface-raised) !important;
+  --popup-secondary-bg-color: var(--ad-surface-inset) !important;
+  --input-bg-color: var(--ad-surface-inset) !important;
+  --input-hover-bg-color: var(--ad-surface-inset) !important;
+  --overlay-bg-color: var(--ad-surface-raised) !important;
+  --default-bg-color: var(--ad-surface) !important;
+
+  /* --- Text — warm ink, not cool Bootstrap grays ------------------------ */
+  --text-primary-color: var(--ad-ink) !important;
+  --input-label-color: var(--ad-ink-secondary) !important;
+  --popup-text-color: var(--ad-ink) !important;
+  --popup-text-inverted-color: var(--ad-ink-inverse) !important;
+  --color-on-surface: var(--ad-ink) !important;
+  --color-muted: var(--ad-ink-tertiary) !important;
+  --color-muted-darker: var(--ad-ink-secondary) !important;
+  --color-muted-darkest: var(--ad-ink) !important;
+  --keybinding-color: var(--ad-ink-tertiary) !important;
+
+  /* --- Borders — hairlines, not harsh Bootstrap #adb5bd ---------------- */
+  --default-border-color: var(--ad-rule) !important;
+  --sidebar-border-color: var(--ad-hairline) !important;
+  --dialog-border-color: var(--ad-rule) !important;
+  --input-border-color: var(--ad-rule) !important;
+  --color-border-outline: var(--ad-rule) !important;
+  --color-border-outline-variant: var(--ad-hairline) !important;
+
+  /* --- Accent — blueprint blue replaces Excalidraw purple --------------- */
+  --color-primary: var(--ad-accent) !important;
+  --color-primary-hover: var(--ad-accent-hover) !important;
+  --color-primary-darker: var(--ad-accent-hover) !important;
+  --color-primary-darkest: #0d3b6e !important;
+  --color-primary-light: var(--ad-accent-subtle) !important;
+  --color-primary-light-darker: #c8ddf5 !important;
+  --color-surface-primary-container: var(--ad-accent-subtle) !important;
+  --color-on-primary-container: var(--ad-accent) !important;
+  --color-brand-hover: var(--ad-accent-hover) !important;
+  --color-brand-active: var(--ad-accent) !important;
+  --link-color: var(--ad-accent) !important;
+  --link-color-hover: var(--ad-accent-hover) !important;
+  --link-color-active: var(--ad-accent-hover) !important;
+  --focus-highlight-color: var(--ad-focus-ring) !important;
+  --color-selection: rgba(25, 113, 194, 0.25) !important;
+
+  /* --- Semantic — aligned with --ad-danger/caution/confirm -------------- */
+  --color-danger: var(--ad-danger) !important;
+  --color-danger-dark: #c0392b !important;
+  --color-danger-darker: #a82020 !important;
+  --color-danger-darkest: #8b0000 !important;
+  --color-danger-text: var(--ad-danger) !important;
+  --color-danger-background: #fce4e4 !important;
+  --color-danger-icon-background: #fce4e4 !important;
+  --color-danger-icon-color: var(--ad-danger) !important;
+
+  --color-warning: var(--ad-caution) !important;
+  --color-warning-dark: #cc6600 !important;
+  --color-warning-darker: #b35900 !important;
+  --color-warning-darkest: #994d00 !important;
+  --color-text-warning: var(--ad-caution) !important;
+  --color-warning-background: #fff3e0 !important;
+  --color-warning-icon-background: #fff3e0 !important;
+  --color-warning-icon-color: var(--ad-caution) !important;
+
+  --color-success: var(--ad-confirm) !important;
+  --color-success-darker: #277a38 !important;
+  --color-success-darkest: #1e5e2b !important;
+  --color-success-text: var(--ad-confirm) !important;
+  --color-success-contrast: var(--ad-confirm) !important;
+  --color-success-contrast-hover: #277a38 !important;
+  --color-success-contrast-active: #1e5e2b !important;
+
+  /* --- Interaction states ------------------------------------------------ */
+  --button-hover-bg: var(--ad-surface-inset) !important;
+  --button-active-bg: var(--ad-accent-subtle) !important;
+  --button-active-border: var(--ad-accent) !important;
+  --button-gray-1: var(--ad-surface) !important;
+  --button-gray-2: var(--ad-surface-inset) !important;
+  --button-gray-3: var(--ad-ink-tertiary) !important;
+  --color-surface-low: var(--ad-surface) !important;
+  --color-surface-mid: var(--ad-surface-inset) !important;
+  --color-surface-high: #e9e5df !important;
+  --color-surface-lowest: var(--ad-surface) !important;
+  --color-disabled: var(--ad-ink-tertiary) !important;
+
+  /* --- Misc — shadows, radius, scrollbar -------------------------------- */
+  --shadow-island: var(--ad-shadow-tracing) !important;
+  --modal-shadow: var(--ad-shadow-raised) !important;
+  --border-radius-lg: var(--ad-radius-lg) !important;
+  --border-radius-md: var(--ad-radius-md) !important;
+  --scrollbar-thumb: var(--ad-ink-tertiary) !important;
+  --scrollbar-thumb-hover: var(--ad-ink-secondary) !important;
+}

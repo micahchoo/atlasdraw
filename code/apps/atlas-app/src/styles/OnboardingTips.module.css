@@ -1,0 +1,81 @@
+/* OnboardingTips — first-run tooltip walkthrough. z:100.
+ * Uses --ad-* design tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.tip {
+  position: fixed;
+  z-index: 101;
+  width: 260px;
+  padding: var(--ad-space-4);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+}
+
+.title {
+  margin: 0 0 var(--ad-space-1);
+  font-family: var(--ad-font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.body {
+  margin: 0 0 var(--ad-space-3);
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.steps {
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+}
+
+.buttons {
+  display: flex;
+  gap: var(--ad-space-1);
+}
+
+.btn {
+  padding: 4px var(--ad-space-3);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  background: var(--ad-surface-raised);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--ad-ink);
+}
+
+.btn:hover {
+  background: var(--ad-surface-inset);
+}
+
+.btnPrimary {
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+  border-color: var(--ad-accent);
+}
+
+.btnPrimary:hover {
+  background: var(--ad-accent-hover);
+}

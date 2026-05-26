@@ -188,8 +188,8 @@ export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
           left: 0,
           right: 0,
           padding: "0.5rem 1rem",
-          background: "#1971c2",
-          color: "#fff",
+          background: "var(--ad-accent, #1971c2)",
+          color: "var(--ad-ink-inverse, #fff)",
           fontSize: "0.8125rem",
           fontWeight: 600,
           zIndex: 1000,
@@ -226,7 +226,7 @@ const MessageScreen: React.FC<{
       width: "100%",
       height: "100%",
       padding: "2rem",
-      color: "#212529",
+      color: "var(--ad-ink, #212529)",
       textAlign: "center",
     }}
   >
@@ -236,7 +236,13 @@ const MessageScreen: React.FC<{
       {title}
     </h2>
     {body && (
-      <p style={{ margin: 0, color: "#495057", fontSize: "0.875rem" }}>
+      <p
+        style={{
+          margin: 0,
+          color: "var(--ad-ink-secondary, #495057)",
+          fontSize: "0.875rem",
+        }}
+      >
         {body}
       </p>
     )}

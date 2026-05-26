@@ -19,6 +19,8 @@
 //   anything else        → MapEditor (the editor)
 
 import { AriaAnnouncer } from "./components/AriaAnnouncer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/ToastProvider";
 import { BillingPage } from "./components/BillingPage";
 import { MapEditor } from "./components/MapEditor";
 import { ShareView } from "./components/ShareView";
@@ -90,11 +92,15 @@ function pickView() {
 
 export function App() {
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      {pickView()}
-      {/* Phase 6 A14b — single hidden aria-live region for screen-reader
-          announcements. See components/AriaAnnouncer.tsx. */}
-      <AriaAnnouncer />
-    </div>
+    <ErrorBoundary>
+      <ToastProvider>
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          {pickView()}
+          {/* Phase 6 A14b — single hidden aria-live region for screen-reader
+              announcements. See components/AriaAnnouncer.tsx. */}
+          <AriaAnnouncer />
+        </div>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

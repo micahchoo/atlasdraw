@@ -18,7 +18,7 @@
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T12
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React from "react";
+import React, { useCallback, useRef, useState } from "react";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 
@@ -112,6 +112,24 @@ function IconChevronDown() {
   );
 }
 
+function IconGripVertical() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="5" cy="3" r="1.2" />
+      <circle cx="11" cy="3" r="1.2" />
+      <circle cx="5" cy="8" r="1.2" />
+      <circle cx="11" cy="8" r="1.2" />
+      <circle cx="5" cy="13" r="1.2" />
+      <circle cx="11" cy="13" r="1.2" />
+    </svg>
+  );
+}
+
 function joinClass(...names: Array<string | false | null | undefined>): string {
   return names.filter(Boolean).join(" ");
 }
@@ -127,19 +145,164 @@ type Mutators = {
   openStyle: (id: string) => void;
 };
 
+interface LayerRowProps {
+  entry: LayerRegistryEntry;
+  mutators: Mutators;
+  allIds: string[];
+}
+
+/**
+ * Wraps a layer row with HTML5 drag-and-drop reorder support.
+ * The drag handle (grip icon) initiates the drag. Drop target is the row
+ * itself — dropping above the midpoint sends the dragged item before the
+ * target; below the midpoint sends it after.
+ *
+ * Keyboard reorder via up/down arrow buttons is preserved as a fallback.
+ */
+function SortableRow({
+  entry,
+  mutators,
+  allIds,
+  children,
+}: LayerRowProps & { children: React.ReactNode }) {
+  const { id, order } = entry;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
+    null,
+  );
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+      e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 0, 0);
+    },
+    [id],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    setDragOverPos(e.clientY < midY ? "above" : "below");
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOverPos(null);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverPos(null);
+      const draggedId = e.dataTransfer.getData("text/plain");
+      if (!draggedId || draggedId === id) {
+        return;
+      }
+
+      const draggedIndex = allIds.indexOf(draggedId);
+      const targetIndex = allIds.indexOf(id);
+      if (draggedIndex === -1 || targetIndex === -1) {
+        return;
+      }
+
+      const newPosition =
+        dragOverPos === "above" ? Math.max(0, targetIndex - 1) : targetIndex;
+      // If the dragged item was above the target, the splice in the store
+      // already accounts for removal — pass the target position directly.
+      // But we need to send the position *after* the dragged item is removed.
+      // Since we're using the *visible* allIds list, calculate the adjusted pos.
+      const adjustedPos =
+        draggedIndex < targetIndex && dragOverPos === "above"
+          ? targetIndex - 1
+          : draggedIndex < targetIndex
+          ? targetIndex
+          : newPosition;
+
+      mutators.reorder(draggedId, adjustedPos);
+    },
+    [id, allIds, mutators, dragOverPos],
+  );
+
+  // With our store's splice-based reorder, any entry can be moved anywhere.
+  // The old up/down buttons are kept for keyboard-only users and as a
+  // discoverable alternative to drag.
+  const isFirst = order === 0;
+  const isLast = allIds.length <= 1 || order === allIds.length - 1;
+
+  const rowClass = joinClass(
+    styles.row,
+    dragOverPos === "above" && styles.dragOverAbove,
+    dragOverPos === "below" && styles.dragOverBelow,
+  );
+
+  return (
+    <div
+      ref={rowRef}
+      data-testid={`layer-row-${id}`}
+      className={rowClass}
+      draggable
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <span
+        className={styles.dragHandle}
+        aria-label={`Drag to reorder ${entry.label}`}
+        data-testid={`layer-drag-${id}`}
+        role="button"
+        tabIndex={0}
+      >
+        <IconGripVertical />
+      </span>
+      {children}
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Move layer up"
+        data-testid={`layer-up-${id}`}
+        disabled={isFirst}
+        onClick={() => mutators.reorder(id, order - 1)}
+      >
+        <IconChevronUp />
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Move layer down"
+        data-testid={`layer-down-${id}`}
+        disabled={isLast}
+        onClick={() => mutators.reorder(id, order + 1)}
+      >
+        <IconChevronDown />
+      </button>
+    </div>
+  );
+}
+
 function DataLayerRow({
   entry,
   mutators,
+  allIds,
 }: {
   entry: DataLayerEntry;
   mutators: Mutators;
+  allIds: string[];
 }) {
-  const { setVisibility, reorder, updateStyle, openStyle } = mutators;
-  const { id, label, visible, order, featureCount, style } = entry;
+  const { setVisibility, updateStyle, openStyle } = mutators;
+  const { id, label, visible, featureCount, style } = entry;
+  const [expanded, setExpanded] = React.useState(false);
 
   return (
-    <div data-testid={`layer-row-${id}`} className={styles.row}>
-      <div className={styles.rowHeader}>
+    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
+      <div
+        className={styles.rowHeader}
+        onClick={() => setExpanded((p) => !p)}
+        style={{ cursor: "pointer" }}
+        data-testid={`layer-row-header-${id}`}
+      >
         <button
           type="button"
           className={joinClass(
@@ -149,11 +312,13 @@ function DataLayerRow({
           aria-label={visible ? "Hide layer" : "Show layer"}
           aria-pressed={visible}
           data-testid={`layer-visibility-${id}`}
-          onClick={() => setVisibility(id, !visible)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisibility(id, !visible);
+          }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
         </button>
-        {/* Non-color-only kind indicator — accessibility (plan §6 scrub). */}
         <span
           aria-label="Data layer"
           className={joinClass(styles.kindBadge, styles.kindBadgeData)}
@@ -165,30 +330,14 @@ function DataLayerRow({
         <button
           type="button"
           className={styles.iconButton}
-          aria-label="Move layer up"
-          data-testid={`layer-up-${id}`}
-          onClick={() => reorder(id, order - 1)}
-        >
-          <IconChevronUp />
-        </button>
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label="Move layer down"
-          data-testid={`layer-down-${id}`}
-          onClick={() => reorder(id, order + 1)}
-        >
-          <IconChevronDown />
-        </button>
-        <button
-          type="button"
-          className={styles.iconButton}
           aria-label="Open style editor"
           data-testid={`layer-style-${id}`}
-          onClick={() => openStyle(id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            openStyle(id);
+          }}
           title="Style editor"
         >
-          {/* Inline SVG palette icon — currentColor per atlasdraw-ui-conventions */}
           <svg
             className={styles.icon}
             viewBox="0 0 16 16"
@@ -205,7 +354,19 @@ function DataLayerRow({
             <circle cx="11" cy="6" r="0.8" />
           </svg>
         </button>
+        <span
+          style={{
+            marginLeft: "auto",
+            fontSize: 10,
+            color: "var(--ad-ink-tertiary)",
+            transform: expanded ? "rotate(180deg)" : "none",
+          }}
+        >
+          {(IconChevronDown as unknown as string) ? "▾" : "▸"}
+        </span>
       </div>
+
+      {/* Inline style controls (always visible, compact) */}
       <div className={styles.styleGrid}>
         <label htmlFor={`fill-${id}`} className={styles.styleGridLabel}>
           fill
@@ -255,67 +416,96 @@ function DataLayerRow({
           onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
-    </div>
+
+      {/* Detail accordion — expands on row click */}
+      {expanded && (
+        <div className={styles.detail} data-testid={`layer-detail-${id}`}>
+          <div className={styles.detailMeta}>
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Features</span>
+              <span className={styles.metaValue}>{featureCount}</span>
+            </div>
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Fill</span>
+              <span className={styles.metaValue}>{style.fillColor ?? "—"}</span>
+            </div>
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Stroke</span>
+              <span className={styles.metaValue}>
+                {style.strokeColor ?? "—"}{" "}
+                {style.strokeWidth != null ? `${style.strokeWidth}px` : ""}
+              </span>
+            </div>
+            <div className={styles.metaItem}>
+              <span className={styles.metaLabel}>Opacity</span>
+              <span className={styles.metaValue}>
+                {style.opacity != null
+                  ? `${Math.round(style.opacity * 100)}%`
+                  : "100%"}
+              </span>
+            </div>
+          </div>
+          <div className={styles.detailActions}>
+            <button
+              type="button"
+              className={styles.detailBtn}
+              onClick={() => openStyle(id)}
+              data-testid={`layer-detail-style-${id}`}
+            >
+              Full style editor
+            </button>
+          </div>
+          <p className={styles.attrHint}>
+            Attribute table preview will appear here when the data source is
+            connected. FeatureCollection metadata is available at the MapLibre
+            source level.
+          </p>
+        </div>
+      )}
+    </SortableRow>
   );
 }
 
 function AnnotationLayerRow({
   entry,
   mutators,
+  allIds,
 }: {
   entry: AnnotationLayerEntry;
   mutators: Mutators;
+  allIds: string[];
 }) {
-  const { setVisibility, reorder } = mutators;
-  const { id, label, visible, order } = entry;
+  const { setVisibility } = mutators;
+  const { id, label, visible } = entry;
 
   // TODO(T14-adjacent): registry-only visibility flip lands here today.
   // Mutating the actual Excalidraw element via excalidrawAPI.updateScene
   // is deferred until Wave 2c — see plan §844.
   return (
-    <div
-      data-testid={`layer-row-${id}`}
-      className={joinClass(styles.row, styles.rowAnnotation)}
-    >
-      <button
-        type="button"
-        className={joinClass(
-          styles.iconButton,
-          visible && styles.iconButtonPressed,
-        )}
-        aria-label={visible ? "Hide annotation" : "Show annotation"}
-        aria-pressed={visible}
-        data-testid={`layer-visibility-${id}`}
-        onClick={() => setVisibility(id, !visible)}
-      >
-        {visible ? <IconEye /> : <IconEyeSlash />}
-      </button>
-      <span
-        aria-label="Annotation"
-        className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
-      >
-        A
-      </span>
-      <span className={styles.label}>{label}</span>
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label="Move annotation up"
-        data-testid={`layer-up-${id}`}
-        onClick={() => reorder(id, order - 1)}
-      >
-        <IconChevronUp />
-      </button>
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label="Move annotation down"
-        data-testid={`layer-down-${id}`}
-        onClick={() => reorder(id, order + 1)}
-      >
-        <IconChevronDown />
-      </button>
-    </div>
+    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
+      <div className={joinClass(styles.rowAnnotation)}>
+        <button
+          type="button"
+          className={joinClass(
+            styles.iconButton,
+            visible && styles.iconButtonPressed,
+          )}
+          aria-label={visible ? "Hide annotation" : "Show annotation"}
+          aria-pressed={visible}
+          data-testid={`layer-visibility-${id}`}
+          onClick={() => setVisibility(id, !visible)}
+        >
+          {visible ? <IconEye /> : <IconEyeSlash />}
+        </button>
+        <span
+          aria-label="Annotation"
+          className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
+        >
+          A
+        </span>
+        <span className={styles.label}>{label}</span>
+      </div>
+    </SortableRow>
   );
 }
 
@@ -342,9 +532,6 @@ export function LayerPanel() {
   const announce = useAnnounce();
   const announcingSetVisibility = React.useCallback(
     (id: string, visible: boolean) => {
-      // Resolve label from the latest entries snapshot — looking it up here
-      // (not closing over the row's stale value) keeps the message accurate
-      // if a label rename races with the toggle.
       const entry = entries.find((e) => e.id === id);
       const name = entry?.label ?? id;
       setVisibility(id, visible);
@@ -369,6 +556,9 @@ export function LayerPanel() {
     .slice()
     .sort(byOrder);
 
+  const dataLayerIds = dataLayers.map((e) => e.id);
+  const annotationIds = annotations.map((e) => e.id);
+
   return (
     <div data-testid="layer-panel-body" className={styles.body}>
       <section aria-label="Data Layers" className={styles.section}>
@@ -377,7 +567,12 @@ export function LayerPanel() {
           <p className={styles.empty}>(none — drop a GeoJSON file)</p>
         ) : (
           dataLayers.map((entry) => (
-            <DataLayerRow key={entry.id} entry={entry} mutators={mutators} />
+            <DataLayerRow
+              key={entry.id}
+              entry={entry}
+              mutators={mutators}
+              allIds={dataLayerIds}
+            />
           ))
         )}
       </section>
@@ -391,6 +586,7 @@ export function LayerPanel() {
               key={entry.id}
               entry={entry}
               mutators={mutators}
+              allIds={annotationIds}
             />
           ))
         )}

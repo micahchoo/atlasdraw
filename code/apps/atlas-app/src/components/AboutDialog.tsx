@@ -76,13 +76,13 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
         aria-modal="true"
         aria-label="About Atlasdraw"
         style={{
-          background: "#fff",
+          background: "var(--ad-surface-raised, #fff)",
           borderRadius: "0.5rem",
           padding: "1.25rem 1.5rem",
           maxWidth: "420px",
           width: "calc(100% - 2rem)",
           boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-          color: "#212529",
+          color: "var(--ad-ink, #212529)",
           fontSize: "0.875rem",
           lineHeight: 1.5,
         }}
@@ -108,27 +108,33 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
             fontSize: "0.8125rem",
           }}
         >
-          <dt style={{ color: "#868e96" }}>Version</dt>
+          <dt style={{ color: "var(--ad-ink-tertiary, #868e96)" }}>Version</dt>
           <dd
             data-testid="about-dialog-version"
-            style={{ margin: 0, fontFamily: "ui-monospace, monospace" }}
+            style={{
+              margin: 0,
+              fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
+            }}
           >
             {version}
           </dd>
-          <dt style={{ color: "#868e96" }}>Build</dt>
+          <dt style={{ color: "var(--ad-ink-tertiary, #868e96)" }}>Build</dt>
           <dd
             data-testid="about-dialog-git-hash"
-            style={{ margin: 0, fontFamily: "ui-monospace, monospace" }}
+            style={{
+              margin: 0,
+              fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
+            }}
           >
             {gitHash}
           </dd>
-          <dt style={{ color: "#868e96" }}>License</dt>
+          <dt style={{ color: "var(--ad-ink-tertiary, #868e96)" }}>License</dt>
           <dd style={{ margin: 0 }}>
             <span
               style={{
                 display: "inline-block",
                 padding: "1px 6px",
-                borderRadius: "3px",
+                borderRadius: "var(--ad-radius-sm, 3px)",
                 background: "#dbeafe",
                 color: "#1e3a8a",
                 fontSize: "0.6875rem",
@@ -138,7 +144,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
               AGPL-3.0
             </span>
           </dd>
-          <dt style={{ color: "#868e96" }}>Edition</dt>
+          <dt style={{ color: "var(--ad-ink-tertiary, #868e96)" }}>Edition</dt>
           <dd data-testid="about-dialog-build-target" style={{ margin: 0 }}>
             {BUILD_TARGET_LABEL[cfg.buildTarget]}
           </dd>
@@ -161,7 +167,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
               href="https://github.com/atlasdraw/atlasdraw/blob/main/docs/architecture/adr/0006-telemetry.md"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "#1971c2" }}
+              style={{ color: "var(--ad-accent, #1971c2)" }}
             >
               ADR-0006
             </a>
@@ -186,7 +192,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
               href="https://github.com/atlasdraw/atlasdraw#self-host"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: "#1971c2" }}
+              style={{ color: "var(--ad-accent, #1971c2)" }}
             >
               self-hosted Atlasdraw
             </a>
@@ -203,8 +209,8 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
               padding: "6px 14px",
               border: "1px solid #adb5bd",
               borderRadius: "4px",
-              background: "#fff",
-              color: "#212529",
+              background: "var(--ad-surface-raised, #fff)",
+              color: "var(--ad-ink, #212529)",
               fontSize: "0.875rem",
               fontWeight: 600,
               cursor: "pointer",

@@ -16,7 +16,7 @@
 }
 
 .section {
-  border-bottom: 2px solid var(--default-border-color, #adb5bd);
+  border-bottom: 1px solid var(--default-border-color, var(--ad-rule));
 }
 
 .section:last-child {
@@ -28,7 +28,7 @@
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary-color, #212529);
+  color: var(--text-primary-color, var(--ad-ink));
 }
 
 .empty {
@@ -36,7 +36,7 @@
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 400;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
 }
 
 .row {
@@ -44,11 +44,40 @@
   flex-direction: column;
   gap: 4px;
   padding: 6px 8px;
-  border-bottom: 1px solid var(--default-border-color, #adb5bd);
+  border-bottom: 1px solid var(--default-border-color, var(--ad-rule));
+  transition: box-shadow 0.15s ease;
 }
 
 .row:last-child {
   border-bottom: none;
+}
+
+.dragOverAbove {
+  box-shadow: inset 0 2px 0 var(--ad-accent, #1971c2);
+}
+
+.dragOverBelow {
+  box-shadow: inset 0 -2px 0 var(--ad-accent, #1971c2);
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  cursor: grab;
+  color: var(--ad-ink-tertiary);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.dragHandle:hover,
+.dragHandle:focus-visible {
+  color: var(--ad-ink-secondary);
+  background: var(--button-hover-bg, var(--ad-surface-inset));
+}
+
+.dragHandle:active {
+  cursor: grabbing;
 }
 
 .rowAnnotation {
@@ -67,13 +96,13 @@
   flex: 1;
   font-size: 12px;
   font-weight: 400;
-  color: var(--text-primary-color, #212529);
+  color: var(--text-primary-color, var(--ad-ink));
 }
 
 .featureCount {
   font-size: 11px;
   font-weight: 400;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
 }
 
 .kindBadge {
@@ -107,30 +136,128 @@
   width: var(--default-button-size, 2rem);
   height: var(--default-button-size, 2rem);
   padding: 0;
-  border: 1px solid var(--default-border-color, #adb5bd);
+  border: 1px solid var(--default-border-color, var(--ad-rule));
   border-radius: 4px;
-  background: var(--island-bg-color, #ffffff);
-  color: var(--text-primary-color, #212529);
+  background: var(--island-bg-color, var(--ad-surface-raised));
+  color: var(--text-primary-color, var(--ad-ink));
   cursor: pointer;
 }
 
 .iconButton:hover {
-  background: var(--button-hover-bg, #f8f9fa);
+  background: var(--button-hover-bg, var(--ad-surface-inset));
 }
 
 .iconButton:disabled {
-  color: #adb5bd;
+  color: var(--ad-ink-tertiary);
   cursor: not-allowed;
 }
 
 .iconButtonPressed {
-  background: #1971c2;
-  color: #ffffff;
-  border-color: #1971c2;
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+  border-color: var(--ad-accent);
 }
 
 .iconButtonPressed:hover {
-  background: #1864ab;
+  background: var(--ad-accent-hover);
+}
+
+/* --- Data layer detail accordion ------------------------------------------ */
+
+.detail {
+  padding: var(--ad-space-2) 0 0;
+  border-top: 1px solid var(--ad-hairline);
+}
+
+.detailMeta {
+  display: flex;
+  gap: var(--ad-space-3);
+  margin-bottom: var(--ad-space-2);
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metaLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ad-ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metaValue {
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+}
+
+.detailActions {
+  display: flex;
+  gap: var(--ad-space-1);
+  margin-top: var(--ad-space-2);
+}
+
+.detailBtn {
+  padding: 2px var(--ad-space-2);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink-secondary);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.detailBtn:hover {
+  border-color: var(--ad-accent);
+  color: var(--ad-accent);
+  background: var(--ad-accent-subtle);
+}
+
+/* Attribute table preview */
+.attrTable {
+  margin-top: var(--ad-space-2);
+  overflow-x: auto;
+}
+
+.attrTable table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.attrTable th {
+  padding: 2px var(--ad-space-2);
+  border-bottom: 1px solid var(--ad-rule);
+  font-family: var(--ad-font-sans);
+  font-weight: 600;
+  color: var(--ad-ink);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.attrTable td {
+  padding: 1px var(--ad-space-2);
+  font-family: var(--ad-font-mono);
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attrHint {
+  margin-top: var(--ad-space-1);
+  font-family: var(--ad-font-sans);
+  font-size: 10px;
+  color: var(--ad-ink-tertiary);
 }
 
 .icon {
@@ -149,7 +276,7 @@
 .styleGridLabel {
   font-size: 11px;
   font-weight: 400;
-  color: var(--text-primary-color, #212529);
+  color: var(--text-primary-color, var(--ad-ink));
 }
 
 .srOnly {

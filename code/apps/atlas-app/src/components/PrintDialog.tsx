@@ -221,7 +221,12 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
               }}
               data-testid="print-dialog-page-size"
             >
-              <legend style={{ fontSize: "0.75rem", color: "#555" }}>
+              <legend
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--ad-ink-secondary, #555)",
+                }}
+              >
                 Page size
               </legend>
               {PAGE_SIZE_OPTIONS.map((opt) => (
@@ -259,7 +264,12 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
               }}
               data-testid="print-dialog-orientation"
             >
-              <legend style={{ fontSize: "0.75rem", color: "#555" }}>
+              <legend
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--ad-ink-secondary, #555)",
+                }}
+              >
                 Orientation
               </legend>
               <div style={{ display: "flex", gap: 12 }}>
@@ -347,8 +357,8 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                   padding: "6px 12px",
                   border: "1px solid #adb5bd",
                   borderRadius: 4,
-                  background: "#fff",
-                  color: "#212529",
+                  background: "var(--ad-surface-raised, #fff)",
+                  color: "var(--ad-ink, #212529)",
                   fontSize: 14,
                   cursor: "pointer",
                 }}
@@ -363,10 +373,12 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
                 data-testid="print-dialog-submit"
                 style={{
                   padding: "6px 12px",
-                  border: "1px solid #1971c2",
+                  border: "1px solid var(--ad-accent, #1971c2)",
                   borderRadius: 4,
-                  background: exporting ? "#74c0fc" : "#1971c2",
-                  color: "#ffffff",
+                  background: exporting
+                    ? "#74c0fc"
+                    : "var(--ad-accent, #1971c2)",
+                  color: "var(--ad-ink-inverse, #ffffff)",
                   fontSize: 14,
                   fontWeight: 600,
                   cursor: exporting ? "wait" : "pointer",

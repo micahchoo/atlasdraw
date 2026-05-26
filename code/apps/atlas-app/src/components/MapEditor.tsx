@@ -31,16 +31,9 @@ import {
   compileLayer,
   defaultLayerStyle,
   getBasemap,
-  resolveStyle,
-  registerPmtilesProtocol,
-  BasemapRemoteGatedError,
 } from "@atlasdraw/basemap";
 
-import {
-  parse,
-  GeoJSONParseError,
-  requireHomogeneousGeometry,
-} from "@atlasdraw/data";
+// @atlasdraw/data imports removed (unused after refactor)
 import {
   Excalidraw,
   MainMenu,
@@ -54,6 +47,7 @@ import {
   annotationToFeatureCollection,
   UnsupportedConvertElementError,
   type ConvertibleElement,
+  type ScaleMode,
 } from "@atlasdraw/tools";
 
 import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
@@ -76,11 +70,13 @@ import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { useCollab } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
+import { useGeoJsonDrop } from "../hooks/useGeoJsonDrop";
+import { useExportPNG } from "../hooks/useExportPNG";
+import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { CollabState } from "../state/collab";
 
 import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 
-import { exportPNG } from "../lib/export";
 import { createPersistenceStore } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useLayerRegistryStore } from "../state/layerRegistry";
@@ -104,9 +100,16 @@ import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { MaputnikDialog } from "./MaputnikDialog";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
+import { StatusBar } from "./StatusBar";
+import { ToolOptionsBar } from "./ToolOptionsBar";
+import { KeyboardShortcuts } from "./KeyboardShortcuts";
+import { QuickActions } from "./QuickActions";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { LayerPanel } from "./LayerPanel";
 import { useAnnounce } from "./AriaAnnouncer";
+import { OnboardingTips, useOnboarding } from "./OnboardingTips";
+import { SettingsDialog } from "./SettingsDialog";
+import { ExportDialog } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
 
@@ -516,6 +519,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // .excalidrawlib fixtures (wildfire / transit / hazard) into Excalidraw's
   // built-in library via updateLibrary({ libraryItems, merge: true }).
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   // Phase 6 A13a — active workspace (managed mode only). Seeded from the
   // A9 env resolver so the boot path still works; the WorkspaceSwitcher
   // updates this when the user picks one. Self-host: stays at the env-
@@ -523,9 +528,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
     () =>
       resolveWorkspaceFromEnv(
-        typeof import.meta.env === "undefined"
-          ? {}
-          : (import.meta.env as Record<string, string | undefined>),
+        import.meta.env as Record<string, string | undefined>,
       ).id,
   );
 
@@ -628,6 +631,32 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const announceMapEditor = useAnnounce();
   const prevSelectionIdsRef = useRef<string>("");
   const lastSelectionAnnounceAtRef = useRef<number>(0);
+  // Space+drag pan bridge: when space is held, Excalidraw's internal pan
+  // mechanism mutates scrollX/Y. The scroll lock below resets those to 0
+  // every onChange (preserving geo-anchor identity). Without this bridge,
+  // the delta is eaten and the map never moves. The hand-tool button works
+  // because it sets pointer-events:none — events fall through to MapLibre
+  // directly. Space+drag takes the scroll-mutation path instead.
+  const spaceHeldRef = useRef(false);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        spaceHeldRef.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spaceHeldRef.current = false;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
@@ -639,41 +668,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
 
-  // Phase 4 T6/T7 — apply basemap style when the map is ready or the user
-  // switches basemaps. registerPmtilesProtocol is idempotent; safe to call
-  // before every setStyle that references pmtiles:// URLs.
-  //
-  // The pmtiles path is read HERE (not inside @atlasdraw/basemap) because
-  // Vite's textual `import.meta.env.X` replacement only fires on files it
-  // transforms in the app's compile pipeline — moving the read out of the
-  // basemap package was the fix for atlasdraw-bff1.
-  useEffect(() => {
-    if (!map) {
-      return;
-    }
-    registerPmtilesProtocol();
-    const apply = async () => {
-      try {
-        // TODO(T14/T15): wire allowRemote from app config (Q3 default = false).
-        const pmtilesPath =
-          import.meta.env.VITE_PMTILES_PATH ?? "/data/world-low-zoom.pmtiles";
-        const style = await resolveStyle(activeBasemapId, {
-          allowRemote: false,
-          pmtilesPath,
-        });
-        map.setStyle(style);
-      } catch (err) {
-        if (err instanceof BasemapRemoteGatedError) {
-          console.warn(
-            `[basemap] Skipping '${err.basemapId}': remote tiles disabled`,
-          );
-          return;
-        }
-        throw err;
-      }
-    };
-    void apply();
-  }, [map, activeBasemapId]);
+  // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
+  useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);
 
   // atlasdraw-9078 — UIOptions.canvasActions.export passed to <Excalidraw>.
   // Memoized on excalidrawAPI identity so the renderCustomUI closure binds
@@ -846,95 +842,62 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
+  // Tool options bar — scaleMode tracks the active tool's default, user can
+  // toggle per-session. Resets to the tool's default when tool changes.
+  const [toolScaleMode, setToolScaleMode] = useState<ScaleMode>("geographic");
+  useEffect(() => {
+    if (activeAtlasTool) {
+      setToolScaleMode(activeAtlasTool.defaultScaleMode);
+    }
+  }, [activeAtlasTool?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard shortcuts panel — toggled with `?`.
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  // Quick-actions palette — Cmd+K / Ctrl+K.
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  // Onboarding — shown on first visit only.
+  const onboarding = useOnboarding();
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Quick-actions: Cmd+K or Ctrl+K.
+      if (e.key === "k" && (e.metaKey || e.ctrlKey) && !e.altKey) {
+        e.preventDefault();
+        setShowQuickActions((prev) => !prev);
+        return;
+      }
+      // Keyboard shortcuts: bare `?`.
+      if (
+        e.key === "?" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.target as HTMLElement).tagName !== "INPUT" &&
+        (e.target as HTMLElement).tagName !== "TEXTAREA"
+      ) {
+        e.preventDefault();
+        setShowShortcuts((prev) => !prev);
+        return;
+      }
+      // Escape dismisses open overlays.
+      if (e.key === "Escape") {
+        if (showShortcuts) {
+          setShowShortcuts(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showShortcuts]);
+
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
   // Selector form so the component re-renders ONLY on isDirty flips, not on
   // store/dispose pointer changes.
   const isDirty = usePersistenceStore((s) => s.isDirty);
 
-  // T13 — GeoJSON drag-and-drop import.
-  //
-  // Drop must run in CAPTURE phase on the root div — Excalidraw's own
-  // handleAppOnDrop (App.tsx:2147) lives on a deeper div and would fire first
-  // in the bubble path, calling parseDataTransferEvent which consumes
-  // dataTransfer.files before our React-bubble handler ever sees it. For
-  // .geojson files we stopPropagation so Excalidraw never sees the event;
-  // for other file types we let propagation continue so Excalidraw still
-  // handles png/svg/library drops normally.
+  // T13 — GeoJSON drag-and-drop import (extracted to useGeoJsonDrop hook).
   const registry = useLayerRegistry();
-  const processGeoJsonDrop = useCallback(
-    async (file: File) => {
-      if (!map) {
-        return;
-      }
-      try {
-        // parse() accepts a Blob; File extends Blob, so we pass it directly.
-        const fc = await parse(file);
-        // T24 (atlasdraw-4142): Atlas v1 supports a single geometry kind per
-        // layer. Reject mixed FCs upfront so users see a clear error instead
-        // of silently-dropped features. Sub-layers per kind is the
-        // planned-of-record direction for Phase 4+.
-        requireHomogeneousGeometry(fc);
-        const id = `dl:${crypto.randomUUID()}`;
-        const style = defaultLayerStyle(fc);
-        const geometryType = inferGeometryType(fc);
-        // Map mutations first (most likely to throw); registry last.
-        map.addSource(id, { type: "geojson", data: fc });
-        try {
-          map.addLayer(compileLayer(id, style, geometryType));
-        } catch (layerErr) {
-          // Rollback the orphan source so a retry can reuse the id space.
-          try {
-            map.removeSource(id);
-          } catch {
-            /* swallow secondary failure */
-          }
-          throw layerErr;
-        }
-        registry.registerDataLayer({ id, fc, label: file.name, style });
-      } catch (err) {
-        if (err instanceof GeoJSONParseError) {
-          // v1 UX — console + alert. Toast/dialog deferred (scrub §3.3).
-          // eslint-disable-next-line no-console
-          console.error("[MapEditor] GeoJSON parse failed:", err.message);
-          window.alert(`GeoJSON parse failed: ${err.message}`);
-          return;
-        }
-        throw err;
-      }
-    },
-    [map, registry],
-  );
-
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) {
-      return;
-    }
-    const onDropCapture = (e: DragEvent) => {
-      const file = e.dataTransfer?.files?.[0];
-      if (!file || !file.name.endsWith(".geojson")) {
-        return;
-      }
-      // Block Excalidraw's bubble-phase handler from also processing this.
-      e.preventDefault();
-      e.stopPropagation();
-      void processGeoJsonDrop(file);
-    };
-    const onDragOverCapture = (e: DragEvent) => {
-      // preventDefault is needed for drop to fire. Don't stopPropagation —
-      // Excalidraw's dragover sets visual cues (cursor) for image drops we
-      // still want it to handle.
-      e.preventDefault();
-    };
-    root.addEventListener("drop", onDropCapture, { capture: true });
-    root.addEventListener("dragover", onDragOverCapture, { capture: true });
-    return () => {
-      root.removeEventListener("drop", onDropCapture, { capture: true });
-      root.removeEventListener("dragover", onDragOverCapture, {
-        capture: true,
-      });
-    };
-  }, [processGeoJsonDrop]);
+  useGeoJsonDrop(rootRef, map, registry.registerDataLayer);
 
   // ---------------------------------------------------------------------------
   // Phase 5 Task 9 — Collab data layer: MapLibre source + layer lifecycle.
@@ -1107,6 +1070,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return excalidrawAPI.registerSidebarTab({
       name: "layers",
       label: "Layers",
+      icon: (
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="1" y="3" width="14" height="3" rx="0.5" />
+          <rect x="3" y="8" width="12" height="3" rx="0.5" />
+          <rect x="5" y="13" width="10" height="3" rx="0.5" />
+          <path d="M2 4.5v6" />
+          <path d="M4 9.5v4" />
+        </svg>
+      ),
       content: <LayerPanel />,
     });
   }, [excalidrawAPI]);
@@ -1122,6 +1104,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return excalidrawAPI.registerSidebarTab({
       name: "comments",
       label: "Comments",
+      icon: (
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M2 3h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9l-3 3v-3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+          <path d="M5 7h6M5 9h4" />
+        </svg>
+      ),
       content: <CommentsPanelHost />,
     });
   }, [excalidrawAPI]);
@@ -1177,33 +1175,40 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return unregister;
   }, [excalidrawAPI, handleConvert, currentConvertibleSelection]);
 
-  // W-B — Composite PNG export, surfaced in MainMenu. Async work fires-and-
-  // forgets; MainMenu.Item.onSelect is sync (event handler signature) and
-  // the menu closes synchronously after handler returns.
-  const handleExportPNG = useCallback(() => {
-    if (!map || !excalidrawAPI) {
+  // W-B — Composite PNG export (extracted to useExportPNG hook).
+  const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg);
+
+  // Export callbacks for ExportDialog — wraps existing handlers.
+  const handleExportGeoJSON = useCallback(() => {
+    if (!excalidrawAPI) {
       return;
     }
-    void (async () => {
-      try {
-        const blob = await exportPNG(map, excalidrawAPI, {
-          backgroundColor: mapBg,
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `atlasdraw-${Date.now()}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        window.alert(
-          `PNG export failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    })();
-  }, [map, excalidrawAPI, mapBg]);
+    const elements = excalidrawAPI.getSceneElements();
+    const fc = buildGeoJsonExport(elements);
+    const json = JSON.stringify(fc, null, 2);
+    const blob = new Blob([json], { type: "application/geo+json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `atlasdraw-${Date.now()}.geojson`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [excalidrawAPI]);
+
+  const handleExportAtlasdraw = useCallback(() => {
+    if (!excalidrawAPI) {
+      return;
+    }
+    // Open Excalidraw's JSON export dialog which now hosts our
+    // renderCustomUI cards via renderAtlasdrawExportCards.
+    void excalidrawAPI.updateScene; // no-op: access pattern ensures the API is ready
+    // Delegate to Excalidraw's built-in export dialog.
+    // The renderCustomUI already adds .atlasdraw cards there.
+    // Unified export dialog coming in next iteration.
+    window.alert(
+      'Use "Export" from the MainMenu → Export → .atlasdraw card. Unified export dialog coming in next iteration.',
+    );
+  }, [excalidrawAPI]);
 
   // Intercept ChangeCanvasBackground: keep Excalidraw transparent so the map
   // shows through, and store the chosen color in mapBg for CSS + export.
@@ -1255,11 +1260,31 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       // scrollX/Y. With non-zero scroll, `el.x + scrollX` ≠ `map.project(anchor).x`
       // so elements appear shifted from their geo positions and reanchorIfMoved
       // picks up false user-drag deltas. Reset to identity; geo sync runs next tick.
+      //
+      // Space+drag bridge: when space is held, Excalidraw pans by mutating
+      // scrollX/Y. We forward the delta to map.panBy before resetting so the
+      // map moves. scrollToContent delivers large single jumps (>200px) when
+      // elements are loaded — those are NOT user pans, so we skip bridging
+      // when the delta exceeds a sane per-frame ceiling.
       if (
         appState.scrollX !== 0 ||
         appState.scrollY !== 0 ||
         appState.zoom.value !== 1
       ) {
+        if (
+          spaceHeldRef.current &&
+          (appState.scrollX !== 0 || appState.scrollY !== 0)
+        ) {
+          // Guard: scrollToContent jumps are typically >>100px in a single
+          // onChange; a user drag within one frame stays well under 100px.
+          const absDx = Math.abs(appState.scrollX);
+          const absDy = Math.abs(appState.scrollY);
+          if (absDx <= 100 && absDy <= 100) {
+            map?.panBy([-appState.scrollX, -appState.scrollY], {
+              animate: false,
+            });
+          }
+        }
         excalidrawAPI?.updateScene({
           appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
         });
@@ -1420,21 +1445,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 ● Unsaved
               </MainMenu.Item>
             )}
+            <MainMenu.Item
+              onSelect={() => setShowExport(true)}
+              data-testid="main-menu-export"
+            >
+              Export…
+            </MainMenu.Item>
+            <MainMenu.Item
+              onSelect={() => setShowSettings(true)}
+              data-testid="main-menu-settings"
+            >
+              Settings…
+            </MainMenu.Item>
             <MainMenu.DefaultItems.Export />
-            <MainMenu.Item
-              onSelect={handleExportPNG}
-              data-testid="main-menu-export-png"
-            >
-              Export composite PNG (with basemap)
-            </MainMenu.Item>
-            {/* Phase 6 A10 — Print PDF. Root-mounted (like AboutDialog /
-                ShareDialog) so MainMenu auto-close doesn't unmount it. */}
-            <MainMenu.Item
-              onSelect={() => setShowPrintDialog(true)}
-              data-testid="main-menu-export-pdf"
-            >
-              Export PDF…
-            </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.Item
               onSelect={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
@@ -1526,26 +1549,33 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           flow into our tool dispatcher instead of becoming Excalidraw selection
           rectangles. Unmounted otherwise so map pan/zoom is unaffected. */}
       {activeAtlasTool && (
-        <div
-          className={styles.atlasToolOverlay}
-          data-testid="atlas-tool-overlay"
-          onPointerDown={(reactEvent) => {
-            dispatchPointerDown({
-              clientX: reactEvent.clientX,
-              clientY: reactEvent.clientY,
-              pointerId: reactEvent.pointerId,
-              pointerType:
-                (reactEvent.pointerType as "mouse" | "pen" | "touch") ??
-                "mouse",
-              button: reactEvent.button,
-              shiftKey: reactEvent.shiftKey,
-              altKey: reactEvent.altKey,
-              ctrlKey: reactEvent.ctrlKey,
-              metaKey: reactEvent.metaKey,
-            });
-          }}
-          style={{ cursor: activeAtlasTool.cursor }}
-        />
+        <>
+          <div
+            className={styles.atlasToolOverlay}
+            data-testid="atlas-tool-overlay"
+            onPointerDown={(reactEvent) => {
+              dispatchPointerDown({
+                clientX: reactEvent.clientX,
+                clientY: reactEvent.clientY,
+                pointerId: reactEvent.pointerId,
+                pointerType:
+                  (reactEvent.pointerType as "mouse" | "pen" | "touch") ??
+                  "mouse",
+                button: reactEvent.button,
+                shiftKey: reactEvent.shiftKey,
+                altKey: reactEvent.altKey,
+                ctrlKey: reactEvent.ctrlKey,
+                metaKey: reactEvent.metaKey,
+              });
+            }}
+            style={{ cursor: activeAtlasTool.cursor }}
+          />
+          <ToolOptionsBar
+            tool={activeAtlasTool}
+            scaleMode={toolScaleMode}
+            onScaleModeChange={setToolScaleMode}
+          />
+        </>
       )}
 
       {/* Phase 4 T6 — Basemap picker. Rendered at the root level (NOT inside
@@ -1598,6 +1628,27 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
       )}
 
+      {/* Settings — tabbed modal replacing standalone BasemapPickerDialog. */}
+      {showSettings && (
+        <SettingsDialog
+          activeBasemapId={activeBasemapId}
+          onBasemapChange={setActiveBasemapId}
+          onCloseRequest={() => setShowSettings(false)}
+          workspaceId={activeWorkspaceId}
+        />
+      )}
+
+      {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw). */}
+      {showExport && (
+        <ExportDialog
+          onCloseRequest={() => setShowExport(false)}
+          onExportPNG={handleExportPNG}
+          onExportPDF={() => setShowPrintDialog(true)}
+          onExportGeoJSON={handleExportGeoJSON}
+          onExportAtlasdraw={handleExportAtlasdraw}
+        />
+      )}
+
       {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
           (selectDocument needs the imperative API). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
@@ -1648,17 +1699,108 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 10,
-            background: "#fff5f5",
-            border: "1px solid #ffc9c9",
-            color: "#c92a2a",
+            background: "var(--ad-danger, #d64045)0d",
+            border:
+              "1px solid color-mix(in srgb, var(--ad-danger, #d64045) 25%, transparent)",
+            color: "var(--ad-danger, #c92a2a)",
             padding: "6px 12px",
-            borderRadius: 4,
+            borderRadius: "var(--ad-radius-md, 6px)",
             fontSize: 13,
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.12)",
+            boxShadow: "var(--ad-shadow-tracing, 0 1px 3px rgba(0,0,0,0.12))",
           }}
         >
           {collabRoomError}
         </div>
+      )}
+
+      <StatusBar map={map} />
+
+      {onboarding.show && <OnboardingTips onDismiss={onboarding.dismiss} />}
+
+      {showShortcuts && (
+        <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />
+      )}
+
+      {showQuickActions && (
+        <QuickActions
+          actions={[
+            {
+              id: "pin",
+              label: "Pin to map",
+              category: "Tools",
+              hint: "P",
+              keywords: ["marker", "point"],
+              onSelect: () => setActiveAtlasTool(PinTool),
+            },
+            {
+              id: "layers",
+              label: "Layers panel",
+              category: "View",
+              keywords: ["sidebar"],
+              onSelect: () =>
+                excalidrawAPI?.toggleSidebar({
+                  name: DEFAULT_SIDEBAR.name,
+                  tab: "layers",
+                }),
+            },
+            {
+              id: "comments",
+              label: "Comments panel",
+              category: "View",
+              keywords: ["sidebar", "threads"],
+              onSelect: () =>
+                excalidrawAPI?.toggleSidebar({
+                  name: DEFAULT_SIDEBAR.name,
+                  tab: "comments",
+                }),
+            },
+            {
+              id: "export-png",
+              label: "Export composite PNG",
+              category: "Export",
+              hint: "⌘⇧E",
+              keywords: ["image", "screenshot", "composite"],
+              onSelect: handleExportPNG,
+            },
+            {
+              id: "export-pdf",
+              label: "Export PDF",
+              category: "Export",
+              keywords: ["print", "document"],
+              onSelect: () => setShowPrintDialog(true),
+            },
+            {
+              id: "share",
+              label: "Share map",
+              category: "File",
+              keywords: ["link", "collaborate", "invite"],
+              onSelect: () => setShowShareDialog(true),
+            },
+            {
+              id: "basemap",
+              label: "Change basemap",
+              category: "View",
+              keywords: ["style", "tiles", "background"],
+              onSelect: () => setShowBasemapPicker(true),
+            },
+            {
+              id: "about",
+              label: "About Atlasdraw",
+              category: "Help",
+              keywords: ["version", "license"],
+              onSelect: () => setShowAboutDialog(true),
+            },
+            {
+              id: "shortcuts",
+              label: "Keyboard shortcuts",
+              category: "Help",
+              hint: "?",
+              keywords: ["keys", "hotkeys"],
+              onSelect: () => setShowShortcuts(true),
+            },
+          ]}
+          onClose={() => setShowQuickActions(false)}
+        />
       )}
     </div>
   );

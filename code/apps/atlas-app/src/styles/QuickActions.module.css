@@ -1,0 +1,123 @@
+/* QuickActions — Cmd+K command palette. z:100.
+ * Same surface treatment as KeyboardShortcuts. Uses --ad-* tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 18vh;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  width: 440px;
+  max-height: 48vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+  overflow: hidden;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-3) var(--ad-space-4);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.prompt {
+  font-family: var(--ad-font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ad-accent);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--ad-font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ad-ink);
+}
+
+.searchInput::placeholder {
+  color: var(--ad-ink-tertiary);
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ad-space-2) 0;
+}
+
+.category {
+  padding: 0 var(--ad-space-4);
+}
+
+.categoryTitle {
+  padding: var(--ad-space-2) 0 4px;
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ad-ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px var(--ad-space-2);
+  border-radius: var(--ad-radius-sm);
+  cursor: pointer;
+}
+
+.item:hover,
+.itemSelected {
+  background: var(--ad-accent-subtle);
+}
+
+.itemLabel {
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-ink);
+}
+
+.itemHint {
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+}
+
+.empty {
+  padding: var(--ad-space-4);
+  text-align: center;
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  color: var(--ad-ink-tertiary);
+}
+
+.footer {
+  padding: var(--ad-space-2) var(--ad-space-4);
+  border-top: 1px solid var(--ad-hairline);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+  display: flex;
+  justify-content: space-between;
+}

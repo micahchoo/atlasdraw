@@ -225,14 +225,21 @@ export function CommentAnchorsOverlay(
       const appState = excalidrawAPI.getAppState();
       const { x, y } = sceneCoordsToViewportCoords(
         { sceneX: e.x + e.width, sceneY: e.y },
-        // Cast around v0.18's branded NormalizedZoomValue — at runtime this
-        // is a plain number. See .claude/rules/excalidraw-api.md.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        appState as any,
+        appState as {
+          zoom: { value: number };
+          offsetLeft: number;
+          offsetTop: number;
+          scrollX: number;
+          scrollY: number;
+        },
       );
       projected.push({ comment: c, screenX: x, screenY: y });
     }
   }
+
+  const authorId = commentsLayer
+    ? `client-${commentsLayer.doc.clientID}`
+    : "anonymous";
 
   return (
     <div className={styles.overlay} data-testid="comment-anchors-overlay">
@@ -242,7 +249,9 @@ export function CommentAnchorsOverlay(
           comment={p.comment}
           screenX={p.screenX}
           screenY={p.screenY}
+          isOwn={p.comment.authorId === authorId}
           onResolve={(id) => commentsLayer.resolve(id)}
+          onEdit={(id, newText) => commentsLayer.editComment(id, newText)}
         />
       ))}
     </div>

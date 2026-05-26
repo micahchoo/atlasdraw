@@ -1,0 +1,105 @@
+/* Toast notifications — transient feedback stacked bottom-right.
+ * z:50 (above toolbar/z:10, below context menus/z:100).
+ * Uses --ad-* design tokens. */
+
+.container {
+  position: absolute;
+  bottom: 36px; /* above status bar (28px + 8px gap) */
+  right: var(--ad-space-3);
+  z-index: 50;
+  display: flex;
+  flex-direction: column-reverse; /* newest at bottom */
+  gap: 6px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-2);
+  padding: 6px var(--ad-space-3);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-raised);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ad-ink);
+  pointer-events: auto;
+  animation: toastIn 200ms ease-out;
+  max-width: 360px;
+}
+
+.toastOut {
+  animation: toastOut 150ms ease-in forwards;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotSuccess {
+  background: var(--ad-confirm);
+}
+.dotError {
+  background: var(--ad-danger);
+}
+.dotInfo {
+  background: var(--ad-accent);
+}
+.dotWarning {
+  background: var(--ad-caution);
+}
+
+.message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ad-ink-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.dismiss:hover {
+  color: var(--ad-ink);
+  background: var(--ad-surface-inset);
+}

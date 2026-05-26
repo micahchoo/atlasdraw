@@ -193,7 +193,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
             fontFamily:
               "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
             fontSize: "0.875rem",
-            color: "#1f2937",
+            color: "var(--ad-ink, #1f2937)",
           }}
           data-testid="asset-library-dialog"
         >
@@ -227,7 +227,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                 padding: "0.25rem 0.5rem",
                 fontSize: "1.25rem",
                 lineHeight: 1,
-                color: "#4b5563",
+                color: "var(--ad-ink-secondary, #4b5563)",
               }}
             >
               ×
@@ -238,7 +238,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
             style={{
               marginTop: 0,
               marginBottom: "0.75rem",
-              color: "#4b5563",
+              color: "var(--ad-ink-secondary, #4b5563)",
             }}
           >
             {items.length} curated items across {groups.length} libraries are
@@ -259,13 +259,13 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
                 data-testid={`asset-library-group-${group.source}`}
                 style={{
                   padding: "0.5rem 0",
-                  borderBottom: "1px solid #e5e7eb",
+                  borderBottom: "1px solid var(--ad-rule, #e5e7eb)",
                   display: "flex",
                   justifyContent: "space-between",
                 }}
               >
                 <span style={{ fontWeight: 500 }}>{group.label}</span>
-                <span style={{ color: "#6b7280" }}>
+                <span style={{ color: "var(--ad-ink-tertiary, #6b7280)" }}>
                   {group.itemCount} items
                 </span>
               </li>
@@ -281,8 +281,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
             style={{
               width: "100%",
               padding: "0.5rem 0.75rem",
-              background: "#6965db",
-              color: "#fff",
+              background: "var(--ad-accent, #6965db)",
+              color: "var(--ad-ink-inverse, #fff)",
               border: "none",
               borderRadius: "0.25rem",
               cursor: excalidrawAPI ? "pointer" : "not-allowed",
@@ -297,8 +297,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
           <footer
             style={{
               fontSize: "0.75rem",
-              color: "#6b7280",
-              borderTop: "1px solid #e5e7eb",
+              color: "var(--ad-ink-tertiary, #6b7280)",
+              borderTop: "1px solid var(--ad-rule, #e5e7eb)",
               paddingTop: "0.75rem",
             }}
             data-testid="asset-library-attribution"

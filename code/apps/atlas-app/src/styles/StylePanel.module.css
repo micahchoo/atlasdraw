@@ -19,12 +19,12 @@
   width: 280px;
   max-height: 80vh;
   overflow: auto;
-  background: #ffffff;
-  border: 1px solid #adb5bd;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--ad-shadow-raised);
   font-family: system-ui, sans-serif;
-  color: #212529;
+  color: var(--ad-ink);
 }
 
 .header {
@@ -32,7 +32,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #adb5bd;
+  border-bottom: 1px solid var(--ad-rule);
 }
 
 .title {
@@ -51,11 +51,11 @@
   background: transparent;
   font-size: 16px;
   cursor: pointer;
-  color: #212529;
+  color: var(--ad-ink);
 }
 
 .closeBtn:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
   border-radius: 4px;
 }
 
@@ -63,22 +63,22 @@
   margin: 0;
   padding: 12px;
   font-size: 12px;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
 }
 
 /* --- tab strip ------------------------------------------------------------ */
 
 .tabStrip {
   display: flex;
-  border-bottom: 1px solid #adb5bd;
+  border-bottom: 1px solid var(--ad-rule);
 }
 
 .tab {
   flex: 1;
   padding: 6px 8px;
   border: none;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-size: 12px;
   font-weight: 400;
   cursor: pointer;
@@ -86,13 +86,13 @@
 }
 
 .tab:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }
 
 .tabActive {
   font-weight: 600;
-  border-bottom-color: #1971c2;
-  color: #1971c2;
+  border-bottom-color: var(--ad-accent);
+  color: var(--ad-accent);
 }
 
 /* --- body / fields -------------------------------------------------------- */
@@ -117,14 +117,14 @@
 
 .fieldLabel {
   flex: 0 0 auto;
-  color: #212529;
+  color: var(--ad-ink);
 }
 
 .field input[type="color"] {
   width: 2rem;
   height: 1.5rem;
   padding: 0;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -134,12 +134,12 @@
 .field select {
   flex: 1;
   padding: 2px 6px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
   font-size: 12px;
   font-family: inherit;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
 }
 
 /* --- stop rows (categorical) --------------------------------------------- */
@@ -159,7 +159,7 @@
 .stopRow input[type="text"] {
   flex: 1;
   padding: 2px 6px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
   font-size: 12px;
 }
@@ -168,7 +168,7 @@
   width: 2rem;
   height: 1.5rem;
   padding: 0;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
 }
 
@@ -176,15 +176,15 @@
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--ad-surface-raised);
   cursor: pointer;
   font-size: 12px;
 }
 
 .stopRow button:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }
 
 /* --- ramp picker ---------------------------------------------------------- */
@@ -200,17 +200,17 @@
   height: 18px;
   min-width: 60px;
   padding: 0;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
   cursor: pointer;
 }
 
 .rampSwatch:hover {
-  border-color: #1971c2;
+  border-color: var(--ad-accent);
 }
 
 .rampSwatchActive {
-  border: 2px solid #1971c2;
+  border: 2px solid var(--ad-accent);
 }
 
 /* --- graduated preview ---------------------------------------------------- */
@@ -233,7 +233,7 @@
 .previewLabel {
   font-size: 10px;
   background: rgba(255, 255, 255, 0.85);
-  color: #212529;
+  color: var(--ad-ink);
   padding: 0 2px;
   border-radius: 2px;
 }
@@ -242,30 +242,30 @@
 
 .applyBtn {
   padding: 6px 12px;
-  border: 1px solid #1971c2;
+  border: 1px solid var(--ad-accent);
   border-radius: 4px;
-  background: #1971c2;
-  color: #ffffff;
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .applyBtn:hover {
-  background: #1864ab;
-  border-color: #1864ab;
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
 }
 
 .secondaryBtn {
   padding: 4px 8px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-rule);
   border-radius: 4px;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-size: 12px;
   cursor: pointer;
 }
 
 .secondaryBtn:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }

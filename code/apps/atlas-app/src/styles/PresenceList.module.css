@@ -14,10 +14,10 @@
   right: 12px;
   z-index: 10;
   min-width: 140px;
-  background: #ffffff;
+  background: var(--ad-surface-raised);
   border: 1px solid #adb5bd;
-  border-radius: 6px;
-  padding: 8px;
+  border-radius: var(--ad-radius-md);
+  padding: var(--ad-space-2);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   font-family: system-ui, sans-serif;
 }
@@ -32,16 +32,16 @@
   align-items: center;
   gap: 2px;
   padding: 6px 8px;
-  background: #ffffff;
+  background: var(--ad-surface-raised);
   border: 1px solid #adb5bd;
-  border-radius: 6px;
+  border-radius: var(--ad-radius-md);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 .header {
   font-size: 12px;
   font-weight: 600;
-  color: #212529;
+  color: var(--ad-ink);
   margin: 0 0 6px 0;
   padding-bottom: 6px;
   border-bottom: 1px solid #adb5bd;
@@ -71,7 +71,7 @@
 .username {
   font-size: 12px;
   font-weight: 400;
-  color: #212529;
+  color: var(--ad-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

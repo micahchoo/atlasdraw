@@ -105,6 +105,14 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
   const [draftText, setDraftText] = useState("");
   const [anchorMode, setAnchorMode] = useState<"map" | "element">("map");
 
+  // Initialize the anchor picker with the default mode on mount so the first
+  // map click is captured without requiring an extra button press.
+  useEffect(() => {
+    onRequestAnchor?.("map");
+    // Run once on mount; anchorMode starts as "map".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const visible = showResolved ? comments : comments.filter((c) => !c.resolved);
 
   const canSubmit =
@@ -126,6 +134,9 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
     });
     setDraftText("");
     onSubmitted?.();
+    // Re-init the picker so the next comment can use the same anchor mode
+    // without requiring an extra button click.
+    onRequestAnchor?.(anchorMode);
   };
 
   return (
@@ -156,6 +167,7 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
               isOwn={c.authorId === authorId}
               onResolve={() => commentsLayer?.resolve(c.id)}
               onDelete={() => commentsLayer?.delete(c.id)}
+              onEdit={(newText) => commentsLayer?.editComment(c.id, newText)}
             />
           ))
         )}
@@ -254,20 +266,37 @@ interface CommentRowProps {
   isOwn: boolean;
   onResolve: () => void;
   onDelete: () => void;
+  onEdit: (newText: string) => void;
 }
 
 function CommentRow(props: CommentRowProps): React.JSX.Element {
-  const { comment: c, isOwn, onResolve, onDelete } = props;
+  const { comment: c, isOwn, onResolve, onDelete, onEdit } = props;
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(c.text);
 
-  // TODO(phase-7): replace socket.id-based delete-own gating with a stable
-  // user identity. socket.id rotates on reconnect — a user loses delete
-  // rights to their own comments after refreshing the tab.
   const anchorClassName = [
     styles.anchorBadge,
     c.anchor.kind === "map" ? styles.anchorBadgeMap : "",
   ]
     .filter(Boolean)
     .join(" ");
+
+  const startEditing = (): void => {
+    setEditText(c.text);
+    setEditing(true);
+  };
+
+  const cancelEditing = (): void => {
+    setEditing(false);
+  };
+
+  const saveEditing = (): void => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== c.text) {
+      onEdit(trimmed);
+    }
+    setEditing(false);
+  };
 
   return (
     <div
@@ -280,22 +309,65 @@ function CommentRow(props: CommentRowProps): React.JSX.Element {
         <span className={styles.authorName}>{c.authorName || "Anon"}</span>
         <span className={styles.timestamp}>{formatTimestamp(c.createdAt)}</span>
       </div>
-      <div className={styles.text}>{c.text}</div>
+      {editing ? (
+        <div className={styles.editArea}>
+          <textarea
+            className={styles.editTextarea}
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            aria-label="Edit comment text"
+            data-testid={`comments-row-edit-text-${c.id}`}
+            onKeyDown={(e) => e.stopPropagation()}
+          />
+          <div className={styles.editActions}>
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={saveEditing}
+              data-testid={`comments-row-save-${c.id}`}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={cancelEditing}
+              data-testid={`comments-row-cancel-${c.id}`}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className={styles.text}>{c.text}</div>
+      )}
       <span className={anchorClassName} aria-label="Anchor type">
         {c.anchor.kind === "map" ? "Map" : "Element"}
       </span>
       <div className={styles.rowActions}>
         {!c.resolved && (
-          <button
-            type="button"
-            className={styles.actionButton}
-            onClick={onResolve}
-            data-testid={`comments-row-resolve-${c.id}`}
-          >
-            Resolve
-          </button>
+          <>
+            {isOwn && !editing && (
+              <button
+                type="button"
+                className={styles.actionButton}
+                onClick={startEditing}
+                data-testid={`comments-row-edit-${c.id}`}
+              >
+                Edit
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles.actionButton}
+              onClick={onResolve}
+              data-testid={`comments-row-resolve-${c.id}`}
+            >
+              Resolve
+            </button>
+          </>
         )}
-        {isOwn && (
+        {isOwn && !editing && (
           <button
             type="button"
             className={styles.actionButton}

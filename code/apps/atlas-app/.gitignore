@@ -4,3 +4,4 @@
 # build. Production self-host volume-mounts at /data/*.pmtiles independently.
 public/data/*
 !public/data/world-low-zoom.pmtiles
+test-results/

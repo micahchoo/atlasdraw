@@ -260,16 +260,57 @@ describe("layerRegistry", () => {
   });
 
   describe("reorder", () => {
-    it("sets the order field on the targeted entry without auto-shifting others", () => {
+    it("moves entry to target position and auto-shifts intermediate entries", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1");
+      store.registerAnnotation("el-2");
+      store.registerAnnotation("el-3");
+
+      // Move el-1 from index 0 to index 2 (last position).
+      store.reorder("el-1", 2);
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries[0].id).toBe("el-2");
+      expect(entries[0].order).toBe(0);
+      expect(entries[1].id).toBe("el-3");
+      expect(entries[1].order).toBe(1);
+      expect(entries[2].id).toBe("el-1");
+      expect(entries[2].order).toBe(2);
+    });
+
+    it("clamps newOrder below 0 to 0", () => {
       const store = useLayerRegistryStore.getState();
       store.registerAnnotation("el-1");
       store.registerAnnotation("el-2");
 
-      store.reorder("el-1", 99);
+      store.reorder("el-2", -5);
 
       const entries = useLayerRegistryStore.getState().entries;
-      expect(entries.find((e) => e.id === "el-1")?.order).toBe(99);
-      expect(entries.find((e) => e.id === "el-2")?.order).toBe(1); // untouched
+      expect(entries[0].id).toBe("el-2");
+      expect(entries[0].order).toBe(0);
+    });
+
+    it("clamps newOrder past length-1 to last position", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1");
+      store.registerAnnotation("el-2");
+
+      store.reorder("el-1", 999);
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries[1].id).toBe("el-1");
+      expect(entries[1].order).toBe(1);
+    });
+
+    it("no-ops when id is not found", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1");
+
+      store.reorder("nonexistent", 0);
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0].id).toBe("el-1");
     });
   });
 });

@@ -38,6 +38,12 @@ afterEach(() => {
   cleanup();
 });
 
+/** Seed two annotation layers so we can test reorder interactions. */
+function seedTwo() {
+  useLayerRegistryStore.getState().registerAnnotation("el-1", "First");
+  useLayerRegistryStore.getState().registerAnnotation("el-2", "Second");
+}
+
 describe("LayerPanel", () => {
   it("renders both Data Layers and Annotations sections", () => {
     render(<LayerPanel />);
@@ -108,5 +114,57 @@ describe("LayerPanel", () => {
     if (entry?.kind === "data") {
       expect(entry.style.fillColor).toBe("#ff8800");
     }
+  });
+
+  describe("drag-and-drop reorder", () => {
+    it("renders a drag handle per annotation row with accessible label", () => {
+      seedTwo();
+      render(<LayerPanel />);
+
+      const handle = screen.getByTestId("layer-drag-el-1");
+      expect(handle).toBeTruthy();
+      expect(handle.getAttribute("aria-label")).toContain("Drag to reorder");
+    });
+
+    it("renders up/down chevron buttons with disabled state at bounds", () => {
+      seedTwo();
+      render(<LayerPanel />);
+
+      // First entry: up should be disabled, down enabled.
+      const upBtn = screen.getByTestId("layer-up-el-1") as HTMLButtonElement;
+      expect(upBtn.disabled).toBe(true);
+      const downBtn = screen.getByTestId(
+        "layer-down-el-1",
+      ) as HTMLButtonElement;
+      expect(downBtn.disabled).toBe(false);
+
+      // Last entry: up enabled, down disabled.
+      const lastDownBtn = screen.getByTestId(
+        "layer-down-el-2",
+      ) as HTMLButtonElement;
+      expect(lastDownBtn.disabled).toBe(true);
+    });
+
+    it("clicking the down button on the first entry reorders via splice", () => {
+      seedTwo();
+      render(<LayerPanel />);
+
+      const downBtn = screen.getByTestId("layer-down-el-1");
+      fireEvent.click(downBtn);
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries[0].id).toBe("el-2");
+      expect(entries[0].order).toBe(0);
+      expect(entries[1].id).toBe("el-1");
+      expect(entries[1].order).toBe(1);
+    });
+
+    it("sets draggable attribute on row containers", () => {
+      seedTwo();
+      render(<LayerPanel />);
+
+      const row = screen.getByTestId("layer-row-el-1");
+      expect(row.getAttribute("draggable")).toBe("true");
+    });
   });
 });

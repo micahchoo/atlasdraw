@@ -127,8 +127,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
         minHeight: "100%",
         padding: "2rem 1.5rem",
         background: "#f8f9fa",
-        color: "#212529",
-        fontFamily: "system-ui, sans-serif",
+        color: "var(--ad-ink, #212529)",
+        fontFamily: "var(--ad-font-sans, system-ui, sans-serif)",
         fontSize: 14,
         lineHeight: 1.5,
         overflowY: "auto",
@@ -152,7 +152,10 @@ export const BillingPage: React.FC<BillingPageProps> = ({
         </h1>
         <p
           data-testid="billing-page-subtitle"
-          style={{ margin: "0 0 1.5rem 0", color: "#495057" }}
+          style={{
+            margin: "0 0 1.5rem 0",
+            color: "var(--ad-ink-secondary, #495057)",
+          }}
         >
           Pick a plan to unlock more workspaces, members, and features.
         </p>
@@ -161,9 +164,9 @@ export const BillingPage: React.FC<BillingPageProps> = ({
           <section
             data-testid="billing-page-self-host"
             style={{
-              background: "#ffffff",
+              background: "var(--ad-surface-raised, #ffffff)",
               border: "1px solid #adb5bd",
-              borderRadius: 6,
+              borderRadius: "var(--ad-radius-md, 6px)",
               padding: "1rem 1.25rem",
               marginBottom: "1rem",
             }}
@@ -183,7 +186,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               <a
                 href="/docs/self-host/README.md"
                 data-testid="billing-page-self-host-docs"
-                style={{ color: "#1971c2" }}
+                style={{ color: "var(--ad-accent, #1971c2)" }}
               >
                 See docs/self-host/README.md
               </a>{" "}
@@ -192,7 +195,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
             <p
               style={{
                 margin: 0,
-                color: "#868e96",
+                color: "var(--ad-ink-tertiary, #868e96)",
                 fontSize: 12,
               }}
             >
@@ -216,9 +219,9 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               key={tier.id}
               data-testid={`billing-tier-${tier.id}`}
               style={{
-                background: "#ffffff",
+                background: "var(--ad-surface-raised, #ffffff)",
                 border: "1px solid #adb5bd",
-                borderRadius: 6,
+                borderRadius: "var(--ad-radius-md, 6px)",
                 padding: "1rem 1.25rem",
                 display: "flex",
                 flexDirection: "column",
@@ -241,7 +244,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     margin: "0.25rem 0",
                     fontSize: "1rem",
                     fontWeight: 600,
-                    color: "#1971c2",
+                    color: "var(--ad-accent, #1971c2)",
                   }}
                 >
                   {tier.price}
@@ -249,7 +252,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                 <p
                   style={{
                     margin: 0,
-                    color: "#868e96",
+                    color: "var(--ad-ink-tertiary, #868e96)",
                     fontSize: 13,
                   }}
                 >
@@ -290,11 +293,13 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     onClick={() => handleUpgrade(tier.upgradeTier!)}
                     style={{
                       padding: "6px 12px",
-                      border: "1px solid #1971c2",
+                      border: "1px solid var(--ad-accent, #1971c2)",
                       borderRadius: 4,
                       background:
-                        pending === tier.upgradeTier ? "#1864ab" : "#1971c2",
-                      color: "#ffffff",
+                        pending === tier.upgradeTier
+                          ? "var(--ad-accent-hover, #1864ab)"
+                          : "var(--ad-accent, #1971c2)",
+                      color: "var(--ad-ink-inverse, #ffffff)",
                       fontSize: 14,
                       fontWeight: 600,
                       cursor:
@@ -311,7 +316,10 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                 ) : tier.id === "free" ? (
                   <span
                     data-testid={`billing-tier-${tier.id}-current`}
-                    style={{ color: "#868e96", fontSize: 12 }}
+                    style={{
+                      color: "var(--ad-ink-tertiary, #868e96)",
+                      fontSize: 12,
+                    }}
                   >
                     Default tier.
                   </span>

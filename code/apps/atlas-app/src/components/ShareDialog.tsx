@@ -175,13 +175,13 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
           aria-modal="true"
           aria-label="Share map"
           style={{
-            background: "#fff",
+            background: "var(--ad-surface-raised, #fff)",
             borderRadius: "0.5rem",
             padding: "1.25rem 1.5rem",
             maxWidth: "480px",
             width: "calc(100% - 2rem)",
             boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-            color: "#212529",
+            color: "var(--ad-ink, #212529)",
             fontSize: "0.875rem",
             lineHeight: 1.5,
           }}
@@ -215,8 +215,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   padding: "10px 14px",
                   border: "1px solid #adb5bd",
                   borderRadius: "4px",
-                  background: "#ffffff",
-                  color: "#212529",
+                  background: "var(--ad-surface-raised, #ffffff)",
+                  color: "var(--ad-ink, #212529)",
                   fontSize: "0.875rem",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -228,7 +228,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   style={{
                     fontSize: "0.75rem",
                     fontWeight: 400,
-                    color: "#495057",
+                    color: "var(--ad-ink-secondary, #495057)",
                     marginTop: "2px",
                   }}
                 >
@@ -241,10 +241,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 data-testid="share-dialog-pick-collab"
                 style={{
                   padding: "10px 14px",
-                  border: "1px solid #1971c2",
+                  border: "1px solid var(--ad-accent, #1971c2)",
                   borderRadius: "4px",
-                  background: "#1971c2",
-                  color: "#ffffff",
+                  background: "var(--ad-accent, #1971c2)",
+                  color: "var(--ad-ink-inverse, #ffffff)",
                   fontSize: "0.875rem",
                   fontWeight: 600,
                   cursor: "pointer",
@@ -318,9 +318,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     border: "1px solid #ced4da",
                     borderRadius: "4px",
                     fontSize: "0.8125rem",
-                    fontFamily: "ui-monospace, monospace",
+                    fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
                     background: "#f8f9fa",
-                    color: "#212529",
+                    color: "var(--ad-ink, #212529)",
                   }}
                 />
                 <button
@@ -329,10 +329,12 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   data-testid="share-dialog-copy"
                   style={{
                     padding: "6px 14px",
-                    border: "1px solid #1971c2",
+                    border: "1px solid var(--ad-accent, #1971c2)",
                     borderRadius: "4px",
-                    background: copied ? "#37b24d" : "#1971c2",
-                    color: "#fff",
+                    background: copied
+                      ? "#37b24d"
+                      : "var(--ad-accent, #1971c2)",
+                    color: "var(--ad-ink-inverse, #fff)",
                     fontSize: "0.875rem",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -348,7 +350,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   style={{
                     margin: "0 0 0.75rem 0",
                     fontSize: "0.75rem",
-                    color: "#495057",
+                    color: "var(--ad-ink-secondary, #495057)",
                   }}
                 >
                   {READONLY_MODE_HINT[view.mode]}
@@ -361,7 +363,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   style={{
                     margin: "0 0 0.75rem 0",
                     fontSize: "0.75rem",
-                    color: "#495057",
+                    color: "var(--ad-ink-secondary, #495057)",
                   }}
                 >
                   {COLLAB_HINT}
@@ -379,8 +381,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 padding: "6px 14px",
                 border: "1px solid #adb5bd",
                 borderRadius: "4px",
-                background: "#fff",
-                color: "#212529",
+                background: "var(--ad-surface-raised, #fff)",
+                color: "var(--ad-ink, #212529)",
                 fontSize: "0.875rem",
                 fontWeight: 600,
                 cursor: "pointer",

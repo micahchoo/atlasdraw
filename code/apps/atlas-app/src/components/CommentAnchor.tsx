@@ -30,11 +30,32 @@ export interface CommentAnchorProps {
   /** Projected screen-y of the anchor inside the overlay container. */
   screenY: number;
   onResolve?: (commentId: string) => void;
+  isOwn?: boolean;
+  onEdit?: (commentId: string, newText: string) => void;
 }
 
 export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
-  const { comment, screenX, screenY, onResolve } = props;
+  const { comment, screenX, screenY, onResolve, isOwn, onEdit } = props;
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.text);
+
+  const startEditing = (): void => {
+    setEditText(comment.text);
+    setEditing(true);
+  };
+
+  const cancelEditing = (): void => {
+    setEditing(false);
+  };
+
+  const saveEditing = (): void => {
+    const trimmed = editText.trim();
+    if (trimmed && trimmed !== comment.text && onEdit) {
+      onEdit(comment.id, trimmed);
+    }
+    setEditing(false);
+  };
 
   return (
     <div
@@ -85,20 +106,62 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
               {new Date(comment.createdAt).toLocaleString()}
             </span>
           </div>
-          <div className={styles.popoverText}>{comment.text}</div>
-          {!comment.resolved && onResolve && (
+          {editing ? (
+            <div className={styles.popoverEditArea}>
+              <textarea
+                className={styles.popoverEditTextarea}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                aria-label="Edit comment text"
+                data-testid={`comment-popover-edit-text-${comment.id}`}
+              />
+              <div className={styles.popoverEditActions}>
+                <button
+                  type="button"
+                  className={styles.popoverButton}
+                  onClick={saveEditing}
+                  data-testid={`comment-popover-save-${comment.id}`}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className={styles.popoverButton}
+                  onClick={cancelEditing}
+                  data-testid={`comment-popover-cancel-${comment.id}`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.popoverText}>{comment.text}</div>
+          )}
+          {!comment.resolved && (
             <div className={styles.popoverActions}>
-              <button
-                type="button"
-                className={styles.popoverButton}
-                onClick={() => {
-                  onResolve(comment.id);
-                  setOpen(false);
-                }}
-                data-testid={`comment-popover-resolve-${comment.id}`}
-              >
-                Resolve
-              </button>
+              {isOwn && !editing && (
+                <button
+                  type="button"
+                  className={styles.popoverButton}
+                  onClick={startEditing}
+                  data-testid={`comment-popover-edit-${comment.id}`}
+                >
+                  Edit
+                </button>
+              )}
+              {onResolve && (
+                <button
+                  type="button"
+                  className={styles.popoverButton}
+                  onClick={() => {
+                    onResolve(comment.id);
+                    setOpen(false);
+                  }}
+                  data-testid={`comment-popover-resolve-${comment.id}`}
+                >
+                  Resolve
+                </button>
+              )}
             </div>
           )}
         </div>

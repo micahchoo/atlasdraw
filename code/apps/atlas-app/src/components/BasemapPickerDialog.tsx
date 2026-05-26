@@ -144,11 +144,15 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
                     gap: "0.5rem",
                     padding: "0.75rem",
                     borderRadius: "0.5rem",
-                    border: isActive ? "2px solid #0aa" : "1px solid #ddd",
-                    background: isActive ? "#e6f7ff" : "#fff",
+                    border: isActive
+                      ? "2px solid var(--ad-accent, #0aa)"
+                      : "1px solid var(--ad-rule, #ddd)",
+                    background: isActive
+                      ? "var(--ad-accent-subtle, #e6f7ff)"
+                      : "var(--ad-surface-raised, #fff)",
                     cursor: "pointer",
                     fontSize: "0.875rem",
-                    color: "#333",
+                    color: "var(--ad-ink, #333)",
                   }}
                 >
                   <div
@@ -158,11 +162,11 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
                       borderRadius: "0.25rem",
                       background:
                         b.id === "protomaps-dark"
-                          ? "#1a1a1a"
+                          ? "var(--ad-ink, #1a1a1a)"
                           : b.id === "openfreemap-bright"
                           ? "#f0f0f0"
-                          : "#ffffff",
-                      border: "1px solid #ddd",
+                          : "var(--ad-surface-raised, #ffffff)",
+                      border: "1px solid var(--ad-rule, #ddd)",
                     }}
                   />
                   <span style={{ fontWeight: isActive ? 600 : 400 }}>
@@ -189,7 +193,7 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
             style={{
               marginTop: "0.75rem",
               fontSize: "0.75rem",
-              color: "#666",
+              color: "var(--ad-ink-tertiary, #666)",
               textAlign: "center",
             }}
           >

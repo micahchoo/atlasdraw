@@ -169,4 +169,24 @@ describe("loadAppConfig", () => {
     );
     expect(cfg.geocoder).toEqual({ endpoint: "https://photon.example" });
   });
+
+  // T14/T15 — VITE_ALLOW_REMOTE_BASEMAPS.
+  it("allowRemoteBasemaps defaults to false (zero call-home posture, ADR-0006)", () => {
+    const cfg = loadAppConfig("hosted");
+    expect(cfg.allowRemoteBasemaps).toBe(false);
+  });
+
+  it("allowRemoteBasemaps is true when VITE_ALLOW_REMOTE_BASEMAPS=true", () => {
+    const cfg = loadAppConfig(
+      "hosted",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "true",
+    );
+    expect(cfg.allowRemoteBasemaps).toBe(true);
+  });
 });

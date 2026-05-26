@@ -173,7 +173,7 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "#0aa",
+                  color: "var(--ad-accent, #0aa)",
                   cursor: "pointer",
                   fontSize: "0.8125rem",
                   padding: 0,
@@ -190,13 +190,13 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
                 onClick={onCloseRequest}
                 style={{
                   background: "transparent",
-                  border: "1px solid #ddd",
+                  border: "1px solid var(--ad-rule, #ddd)",
                   borderRadius: "0.25rem",
                   cursor: "pointer",
                   fontSize: "1rem",
                   lineHeight: 1,
                   padding: "0.25rem 0.5rem",
-                  color: "#333",
+                  color: "var(--ad-ink, #333)",
                 }}
               >
                 ×
@@ -220,9 +220,9 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
             style={{
               flex: 1,
               width: "100%",
-              border: "1px solid #ddd",
+              border: "1px solid var(--ad-rule, #ddd)",
               borderRadius: "0.25rem",
-              background: "#fff",
+              background: "var(--ad-surface-raised, #fff)",
             }}
           />
 
@@ -232,7 +232,7 @@ export const MaputnikDialog: React.FC<MaputnikDialogProps> = ({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.75rem",
-              color: "#666",
+              color: "var(--ad-ink-tertiary, #666)",
               textAlign: "center",
             }}
           >

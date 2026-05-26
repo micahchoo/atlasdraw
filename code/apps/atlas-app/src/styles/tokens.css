@@ -1,0 +1,79 @@
+/* Atlasdraw Design Tokens — .interface-design/system.md is the canonical reference.
+ *
+ * Adopted incrementally: new components use these custom properties. Existing
+ * hex literals in older CSS Modules stay until they're touched for other reasons.
+ * Prefix --ad- (atlasdraw) avoids collisions with Excalidraw's --color-* namespace.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* Surface — drafting vellum.
+   * Deliberately warm. The eye says "paper" immediately. */
+
+  --ad-surface: #f2e8d5; /* vellum — unmistakably paper */
+  --ad-surface-raised: #faf6ee; /* tracing paper — bright, warm */
+  --ad-surface-inset: #e8ddc8; /* inset — shadow on paper */
+
+  /* Ink — warm sepia-toned black.
+   * Not #000, not Bootstrap #212529. Brown-black like technical pen ink. */
+
+  --ad-ink: #2d2218; /* primary — sepia-black */
+  --ad-ink-secondary: #544a3d; /* supporting — warm dark brown-gray */
+  --ad-ink-tertiary: #8a7e6e; /* muted — warm mid-brown */
+  --ad-ink-inverse: #faf6ee; /* on accent — warm white */
+
+  /* Accent — blueprint / cyanotype blue.
+   * Unchanged from existing #1971c2 — already the right domain color.
+   * Subtle tint warmed slightly to sit on vellum without clashing. */
+
+  --ad-accent: #1971c2;
+  --ad-accent-hover: #1864ab;
+  --ad-accent-subtle: #e5eef6; /* accent tint — slightly warmer */
+
+  /* Hairlines — border progression.
+   * RGBA blends with whatever surface they sit on. Slightly softer than
+   * the previous values to feel more organic (paper fiber gaps, not
+   * pixel-precise digital lines). */
+
+  --ad-hairline: rgba(0, 0, 0, 0.06); /* whisper */
+  --ad-rule: rgba(0, 0, 0, 0.11); /* standard */
+  --ad-emphasis: rgba(0, 0, 0, 0.2); /* strong */
+  --ad-focus-ring: #1971c2; /* focus (opaque for a11y) */
+
+  /* Markup — semantic colors -------------------------------------------------- */
+
+  --ad-danger: #d64045; /* destructive — red pencil correction */
+  --ad-caution: #e67700; /* warning — amber */
+  --ad-confirm: #2f9e44; /* success — green */
+
+  /* Spacing scale — base unit 4px.
+   * Compact (6px) is accepted for inline padding and tight-fit contexts
+   * where 4px is too tight and 8px is too loose. Structural spacing
+   * (margins, section gaps) stays on the 4px grid. */
+
+  --ad-space-1: 4px;
+  --ad-space-compact: 6px;
+  --ad-space-2: 8px;
+  --ad-space-3: 12px;
+  --ad-space-4: 16px;
+  --ad-space-6: 24px;
+  --ad-space-8: 32px;
+
+  /* Radius -------------------------------------------------------------------- */
+
+  --ad-radius-sm: 4px;
+  --ad-radius-md: 6px;
+  --ad-radius-lg: 10px;
+
+  /* Typography ---------------------------------------------------------------- */
+
+  --ad-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ad-font-mono: ui-monospace, "Cascadia Code", "Fira Code", "JetBrains Mono",
+    monospace;
+
+  /* Shadows — whisper-quiet, used only on raised surfaces --------------------- */
+
+  --ad-shadow-tracing: 0 1px 2px rgba(0, 0, 0, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.03);
+  --ad-shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+}

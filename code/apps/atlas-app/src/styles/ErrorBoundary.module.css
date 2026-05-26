@@ -1,0 +1,75 @@
+/* ErrorBoundary — crash screen when the app encounters an unhandled error.
+ * Full-viewport fallback surface. Uses --ad-* design tokens. */
+
+.root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--ad-surface);
+}
+
+.card {
+  max-width: 420px;
+  padding: var(--ad-space-6);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-tracing);
+  text-align: center;
+}
+
+.heading {
+  margin: 0 0 var(--ad-space-2);
+  font-family: var(--ad-font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.message {
+  margin: 0 0 var(--ad-space-4);
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+  line-height: 1.5;
+}
+
+.details {
+  margin: 0 0 var(--ad-space-4);
+  padding: var(--ad-space-3);
+  background: var(--ad-surface-inset);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius-md);
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px var(--ad-space-4);
+  border: 1px solid var(--ad-accent);
+  border-radius: var(--ad-radius-md);
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
+}

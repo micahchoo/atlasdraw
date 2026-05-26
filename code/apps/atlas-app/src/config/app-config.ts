@@ -30,6 +30,10 @@ const EnvSchema = z.object({
   // / pages tiers never see them. Cites ADR-0011 (hosted-mode telemetry,
   // server-side only) — the *client* surface is gated here.
   VITE_MANAGED_MODE: z.enum(["true", "false"]).default("false"),
+  // T14/T15: allow remote basemap tile sources (e.g. MapTiler, Stadia Maps).
+  // Default false per Q3 — no outbound tile requests without operator opt-in.
+  // ADR-0006 (zero call-home posture).
+  VITE_ALLOW_REMOTE_BASEMAPS: z.enum(["true", "false"]).default("false"),
 });
 
 export type AppConfig = {
@@ -69,6 +73,8 @@ export type AppConfig = {
    * `false` regardless of `buildTarget`. Cites ADR-0011.
    */
   managed: boolean;
+  /** T14/T15: gate for remote basemap tile sources. Default false (Q3). */
+  allowRemoteBasemaps: boolean;
 };
 
 export function loadAppConfig(
@@ -81,6 +87,8 @@ export function loadAppConfig(
   rawGeocoderEndpoint: string | undefined = import.meta.env
     .VITE_GEOCODER_ENDPOINT,
   rawManagedMode: string | undefined = import.meta.env.VITE_MANAGED_MODE,
+  rawAllowRemoteBasemaps: string | undefined = import.meta.env
+    .VITE_ALLOW_REMOTE_BASEMAPS,
 ): AppConfig {
   const parsed = EnvSchema.safeParse({
     VITE_BUILD_TARGET: rawTarget,
@@ -90,6 +98,7 @@ export function loadAppConfig(
     VITE_MAPUTNIK_URL: rawMaputnikUrl,
     VITE_GEOCODER_ENDPOINT: rawGeocoderEndpoint,
     VITE_MANAGED_MODE: rawManagedMode,
+    VITE_ALLOW_REMOTE_BASEMAPS: rawAllowRemoteBasemaps,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -118,6 +127,7 @@ export function loadAppConfig(
   // server-side `MANAGED_MODE=true` posture.
   const managed =
     buildTarget === "hosted" && parsed.data.VITE_MANAGED_MODE === "true";
+  const allowRemoteBasemaps = parsed.data.VITE_ALLOW_REMOTE_BASEMAPS === "true";
   return {
     buildTarget,
     enableShareUI: buildTarget === "hosted",
@@ -128,6 +138,7 @@ export function loadAppConfig(
     maputnikUrl: parsed.data.VITE_MAPUTNIK_URL,
     geocoder,
     managed,
+    allowRemoteBasemaps,
   };
 }
 

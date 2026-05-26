@@ -47,6 +47,7 @@ const BASE_CONFIG: AppConfig = {
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   managed: true,
+  allowRemoteBasemaps: false,
 };
 
 afterEach(() => {

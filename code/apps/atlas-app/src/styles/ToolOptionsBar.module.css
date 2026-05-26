@@ -1,0 +1,109 @@
+/* ToolOptionsBar — context-sensitive controls for the active atlas tool.
+ * Positioned below Excalidraw's toolbar, z:10. Appears only when an atlas
+ * tool is active. Uses --ad-* design tokens. */
+
+.bar {
+  position: absolute;
+  top: 52px; /* below Excalidraw's native toolbar (~44px + 8px gap) */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-2);
+  padding: 6px var(--ad-space-3);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-tracing);
+  pointer-events: auto;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.separator {
+  width: 1px;
+  height: 20px;
+  background: var(--ad-hairline);
+}
+
+.toolLabel {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-ink);
+  white-space: nowrap;
+}
+
+/* ScaleMode toggle — segmented button group */
+.modeGroup {
+  display: flex;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  overflow: hidden;
+}
+
+.modeButton {
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+  cursor: pointer;
+  transition: background 100ms ease;
+}
+
+.modeButton:not(:last-child) {
+  border-right: 1px solid var(--ad-rule);
+}
+
+.modeButton:hover {
+  background: var(--ad-accent-subtle);
+}
+
+.modeButtonActive {
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+}
+
+.modeButtonActive:hover {
+  background: var(--ad-accent-hover);
+}
+
+/* Hint — keyboard shortcut or status */
+.hint {
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+}
+
+/* Style controls — stubbed for future stroke/fill */
+.styleButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink-secondary);
+  cursor: pointer;
+}
+
+.styleButton:hover {
+  border-color: var(--ad-emphasis);
+  color: var(--ad-ink);
+}
+
+.styleButtonActive {
+  border-color: var(--ad-accent);
+  color: var(--ad-accent);
+}

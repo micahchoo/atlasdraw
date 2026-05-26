@@ -1,40 +1,36 @@
 /* SPDX-License-Identifier: AGPL-3.0-only
- * Phase 6 A14b — High-contrast theme overrides.
+ * High-contrast theme overrides — WCAG AAA (≥7:1 contrast).
  *
- * Targets WCAG AAA contrast (≥7:1 between foreground/background). Activates on:
+ * Activates on:
  *   - prefers-contrast: more  (system-level user preference)
- *   - [data-theme="high-contrast"] on <html> (manual app-level opt-in)
+ *   - [data-theme="high-contrast"] on <html> (manual opt-in)
  *
- * Reference: WCAG 2.1 §1.4.6 Contrast (Enhanced)
- *   https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html
- *
- * The atlasdraw-ui-conventions palette uses literal Bootstrap-5 hex tokens
- * (no CSS vars yet). Inline styles in components reference those hex values
- * directly, so for this pass we override:
- *   - The `--color-surface` CSS variable that several modal panels reference
- *     via `var(--color-surface, #fff)`.
- *   - A small set of new tokens (--ad-fg, --ad-bg, --ad-border, --ad-link,
- *     --ad-accent) that newer components SHOULD reference when authored.
- *
- * Migration note: components written before this stylesheet (BasemapPicker,
- * MaputnikDialog, PrintDialog, etc.) hard-code hex values. They will not pick
- * up these overrides until a follow-up converts them to var() references.
- * That's an explicit follow-up — out of scope for this wave per plan §A14b.
+ * Overrides tokens.css --ad-* variables. Components using our token system
+ * pick these up automatically. Legacy components with hardcoded hex values
+ * do not — they'll need separate migration.
  */
 
 @media (prefers-contrast: more) {
   :root {
-    --color-surface: #ffffff;
-    --ad-fg: #000000;
-    --ad-bg: #ffffff;
-    --ad-border: #000000;
-    --ad-link: #0000ee; /* true blue, WCAG AAA on white */
-    --ad-accent: #0000aa;
-    --ad-error: #b00000;
-    --ad-muted: #1a1a1a; /* ≥7:1 on white */
+    --ad-surface: #ffffff;
+    --ad-surface-raised: #ffffff;
+    --ad-surface-inset: #eeeeee;
+    --ad-ink: #000000;
+    --ad-ink-secondary: #1a1816;
+    --ad-ink-tertiary: #4a4540;
+    --ad-ink-inverse: #ffffff;
+    --ad-accent: #0000cc;
+    --ad-accent-hover: #000099;
+    --ad-accent-subtle: #e5eef6;
+    --ad-hairline: #000000;
+    --ad-rule: #000000;
+    --ad-emphasis: #000000;
+    --ad-focus-ring: #0000ee;
+    --ad-danger: #b00000;
+    --ad-caution: #8b4500;
+    --ad-confirm: #006400;
   }
 
-  /* Force borders visible on all interactive surfaces. */
   button,
   input,
   select,
@@ -42,7 +38,6 @@
     outline-color: #000000;
   }
 
-  /* Strengthen focus rings — WCAG 2.4.7 Focus Visible (AAA-aligned). */
   *:focus-visible {
     outline: 3px solid #0000ee;
     outline-offset: 2px;
@@ -50,14 +45,23 @@
 }
 
 [data-theme="high-contrast"] {
-  --color-surface: #ffffff;
-  --ad-fg: #000000;
-  --ad-bg: #ffffff;
-  --ad-border: #000000;
-  --ad-link: #0000ee;
-  --ad-accent: #0000aa;
-  --ad-error: #b00000;
-  --ad-muted: #1a1a1a;
+  --ad-surface: #ffffff;
+  --ad-surface-raised: #ffffff;
+  --ad-surface-inset: #eeeeee;
+  --ad-ink: #000000;
+  --ad-ink-secondary: #1a1816;
+  --ad-ink-tertiary: #4a4540;
+  --ad-ink-inverse: #ffffff;
+  --ad-accent: #0000cc;
+  --ad-accent-hover: #000099;
+  --ad-accent-subtle: #e5eef6;
+  --ad-hairline: #000000;
+  --ad-rule: #000000;
+  --ad-emphasis: #000000;
+  --ad-focus-ring: #0000ee;
+  --ad-danger: #b00000;
+  --ad-caution: #8b4500;
+  --ad-confirm: #006400;
 }
 
 [data-theme="high-contrast"] button,

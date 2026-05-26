@@ -12,13 +12,13 @@
   height: 100%;
   font-family: system-ui, sans-serif;
   font-size: 12px;
-  color: #212529;
+  color: var(--ad-ink);
 }
 
 .filterBar {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: var(--ad-space-1) var(--ad-space-2);
   border-bottom: 1px solid var(--default-border-color, #ced4da);
   font-size: 11px;
 }
@@ -26,39 +26,39 @@
 .filterToggle {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ad-space-1);
   background: none;
   border: none;
-  padding: 4px 8px;
+  padding: var(--ad-space-1) var(--ad-space-2);
   cursor: pointer;
-  color: #212529;
+  color: var(--ad-ink);
   font-size: 11px;
 }
 
 .filterToggle[aria-pressed="true"] {
-  color: #1971c2;
+  color: var(--ad-accent);
   font-weight: 600;
 }
 
 .list {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: var(--ad-space-1) 0;
 }
 
 .empty {
-  padding: 16px 12px;
-  color: #868e96;
+  padding: var(--ad-space-4) var(--ad-space-3);
+  color: var(--ad-ink-tertiary);
   font-size: 11px;
   text-align: center;
 }
 
 .row {
-  padding: 8px 12px;
+  padding: var(--ad-space-2) var(--ad-space-3);
   border-bottom: 1px solid var(--default-border-color, #ced4da);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ad-space-1);
 }
 
 .rowResolved {
@@ -69,7 +69,7 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--ad-space-2);
 }
 
 .authorName {
@@ -79,7 +79,7 @@
 
 .timestamp {
   font-size: 11px;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
 }
 
 .text {
@@ -106,7 +106,7 @@
 
 .rowActions {
   display: flex;
-  gap: 4px;
+  gap: var(--ad-space-1);
   margin-top: 2px;
 }
 
@@ -115,8 +115,8 @@
   padding: 2px 8px;
   border: 1px solid #adb5bd;
   border-radius: 4px;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   cursor: pointer;
 }
 
@@ -131,7 +131,7 @@
 
 .composer {
   border-top: 1px solid var(--default-border-color, #ced4da);
-  padding: 8px;
+  padding: var(--ad-space-2);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -152,7 +152,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--ad-space-2);
 }
 
 .composerToggle {
@@ -164,33 +164,33 @@
 }
 
 .composerToggleBtn {
-  padding: 4px 8px;
+  padding: var(--ad-space-1) var(--ad-space-2);
   border: none;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-size: 11px;
   cursor: pointer;
 }
 
 .composerToggleBtnActive {
-  background: #1971c2;
-  color: #ffffff;
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
 }
 
 .composerSubmit {
   padding: 6px 12px;
-  border: 1px solid #1971c2;
+  border: 1px solid var(--ad-accent);
   border-radius: 4px;
-  background: #1971c2;
-  color: #ffffff;
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .composerSubmit:hover {
-  background: #1864ab;
-  border-color: #1864ab;
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
 }
 
 .composerSubmit:disabled {
@@ -201,5 +201,27 @@
 
 .composerHint {
   font-size: 11px;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
+}
+
+.editArea {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editTextarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
+  padding: 4px 6px;
+  border: 1px solid var(--ad-accent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.editActions {
+  display: flex;
+  gap: var(--ad-space-1);
 }

@@ -1,0 +1,144 @@
+/* KeyboardShortcuts — ? key overlay, searchable shortcut reference.
+ * z:100 (context menu band). Uses --ad-* design tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  width: 480px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+  overflow: hidden;
+}
+
+/* Search input area */
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-3) var(--ad-space-4);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.searchIcon {
+  color: var(--ad-ink-tertiary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--ad-font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ad-ink);
+}
+
+.searchInput::placeholder {
+  color: var(--ad-ink-tertiary);
+}
+
+/* Scrollable shortcut list */
+.list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--ad-space-2) 0;
+}
+
+.category {
+  padding: 0 var(--ad-space-4);
+}
+
+.categoryTitle {
+  padding: var(--ad-space-2) 0 4px;
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ad-ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.label {
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-ink);
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--ad-emphasis);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-inset);
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ad-ink);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.plus {
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  color: var(--ad-ink-tertiary);
+}
+
+.empty {
+  padding: var(--ad-space-4);
+  text-align: center;
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+  color: var(--ad-ink-tertiary);
+}
+
+/* Footer hint */
+.footer {
+  padding: var(--ad-space-2) var(--ad-space-4);
+  border-top: 1px solid var(--ad-hairline);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+  display: flex;
+  justify-content: space-between;
+}
