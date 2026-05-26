@@ -211,6 +211,8 @@ describe("CommentsPanel", () => {
         onRequestAnchor={(kind) => captured.push(kind)}
       />,
     );
+    // Mount initializes with "map"; clear before asserting button clicks.
+    captured.length = 0;
     fireEvent.click(screen.getByTestId("comments-anchor-element"));
     fireEvent.click(screen.getByTestId("comments-anchor-map"));
     expect(captured).toEqual(["element", "map"]);

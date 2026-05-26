@@ -51,10 +51,10 @@ edition traces every claim to source code).
 | # | Risk | Severity | Dimension(s) | Affected Subsystems | Fix Complexity | Source |
 |---|------|----------|-------------|--------------------|---------------|--------|
 | I1 | **AssetLibraryPanel incomplete (console.log in production, no apparent resolver)** | Info | Spatial, Temporal (contemporary) | Editor SPA | Low (remove debug logging) | `atlas-app/components.md` SS8 |
-| I2 | **LayerPanel drag-reorder UNSAFE pointer handler (HACK comment)** | Info | Spatial, Temporal (contemporary) | Editor SPA | Low (implement proper DnD) | `atlas-app/components.md` SS5 |
+| I2 | **LayerPanel drag-reorder UNSAFE pointer handler (HACK comment)** | ~~Info~~ Resolved (2026-05-25) | Spatial, Temporal (contemporary) | Editor SPA | HTML5 DnD implemented; up/down keyboard fallback preserved | `atlas-app/components.md` SS5 |
 | I3 | **Comments-anchor-picker vanilla store (second state pattern beyond Zustand)** | Info | Tangle Complexity | Editor SPA | Low (document or migrate to Zustand) | `atlas-app/components.md` SS8 |
-| I4 | **ID_RE regex duplicated 4x across maps.ts, share.ts, both adapters** | Info | Readiness | Storage Server | Easy (extract shared utility) | `storage/components.md` SSWeaknesses |
-| I5 | **isNotFoundError helper duplicated in maps.ts and share.ts** | Info | Readiness | Storage Server | Easy (extract to shared module) | `storage/components.md` SSWeaknesses |
+| I4 | **ID_RE regex duplicated 4x across maps.ts, share.ts, both adapters** | ~~Info~~ Resolved (2026-05-06) | Readiness | Storage Server | Already fixed — single source in `constants.ts` | `storage/components.md` SSWeaknesses |
+| I5 | **isNotFoundError helper duplicated in maps.ts and share.ts** | ~~Info~~ Resolved (2026-05-25) | Readiness | Storage Server | Extracted to `lib/errors.ts` | `storage/components.md` SSWeaknesses |
 | I6 | **`ignoreDeprecations: "6.0"` in storage tsconfig** | Info | Temporal (fossil) | Storage Server | Easy (verify and remove) | `storage/components.md` SSQuality |
 | I7 | **No lazy-loading (all 21 components statically bundled)** | Info | Readiness | Editor SPA | Medium (React.lazy for dialogs) | `atlas-app/modules.md` SSRisks |
 | I8 | **Workspace table created unconditionally in self-host** | Info | Spatial | Storage Server | Easy (gate on MANAGED_MODE) | `storage/components.md` SSDead Code |

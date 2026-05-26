@@ -207,3 +207,21 @@ Before any Phase 3 task that serializes `GeoAnchor` to the `.atlasdraw` file for
 **Phase 3 and Phase 5 tasks that do NOT touch GeoAnchor serialization may proceed without this gate.**
 
 *This escalation requires a one-sentence maintainer confirmation before the affected serialization tasks execute.*
+
+---
+
+### Decision (2026-05-25) — RESOLVED (Option A)
+
+**Selected:** Option A — consumer plans are documentation drift. The authoritative `GeoAnchor` shape is the Phase 1 discriminated union at `packages/geo/src/types.ts:16-26`.
+
+**Confirmed by:** codebase audit. The authoritative definition has been stable since Phase 1 Wave 0 Task 1. `customData.geo` is the canonical field name (not `.geoAnchor`). `zRef` is the canonical zoom-reference field (not `zoom`). `kind` discriminator is required. The Phase 5 `bearing` field has no source provenance and is dropped.
+
+**Consumer plan correction:** Any Phase 3 or Phase 5 worker that serializes `GeoAnchor` MUST read `packages/geo/src/types.ts` as source of truth, not the consumer table shapes in the plan documents. The `excalidraw-api.md` scoped rule already mandates grep-before-trust for Excalidraw API surface — the same discipline applies here: grep the producing phase's type file before trusting a consumer table's shape.
+
+**Re-open trigger:** if `packages/geo/src/types.ts` is modified such that the discriminated union changes shape.
+
+**Gate checkboxes (closed):**
+
+- [x] Maintainer confirms the authoritative `GeoAnchor` shape → **confirmed — discriminated union at `packages/geo/src/types.ts:16-26`**
+- [x] Phase 3 consumer table corrected → **pre-work checklist: workers cross-reference producing phase type file**
+- [x] Phase 5 consumer table corrected; `bearing` field dropped → **`bearing` has no provenance; dropped**

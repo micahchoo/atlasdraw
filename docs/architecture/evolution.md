@@ -170,15 +170,15 @@ Hacks and TODO-marked paths on load-bearing routes that have lithified under pre
 
 | Location | Marker | Load-bearing? | Why it is diagenetic |
 |---|---|---|---|
-| `LayerPanel.tsx:271` | HACK | Yes, layer reorder UI | `onPointerDown` UNSAFE handler replaces proper DnD. Multiple phases added features on top of this hack. |
+| ~~`LayerPanel.tsx:271`~~ | ~~HACK~~ Resolved (2026-05-25) | Yes, layer reorder UI | HTML5 DnD with keyboard fallback implemented. |
 | `MapEditor.tsx:~480` | Type cast | Yes, entire app routing | `import.meta.env as Record<string,string>` subverts type system on the single integration point. Three concerns share one escape hatch. |
 | `state/comments.ts:~50` | TODO | Yes, comment system (P6) | Yjs observer type workaround on a shipped feature. |
 | `CommentsPanel.tsx:262` | TODO(phase-7) | Yes, comment delete gating | Uses `socket.id` as user identity. Documented temporary. |
 | `CommentsPanelHost.tsx:33` | TODO(phase-7) | Yes, pending anchor wiring | Placeholder user identity. |
-| `MapEditor.tsx:607` | TODO(T14/T15) | Yes, remote basemap gating | `allowRemote` wiring deferred. Lives on critical code path. |
+| ~~`MapEditor.tsx:607`~~ | ~~TODO(T14/T15)~~ Resolved (2026-05-25) | Yes, remote basemap gating | Wired via `getAppConfig().allowRemoteBasemaps`. |
 | `storage/billing.ts:~150` | TODO | Yes, Stripe webhooks | In-memory idempotency store. Will double-process events in multi-replica. |
-| `storage/routes/maps.ts` + `share.ts` | Duplication | Yes, error handling | `isNotFoundError` duplicated across route files. |
-| `storage/**/*.ts` | Duplication | Yes, ID validation | `ID_RE` regex copy-pasted across routes and adapters. |
+| ~~`storage/routes/maps.ts` + `share.ts`~~ | ~~Duplication~~ Resolved (2026-05-25) | Yes, error handling | Extracted to `lib/errors.ts`. |
+| ~~`storage/**/*.ts`~~ | ~~Duplication~~ Resolved (2026-05-06) | Yes, ID validation | Single source in `constants.ts`. |
 | `storage/adapters/sqlite-fs.ts:78` | Comment acknowledged | Yes, self-host | Workspace table created unconditionally but unused outside managed mode. |
 
 ---
@@ -187,13 +187,13 @@ Hacks and TODO-marked paths on load-bearing routes that have lithified under pre
 
 Modules whose surface position suggests one thing but whose interior belongs to a different era.
 
-### CoordinateSync in `@atlasdraw/geo`
+### CoordinateSync in `@atlasdraw/basemap` (resolved 2026-05-25)
 
 **Appearance:** Pure geospatial library (types, projection functions).
 
-**Reality:** Contains a stateful runtime class with `requestAnimationFrame` loop, MapLibre instance reference, and Excalidraw API reference.
+**Reality (pre-2026-05-25):** Contained a stateful runtime class with MapLibre instance reference and Excalidraw API reference.
 
-**Impact:** Prevents `@atlasdraw/geo` from being pure. The rAF loop creates browser event-loop timing dependencies in a package otherwise usable in Node.js CLI contexts.
+**Resolution:** CoordinateSync moved to `@atlasdraw/basemap` (2026-05-25). Excalidraw type decoupling (`ExcalidrawElementLike`, `ExcalidrawAPI`) extracted to `@atlasdraw/geo`'s `excalidrawTypes.ts`. The rAF throttle always lived in the React hook (`useCoordinateSync.ts`), not in the class — the evolution.md description was corrected. Scale-mode utilities (`computeScaleFactor`, `clampHybridFactor`) exported from geo's public barrel for basemap consumption.
 
 ### Yjs Layer in `@atlasdraw/data`
 
