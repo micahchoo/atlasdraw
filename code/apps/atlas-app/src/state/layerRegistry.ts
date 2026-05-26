@@ -75,6 +75,7 @@ export type LayerRegistryEntry = AnnotationLayerEntry | DataLayerEntry;
 export interface ILayerRegistry {
   entries: LayerRegistryEntry[];
   registerAnnotation(elementId: string, label?: string): void;
+  updateAnnotationLabel(elementId: string, label: string): void;
   registerDataLayer(opts: {
     id: string;
     fc: FeatureCollection;
@@ -110,6 +111,9 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
 
     registerAnnotation: (elementId, label) =>
       set((s) => {
+        if (s.entries.some((e) => e.id === elementId)) {
+          return;
+        }
         s.entries.push({
           kind: "annotation",
           id: elementId,
@@ -117,6 +121,13 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           visible: true,
           order: s.entries.length,
         });
+      }),
+    updateAnnotationLabel: (elementId, label) =>
+      set((s) => {
+        const e = s.entries.find((x) => x.id === elementId);
+        if (e) {
+          e.label = label;
+        }
       }),
 
     registerDataLayer: ({ id, fc, label, style }) => {

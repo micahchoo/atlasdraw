@@ -18,6 +18,7 @@ export interface ExcalidrawElementLike {
   width?: number;
   height?: number;
   fontSize?: number;
+  strokeWidth?: number;
   points?: ReadonlyArray<readonly [number, number]>;
   customData?: unknown;
   [k: string]: unknown;

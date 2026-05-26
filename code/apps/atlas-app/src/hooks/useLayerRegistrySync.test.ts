@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
   buildSceneDiffHandler,
+  generateLayerLabel,
   applyVisibilityToScene,
   applyVisibilityToMap,
   diffVisibility,
@@ -31,8 +32,9 @@ import type { LayerRegistryEntry } from "../state/layerRegistry";
 
 function makeRegistryStubs() {
   const registerAnnotation = vi.fn();
+  const updateAnnotationLabel = vi.fn();
   const remove = vi.fn();
-  return { registerAnnotation, remove };
+  return { registerAnnotation, updateAnnotationLabel, remove };
 }
 
 // ---------------------------------------------------------------------------
@@ -44,32 +46,39 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
     vi.clearAllMocks();
   });
 
-  it("registers each element on the initial scene", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+  it("registers each element on the initial scene with labels", () => {
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>();
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
 
-    handler([{ id: "a" }, { id: "b" }]);
+    handler([
+      { id: "a", type: "rectangle" },
+      { id: "b", type: "ellipse" },
+    ]);
 
     expect(registerAnnotation).toHaveBeenCalledTimes(2);
-    expect(registerAnnotation).toHaveBeenNthCalledWith(1, "a");
-    expect(registerAnnotation).toHaveBeenNthCalledWith(2, "b");
+    expect(registerAnnotation).toHaveBeenNthCalledWith(1, "a", "Rectangle");
+    expect(registerAnnotation).toHaveBeenNthCalledWith(2, "b", "Ellipse");
     expect(remove).not.toHaveBeenCalled();
     expect(knownIds.has("a")).toBe(true);
     expect(knownIds.has("b")).toBe(true);
   });
 
   it("dedupes — second call with same scene is a no-op", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>();
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
@@ -83,30 +92,37 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it("registers a newly-added element exactly once", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+  it("registers a newly-added element exactly once with label", () => {
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>(["a"]);
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
 
-    handler([{ id: "a" }, { id: "b" }]);
+    handler([
+      { id: "a", type: "rectangle" },
+      { id: "b", type: "freedraw" },
+    ]);
 
     expect(registerAnnotation).toHaveBeenCalledTimes(1);
-    expect(registerAnnotation).toHaveBeenCalledWith("b");
+    expect(registerAnnotation).toHaveBeenCalledWith("b", "Freehand");
     expect(remove).not.toHaveBeenCalled();
     expect(knownIds.has("b")).toBe(true);
   });
 
   it("removes an element that vanished from the scene", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>(["a", "b"]);
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
@@ -120,11 +136,13 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
   });
 
   it("ignores resize/drag — same id with mutated props is a no-op", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>(["a"]);
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
@@ -138,11 +156,13 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
   });
 
   it("treats deleted elements as absent (removes if previously known)", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>(["a"]);
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
@@ -155,11 +175,13 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
   });
 
   it("does NOT register newly-added deleted elements", () => {
-    const { registerAnnotation, remove } = makeRegistryStubs();
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
     const knownIds = new Set<string>();
     const handler = buildSceneDiffHandler({
       knownIds,
       registerAnnotation,
+      updateAnnotationLabel,
       remove,
       existsInRegistry: () => false,
     });
@@ -168,6 +190,108 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
 
     expect(registerAnnotation).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("enriches the label when geo data appears after registration", () => {
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
+    const knownIds = new Set<string>();
+    const handler = buildSceneDiffHandler({
+      knownIds,
+      registerAnnotation,
+      updateAnnotationLabel,
+      remove,
+      existsInRegistry: () => false,
+    });
+
+    // First call: element has no geo data — label is just the type.
+    handler([{ id: "a", type: "rectangle" }]);
+    expect(registerAnnotation).toHaveBeenCalledWith("a", "Rectangle");
+
+    // Second call: element now has geo data — label should be updated.
+    handler([
+      {
+        id: "a",
+        type: "rectangle",
+        customData: {
+          schemaVersion: 1,
+          projection: "mercator",
+          scaleMode: "geographic",
+          geo: { kind: "point", lng: -74.006, lat: 40.7128, zRef: 10 },
+        },
+      },
+    ]);
+
+    expect(updateAnnotationLabel).toHaveBeenCalledTimes(1);
+    expect(updateAnnotationLabel).toHaveBeenCalledWith(
+      "a",
+      "Rectangle near 40.7°N, 74.0°W",
+    );
+  });
+
+  it("falls back to element id when type is unknown", () => {
+    const { registerAnnotation, updateAnnotationLabel, remove } =
+      makeRegistryStubs();
+    const knownIds = new Set<string>();
+    const handler = buildSceneDiffHandler({
+      knownIds,
+      registerAnnotation,
+      updateAnnotationLabel,
+      remove,
+      existsInRegistry: () => false,
+    });
+
+    handler([{ id: "abc-123" }]);
+    expect(registerAnnotation).toHaveBeenCalledWith("abc-123", "abc-123");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateLayerLabel
+// ---------------------------------------------------------------------------
+
+describe("generateLayerLabel", () => {
+  it('formats "Type near lat, lng" when geo data is present', () => {
+    const el: SyncSceneElement = {
+      id: "x",
+      type: "rectangle",
+      customData: {
+        schemaVersion: 1,
+        projection: "mercator",
+        scaleMode: "geographic",
+        geo: { kind: "point", lng: -74.006, lat: 40.7128, zRef: 10 },
+      },
+    };
+    expect(generateLayerLabel(el)).toBe("Rectangle near 40.7°N, 74.0°W");
+  });
+
+  it("uses only the type name when geo data is absent", () => {
+    expect(generateLayerLabel({ id: "x", type: "freedraw" })).toBe("Freehand");
+  });
+
+  it("falls back to id when type is missing", () => {
+    expect(generateLayerLabel({ id: "abc-123" })).toBe("abc-123");
+  });
+
+  it("extracts the center of a bbox anchor", () => {
+    const el: SyncSceneElement = {
+      id: "x",
+      type: "ellipse",
+      customData: {
+        schemaVersion: 1,
+        projection: "mercator",
+        scaleMode: "geographic",
+        geo: {
+          kind: "bbox",
+          west: -0.2,
+          south: 51.4,
+          east: 0.0,
+          north: 51.6,
+          zRef: 10,
+        },
+      },
+    };
+    expect(generateLayerLabel(el)).toBe("Ellipse near 51.5°N, 0.1°W");
   });
 });
 

@@ -54,6 +54,34 @@ describe("layerRegistry", () => {
         order: 1,
       });
     });
+
+    it("is idempotent — second call with same id is a no-op", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1", "Original");
+      store.registerAnnotation("el-1", "Duplicate");
+
+      const { entries } = useLayerRegistryStore.getState();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({ id: "el-1", label: "Original" });
+    });
+  });
+
+  describe("updateAnnotationLabel", () => {
+    it("updates the label of an existing annotation entry", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1", "Initial");
+      store.updateAnnotationLabel("el-1", "Updated Label");
+
+      const { entries } = useLayerRegistryStore.getState();
+      expect(entries[0]).toMatchObject({ id: "el-1", label: "Updated Label" });
+    });
+
+    it("is a no-op when the annotation does not exist", () => {
+      const store = useLayerRegistryStore.getState();
+      expect(() =>
+        store.updateAnnotationLabel("nonexistent", "X"),
+      ).not.toThrow();
+    });
   });
 
   describe("registerDataLayer", () => {

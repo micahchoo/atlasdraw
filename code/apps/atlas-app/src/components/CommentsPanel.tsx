@@ -115,27 +115,27 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
 
   const visible = showResolved ? comments : comments.filter((c) => !c.resolved);
 
-  const canSubmit =
-    !!commentsLayer && draftText.trim().length > 0 && pendingAnchor != null;
+  const canSubmit = !!commentsLayer && draftText.trim().length > 0;
 
   const submit = (): void => {
-    if (!commentsLayer || !pendingAnchor) {
+    if (!commentsLayer) {
       return;
     }
     const text = draftText.trim();
     if (!text) {
       return;
     }
+    // Default to a map anchor at origin when no explicit anchor was picked.
+    // The user can refine placement later by clicking the map first.
+    const anchor = pendingAnchor ?? { kind: "map", lng: 0, lat: 0 };
     commentsLayer.addComment({
       text,
-      anchor: pendingAnchor,
+      anchor,
       authorId,
       authorName,
     });
     setDraftText("");
     onSubmitted?.();
-    // Re-init the picker so the next comment can use the same anchor mode
-    // without requiring an extra button click.
     onRequestAnchor?.(anchorMode);
   };
 
@@ -239,8 +239,6 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
             title={
               !commentsLayer
                 ? "Comments require an active collab session"
-                : pendingAnchor == null
-                ? `Click on the ${anchorMode} to anchor this comment`
                 : "Post comment"
             }
             onClick={submit}
@@ -252,8 +250,8 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
         {pendingAnchor == null && commentsLayer && (
           <div className={styles.composerHint} data-testid="comments-hint">
             {anchorMode === "map"
-              ? "Click on the map to drop a pin for this comment."
-              : "Select an Excalidraw element to anchor this comment."}
+              ? "Click the map to pin this comment (or post without a pin)."
+              : "Select an element to anchor this comment."}
           </div>
         )}
       </div>

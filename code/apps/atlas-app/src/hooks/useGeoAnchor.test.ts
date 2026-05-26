@@ -133,6 +133,39 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     });
   });
 
+  it("iframe stamps bbox + geographic (same bucket as image)", () => {
+    const { updateScene, trigger } = setup();
+    trigger([
+      { id: "iframe-1", type: "iframe", x: 0, y: 0, width: 100, height: 50 },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const stamped = updateScene.mock.calls[0][0].elements[0] as SceneElement;
+    expect(stamped.customData).toMatchObject({
+      geo: { kind: "bbox", west: 0, east: 100, north: 50, south: 0, zRef: 12 },
+      scaleMode: "geographic",
+    });
+  });
+
+  it("embeddable stamps bbox + geographic (same bucket as image)", () => {
+    const { updateScene, trigger } = setup();
+    trigger([
+      {
+        id: "emb-1",
+        type: "embeddable",
+        x: 10,
+        y: 10,
+        width: 80,
+        height: 60,
+      },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const stamped = updateScene.mock.calls[0][0].elements[0] as SceneElement;
+    expect(stamped.customData).toMatchObject({
+      geo: { kind: "bbox", west: 10, east: 90, north: 70, south: 10, zRef: 12 },
+      scaleMode: "geographic",
+    });
+  });
+
   it("line stamps polyline + geographic with projected coordinates", () => {
     const { updateScene, trigger } = setup();
     trigger([
@@ -231,7 +264,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     });
   });
 
-  it("text stamps point + screen", () => {
+  it("text stamps point + geographic", () => {
     const { updateScene, trigger } = setup();
     trigger([
       { id: "txt-1", type: "text", x: 42, y: 84, width: 100, height: 20 },
@@ -240,7 +273,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     const stamped = updateScene.mock.calls[0][0].elements[0] as SceneElement;
     expect(stamped.customData).toMatchObject({
       geo: { kind: "point", lng: 42, lat: 84, zRef: 12 },
-      scaleMode: "screen",
+      scaleMode: "geographic",
       projection: "mercator",
       schemaVersion: 1,
     });
@@ -378,10 +411,10 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     const { updateScene, trigger } = setup();
     trigger([
       {
-        id: "embed-1",
-        // `embeddable` is a real Excalidraw type but is in none of the three
+        id: "sel-1",
+        // `selection` is a real Excalidraw type but is in none of the three
         // anchor buckets (BBOX_TOOL_TYPES / POLYLINE_TOOL_TYPES / POINT_TOOL_TYPES).
-        type: "embeddable",
+        type: "selection",
         x: 0,
         y: 0,
         width: 100,

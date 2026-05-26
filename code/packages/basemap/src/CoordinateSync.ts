@@ -97,9 +97,13 @@ export class CoordinateSync {
         const h0 = (prevSync?.h0 as number | undefined) ?? el.height;
         const fontSize0 =
           (prevSync?.fontSize0 as number | undefined) ?? el.fontSize;
+        const strokeWidth0 =
+          (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
         const width = w0 !== undefined ? w0 * f : undefined;
         const height = h0 !== undefined ? h0 * f : undefined;
         const fontSize = fontSize0 !== undefined ? fontSize0 * f : undefined;
+        const strokeWidth =
+          strokeWidth0 !== undefined ? strokeWidth0 * f : undefined;
         const newSync: Record<string, unknown> = {
           x,
           y,
@@ -111,6 +115,9 @@ export class CoordinateSync {
         if (fontSize0 !== undefined) {
           newSync.fontSize0 = fontSize0;
         }
+        if (strokeWidth0 !== undefined) {
+          newSync.strokeWidth0 = strokeWidth0;
+        }
         return {
           ...el,
           x,
@@ -118,6 +125,7 @@ export class CoordinateSync {
           ...(width !== undefined ? { width } : {}),
           ...(height !== undefined ? { height } : {}),
           ...(fontSize !== undefined ? { fontSize } : {}),
+          ...(strokeWidth !== undefined ? { strokeWidth } : {}),
           customData: {
             ...(el.customData as Record<string, unknown>),
             _lastSync: newSync,
@@ -143,22 +151,48 @@ export class CoordinateSync {
         if (scaleMode === "hybrid") {
           const f = clampHybridFactor(factor);
           const adj = f / factor;
+          const prevSync = (el.customData as Record<string, unknown>)
+            ._lastSync as Record<string, unknown> | undefined;
+          const strokeWidth0 =
+            (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
+          const strokeWidth =
+            strokeWidth0 !== undefined ? strokeWidth0 * f : undefined;
+          const nextSync: Record<string, unknown> = {
+            x: nw.x,
+            y: nw.y,
+            w: Math.max(1, projectedWidth * adj),
+            h: Math.max(1, projectedHeight * adj),
+          };
+          if (strokeWidth0 !== undefined) {
+            nextSync.strokeWidth0 = strokeWidth0;
+          }
           return {
             ...el,
             x: nw.x,
             y: nw.y,
             width: Math.max(1, projectedWidth * adj),
             height: Math.max(1, projectedHeight * adj),
+            ...(strokeWidth !== undefined ? { strokeWidth } : {}),
             customData: {
               ...(el.customData as Record<string, unknown>),
-              _lastSync: {
-                x: nw.x,
-                y: nw.y,
-                w: Math.max(1, projectedWidth * adj),
-                h: Math.max(1, projectedHeight * adj),
-              },
+              _lastSync: nextSync,
             },
           };
+        }
+        const prevSync = (el.customData as Record<string, unknown>)
+          ._lastSync as Record<string, unknown> | undefined;
+        const strokeWidth0 =
+          (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
+        const strokeWidth =
+          strokeWidth0 !== undefined ? strokeWidth0 * factor : undefined;
+        const nextSync: Record<string, unknown> = {
+          x: nw.x,
+          y: nw.y,
+          w: projectedWidth,
+          h: projectedHeight,
+        };
+        if (strokeWidth0 !== undefined) {
+          nextSync.strokeWidth0 = strokeWidth0;
         }
         return {
           ...el,
@@ -166,14 +200,10 @@ export class CoordinateSync {
           y: nw.y,
           width: projectedWidth,
           height: projectedHeight,
+          ...(strokeWidth !== undefined ? { strokeWidth } : {}),
           customData: {
             ...(el.customData as Record<string, unknown>),
-            _lastSync: {
-              x: nw.x,
-              y: nw.y,
-              w: projectedWidth,
-              h: projectedHeight,
-            },
+            _lastSync: nextSync,
           },
         };
       }
@@ -221,12 +251,28 @@ export class CoordinateSync {
         }
         const f =
           scaleMode === "hybrid" ? clampHybridFactor(factor) / factor : 1;
+        const strokeFactor =
+          scaleMode === "hybrid" ? clampHybridFactor(factor) : factor;
+        const prevSync = (el.customData as Record<string, unknown>)
+          ._lastSync as Record<string, unknown> | undefined;
+        const strokeWidth0 =
+          (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
+        const strokeWidth =
+          strokeWidth0 !== undefined ? strokeWidth0 * strokeFactor : undefined;
         const points = projected.map(
           (p) =>
             [(p.x - origin.x) * f, (p.y - origin.y) * f] as [number, number],
         );
         const xs = points.map((p) => p[0]);
         const ys = points.map((p) => p[1]);
+        const nextSync: Record<string, unknown> = {
+          x: origin.x,
+          y: origin.y,
+          pts: points,
+        };
+        if (strokeWidth0 !== undefined) {
+          nextSync.strokeWidth0 = strokeWidth0;
+        }
         return {
           ...el,
           x: origin.x,
@@ -234,9 +280,10 @@ export class CoordinateSync {
           points,
           width: Math.max(1, Math.max(...xs) - Math.min(...xs)),
           height: Math.max(1, Math.max(...ys) - Math.min(...ys)),
+          ...(strokeWidth !== undefined ? { strokeWidth } : {}),
           customData: {
             ...(el.customData as Record<string, unknown>),
-            _lastSync: { x: origin.x, y: origin.y, pts: points },
+            _lastSync: nextSync,
           },
         };
       }

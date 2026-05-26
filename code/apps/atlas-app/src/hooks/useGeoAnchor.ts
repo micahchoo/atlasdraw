@@ -8,17 +8,18 @@
  *
  *   | type                              | kind     | scaleMode    |
  *   |-----------------------------------|----------|--------------|
- *   | rectangle, ellipse, diamond, image| bbox     | geographic   |
+ *   | rectangle, ellipse, diamond       | bbox     | geographic   |
+ *   | image, iframe, embeddable         | bbox     | geographic   |
  *   | frame, magicframe                 | bbox     | geographic   |
  *   | line, arrow, freedraw             | polyline | geographic   |
- *   | text                              | point    | screen       |
+ *   | text                              | point    | geographic   |
  *
  * Rationale (per Wave 4 plan addendum):
  *   - bbox / geographic: shape size is meaningful in world units; resize with zoom.
  *   - polyline / geographic: vertex coordinates scale fully with projection, matching
  *     bbox behavior — lines cover consistent real-world distance at any zoom.
- *   - point / screen: text size is set explicitly by the user; only its anchor
- *     position should track the map.
+ *   - point / geographic: text labels scale with the map projection alongside
+ *     other geo-anchored shapes (fontSize, width, height all scale by factor).
  *
  * Lifecycle: subscribes via `excalidrawAPI.onChange`. While `appState.newElement`
  * is non-null, the element is mid-drag — we skip stamping so the final geometry
@@ -54,12 +55,14 @@ const BBOX_TOOL_TYPES = new Set([
   "ellipse",
   "diamond",
   "image",
+  "iframe",
+  "embeddable",
   "frame",
   "magicframe",
 ]);
 /** Polyline-shaped tools — anchored as `kind:"polyline"` with `scaleMode:"geographic"`. */
 const POLYLINE_TOOL_TYPES = new Set(["line", "arrow", "freedraw"]);
-/** Point-anchored tools — anchored as `kind:"point"` with `scaleMode:"screen"`. */
+/** Point-anchored tools — anchored as `kind:"point"` with `scaleMode:"geographic"`. */
 const POINT_TOOL_TYPES = new Set(["text"]);
 
 /**
@@ -164,7 +167,7 @@ function buildGeoCustomData(
         lat: ll.lat,
         zRef,
       },
-      scaleMode: "screen",
+      scaleMode: "geographic",
       projection: PROJECTION,
       schemaVersion: 1,
     };

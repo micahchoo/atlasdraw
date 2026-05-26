@@ -603,3 +603,218 @@ describe("_projectElement: point + geographic — no compounding across sequenti
     expect(after14).toMatchObject({ width: 40, height: 32, fontSize: 80 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression: strokeWidth scaling and compounding prevention
+// ---------------------------------------------------------------------------
+
+describe("_projectElement: strokeWidth scaling", () => {
+  it("point + geographic scales strokeWidth by factor", () => {
+    const map = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 13, // factor = 2
+    });
+    const el: ExcalidrawElementLike = {
+      id: "p-geo-stroke",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      strokeWidth: 3,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 6, width: 20, height: 20 });
+  });
+
+  it("point + geographic — strokeWidth no compounding across syncs", () => {
+    const makeEl = (): ExcalidrawElementLike => ({
+      id: "p-sw-no-compound",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      strokeWidth: 3,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    });
+
+    const map13 = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 13,
+    });
+    const after13 = runSync(map13, makeEl());
+    expect(after13).toMatchObject({ strokeWidth: 6 });
+
+    // Second sync at zoom 14 → factor 4. strokeWidth should be 12 (3*4), not 24 (6*4).
+    const map14 = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 14,
+    });
+    const after14 = runSync(map14, after13);
+    expect(after14).toMatchObject({ strokeWidth: 12 });
+  });
+
+  it("does not scale strokeWidth when element has none", () => {
+    const map = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 13,
+    });
+    const el: ExcalidrawElementLike = {
+      id: "p-geo-no-stroke",
+      x: 0,
+      y: 0,
+      width: 32,
+      height: 32,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out.strokeWidth).toBeUndefined();
+    expect(out).toMatchObject({ width: 64, height: 64 });
+  });
+
+  it("polyline + geographic scales strokeWidth by factor", () => {
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 50, y: 50 }],
+      [[1, 0], { x: 80, y: 50 }],
+    ]);
+    const map = makeMap({ project, zoom: 13 }); // factor = 2
+    const el: ExcalidrawElementLike = {
+      id: "l-geo-stroke",
+      x: 0,
+      y: 0,
+      strokeWidth: 4,
+      points: [],
+      customData: {
+        geo: {
+          kind: "polyline",
+          coordinates: [
+            [0, 0],
+            [1, 0],
+          ],
+          zRef: 12,
+        },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 8 });
+  });
+
+  it("bbox + geographic scales strokeWidth by factor", () => {
+    const project = makeProjectByLngLat([
+      [[-1, 1], { x: 100, y: 100 }],
+      [[1, -1], { x: 300, y: 250 }],
+    ]);
+    const map = makeMap({ project, zoom: 13 }); // factor = 2
+    const el: ExcalidrawElementLike = {
+      id: "b-geo-stroke",
+      x: 0,
+      y: 0,
+      strokeWidth: 2,
+      customData: {
+        geo: { kind: "bbox", west: -1, south: -1, east: 1, north: 1, zRef: 12 },
+        scaleMode: "geographic",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 4 });
+  });
+
+  it("point + hybrid scales strokeWidth by clamped factor", () => {
+    const map = makeMap({
+      project: vi.fn().mockReturnValue({ x: 0, y: 0 }),
+      zoom: 20, // factor = 256, clamps to 4
+    });
+    const el: ExcalidrawElementLike = {
+      id: "p-hyb-stroke",
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      strokeWidth: 3,
+      customData: {
+        geo: { kind: "point", lng: 0, lat: 0, zRef: 12 },
+        scaleMode: "hybrid",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 12, width: 40, height: 40 });
+  });
+
+  it("polyline + hybrid scales strokeWidth by clamped factor", () => {
+    // factor = 8, clamps to 4. Points use adj=0.5, strokeWidth uses 4.
+    const project = makeProjectByLngLat([
+      [[0, 0], { x: 50, y: 50 }],
+      [[1, 0], { x: 80, y: 50 }],
+      [[-1, 0], { x: 20, y: 50 }],
+    ]);
+    const map = makeMap({ project, zoom: 15 });
+    const el: ExcalidrawElementLike = {
+      id: "l-hyb-stroke",
+      x: 0,
+      y: 0,
+      strokeWidth: 5,
+      points: [],
+      customData: {
+        geo: {
+          kind: "polyline",
+          coordinates: [
+            [0, 0],
+            [1, 0],
+            [-1, 0],
+          ],
+          zRef: 12,
+        },
+        scaleMode: "hybrid",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 20 });
+  });
+
+  it("bbox + hybrid scales strokeWidth by clamped factor", () => {
+    // factor = 8, clamps to 4.
+    const project = makeProjectByLngLat([
+      [[-1, 1], { x: 100, y: 100 }],
+      [[1, -1], { x: 300, y: 250 }],
+    ]);
+    const map = makeMap({ project, zoom: 15 });
+    const el: ExcalidrawElementLike = {
+      id: "b-hyb-stroke",
+      x: 0,
+      y: 0,
+      strokeWidth: 2,
+      customData: {
+        geo: { kind: "bbox", west: -1, south: -1, east: 1, north: 1, zRef: 12 },
+        scaleMode: "hybrid",
+        projection: "mercator",
+        schemaVersion: 1,
+      } satisfies GeoCustomData,
+    };
+    const out = runSync(map, el);
+    expect(out).toMatchObject({ strokeWidth: 8 });
+  });
+});

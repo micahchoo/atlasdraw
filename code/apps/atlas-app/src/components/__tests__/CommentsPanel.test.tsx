@@ -94,8 +94,8 @@ describe("CommentsPanel", () => {
     expect(layer.comments[0]?.text).toBe("hello world");
   });
 
-  it("Post button is disabled until both text + anchor are present", () => {
-    const { rerender } = render(
+  it("enables Post as soon as text is present (anchor defaults to origin)", () => {
+    render(
       <CommentsPanel
         commentsLayer={layer}
         authorId="alice"
@@ -105,26 +105,11 @@ describe("CommentsPanel", () => {
     const submit = screen.getByTestId("comments-submit") as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
-    // Add text — still disabled (no anchor).
+    // Add text — Post enables immediately; anchor defaults to {kind:"map", lng:0, lat:0}.
     fireEvent.change(screen.getByTestId("comments-composer-text"), {
-      target: { value: "x" },
+      target: { value: "hello" },
     });
-    expect(submit.disabled).toBe(true);
-
-    rerender(
-      <CommentsPanel
-        commentsLayer={layer}
-        authorId="alice"
-        authorName="Alice"
-        pendingAnchor={mapAnchor}
-      />,
-    );
-    fireEvent.change(screen.getByTestId("comments-composer-text"), {
-      target: { value: "now ready" },
-    });
-    expect(
-      (screen.getByTestId("comments-submit") as HTMLButtonElement).disabled,
-    ).toBe(false);
+    expect(submit.disabled).toBe(false);
   });
 
   it("resolve button flips resolved on the matching comment", () => {

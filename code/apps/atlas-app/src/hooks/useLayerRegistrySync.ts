@@ -31,6 +31,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { isGeoCustomData, type GeoCustomData } from "@atlasdraw/geo";
+
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
 
 import {
@@ -49,6 +51,7 @@ import type maplibregl from "maplibre-gl";
 
 export interface SyncSceneElement {
   id: string;
+  type?: string;
   isDeleted?: boolean;
   opacity?: number;
   customData?: Record<string, unknown>;
@@ -63,6 +66,7 @@ export interface SceneDiffDeps {
   knownIds: Set<string>;
   /** Registry actions (a thin slice — we don't need the whole store). */
   registerAnnotation: (elementId: string, label?: string) => void;
+  updateAnnotationLabel: (elementId: string, label: string) => void;
   remove: (id: string) => void;
   /**
    * Check whether an id already exists in the registry. Used as a
@@ -72,6 +76,90 @@ export interface SceneDiffDeps {
    */
   existsInRegistry: (id: string) => boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Layer label generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Human-readable name for each Excalidraw element type used in layer labels.
+ */
+const TOOL_NAMES: Record<string, string> = {
+  rectangle: "Rectangle",
+  ellipse: "Ellipse",
+  diamond: "Diamond",
+  freedraw: "Freehand",
+  arrow: "Arrow",
+  line: "Line",
+  text: "Text",
+  image: "Image",
+  frame: "Frame",
+  embeddable: "Embed",
+  iframe: "Embed",
+  magicframe: "Frame",
+  selection: "Selection",
+};
+
+/** Extract the approximate center from a GeoCustomData anchor. */
+function geoCenter(customData: unknown): { lat: number; lng: number } | null {
+  if (!isGeoCustomData(customData)) {
+    return null;
+  }
+  const geo = (customData as GeoCustomData).geo;
+  switch (geo.kind) {
+    case "point":
+      return { lat: geo.lat, lng: geo.lng };
+    case "bbox":
+      return {
+        lat: (geo.north + geo.south) / 2,
+        lng: (geo.east + geo.west) / 2,
+      };
+    case "polyline": {
+      const first = geo.coordinates[0];
+      return first ? { lng: first[0], lat: first[1] } : null;
+    }
+  }
+}
+
+/** Format coordinates as "40.7°N, 74.0°W". */
+function formatLatLng(lat: number, lng: number): string {
+  const latDir = lat >= 0 ? "N" : "S";
+  const lngDir = lng >= 0 ? "E" : "W";
+  return `${Math.abs(lat).toFixed(1)}°${latDir}, ${Math.abs(lng).toFixed(
+    1,
+  )}°${lngDir}`;
+}
+
+/**
+ * Generate a layer label from an element's type and optional geo-anchor data.
+ *
+ * With geo:  "Rectangle near 40.7°N, 74.0°W"
+ * Without:   "Rectangle"
+ * Unknown type without geo: element id.
+ */
+export function generateLayerLabel(el: SyncSceneElement): string {
+  const typeName = el.type ? TOOL_NAMES[el.type] ?? el.type : null;
+  const center = geoCenter(el.customData);
+  if (typeName && center) {
+    return `${typeName} near ${formatLatLng(center.lat, center.lng)}`;
+  }
+  if (typeName) {
+    return typeName;
+  }
+  return el.id;
+}
+
+/**
+ * True when the label looks like it still needs geo enrichment — it has a
+ * tool-name prefix but no " near " segment.
+ */
+function labelNeedsGeoEnrichment(label: string): boolean {
+  return !label.includes(" near ");
+}
+
+// ---------------------------------------------------------------------------
+// Bug A — scene-diff handler factory.
+// ---------------------------------------------------------------------------
 
 /**
  * Build the onChange callback that syncs scene-element membership into the
@@ -86,29 +174,50 @@ export interface SceneDiffDeps {
  * for undo/history but are not visible. If the user undoes a deletion, the
  * element re-appears with isDeleted:false and we'll re-register it.
  *
+ * Label enrichment: when an already-registered element later gains geo-anchor
+ * data (stamped by useGeoAnchor on a subsequent onChange), the label is
+ * updated to include the geographic area.
+ *
  * Exported for unit testing.
  */
 export function buildSceneDiffHandler(
   deps: SceneDiffDeps,
 ): (elements: readonly SyncSceneElement[]) => void {
-  const { knownIds, registerAnnotation, remove } = deps;
+  const { knownIds, registerAnnotation, updateAnnotationLabel, remove } = deps;
   return (elements) => {
     const incoming = new Set<string>();
+    const elementById = new Map<string, SyncSceneElement>();
     for (const el of elements) {
       if (el.isDeleted) {
         continue;
       }
       incoming.add(el.id);
+      elementById.set(el.id, el);
     }
 
     // Additions — in incoming but not known AND not already in registry.
-    // The registry check guards against hydrate() races: hydrate adds entries
-    // between the knownIds seed and the first onChange, so knownIds alone
-    // can be stale.
     for (const id of incoming) {
       if (!knownIds.has(id) && !deps.existsInRegistry(id)) {
-        registerAnnotation(id);
+        const el = elementById.get(id);
+        const label = el ? generateLayerLabel(el) : id;
+        registerAnnotation(id, label);
         knownIds.add(id);
+      }
+    }
+
+    // Label enrichment — update labels for known elements that now have geo
+    // data but whose label was generated before the geo-anchor was stamped.
+    for (const id of incoming) {
+      if (knownIds.has(id)) {
+        const el = elementById.get(id);
+        if (!el) {
+          continue;
+        }
+        const label = generateLayerLabel(el);
+        if (!labelNeedsGeoEnrichment(label)) {
+          // Label already includes geo — update it in case the element moved.
+          updateAnnotationLabel(id, label);
+        }
       }
     }
 
@@ -287,6 +396,8 @@ export function useLayerRegistrySync(
       knownIds: knownIdsRef.current,
       registerAnnotation: (id, label) =>
         useLayerRegistryStore.getState().registerAnnotation(id, label),
+      updateAnnotationLabel: (id, label) =>
+        useLayerRegistryStore.getState().updateAnnotationLabel(id, label),
       remove: (id) => useLayerRegistryStore.getState().remove(id),
       existsInRegistry: (id) =>
         useLayerRegistryStore.getState().entries.some((e) => e.id === id),
