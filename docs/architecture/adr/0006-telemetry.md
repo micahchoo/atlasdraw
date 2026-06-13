@@ -20,7 +20,7 @@ Competing FOSS tools in this space (Excalidraw, draw.io, JOSM, QGIS, Felt) all t
 
 Atlasdraw, in any official build (`atlas-app`, `storage`, `realtime`), performs **no outbound network communication** other than:
 
-1. **User-initiated network operations.** Share-link resolution against a configured storage server, basemap tile fetches against a user-selected remote provider (gated by `[basemap.allow_remote] = true`, default `false`), explicit "Open from URL" loads.
+1. **User-initiated network operations.** Share-link resolution against a configured storage server, basemap tile fetches against a user-selected remote provider (gated by `[basemap.allow_remote]`; **default changed to `true` on 2026-06-13 — see "Update" below**), explicit "Open from URL" loads.
 2. **Configured runtime services in self-host stacks.** Postgres, MinIO/S3, and Redis connections in the `postgres-minio` storage mode are operator-configured; they are not "telemetry" — they are the operator's own infrastructure.
 
 Specifically, Atlasdraw will not:
@@ -37,6 +37,14 @@ The AboutDialog states this policy verbatim:
 > **Telemetry.** No analytics. No call-home. No required API keys.
 
 That summary, the AGPL-3.0 license badge, the build version, and the build git hash are the four trust signals surfaced in the AboutDialog.
+
+## Update (2026-06-13)
+
+The remote-basemap gate (`VITE_ALLOW_REMOTE_BASEMAPS` / `[basemap.allow_remote]`) **default was flipped from `false` to `true`** (user decision). Rationale: the Bright (OpenFreeMap) and OSM (openstreetmap.org raster) basemaps were silently not rendering out of the box, and the project wants them available by default.
+
+**Privacy implication (accepted):** with the gate on by default, a default build now issues outbound tile requests to third-party hosts (`tiles.openfreemap.org`, `tile.openstreetmap.org`) as soon as a user selects one of those basemaps. Those hosts observe the user's IP and map viewport. This is still *user-initiated* (item 1 above) — no tiles are fetched until a remote basemap is selected, and the offline PMTiles basemaps (Light/Dark) remain the initial default — but it weakens the "no third-party fetches without explicit opt-in" stance for operators who relied on the prior default. Operators who need the original posture set `VITE_ALLOW_REMOTE_BASEMAPS=false`.
+
+The AboutDialog "No call-home" claim is unaffected: it concerns telemetry/analytics/crash-reporting to the *project*, not user-selected tile providers.
 
 ## Consequences
 

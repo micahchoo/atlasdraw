@@ -121,7 +121,7 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(72px, 1fr))",
               gap: "0.75rem",
             }}
           >
@@ -165,6 +165,8 @@ export const BasemapPickerDialog: React.FC<BasemapPickerDialogProps> = ({
                           ? "var(--ad-ink, #1a1a1a)"
                           : b.id === "openfreemap-bright"
                           ? "#f0f0f0"
+                          : b.id === "osm-standard"
+                          ? "#aadb98"
                           : "var(--ad-surface-raised, #ffffff)",
                       border: "1px solid var(--ad-rule, #ddd)",
                     }}

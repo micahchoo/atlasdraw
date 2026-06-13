@@ -30,10 +30,12 @@ const EnvSchema = z.object({
   // / pages tiers never see them. Cites ADR-0011 (hosted-mode telemetry,
   // server-side only) — the *client* surface is gated here.
   VITE_MANAGED_MODE: z.enum(["true", "false"]).default("false"),
-  // T14/T15: allow remote basemap tile sources (e.g. MapTiler, Stadia Maps).
-  // Default false per Q3 — no outbound tile requests without operator opt-in.
-  // ADR-0006 (zero call-home posture).
-  VITE_ALLOW_REMOTE_BASEMAPS: z.enum(["true", "false"]).default("false"),
+  // T14/T15: allow remote basemap tile sources (e.g. OpenFreeMap, OSM).
+  // Default TRUE as of 2026-06-13 (user decision) so the Bright/OSM basemaps
+  // render out of the box. Operators opt OUT by setting this to "false".
+  // NOTE: this is a deliberate deviation from ADR-0006's original
+  // default-false posture — see ADR-0006 "Update (2026-06-13)".
+  VITE_ALLOW_REMOTE_BASEMAPS: z.enum(["true", "false"]).default("true"),
 });
 
 export type AppConfig = {
@@ -73,7 +75,8 @@ export type AppConfig = {
    * `false` regardless of `buildTarget`. Cites ADR-0011.
    */
   managed: boolean;
-  /** T14/T15: gate for remote basemap tile sources. Default false (Q3). */
+  /** T14/T15: gate for remote basemap tile sources. Default true as of
+   *  2026-06-13 (user decision); opt out with VITE_ALLOW_REMOTE_BASEMAPS=false. */
   allowRemoteBasemaps: boolean;
 };
 

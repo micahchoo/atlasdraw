@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { BASEMAPS, getBasemap } from "../BasemapRegistry";
 
 describe("BasemapRegistry", () => {
-  it("exposes exactly 3 entries", () => {
-    expect(BASEMAPS).toHaveLength(3);
+  it("exposes exactly 4 entries", () => {
+    expect(BASEMAPS).toHaveLength(4);
   });
 
   it("has unique ids", () => {
@@ -16,7 +16,12 @@ describe("BasemapRegistry", () => {
   it("contains the expected ids", () => {
     const ids = BASEMAPS.map((b) => b.id).sort();
     expect(ids).toEqual(
-      ["openfreemap-bright", "protomaps-dark", "protomaps-light"].sort(),
+      [
+        "openfreemap-bright",
+        "osm-standard",
+        "protomaps-dark",
+        "protomaps-light",
+      ].sort(),
     );
   });
 
@@ -37,5 +42,6 @@ describe("BasemapRegistry", () => {
     expect(getBasemap("protomaps-light")?.requiresRemote).toBe(false);
     expect(getBasemap("protomaps-dark")?.requiresRemote).toBe(false);
     expect(getBasemap("openfreemap-bright")?.requiresRemote).toBe(true);
+    expect(getBasemap("osm-standard")?.requiresRemote).toBe(true);
   });
 });

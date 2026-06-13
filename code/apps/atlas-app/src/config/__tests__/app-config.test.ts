@@ -171,12 +171,12 @@ describe("loadAppConfig", () => {
   });
 
   // T14/T15 — VITE_ALLOW_REMOTE_BASEMAPS.
-  it("allowRemoteBasemaps defaults to false (zero call-home posture, ADR-0006)", () => {
+  it("allowRemoteBasemaps defaults to true (user decision 2026-06-13, ADR-0006 Update)", () => {
     const cfg = loadAppConfig("hosted");
-    expect(cfg.allowRemoteBasemaps).toBe(false);
+    expect(cfg.allowRemoteBasemaps).toBe(true);
   });
 
-  it("allowRemoteBasemaps is true when VITE_ALLOW_REMOTE_BASEMAPS=true", () => {
+  it("allowRemoteBasemaps is false when VITE_ALLOW_REMOTE_BASEMAPS=false (opt-out)", () => {
     const cfg = loadAppConfig(
       "hosted",
       undefined,
@@ -185,8 +185,8 @@ describe("loadAppConfig", () => {
       undefined,
       undefined,
       undefined,
-      "true",
+      "false",
     );
-    expect(cfg.allowRemoteBasemaps).toBe(true);
+    expect(cfg.allowRemoteBasemaps).toBe(false);
   });
 });

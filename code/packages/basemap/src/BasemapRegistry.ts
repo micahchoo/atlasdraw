@@ -6,7 +6,11 @@
 // only references them by relative filename.
 
 export interface BasemapConfig {
-  id: "protomaps-light" | "protomaps-dark" | "openfreemap-bright";
+  id:
+    | "protomaps-light"
+    | "protomaps-dark"
+    | "openfreemap-bright"
+    | "osm-standard";
   /** Human-facing label (used in basemap picker UI). */
   label: string;
   /** Filename of the vendored style JSON in `./styles/`, NOT a URL. */
@@ -32,6 +36,12 @@ export const BASEMAPS: ReadonlyArray<BasemapConfig> = [
     id: "openfreemap-bright",
     label: "Bright",
     styleFile: "openfreemap-bright.json",
+    requiresRemote: true,
+  },
+  {
+    id: "osm-standard",
+    label: "OSM",
+    styleFile: "osm-standard.json",
     requiresRemote: true,
   },
 ] as const;
