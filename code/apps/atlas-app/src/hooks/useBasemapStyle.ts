@@ -37,7 +37,13 @@ export function useBasemapStyle(
           );
           return;
         }
-        throw err;
+        // `void apply()` below is fire-and-forget — an unguarded rethrow here
+        // would become a silent unhandled promise rejection (same class of
+        // bug as useGeoJsonDrop.ts's addLayer-failure path; see COVERAGE.md).
+        console.error(
+          `[basemap] Failed to apply style '${activeBasemapId}':`,
+          err,
+        );
       }
     };
     void apply();

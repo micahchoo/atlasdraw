@@ -116,7 +116,12 @@ export function useGeoJsonDrop(
           toast.error(`CSV import failed — ${err.message}${hint}`);
           return;
         }
-        throw err;
+        // Anything else (e.g. MapLibre rejecting an addLayer spec) would
+        // otherwise become a silent unhandled rejection — processDataDrop
+        // is invoked fire-and-forget (`void processDataDrop(...)`) by the
+        // drop listener, so nothing downstream ever sees this throw.
+        console.error("[MapEditor] import failed unexpectedly:", err);
+        toast.error(`${file.name}: import failed unexpectedly`);
       }
     },
     [map, registerDataLayer, toast],
