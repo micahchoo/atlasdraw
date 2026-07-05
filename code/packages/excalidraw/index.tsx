@@ -281,6 +281,8 @@ const areEqual = (prevProps: ExcalidrawProps, nextProps: ExcalidrawProps) => {
 export const Excalidraw = React.memo(ExcalidrawBase, areEqual);
 Excalidraw.displayName = "Excalidraw";
 
+export type { ExcalidrawImperativeAPI } from "./types";
+
 export {
   getSceneVersion,
   hashElementsVersion,
