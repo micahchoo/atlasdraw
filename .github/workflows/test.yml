@@ -1,0 +1,40 @@
+name: Unit tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Must precede setup-node: its `cache: yarn` step shells out to yarn to
+      # locate the cache folder, and classic yarn 1.22 errors on the
+      # `packageManager: yarn@4` pin unless corepack has already shimmed yarn.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+          cache-dependency-path: code/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+        working-directory: code
+
+      - name: Typecheck
+        run: yarn test:typecheck
+        working-directory: code
+
+      - name: Unit tests (all workspace projects)
+        run: yarn test:app --watch=false
+        working-directory: code

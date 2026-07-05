@@ -57,6 +57,13 @@ export default defineConfig({
     setupFiles: ["./setupTests.ts"],
     globals: true,
     environment: "jsdom",
+    // Playwright suites — driven by `playwright test`, never by vitest.
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "apps/atlas-app/e2e/**",
+      "tests/e2e/**",
+    ],
     coverage: {
       reporter: ["text", "json-summary", "json", "html", "lcovonly"],
       // Since v2, it ignores empty lines by default and we need to disable it as it affects the coverage
