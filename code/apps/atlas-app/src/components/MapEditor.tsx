@@ -57,6 +57,7 @@ import { useMapRef } from "../hooks/useMapRef";
 import { useCollabDataLayer } from "../hooks/useCollabDataLayer";
 import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
+import { useMapEditorKeyboard } from "../hooks/useMapEditorKeyboard";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
@@ -458,25 +459,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // directly. Space+drag takes the scroll-mutation path instead.
   const spaceHeldRef = useRef(false);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat) {
-        spaceHeldRef.current = true;
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        spaceHeldRef.current = false;
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, []);
-
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
   // retrigger the callback.
@@ -568,60 +550,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Onboarding — shown on first visit only.
   const onboarding = useOnboarding();
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      // Quick-actions: Cmd+K or Ctrl+K.
-      if (e.key === "k" && (e.metaKey || e.ctrlKey) && !e.altKey) {
-        e.preventDefault();
-        setShowQuickActions((prev) => !prev);
-        return;
-      }
-      // Atlas document save/open — Cmd+S / Cmd+O. Excalidraw's own
-      // equivalents are disabled (EXCALIDRAW_UI_OPTIONS), so these don't
-      // double-fire. preventDefault stops the browser save/open dialogs.
-      if (
-        e.key.toLowerCase() === "s" &&
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey
-      ) {
-        e.preventDefault();
-        void saveAtlasDocument(excalidrawAPI, documentNotify);
-        return;
-      }
-      if (
-        e.key.toLowerCase() === "o" &&
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey
-      ) {
-        e.preventDefault();
-        void openAtlasDocument(excalidrawAPI, documentNotify);
-        return;
-      }
-      // Keyboard shortcuts: bare `?`.
-      if (
-        e.key === "?" &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        (e.target as HTMLElement).tagName !== "INPUT" &&
-        (e.target as HTMLElement).tagName !== "TEXTAREA"
-      ) {
-        e.preventDefault();
-        setShowShortcuts((prev) => !prev);
-        return;
-      }
-      // Escape dismisses open overlays.
-      if (e.key === "Escape") {
-        if (showShortcuts) {
-          setShowShortcuts(false);
-        }
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showShortcuts, excalidrawAPI, documentNotify]);
+  // Keyboard shortcuts (Cmd+K quick actions, Cmd+S/Cmd+O save/open, `?`
+  // shortcuts panel, Escape to dismiss) — extracted to useMapEditorKeyboard.
+  useMapEditorKeyboard({
+    spaceHeldRef,
+    excalidrawAPI,
+    showShortcuts,
+    setShowShortcuts,
+    setShowQuickActions,
+    onSave: (api) => void saveAtlasDocument(api, documentNotify),
+    onOpen: (api) => void openAtlasDocument(api, documentNotify),
+  });
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
   // Selector form so the component re-renders ONLY on isDirty flips, not on
