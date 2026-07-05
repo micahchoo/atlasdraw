@@ -679,6 +679,15 @@ has that nothing above it exposes. These are decisions, not work items: each
 
 ### Direction 1 — CSV, Shapefile import, and address geocoding are fully built and tested; only GeoJSON is reachable from the UI
 
+> **Verdict: pursue, scoped 2026-07-05** — ledger: `CAPABILITY.md`.
+> Verification found the premise half-stale: CSV import + Photon geocoding
+> are already wired via `useGeoJsonDrop.ts` (a side effect of this
+> session's Issue 3 journey-walk fix) — reclassified reachable, no action.
+> Only Shapefile import is genuinely orphaned (zero UI path, confirmed).
+> Pursued scoped to Shapefile + a real file-picker (today there's no
+> `<input type="file">` anywhere, drag-drop is the only mechanism).
+> Commissioned a spec interview, not built.
+
 **Surplus:** `@atlasdraw/data` ships `csv.ts` (317 lines + `csv.test.ts` 268
 + `csv-geocode.test.ts` 208), `shapefile.ts` (144 lines + 65 lines of
 tests), and `geocode.ts` (315 lines + 279 lines of tests, a full Photon
@@ -737,6 +746,16 @@ into the row.
 
 ### Direction 2 — Graduated layer styling declares three classification methods and always renders one
 
+> **Verdict: reject 2026-07-05 — false premise on verification** — ledger:
+> `HEADROOM.md`. `style-compiler.ts`'s "always linear" comment refers to
+> MapLibre's required interpolation-**curve** parameter, not the break-
+> selection method. `StylePanel.tsx` already computes genuinely distinct
+> stops per method — `quantileStops` is real percentile math;
+> `equalIntervalStops` is correctly identical to `linearStops` because
+> that's the actual mathematical definition of equal-interval
+> classification (equal-width bins across the value range). No gap; no
+> code changed.
+
 **Surplus:** `packages/basemap/src/style.ts:29` types `method: "linear" |
 "quantile" | "equal-interval"` for graduated layer styling — a real,
 UI-facing choice per CHANGELOG's "categorical + graduated layer styling"
@@ -788,6 +807,15 @@ equal-interval break calculation, its prompt written into the row.
 ---
 
 ### Direction 3 — The Yjs data-layer encryption stub has been ready to wire since Phase 5, and Phase 6 shipped without picking it up
+
+> **Verdict: park 2026-07-05** — ledger: `DARKDATA.md`. Confirmed zero
+> non-test callers of `yjs-crypto.ts` anywhere. Not pursue (Option B is a
+> real week-scale relay rewrite, not a one-word-verdict start) and not
+> reject (permanently closing E2EE is a bigger call than a park verdict
+> commits to, and E-01 itself still treats it as open). Updated
+> `docs/decisions/escalations.md` with a "RE-OPENED, not closed" status
+> block under E-01 — no code changed, but the gap is now honestly on the
+> record instead of silently dropped.
 
 **Surplus:** `packages/data/src/yjs-crypto.ts` (`encryptUpdate`/
 `decryptUpdate`) exists as a tested API stub per the explicit, resolved
@@ -842,6 +870,11 @@ the Option-B relay rewrite this already-written escalation describes.
 
 ### Direction 4 — Every registry in the codebase is a static list with no register() — right where the roadmap's plugin API needs one
 
+> **Verdict: pursue 2026-07-05** — ledger: `HEADROOM.md`. Both rows
+> (BasemapRegistry, tools) confirmed as described — no register() anywhere.
+> Commissioned a shared spec interview for the registration API shape
+> (Phase 7's Plugin SDK). Build nothing yet — spec only.
+
 **Surplus:** `BasemapRegistry.ts:49` hardcodes 4 basemaps
 (`protomaps-light/dark`, `openfreemap-bright`, `osm-standard`) in a static
 array behind a `getBasemap(id)` lookup — no add/register function.
@@ -891,6 +924,12 @@ commissions a spec interview for the registration API shape.
 ---
 
 ### Direction 5 — The "Pro+" billing tier is fully priced and fully plumbed, and grants nothing a "Pro" subscriber doesn't already get
+
+> **Verdict: reject 2026-07-05 — executed, not just decided** — ledger:
+> `HEADROOM.md`. Folded `pro_25` back into `pro`: `WorkspacePlan` narrowed
+> to `"free" | "pro"`, `STRIPE_PRICE_PRO_25` env var removed, quota/billing
+> code and tests updated, `CHANGELOG.md` corrected. All 122 storage tests
+> green.
 
 **Surplus:** `apps/storage/src/quota.ts:23-27,42-51` — `QuotaLimits.pro_25`
 reuses `pro`'s cap exactly; the only place `pro_25` differs from `pro`
@@ -953,8 +992,16 @@ either.
 
 ## Top direction
 
-**Direction 1 — surface the already-built CSV/Shapefile/geocoding import
-path.** Of the five directions, this is both the strongest evidence (fully
-built, fully tested, README already advertises it as shipped) and the
-closest to done — the only missing piece is a file-picker UI and format
-dispatch in `apps/atlas-app`, not new backend work.
+**Superseded 2026-07-05** — all five directions now carry a maintainer
+verdict (see each Direction's Status line): Directions 1 and 4 pursued
+(spec interviews commissioned, not built); Direction 5 rejected and
+actually executed (`pro_25` folded into `pro`); Direction 3 parked
+(`escalations.md` re-opened, honestly recorded); Direction 2 rejected on
+verification — its premise didn't hold, nothing to build. Ledgers:
+`CAPABILITY.md`, `HEADROOM.md`, `DARKDATA.md`.
+
+**Original recommendation (now executed in scoped form):** Direction 1 —
+surface the already-built CSV/Shapefile/geocoding import path. Verification
+found CSV + geocoding already reachable (a side effect of this session's
+Issue 3 fix); only Shapefile genuinely needed the file-picker work, and
+that's what got commissioned.
