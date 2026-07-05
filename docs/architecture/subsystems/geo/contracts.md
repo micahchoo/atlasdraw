@@ -112,33 +112,6 @@ export class CoordinateSync {
 
 ### Functions
 
-#### `geoToExcalidraw` — **stable**
-[CONFIDENCE: high — per tech spec §4.1]
-
-```ts
-export function geoToExcalidraw(
-  feature: GeoJSON.Feature,
-  opts?: { scaleMode?: ScaleMode }
-): ExcalidrawElementSkeleton;
-```
-
-Converts a GeoJSON Feature into an Excalidraw element skeleton with `customData.geo` populated. Input geometry type determines `GeoAnchor.kind`: `Point` → `"point"`, `LineString`/`MultiLineString` → `"polyline"`, `Polygon`/`MultiPolygon` → `"polyline"` (closed ring).
-
----
-
-#### `excalidrawToGeo` — **stable**
-[CONFIDENCE: high — per tech spec §4.1]
-
-```ts
-export function excalidrawToGeo(
-  element: ExcalidrawElement
-): GeoJSON.Feature | null;
-```
-
-Inverse of `geoToExcalidraw`. Returns `null` for elements without `customData.geo`.
-
----
-
 #### `projectElement` — **stable**
 [CONFIDENCE: high — per Phase 1 plan Flow A]
 
@@ -202,8 +175,6 @@ Returns `null` if no elements have geo anchors.
 | `ScaleMode` | stable | Phase 1 |
 | `Projection` | stable | Phase 1 |
 | `CoordinateSync` | stable | Phase 1 |
-| `geoToExcalidraw` | stable | Phase 1 |
-| `excalidrawToGeo` | stable | Phase 1 |
 | `projectElement` | stable | Phase 1 |
 | `area`, `length`, `centroid` | stable | Phase 2 |
 | `bounds` | stable | Phase 2 |
