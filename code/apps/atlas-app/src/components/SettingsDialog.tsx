@@ -9,11 +9,13 @@
  * surface, blueprint accent on active tab. Clean, instrumental, quick.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { getBasemap, type BasemapConfig } from "@atlasdraw/basemap";
 
 import styles from "../styles/SettingsDialog.module.css";
+
+import { getAppConfig } from "../config/app-config";
 
 import { FocusTrap } from "./FocusTrap";
 
@@ -183,22 +185,72 @@ function BasemapTab({
   );
 }
 
+type StorageStatus = "checking" | "connected" | "unreachable";
+
 function StorageTab() {
+  const cfg = getAppConfig();
+  const [status, setStatus] = useState<StorageStatus>("checking");
+
+  // The client has no way to know postgres-minio vs. sqlite+filesystem — that
+  // adapter choice is entirely server-side. What it CAN report honestly:
+  // whether a backend is configured at all, and (if so) whether it's
+  // actually reachable right now — a live check, not a hardcoded label.
+  useEffect(() => {
+    if (!cfg.enableBackendPersistence) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`${cfg.storageBaseUrl}/health`);
+        if (!cancelled) {
+          setStatus(res.ok ? "connected" : "unreachable");
+        }
+      } catch {
+        if (!cancelled) {
+          setStatus("unreachable");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg.enableBackendPersistence, cfg.storageBaseUrl]);
+
+  if (!cfg.enableBackendPersistence) {
+    return (
+      <div>
+        <h3 className={styles.sectionTitle}>Storage backend</h3>
+        <div className={styles.fieldGroup}>
+          <span className={styles.fieldLabel}>Mode</span>
+          <span className={styles.fieldValue} data-testid="storage-mode">
+            Local-only (IndexedDB) — no backend configured
+          </span>
+        </div>
+        <p className={styles.fieldLabel}>
+          Configure storage via environment variables. See{" "}
+          <code>docs/self-host/</code> for options.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h3 className={styles.sectionTitle}>Storage backend</h3>
       <div className={styles.fieldGroup}>
-        <span className={styles.fieldLabel}>Mode</span>
-        <span className={styles.fieldValue}>
-          {typeof import.meta.env !== "undefined" &&
-          import.meta.env.VITE_STORAGE_MODE === "postgres-minio"
-            ? "Postgres + MinIO (S3-compatible)"
-            : "SQLite + filesystem (default)"}
+        <span className={styles.fieldLabel}>Base URL</span>
+        <span className={styles.fieldValue} data-testid="storage-mode">
+          {cfg.storageBaseUrl || "(same-origin)"}
         </span>
       </div>
       <div className={styles.fieldGroup}>
         <span className={styles.fieldLabel}>Status</span>
-        <span className={styles.fieldValue}>Connected</span>
+        <span className={styles.fieldValue} data-testid="storage-status">
+          {status === "checking" && "Checking…"}
+          {status === "connected" && "Connected"}
+          {status === "unreachable" && "Unreachable"}
+        </span>
       </div>
       <p className={styles.fieldLabel}>
         Configure storage via environment variables. See{" "}
@@ -209,22 +261,24 @@ function StorageTab() {
 }
 
 function CollaborationTab() {
+  const cfg = getAppConfig();
   return (
     <div>
       <h3 className={styles.sectionTitle}>Collaboration</h3>
       <div className={styles.fieldGroup}>
         <span className={styles.fieldLabel}>Realtime server</span>
-        <span className={styles.fieldValue}>
-          {typeof import.meta.env !== "undefined" &&
-          import.meta.env.VITE_REALTIME_URL
-            ? import.meta.env.VITE_REALTIME_URL
-            : "Disabled (set VITE_REALTIME_URL to enable)"}
+        <span className={styles.fieldValue} data-testid="realtime-url">
+          {cfg.realtime.enabled && cfg.realtime.wsUrl
+            ? cfg.realtime.wsUrl
+            : "Disabled (set VITE_REALTIME_ENABLED + VITE_REALTIME_WS_URL to enable)"}
         </span>
       </div>
       <div className={styles.fieldGroup}>
         <span className={styles.fieldLabel}>Presence</span>
         <span className={styles.fieldValue}>
-          Cursor + viewport sharing enabled
+          {cfg.realtime.enabled
+            ? "Cursor + viewport sharing enabled"
+            : "Disabled — no realtime server configured"}
         </span>
       </div>
     </div>

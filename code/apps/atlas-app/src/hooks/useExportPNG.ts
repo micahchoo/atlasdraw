@@ -8,10 +8,15 @@ import { exportPNG } from "../lib/export";
 
 import type maplibregl from "maplibre-gl";
 
+export interface ExportPNGNotify {
+  error: (msg: string) => void;
+}
+
 export function useExportPNG(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   backgroundColor: string,
+  notify: ExportPNGNotify,
 ): () => void {
   return useCallback(() => {
     if (!map || !excalidrawAPI) {
@@ -27,12 +32,12 @@ export function useExportPNG(
         a.click();
         URL.revokeObjectURL(url);
       } catch (err) {
-        window.alert(
+        notify.error(
           `PNG export failed: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
       }
     })();
-  }, [map, excalidrawAPI, backgroundColor]);
+  }, [map, excalidrawAPI, backgroundColor, notify]);
 }

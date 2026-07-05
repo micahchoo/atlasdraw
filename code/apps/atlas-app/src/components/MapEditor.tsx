@@ -559,7 +559,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // context menu (registered internally). Extracted to useConvertToDataLayer
   // hook; its returned currentConvertibleSelection/handleConvert pair has no
   // consumer here today (no MainMenu item wires it — see the hook's header).
-  useConvertToDataLayer(map, excalidrawAPI, registry);
+  useConvertToDataLayer(map, excalidrawAPI, registry, toast);
 
   // Register the LayerPanel as a tab inside Excalidraw's DefaultSidebar
   // (the sidebar that hosts Library + canvas Search). Replaces the
@@ -630,7 +630,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   }, [excalidrawAPI]);
 
   // W-B — Composite PNG export (extracted to useExportPNG hook).
-  const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg);
+  const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg, toast);
 
   // Export callbacks for ExportDialog — wraps existing handlers.
   const handleExportGeoJSON = useCallback(() => {

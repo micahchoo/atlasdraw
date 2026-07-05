@@ -52,10 +52,15 @@ import type maplibregl from "maplibre-gl";
  * `currentConvertibleSelection`/`handleConvert` pair for a future MainMenu
  * surface to reuse — unconsumed by any caller today.
  */
+export interface ConvertToDataLayerNotify {
+  error: (msg: string) => void;
+}
+
 export function useConvertToDataLayer(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   registry: Pick<LayerRegistryState, "registerDataLayer" | "remove">,
+  notify: ConvertToDataLayerNotify,
 ): {
   currentConvertibleSelection: () => ConvertibleElement | null;
   handleConvert: (el: ConvertibleElement) => void;
@@ -122,13 +127,23 @@ export function useConvertToDataLayer(
         excalidrawAPI.updateScene({ elements: remaining });
       } catch (err) {
         if (err instanceof UnsupportedConvertElementError) {
-          window.alert(err.message);
+          notify.error(err.message);
           return;
         }
-        throw err;
+        // `handleConvert` runs synchronously inside the vendored context
+        // menu's onClick — an unguarded rethrow here would surface as an
+        // uncaught exception with nothing shown to the user (same class of
+        // bug as useGeoJsonDrop.ts's addLayer-failure path).
+        // eslint-disable-next-line no-console
+        console.error("[useConvertToDataLayer] convert failed:", err);
+        notify.error(
+          `Couldn't convert to a data layer${
+            err instanceof Error ? ` — ${err.message}` : ""
+          }`,
+        );
       }
     },
-    [map, registry, excalidrawAPI],
+    [map, registry, excalidrawAPI, notify],
   );
 
   // W-C — Surface Convert as a right-click context-menu item via the

@@ -67,8 +67,18 @@ export function usePersistenceWiring(
       : undefined;
     const store = createPersistenceStore({
       remoteSave,
-      onRemoteSaveFailed: () =>
-        usePersistenceStore.getState().setRemoteSaveFailed(true),
+      onRemoteSaveFailed: () => {
+        // Edge-triggered: notify once on the ok->failed transition, not on
+        // every subsequent autosave tick while the server stays down (that
+        // would spam a toast every debounce cycle).
+        const wasFailed = usePersistenceStore.getState().remoteSaveFailed;
+        usePersistenceStore.getState().setRemoteSaveFailed(true);
+        if (!wasFailed) {
+          documentNotify.error(
+            "Couldn't sync to the server — your changes are saved locally but not backed up",
+          );
+        }
+      },
     });
     usePersistenceStore.getState().setPersistenceStore(store);
 
@@ -111,6 +121,9 @@ export function usePersistenceWiring(
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn("[atlasdraw] persistence.load() failed", err);
+        documentNotify.error(
+          "Couldn't load your saved map — starting from a blank canvas",
+        );
       }
     })();
 

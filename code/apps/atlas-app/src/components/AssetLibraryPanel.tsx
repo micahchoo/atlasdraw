@@ -40,6 +40,7 @@ import type {
 } from "@atlasdraw/excalidraw/types";
 
 import { FocusTrap } from "./FocusTrap";
+import { useToast } from "./ToastProvider";
 
 export interface AssetLibraryPanelProps {
   /**
@@ -95,6 +96,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const toast = useToast();
 
   // Compute once: built-in libraries + aggregated items + group summary.
   // getBuiltInLibraries() reads from bundled fixtures (Vite import.meta.glob
@@ -111,7 +113,8 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   // On mount: push the aggregated items into Excalidraw's built-in library.
   // `merge: true` so we don't clobber any library items the user already
   // imported. `updateLibrary` is async — we attach a `.catch` so a malformed
-  // fixture surfaces as a console warning rather than an unhandled rejection.
+  // fixture surfaces to the user via toast (and to devtools via console)
+  // rather than as an unhandled rejection nobody sees.
   useEffect(() => {
     if (!excalidrawAPI) {
       return;
@@ -119,13 +122,14 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     if (items.length === 0) {
       return;
     }
-    excalidrawAPI
-      .updateLibrary({ libraryItems: items, merge: true })
+    excalidrawAPI.updateLibrary({ libraryItems: items, merge: true }).catch(
       // eslint-disable-next-line no-console
-      .catch((err) =>
-        console.warn("AssetLibraryPanel updateLibrary failed:", err),
-      );
-  }, [excalidrawAPI, items]);
+      (err: unknown) => {
+        console.warn("AssetLibraryPanel updateLibrary failed:", err);
+        toast.error("Couldn't load the built-in asset libraries");
+      },
+    );
+  }, [excalidrawAPI, items, toast]);
 
   // Focus management + Escape to close. Same pattern as MaputnikDialog.
   useEffect(() => {

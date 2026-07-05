@@ -19,6 +19,8 @@ vi.mock("../lib/export", () => ({
 
 const FAKE_BLOB = {} as Blob;
 
+const notify = { error: vi.fn() };
+
 beforeEach(() => {
   vi.clearAllMocks();
   exportPNGMock.mockResolvedValue(FAKE_BLOB);
@@ -27,7 +29,6 @@ beforeEach(() => {
     createObjectURL: vi.fn(() => "blob:fake-url"),
     revokeObjectURL: vi.fn(),
   });
-  vi.spyOn(window, "alert").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -39,7 +40,9 @@ afterEach(() => {
 describe("useExportPNG", () => {
   it("does nothing when map is null", async () => {
     const api = {} as ExcalidrawImperativeAPI;
-    const { result } = renderHook(() => useExportPNG(null, api, "#fff"));
+    const { result } = renderHook(() =>
+      useExportPNG(null, api, "#fff", notify),
+    );
     result.current();
     await Promise.resolve();
     expect(exportPNGMock).not.toHaveBeenCalled();
@@ -47,7 +50,9 @@ describe("useExportPNG", () => {
 
   it("does nothing when excalidrawAPI is null", async () => {
     const map = {} as maplibregl.Map;
-    const { result } = renderHook(() => useExportPNG(map, null, "#fff"));
+    const { result } = renderHook(() =>
+      useExportPNG(map, null, "#fff", notify),
+    );
     result.current();
     await Promise.resolve();
     expect(exportPNGMock).not.toHaveBeenCalled();
@@ -71,7 +76,9 @@ describe("useExportPNG", () => {
         return realCreateElement(tag, opts);
       });
 
-    const { result } = renderHook(() => useExportPNG(map, api, "#123456"));
+    const { result } = renderHook(() =>
+      useExportPNG(map, api, "#123456", notify),
+    );
     result.current();
     await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
 
@@ -83,7 +90,7 @@ describe("useExportPNG", () => {
     createElementSpy.mockRestore();
   });
 
-  it("alerts with the error message when exportPNG rejects with an Error", async () => {
+  it("toasts with the error message when exportPNG rejects with an Error", async () => {
     const map = {} as maplibregl.Map;
     const api = {} as ExcalidrawImperativeAPI;
     exportPNGMock.mockRejectedValue(new Error("canvas too large"));
@@ -95,25 +102,25 @@ describe("useExportPNG", () => {
           : realCreateElement(tag, opts),
     );
 
-    const { result } = renderHook(() => useExportPNG(map, api, "#fff"));
+    const { result } = renderHook(() => useExportPNG(map, api, "#fff", notify));
     result.current();
 
-    await vi.waitFor(() => expect(window.alert).toHaveBeenCalledTimes(1));
-    expect(window.alert).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(notify.error).toHaveBeenCalledTimes(1));
+    expect(notify.error).toHaveBeenCalledWith(
       "PNG export failed: canvas too large",
     );
   });
 
-  it("alerts with a stringified value when exportPNG rejects with a non-Error", async () => {
+  it("toasts with a stringified value when exportPNG rejects with a non-Error", async () => {
     const map = {} as maplibregl.Map;
     const api = {} as ExcalidrawImperativeAPI;
     exportPNGMock.mockRejectedValue("weird rejection");
 
-    const { result } = renderHook(() => useExportPNG(map, api, "#fff"));
+    const { result } = renderHook(() => useExportPNG(map, api, "#fff", notify));
     result.current();
 
-    await vi.waitFor(() => expect(window.alert).toHaveBeenCalledTimes(1));
-    expect(window.alert).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(notify.error).toHaveBeenCalledTimes(1));
+    expect(notify.error).toHaveBeenCalledWith(
       "PNG export failed: weird rejection",
     );
   });
@@ -122,7 +129,7 @@ describe("useExportPNG", () => {
     const map = {} as maplibregl.Map;
     const api = {} as ExcalidrawImperativeAPI;
     const { result, rerender } = renderHook(
-      ({ bg }) => useExportPNG(map, api, bg),
+      ({ bg }) => useExportPNG(map, api, bg, notify),
       { initialProps: { bg: "#fff" } },
     );
     const first = result.current;

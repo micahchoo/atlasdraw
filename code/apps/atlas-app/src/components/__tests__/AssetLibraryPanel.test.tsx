@@ -7,11 +7,25 @@ import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw/types";
 
 import { AssetLibraryPanel } from "../AssetLibraryPanel";
+import { ToastProvider } from "../ToastProvider";
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
+
+/** AssetLibraryPanel calls useToast() — every render needs a ToastProvider
+ * ancestor, same as the real app's root. */
+function renderPanel(props: {
+  excalidrawAPI: ExcalidrawImperativeAPI | null;
+  onCloseRequest: () => void;
+}) {
+  return render(
+    <ToastProvider>
+      <AssetLibraryPanel {...props} />
+    </ToastProvider>,
+  );
+}
 
 /**
  * Build a minimal mock ExcalidrawImperativeAPI. We only stub the methods the
@@ -29,7 +43,7 @@ function makeMockExcalidrawAPI(): ExcalidrawImperativeAPI {
 describe("AssetLibraryPanel", () => {
   it("renders with role=dialog and the documented aria-label", () => {
     const api = makeMockExcalidrawAPI();
-    render(<AssetLibraryPanel excalidrawAPI={api} onCloseRequest={() => {}} />);
+    renderPanel({ excalidrawAPI: api, onCloseRequest: () => {} });
     const dialog = screen.getByRole("dialog");
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.getAttribute("aria-label")).toBe("Asset library");
@@ -37,7 +51,7 @@ describe("AssetLibraryPanel", () => {
 
   it("renders the three atlas-curated library groups with item counts", () => {
     const api = makeMockExcalidrawAPI();
-    render(<AssetLibraryPanel excalidrawAPI={api} onCloseRequest={() => {}} />);
+    renderPanel({ excalidrawAPI: api, onCloseRequest: () => {} });
     // Each fixture's source field surfaces as a group testid.
     expect(
       screen.getByTestId("asset-library-group-atlasdraw:wildfire-icons"),
@@ -56,7 +70,7 @@ describe("AssetLibraryPanel", () => {
 
   it("calls excalidrawAPI.updateLibrary once on mount with merge: true", () => {
     const api = makeMockExcalidrawAPI();
-    render(<AssetLibraryPanel excalidrawAPI={api} onCloseRequest={() => {}} />);
+    renderPanel({ excalidrawAPI: api, onCloseRequest: () => {} });
     expect(api.updateLibrary).toHaveBeenCalledTimes(1);
     const arg = (api.updateLibrary as ReturnType<typeof vi.fn>).mock
       .calls[0][0];
@@ -69,7 +83,7 @@ describe("AssetLibraryPanel", () => {
   it("toggleSidebar fires with DEFAULT_SIDEBAR.name + library tab on button click", () => {
     const api = makeMockExcalidrawAPI();
     const onClose = vi.fn();
-    render(<AssetLibraryPanel excalidrawAPI={api} onCloseRequest={onClose} />);
+    renderPanel({ excalidrawAPI: api, onCloseRequest: onClose });
     fireEvent.click(screen.getByTestId("asset-library-view"));
     // Per code/packages/common/src/constants.ts:432-438 — name="default",
     // tab="library". The panel must use the addressable form, not
@@ -83,7 +97,7 @@ describe("AssetLibraryPanel", () => {
 
   it("renders MIT license attribution for each library", () => {
     const api = makeMockExcalidrawAPI();
-    render(<AssetLibraryPanel excalidrawAPI={api} onCloseRequest={() => {}} />);
+    renderPanel({ excalidrawAPI: api, onCloseRequest: () => {} });
     const attribution = screen.getByTestId("asset-library-attribution");
     expect(attribution.textContent).toContain("MIT");
     // One license line per shipped library.
@@ -100,20 +114,35 @@ describe("AssetLibraryPanel", () => {
 
   it("close button fires onCloseRequest", () => {
     const onClose = vi.fn();
-    render(
-      <AssetLibraryPanel
-        excalidrawAPI={makeMockExcalidrawAPI()}
-        onCloseRequest={onClose}
-      />,
-    );
+    renderPanel({
+      excalidrawAPI: makeMockExcalidrawAPI(),
+      onCloseRequest: onClose,
+    });
     fireEvent.click(screen.getByTestId("asset-library-close"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("disables the View button and skips API calls when excalidrawAPI is null", () => {
-    render(
-      <AssetLibraryPanel excalidrawAPI={null} onCloseRequest={() => {}} />,
+  it("toasts an error when updateLibrary rejects, instead of only logging (ISSUES.md Issue 7)", async () => {
+    const api = {
+      updateLibrary: vi.fn().mockRejectedValue(new Error("malformed fixture")),
+      toggleSidebar: vi.fn(),
+    } as unknown as ExcalidrawImperativeAPI;
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    renderPanel({ excalidrawAPI: api, onCloseRequest: () => {} });
+
+    const toast = await screen.findByTestId("toast-error");
+    expect(toast.textContent).toContain(
+      "Couldn't load the built-in asset libraries",
     );
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("disables the View button and skips API calls when excalidrawAPI is null", () => {
+    renderPanel({ excalidrawAPI: null, onCloseRequest: () => {} });
     const view = screen.getByTestId("asset-library-view") as HTMLButtonElement;
     expect(view.disabled).toBe(true);
     // Still renders the group list — the panel is informational even if API

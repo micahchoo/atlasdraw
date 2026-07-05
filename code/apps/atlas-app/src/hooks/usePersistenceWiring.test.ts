@@ -184,6 +184,59 @@ describe("usePersistenceWiring", () => {
     );
   });
 
+  it("calls documentNotify.error when the initial load() rejects (ISSUES.md Issue 7)", async () => {
+    const store = makeFakeStore({
+      load: vi.fn(async () => {
+        throw new Error("IDB unavailable");
+      }),
+    });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+    const notifyError = vi.fn();
+
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: notifyError }),
+    );
+
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith(
+        "Couldn't load your saved map — starting from a blank canvas",
+      );
+    });
+  });
+
+  it("notifies once on the ok->failed transition for remoteSave, not on every subsequent failure (ISSUES.md Issue 7)", () => {
+    const store = makeFakeStore();
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockImplementation(
+      (opts) => {
+        // Simulate two consecutive remoteSave failures firing onRemoteSaveFailed.
+        (store as unknown as { __opts: typeof opts }).__opts = opts;
+        return store;
+      },
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+    const notifyError = vi.fn();
+
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: notifyError }),
+    );
+
+    const opts = (
+      store as unknown as { __opts: { onRemoteSaveFailed?: () => void } }
+    ).__opts;
+    opts.onRemoteSaveFailed?.();
+    opts.onRemoteSaveFailed?.();
+    opts.onRemoteSaveFailed?.();
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyError).toHaveBeenCalledWith(
+      "Couldn't sync to the server — your changes are saved locally but not backed up",
+    );
+    expect(usePersistenceStore.getState().remoteSaveFailed).toBe(true);
+  });
+
   it("disposes the store and clears usePersistenceStore on unmount", () => {
     const store = makeFakeStore();
     const dispose = vi.fn();
