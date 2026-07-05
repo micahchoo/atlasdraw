@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useGeoJsonDrop (ISSUES.md Issue 6 — coverage climb, priority 2).
+// Tests for useDataFileImport (renamed from useGeoJsonDrop — ISSUES.md
+// Direction 1: Shapefile import + file-picker UI).
 //
-// This hook is the app's ONLY external-input trust boundary (drag-drop
-// GeoJSON/CSV importer). MapEditor.drop.test.tsx already covers the happy
-// paths indirectly (mounting the whole MapEditor tree); this file drives
-// the hook in isolation via a minimal harness component so branch coverage
-// doesn't depend on MapEditor's unrelated wiring, and adds the error/edge
-// paths MapEditor.drop.test.tsx doesn't reach: map-null early return, the
-// addLayer-failure rollback, the GeoJSONParseError toast path, the
-// configured-geocoder CSV branch, and listener cleanup on unmount.
+// This hook is the app's ONLY external-input trust boundary (drag-drop and
+// now click-to-pick GeoJSON/CSV/Shapefile importer). MapEditor.drop.test.tsx
+// covers the happy paths indirectly (mounting the whole MapEditor tree);
+// this file drives the hook in isolation via a minimal harness component so
+// branch coverage doesn't depend on MapEditor's unrelated wiring: map-null
+// early return, the addLayer-failure rollback, each parser's error-toast
+// path, the configured-geocoder CSV branch, listener cleanup on unmount,
+// and (new) the imperative importFile() path used by the "Import…" menu
+// item, including its unsupported-file-type toast — a deliberate pick gets
+// explicit feedback where an accidental drag silently no-ops.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
@@ -19,7 +22,7 @@ import { afterEach } from "vitest";
 
 import { ToastProvider } from "../components/ToastProvider";
 
-import { useGeoJsonDrop } from "./useGeoJsonDrop";
+import { useDataFileImport } from "./useDataFileImport";
 
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
@@ -32,8 +35,10 @@ import type { LayerStyle } from "../state/layerRegistry";
 const {
   FakeGeoJSONParseError,
   FakeCSVParseError,
+  FakeShapefileParseError,
   parseMock,
   parseCSVMock,
+  parseShapefileMock,
   requireHomogeneousGeometryMock,
   photonGeocoderCtor,
   compileLayerMock,
@@ -54,11 +59,21 @@ const {
       this.code = code;
     }
   }
+  class FakeShapefileParseError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.name = "ShapefileParseError";
+      this.code = code;
+    }
+  }
   return {
     FakeGeoJSONParseError,
     FakeCSVParseError,
+    FakeShapefileParseError,
     parseMock: vi.fn(),
     parseCSVMock: vi.fn(),
+    parseShapefileMock: vi.fn(),
     requireHomogeneousGeometryMock: vi.fn(),
     photonGeocoderCtor: vi.fn(),
     compileLayerMock: vi.fn(
@@ -77,8 +92,10 @@ const {
 vi.mock("@atlasdraw/data", () => ({
   parse: parseMock,
   parseCSV: parseCSVMock,
+  parseShapefile: parseShapefileMock,
   GeoJSONParseError: FakeGeoJSONParseError,
   CSVParseError: FakeCSVParseError,
+  ShapefileParseError: FakeShapefileParseError,
   PhotonGeocoder: class {
     constructor(...args: unknown[]) {
       photonGeocoderCtor(...args);
@@ -142,6 +159,8 @@ function makeMockMap(): maplibregl.Map & {
   };
 }
 
+let lastImportFile: ((file: File) => void) | null = null;
+
 function Harness({
   map,
   registerDataLayer,
@@ -155,7 +174,8 @@ function Harness({
   }) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  useGeoJsonDrop(rootRef, map, registerDataLayer);
+  const { importFile } = useDataFileImport(rootRef, map, registerDataLayer);
+  lastImportFile = importFile;
   return React.createElement("div", { ref: rootRef, "data-testid": "root" });
 }
 
@@ -180,6 +200,7 @@ function renderHarness(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  lastImportFile = null;
   getAppConfigMock.mockReturnValue({ geocoder: undefined });
   parseMock.mockResolvedValue(POLY_FC);
   requireHomogeneousGeometryMock.mockImplementation(() => {});
@@ -189,7 +210,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe("useGeoJsonDrop", () => {
+describe("useDataFileImport — drag-and-drop", () => {
   it("dragover always calls preventDefault, regardless of file type", () => {
     const map = makeMockMap();
     const { root } = renderHarness(map);
@@ -273,6 +294,20 @@ describe("useGeoJsonDrop", () => {
     expect(opts).toMatchObject({ geocoder: expect.anything() });
   });
 
+  it("Shapefile path: drops a .zip, parses via parseShapefile, registers the data layer", async () => {
+    parseShapefileMock.mockResolvedValue(POLY_FC);
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+    fireEvent.drop(root, {
+      dataTransfer: { files: [makeFile("parcels.zip")] },
+    });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(parseShapefileMock).toHaveBeenCalledTimes(1);
+    const callArg = registerDataLayer.mock.calls[0][0];
+    expect(callArg.label).toBe("parcels.zip");
+  });
+
   it("GeoJSONParseError surfaces a toast and does not register a data layer", async () => {
     parseMock.mockRejectedValue(
       new FakeGeoJSONParseError("bad geometry at feature 2"),
@@ -287,7 +322,6 @@ describe("useGeoJsonDrop", () => {
     expect(toast.textContent).toMatch(/GeoJSON import failed/);
     expect(toast.textContent).toMatch(/bad geometry at feature 2/);
     expect(registerDataLayer).not.toHaveBeenCalled();
-    // Confirm no layer/source mutation happened for the failed import.
     expect(map.addSource).not.toHaveBeenCalled();
   });
 
@@ -310,6 +344,28 @@ describe("useGeoJsonDrop", () => {
     expect(toast.textContent).toMatch(/geocoder/);
     expect(registerDataLayer).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["BAD_ZIP", "not a valid zip"],
+    ["NO_SHP_FILE", "no shp entry"],
+    ["PARSE_FAILED", "shpjs threw"],
+  ] as const)(
+    "ShapefileParseError code %s surfaces a toast and does not register a data layer",
+    async (code, message) => {
+      parseShapefileMock.mockRejectedValue(
+        new FakeShapefileParseError(code, message),
+      );
+      const map = makeMockMap();
+      const { root, registerDataLayer, findByTestId } = renderHarness(map);
+      fireEvent.drop(root, {
+        dataTransfer: { files: [makeFile("parcels.zip")] },
+      });
+
+      const toast = await findByTestId("toast-error");
+      expect(toast.textContent).toMatch(/Shapefile import failed/);
+      expect(registerDataLayer).not.toHaveBeenCalled();
+    },
+  );
 
   it("rolls back addSource via removeSource when addLayer throws, and surfaces a toast", async () => {
     const map = makeMockMap();
@@ -419,7 +475,7 @@ describe("useGeoJsonDrop", () => {
     // exercises the `if (!root) return;` guard inside the effect.
     function UnattachedHarness({ mapArg }: { mapArg: maplibregl.Map | null }) {
       const rootRef = useRef<HTMLDivElement | null>(null);
-      useGeoJsonDrop(rootRef, mapArg, vi.fn());
+      useDataFileImport(rootRef, mapArg, vi.fn());
       return null;
     }
     // No throw = the effect's `if (!root) return;` guard was taken cleanly.
@@ -432,5 +488,41 @@ describe("useGeoJsonDrop", () => {
         ),
       ),
     ).not.toThrow();
+  });
+});
+
+describe("useDataFileImport — importFile (deliberate file-picker action)", () => {
+  it("imports a .geojson file picked via importFile the same way a drop would", async () => {
+    const map = makeMockMap();
+    const { registerDataLayer } = renderHarness(map);
+
+    lastImportFile!(makeFile("picked.geojson"));
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(registerDataLayer.mock.calls[0][0].label).toBe("picked.geojson");
+  });
+
+  it("imports a .zip Shapefile bundle picked via importFile", async () => {
+    parseShapefileMock.mockResolvedValue(POLY_FC);
+    const map = makeMockMap();
+    const { registerDataLayer } = renderHarness(map);
+
+    lastImportFile!(makeFile("parcels.zip"));
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(parseShapefileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("toasts an explicit 'unsupported file type' error for an unrecognized extension — unlike drag-drop's silent no-op", async () => {
+    const map = makeMockMap();
+    const { registerDataLayer, findByTestId } = renderHarness(map);
+
+    lastImportFile!(makeFile("notes.txt"));
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toMatch(/unsupported file type/i);
+    expect(toast.textContent).toMatch(/notes\.txt/);
+    expect(parseMock).not.toHaveBeenCalled();
+    expect(registerDataLayer).not.toHaveBeenCalled();
   });
 });

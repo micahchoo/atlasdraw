@@ -356,7 +356,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(callArg.fc.features).toHaveLength(2);
     expect(callArg.fc.features[0].geometry.type).toBe("Point");
 
-    // Points → "circle" (see inferGeometryType in useGeoJsonDrop.ts).
+    // Points → "circle" (see inferGeometryType in useDataFileImport.ts).
     expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
     const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock
       .calls[0][0];

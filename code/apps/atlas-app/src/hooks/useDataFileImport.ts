@@ -1,21 +1,41 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Extracted from MapEditor.tsx (2026-05-25) — data-file drag-and-drop import.
+// Extracted from MapEditor.tsx (2026-05-25); renamed from useGeoJsonDrop
+// (ISSUES.md Direction 1) once it grew beyond GeoJSON to also cover CSV and
+// (now) Shapefile — "useGeoJsonDrop" undersold what this hook actually does.
 //
-// Wires capture-phase DOM listeners on a root element so .geojson and .csv
-// files are intercepted before Excalidraw's bubble-phase handler consumes
-// them. Other files pass through for Excalidraw's native image/library drops.
+// Two trigger paths funnel into the same processDataDrop pipeline:
+//   1. Drag-and-drop — capture-phase DOM listeners on a root element so
+//      .geojson/.csv/.zip files are intercepted before Excalidraw's
+//      bubble-phase handler consumes them. Other files pass through for
+//      Excalidraw's native image/library drops.
+//   2. A deliberate "Import…" menu action — MapEditor calls the returned
+//      `importFile(file)` after a native file picker resolves a File (see
+//      the fallbackOpen pattern in state/persistence.ts for the picker
+//      itself). Unlike an accidental drag, a deliberate pick that doesn't
+//      match a supported format gets an explicit toast, not a silent no-op.
 //
 // CSV rows need lat/lng columns (auto-detected by @atlasdraw/data's parseCSV);
 // address-only CSVs additionally need the operator-configured Photon geocoder
 // (config.geocoder — ADR-0006/0011, zero call-home, no default endpoint).
+//
+// Shapefile bundles are a single .zip (parseShapefile takes one Blob — shpjs
+// handles the zip extraction internally). A zip containing multiple .shp
+// layers gets flattened into one FeatureCollection by parseShapefile itself
+// (no per-layer provenance) — if those layers have mixed geometry types, the
+// requireHomogeneousGeometry check below rejects it with its normal generic
+// message. That's a known, accepted limitation for this pass: teasing layers
+// apart would mean changing parseShapefile's merge behavior in
+// @atlasdraw/data, not just this hook.
 
 import { useCallback, useEffect } from "react";
 
 import {
   parse,
   parseCSV,
+  parseShapefile,
   GeoJSONParseError,
   CSVParseError,
+  ShapefileParseError,
   PhotonGeocoder,
 } from "@atlasdraw/data";
 import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
@@ -30,6 +50,8 @@ import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type { LayerStyle } from "../state/layerRegistry";
 
+type DataFileExt = "geojson" | "csv" | "zip";
+
 function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
   const t = fc.features[0]?.geometry?.type;
   if (t === "Polygon" || t === "MultiPolygon") {
@@ -41,10 +63,25 @@ function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
   return "circle";
 }
 
-/** Parse a dropped file by extension. Throws the parser's own error types. */
+/** Extension routing shared by both the drop handler and the file picker. */
+function detectExt(fileName: string): DataFileExt | null {
+  const name = fileName.toLowerCase();
+  if (name.endsWith(".geojson")) {
+    return "geojson";
+  }
+  if (name.endsWith(".csv")) {
+    return "csv";
+  }
+  if (name.endsWith(".zip")) {
+    return "zip";
+  }
+  return null;
+}
+
+/** Parse a dropped/picked file by extension. Throws the parser's own error types. */
 async function parseDroppedFile(
   file: File,
-  ext: "geojson" | "csv",
+  ext: DataFileExt,
 ): Promise<FeatureCollection> {
   if (ext === "csv") {
     const geocoderConfig = getAppConfig().geocoder;
@@ -57,10 +94,35 @@ async function parseDroppedFile(
         : undefined,
     );
   }
+  if (ext === "zip") {
+    return parseShapefile(file);
+  }
   return parse(file);
 }
 
-export function useGeoJsonDrop(
+/** Human-readable message per ShapefileParseError code. */
+function shapefileErrorMessage(err: ShapefileParseError): string {
+  switch (err.code) {
+    case "BAD_ZIP":
+      return "That doesn't look like a valid zip file";
+    case "NO_SHP_FILE":
+      return "No .shp file found in that zip";
+    case "PARSE_FAILED":
+      return `Couldn't parse the shapefile — ${err.message}`;
+  }
+}
+
+export interface UseDataFileImportResult {
+  /** Imperatively import a file — used by a deliberate file-picker action
+   * (e.g. the "Import…" menu item), as opposed to drag-drop. Unlike
+   * drag-drop's silent no-op on an unrecognized extension, this surfaces an
+   * explicit toast — a user who deliberately picked a file has a much
+   * higher expectation of feedback than one who dragged something in by
+   * accident. */
+  importFile: (file: File) => void;
+}
+
+export function useDataFileImport(
   rootRef: React.RefObject<HTMLDivElement | null>,
   map: maplibregl.Map | null,
   registerDataLayer: (opts: {
@@ -69,11 +131,11 @@ export function useGeoJsonDrop(
     label: string;
     style: LayerStyle;
   }) => void,
-): void {
+): UseDataFileImportResult {
   const toast = useToast();
 
   const processDataDrop = useCallback(
-    async (file: File, ext: "geojson" | "csv") => {
+    async (file: File, ext: DataFileExt) => {
       if (!map) {
         return;
       }
@@ -116,6 +178,13 @@ export function useGeoJsonDrop(
           toast.error(`CSV import failed — ${err.message}${hint}`);
           return;
         }
+        if (err instanceof ShapefileParseError) {
+          console.error("[MapEditor] Shapefile parse failed:", err.message);
+          toast.error(
+            `Shapefile import failed — ${shapefileErrorMessage(err)}`,
+          );
+          return;
+        }
         // Anything else (e.g. MapLibre rejecting an addLayer spec) would
         // otherwise become a silent unhandled rejection — processDataDrop
         // is invoked fire-and-forget (`void processDataDrop(...)`) by the
@@ -125,6 +194,20 @@ export function useGeoJsonDrop(
       }
     },
     [map, registerDataLayer, toast],
+  );
+
+  const importFile = useCallback(
+    (file: File) => {
+      const ext = detectExt(file.name);
+      if (!ext) {
+        toast.error(
+          `${file.name}: unsupported file type — expected .geojson, .csv, or .zip`,
+        );
+        return;
+      }
+      void processDataDrop(file, ext);
+    },
+    [processDataDrop, toast],
   );
 
   useEffect(() => {
@@ -138,12 +221,7 @@ export function useGeoJsonDrop(
       if (!file) {
         return;
       }
-      const name = file.name.toLowerCase();
-      const ext = name.endsWith(".geojson")
-        ? ("geojson" as const)
-        : name.endsWith(".csv")
-        ? ("csv" as const)
-        : null;
+      const ext = detectExt(file.name);
       if (!ext) {
         return;
       }
@@ -163,4 +241,6 @@ export function useGeoJsonDrop(
       });
     };
   }, [processDataDrop, rootRef]);
+
+  return { importFile };
 }

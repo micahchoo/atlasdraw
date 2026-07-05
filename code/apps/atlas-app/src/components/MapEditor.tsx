@@ -70,7 +70,7 @@ import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
-import { useGeoJsonDrop } from "../hooks/useGeoJsonDrop";
+import { useDataFileImport } from "../hooks/useDataFileImport";
 import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { CollabState } from "../state/collab";
@@ -565,9 +565,53 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // store/dispose pointer changes.
   const isDirty = usePersistenceStore((s) => s.isDirty);
 
-  // T13 — GeoJSON drag-and-drop import (extracted to useGeoJsonDrop hook).
+  // T13 — data-file drag-and-drop import (extracted to useDataFileImport
+  // hook). ISSUES.md Direction 1: also exposes importFile() for the
+  // deliberate "Import…" menu action below (native file picker), so both
+  // trigger paths funnel through the same parse+dispatch pipeline.
   const registry = useLayerRegistry();
-  useGeoJsonDrop(rootRef, map, registry.registerDataLayer);
+  const { importFile } = useDataFileImport(
+    rootRef,
+    map,
+    registry.registerDataLayer,
+  );
+
+  // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
+  // <input type="file"> pattern in state/persistence.ts's fallbackOpen:
+  // create it off-DOM, click it programmatically, clean up once settled.
+  // .accept covers all three formats useDataFileImport understands so one
+  // picker serves GeoJSON/CSV/Shapefile alike — drag-drop already handles
+  // GeoJSON/CSV; this is the discoverable, menu-driven equivalent, and the
+  // only reachable path for Shapefile today.
+  const handleImportFile = useCallback(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".geojson,.csv,.zip";
+    input.style.display = "none";
+    let settled = false;
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (input.parentNode) {
+        input.parentNode.removeChild(input);
+      }
+    };
+    input.addEventListener("change", () => {
+      const file = input.files?.[0];
+      settle();
+      if (file) {
+        importFile(file);
+      }
+    });
+    input.addEventListener("cancel", settle);
+    document.body.appendChild(input);
+    input.click();
+  }, [importFile]);
 
   // Phase 5 Task 9 — Collab data layer: renders the live Yjs FeatureCollection
   // as a MapLibre source+layer (extracted to useCollabDataLayer hook).
@@ -786,6 +830,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   ● Unsaved
                 </MainMenu.Item>
               )}
+              <MainMenu.Item
+                onSelect={handleImportFile}
+                data-testid="main-menu-import"
+              >
+                Import…
+              </MainMenu.Item>
               <MainMenu.Item
                 onSelect={() => setShowExport(true)}
                 data-testid="main-menu-export"

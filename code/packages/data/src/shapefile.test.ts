@@ -2,23 +2,26 @@
 // packages/data/src/shapefile.test.ts
 // Phase 3 Wave 1 T7 — colocated tests for the Shapefile zip → GeoJSON adapter.
 //
-// Coverage is currently error-path only (Option B from the worker brief):
+// Error-path coverage (Option B from the worker brief):
 //   - non-zip blob          → ShapefileParseError code === "BAD_ZIP"
 //   - empty blob            → ShapefileParseError (any code)
 //   - empty zip (no layers) → ShapefileParseError code === "NO_SHP_FILE"
 //
-// [SNAG] No happy-path test ships with this file. Generating a valid
-// shapefile binary in code requires hand-rolling the mixed-endian .shp/.shx
-// headers + a .dbf attribute table — fragile and expensive relative to the
-// task budget. Recommended follow-up: add a checked-in fixture (e.g.
-// `code/packages/data/__fixtures__/point.zip`, ~1 KB, produced once via
-// `ogr2ogr -f "ESRI Shapefile"`) and a test asserting
-// `parseShapefile(<fixture>)` returns `{ features.length === 1, geometry.type === "Point" }`.
+// Happy-path coverage (ISSUES.md Direction 1 — closed the [SNAG] this file
+// used to carry: "no happy-path test ships with this file"): a real 2-point
+// shapefile bundle at __fixtures__/point.zip, produced once via Python's
+// `pyshp` (no GDAL/ogr2ogr required — this environment doesn't have it).
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
 import { parseShapefile, ShapefileParseError } from "./shapefile.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("shapefile.parseShapefile — error paths", () => {
   it("rejects a non-zip blob with ShapefileParseError code=BAD_ZIP", async () => {
@@ -61,5 +64,27 @@ describe("shapefile.parseShapefile — error paths", () => {
       expect(err).toBeInstanceOf(ShapefileParseError);
       expect((err as ShapefileParseError).code).toBe("NO_SHP_FILE");
     }
+  });
+});
+
+describe("shapefile.parseShapefile — happy path", () => {
+  it("parses a real point shapefile zip into a FeatureCollection", async () => {
+    const zipPath = path.join(__dirname, "..", "__fixtures__", "point.zip");
+    const buf = Uint8Array.from(fs.readFileSync(zipPath));
+    const blob = new Blob([buf], { type: "application/zip" });
+
+    const fc = await parseShapefile(blob);
+
+    expect(fc.type).toBe("FeatureCollection");
+    expect(fc.features).toHaveLength(2);
+    expect(fc.features[0].geometry.type).toBe("Point");
+    expect(fc.features[0].geometry).toMatchObject({
+      type: "Point",
+      coordinates: [expect.closeTo(-122.4194, 3), expect.closeTo(37.7749, 3)],
+    });
+    expect(fc.features.map((f) => f.properties?.name).sort()).toEqual([
+      "New York",
+      "San Francisco",
+    ]);
   });
 });

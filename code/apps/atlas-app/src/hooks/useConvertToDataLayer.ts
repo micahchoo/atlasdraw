@@ -133,7 +133,7 @@ export function useConvertToDataLayer(
         // `handleConvert` runs synchronously inside the vendored context
         // menu's onClick — an unguarded rethrow here would surface as an
         // uncaught exception with nothing shown to the user (same class of
-        // bug as useGeoJsonDrop.ts's addLayer-failure path).
+        // bug as useDataFileImport.ts's addLayer-failure path).
         // eslint-disable-next-line no-console
         console.error("[useConvertToDataLayer] convert failed:", err);
         notify.error(
