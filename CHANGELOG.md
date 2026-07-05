@@ -37,7 +37,8 @@ optional maintainer-hosted SaaS overlay.
 - **Hosted-mode (managed) overlay.** Opt-in via `MANAGED_MODE=true`
   on the storage server + `VITE_MANAGED_MODE=true` on the atlas-app.
   Adds: per-workspace Stripe billing (Pro / Pro+ tiers), per-workspace
-  map-count quotas (free=3, pro/pro+=unlimited), `WorkspaceSwitcher`
+  map-count quotas (free=3, pro/pro+=100 by default; configurable via
+  `QUOTA_FREE_MAPS` / `QUOTA_PRO_MAPS`), `WorkspaceSwitcher`
   dropdown, `BillingPage` route. ADR-0011 governs telemetry: hosted
   mode emits server-side `pino` operational events only — no client
   beacon, Stripe holds billing PII. Self-host is unaffected; quota
@@ -66,7 +67,8 @@ optional maintainer-hosted SaaS overlay.
 ### Phase 3 — recap
 
 - `.atlasdraw` file format (versioned zipped JSON + assets).
-- Data readers: CSV, GeoJSON, KML, Shapefile via `packages/data`.
+- Data readers: CSV, GeoJSON, Shapefile via `packages/data`. (KML/GPX
+  remain unimplemented planned adapters.)
 
 ### Notable decisions
 
@@ -109,6 +111,8 @@ optional maintainer-hosted SaaS overlay.
 
 - Applications (`apps/atlas-app`, `apps/storage`, `apps/realtime`) —
   AGPL-3.0-only.
-- Packages (`packages/*`) — MIT.
+- Packages (`packages/*`) — MIT, except `packages/basemap` and
+  `packages/tools` (MPL-2.0). See `code/LICENSING.md` for the full
+  per-package breakdown.
 
 [1.0.0]: https://github.com/atlasdraw/atlasdraw/releases/tag/v1.0.0
