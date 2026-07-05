@@ -1,18 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Extracted from MapEditor.tsx (2026-05-25) — GeoJSON drag-and-drop import.
+// Extracted from MapEditor.tsx (2026-05-25) — data-file drag-and-drop import.
 //
-// Wires capture-phase DOM listeners on a root element so .geojson files are
-// intercepted before Excalidraw's bubble-phase handler consumes them.
-// Non-.geojson files pass through for Excalidraw's native image/library drops.
+// Wires capture-phase DOM listeners on a root element so .geojson and .csv
+// files are intercepted before Excalidraw's bubble-phase handler consumes
+// them. Other files pass through for Excalidraw's native image/library drops.
+//
+// CSV rows need lat/lng columns (auto-detected by @atlasdraw/data's parseCSV);
+// address-only CSVs additionally need the operator-configured Photon geocoder
+// (config.geocoder — ADR-0006/0011, zero call-home, no default endpoint).
 
 import { useCallback, useEffect } from "react";
 
 import {
   parse,
+  parseCSV,
   GeoJSONParseError,
-  requireHomogeneousGeometry,
+  CSVParseError,
+  PhotonGeocoder,
 } from "@atlasdraw/data";
 import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
+
+import { requireHomogeneousGeometry } from "@atlasdraw/data";
+
+import { getAppConfig } from "../config/app-config";
+
+import { useToast } from "../components/ToastProvider";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
@@ -29,6 +41,25 @@ function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
   return "circle";
 }
 
+/** Parse a dropped file by extension. Throws the parser's own error types. */
+async function parseDroppedFile(
+  file: File,
+  ext: "geojson" | "csv",
+): Promise<FeatureCollection> {
+  if (ext === "csv") {
+    const geocoderConfig = getAppConfig().geocoder;
+    return parseCSV(
+      file,
+      geocoderConfig
+        ? {
+            geocoder: new PhotonGeocoder({ endpoint: geocoderConfig.endpoint }),
+          }
+        : undefined,
+    );
+  }
+  return parse(file);
+}
+
 export function useGeoJsonDrop(
   rootRef: React.RefObject<HTMLDivElement | null>,
   map: maplibregl.Map | null,
@@ -39,13 +70,15 @@ export function useGeoJsonDrop(
     style: LayerStyle;
   }) => void,
 ): void {
-  const processGeoJsonDrop = useCallback(
-    async (file: File) => {
+  const toast = useToast();
+
+  const processDataDrop = useCallback(
+    async (file: File, ext: "geojson" | "csv") => {
       if (!map) {
         return;
       }
       try {
-        const fc = await parse(file);
+        const fc = await parseDroppedFile(file, ext);
         requireHomogeneousGeometry(fc);
         const id = `dl:${crypto.randomUUID()}`;
         const style = defaultLayerStyle(fc);
@@ -62,16 +95,31 @@ export function useGeoJsonDrop(
           throw layerErr;
         }
         registerDataLayer({ id, fc, label: file.name, style });
+        const n = fc.features.length;
+        toast.success(
+          `${file.name}: ${n} feature${n === 1 ? "" : "s"} imported`,
+        );
       } catch (err) {
         if (err instanceof GeoJSONParseError) {
           console.error("[MapEditor] GeoJSON parse failed:", err.message);
-          window.alert(`GeoJSON parse failed: ${err.message}`);
+          toast.error(`GeoJSON import failed — ${err.message}`);
+          return;
+        }
+        if (err instanceof CSVParseError) {
+          console.error("[MapEditor] CSV parse failed:", err.message);
+          // NO_COORD_COLUMNS on an address-only CSV means "no geocoder
+          // configured" from the user's point of view — say so.
+          const hint =
+            err.code === "NO_COORD_COLUMNS" && !getAppConfig().geocoder
+              ? " (address-only CSVs need a geocoder — see the VITE_GEOCODER_ENDPOINT setting)"
+              : "";
+          toast.error(`CSV import failed — ${err.message}${hint}`);
           return;
         }
         throw err;
       }
     },
-    [map, registerDataLayer],
+    [map, registerDataLayer, toast],
   );
 
   useEffect(() => {
@@ -82,12 +130,21 @@ export function useGeoJsonDrop(
 
     const onDropCapture = (e: DragEvent) => {
       const file = e.dataTransfer?.files?.[0];
-      if (!file || !file.name.endsWith(".geojson")) {
+      if (!file) {
+        return;
+      }
+      const name = file.name.toLowerCase();
+      const ext = name.endsWith(".geojson")
+        ? ("geojson" as const)
+        : name.endsWith(".csv")
+        ? ("csv" as const)
+        : null;
+      if (!ext) {
         return;
       }
       e.preventDefault();
       e.stopPropagation();
-      void processGeoJsonDrop(file);
+      void processDataDrop(file, ext);
     };
     const onDragOverCapture = (e: DragEvent) => {
       e.preventDefault();
@@ -100,5 +157,5 @@ export function useGeoJsonDrop(
         capture: true,
       });
     };
-  }, [processGeoJsonDrop, rootRef]);
+  }, [processDataDrop, rootRef]);
 }

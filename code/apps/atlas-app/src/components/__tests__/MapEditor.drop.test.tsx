@@ -324,4 +324,70 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(mockMap.addSource).not.toHaveBeenCalled();
     expect(mockMap.addLayer).not.toHaveBeenCalled();
   });
+
+  it("parses a dropped .csv with lat/lng columns and registers a point layer", async () => {
+    const registerSpy = vi.spyOn(
+      useLayerRegistryStore.getState(),
+      "registerDataLayer",
+    );
+
+    const { container } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
+    const root = container.firstChild as HTMLElement;
+
+    const csv =
+      "name,lat,lng\nCity Hall,37.7793,-122.4193\nFerry Building,37.7955,-122.3937\n";
+    const csvFileLike = {
+      name: "places.csv",
+      type: "text/csv",
+      text: () => Promise.resolve(csv),
+    } as unknown as File;
+    fireEvent.drop(root, { dataTransfer: { files: [csvFileLike] } });
+
+    await waitFor(() => {
+      expect(registerSpy).toHaveBeenCalledTimes(1);
+    });
+
+    const callArg = registerSpy.mock.calls[0][0];
+    expect(callArg.label).toBe("places.csv");
+    expect(callArg.fc.features).toHaveLength(2);
+    expect(callArg.fc.features[0].geometry.type).toBe("Point");
+
+    // Points → "circle" (see inferGeometryType in useGeoJsonDrop.ts).
+    expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
+    const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(layerSpec.type).toBe("circle");
+  });
+
+  it("surfaces a toast (no layer) for an address-only .csv when no geocoder is configured", async () => {
+    const registerSpy = vi.spyOn(
+      useLayerRegistryStore.getState(),
+      "registerDataLayer",
+    );
+
+    const { container, findByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
+    const root = container.firstChild as HTMLElement;
+
+    const csv = "name,address\nCity Hall,1 Dr Carlton B Goodlett Pl\n";
+    const csvFileLike = {
+      name: "addresses.csv",
+      type: "text/csv",
+      text: () => Promise.resolve(csv),
+    } as unknown as File;
+    fireEvent.drop(root, { dataTransfer: { files: [csvFileLike] } });
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toMatch(/CSV import failed/);
+    expect(toast.textContent).toMatch(/geocoder/);
+    expect(registerSpy).not.toHaveBeenCalled();
+    expect(mockMap.addLayer).not.toHaveBeenCalled();
+  });
 });
