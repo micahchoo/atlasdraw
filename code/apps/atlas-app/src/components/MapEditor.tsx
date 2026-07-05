@@ -58,6 +58,7 @@ import { useCollabDataLayer } from "../hooks/useCollabDataLayer";
 import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
 import { useMapEditorKeyboard } from "../hooks/useMapEditorKeyboard";
+import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
@@ -427,30 +428,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
-  // Tracks the prior elements array reference so handleExcalidrawChange can
-  // skip markDirty when Excalidraw fires onChange without an actual element
-  // mutation (initial mount, viewport-only updates, scroll-lock self-fires).
-  // Closes atlasdraw-12f0 — the "● Unsaved" indicator no longer trips on
-  // first load before the user has done anything.
-  const prevElementsRef = useRef<readonly unknown[] | null>(null);
-  // Guards against re-entrant updateScene calls in handleExcalidrawChange.
-  // CoordinateSync fires many onChange events before React can process our
-  // viewBackgroundColor reset; without this flag each one queues another
-  // updateScene, exhausting React's 50-update nesting limit.
-  const bgResetQueuedRef = useRef(false);
-  // True once Excalidraw has emitted at least one onChange with vbg ==
-  // "transparent" (i.e. our initialData/reset has actually been applied).
-  // Excalidraw v0.18 emits a default-vbg ("#ffffff") onChange on mount
-  // BEFORE initialData lands — without this guard, setMapBg(default-white)
-  // ran on every load, painting an opaque rectangle over the map.
-  const transparentAppliedRef = useRef(false);
-  // Phase 6 A14b — aria-live selection-change announcer. We compare prev
-  // selected ids against current to fire one announcement per real change;
-  // throttle wall-clock to ≤1 announcement / 500ms so a rubber-band-select
-  // sweep doesn't spam the screen-reader queue.
+  // Phase 6 A14b — aria-live selection-change announcer, read inside
+  // useExcalidrawChangeHandler.
   const announceMapEditor = useAnnounce();
-  const prevSelectionIdsRef = useRef<string>("");
-  const lastSelectionAnnounceAtRef = useRef<number>(0);
   // Space+drag pan bridge: when space is held, Excalidraw's internal pan
   // mechanism mutates scrollX/Y. The scroll lock below resets those to 0
   // every onChange (preserving geo-anchor identity). Without this bridge,
@@ -675,153 +655,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     void saveAtlasDocument(excalidrawAPI, documentNotify);
   }, [excalidrawAPI, documentNotify]);
 
-  // Intercept ChangeCanvasBackground: keep Excalidraw transparent so the map
-  // shows through, and store the chosen color in mapBg for CSS + export.
-  //
-  // Also enforces identity scroll/zoom (scroll lock) and handles post-file-load
-  // sync. Two invariants that Atlas relies on:
-  //
-  //   1. Scroll lock — Excalidraw must keep scrollX=0, scrollY=0, zoom=1 so
-  //      that scene coordinates equal screen pixels. After file load, Excalidraw
-  //      calls scrollToContent which breaks this. We detect and immediately reset.
-  //      The geo sync runs on the following onChange once scroll is at identity.
-  //
-  //   2. Post-load sync — loading a .excalidraw file emits no camera events, so
-  //      geo-anchored elements stay at their canonical zoom-0 coordinates until
-  //      the user pans. We detect this by comparing the first geo element's scene
-  //      position against map.project(anchor) and calling syncNow() if delta>10px.
-  //      The self-terminating property: after sync, el.x == map.project(anchor)
-  //      so delta==0 on the follow-up onChange.
-  const handleExcalidrawChange = useCallback<
-    NonNullable<React.ComponentProps<typeof Excalidraw>["onChange"]>
-  >(
-    (elements, appState) => {
-      // --- 1. Background color intercept ---
-      if (appState.viewBackgroundColor !== "transparent") {
-        // Gate: only treat as a user color-pick after we've seen a transparent
-        // state at least once (= our initialData/reset has been applied).
-        // Otherwise the mount-time default `#ffffff` emit gets captured into
-        // mapBg and paints an opaque rectangle over the map.
-        if (transparentAppliedRef.current) {
-          setMapBg(appState.viewBackgroundColor);
-        }
-        // Only queue one reset at a time. CoordinateSync fires many onChange
-        // events (one per camera event) before React processes our setState;
-        // without this guard each fires another updateScene, exhausting
-        // React's 50-nested-update limit ("Maximum update depth exceeded").
-        if (!bgResetQueuedRef.current) {
-          bgResetQueuedRef.current = true;
-          excalidrawAPI?.updateScene({
-            appState: { viewBackgroundColor: "transparent" },
-          });
-        }
-      } else {
-        transparentAppliedRef.current = true;
-        bgResetQueuedRef.current = false;
-      }
-
-      // --- 2. Scroll lock ---
-      // After file load, Excalidraw calls scrollToContent setting non-zero
-      // scrollX/Y. With non-zero scroll, `el.x + scrollX` ≠ `map.project(anchor).x`
-      // so elements appear shifted from their geo positions and reanchorIfMoved
-      // picks up false user-drag deltas. Reset to identity; geo sync runs next tick.
-      //
-      // Space+drag bridge: when space is held, Excalidraw pans by mutating
-      // scrollX/Y. We forward the delta to map.panBy before resetting so the
-      // map moves. scrollToContent delivers large single jumps (>200px) when
-      // elements are loaded — those are NOT user pans, so we skip bridging
-      // when the delta exceeds a sane per-frame ceiling.
-      if (
-        appState.scrollX !== 0 ||
-        appState.scrollY !== 0 ||
-        appState.zoom.value !== 1
-      ) {
-        if (
-          spaceHeldRef.current &&
-          (appState.scrollX !== 0 || appState.scrollY !== 0)
-        ) {
-          // Guard: scrollToContent jumps are typically >>100px in a single
-          // onChange; a user drag within one frame stays well under 100px.
-          const absDx = Math.abs(appState.scrollX);
-          const absDy = Math.abs(appState.scrollY);
-          if (absDx <= 100 && absDy <= 100) {
-            map?.panBy([-appState.scrollX, -appState.scrollY], {
-              animate: false,
-            });
-          }
-        }
-        excalidrawAPI?.updateScene({
-          appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
-        });
-        return;
-      }
-
-      // --- 3. Post-load geo sync (scroll is identity here) ---
-      if (map && syncNow) {
-        for (const el of elements) {
-          const cd = (el as { customData?: unknown }).customData;
-          if (!isGeoCustomData(cd)) {
-            continue;
-          }
-          const anchor = cd.geo;
-          const ref =
-            anchor.kind === "point"
-              ? map.project([anchor.lng, anchor.lat] as [number, number])
-              : anchor.kind === "bbox"
-              ? map.project([anchor.west, anchor.north] as [number, number])
-              : map.project(anchor.coordinates[0] as [number, number]);
-          if (
-            Math.abs((el as { x: number }).x - ref.x) > 10 ||
-            Math.abs((el as { y: number }).y - ref.y) > 10
-          ) {
-            syncNow();
-          }
-          break; // O(1): only inspect the first geo element
-        }
-      }
-
-      // --- 4. T9 — mark persistence dirty (gated on real element mutation).
-      // Excalidraw fires onChange on initial mount, viewport changes, scroll-
-      // lock self-fires, and selection updates — none of which are user
-      // edits. Mark dirty only when the elements reference actually changes
-      // from the prior call, AND skip the first call (which establishes the
-      // baseline). The underlying PersistenceStore debounces (5s) + ceilings
-      // (30s) so the actual IDB write rate stays bounded.
-      const prev = prevElementsRef.current;
-      prevElementsRef.current = elements;
-      if (prev !== null && elements !== prev) {
-        usePersistenceStore.getState().markDirty();
-      }
-
-      // --- 5. Phase 6 A14b — selection-change aria-live announcement.
-      // Compare the sorted selected-id set against the prior call. Throttled
-      // to ≤1 announcement per 500ms so a rubber-band drag-select doesn't
-      // spam the screen-reader queue.
-      const selectedIds = Object.keys(appState.selectedElementIds ?? {})
-        .sort()
-        .join(",");
-      if (selectedIds !== prevSelectionIdsRef.current) {
-        prevSelectionIdsRef.current = selectedIds;
-        const now = Date.now();
-        if (
-          selectedIds !== "" &&
-          now - lastSelectionAnnounceAtRef.current >= 500
-        ) {
-          lastSelectionAnnounceAtRef.current = now;
-          const ids = selectedIds.split(",");
-          if (ids.length === 1) {
-            const el = elements.find((e: { id: string }) => e.id === ids[0]) as
-              | { type?: string }
-              | undefined;
-            announceMapEditor(`Selected: ${el?.type ?? "element"}`);
-          } else {
-            announceMapEditor(`Selected: ${ids.length} elements`);
-          }
-        }
-      }
-    },
-    [excalidrawAPI, map, syncNow, announceMapEditor],
-  );
+  // Excalidraw onChange: background intercept + scroll-lock/space-pan bridge
+  // + post-load geo sync + autosave markDirty + aria-live selection announce
+  // — extracted to useExcalidrawChangeHandler hook.
+  const handleExcalidrawChange = useExcalidrawChangeHandler({
+    excalidrawAPI,
+    map,
+    syncNow,
+    announceMapEditor,
+    setMapBg,
+    spaceHeldRef,
+  });
 
   // Provide the live MapLibre canvas to Excalidraw's native Save as Image /
   // Copy as PNG so they composite basemap + annotations in a single export.
