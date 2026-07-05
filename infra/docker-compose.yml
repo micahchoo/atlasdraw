@@ -110,10 +110,17 @@ services:
     profiles: ["realtime"]
     depends_on:
       - storage
-    ports:
-      - "4001:4001"
+    # Not published to the host. The relay is reachable only on the compose
+    # network, via Caddy's /socket.io and /yjs routes, so realtime traffic
+    # (including the plaintext Yjs data layer) is TLS-terminated at the edge
+    # like every other route. `expose` documents the internal port; add a
+    # `ports:` mapping back only for direct local debugging, never in prod.
+    expose:
+      - "4001"
     environment:
       PORT: "4001"
+      # Pin to your domain in production; the relay is same-origin behind Caddy.
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
       REDIS_URL: ${REDIS_URL:-}
     restart: unless-stopped
 

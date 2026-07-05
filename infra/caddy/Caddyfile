@@ -1,9 +1,15 @@
 # Atlasdraw — Caddy reverse-proxy config for the full production stack.
 #
 # Routes:
-#   /api/* → storage (Caddy strips the /api prefix; storage serves its
-#            own routes at /maps, /share, /health, etc.)
-#   /*     → web (atlas-app dist via nginx on port 3000)
+#   /api/*       → storage (Caddy strips the /api prefix; storage serves its
+#                  own routes at /maps, /share, /health, etc.)
+#   /socket.io/* → realtime relay (Socket.IO; WebSocket upgrade proxied)
+#   /yjs/*       → realtime relay (y-websocket; WebSocket upgrade proxied)
+#   /*           → web (atlas-app dist via nginx on port 3000)
+#
+# The realtime routes only respond when the `realtime` compose profile is up;
+# otherwise Caddy 502s that path (the relay is not published to the host — it
+# is reachable only on the compose network, through this proxy, over TLS).
 #
 # TLS: automatic via Let's Encrypt ACME (production) — operators MUST set
 # ACME_EMAIL in .env. For local-host testing, override the `tls` line:
@@ -11,21 +17,32 @@
 # or comment out the entire `tls` directive and use http://${PUBLIC_DOMAIN}.
 
 {$PUBLIC_DOMAIN} {
-    encode zstd gzip
+	encode zstd gzip
 
-    handle_path /api/* {
-        reverse_proxy storage:4000
-    }
+	handle_path /api/* {
+		reverse_proxy storage:4000
+	}
 
-    handle {
-        reverse_proxy web:3000
-    }
+	# Realtime relay — full path preserved (relay serves /socket.io and
+	# /yjs/:roomId verbatim). Caddy proxies the WebSocket Upgrade handshake
+	# automatically, so both transports get TLS terminated here.
+	handle /socket.io/* {
+		reverse_proxy realtime:4001
+	}
 
-    tls {$ACME_EMAIL}
+	handle /yjs/* {
+		reverse_proxy realtime:4001
+	}
 
-    log {
-        output stdout
-        format json
-        level INFO
-    }
+	handle {
+		reverse_proxy web:3000
+	}
+
+	tls {$ACME_EMAIL}
+
+	log {
+		output stdout
+		format json
+		level INFO
+	}
 }
