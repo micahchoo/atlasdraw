@@ -47,9 +47,10 @@ import type { LayerRegistryState } from "../state/layerRegistry";
 import type maplibregl from "maplibre-gl";
 
 /**
- * Wires the Convert-annotation-to-data-layer action into both the MainMenu
- * item (via the returned `currentConvertibleSelection`/`handleConvert` pair)
- * and the element right-click context menu (registered internally).
+ * Registers the Convert-annotation-to-data-layer action on the element
+ * right-click context menu. Also returns the underlying
+ * `currentConvertibleSelection`/`handleConvert` pair for a future MainMenu
+ * surface to reuse — unconsumed by any caller today.
  */
 export function useConvertToDataLayer(
   map: maplibregl.Map | null,
@@ -132,9 +133,9 @@ export function useConvertToDataLayer(
 
   // W-C — Surface Convert as a right-click context-menu item via the
   // atlasdraw fork's `excalidrawAPI.registerContextMenuItem`. Item appears
-  // at the tail of the element menu, gated by the same predicate the W-B
-  // MainMenu gate used (single geo selection, not text/arrow). Re-runs on
-  // handleConvert identity change; the unregister fn returned by the API
+  // at the tail of the element menu, gated the same way
+  // currentConvertibleSelection is (single geo selection, not text/arrow).
+  // Re-runs on handleConvert identity change; the unregister fn returned by the API
   // removes the prior closure so we don't accumulate stale items.
   useEffect(() => {
     if (!excalidrawAPI) {
