@@ -679,14 +679,19 @@ has that nothing above it exposes. These are decisions, not work items: each
 
 ### Direction 1 — CSV, Shapefile import, and address geocoding are fully built and tested; only GeoJSON is reachable from the UI
 
-> **Verdict: pursue, scoped 2026-07-05** — ledger: `CAPABILITY.md`.
+> **Verdict: pursue, scoped 2026-07-05 — built** — ledger: `CAPABILITY.md`.
 > Verification found the premise half-stale: CSV import + Photon geocoding
 > are already wired via `useGeoJsonDrop.ts` (a side effect of this
 > session's Issue 3 journey-walk fix) — reclassified reachable, no action.
-> Only Shapefile import is genuinely orphaned (zero UI path, confirmed).
-> Pursued scoped to Shapefile + a real file-picker (today there's no
-> `<input type="file">` anywhere, drag-drop is the only mechanism).
-> Commissioned a spec interview, not built.
+> Only Shapefile import was genuinely orphaned (zero UI path, confirmed).
+> `/grill-with-docs` design interview scoped the build to Shapefile + a
+> real file-picker (renamed `useGeoJsonDrop` → `useDataFileImport`, widened
+> to a `"zip"` ext, added a `ShapefileParseError` toast branch, and a new
+> "Import…" `MainMenu` item opening a native file picker that dispatches
+> through the same pipeline drag-drop uses). Also closed
+> `packages/data/src/shapefile.test.ts`'s long-standing no-happy-path-test
+> gap with a real fixture. atlas-app 63 files/525 tests, packages/data 13
+> files/144 tests, both green.
 
 **Surplus:** `@atlasdraw/data` ships `csv.ts` (317 lines + `csv.test.ts` 268
 + `csv-geocode.test.ts` 208), `shapefile.ts` (144 lines + 65 lines of
@@ -870,10 +875,18 @@ the Option-B relay rewrite this already-written escalation describes.
 
 ### Direction 4 — Every registry in the codebase is a static list with no register() — right where the roadmap's plugin API needs one
 
-> **Verdict: pursue 2026-07-05** — ledger: `HEADROOM.md`. Both rows
+> **Verdict: pursue 2026-07-05 — built** — ledger: `HEADROOM.md`. Both rows
 > (BasemapRegistry, tools) confirmed as described — no register() anywhere.
-> Commissioned a shared spec interview for the registration API shape
-> (Phase 7's Plugin SDK). Build nothing yet — spec only.
+> `/grill-with-docs` design interview specced a shared registration
+> primitive; implementing it surfaced a real constraint the interview
+> missed (the root tsconfig.json's composite project graph explicitly
+> excludes `@atlasdraw/common`, where the primitive was meant to live) —
+> each package now carries its own small private copy instead of sharing
+> one. `registerBasemap`/`listBasemaps` and `registerTool`/`getTool`/
+> `listTools` added; zero breaking changes to existing consumers.
+> Incidentally fixed `SettingsDialog.tsx`'s `getBasemap("__all__") as
+> unknown as BasemapConfig[]` sentinel-string hack. basemap 7 files/76
+> tests, tools 12 files/77 tests, atlas-app 63 files/525 tests, all green.
 
 **Surplus:** `BasemapRegistry.ts:49` hardcodes 4 basemaps
 (`protomaps-light/dark`, `openfreemap-bright`, `osm-standard`) in a static

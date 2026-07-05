@@ -33,10 +33,10 @@ break selection. This is standard, correct MapLibre usage — not a gap.
 
 | dimension | declared | reached | pinned at | intent | verdict | commissioned as |
 |---|---|---|---|---|---|---|
-| basemap registry | extensible plugin seam per `docs/PHASES.md` Phase 7 (v1.5) — Plugin SDK naming `registerLayerType` | static 4-entry array (`protomaps-light/dark`, `openfreemap-bright`, `osm-standard`), `getBasemap(id)` lookup only — confirmed via grep, no "register" keyword anywhere in the file | `packages/basemap/src/BasemapRegistry.ts:49` | designed-latent — Phase 7 roadmap already names this seam; today's shape is the pre-plugin baseline | **pursue** | spec interview below |
-| tools registry | same Phase 7 Plugin SDK, naming `registerTool` | 11 individually-exported tool objects (`PinTool`, `PolygonTool`, ... — confirmed via grep), no registry array or lookup table at all | `packages/tools/src/index.ts` | designed-latent — same Phase 7 roadmap | **pursue** | spec interview below (same brief — one Plugin SDK spans both) |
+| basemap registry | extensible plugin seam per `docs/PHASES.md` Phase 7 (v1.5) — Plugin SDK naming `registerLayerType` | **built 2026-07-05**: `registerBasemap`/`listBasemaps` added, 4 existing entries seed the registry at module load, `getBasemap`/`BASEMAPS` unchanged for existing consumers | `packages/basemap/src/BasemapRegistry.ts` | designed-latent — Phase 7 roadmap already names this seam; today's shape was the pre-plugin baseline | **pursue** | built, not just specced |
+| tools registry | same Phase 7 Plugin SDK, naming `registerTool` | **built 2026-07-05**: `registerTool`/`getTool`/`listTools` added, 8 existing tools self-register at module load, all 8 unchanged as named exports | `packages/tools/src/index.ts` | designed-latent — same Phase 7 roadmap | **pursue** | built, not just specced |
 
-### Commissioned spec interview (Direction 4)
+### Commissioned spec interview (Direction 4) — run via `/grill-with-docs`
 
 ```
 Design the registration API shape for atlas-app's future plugin SDK
@@ -54,6 +54,30 @@ concretely for basemaps vs tools? Should this land ahead of Phase 7 proper
 kickoff to pick up? Bring back a brief, not code — no register() ships from
 this interview alone.
 ```
+
+### Interview outcome vs. what actually shipped
+
+The interview's own recommendation — share one generic `Registry<T>` via
+`@atlasdraw/common` — turned out not to hold once implementation started:
+the root `tsconfig.json`'s composite project graph explicitly excludes
+`@atlasdraw/common` from the atlas-owned package graph (`basemap`, `data`,
+`geo`, `tools`, `cli`) — a documented boundary ("Vendored Excalidraw
+packages... prevent composite... path-resolved via tsconfig.base.json
+paths"), not an oversight. Adding `@atlasdraw/common` as a dependency of
+`packages/basemap` immediately hit a real `tsc` rootDir violation. Given
+the primitive is ~15 trivial lines (register/get/list over a `Map`), each
+package now carries its own private copy rather than crossing that
+boundary — the "different enough shapes" question the interview raised
+turned out moot once the sharing mechanism itself wasn't viable. Same
+outward API either way: `registerBasemap`/`listBasemaps` and
+`registerTool`/`getTool`/`listTools`, both zero-breaking-change over the
+prior static exports.
+
+**Integrity hashing / Web Worker sandbox / PluginManifest**: confirmed out
+of scope, left as a code comment pointing at this ledger rather than built
+— that's the actual Phase 7 (v1.5) plugin loader, a separate and much
+larger piece of work sitting on top of the registration primitive shipped
+here.
 
 ---
 
@@ -84,6 +108,9 @@ this interview alone.
 ## Done
 
 All three surpluses resolved: Direction 2 rejected on verification (false
-premise, nothing to build); Direction 4 pursued with a shared spec-interview
-brief, commissioned not built; Direction 5 rejected and actually executed —
-the redundant tier is gone, not just decided against.
+premise, nothing to build); Direction 4 pursued, specced via
+`/grill-with-docs`, and built — `registry.test.ts` (tools, 5 tests, new),
+`BasemapRegistry.test.ts` (9 tests, up from 6); Direction 5 rejected and
+actually executed — the redundant tier is gone, not just decided against.
+basemap 7 files/76 tests, tools 12 files/77 tests, storage 122 tests, all
+green.
