@@ -119,17 +119,19 @@ export const Dialog = (props: DialogProps) => {
             <span className="Dialog__titleContent">{props.title}</span>
           </h2>
         )}
-        {isFullscreen && (
-          <button
-            className="Dialog__close"
-            onClick={onClose}
-            title={t("buttons.close")}
-            aria-label={t("buttons.close")}
-            type="button"
-          >
-            {CloseIcon}
-          </button>
-        )}
+        {/* Always rendered (not just fullscreen): besides being the only
+            visible dismissal, this is the dialog's guaranteed focusable
+            element — without one, the autofocus effect focuses nothing and
+            Modal's Escape handler (keyed on focus-within) never fires. */}
+        <button
+          className="Dialog__close"
+          onClick={onClose}
+          title={t("buttons.close")}
+          aria-label={t("buttons.close")}
+          type="button"
+        >
+          {CloseIcon}
+        </button>
         <div className="Dialog__content">{props.children}</div>
       </Island>
     </Modal>
