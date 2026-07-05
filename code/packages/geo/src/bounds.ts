@@ -7,7 +7,7 @@
 
 import { isGeoCustomData } from "./types.js";
 
-import type { ExcalidrawElementLike } from "./CoordinateSync.js";
+import type { ExcalidrawElementLike } from "./excalidrawTypes.js";
 
 export type LngLatBox = {
   west: number;
