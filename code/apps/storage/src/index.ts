@@ -116,7 +116,6 @@ async function main(): Promise<void> {
     limits: {
       free: config.QUOTA_FREE_MAPS,
       pro: config.QUOTA_PRO_MAPS,
-      pro_25: config.QUOTA_PRO_MAPS,
     },
   });
   registerMapRoutes(app, client);
@@ -134,7 +133,6 @@ async function main(): Promise<void> {
     stripeSecretKey: config.STRIPE_SECRET_KEY,
     stripeWebhookSecret: config.STRIPE_WEBHOOK_SECRET,
     stripePricePro: config.STRIPE_PRICE_PRO,
-    stripePricePro25: config.STRIPE_PRICE_PRO_25,
     siteUrl: config.SITE_URL,
   });
 

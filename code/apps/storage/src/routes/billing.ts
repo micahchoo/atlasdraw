@@ -50,7 +50,6 @@ export interface BillingRoutesOptions {
   stripeSecretKey?: string;
   stripeWebhookSecret?: string;
   stripePricePro?: string;
-  stripePricePro25?: string;
   siteUrl: string;
   /**
    * Optional Stripe SDK injection for tests. Production code path is the
@@ -124,9 +123,6 @@ function priceIdForTier(
   if (tier === "pro") {
     return opts.stripePricePro;
   }
-  if (tier === "pro_25") {
-    return opts.stripePricePro25;
-  }
   return undefined;
 }
 
@@ -184,7 +180,7 @@ export function registerBillingRoutes(
         .code(400)
         .send({ error: "workspaceId_and_priceTier_required" });
     }
-    if (priceTier !== "pro" && priceTier !== "pro_25") {
+    if (priceTier !== "pro") {
       return reply.code(400).send({ error: "invalid_priceTier" });
     }
     const priceId = priceIdForTier(priceTier, opts);
@@ -290,7 +286,7 @@ async function dispatchEvent(
       if (!workspaceId || !priceTier) {
         return;
       }
-      if (priceTier !== "pro" && priceTier !== "pro_25") {
+      if (priceTier !== "pro") {
         return;
       }
       await opts.client.updateWorkspacePlan(

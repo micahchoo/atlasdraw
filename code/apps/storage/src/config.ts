@@ -46,14 +46,13 @@ const BaseSchema = z.object({
   QUOTA_FREE_MAPS: z.coerce.number().int().positive().default(3),
   QUOTA_PRO_MAPS: z.coerce.number().int().positive().default(100),
   // ─── Phase 6 A13c: Stripe checkout + webhook ────────────────────────
-  // All four are optional — managed-mode deployments that haven't yet
+  // All three are optional — managed-mode deployments that haven't yet
   // wired Stripe still come up. Routes that require them raise a clear
   // 503 at request time. Values flow straight through to the Stripe
   // SDK; never logged.
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRICE_PRO: z.string().optional(),
-  STRIPE_PRICE_PRO_25: z.string().optional(),
   // Site URL used for Stripe checkout success/cancel redirects.
   SITE_URL: z.string().default("http://localhost:3000"),
   // Per-IP fixed-window rate limit for the HTTP API. RATE_LIMIT_MAX requests

@@ -107,6 +107,32 @@ Appended to Phase 5 → Phase 6 contract:
 
 ---
 
+### Status update (2026-07-05) — Phase 6 inherited work items: RE-OPENED, not closed
+
+Phase 6 shipped (`CHANGELOG.md`, v1.0.0, 2026-05-15) without addressing
+either of the two work items this decision assigned to it: (1) wire
+`setPersistence` to the storage API — Phase 5's in-memory TTL eviction in
+`yjs-server.ts` is still the only mechanism; (2) evaluate the Option B
+relay rewrite (commit or formally close). Neither item appears in
+`CHANGELOG.md`'s Phase 6 section, and `grep -rn 'yjs-crypto'` outside
+`packages/data/src` confirms zero wiring into `apps/realtime` — the stub
+described by this decision is exactly as unwired today as it was on
+2026-05-11.
+
+Surfaced via ISSUES.md Direction 3 (`DARKDATA.md` ledger — dark-data
+census of `packages/data/src/yjs-crypto.ts`'s `encryptUpdate`/
+`decryptUpdate`). **Maintainer verdict: park** — the Option-B evaluation
+is explicitly re-opened for a future phase, not silently closed as
+permanent server-trusted relay and not committed to immediate
+implementation either. The stub remains safe to leave unwired under
+Option A/C in the interim (per this decision's own original finding: "the
+stub is safe under all three options").
+
+**Re-open trigger:** a future phase that names Option B evaluation as an
+explicit task, or a fresh decision closing it permanently under Option A.
+
+---
+
 ## E-02 — Phase 7 Snapshot/Diff Dependency on E-01 Resolution
 
 **Date escalated:** 2026-05-03  

@@ -69,7 +69,6 @@ function buildApp(opts: BuildOpts) {
     stripeSecretKey: opts.withStripeEnv ? "sk_test_xxx" : undefined,
     stripeWebhookSecret: opts.withStripeEnv ? "whsec_xxx" : undefined,
     stripePricePro: opts.withStripeEnv ? "price_pro" : undefined,
-    stripePricePro25: opts.withStripeEnv ? "price_pro_25" : undefined,
     siteUrl: "https://atlas.example.com",
     stripeFactory: () => makeStripeStub(calls, behaviorFn),
   });
@@ -300,7 +299,7 @@ describe("registerBillingRoutes", () => {
         data: {
           object: {
             customer: "cus_dup",
-            metadata: { workspaceId: "ws-d", priceTier: "pro_25" },
+            metadata: { workspaceId: "ws-d", priceTier: "pro" },
           },
         },
       };
@@ -331,7 +330,7 @@ describe("registerBillingRoutes", () => {
       expect(r1.json()).toEqual({ status: "ok" });
 
       // Manually flip the plan back to free — if the second delivery
-      // wasn't idempotent, it would re-update to pro_25.
+      // wasn't idempotent, it would re-update to pro.
       await built.client.updateWorkspacePlan("ws-d", "free");
 
       const r2 = await app.inject({

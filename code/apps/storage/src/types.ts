@@ -59,13 +59,15 @@ export interface WorkspaceScope {
 
 /**
  * Workspace plan tier. Phase 6 A13b/A13c:
- *  - `free`   — default tier; map count gated by `QUOTA_FREE_MAPS`.
- *  - `pro`    — paid tier; map count gated by `QUOTA_PRO_MAPS`.
- *  - `pro_25` — higher paid tier; same map quota as `pro` for v1 (kept
- *               as a distinct tier so Stripe priceId metadata round-trips
- *               accurately for future per-tier quota differentiation).
+ *  - `free` — default tier; map count gated by `QUOTA_FREE_MAPS`.
+ *  - `pro`  — paid tier; map count gated by `QUOTA_PRO_MAPS`.
+ *
+ * A third tier, `pro_25` ("Pro+"), previously existed here with its own
+ * Stripe price ID but an identical map cap to `pro` — no code anywhere
+ * ever read a difference between the two. Folded back into `pro` per
+ * ISSUES.md Direction 5 (headroom audit verdict: reject).
  */
-export type WorkspacePlan = "free" | "pro" | "pro_25";
+export type WorkspacePlan = "free" | "pro";
 
 /**
  * A persisted workspace. `stripe_customer_id` is `null` for free-tier

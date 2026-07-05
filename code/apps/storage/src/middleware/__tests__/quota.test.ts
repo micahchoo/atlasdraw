@@ -32,7 +32,6 @@ function buildApp(opts: BuildOpts) {
     limits: {
       free: opts.free ?? 3,
       pro: opts.pro ?? 100,
-      pro_25: opts.pro ?? 100,
     },
   });
   registerMapRoutes(app, client);

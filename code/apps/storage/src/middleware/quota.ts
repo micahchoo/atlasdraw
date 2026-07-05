@@ -21,9 +21,6 @@ import type { StorageClient, Workspace, WorkspacePlan } from "../types";
 export interface QuotaLimits {
   free: number;
   pro: number;
-  // pro_25 reuses the pro map cap in v1 — kept as a separate union member
-  // in WorkspacePlan so the priceId metadata round-trips intact.
-  pro_25: number;
 }
 
 export interface QuotaMiddlewareOptions {
@@ -35,18 +32,13 @@ export interface QuotaMiddlewareOptions {
   limits: QuotaLimits;
 }
 
-/**
- * Decide the cap for a given workspace plan. `pro_25` reuses `pro`'s cap
- * in v1 — see `QuotaLimits` above.
- */
+/** Decide the cap for a given workspace plan. */
 function capForPlan(plan: WorkspacePlan, limits: QuotaLimits): number {
   switch (plan) {
     case "free":
       return limits.free;
     case "pro":
       return limits.pro;
-    case "pro_25":
-      return limits.pro_25;
   }
 }
 

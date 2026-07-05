@@ -4,6 +4,16 @@ All notable changes to Atlasdraw are documented in this file. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); Atlasdraw
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- **"Pro+" billing tier.** `pro_25` was a separate `WorkspacePlan` with its
+  own Stripe price ID but an identical map quota to `pro` — no code ever
+  read a difference between the two (ISSUES.md Direction 5, headroom audit,
+  verdict: reject). Folded back into `pro`; `STRIPE_PRICE_PRO_25` is no
+  longer a recognized env var.
+
 ## [1.0.0] — 2026-05-15
 
 First standalone-app release. Atlasdraw is a collaborative web map studio
@@ -36,8 +46,8 @@ optional maintainer-hosted SaaS overlay.
   behaviour is preserved.
 - **Hosted-mode (managed) overlay.** Opt-in via `MANAGED_MODE=true`
   on the storage server + `VITE_MANAGED_MODE=true` on the atlas-app.
-  Adds: per-workspace Stripe billing (Pro / Pro+ tiers), per-workspace
-  map-count quotas (free=3, pro/pro+=100 by default; configurable via
+  Adds: per-workspace Stripe billing (Pro tier), per-workspace
+  map-count quotas (free=3, pro=100 by default; configurable via
   `QUOTA_FREE_MAPS` / `QUOTA_PRO_MAPS`), `WorkspaceSwitcher`
   dropdown, `BillingPage` route. ADR-0011 governs telemetry: hosted
   mode emits server-side `pino` operational events only — no client
