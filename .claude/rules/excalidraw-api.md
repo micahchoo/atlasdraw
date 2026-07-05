@@ -17,7 +17,7 @@ Before any worker brief, plan section, or implementation that **names an Excalid
 When the plan/spec/prior decision names:
 
 - An `<Excalidraw>` prop → grep `code/packages/excalidraw/types.ts` for `ExcalidrawProps`. If absent, the prop is an `AppState` field and goes via `initialData.appState`, not as a top-level prop.
-- An element factory (`newElement`, `newTextElement`, `newElementWith`, etc.) → grep `code/packages/element/src/newElement.ts`. `newElementWith` **mutates** an existing element; for creation use the factory functions in `@excalidraw/element`.
+- An element factory (`newElement`, `newTextElement`, `newElementWith`, etc.) → grep `code/packages/element/src/newElement.ts`. `newElementWith` **mutates** an existing element; for creation use the factory functions in `@atlasdraw/element`.
 - A "custom tools" registration → there is **no `customTools` prop in v0.18**. Atlas-side tools dispatch via overlay (see `code/apps/atlas-app/src/hooks/useAtlasdrawTool.ts` for the established pattern).
 - An imperative API method (`onChange`, `updateScene`, `getSceneElements`) → grep `code/packages/excalidraw/types.ts` for `ExcalidrawImperativeAPI`. The return type may be `UnsubscribeCallback` (cleanup signature differs from typical event listeners).
 - An AppState field (`viewBackgroundColor`, `theme`, `gridSize`, `editingElement`, `newElement`) → grep `code/packages/excalidraw/types.ts` for `interface AppState`. Goes in `initialData.appState`, NOT as a top-level prop.

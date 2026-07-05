@@ -1,5 +1,7 @@
 # Upstream Patches Register
 
+> **CLOSED 2026-07-04 per ADR 0010.** The fork is permanent and fully owned; vendored-package changes no longer require register entries, and the `check-patches.sh` CI guard is retired. Kept for historical reference.
+
 This file tracks every modification to vendored Excalidraw packages (`packages/excalidraw`, `packages/element`, `packages/math`, `packages/common`). Every patch has an entry. CI fails any PR that modifies a vendored file without adding to this register (see `scripts/check-patches.sh`).
 
 The register exists because we re-merge `upstream/master` monthly per ADR 0004. Without it, conflicts during merge become archaeology. With it, conflicts become a checklist.

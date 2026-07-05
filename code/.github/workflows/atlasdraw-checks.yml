@@ -13,9 +13,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # Full history required for check-patches.sh to compute the PR diff
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,11 +22,8 @@ jobs:
       - name: Check license fields (ADR 0002)
         run: bash scripts/check-license.sh
 
-      - name: Check upstream-patches doc (ADR 0004)
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash scripts/check-patches.sh
+      # patch-guard step (check-patches.sh, ADR 0004) retired 2026-07-04 per
+      # ADR 0010 — the fork is permanent; vendored changes need no register.
 
       - name: Check telemetry imports (ADR 0006)
         run: bash scripts/check-telemetry.sh

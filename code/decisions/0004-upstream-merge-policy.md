@@ -1,6 +1,6 @@
 # ADR 0004: Upstream Merge Policy
 
-**Status:** Accepted  
+**Status:** Superseded by ADR 0010 (2026-07-04) — exit clause invoked; the fork is permanent and fully owned.  
 **Date:** 2026-05-03
 
 ## Context
@@ -24,6 +24,7 @@ A formal policy sets clear expectations and an exit ramp.
 **Exit condition:** If any gate fails for two consecutive quarters, cease monthly merges and treat upstream as a one-time vendor. Pin the last-merged version and backport critical security patches manually.
 
 **Enforcement:**
+
 - CI guard: any PR touching vendored Excalidraw files without a corresponding entry in `decisions/upstream-patches.md` is rejected
 - Quarterly review checkpoint (first Monday of Q)
 - Merge branch: `upstream-merge/YYYY-MM`, tagged `upstream-merge-YYYY-Q`
@@ -31,16 +32,19 @@ A formal policy sets clear expectations and an exit ramp.
 ## Consequences
 
 ### Positive
+
 - Predictable merge burden and clear exit criteria
 - Documented patches survive rebases
 - Team has quarterly decision point to abandon merges if cost exceeds benefit
 
 ### Negative / Risks
+
 - **Quarterly overhead** — ~2 hours per month = ~8 hours per quarter
 - **Patch rot** — Patches may bitrot if not regularly tested
 - **Upstreamcommit latency** — Monthly cycle means security fixes lag 1–4 weeks
 
 **Mitigation:**
+
 - `decisions/upstream-patches.md` lives in repo and is code-reviewed
 - Quarterly review may accelerate merge frequency if patches are stable
 - Emergency merges allowed outside cadence for critical CVEs
