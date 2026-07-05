@@ -108,6 +108,8 @@ import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { MaputnikDialog } from "./MaputnikDialog";
 import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
+import { CursorOverlay } from "./CursorOverlay";
+import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
@@ -1487,6 +1489,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           band); the container is pointer-events: none so non-anchor clicks
           pass through. */}
       <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
+
+      {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
+          (no-op for single-player deployments, Q1). Both components already
+          no-op internally when there are no peers; the active gate just
+          skips mounting them at all when realtime is disabled. Wiring was
+          orphaned when CollabWrapper (the original Task 11 mount point) was
+          deleted 2026-05-25 as an unused gateway — see ledgers/DEADWOOD.md. */}
+      {collab.active && (
+        <>
+          <CursorOverlay />
+          {/* PresenceList shares WorkspaceSwitcher's top-right z:10 slot
+              (top:12/right:12) — offset below it in managed mode so the two
+              don't overlap when both are showing (hosted collab session). */}
+          <PresenceList topOffset={getAppConfig().managed ? 56 : undefined} />
+        </>
+      )}
 
       {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
           renders null; managed-mode renders a top-right dropdown that

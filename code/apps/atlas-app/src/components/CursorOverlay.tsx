@@ -7,7 +7,10 @@
 //
 // Flow position: Step 2 of 3 in client-collab (collab-state → cursor-presence
 // → presence-list). Upstream contract: useCollab().peers map.
-// Downstream contract: consumed by CollabWrapper (Task 11).
+// Downstream contract: mounted directly by MapEditor (CollabWrapper, the
+// original Task 11 mount point, was deleted 2026-05-25 as an unused
+// gateway — collab wiring moved into MapEditor but this mount never
+// followed; see ledgers/DEADWOOD.md).
 //
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 11
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md

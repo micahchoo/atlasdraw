@@ -203,12 +203,13 @@ a failed save or open ever tells the user it failed.
 
 ## Issue 4 — Two structural hotspots (one component, one class) that concentrate the app's complexity
 
-> **Status: running — ledger: ledgers/DEADWOOD.md** (started 2026-07-04.
-> All 66 modules classified; 2 dead modules deleted and merged to
-> `tend/deadwood-sweep` (`bbf6424`; vitest 44/44, tsc clean post-merge).
-> Both god split plans written. Remaining before `done`: maintainer
-> verdict on 2 feature-shaped dead modules, CursorOverlay + PresenceList
-> — built Phase 5 T11, never mounted.)
+> **Status: done 2026-07-05** — ledger: ledgers/DEADWOOD.md. All 66
+> modules classified; 2 dead modules deleted; CursorOverlay + PresenceList
+> verdicted **pursue** and mounted (gated on `collab.active`, offset
+> below WorkspaceSwitcher in managed mode; 5 new tests, vitest 45/45,
+> tsc clean). Both god split plans written (execution is separate,
+> unscheduled follow-on work — see Issue 4's ledger, not blocking done).
+> Wiring the mount surfaced a real, deeper bug — queued below as Issue 9.
 
 **Symptom:** `MapEditor.tsx` is 1,728 lines with 65 imports, 16 `useState`,
 17 `useEffect`, and 7 `useCallback` in a single component (line-counted
@@ -470,6 +471,87 @@ as storage. Done when every row reads pass.
 ```
 
 **Strength:** Worth exploring.
+
+---
+
+## Issue 9 — Collab presence/cursor UI and the Yjs data-layer sync both read a `CollabState` instance nobody ever connects
+
+**Status: queued** (surfaced 2026-07-05 while wiring Issue 4's CursorOverlay/
+PresenceList mount — logged, not fixed, per loop discipline: out-of-scope
+findings land here, not folded into the ledger that found them)
+
+**Symptom:** `useCollab()` (`hooks/useCollab.ts`) returns the current
+`CollabContext` value if a `<CollabContext.Provider>` is mounted —  but
+`grep -rn 'CollabContext.Provider'` across `apps/atlas-app/src` (excluding
+tests) returns **zero** hits; the only mention is a comment in
+`useCollab.ts:8` describing a mount that was never written ("e.g. by
+MapEditor after Task 11 wiring"). So every call to `useCollab()` in the real
+app takes the hook's no-provider fallback branch (`useCollab.ts:78-93`),
+which lazily constructs its **own** `CollabState` instance — one that is
+never `.connect()`-ed by anyone. Meanwhile `MapEditor.tsx:469` separately
+constructs the **real**, connected instance (`useMemo(() => new
+CollabState(), [])`), which `useCollabRoom` (line 478) and `ShareDialog`
+actually wire up. Two live `CollabState` objects exist per mount; the one
+`useYjsLayer(collab)` (`MapEditor.tsx:504`) and now `CursorOverlay`/
+`PresenceList` read from is always the disconnected one. Practical effect:
+the Yjs data-layer CRDT sync (`useYjsLayer`) and the collab presence UI have
+been reading a permanently-empty `yjsDoc`/`peers` since Phase 5 — this may
+mean the data-layer collab feature has never carried live remote data in
+production, masked because nothing visually surfaced `collab.peers` until
+this session's CursorOverlay/PresenceList mount.
+
+**Rungs:** L3 (structure: two parallel instances of the same class, one
+inert) ↔ L4 (implementation: the actual data path a "connected collaborator"
+depends on silently does nothing).
+
+**Why it's high-leverage:** this is a live, currently-shipped collaboration
+feature (`useYjsLayer`, the CRDT data-layer sync) potentially non-functional
+in every hosted deployment, discovered only as a side effect of mounting an
+unrelated UI component — the kind of gap that stays invisible until someone
+asks "why isn't my collaborator's layer edit showing up?" **Teaches:**
+dependency injection footguns — a context hook with a "fallback instance for
+convenience" is safe only if every real caller is checked to confirm the
+Provider is actually mounted; an unconnected fallback that type-matches the
+real thing is worse than a hard failure, because it fails silently.
+
+**Loop:** `sweep-triage-fix-resweep`, scoped narrowly to the collab wiring
+seam (not a full security sweep). Ledger `COLLABWIRING.md`: finding | file |
+severity | user impact | fix commit | re-audit. First finding: confirm via a
+forced integration test (two `MapEditor` instances or a mocked socket
+exchanging a CURSOR/data-layer event) whether real peer data ever reaches
+`collab.peers`/`collab.yjsDoc` today. Second: design the fix — likely
+wrapping MapEditor's render tree in `<CollabContext.Provider value={...}>`
+built from `collabState`, **plus** verifying `CollabState`'s peers/yjsDoc
+mutations actually trigger a React re-render (a plain `Map.set()` won't;
+this may need a subscribe/notify bridge, not just a Provider). Third: retest
+`useYjsLayer` and the two UI components against a real connected session.
+
+**Run it:**
+```
+Investigate whether code/apps/atlas-app/src/hooks/useCollab.ts's CollabContext
+is ever actually provided in the real app. Confirm via grep (CollabContext.Provider
+outside test files) that it is not, meaning every useCollab() call in
+MapEditor.tsx takes the no-provider fallback branch (useCollab.ts:69-94),
+constructing a CollabState instance that is never connect()-ed — separate
+from the real, connected instance MapEditor creates itself at MapEditor.tsx:469
+(useMemo(() => new CollabState(), [])) and wires via useCollabRoom/ShareDialog.
+Confirm the practical impact: useYjsLayer(collab) at MapEditor.tsx:504 (the
+Yjs CRDT data-layer sync) and CursorOverlay/PresenceList (mounted 2026-07-05)
+all read the disconnected instance. Ledger COLLABWIRING.md: finding | file |
+severity | user impact | fix commit | re-audit. Write a forced integration
+test first (two connected MapEditor sessions, or a mocked Socket.IO/y-websocket
+exchange) proving peers/yjsDoc never populate today — that's the finding to
+anchor severity on. Then design and implement the fix: likely a
+CollabContext.Provider in MapEditor wrapping its render tree with a value
+built from the real collabState, PLUS checking whether CollabState needs a
+subscribe/notify mechanism so peer/doc mutations actually trigger a React
+re-render (plain Map mutation won't). Retest useYjsLayer's data-layer sync
+and the cursor/presence UI end-to-end against a real two-client session
+before closing. Done when a real connected peer's cursor, presence, and
+data-layer edits are observed reaching the other client in a forced test.
+```
+
+**Strength:** Strong.
 
 ---
 

@@ -8,7 +8,10 @@
 //
 // Flow position: Step 2 of 3 in client-collab (collab-state → cursor-presence
 // → presence-list). Upstream contract: useCollab().peers map.
-// Downstream contract: consumed by CollabWrapper (Task 11).
+// Downstream contract: mounted directly by MapEditor (CollabWrapper, the
+// original Task 11 mount point, was deleted 2026-05-25 as an unused
+// gateway — collab wiring moved into MapEditor but this mount never
+// followed; see ledgers/DEADWOOD.md).
 //
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 11
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
@@ -28,6 +31,17 @@ function truncate(name: string, max = 12): string {
   return `${name.slice(0, max)}…`;
 }
 
+export interface PresenceListProps {
+  /**
+   * Vertical offset (px) for the top-right anchor, overriding the CSS
+   * module's default `top: 12px`. Both PresenceList and WorkspaceSwitcher
+   * anchor to the same top-right slot (z-index 10) — pass a larger offset
+   * when WorkspaceSwitcher is also mounted (managed mode) so the two don't
+   * overlap.
+   */
+  topOffset?: number;
+}
+
 /**
  * Compact sidebar collaborator list.
  *
@@ -36,7 +50,7 @@ function truncate(name: string, max = 12): string {
  * (dots in a row) to conserve screen space. Returns null when there are no
  * peers (collab inactive or empty room).
  */
-export function PresenceList() {
+export function PresenceList({ topOffset }: PresenceListProps = {}) {
   const { peers } = useCollab();
   const entries = Array.from(peers.values());
   const count = entries.length;
@@ -45,11 +59,16 @@ export function PresenceList() {
     return null;
   }
 
+  const style = topOffset === undefined ? undefined : { top: topOffset };
   const compact = count >= 4;
 
   if (compact) {
     return (
-      <div className={styles.rootCompact} data-testid="presence-list-compact">
+      <div
+        className={styles.rootCompact}
+        style={style}
+        data-testid="presence-list-compact"
+      >
         {entries.map((peer) => (
           <span
             key={peer.id}
@@ -66,7 +85,7 @@ export function PresenceList() {
   const headerText = count === 1 ? "1 collaborator" : `${count} collaborators`;
 
   return (
-    <div className={styles.root} data-testid="presence-list">
+    <div className={styles.root} style={style} data-testid="presence-list">
       <h3 className={styles.header} data-testid="presence-list-header">
         {headerText}
       </h3>
