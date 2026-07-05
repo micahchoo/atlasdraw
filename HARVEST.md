@@ -1,3 +1,30 @@
+# HARVEST.md — Issue 2 claim-vs-reality session (2026-07-04)
+
+Harvest pattern: session lessons → general rules → stored where they act.
+
+| lesson | general rule | stored where |
+|--------|--------------|--------------|
+| CHANGELOG.md was the "reality source" for checking PHASES.md, yet itself made three false claims (a KML reader that doesn't exist, "pro/pro+=unlimited" when the quota schema can't even represent unlimited, "packages/* — MIT" when two are MPL-2.0). | In a claim-vs-reality diff, the reference document is also a claim surface — verify it against code before using it as ground truth. | `CLAIMS.md` rows 14–16 (pattern decision, in its ledger) |
+| The false "render" claim lived in both README and package.json `description`; the false KML claim lived in README, a barrel comment, and CHANGELOG. Fixing only the README would have left the lie alive in two places. | When a doc claim is falsified, grep its literal repo-wide (README, package.json description, code comments, CHANGELOG) and fix every surface in the same commit-set. | `CLAIMS.md` rows 10, 14, 17 |
+| Two usage snippets were nearly shipped with invented APIs (`projectPoint({lng,lat}, zoom)` — real signature is `(map, lng, lat)`; a `yarn workspace` CLI invocation that can't work because bin → TS source with no build). Caught only by grepping exports before commit. | Every code snippet in a doc is a new claim: verify each symbol and command against actual exports/scripts at write time, or the drift fix becomes the next drift. | HARVEST.md + widened trigger in `.claude/rules/excalidraw-api.md` |
+| The tools README's "registered as Excalidraw customType tools" was the 4th logged instance of the plan-literal-vs-v0.18 failure mode — this time in a README, a surface the existing rule didn't name. | Rules should name every surface their failure mode has actually appeared on; a rule scoped to "plans and briefs" silently exempts READMEs. | `.claude/rules/excalidraw-api.md` (trigger widened, instance logged) |
+
+## Session outcome
+
+- **Ran:** Issue 2 (`claim-vs-reality diff`), `/github-readme` as reference.
+  Ledger: `CLAIMS.md` — 19 rows (17 from the diff, 2 more from the recheck
+  sweep: sdk's stale "lands in Phase 6", protocol's missing README), all
+  fixed and rechecked. Done-when met: final re-diff finds nothing.
+- **Commits:** 11 on branch `docs/claims-vs-reality` (branched from
+  `security/managed-mode-trust-boundary` HEAD to keep doc commits out of the
+  security branch).
+- **Not touched (deliberate):** Pro/Pro+ tier differentiation (Direction 5 —
+  maintainer decision), KML/GPX implementation (docs now say "not
+  implemented" instead), god-module and journey issues (Issues 3–8 still
+  open in ISSUES.md).
+
+---
+
 # HARVEST.md — Issue 1 security sweep session
 
 Harvest pattern: session lessons → general rules → stored where they act.

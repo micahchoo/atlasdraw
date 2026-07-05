@@ -10,7 +10,7 @@ source: hand-written
 
 # Excalidraw API: grep before you trust the plan
 
-Before any worker brief, plan section, or implementation that **names an Excalidraw API** (prop, hook, factory, type, lifecycle event), grep the vendored source first. The plan literal may diverge from v0.18 reality.
+Before any worker brief, plan section, implementation, **or doc/README text** that **names an Excalidraw API** (prop, hook, factory, type, lifecycle event, registration mechanism), grep the vendored source first. The plan literal may diverge from v0.18 reality.
 
 ## Mandatory checks
 
@@ -24,11 +24,12 @@ When the plan/spec/prior decision names:
 
 ## Why this rule exists
 
-Recurring failure mode (3 instances logged):
+Recurring failure mode (4 instances logged):
 
 - **viewBackgroundColor footgun** (Wave 3a): plan said `<Excalidraw viewBackgroundColor="transparent">`. v0.18 silently accepted the unknown prop (loose `ExcalidrawProps` type), painted white over the map. Lives in AppState.
 - **customTools non-existence** (Wave 3b): plan said "use Excalidraw's custom tool registration." v0.18 has no such prop. Caught only by pre-dispatch scrub.
 - **newElementWith mutates** (Wave 3b): plan said "use newElementWith or newTextElement." `newElementWith` mutates an existing element; for new creation use `newElement` / `newTextElement` / `newRectangleElement` factories.
+- **customTools in a README** (Issue 2 doc sweep, 2026-07-04): `packages/tools/README.md` shipped v1.0 claiming tools are "registered as Excalidraw customType tools" — the same nonexistent v0.18 API, this time on a doc surface. READMEs and docs are claim surfaces this rule now covers.
 
 TypeScript will not catch these — `ExcalidrawProps` is loose enough to silently accept unknown props, and the plan-text doesn't typecheck. The grep is the gate.
 
