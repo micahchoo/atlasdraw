@@ -123,6 +123,9 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // export. Without this WebGL clears the drawing buffer between frames
       // and the export reads a blank layer.
       preserveDrawingBuffer: true,
+      // Prevent horizontal world tiling at low zoom — a single world copy
+      // avoids the disorienting 1.5x repetition at zoom 0.
+      renderWorldCopies: false,
     });
 
     mapRef.current = map;
