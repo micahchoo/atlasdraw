@@ -203,6 +203,9 @@ a failed save or open ever tells the user it failed.
 
 ## Issue 4 — Two structural hotspots (one component, one class) that concentrate the app's complexity
 
+> **Status: running — ledger: ledgers/DEADWOOD.md** (started 2026-07-04,
+> branch `tend/deadwood-sweep`)
+
 **Symptom:** `MapEditor.tsx` is 1,728 lines with 65 imports, 16 `useState`,
 17 `useEffect`, and 7 `useCallback` in a single component (line-counted
 directly). `state/collab.ts` is a 585-line class holding two live network
