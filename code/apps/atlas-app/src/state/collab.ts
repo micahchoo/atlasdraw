@@ -36,17 +36,71 @@ import type { CursorState, PeerMeta } from "./sceneChannel";
 
 export type { CursorState, PeerCamera, PeerMeta } from "./sceneChannel";
 
+/**
+ * Plain-data snapshot of CollabState's reactive fields (ISSUES.md Issue 9).
+ * Cached by `getSnapshot()` and only rebuilt when a channel calls back via
+ * `_notify()` — the stable reference between real changes is required by
+ * `useSyncExternalStore`, which the React-facing consumers use to actually
+ * re-render on peer/doc changes (a plain `Map.set()` on `peers` is otherwise
+ * invisible to React).
+ */
+export interface CollabSnapshot {
+  peers: Map<string, PeerMeta>;
+  localCursor: CursorState;
+  yjsDoc: import("yjs").Doc | null;
+  commentsLayer: CommentsLayer | null;
+}
+
 // ---------------------------------------------------------------------------
 // CollabState
 // ---------------------------------------------------------------------------
 
 export class CollabState {
-  private _sceneChannel: SceneChannel = new SceneChannel();
-  private _yjsChannel: YjsChannel = new YjsChannel();
+  private _listeners = new Set<() => void>();
+  private _snapshot: CollabSnapshot | null = null;
+
+  private _notify = (): void => {
+    this._snapshot = null;
+    for (const listener of this._listeners) {
+      listener();
+    }
+  };
+
+  private _sceneChannel: SceneChannel = new SceneChannel(this._notify);
+  private _yjsChannel: YjsChannel = new YjsChannel(this._notify);
   // Phase 6 A3 — anchored comments live in a separate Y.Doc with its own
   // WebSocket connection (different docName, different ACL granularity).
   // Lifecycle bound to connect()/disconnect(). Extracted to CommentsChannel.
-  private _commentsChannel: CommentsChannel = new CommentsChannel();
+  private _commentsChannel: CommentsChannel = new CommentsChannel(this._notify);
+
+  /**
+   * React (`useSyncExternalStore`) subscription hook — registers `listener`
+   * to be called after any peers/yjsDoc/commentsLayer change. Returns an
+   * unsubscribe function.
+   */
+  subscribe = (listener: () => void): (() => void) => {
+    this._listeners.add(listener);
+    return () => {
+      this._listeners.delete(listener);
+    };
+  };
+
+  /**
+   * Stable-reference snapshot of the reactive fields, rebuilt lazily after
+   * `_notify()` invalidates the cache. Pass directly as `useSyncExternalStore`'s
+   * `getSnapshot` (bound as a class field, so it's safe to pass by reference).
+   */
+  getSnapshot = (): CollabSnapshot => {
+    if (!this._snapshot) {
+      this._snapshot = {
+        peers: this._sceneChannel.peers,
+        localCursor: this._sceneChannel.localCursor,
+        yjsDoc: this._yjsChannel.doc,
+        commentsLayer: this._commentsChannel.layer,
+      };
+    }
+    return this._snapshot;
+  };
 
   /**
    * Whether realtime collaboration is enabled for this session. Set once in

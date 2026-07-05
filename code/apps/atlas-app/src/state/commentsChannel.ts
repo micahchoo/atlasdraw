@@ -22,6 +22,15 @@ import { CommentsLayer } from "./comments";
 const LOCAL_STORAGE_KEY = "atlasdraw:comments:local";
 
 export class CommentsChannel {
+  /**
+   * Fired when `layer` transitions to a new instance (connect()/disconnect())
+   * so a subscriber (CollabState) can invalidate its React-facing snapshot
+   * (ISSUES.md Issue 9). Not fired for the lazy local-layer creation inside
+   * the `layer` getter — that happens synchronously within whichever read
+   * triggers it, so there's nothing to invalidate.
+   */
+  constructor(private readonly _onChange?: () => void) {}
+
   private _layer: CommentsLayer | null = null;
 
   /**
@@ -93,11 +102,13 @@ export class CommentsChannel {
   connect(wsUrl: string, roomId: string, workspaceId: string | null): void {
     this._layer?.destroy();
     this._layer = new CommentsLayer({ wsUrl, roomId, workspaceId });
+    this._onChange?.();
   }
 
   /** Tear down the Y.Doc + provider. Idempotent. */
   disconnect(): void {
     this._layer?.destroy();
     this._layer = null;
+    this._onChange?.();
   }
 }

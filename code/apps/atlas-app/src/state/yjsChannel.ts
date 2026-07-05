@@ -20,6 +20,13 @@ import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
 import type * as Y from "yjs";
 
 export class YjsChannel {
+  /**
+   * Fired when `doc` transitions (connect() creates one, disconnect()
+   * destroys it) so a subscriber (CollabState) can invalidate its
+   * React-facing snapshot (ISSUES.md Issue 9).
+   */
+  constructor(private readonly _onChange?: () => void) {}
+
   private _ws: WebSocket | null = null;
   private _layer: YjsLayer | null = null;
   private _undoManager: CollabUndoManager | null = null;
@@ -46,6 +53,7 @@ export class YjsChannel {
   connect(wsUrl: string, roomId: string): void {
     this._layer = new YjsLayer();
     this._ws = new WebSocket(`${wsUrl}/yjs/${roomId}`);
+    this._onChange?.();
 
     this._ws.onopen = () => {
       // WebSocket ready — useYjsLayer binds Yjs sync here.
@@ -79,5 +87,6 @@ export class YjsChannel {
     this._undoManager = null;
     this._layer?.doc.destroy();
     this._layer = null;
+    this._onChange?.();
   }
 }

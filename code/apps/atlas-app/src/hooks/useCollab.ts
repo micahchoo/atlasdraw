@@ -15,13 +15,13 @@
 // Downstream contract: consumed by CollabWrapper, CursorOverlay, PresenceList
 //   (Task 11) and useYjsLayer (Task 9).
 
-import { createContext, useContext, useRef } from "react";
+import { createContext, useContext, useRef, useSyncExternalStore } from "react";
 
 import { CollabState } from "../state/collab";
 
 import type * as Y from "yjs";
 
-import type { PeerMeta, CursorState } from "../state/collab";
+import type { PeerMeta, CursorState, CollabSnapshot } from "../state/collab";
 import type { CommentsLayer } from "../state/comments";
 
 // ---------------------------------------------------------------------------
@@ -58,6 +58,15 @@ export const CollabContext = createContext<CollabContextValue | null>(null);
 // Hook
 // ---------------------------------------------------------------------------
 
+const NOOP_SUBSCRIBE = () => () => {};
+const NOOP_SNAPSHOT = (): CollabSnapshot => EMPTY_SNAPSHOT;
+const EMPTY_SNAPSHOT: CollabSnapshot = {
+  peers: new Map(),
+  localCursor: { x: 0, y: 0 },
+  yjsDoc: null,
+  commentsLayer: null,
+};
+
 /**
  * Access the collaborative-editing state: connection lifecycle, peer presence,
  * local cursor.
@@ -65,29 +74,43 @@ export const CollabContext = createContext<CollabContextValue | null>(null);
  * Returns an inactive CollabState by default (when no provider is mounted or
  * realtime is disabled). Callers never null-check; the returned value always
  * has the same shape.
+ *
+ * ISSUES.md Issue 9: peers/yjsDoc/commentsLayer are read through
+ * `useSyncExternalStore` against the CollabState's `subscribe`/`getSnapshot` —
+ * plain `Map.set()`/field mutations on the underlying channels are otherwise
+ * invisible to React, so without this, CursorOverlay/PresenceList would never
+ * re-render on a peer joining or a remote cursor moving even with a real
+ * connected session.
  */
 export function useCollab(): CollabContextValue {
   const ctx = useContext(CollabContext);
+
+  // Fallback CollabState for when no Provider is mounted (isolated hook
+  // tests, or a future standalone consumer). Hooks below always run
+  // (rules-of-hooks) — only the ref's contents are conditional on `ctx`, so
+  // the real app (where a Provider is always mounted per MapEditor) never
+  // pays for constructing this second instance.
+  const collabRef = useRef<CollabState | null>(null);
+  if (!ctx && !collabRef.current) {
+    collabRef.current = new CollabState();
+  }
+  const fallback = collabRef.current;
+  const fallbackSnapshot = useSyncExternalStore(
+    fallback?.subscribe ?? NOOP_SUBSCRIBE,
+    fallback?.getSnapshot ?? NOOP_SNAPSHOT,
+  );
+
   if (ctx) {
     return ctx;
   }
 
-  // No provider — create a fallback CollabState (inactive when realtime is
-  // disabled; otherwise available but unconnected until connect() is called).
-  // The ref ensures a stable instance across renders.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const collabRef = useRef<CollabState | null>(null);
-  if (!collabRef.current) {
-    collabRef.current = new CollabState();
-  }
-  const collab = collabRef.current;
-
+  const collab = fallback!;
   return {
     active: collab.active,
-    peers: collab.peers,
-    localCursor: collab.localCursor,
-    yjsDoc: collab.yjsDoc,
-    commentsLayer: collab.commentsLayer,
+    peers: fallbackSnapshot.peers,
+    localCursor: fallbackSnapshot.localCursor,
+    yjsDoc: fallbackSnapshot.yjsDoc,
+    commentsLayer: fallbackSnapshot.commentsLayer,
     connect: collab.connect.bind(collab),
     disconnect: collab.disconnect.bind(collab),
   };

@@ -523,3 +523,97 @@ describe("CollabState — disconnect cleanup", () => {
     expect(() => collab.disconnect()).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// ISSUES.md Issue 9 — subscribe/getSnapshot reactivity.
+//
+// `peers` is a mutable Map; `Map.set()`/`.delete()` are invisible to React.
+// useSyncExternalStore (the mechanism MapEditor/useCollab now use) requires
+// getSnapshot() to return the SAME reference until a real change, and
+// subscribe()'s listener to fire on every change. These tests exercise that
+// contract directly, independent of React — the bug this closes (peer data
+// never reaching the UI) was as much "nothing calls subscribe() usefully" as
+// it was "no Provider is mounted" (COLLABWIRING.md).
+// ---------------------------------------------------------------------------
+describe("CollabState — subscribe/getSnapshot reactivity", () => {
+  beforeEach(() => {
+    currentFakeSocket = makeFakeSocket("joiner");
+  });
+
+  it("getSnapshot returns a stable reference until something changes", () => {
+    const collab = new CollabState();
+    const a = collab.getSnapshot();
+    const b = collab.getSnapshot();
+    expect(a).toBe(b);
+  });
+
+  it("notifies subscribers and returns a new snapshot with the peer when CURSOR arrives", () => {
+    const collab = new CollabState();
+    const listener = vi.fn();
+    collab.subscribe(listener);
+
+    const before = collab.getSnapshot();
+    collab.connect(ROOM_ID);
+    currentFakeSocket._trigger("CURSOR", {
+      senderId: "peer-1",
+      data: { x: 1, y: 2, color: "#000", username: "Ari" },
+    });
+
+    expect(listener).toHaveBeenCalled();
+    const after = collab.getSnapshot();
+    expect(after).not.toBe(before);
+    expect(after.peers.get("peer-1")).toMatchObject({
+      id: "peer-1",
+      username: "Ari",
+      cursor: { x: 1, y: 2 },
+    });
+  });
+
+  it("notifies subscribers and drops the peer when PEER_LEFT arrives", () => {
+    const collab = new CollabState();
+    collab.connect(ROOM_ID);
+    currentFakeSocket._trigger("CURSOR", {
+      senderId: "peer-1",
+      data: { x: 1, y: 2, color: "#000", username: "Ari" },
+    });
+    expect(collab.getSnapshot().peers.has("peer-1")).toBe(true);
+
+    const listener = vi.fn();
+    collab.subscribe(listener);
+    currentFakeSocket._trigger("PEER_LEFT", { senderId: "peer-1" });
+
+    expect(listener).toHaveBeenCalled();
+    expect(collab.getSnapshot().peers.has("peer-1")).toBe(false);
+  });
+
+  it("notifies subscribers with a non-null yjsDoc after connect, and null again after disconnect", () => {
+    const collab = new CollabState();
+    const listener = vi.fn();
+    collab.subscribe(listener);
+
+    expect(collab.getSnapshot().yjsDoc).toBeNull();
+    collab.connect(ROOM_ID);
+    expect(listener).toHaveBeenCalled();
+    expect(collab.getSnapshot().yjsDoc).not.toBeNull();
+
+    listener.mockClear();
+    collab.disconnect();
+    expect(listener).toHaveBeenCalled();
+    expect(collab.getSnapshot().yjsDoc).toBeNull();
+  });
+
+  it("unsubscribe stops further notifications", () => {
+    const collab = new CollabState();
+    const listener = vi.fn();
+    const unsubscribe = collab.subscribe(listener);
+    unsubscribe();
+
+    collab.connect(ROOM_ID);
+    currentFakeSocket._trigger("CURSOR", {
+      senderId: "peer-1",
+      data: { x: 1, y: 2, color: "#000", username: "Ari" },
+    });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});

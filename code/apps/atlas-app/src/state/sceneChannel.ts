@@ -54,6 +54,15 @@ export interface PeerMeta {
 }
 
 export class SceneChannel {
+  /**
+   * Fired after every `_peers` mutation (join/leave/cursor/camera) so a
+   * subscriber (CollabState) can invalidate its React-facing snapshot.
+   * `_peers` is a mutable Map — nothing about setting/deleting a key on it
+   * is itself observable to React, so callers that need a re-render on
+   * presence changes MUST go through this callback (ISSUES.md Issue 9).
+   */
+  constructor(private readonly _onChange?: () => void) {}
+
   private _socket: Socket | null = null;
   private _peers: Map<string, PeerMeta> = new Map();
   private _localCursor: CursorState = { x: 0, y: 0 };
@@ -184,6 +193,7 @@ export class SceneChannel {
         const peer = this._peers.get(event.senderId);
         if (peer) {
           peer.camera = event.data;
+          this._onChange?.();
         }
       },
     );
@@ -208,6 +218,7 @@ export class SceneChannel {
           this._peers.set(event.senderId, peer);
         }
         peer.cursor = { x: event.data.x, y: event.data.y };
+        this._onChange?.();
       },
     );
 
@@ -235,6 +246,7 @@ export class SceneChannel {
     // PEER_LEFT — remove the disconnecting peer from the presence map.
     this._socket.on("PEER_LEFT", (data: { senderId: string }) => {
       this._peers.delete(data.senderId);
+      this._onChange?.();
     });
 
     // REQUEST_SNAPSHOT — Q-P5-1 sender-side. This client was elected by the
@@ -347,6 +359,7 @@ export class SceneChannel {
     this._socket?.close();
     this._socket = null;
     this._peers.clear();
+    this._onChange?.();
   }
 
   // -------------------------------------------------------------------------
