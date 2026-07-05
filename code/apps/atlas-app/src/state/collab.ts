@@ -14,18 +14,16 @@
 // are stored as peer viewport overlays only — local camera is never updated.
 
 import { io, type Socket } from "socket.io-client";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import * as Y from "yjs";
 import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
-
-import { COMMENTS_ARRAY_KEY, type CommentSchemaV1 } from "@atlasdraw/protocol";
 
 import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
 
 import { getAppConfig } from "../config/app-config";
 import { encryptScene, decryptScene } from "../collab/scene-crypto";
 
-import { CommentsLayer } from "./comments";
+import { CommentsChannel } from "./commentsChannel";
+
+import type { CommentsLayer } from "./comments";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -75,8 +73,8 @@ export class CollabState {
   private _currentRoomId: string = "";
   // Phase 6 A3 — anchored comments live in a separate Y.Doc with its own
   // WebSocket connection (different docName, different ACL granularity).
-  // Lifecycle bound to connect()/disconnect().
-  private _commentsLayer: CommentsLayer | null = null;
+  // Lifecycle bound to connect()/disconnect(). Extracted to CommentsChannel.
+  private _commentsChannel: CommentsChannel = new CommentsChannel();
 
   // -------------------------------------------------------------------------
   // Snapshot pull state (Q-P5-1)
@@ -211,58 +209,7 @@ export class CollabState {
    * See `state/comments.ts` and ADR-0010 trust posture.
    */
   get commentsLayer(): CommentsLayer | null {
-    if (!this._commentsLayer) {
-      const STORAGE_KEY = "atlasdraw:comments:local";
-      const config = getAppConfig();
-
-      // Restore persisted comments into a pre-populated Y.Doc.
-      let doc: Y.Doc | undefined;
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        try {
-          const saved: CommentSchemaV1[] = JSON.parse(raw);
-          if (saved.length > 0) {
-            doc = new Y.Doc();
-            const arr = doc.getArray<Y.Map<unknown>>(COMMENTS_ARRAY_KEY);
-            doc.transact(() => {
-              for (const c of saved) {
-                const m = new Y.Map<unknown>();
-                for (const [k, v] of Object.entries(c)) {
-                  if (k === "anchor" && typeof v === "object" && v !== null) {
-                    const a = new Y.Map<unknown>();
-                    for (const [ak, av] of Object.entries(
-                      v as Record<string, unknown>,
-                    )) {
-                      a.set(ak, av);
-                    }
-                    m.set("anchor", a);
-                  } else {
-                    m.set(k, v);
-                  }
-                }
-                arr.push([m]);
-              }
-            });
-          }
-        } catch {
-          // Corrupt data — start fresh.
-        }
-      }
-
-      this._commentsLayer = new CommentsLayer({
-        wsUrl: config.realtime.wsUrl || "http://localhost",
-        roomId: "local",
-        workspaceId: null,
-        providerFactory: () => null,
-        doc,
-      });
-
-      // Persist on every change so comments survive page refresh.
-      this._commentsLayer.subscribe((comments) => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(comments));
-      });
-    }
-    return this._commentsLayer;
+    return this._commentsChannel.layer;
   }
 
   /**
@@ -472,14 +419,7 @@ export class CollabState {
     // `comments/${workspaceId}/${roomId}`) — see protocol/comment-schema.ts.
     // Trust posture: plaintext on relay per ADR-0010 (same as data-layer doc).
     // -----------------------------------------------------------------------
-    // Destroy any local-only layer created by the lazy getter before
-    // replacing it with a real collab layer (avoids Y.Doc memory leak).
-    this._commentsLayer?.destroy();
-    this._commentsLayer = new CommentsLayer({
-      wsUrl,
-      roomId,
-      workspaceId: workspaceId ?? null,
-    });
+    this._commentsChannel.connect(wsUrl, roomId, workspaceId ?? null);
 
     this._yjsWs.onopen = () => {
       // WebSocket ready — Task 9 will bind Yjs sync here.
@@ -536,8 +476,7 @@ export class CollabState {
     this._yjsLayer?.doc.destroy();
     this._yjsLayer = null;
     // Phase 6 A3 — tear down the comments Y.Doc + provider in lockstep.
-    this._commentsLayer?.destroy();
-    this._commentsLayer = null;
+    this._commentsChannel.disconnect();
     this._peers.clear();
   }
 
