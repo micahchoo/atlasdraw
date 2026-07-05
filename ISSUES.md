@@ -367,6 +367,20 @@ can't creep back. Done at zero call sites and the lock recorded.
 
 ## Issue 6 — The highest-risk code paths are exactly the ones with zero tests
 
+> **Status: done 2026-07-05** — ledger: `code/apps/atlas-app/COVERAGE.md`.
+> All 10 named hooks closed out (2 — `useCollab.ts`, `useLayerRegistry.ts` —
+> were already at 100% indirect coverage via existing suites and needed no
+> new test file). Two real bugs surfaced and fixed along the way:
+> `useBasemapStyle.ts` and `useGeoJsonDrop.ts` both had a bare `throw err`
+> inside a fire-and-forget async call, turning any non-parser error into a
+> silent unhandled promise rejection — both now log and toast. `src/hooks`
+> coverage rose 70.23% → 81.64%; full suite 431 → 496 tests (51 → 59 files),
+> all green. Also fixed in the same pass (surfaced by the new tests):
+> `packages/excalidraw/index.tsx` wasn't re-exporting `ExcalidrawImperativeAPI`
+> despite ~20 consumers importing it from `@atlasdraw/excalidraw`, and
+> `MapCanvas.tsx` was missing `renderWorldCopies: false` (world tiling at low
+> zoom).
+
 **Symptom:** `useCoordinateSync.ts` (94 lines — the core geo↔screen pin sync)
 has no test file (`ls src/hooks/useCoordinateSync*` shows only the source).
 `useGeoJsonDrop` — the app's **only** external-input trust boundary (the
