@@ -3,22 +3,22 @@ import {
   KEYS,
   MOBILE_ACTION_BUTTON_BG,
   arrayToMap,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@atlasdraw/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
+import { LinearElementEditor } from "@atlasdraw/element";
 
 import {
   getSelectedElements,
   getSelectionStateForElements,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { syncMovedIndices } from "@excalidraw/element";
+import { syncMovedIndices } from "@atlasdraw/element";
 
-import { duplicateElements } from "@excalidraw/element";
+import { duplicateElements } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import { ToolButton } from "../components/ToolButton";
 import { DuplicateIcon } from "../components/icons";

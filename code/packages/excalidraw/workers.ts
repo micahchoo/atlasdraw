@@ -1,4 +1,4 @@
-import { debounce } from "@excalidraw/common";
+import { debounce } from "@atlasdraw/common";
 
 import { WorkerInTheMainChunkError, WorkerUrlNotDefinedError } from "./errors";
 

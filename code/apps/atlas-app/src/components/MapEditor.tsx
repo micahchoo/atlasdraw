@@ -38,9 +38,9 @@ import {
   Excalidraw,
   MainMenu,
   setExportElementTransformer,
-} from "@excalidraw/excalidraw";
+} from "@atlasdraw/excalidraw";
 
-import { DEFAULT_SIDEBAR } from "@excalidraw/common";
+import { DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import {
   PinTool,
@@ -57,7 +57,13 @@ import { openDB } from "idb";
 import type {
   ExcalidrawElement,
   ExcalidrawImperativeAPI,
-} from "@excalidraw/excalidraw";
+} from "@atlasdraw/excalidraw";
+
+import type { GeoAnchor } from "@atlasdraw/geo";
+
+import type { BasemapConfig } from "@atlasdraw/basemap";
+
+import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
 import { useMapRef } from "../hooks/useMapRef";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
@@ -113,12 +119,8 @@ import { ExportDialog } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
 
-import type { GeoAnchor } from "@atlasdraw/geo";
 import type maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-
-import type { BasemapConfig } from "@atlasdraw/basemap";
-import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
 /**
  * Pick a MapLibre layer kind for the FeatureCollection's first feature.
@@ -254,209 +256,70 @@ function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
 }
 
 // ---------------------------------------------------------------------------
-// Atlasdraw export cards (atlasdraw-9078, Phase 4 Wave 0 prereq)
+// Atlas document Save / Open (one format, one door — ADR 0010 cohesion work)
 //
-// Unify atlasdraw-format Save/Open and GeoJSON export INTO Excalidraw's
-// existing JSONExportDialog (the Card grid opened by MainMenu.DefaultItems
-// .Export → openDialog: { name: "jsonExport" }) via the public extension
-// point `UIOptions.canvasActions.export.renderCustomUI`. Replaces the
-// adjacent <MainMenu.Item> "Save .atlasdraw…" / "Open .atlasdraw…" entries
-// that Phase 3 T9 added — single entry point ("Export") now reaches
-// every atlas-format I/O surface alongside Excalidraw's own .excalidraw
-// disk save (saveFileToDisk). Excalidraw's .excalidraw-format Load (the
-// LoadScene MainMenu item) still lives in the menu — no dialog equivalent
-// upstream — so we keep <MainMenu.DefaultItems.LoadScene /> there.
+// The .atlasdraw bundle is the canonical format and these two handlers are
+// the ONLY save/open surfaces: the "Open…" / "Save" MainMenu items and the
+// Cmd+O / Cmd+S bindings all route here. Excalidraw's own persistence
+// actions (LoadScene, SaveToActiveFile, the JSONExportDialog) are disabled
+// via UIOptions.canvasActions — see EXCALIDRAW_UI_OPTIONS below — which
+// also disables their built-in keyboard shortcuts (action `predicate`
+// gates both, actions/manager.tsx). Rendering/format export (PNG, PDF,
+// GeoJSON, .atlasdraw) lives in the atlas ExportDialog ("Export…" item).
 //
-// Why renderCustomUI rather than a parallel dialog: it IS the same place
-// the user already opens. A parallel `<AtlasdrawExportDialog>` would
-// reintroduce the dual-entry-points ergonomic bug 9078 closes. Bonus —
-// no vendored-fork patch, no separate open/close state, no juggling of
-// `useExcalidrawContainer` context (Dialog needs it; renderCustomUI is
-// already inside the Excalidraw provider tree).
+// Exported for unit tests (MapEditor.atlasdraw-export.test.tsx) — the same
+// contract the old renderCustomUI cards carried before 9078's dialog was
+// itself replaced by this single door.
 // ---------------------------------------------------------------------------
 
-function renderGeoJsonCard(elements: readonly unknown[]): React.JSX.Element {
-  const fc = buildGeoJsonExport(elements);
-  const count = fc.features.length;
-  const empty = count === 0;
-  return (
-    <div
-      className="Card"
-      style={
-        {
-          "--card-color": "var(--color-primary)",
-          "--card-color-darker": "var(--color-primary-darker)",
-          "--card-color-darkest": "var(--color-primary-darkest)",
-        } as React.CSSProperties
-      }
-    >
-      <h2>GeoJSON</h2>
-      <div className="Card-details">
-        {empty
-          ? "No geo-anchored annotations in scene"
-          : `${count} geo-anchored annotation${count !== 1 ? "s" : ""}`}
-      </div>
-      <button
-        className="Card-button"
-        type="button"
-        disabled={empty}
-        aria-disabled={empty}
-        title={empty ? "No geo-anchored annotations to export" : undefined}
-        data-testid="geojson-export-download"
-        onClick={() => {
-          const blob = new Blob([JSON.stringify(fc, null, 2)], {
-            type: "application/geo+json",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "annotations.geojson";
-          a.click();
-          URL.revokeObjectURL(url);
-        }}
-      >
-        Download .geojson
-      </button>
-    </div>
-  );
+export async function saveAtlasDocument(
+  excalidrawAPI: ExcalidrawImperativeAPI | null,
+): Promise<void> {
+  if (!excalidrawAPI) {
+    return;
+  }
+  const store = usePersistenceStore.getState().persistenceStore;
+  if (!store) {
+    return;
+  }
+  try {
+    await store.saveToDisk(
+      selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
+    );
+    usePersistenceStore.getState().clearDirty();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] saveToDisk failed", err);
+  }
 }
 
-function renderAtlasdrawSaveCard(
-  excalidrawAPI: ExcalidrawImperativeAPI,
-): React.JSX.Element {
-  return (
-    <div
-      className="Card"
-      style={
-        {
-          "--card-color": "#74b816", // open-color lime[7] (matches disk save)
-          "--card-color-darker": "#66a80f",
-          "--card-color-darkest": "#5c940d",
-        } as React.CSSProperties
-      }
-    >
-      <h2>Atlasdraw</h2>
-      <div className="Card-details">
-        Save scene + map layers + geo data as a portable .atlasdraw file.
-      </div>
-      <button
-        className="Card-button"
-        type="button"
-        data-testid="atlasdraw-export-save"
-        aria-label="Save .atlasdraw"
-        onClick={async () => {
-          const store = usePersistenceStore.getState().persistenceStore;
-          if (!store) {
-            return;
-          }
-          try {
-            await store.saveToDisk(
-              selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
-            );
-            usePersistenceStore.getState().clearDirty();
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn("[atlasdraw] saveToDisk failed", err);
-          }
-        }}
-      >
-        Save .atlasdraw
-      </button>
-    </div>
-  );
-}
-
-function renderAtlasdrawOpenCard(
-  excalidrawAPI: ExcalidrawImperativeAPI,
-): React.JSX.Element {
-  return (
-    <div
-      className="Card"
-      style={
-        {
-          "--card-color": "#1098ad", // open-color cyan[7] — distinct from save+geojson
-          "--card-color-darker": "#0c8599",
-          "--card-color-darkest": "#0b7285",
-        } as React.CSSProperties
-      }
-    >
-      <h2>Open .atlasdraw</h2>
-      <div className="Card-details">
-        Load a previously saved .atlasdraw file, replacing the current scene.
-      </div>
-      <button
-        className="Card-button"
-        type="button"
-        data-testid="atlasdraw-export-open"
-        aria-label="Open .atlasdraw"
-        onClick={async () => {
-          const store = usePersistenceStore.getState().persistenceStore;
-          if (!store) {
-            return;
-          }
-          try {
-            const loaded = await store.openFromDisk();
-            if (loaded) {
-              // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
-              // see state/hydrate.ts for ordering + idempotency.
-              await hydrate(loaded, excalidrawAPI);
-              // eslint-disable-next-line no-console
-              console.info("[atlasdraw] document opened + hydrated", {
-                id: loaded.manifest.id,
-                layerCount: loaded.manifest.layers.length,
-                sceneLength: loaded.scene.length,
-              });
-            }
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn("[atlasdraw] openFromDisk failed", err);
-          }
-        }}
-      >
-        Open .atlasdraw
-      </button>
-    </div>
-  );
-}
-
-/**
- * Build the atlasdraw cards that are appended to Excalidraw's JSONExportDialog
- * via `renderCustomUI`. Order: Save → Open → GeoJSON. Save sits leftmost so
- * the lime-coded "save" cluster (Excalidraw's own `Save to disk` lime card +
- * our `.atlasdraw` lime card) reads as a group.
- *
- * Exported for unit tests only — production callers use `buildExportOpts`.
- */
-export function renderAtlasdrawExportCards(
-  elements: readonly unknown[],
-  excalidrawAPI: ExcalidrawImperativeAPI,
-): React.JSX.Element {
-  return (
-    <>
-      {renderAtlasdrawSaveCard(excalidrawAPI)}
-      {renderAtlasdrawOpenCard(excalidrawAPI)}
-      {renderGeoJsonCard(elements)}
-    </>
-  );
-}
-
-/**
- * Build the `UIOptions.canvasActions.export` shape passed to <Excalidraw>.
- * Memoized on `excalidrawAPI` identity so the renderCustomUI closure captures
- * a fresh API after remount but stays stable across normal re-renders —
- * Excalidraw shallow-checks `saveFileToDisk` only, so a stable parent object
- * isn't strictly required, but stable identity is cheap insurance against
- * future Excalidraw memo bugs (per the comment that lived on the old
- * EXCALIDRAW_EXPORT_OPTS module-scoped const).
- */
-function buildExportOpts(excalidrawAPI: ExcalidrawImperativeAPI | null) {
-  return {
-    saveFileToDisk: true,
-    renderCustomUI: (elements: readonly unknown[]) =>
-      excalidrawAPI
-        ? renderAtlasdrawExportCards(elements, excalidrawAPI)
-        : renderGeoJsonCard(elements),
-  };
+export async function openAtlasDocument(
+  excalidrawAPI: ExcalidrawImperativeAPI | null,
+): Promise<void> {
+  if (!excalidrawAPI) {
+    return;
+  }
+  const store = usePersistenceStore.getState().persistenceStore;
+  if (!store) {
+    return;
+  }
+  try {
+    const loaded = await store.openFromDisk();
+    if (loaded) {
+      // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
+      // see state/hydrate.ts for ordering + idempotency.
+      await hydrate(loaded, excalidrawAPI);
+      // eslint-disable-next-line no-console
+      console.info("[atlasdraw] document opened + hydrated", {
+        id: loaded.manifest.id,
+        layerCount: loaded.manifest.layers.length,
+        sceneLength: loaded.scene.length,
+      });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] openFromDisk failed", err);
+  }
 }
 
 // Module-scoped so the Excalidraw mount sees a stable identity. Excalidraw
@@ -464,6 +327,18 @@ function buildExportOpts(excalidrawAPI: ExcalidrawImperativeAPI | null) {
 // harmless today but brittle if a future Excalidraw version memoizes on it.
 const EXCALIDRAW_INITIAL_DATA = {
   appState: { viewBackgroundColor: "transparent" },
+} as const;
+
+// One format, one door: disable Excalidraw's own persistence actions
+// (.excalidraw load/save + the JSONExportDialog). The `predicate` on each
+// action gates its keyboard shortcut too, so Cmd+O / Cmd+S fall through to
+// the atlas handlers wired in MapEditor's own onKeyDown.
+const EXCALIDRAW_UI_OPTIONS = {
+  canvasActions: {
+    loadScene: false,
+    saveToActiveFile: false,
+    export: false as const,
+  },
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -671,16 +546,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
   useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);
 
-  // atlasdraw-9078 — UIOptions.canvasActions.export passed to <Excalidraw>.
-  // Memoized on excalidrawAPI identity so the renderCustomUI closure binds
-  // a non-null API once available; before that the GeoJSON-only fallback
-  // is harmless (Save/Open cards aren't rendered until the API is ready).
-  // See `buildExportOpts` above for the wiring rationale.
-  const exportOpts = useMemo(
-    () => buildExportOpts(excalidrawAPI),
-    [excalidrawAPI],
-  );
-
   // Normalize geo-anchored element coords to canonical Web Mercator (zoom 0)
   // before .excalidraw file saves so saved files are viewport-independent.
   useEffect(() => {
@@ -866,6 +731,29 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         setShowQuickActions((prev) => !prev);
         return;
       }
+      // Atlas document save/open — Cmd+S / Cmd+O. Excalidraw's own
+      // equivalents are disabled (EXCALIDRAW_UI_OPTIONS), so these don't
+      // double-fire. preventDefault stops the browser save/open dialogs.
+      if (
+        e.key.toLowerCase() === "s" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
+        e.preventDefault();
+        void saveAtlasDocument(excalidrawAPI);
+        return;
+      }
+      if (
+        e.key.toLowerCase() === "o" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
+        e.preventDefault();
+        void openAtlasDocument(excalidrawAPI);
+        return;
+      }
       // Keyboard shortcuts: bare `?`.
       if (
         e.key === "?" &&
@@ -888,7 +776,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showShortcuts]);
+  }, [showShortcuts, excalidrawAPI]);
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
   // Selector form so the component re-renders ONLY on isDirty flips, not on
@@ -1397,7 +1285,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
           onChange={handleExcalidrawChange}
           getBackgroundCanvas={getBackgroundCanvas}
-          UIOptions={{ canvasActions: { export: exportOpts } }}
+          UIOptions={EXCALIDRAW_UI_OPTIONS}
         >
           {/* LayerPanel mounts as a tab inside DefaultSidebar via
               registerSidebarTab (see useEffect above). No <Sidebar> child
@@ -1411,13 +1299,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               additions. Order mirrors LayerUI's default with atlas
               items inserted into logical groups. */}
           <MainMenu>
-            <MainMenu.DefaultItems.LoadScene />
-            <MainMenu.DefaultItems.SaveToActiveFile />
-            {/* atlasdraw-9078 (Phase 4 W0 prereq): the adjacent
-                Save/Open `.atlasdraw…` items that lived here under T9
-                were unified INTO Excalidraw's existing JSONExport dialog
-                via `renderCustomUI` — see `renderAtlasdrawExportCards`
-                above. Single entry point: MainMenu → Export. */}
+            {/* One format, one door: the .atlasdraw bundle is the only
+                save/open surface. Excalidraw's LoadScene/SaveToActiveFile/
+                Export defaults are disabled via EXCALIDRAW_UI_OPTIONS;
+                Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
+            <MainMenu.Item
+              onSelect={() => void openAtlasDocument(excalidrawAPI)}
+              data-testid="main-menu-open"
+            >
+              Open…
+            </MainMenu.Item>
+            <MainMenu.Item
+              onSelect={() => void saveAtlasDocument(excalidrawAPI)}
+              data-testid="main-menu-save"
+            >
+              Save
+            </MainMenu.Item>
             <MainMenu.Item
               onSelect={() => setShowAboutDialog(true)}
               data-testid="main-menu-about"
@@ -1457,7 +1354,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             >
               Settings…
             </MainMenu.Item>
-            <MainMenu.DefaultItems.Export />
             <MainMenu.Separator />
             <MainMenu.Item
               onSelect={() => setActiveAtlasTool(isPinActive ? null : PinTool)}
@@ -1479,7 +1375,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </MainMenu.Item>
             <MainMenu.Separator />
             <MainMenu.DefaultItems.SearchMenu />
-            <MainMenu.DefaultItems.Help />
+            {/* Atlasdraw's own Help entry — not MainMenu.DefaultItems.Help,
+                which opens Excalidraw's vendored HelpDialog (links to
+                docs.excalidraw.com / github.com/excalidraw / Excalidraw+)
+                and collides with our own "?" shortcut binding above. */}
+            <MainMenu.Item
+              onSelect={() => setShowShortcuts(true)}
+              data-testid="main-menu-shortcuts"
+            >
+              Keyboard shortcuts
+            </MainMenu.Item>
             <MainMenu.DefaultItems.ClearCanvas />
             {/* Phase 4 T6 — Basemap picker replaces the canvas background
                 picker. Previously ChangeCanvasBackground set a solid color
@@ -1768,6 +1673,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               category: "Export",
               keywords: ["print", "document"],
               onSelect: () => setShowPrintDialog(true),
+            },
+            {
+              id: "open",
+              label: "Open map…",
+              category: "File",
+              hint: "⌘O",
+              keywords: ["load", "file", "atlasdraw", "excalidraw", "import"],
+              onSelect: () => void openAtlasDocument(excalidrawAPI),
+            },
+            {
+              id: "save",
+              label: "Save map",
+              category: "File",
+              hint: "⌘S",
+              keywords: ["disk", "file", "atlasdraw"],
+              onSelect: () => void saveAtlasDocument(excalidrawAPI),
             },
             {
               id: "share",

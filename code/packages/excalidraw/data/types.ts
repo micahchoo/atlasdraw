@@ -1,6 +1,6 @@
-import type { VERSIONS } from "@excalidraw/common";
+import type { VERSIONS } from "@atlasdraw/common";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
 import type { cleanAppStateForExport } from "../appState";
 import type {

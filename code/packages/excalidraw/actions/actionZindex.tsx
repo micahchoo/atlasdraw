@@ -1,13 +1,13 @@
-import { KEYS, CODES, isDarwin } from "@excalidraw/common";
+import { KEYS, CODES, isDarwin } from "@atlasdraw/common";
 
 import {
   moveOneLeft,
   moveOneRight,
   moveAllLeft,
   moveAllRight,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import {
   BringForwardIcon,

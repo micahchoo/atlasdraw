@@ -3,30 +3,30 @@ import {
   FRAME_STYLE,
   THEME,
   throttleRAF,
-} from "@excalidraw/common";
-import { isElementLink } from "@excalidraw/element";
-import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
-import { getBoundTextElement } from "@excalidraw/element";
+} from "@atlasdraw/common";
+import { isElementLink } from "@atlasdraw/element";
+import { createPlaceholderEmbeddableLabel } from "@atlasdraw/element";
+import { getBoundTextElement } from "@atlasdraw/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 import {
   elementOverlapsWithFrame,
   getTargetFrame,
   shouldApplyFrameClip,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { renderElement } from "@excalidraw/element";
+import { renderElement } from "@atlasdraw/element";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@atlasdraw/element";
 
 import type {
   ElementsMap,
   ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import {
   EXTERNAL_LINK_IMG,

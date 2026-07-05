@@ -20,7 +20,7 @@ import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
 
 import { COMMENTS_ARRAY_KEY, type CommentSchemaV1 } from "@atlasdraw/protocol";
 
-import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
 
 import { getAppConfig } from "../config/app-config";
 import { encryptScene, decryptScene } from "../collab/scene-crypto";

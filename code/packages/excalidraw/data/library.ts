@@ -15,15 +15,15 @@ import {
   toValidURL,
   Queue,
   Emitter,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import { hashElementsVersion, hashString } from "@excalidraw/element";
+import { hashElementsVersion, hashString } from "@atlasdraw/element";
 
-import { getCommonBoundingBox } from "@excalidraw/element";
+import { getCommonBoundingBox } from "@atlasdraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { MaybePromise } from "@excalidraw/common/utility-types";
+import type { MaybePromise } from "@atlasdraw/common/utility-types";
 
 import { atom, editorJotaiStore } from "../editor-jotai";
 

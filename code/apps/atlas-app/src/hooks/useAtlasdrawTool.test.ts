@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { buildToolContext } from "./useAtlasdrawTool";
 

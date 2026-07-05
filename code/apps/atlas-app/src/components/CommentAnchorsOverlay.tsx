@@ -20,7 +20,7 @@
 
 import React, { useEffect, useState } from "react";
 
-import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+import { sceneCoordsToViewportCoords } from "@atlasdraw/common";
 
 import { useCollab } from "../hooks/useCollab";
 
@@ -37,7 +37,7 @@ import { CommentAnchor } from "./CommentAnchor";
 import type { Comment } from "../state/comments";
 import type maplibregl from "maplibre-gl";
 
-// ExcalidrawImperativeAPI is not re-exported from @excalidraw/excalidraw in
+// ExcalidrawImperativeAPI is not re-exported from @atlasdraw/excalidraw in
 // v0.18 (see .claude/rules/excalidraw-api.md). We type-erase here — the
 // methods we touch (onChange, getSceneElements, getAppState) are stable in
 // production but pre-Phase-6 unit-test mocks may omit `onChange`; we guard

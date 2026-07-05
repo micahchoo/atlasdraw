@@ -1,6 +1,6 @@
-import { CODES, KEYS } from "@excalidraw/common";
+import { CODES, KEYS } from "@atlasdraw/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import { magnetIcon } from "../components/icons";
 

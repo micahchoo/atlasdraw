@@ -2,7 +2,7 @@
 // Extracted from MapEditor.tsx (2026-05-25) — composite PNG export callback.
 import { useCallback } from "react";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { exportPNG } from "../lib/export";
 

@@ -157,7 +157,7 @@ const mockFakeExcalidrawAPI = {
   registerSidebarTab: vi.fn(() => vi.fn()),
 };
 
-vi.mock("@excalidraw/excalidraw", () => {
+vi.mock("@atlasdraw/excalidraw", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactInner = require("react") as typeof import("react");
   const MainMenuStub = Object.assign(
@@ -247,6 +247,7 @@ const mockMap = {
   project: vi.fn(() => ({ x: 0, y: 0 })),
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
+  getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
     getSouth: () => 0,

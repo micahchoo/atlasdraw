@@ -1,20 +1,16 @@
-import { KEYS, arrayToMap } from "@excalidraw/common";
+import { KEYS, arrayToMap } from "@atlasdraw/common";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@atlasdraw/math";
 
-import { actionWrapTextInContainer } from "@excalidraw/excalidraw/actions/actionBoundText";
+import { actionWrapTextInContainer } from "@atlasdraw/excalidraw/actions/actionBoundText";
 
-import { Excalidraw, isLinearElement } from "@excalidraw/excalidraw";
+import { Excalidraw, isLinearElement } from "@atlasdraw/excalidraw";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { UI, Pointer, Keyboard } from "@excalidraw/excalidraw/tests/helpers/ui";
-import {
-  act,
-  fireEvent,
-  render,
-} from "@excalidraw/excalidraw/tests/test-utils";
+import { API } from "@atlasdraw/excalidraw/tests/helpers/api";
+import { UI, Pointer, Keyboard } from "@atlasdraw/excalidraw/tests/helpers/ui";
+import { act, fireEvent, render } from "@atlasdraw/excalidraw/tests/test-utils";
 
-import { defaultLang, setLanguage } from "@excalidraw/excalidraw/i18n";
+import { defaultLang, setLanguage } from "@atlasdraw/excalidraw/i18n";
 
 import { getTransformHandles } from "../src/transformHandles";
 import {

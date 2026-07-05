@@ -1,8 +1,8 @@
 import React from "react";
 
-import { getFrame } from "@excalidraw/common";
+import { getFrame } from "@atlasdraw/common";
 
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
+import type { NonDeletedExcalidrawElement } from "@atlasdraw/element/types";
 
 import { actionSaveFileToDisk } from "../actions/actionExport";
 

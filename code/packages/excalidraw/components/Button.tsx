@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import React from "react";
 
-import { composeEventHandlers } from "@excalidraw/common";
+import { composeEventHandlers } from "@atlasdraw/common";
 
 import "./Button.scss";
 

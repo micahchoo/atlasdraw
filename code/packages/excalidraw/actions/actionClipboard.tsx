@@ -1,9 +1,9 @@
-import { isTextElement } from "@excalidraw/element";
-import { getTextFromElements } from "@excalidraw/element";
+import { isTextElement } from "@atlasdraw/element";
+import { getTextFromElements } from "@atlasdraw/element";
 
-import { CODES, KEYS, isFirefox } from "@excalidraw/common";
+import { CODES, KEYS, isFirefox } from "@atlasdraw/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import {
   copyTextToSystemClipboard,

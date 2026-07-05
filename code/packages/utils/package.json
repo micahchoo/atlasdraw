@@ -1,5 +1,6 @@
 {
-  "name": "@excalidraw/utils",
+  "name": "@atlasdraw/utils",
+  "private": true,
   "version": "0.1.2",
   "type": "module",
   "types": "./dist/types/utils/src/index.d.ts",
@@ -20,9 +21,6 @@
     "dist/*"
   ],
   "description": "Excalidraw utility functions",
-  "publishConfig": {
-    "access": "public"
-  },
   "license": "MIT",
   "keywords": [
     "excalidraw",

@@ -1,5 +1,5 @@
 # stripped Excalidraw deploy in Phase 0
-# Original: Auto-publishes @excalidraw/excalidraw@next to npm on release branch pushes.
+# Original: Auto-publishes @atlasdraw/excalidraw@next to npm on release branch pushes.
 # Atlasdraw uses a different package name and release strategy — re-design for Phase 4.
 #
 # name: Auto release excalidraw next

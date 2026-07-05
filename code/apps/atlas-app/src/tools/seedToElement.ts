@@ -14,7 +14,7 @@
 //      - polyline → project every vertex; element x/y = first vertex; per-vertex
 //        `points[i]` = projected[i] - origin (relative LocalPoint tuples).
 //   2. Constructs a real `ExcalidrawElement` via the appropriate factory from
-//      `@excalidraw/element` (`newElement`, `newFreeDrawElement`,
+//      `@atlasdraw/element` (`newElement`, `newFreeDrawElement`,
 //      `newLinearElement`, `newArrowElement`, `newTextElement`).
 //   3. Stamps the full `GeoCustomData` wrapper (`projection: "mercator"`,
 //      `schemaVersion: 1`) so `useCoordinateSync` recognizes it via
@@ -36,19 +36,20 @@ import {
   newLinearElement,
   newArrowElement,
   newTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@atlasdraw/math";
 
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawFreeDrawElement,
-} from "@excalidraw/element/types";
-import type { LocalPoint } from "@excalidraw/math";
+} from "@atlasdraw/element/types";
+import type { LocalPoint } from "@atlasdraw/math";
 
 import type { AtlasdrawElementSeed } from "@atlasdraw/tools";
 import type { GeoCustomData } from "@atlasdraw/geo";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------

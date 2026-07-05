@@ -1,14 +1,14 @@
-import { arrayToMap } from "@excalidraw/common";
-import { isPointWithinBounds, pointFrom } from "@excalidraw/math";
-import { doLineSegmentsIntersect } from "@excalidraw/utils/bbox";
+import { arrayToMap } from "@atlasdraw/common";
+import { isPointWithinBounds, pointFrom } from "@atlasdraw/math";
+import { doLineSegmentsIntersect } from "@atlasdraw/utils/bbox";
 
 import type {
   AppClassProperties,
   AppState,
   StaticCanvasAppState,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
-import type { ReadonlySetLike } from "@excalidraw/common/utility-types";
+import type { ReadonlySetLike } from "@atlasdraw/common/utility-types";
 
 import { getElementsWithinSelection, getSelectedElements } from "./selection";
 import { getElementsInGroup, selectGroupsFromGivenElements } from "./groups";

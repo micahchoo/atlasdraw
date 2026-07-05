@@ -16,7 +16,7 @@
 
 import React, { useEffect, useState } from "react";
 import LZString from "lz-string";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw } from "@atlasdraw/excalidraw";
 import { read, type AtlasdrawDocument } from "@atlasdraw/data";
 
 import {

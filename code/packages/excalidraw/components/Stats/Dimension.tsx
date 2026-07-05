@@ -1,19 +1,19 @@
-import { clamp, round } from "@excalidraw/math";
+import { clamp, round } from "@atlasdraw/math";
 
-import { MIN_WIDTH_OR_HEIGHT } from "@excalidraw/common";
+import { MIN_WIDTH_OR_HEIGHT } from "@atlasdraw/common";
 import {
   MINIMAL_CROP_SIZE,
   getUncroppedWidthAndHeight,
-} from "@excalidraw/element";
-import { resizeSingleElement } from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
-import { isFrameLikeElement } from "@excalidraw/element";
-import { getElementsInResizingFrame } from "@excalidraw/element";
-import { replaceAllElementsInFrame } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { resizeSingleElement } from "@atlasdraw/element";
+import { isImageElement } from "@atlasdraw/element";
+import { isFrameLikeElement } from "@atlasdraw/element";
+import { getElementsInResizingFrame } from "@atlasdraw/element";
+import { replaceAllElementsInFrame } from "@atlasdraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import DragInput from "./DragInput";
 import { getStepSizedValue, isPropertyEditable } from "./utils";

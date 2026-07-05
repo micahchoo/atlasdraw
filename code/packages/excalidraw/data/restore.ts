@@ -1,4 +1,4 @@
-import { isFiniteNumber, pointFrom } from "@excalidraw/math";
+import { isFiniteNumber, pointFrom } from "@atlasdraw/math";
 
 import {
   type CombineBrandsIfNeeded,
@@ -18,7 +18,7 @@ import {
   getSizeFromPoints,
   normalizeLink,
   getLineHeight,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 import {
   calculateFixedPointForNonElbowArrowBinding,
   getNonDeletedElements,
@@ -26,16 +26,16 @@ import {
   isPointInElement,
   isValidPolygon,
   projectFixedPointOntoDiagonal,
-} from "@excalidraw/element";
-import { normalizeFixedPoint } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { normalizeFixedPoint } from "@atlasdraw/element";
 import {
   updateElbowArrowPoints,
   validateElbowPoints,
-} from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
-import { getContainerElement } from "@excalidraw/element";
-import { detectLineHeight } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { LinearElementEditor } from "@atlasdraw/element";
+import { bumpVersion } from "@atlasdraw/element";
+import { getContainerElement } from "@atlasdraw/element";
+import { detectLineHeight } from "@atlasdraw/element";
 import {
   isArrowBoundToElement,
   isArrowElement,
@@ -44,17 +44,17 @@ import {
   isLineElement,
   isTextElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { syncInvalidIndices } from "@excalidraw/element";
+import { syncInvalidIndices } from "@atlasdraw/element";
 
-import { refreshTextDimensions } from "@excalidraw/element";
+import { refreshTextDimensions } from "@atlasdraw/element";
 
-import { getNormalizedDimensions } from "@excalidraw/element";
+import { getNormalizedDimensions } from "@atlasdraw/element";
 
-import { isInvisiblySmallElement } from "@excalidraw/element";
+import { isInvisiblySmallElement } from "@atlasdraw/element";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@atlasdraw/math";
 
 import type {
   ElementsMap,
@@ -71,9 +71,9 @@ import type {
   NonDeletedSceneElementsMap,
   OrderedExcalidrawElement,
   StrokeRoundness,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { MarkOptional, Mutable } from "@excalidraw/common/utility-types";
+import type { MarkOptional, Mutable } from "@atlasdraw/common/utility-types";
 
 import { getDefaultAppState } from "../appState";
 

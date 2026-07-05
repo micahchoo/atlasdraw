@@ -1,10 +1,10 @@
 import { queryByText } from "@testing-library/react";
 
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@atlasdraw/math";
 import {
   getLineHeightInPx,
   getOriginalContainerHeightFromCache,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import {
   CODES,
@@ -15,12 +15,12 @@ import {
   THEME,
   VERTICAL_ALIGN,
   applyDarkModeFilter,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   ExcalidrawTextElement,
   ExcalidrawTextElementWithContainer,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { Excalidraw } from "../index";
 import { API } from "../tests/helpers/api";

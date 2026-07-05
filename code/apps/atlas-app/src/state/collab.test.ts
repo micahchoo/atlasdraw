@@ -25,7 +25,7 @@ import {
   type Mock,
 } from "vitest";
 
-import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
 
 // ---------------------------------------------------------------------------
 // Import after mocks are in place.

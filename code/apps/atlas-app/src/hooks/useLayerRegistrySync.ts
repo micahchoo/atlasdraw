@@ -33,7 +33,7 @@ import { useEffect, useRef } from "react";
 
 import { isGeoCustomData, type GeoCustomData } from "@atlasdraw/geo";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import {
   useLayerRegistryStore,

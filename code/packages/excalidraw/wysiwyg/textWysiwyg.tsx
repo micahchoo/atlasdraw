@@ -11,18 +11,18 @@ import {
   MIME_TYPES,
   applyDarkModeFilter,
   isRTL,
-} from "@excalidraw/common";
-import { pointFrom, pointRotateRads, type Radians } from "@excalidraw/math";
+} from "@atlasdraw/common";
+import { pointFrom, pointRotateRads, type Radians } from "@atlasdraw/math";
 
 import {
   getTextFromElements,
   originalContainerCache,
   updateBoundElements,
   updateOriginalContainerCache,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
+import { LinearElementEditor } from "@atlasdraw/element";
+import { bumpVersion } from "@atlasdraw/element";
 import {
   getBoundTextElementId,
   getContainerElement,
@@ -33,25 +33,25 @@ import {
   computeContainerDimensionForBoundText,
   computeBoundTextPosition,
   getBoundTextElement,
-} from "@excalidraw/element";
-import { getTextWidth } from "@excalidraw/element";
-import { getLineHeightInPx } from "@excalidraw/element";
-import { getLineWidth } from "@excalidraw/element";
-import { normalizeText } from "@excalidraw/element";
-import { wrapText } from "@excalidraw/element";
-import { getWrappedTextLines } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { getTextWidth } from "@atlasdraw/element";
+import { getLineHeightInPx } from "@atlasdraw/element";
+import { getLineWidth } from "@atlasdraw/element";
+import { normalizeText } from "@atlasdraw/element";
+import { wrapText } from "@atlasdraw/element";
+import { getWrappedTextLines } from "@atlasdraw/element";
 import {
   isArrowElement,
   isBoundToContainer,
   isTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { actionSaveToActiveFile } from "../actions";
 

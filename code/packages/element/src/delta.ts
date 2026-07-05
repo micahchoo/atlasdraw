@@ -6,7 +6,7 @@ import {
   isShallowEqual,
   isTestEnv,
   randomInteger,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   ExcalidrawElement,
@@ -17,21 +17,21 @@ import type {
   Ordered,
   OrderedExcalidrawElement,
   SceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import type {
   DTO,
   Mutable,
   SubtypeOf,
   ValueOf,
-} from "@excalidraw/common/utility-types";
+} from "@atlasdraw/common/utility-types";
 
 import type {
   AppState,
   ObservedAppState,
   ObservedElementsAppState,
   ObservedStandaloneAppState,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
 import { getObservedAppState } from "./store";
 

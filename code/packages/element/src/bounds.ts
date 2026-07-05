@@ -6,7 +6,7 @@ import {
   invariant,
   rescalePoints,
   sizeOf,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import {
   degreesToRadians,
@@ -15,9 +15,9 @@ import {
   pointFrom,
   pointFromArray,
   pointRotateRads,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
-import { getCurvePathOps } from "@excalidraw/utils/shape";
+import { getCurvePathOps } from "@atlasdraw/utils/shape";
 
 import { pointsOnBezierCurves } from "points-on-curve";
 
@@ -28,11 +28,11 @@ import type {
   LineSegment,
   LocalPoint,
   Radians,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@atlasdraw/excalidraw/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@atlasdraw/common/utility-types";
 
 import { generateRoughOptions } from "./shape";
 import { ShapeCache } from "./shape";

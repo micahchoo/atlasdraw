@@ -4,7 +4,7 @@
 // LayerPanel now renders body-only — no Sidebar wrapper. The parent
 // surface (DefaultSidebar via excalidrawAPI.registerSidebarTab) provides
 // the dockable shell; LayerPanel just renders sections. So we no longer
-// need to mock @excalidraw/excalidraw — the component imports nothing
+// need to mock @atlasdraw/excalidraw — the component imports nothing
 // from there.
 //
 // Store seeding follows the same pattern as state/__tests__/layerRegistry.test.ts —

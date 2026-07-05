@@ -7,6 +7,11 @@
         "groups": ["builtin", "external", "internal", "parent", "sibling", "index", "object", "type"],
         "pathGroups": [
           {
+            "pattern": "@atlasdraw/**",
+            "group": "external",
+            "position": "after"
+          },
+          {
             "pattern": "@excalidraw/**",
             "group": "external",
             "position": "after"
@@ -50,7 +55,7 @@
           {
             "patterns": [
               {
-                "group": ["@excalidraw/excalidraw"],
+                "group": ["@atlasdraw/excalidraw"],
                 "message": "Do not import from the barrel 'index.tsx' files. Use direct relative imports to the specific module instead.",
                 "allowTypeImports": true
               }

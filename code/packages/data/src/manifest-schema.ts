@@ -98,7 +98,7 @@ export type Manifest = z.infer<typeof ManifestSchema>;
  * persistence-load hydration path (`updateScene({elements: doc.scene})`) does
  * not have to launder typing.
  *
- * We deliberately do NOT import @excalidraw/element types here — that would
+ * We deliberately do NOT import @atlasdraw/element types here — that would
  * pull the entire Excalidraw type graph into a package the CLI also consumes.
  * Instead we declare the cross-cut properties the writer touches (`id`,
  * `type`, `version`) and leave room for the rest as `unknown` index entries.

@@ -30,14 +30,14 @@
 // inline styles, Escape/focus trap inline.
 
 import React, { useEffect, useMemo, useRef } from "react";
-import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@excalidraw/common";
+import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@atlasdraw/common";
 
 import { getBuiltInLibraries, type ExcalidrawLibrary } from "@atlasdraw/data";
 
 import type {
   ExcalidrawImperativeAPI,
   LibraryItem,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
 import { FocusTrap } from "./FocusTrap";
 

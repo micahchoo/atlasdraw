@@ -1,8 +1,8 @@
-import { isImageElement } from "@excalidraw/element";
+import { isImageElement } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
-import type { ExcalidrawImageElement } from "@excalidraw/element/types";
+import type { ExcalidrawImageElement } from "@atlasdraw/element/types";
 
 import { ToolButton } from "../components/ToolButton";
 import { cropIcon } from "../components/icons";

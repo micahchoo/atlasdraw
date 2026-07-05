@@ -5,7 +5,7 @@ import {
   isShallowEqual,
   sceneCoordsToViewportCoords,
   type EditorInterface,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   InteractiveCanvasRenderConfig,
@@ -13,12 +13,12 @@ import type {
   InteractiveSceneRenderConfig,
   RenderableElementsMap,
   RenderInteractiveSceneCallback,
-} from "@excalidraw/excalidraw/scene/types";
+} from "@atlasdraw/excalidraw/scene/types";
 
 import type {
   NonDeletedExcalidrawElement,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { t } from "../../i18n";
 import { renderInteractiveScene } from "../../renderer/interactiveScene";

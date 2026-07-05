@@ -2,16 +2,16 @@ import {
   DEFAULT_EXPORT_PADDING,
   EDITOR_LS_KEYS,
   THEME,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import { convertToExcalidrawElements } from "@excalidraw/element";
+import { convertToExcalidrawElements } from "@atlasdraw/element";
 
-import { exportToCanvas } from "@excalidraw/utils";
+import { exportToCanvas } from "@atlasdraw/utils";
 
 import type {
   NonDeletedExcalidrawElement,
   Theme,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { EditorLocalStorage } from "../../data/EditorLocalStorage";
 

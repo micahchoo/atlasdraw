@@ -1,6 +1,6 @@
-import { exportToCanvas } from "@excalidraw/excalidraw";
+import { exportToCanvas } from "@atlasdraw/excalidraw";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type maplibregl from "maplibre-gl";
 

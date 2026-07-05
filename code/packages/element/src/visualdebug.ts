@@ -5,19 +5,19 @@ import {
   pointFrom,
   type GlobalPoint,
   type LocalPoint,
-} from "@excalidraw/math";
-import { type Bounds, isBounds } from "@excalidraw/common";
+} from "@atlasdraw/math";
+import { type Bounds, isBounds } from "@atlasdraw/common";
 import {
   getElementBounds,
   intersectElementWithLineSegment,
   isFreeDrawElement,
   isLinearElement,
   isPathALoop,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
-import type { Curve } from "@excalidraw/math";
-import type { LineSegment } from "@excalidraw/utils";
+import type { ElementsMap, ExcalidrawElement } from "@atlasdraw/element/types";
+import type { Curve } from "@atlasdraw/math";
+import type { LineSegment } from "@atlasdraw/utils";
 
 // The global data holder to collect the debug operations
 declare global {

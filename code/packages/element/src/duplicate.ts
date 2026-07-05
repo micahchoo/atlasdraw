@@ -7,11 +7,11 @@ import {
   findLastIndex,
   getUpdatedTimestamp,
   isTestEnv,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@atlasdraw/common/utility-types";
 
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@atlasdraw/excalidraw/types";
 
 import {
   getElementsInGroup,

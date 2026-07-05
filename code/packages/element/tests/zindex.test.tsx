@@ -1,4 +1,4 @@
-import { reseed } from "@excalidraw/common";
+import { reseed } from "@atlasdraw/common";
 
 import {
   actionSendBackward,
@@ -6,19 +6,19 @@ import {
   actionBringToFront,
   actionSendToBack,
   actionDuplicateSelection,
-} from "@excalidraw/excalidraw/actions";
+} from "@atlasdraw/excalidraw/actions";
 
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw } from "@atlasdraw/excalidraw";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
+import { API } from "@atlasdraw/excalidraw/tests/helpers/api";
 import {
   act,
   getCloneByOrigId,
   render,
   unmountComponent,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@atlasdraw/excalidraw/tests/test-utils";
 
-import type { AppState } from "@excalidraw/excalidraw/types";
+import type { AppState } from "@atlasdraw/excalidraw/types";
 
 import { selectGroupsForSelectedElements } from "../src/groups";
 

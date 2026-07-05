@@ -1,15 +1,15 @@
-import { degreesToRadians, radiansToDegrees } from "@excalidraw/math";
+import { degreesToRadians, radiansToDegrees } from "@atlasdraw/math";
 
-import { getBoundTextElement } from "@excalidraw/element";
-import { isArrowElement } from "@excalidraw/element";
+import { getBoundTextElement } from "@atlasdraw/element";
+import { isArrowElement } from "@atlasdraw/element";
 
-import { isInGroup } from "@excalidraw/element";
+import { isInGroup } from "@atlasdraw/element";
 
-import type { Degrees } from "@excalidraw/math";
+import type { Degrees } from "@atlasdraw/math";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import { angleIcon } from "../icons";
 

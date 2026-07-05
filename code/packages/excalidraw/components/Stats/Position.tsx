@@ -1,14 +1,14 @@
-import { clamp, pointFrom, pointRotateRads, round } from "@excalidraw/math";
+import { clamp, pointFrom, pointRotateRads, round } from "@atlasdraw/math";
 
 import {
   getFlipAdjustedCropPosition,
   getUncroppedWidthAndHeight,
-} from "@excalidraw/element";
-import { isImageElement } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { isImageElement } from "@atlasdraw/element";
 
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { ElementsMap, ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import StatsDragInput from "./DragInput";
 import { getStepSizedValue, moveElement, STEP_SIZE } from "./utils";

@@ -10,37 +10,37 @@ import {
   getVerticalOffset,
   applyDarkModeFilter,
   MIME_TYPES,
-} from "@excalidraw/common";
-import { normalizeLink, toValidURL } from "@excalidraw/common";
-import { hashString } from "@excalidraw/element";
-import { getUncroppedWidthAndHeight } from "@excalidraw/element";
+} from "@atlasdraw/common";
+import { normalizeLink, toValidURL } from "@atlasdraw/common";
+import { hashString } from "@atlasdraw/element";
+import { getUncroppedWidthAndHeight } from "@atlasdraw/element";
 import {
   createPlaceholderEmbeddableLabel,
   getEmbedLink,
-} from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
-import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
-import { getLineHeightInPx } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { LinearElementEditor } from "@atlasdraw/element";
+import { getBoundTextElement, getContainerElement } from "@atlasdraw/element";
+import { getLineHeightInPx } from "@atlasdraw/element";
 import {
   isArrowElement,
   isIframeLikeElement,
   isInitializedImageElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { getContainingFrame } from "@excalidraw/element";
+import { getContainingFrame } from "@atlasdraw/element";
 
-import { getCornerRadius, isPathALoop } from "@excalidraw/element";
+import { getCornerRadius, isPathALoop } from "@atlasdraw/element";
 
-import { ShapeCache } from "@excalidraw/element";
+import { ShapeCache } from "@atlasdraw/element";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@atlasdraw/element";
 
 import type {
   ExcalidrawElement,
   ExcalidrawTextElementWithContainer,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import type { RenderableElementsMap, SVGRenderConfig } from "../scene/types";
 import type { AppState, BinaryFiles } from "../types";

@@ -104,14 +104,14 @@ async function injectElement(
         }
       ).__atlasdraw__.excalidrawAPI;
 
-      // Use the element factory exposed by @excalidraw/element — already
+      // Use the element factory exposed by @atlasdraw/element — already
       // loaded into the Vite module graph by the app, so this resolves
       // from the import cache and does not refetch. We use a string
       // expression on the dynamic import to bypass TS module resolution
       // (the package is source-only inside the monorepo; Vite resolves it
       // via alias at runtime). Typing as `any` is safe — this only runs
       // inside the Playwright-driven browser context.
-      const modPath: string = "@excalidraw/element";
+      const modPath: string = "@atlasdraw/element";
       const elementMod: any = await import(/* @vite-ignore */ modPath);
 
       // Per .claude/rules/excalidraw-api.md: use the typed factory functions

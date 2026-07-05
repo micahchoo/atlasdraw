@@ -1,16 +1,16 @@
-import { exportToCanvas, exportToSvg } from "@excalidraw/utils";
+import { exportToCanvas, exportToSvg } from "@atlasdraw/utils";
 
 import {
   applyDarkModeFilter,
   FONT_FAMILY,
   FRAME_STYLE,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   ExcalidrawTextElement,
   FractionalIndex,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { prepareElementsForExport } from "../../data";
 import * as exportUtils from "../../scene/export";

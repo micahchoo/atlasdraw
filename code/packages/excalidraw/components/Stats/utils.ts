@@ -1,32 +1,32 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@atlasdraw/math";
 
 import {
   getBoundTextElement,
   isBindingElement,
   unbindBindingElement,
-} from "@excalidraw/element";
-import { isFrameLikeElement } from "@excalidraw/element";
+} from "@atlasdraw/element";
+import { isFrameLikeElement } from "@atlasdraw/element";
 
 import {
   getSelectedGroupIds,
   getElementsInGroup,
   isInGroup,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { getFrameChildren } from "@excalidraw/element";
+import { getFrameChildren } from "@atlasdraw/element";
 
-import { updateBindings } from "@excalidraw/element";
-import { DRAGGING_THRESHOLD } from "@excalidraw/common";
+import { updateBindings } from "@atlasdraw/element";
+import { DRAGGING_THRESHOLD } from "@atlasdraw/common";
 
-import type { Radians } from "@excalidraw/math";
+import type { Radians } from "@atlasdraw/math";
 
 import type {
   ElementsMap,
   ExcalidrawElement,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import type { AppState } from "../../types";
 

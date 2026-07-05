@@ -3,17 +3,17 @@ import {
   pointOnLineSegment,
   pointRotateRads,
   type Radians,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import {
   SIDE_RESIZING_THRESHOLD,
   type EditorInterface,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import type { GlobalPoint, LineSegment, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LineSegment, LocalPoint } from "@atlasdraw/math";
 
-import type { AppState, Zoom } from "@excalidraw/excalidraw/types";
-import type { Bounds } from "@excalidraw/common";
+import type { AppState, Zoom } from "@atlasdraw/excalidraw/types";
+import type { Bounds } from "@atlasdraw/common";
 
 import { getElementAbsoluteCoords } from "./bounds";
 import {

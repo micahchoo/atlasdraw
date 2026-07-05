@@ -1,5 +1,6 @@
 {
-  "name": "@excalidraw/math",
+  "name": "@atlasdraw/math",
+  "private": true,
   "version": "0.18.0",
   "type": "module",
   "types": "./dist/types/math/src/index.d.ts",
@@ -23,9 +24,6 @@
     "dist/*"
   ],
   "description": "Excalidraw math functions",
-  "publishConfig": {
-    "access": "public"
-  },
   "license": "MIT",
   "keywords": [
     "excalidraw",
@@ -61,6 +59,6 @@
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types"
   },
   "dependencies": {
-    "@excalidraw/common": "0.18.0"
+    "@atlasdraw/common": "0.18.0"
   }
 }

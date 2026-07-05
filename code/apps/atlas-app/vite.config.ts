@@ -119,58 +119,58 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "maplibre-gl"],
     alias: [
       {
-        find: /^@excalidraw\/common$/,
+        find: /^@atlasdraw\/common$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/common/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/common\/(.*?)/,
+        find: /^@atlasdraw\/common\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/common/src/$1"),
       },
       {
-        find: /^@excalidraw\/element$/,
+        find: /^@atlasdraw\/element$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/element/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/element\/(.*?)/,
+        find: /^@atlasdraw\/element\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/element/src/$1"),
       },
       {
-        find: /^@excalidraw\/excalidraw$/,
+        find: /^@atlasdraw\/excalidraw$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/excalidraw/index.tsx",
         ),
       },
       {
-        find: /^@excalidraw\/excalidraw\/(.*?)/,
+        find: /^@atlasdraw\/excalidraw\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/excalidraw/$1"),
       },
       {
-        find: /^@excalidraw\/math$/,
+        find: /^@atlasdraw\/math$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/math/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/math\/(.*?)/,
+        find: /^@atlasdraw\/math\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/math/src/$1"),
       },
       {
-        find: /^@excalidraw\/utils$/,
+        find: /^@atlasdraw\/utils$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/utils/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/utils\/(.*?)/,
+        find: /^@atlasdraw\/utils\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/utils/src/$1"),
       },
     ],

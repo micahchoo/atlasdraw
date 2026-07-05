@@ -1,4 +1,4 @@
-import { LOCAL_FONT_PROTOCOL } from "@excalidraw/common";
+import { LOCAL_FONT_PROTOCOL } from "@atlasdraw/common";
 
 import { type ExcalidrawFontFaceDescriptor } from "../Fonts";
 

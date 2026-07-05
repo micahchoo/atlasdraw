@@ -99,7 +99,7 @@ vi.mock("@atlasdraw/basemap", () => ({
 // excalidrawAPI, so leaving it null is fine. We must export MainMenu and
 // Sidebar (consumed by W-B's MainMenu items + LayerPanel) as passthrough
 // stubs or React throws "type is invalid" at mount.
-vi.mock("@excalidraw/excalidraw", () => ({
+vi.mock("@atlasdraw/excalidraw", () => ({
   Excalidraw: ({
     onExcalidrawAPI: _,
     children,
@@ -163,6 +163,7 @@ const mockMap = {
   project: vi.fn(() => ({ x: 0, y: 0 })),
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
+  getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
     getSouth: () => 0,

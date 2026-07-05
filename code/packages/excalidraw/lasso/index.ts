@@ -1,29 +1,25 @@
-import {
-  type GlobalPoint,
-  type LineSegment,
-  pointFrom,
-} from "@excalidraw/math";
+import { type GlobalPoint, type LineSegment, pointFrom } from "@atlasdraw/math";
 
-import { getElementLineSegments } from "@excalidraw/element";
-import { LinearElementEditor } from "@excalidraw/element";
+import { getElementLineSegments } from "@atlasdraw/element";
+import { LinearElementEditor } from "@atlasdraw/element";
 import {
   isFrameLikeElement,
   isLinearElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { getFrameChildren } from "@excalidraw/element";
-import { selectGroupsForSelectedElements } from "@excalidraw/element";
+import { getFrameChildren } from "@atlasdraw/element";
+import { selectGroupsForSelectedElements } from "@atlasdraw/element";
 
-import { getContainerElement } from "@excalidraw/element";
+import { getContainerElement } from "@atlasdraw/element";
 
-import { arrayToMap, easeOut, isShallowEqual } from "@excalidraw/common";
+import { arrayToMap, easeOut, isShallowEqual } from "@atlasdraw/common";
 
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   NonDeleted,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { type AnimationFrameHandler } from "../animation-frame-handler";
 

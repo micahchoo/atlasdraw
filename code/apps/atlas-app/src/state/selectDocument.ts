@@ -18,11 +18,12 @@
 
 import { ulid } from "ulid";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+
+import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
-import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
@@ -163,6 +164,65 @@ export function selectDocument(
     manifest,
     scene: elements,
     layers,
+    styleRef: {},
+    files,
+  };
+}
+
+/**
+ * Import-only compatibility: convert the text of a bare `.excalidraw` file
+ * into a fresh AtlasdrawDocument (one format, one door — ADR 0010 cohesion
+ * work). The drawing comes in; zero geo layers, default basemap/camera, new
+ * ULID. Never round-tripped back out as `.excalidraw` — the caller
+ * (persistence.openFromDisk) must NOT retain a writable handle to the
+ * source file, or a later save would clobber it with zip bytes.
+ *
+ * Throws on malformed input; the caller surfaces it like any other
+ * open failure.
+ */
+export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
+  const parsed: unknown = JSON.parse(text);
+  const obj = parsed as {
+    type?: unknown;
+    elements?: unknown;
+    files?: Record<string, { dataURL?: string; mimeType?: string }>;
+  };
+  if (obj?.type !== "excalidraw" || !Array.isArray(obj.elements)) {
+    throw new Error("not a valid .excalidraw file (missing type/elements)");
+  }
+
+  const files: Map<string, Blob> = new Map();
+  if (obj.files && typeof obj.files === "object") {
+    for (const [id, file] of Object.entries(obj.files)) {
+      if (
+        !file ||
+        typeof file.dataURL !== "string" ||
+        typeof file.mimeType !== "string"
+      ) {
+        continue;
+      }
+      const blob = dataUrlToBlob(file.dataURL, file.mimeType);
+      if (blob) {
+        files.set(id, blob);
+      }
+    }
+  }
+
+  const now = new Date().toISOString();
+  return {
+    manifest: {
+      id: ulid(),
+      version: 1,
+      title: DEFAULT_TITLE,
+      createdAt: now,
+      updatedAt: now,
+      basemap: { type: "registry", id: DEFAULT_BASEMAP_ID },
+      camera: { ...DEFAULT_CAMERA },
+      layers: [],
+      permissions: { publicView: false },
+    },
+    scene: obj.elements as AtlasdrawDocument["scene"],
+    layers: new Map(),
     styleRef: {},
     files,
   };

@@ -1,4 +1,4 @@
-import { arrayToMap, easeOut, THEME } from "@excalidraw/common";
+import { arrayToMap, easeOut, THEME } from "@atlasdraw/common";
 
 import {
   computeBoundTextPosition,
@@ -13,25 +13,25 @@ import {
   isFreeDrawElement,
   isLineElement,
   isPointInElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 import {
   lineSegment,
   lineSegmentsDistance,
   pointFrom,
   polygon,
   polygonIncludesPointNonZero,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
-import { getElementsInGroup } from "@excalidraw/element";
+import { getElementsInGroup } from "@atlasdraw/element";
 
-import { shouldTestInside } from "@excalidraw/element";
-import { hasBoundTextElement, isBoundToContainer } from "@excalidraw/element";
-import { getBoundTextElementId } from "@excalidraw/element";
+import { shouldTestInside } from "@atlasdraw/element";
+import { hasBoundTextElement, isBoundToContainer } from "@atlasdraw/element";
+import { getBoundTextElementId } from "@atlasdraw/element";
 
-import type { Bounds } from "@excalidraw/common";
+import type { Bounds } from "@atlasdraw/common";
 
-import type { GlobalPoint, LineSegment } from "@excalidraw/math/types";
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type { GlobalPoint, LineSegment } from "@atlasdraw/math/types";
+import type { ElementsMap, ExcalidrawElement } from "@atlasdraw/element/types";
 
 import { AnimatedTrail } from "../animated-trail";
 

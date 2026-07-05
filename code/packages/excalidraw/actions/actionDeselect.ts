@@ -3,11 +3,11 @@ import {
   isSomeElementSelected,
   makeNextSelectedElementIds,
   selectGroupsForSelectedElements,
-} from "@excalidraw/element";
-import { CaptureUpdateAction } from "@excalidraw/element";
-import { KEYS, isWritableElement, updateActiveTool } from "@excalidraw/common";
+} from "@atlasdraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
+import { KEYS, isWritableElement, updateActiveTool } from "@atlasdraw/common";
 
-import type { GroupId } from "@excalidraw/element/types";
+import type { GroupId } from "@atlasdraw/element/types";
 
 import { register } from "./register";
 

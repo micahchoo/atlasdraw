@@ -1,27 +1,27 @@
-import { MIME_TYPES } from "@excalidraw/common";
-import { getDefaultAppState } from "@excalidraw/excalidraw/appState";
+import { MIME_TYPES } from "@atlasdraw/common";
+import { getDefaultAppState } from "@atlasdraw/excalidraw/appState";
 import {
   copyBlobToClipboardAsPng,
   copyTextToSystemClipboard,
   copyToClipboard,
-} from "@excalidraw/excalidraw/clipboard";
-import { encodePngMetadata } from "@excalidraw/excalidraw/data/image";
-import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
+} from "@atlasdraw/excalidraw/clipboard";
+import { encodePngMetadata } from "@atlasdraw/excalidraw/data/image";
+import { serializeAsJSON } from "@atlasdraw/excalidraw/data/json";
 import {
   restoreAppState,
   restoreElements,
-} from "@excalidraw/excalidraw/data/restore";
+} from "@atlasdraw/excalidraw/data/restore";
 import {
   exportToCanvas as _exportToCanvas,
   exportToSvg as _exportToSvg,
-} from "@excalidraw/excalidraw/scene/export";
+} from "@atlasdraw/excalidraw/scene/export";
 
 import type {
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   NonDeleted,
-} from "@excalidraw/element/types";
-import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/element/types";
+import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
 export { MIME_TYPES };
 

@@ -8,7 +8,7 @@
 //
 // The element shape is the minimal subset CoordinateSync.syncMapToScene reads:
 // id, x, y, width, height, points, customData. We do NOT depend on
-// @excalidraw/excalidraw — see ExcalidrawElementLike in CoordinateSync.ts.
+// @atlasdraw/excalidraw — see ExcalidrawElementLike in CoordinateSync.ts.
 
 import type {
   ExcalidrawElementLike,

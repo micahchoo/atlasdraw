@@ -1,4 +1,4 @@
-import { exportToCanvas, exportToSvg } from "@excalidraw/utils/export";
+import { exportToCanvas, exportToSvg } from "@atlasdraw/utils/export";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -8,7 +8,7 @@ import {
   VERSIONS,
   chunk,
   getExportSource,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import { EditorLocalStorage } from "../data/EditorLocalStorage";
 import { canvasToBlob, resizeImageFile } from "../data/blob";

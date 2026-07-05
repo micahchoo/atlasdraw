@@ -25,9 +25,10 @@ import { useEffect, useMemo } from "react";
 import throttle from "lodash.throttle";
 import { CoordinateSync } from "@atlasdraw/basemap";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawAPI } from "@atlasdraw/geo";
+
 import type maplibregl from "maplibre-gl";
 
 /** Camera event types that trigger a re-projection of geo-anchored elements. */

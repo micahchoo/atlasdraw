@@ -3,10 +3,10 @@ import {
   VERTICAL_ALIGN,
   escapeDoubleQuotes,
   getFontString,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import type { ExcalidrawProps } from "@excalidraw/excalidraw/types";
-import type { MarkRequired } from "@excalidraw/common/utility-types";
+import type { ExcalidrawProps } from "@atlasdraw/excalidraw/types";
+import type { MarkRequired } from "@atlasdraw/common/utility-types";
 
 import { newTextElement } from "./newElement";
 import { wrapText } from "./textWrapping";

@@ -1,16 +1,16 @@
-import { pointFrom, pointRotateRads } from "@excalidraw/math";
+import { pointFrom, pointRotateRads } from "@atlasdraw/math";
 
-import { MIME_TYPES } from "@excalidraw/common";
-import { getElementAbsoluteCoords } from "@excalidraw/element";
-import { hitElementBoundingBox } from "@excalidraw/element";
+import { MIME_TYPES } from "@atlasdraw/common";
+import { getElementAbsoluteCoords } from "@atlasdraw/element";
+import { hitElementBoundingBox } from "@atlasdraw/element";
 
-import type { GlobalPoint, Radians } from "@excalidraw/math";
+import type { GlobalPoint, Radians } from "@atlasdraw/math";
 
-import type { Bounds } from "@excalidraw/common";
+import type { Bounds } from "@atlasdraw/common";
 import type {
   ElementsMap,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import type { AppState, UIAppState } from "../../types";
 

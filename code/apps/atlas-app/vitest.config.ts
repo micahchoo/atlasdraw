@@ -3,7 +3,7 @@
 // Phase 2 Wave 1a — minimal vitest config for atlas-app unit tests.
 //
 // Inherits the @excalidraw/* alias setup from vite.config.ts so source-resolved
-// imports (e.g. `@excalidraw/excalidraw`) work in tests the same way they
+// imports (e.g. `@atlasdraw/excalidraw`) work in tests the same way they
 // do at dev/build time. Uses `node` environment (no DOM) — current tests are
 // pure ToolContext-shape unit tests that mock map/excalidrawAPI.
 
@@ -15,64 +15,64 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@excalidraw\/common$/,
+        find: /^@atlasdraw\/common$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/common/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/common\/(.*?)/,
+        find: /^@atlasdraw\/common\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/common/src/$1"),
       },
       {
-        find: /^@excalidraw\/element$/,
+        find: /^@atlasdraw\/element$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/element/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/element\/(.*?)/,
+        find: /^@atlasdraw\/element\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/element/src/$1"),
       },
       {
-        find: /^@excalidraw\/excalidraw$/,
+        find: /^@atlasdraw\/excalidraw$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/excalidraw/index.tsx",
         ),
       },
       {
-        find: /^@excalidraw\/excalidraw\/(.*?)/,
+        find: /^@atlasdraw\/excalidraw\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/excalidraw/$1"),
       },
       {
-        find: /^@excalidraw\/math$/,
+        find: /^@atlasdraw\/math$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/math/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/math\/(.*?)/,
+        find: /^@atlasdraw\/math\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/math/src/$1"),
       },
       {
-        find: /^@excalidraw\/utils$/,
+        find: /^@atlasdraw\/utils$/,
         replacement: path.resolve(
           __dirname,
           "../../packages/utils/src/index.ts",
         ),
       },
       {
-        find: /^@excalidraw\/utils\/(.*?)/,
+        find: /^@atlasdraw\/utils\/(.*?)/,
         replacement: path.resolve(__dirname, "../../packages/utils/src/$1"),
       },
     ],
   },
   test: {
-    // jsdom — vendored @excalidraw/common references `navigator` at module
+    // jsdom — vendored @atlasdraw/common references `navigator` at module
     // load time, so even node-only logic tests need a DOM-ish global. Matches
     // the root code/vitest.config.mts environment.
     environment: "jsdom",

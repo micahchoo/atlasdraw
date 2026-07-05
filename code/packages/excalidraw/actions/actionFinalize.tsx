@@ -1,18 +1,18 @@
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@atlasdraw/math";
 
-import { bindOrUnbindBindingElement } from "@excalidraw/element/binding";
+import { bindOrUnbindBindingElement } from "@atlasdraw/element/binding";
 import {
   isValidPolygon,
   LinearElementEditor,
   newElementWith,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import {
   isBindingElement,
   isFreeDrawElement,
   isLinearElement,
   isLineElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import {
   KEYS,
@@ -20,20 +20,20 @@ import {
   invariant,
   shouldRotateWithDiscreteAngle,
   updateActiveTool,
-} from "@excalidraw/common";
-import { isPathALoop } from "@excalidraw/element";
+} from "@atlasdraw/common";
+import { isPathALoop } from "@atlasdraw/element";
 
-import { isInvisiblySmallElement } from "@excalidraw/element";
+import { isInvisiblySmallElement } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
-import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import type { GlobalPoint, LocalPoint } from "@atlasdraw/math";
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   NonDeleted,
   PointsPositionUpdates,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { t } from "../i18n";
 import { resetCursor } from "../cursor";

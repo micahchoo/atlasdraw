@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // jsdom 22 has no OffscreenCanvas / convertToBlob; stub them.
-// Also stub the package-level `exportToCanvas` from @excalidraw/excalidraw
+// Also stub the package-level `exportToCanvas` from @atlasdraw/excalidraw
 // so we don't pull in the entire renderer.
 
 const exportToCanvasMock = vi.fn();
-vi.mock("@excalidraw/excalidraw", () => ({
+vi.mock("@atlasdraw/excalidraw", () => ({
   exportToCanvas: (opts: unknown) => exportToCanvasMock(opts),
 }));
 
@@ -92,7 +92,7 @@ function makeExcalidrawAPI(appStateOverrides: Record<string, unknown> = {}) {
       getSceneElements: () => [{ id: "el-1" }],
       getAppState: () => appState,
       getFiles: () => ({}),
-    } as unknown as import("@excalidraw/excalidraw").ExcalidrawImperativeAPI,
+    } as unknown as import("@atlasdraw/excalidraw").ExcalidrawImperativeAPI,
     fakeExcalidrawCanvas,
     appState,
   };

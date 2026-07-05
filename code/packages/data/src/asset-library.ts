@@ -10,7 +10,7 @@
 //     emits `{ type: "excalidrawlib", version: 2, source, libraryItems }`.
 //
 // We deliberately do NOT redefine `LibraryItem` — we import the upstream type
-// from `@excalidraw/excalidraw` so atlas fixtures stay binary-compatible with
+// from `@atlasdraw/excalidraw` so atlas fixtures stay binary-compatible with
 // any `.excalidrawlib` exported by Excalidraw itself, and a future fork-bump
 // surfaces field changes as type errors.
 //
@@ -19,7 +19,7 @@
 // panel inserts items directly via `excalidrawAPI.updateLibrary` (Path A —
 // extend Excalidraw's own library). This reader is unaware of insertion path.
 
-import type { LibraryItem } from "@excalidraw/excalidraw/types";
+import type { LibraryItem } from "@atlasdraw/excalidraw/types";
 
 /**
  * The on-disk shape of an `.excalidrawlib` file.

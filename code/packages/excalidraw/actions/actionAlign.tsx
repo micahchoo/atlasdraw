@@ -1,20 +1,20 @@
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@atlasdraw/element";
 
-import { isFrameLikeElement } from "@excalidraw/element";
+import { isFrameLikeElement } from "@atlasdraw/element";
 
-import { updateFrameMembershipOfSelectedElements } from "@excalidraw/element";
+import { updateFrameMembershipOfSelectedElements } from "@atlasdraw/element";
 
-import { KEYS, arrayToMap } from "@excalidraw/common";
+import { KEYS, arrayToMap } from "@atlasdraw/common";
 
-import { alignElements } from "@excalidraw/element";
+import { alignElements } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
-import { getSelectedElementsByGroup } from "@excalidraw/element";
+import { getSelectedElementsByGroup } from "@atlasdraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { Alignment } from "@excalidraw/element";
+import type { Alignment } from "@atlasdraw/element";
 
 import { ToolButton } from "../components/ToolButton";
 import {

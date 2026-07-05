@@ -1,9 +1,9 @@
 import clsx from "clsx";
 import React, { useEffect, useRef, useState } from "react";
 
-import { isPromiseLike } from "@excalidraw/common";
+import { isPromiseLike } from "@atlasdraw/common";
 
-import type { PointerType } from "@excalidraw/element/types";
+import type { PointerType } from "@atlasdraw/element/types";
 
 import { AbortError } from "../errors";
 

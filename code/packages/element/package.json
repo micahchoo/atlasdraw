@@ -1,5 +1,6 @@
 {
-  "name": "@excalidraw/element",
+  "name": "@atlasdraw/element",
+  "private": true,
   "version": "0.18.0",
   "type": "module",
   "types": "./dist/types/element/src/index.d.ts",
@@ -29,9 +30,6 @@
     "dist/*"
   ],
   "description": "Excalidraw elements-related logic",
-  "publishConfig": {
-    "access": "public"
-  },
   "license": "MIT",
   "keywords": [
     "excalidraw",
@@ -63,7 +61,7 @@
     "build:esm": "rimraf dist && node ../../scripts/buildBase.js && yarn gen:types"
   },
   "dependencies": {
-    "@excalidraw/common": "0.18.0",
-    "@excalidraw/math": "0.18.0"
+    "@atlasdraw/common": "0.18.0",
+    "@atlasdraw/math": "0.18.0"
   }
 }

@@ -9,15 +9,13 @@ import {
 } from "@testing-library/react";
 import ansi from "ansicolor";
 
-import { ORIG_ID, arrayToMap } from "@excalidraw/common";
+import { ORIG_ID, arrayToMap } from "@atlasdraw/common";
 
-import { getSelectedElements } from "@excalidraw/element";
+import { getSelectedElements } from "@atlasdraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import type { AllPossibleKeys } from "@excalidraw/common/utility-types";
-
-import { STORAGE_KEYS } from "../../../excalidraw-app/app_constants";
+import type { AllPossibleKeys } from "@atlasdraw/common/utility-types";
 
 import { Pointer, UI } from "./helpers/ui";
 import * as toolQueries from "./queries/toolQueries";
@@ -130,6 +128,13 @@ export class GlobalTestState {
     return null!;
   }
 }
+
+// Inlined from the deleted upstream excalidraw-app's app_constants — these
+// legacy localStorage keys are baked into existing test fixtures, keep verbatim.
+const STORAGE_KEYS = {
+  LOCAL_STORAGE_ELEMENTS: "excalidraw",
+  LOCAL_STORAGE_APP_STATE: "excalidraw-state",
+} as const;
 
 const initLocalStorage = (data: ImportedDataState) => {
   if (data.elements) {

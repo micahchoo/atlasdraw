@@ -1,13 +1,13 @@
-import { FONT_FAMILY } from "@excalidraw/common";
+import { FONT_FAMILY } from "@atlasdraw/common";
 import {
   DEFAULT_CHART_COLOR_INDEX,
   getAllColorsSpecificShade,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   ExcalidrawLineElement,
   ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import {
   isSpreadsheetValidForChartType,

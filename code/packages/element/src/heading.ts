@@ -1,9 +1,4 @@
-import {
-  invariant,
-  isDevEnv,
-  isTestEnv,
-  type Bounds,
-} from "@excalidraw/common";
+import { invariant, isDevEnv, isTestEnv, type Bounds } from "@atlasdraw/common";
 
 import {
   pointFrom,
@@ -15,14 +10,14 @@ import {
   vectorCross,
   vectorFromPoint,
   vectorScale,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import type {
   LocalPoint,
   GlobalPoint,
   Triangle,
   Vector,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import { getCenterForBounds } from "./bounds";
 

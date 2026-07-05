@@ -3,13 +3,13 @@ import {
   DEFAULT_EXPORT_PADDING,
   EXPORT_SCALES,
   THEME,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import { getNonDeletedElements } from "@excalidraw/element";
+import { getNonDeletedElements } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
-import type { ExcalidrawElement, Theme } from "@excalidraw/element/types";
+import type { ExcalidrawElement, Theme } from "@atlasdraw/element/types";
 
 import { useEditorInterface } from "../components/App";
 import { CheckboxItem } from "../components/CheckboxItem";

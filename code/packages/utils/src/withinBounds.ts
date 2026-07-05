@@ -1,26 +1,26 @@
-import { arrayToMap, type Bounds } from "@excalidraw/common";
-import { getElementBounds } from "@excalidraw/element";
+import { arrayToMap, type Bounds } from "@atlasdraw/common";
+import { getElementBounds } from "@atlasdraw/element";
 import {
   isArrowElement,
   isExcalidrawElement,
   isFreeDrawElement,
   isLinearElement,
   isTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 import {
   rangeIncludesValue,
   pointFrom,
   pointRotateRads,
   rangeInclusive,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import type {
   ExcalidrawElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
-import type { LocalPoint } from "@excalidraw/math";
+} from "@atlasdraw/element/types";
+import type { LocalPoint } from "@atlasdraw/math";
 
 type Element = NonDeletedExcalidrawElement;
 type Elements = readonly NonDeletedExcalidrawElement[];

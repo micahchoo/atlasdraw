@@ -2,9 +2,9 @@ import fs from "fs";
 import path from "path";
 import util from "util";
 
-import { pointFrom, type LocalPoint, type Radians } from "@excalidraw/math";
+import { pointFrom, type LocalPoint, type Radians } from "@atlasdraw/math";
 
-import { DEFAULT_VERTICAL_ALIGN, ROUNDNESS, assertNever } from "@excalidraw/common";
+import { DEFAULT_VERTICAL_ALIGN, ROUNDNESS, assertNever } from "@atlasdraw/common";
 
 import {
   newArrowElement,
@@ -17,13 +17,13 @@ import {
   newLinearElement,
   newMagicFrameElement,
   newTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { isLinearElementType } from "@excalidraw/element";
-import { getSelectedElements } from "@excalidraw/element";
-import { selectGroupsForSelectedElements } from "@excalidraw/element";
+import { isLinearElementType } from "@atlasdraw/element";
+import { getSelectedElements } from "@atlasdraw/element";
+import { selectGroupsForSelectedElements } from "@atlasdraw/element";
 
-import { FONT_SIZES } from "@excalidraw/common";
+import { FONT_SIZES } from "@atlasdraw/common";
 
 import type {
   ExcalidrawElement,
@@ -39,9 +39,9 @@ import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawArrowElement,
   FixedSegment,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@atlasdraw/common/utility-types";
 
 import { getMimeType } from "../../data/blob";
 import { createTestHook } from "../../components/App";

@@ -17,16 +17,16 @@
 // in response to updateScene. Without the deferral the indicator would
 // re-flip to "dirty" the moment we hand the scene over.
 
-import { syncInvalidIndices } from "@excalidraw/element";
+import { syncInvalidIndices } from "@atlasdraw/element";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
-import type { BinaryFileData, FileId, DataURL } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type { BinaryFileData, FileId, DataURL } from "@atlasdraw/excalidraw";
+
+import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { usePersistenceStore } from "./usePersistenceStore";
-
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 /**
  * Apply a loaded `AtlasdrawDocument` to the live editor state.

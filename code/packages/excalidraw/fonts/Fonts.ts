@@ -5,10 +5,10 @@ import {
   WINDOWS_EMOJI_FALLBACK_FONT,
   getFontFamilyFallbacks,
   FONT_SIZES,
-} from "@excalidraw/common";
-import { getContainerElement } from "@excalidraw/element";
-import { charWidth } from "@excalidraw/element";
-import { containsCJK } from "@excalidraw/element";
+} from "@atlasdraw/common";
+import { getContainerElement } from "@atlasdraw/element";
+import { charWidth } from "@atlasdraw/element";
+import { containsCJK } from "@atlasdraw/element";
 
 import {
   FONT_METADATA,
@@ -16,20 +16,20 @@ import {
   getFontString,
   PromisePool,
   promiseTry,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import { ShapeCache } from "@excalidraw/element";
+import { ShapeCache } from "@atlasdraw/element";
 
-import { isTextElement } from "@excalidraw/element";
+import { isTextElement } from "@atlasdraw/element";
 
 import type {
   ExcalidrawElement,
   ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { ValueOf } from "@excalidraw/common/utility-types";
+import type { ValueOf } from "@atlasdraw/common/utility-types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import { CascadiaFontFaces } from "./Cascadia";
 import { ComicShannsFontFaces } from "./ComicShanns";

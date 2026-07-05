@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 
 import { classifyTool } from "@atlasdraw/tools";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 // ---------------------------------------------------------------------------
 // Types

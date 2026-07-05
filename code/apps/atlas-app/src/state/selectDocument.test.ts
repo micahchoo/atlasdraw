@@ -4,17 +4,17 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { selectDocument } from "./selectDocument";
+import type { Manifest } from "@atlasdraw/data";
+
+import { selectDocument, documentFromExcalidrawJson } from "./selectDocument";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
-
-import type { Manifest } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -300,5 +300,45 @@ describe("selectDocument", () => {
     });
     const doc = selectDocument(api, makeRegistry(), { now: () => NOW });
     expect(doc.files.size).toBe(0);
+  });
+});
+
+describe("documentFromExcalidrawJson (import-only .excalidraw compatibility)", () => {
+  const validPayload = JSON.stringify({
+    type: "excalidraw",
+    version: 2,
+    elements: [{ id: "el-1", type: "rectangle" }],
+    appState: {},
+    files: {
+      "img-1": {
+        dataURL: "data:image/png;base64,aGVsbG8=",
+        mimeType: "image/png",
+      },
+    },
+  });
+
+  it("wraps elements in a fresh document with zero layers and a new manifest", () => {
+    const doc = documentFromExcalidrawJson(validPayload);
+    expect(doc.scene).toEqual([{ id: "el-1", type: "rectangle" }]);
+    expect(doc.layers.size).toBe(0);
+    expect(doc.manifest.version).toBe(1);
+    expect(doc.manifest.layers).toEqual([]);
+    expect(doc.manifest.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+
+  it("converts embedded binary files (dataURL) to Blobs", () => {
+    const doc = documentFromExcalidrawJson(validPayload);
+    expect(doc.files.size).toBe(1);
+    expect(doc.files.get("img-1")).toBeInstanceOf(Blob);
+  });
+
+  it("throws on non-excalidraw JSON", () => {
+    expect(() => documentFromExcalidrawJson('{"foo": 1}')).toThrow(
+      /not a valid \.excalidraw file/,
+    );
+  });
+
+  it("throws on malformed JSON", () => {
+    expect(() => documentFromExcalidrawJson("not json")).toThrow();
   });
 });

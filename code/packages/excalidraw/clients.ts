@@ -4,7 +4,7 @@ import {
   COLOR_WHITE,
   THEME,
   UserIdleState,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import { roundRect } from "./renderer/roundRect";
 

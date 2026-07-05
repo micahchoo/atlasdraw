@@ -1,8 +1,8 @@
-import { average } from "@excalidraw/math";
+import { average } from "@atlasdraw/math";
 
-import type { GlobalCoord } from "@excalidraw/math";
+import type { GlobalCoord } from "@atlasdraw/math";
 
-import type { FontFamilyValues, FontString } from "@excalidraw/element/types";
+import type { FontFamilyValues, FontString } from "@atlasdraw/element/types";
 
 import type {
   ActiveTool,
@@ -10,7 +10,7 @@ import type {
   ToolType,
   UnsubscribeCallback,
   Zoom,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
 import {
   DEFAULT_VERSION,

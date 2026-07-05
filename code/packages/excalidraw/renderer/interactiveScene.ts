@@ -8,7 +8,7 @@ import {
   bezierEquation,
   pointRotateRads,
   pointDistance,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import {
   arrayToMap,
@@ -18,7 +18,7 @@ import {
   getFeatureFlag,
   invariant,
   THEME,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import {
   deconstructDiamondElement,
@@ -42,29 +42,26 @@ import {
   isTextElement,
   LinearElementEditor,
   getActiveTextElement,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { renderSelectionElement } from "@excalidraw/element";
+import { renderSelectionElement } from "@atlasdraw/element";
 
 import {
   getElementsInGroup,
   getSelectedGroupIds,
   isSelectedViaGroup,
   selectGroupsFromGivenElements,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import { getCommonBounds, getElementAbsoluteCoords } from "@atlasdraw/element";
 import {
   getGlobalFixedPointForBindableElement,
   isFocusPointVisible,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import type { EditorInterface } from "@excalidraw/common";
+import type { EditorInterface } from "@atlasdraw/common";
 
-import type {
-  TransformHandles,
-  TransformHandleType,
-} from "@excalidraw/element";
+import type { TransformHandles, TransformHandleType } from "@atlasdraw/element";
 
 import type {
   ElementsMap,
@@ -78,7 +75,7 @@ import type {
   GroupId,
   NonDeleted,
   NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { renderSnaps } from "../renderer/renderSnaps";
 import { roundRect } from "../renderer/roundRect";

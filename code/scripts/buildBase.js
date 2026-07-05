@@ -11,9 +11,9 @@ const getConfig = (outdir) => ({
   entryNames: "[name]",
   assetNames: "[dir]/[name]",
   alias: {
-    "@excalidraw/utils": path.resolve(__dirname, "../packages/utils/src"),
+    "@atlasdraw/utils": path.resolve(__dirname, "../packages/utils/src"),
   },
-  external: ["@excalidraw/common", "@excalidraw/element", "@excalidraw/math"],
+  external: ["@atlasdraw/common", "@atlasdraw/element", "@atlasdraw/math"],
 });
 
 function buildDev(config) {

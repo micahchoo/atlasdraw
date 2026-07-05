@@ -44,9 +44,10 @@
 import { useEffect } from "react";
 import { unprojectPoint, projectPoint, isGeoCustomData } from "@atlasdraw/geo";
 
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { GeoCustomData, GeoAnchor } from "@atlasdraw/geo";
+
 import type maplibregl from "maplibre-gl";
 
 /** Bbox-shaped tools — anchored as `kind:"bbox"` with `scaleMode:"geographic"`. */

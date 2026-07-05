@@ -1,15 +1,12 @@
-import {
-  convertToExcalidrawElements,
-  Excalidraw,
-} from "@excalidraw/excalidraw";
-import { arrayToMap } from "@excalidraw/common";
+import { convertToExcalidrawElements, Excalidraw } from "@atlasdraw/excalidraw";
+import { arrayToMap } from "@atlasdraw/common";
 
-import { API } from "@excalidraw/excalidraw/tests/helpers/api";
-import { Keyboard, Pointer } from "@excalidraw/excalidraw/tests/helpers/ui";
+import { API } from "@atlasdraw/excalidraw/tests/helpers/api";
+import { Keyboard, Pointer } from "@atlasdraw/excalidraw/tests/helpers/ui";
 import {
   getCloneByOrigId,
   render,
-} from "@excalidraw/excalidraw/tests/test-utils";
+} from "@atlasdraw/excalidraw/tests/test-utils";
 
 import { elementOverlapsWithFrame } from "../src/frame";
 

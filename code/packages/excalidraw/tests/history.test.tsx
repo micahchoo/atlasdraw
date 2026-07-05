@@ -6,9 +6,9 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { vi } from "vitest";
-import { pointFrom } from "@excalidraw/math";
+import { pointFrom } from "@atlasdraw/math";
 
-import { newElementWith } from "@excalidraw/element";
+import { newElementWith } from "@atlasdraw/element";
 
 import {
   EXPORT_DATA_TYPES,
@@ -21,15 +21,15 @@ import {
   DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
   reseed,
   randomId,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
-import "@excalidraw/utils/test-utils";
+import "@atlasdraw/utils/test-utils";
 
-import { ElementsDelta, AppStateDelta } from "@excalidraw/element";
+import { ElementsDelta, AppStateDelta } from "@atlasdraw/element";
 
-import { CaptureUpdateAction, StoreDelta } from "@excalidraw/element";
+import { CaptureUpdateAction, StoreDelta } from "@atlasdraw/element";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LocalPoint, Radians } from "@atlasdraw/math";
 
 import type {
   ExcalidrawElbowArrowElement,
@@ -41,7 +41,7 @@ import type {
   FixedPointBinding,
   FractionalIndex,
   SceneElementsMap,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import "../global.d.ts";
 

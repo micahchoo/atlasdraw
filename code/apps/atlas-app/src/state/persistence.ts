@@ -14,6 +14,8 @@
 import { openDB, type IDBPDatabase } from "idb";
 import { read, write, type AtlasdrawDocument } from "@atlasdraw/data";
 
+import { documentFromExcalidrawJson } from "./selectDocument";
+
 // ---------------------------------------------------------------------------
 // IndexedDB schema
 // ---------------------------------------------------------------------------
@@ -323,7 +325,7 @@ export function createPersistenceStore(
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".atlasdraw";
+      input.accept = ".atlasdraw,.excalidraw";
       input.style.display = "none";
       let settled = false;
       const settle = (val: Blob | null): void => {
@@ -382,6 +384,7 @@ export function createPersistenceStore(
   const openFromDisk = async (): Promise<AtlasdrawDocument | null> => {
     const w = fsaWindow();
     let blob: Blob | null = null;
+    let fileName = "";
     if (hasFSA() && w && w.showOpenFilePicker) {
       try {
         const [handle] = await w.showOpenFilePicker({
@@ -391,11 +394,21 @@ export function createPersistenceStore(
               description: "Atlasdraw document",
               accept: { "application/vnd.atlasdraw+zip": [".atlasdraw"] },
             },
+            {
+              description: "Excalidraw drawing (import)",
+              accept: { "application/json": [".excalidraw"] },
+            },
           ],
         });
-        await setStoredFileHandle(handle);
         const file = await handle.getFile();
         blob = file;
+        fileName = file.name;
+        // Import-only for .excalidraw: do NOT retain the handle — a later
+        // save must never clobber the source drawing with .atlasdraw zip
+        // bytes. Save prompts for a fresh .atlasdraw destination instead.
+        if (!fileName.toLowerCase().endsWith(".excalidraw")) {
+          await setStoredFileHandle(handle);
+        }
       } catch (err) {
         // AbortError (user cancel) → null. Anything else is a real failure.
         if (
@@ -412,9 +425,13 @@ export function createPersistenceStore(
         "[persistence] File System Access API unavailable; using download/input path",
       );
       blob = await fallbackOpen();
+      fileName = blob instanceof File ? blob.name : "";
     }
     if (!blob) {
       return null;
+    }
+    if (fileName.toLowerCase().endsWith(".excalidraw")) {
+      return documentFromExcalidrawJson(await blob.text());
     }
     return read(blob);
   };

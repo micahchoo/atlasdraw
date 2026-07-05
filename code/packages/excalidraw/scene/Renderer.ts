@@ -1,14 +1,14 @@
-import { isElementInViewport } from "@excalidraw/element";
+import { isElementInViewport } from "@atlasdraw/element";
 
-import { memoize, toBrandedType } from "@excalidraw/common";
+import { memoize, toBrandedType } from "@atlasdraw/common";
 
 import type {
   ExcalidrawElement,
   NonDeletedElementsMap,
   NonDeletedExcalidrawElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { Scene } from "@excalidraw/element";
+import type { Scene } from "@atlasdraw/element";
 
 import { renderStaticSceneThrottled } from "../renderer/staticScene";
 

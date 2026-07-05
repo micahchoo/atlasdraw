@@ -97,7 +97,7 @@ const mockFakeExcalidrawAPI = {
 // (Vitest spec exception: prefixing with `mock` lets module-top consts
 // survive hoisting).
 
-vi.mock("@excalidraw/excalidraw", () => {
+vi.mock("@atlasdraw/excalidraw", () => {
   // Local React import — the hoisted factory runs before the file's top
   // import binding is initialized.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -189,6 +189,7 @@ const mockMap = {
   project: vi.fn(() => ({ x: 0, y: 0 })),
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
+  getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
     getSouth: () => 0,

@@ -1,8 +1,8 @@
-import { isEmbeddableElement } from "@excalidraw/element";
+import { isEmbeddableElement } from "@atlasdraw/element";
 
-import { KEYS } from "@excalidraw/common";
+import { KEYS } from "@atlasdraw/common";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import { ToolButton } from "../components/ToolButton";
 import { getContextMenuLabel } from "../components/hyperlink/Hyperlink";

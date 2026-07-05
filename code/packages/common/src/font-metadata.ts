@@ -1,7 +1,7 @@
 import type {
   ExcalidrawTextElement,
   FontFamilyValues,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
 import { FONT_FAMILY, FONT_FAMILY_FALLBACKS } from "./constants";
 

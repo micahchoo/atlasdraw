@@ -13,7 +13,7 @@
  */
 import { pointsOnBezierCurves } from "points-on-curve";
 
-import { invariant } from "@excalidraw/common";
+import { invariant } from "@atlasdraw/common";
 import {
   curve,
   lineSegment,
@@ -32,9 +32,9 @@ import {
   vectorScale,
   type GlobalPoint,
   type LocalPoint,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
-import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { getElementAbsoluteCoords } from "@atlasdraw/element";
 
 import type {
   ElementsMap,
@@ -51,8 +51,8 @@ import type {
   ExcalidrawRectangleElement,
   ExcalidrawSelectionElement,
   ExcalidrawTextElement,
-} from "@excalidraw/element/types";
-import type { Curve, LineSegment, Polygon, Radians } from "@excalidraw/math";
+} from "@atlasdraw/element/types";
+import type { Curve, LineSegment, Polygon, Radians } from "@atlasdraw/math";
 
 import type { Drawable, Op } from "roughjs/bin/core";
 

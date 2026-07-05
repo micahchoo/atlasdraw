@@ -18,10 +18,10 @@
   "dependencies": {
     "@atlasdraw/basemap": "0.0.0",
     "@atlasdraw/data": "0.0.0",
+    "@atlasdraw/excalidraw": "0.18.0",
     "@atlasdraw/geo": "0.1.0",
     "@atlasdraw/protocol": "0.0.0",
     "@atlasdraw/tools": "0.1.0",
-    "@excalidraw/excalidraw": "0.18.0",
     "@react-aria/focus": "^3.20.0",
     "idb": "^8.0.0",
     "immer": "11.1.6",

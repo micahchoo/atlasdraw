@@ -5,20 +5,20 @@ import {
   VERTICAL_ALIGN,
   arrayToMap,
   getFontString,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 import {
   getOriginalContainerHeightFromCache,
   isBoundToContainer,
   resetOriginalContainerCache,
   updateOriginalContainerCache,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import {
   computeBoundTextPosition,
   computeContainerDimensionForBoundText,
   getBoundTextElement,
   redrawTextBoundingBox,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
 import {
   hasBoundTextElement,
@@ -26,26 +26,26 @@ import {
   isTextBindableContainer,
   isTextElement,
   isUsingAdaptiveRadius,
-} from "@excalidraw/element";
+} from "@atlasdraw/element";
 
-import { measureText } from "@excalidraw/element";
+import { measureText } from "@atlasdraw/element";
 
-import { syncMovedIndices } from "@excalidraw/element";
+import { syncMovedIndices } from "@atlasdraw/element";
 
-import { newElement } from "@excalidraw/element";
+import { newElement } from "@atlasdraw/element";
 
-import { CaptureUpdateAction } from "@excalidraw/element";
+import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   ExcalidrawTextContainer,
   ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+} from "@atlasdraw/element/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
+import type { Mutable } from "@atlasdraw/common/utility-types";
 
-import type { Radians } from "@excalidraw/math";
+import type { Radians } from "@atlasdraw/math";
 
 import { register } from "./register";
 

@@ -26,7 +26,7 @@ export interface ExcalidrawElementLike {
 
 /**
  * Minimal Excalidraw API surface. Mirrors `getSceneElements` and `updateScene`
- * from `@excalidraw/excalidraw`'s `ExcalidrawImperativeAPI` without coupling.
+ * from `@atlasdraw/excalidraw`'s `ExcalidrawImperativeAPI` without coupling.
  */
 export interface ExcalidrawAPI {
   getSceneElements(): ReadonlyArray<ExcalidrawElementLike>;

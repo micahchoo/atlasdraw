@@ -7,7 +7,7 @@ import {
   pointFrom,
   pointRotateRads,
   type Radians,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import {
   BOUND_TEXT_PADDING,
@@ -24,7 +24,7 @@ import {
   invariant,
   applyDarkModeFilter,
   isSafari,
-} from "@excalidraw/common";
+} from "@atlasdraw/common";
 
 import type {
   AppState,
@@ -34,13 +34,13 @@ import type {
   ElementsPendingErasure,
   PendingExcalidrawElements,
   NormalizedZoomValue,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
 import type {
   StaticCanvasRenderConfig,
   RenderableElementsMap,
   InteractiveCanvasRenderConfig,
-} from "@excalidraw/excalidraw/scene/types";
+} from "@atlasdraw/excalidraw/scene/types";
 
 import { getElementAbsoluteCoords, getElementBounds } from "./bounds";
 import { getUncroppedImageElement } from "./cropElement";

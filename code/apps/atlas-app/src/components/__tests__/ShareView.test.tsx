@@ -17,7 +17,7 @@ import {
 } from "../../services/createHttpStorageClient";
 
 // Excalidraw renders a heavy canvas in jsdom; mock it down to a sentinel.
-vi.mock("@excalidraw/excalidraw", () => ({
+vi.mock("@atlasdraw/excalidraw", () => ({
   Excalidraw: () => null,
   MainMenu: () => null,
 }));

@@ -5,7 +5,7 @@
 // Two anchor kinds:
 //   - "map":     MapLibre map.project([lng, lat]) → screen-space pixel point.
 //   - "element": Excalidraw scene-coords → viewport-coords via
-//                @excalidraw/common's sceneCoordsToViewportCoords helper
+//                @atlasdraw/common's sceneCoordsToViewportCoords helper
 //                (verified at code/packages/common/src/utils.ts:439).
 //
 // Re-projection is computed every map move / app-state update. CommentAnchor

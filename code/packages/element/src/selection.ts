@@ -1,16 +1,16 @@
-import { arrayToMap, isShallowEqual, type Bounds } from "@excalidraw/common";
+import { arrayToMap, isShallowEqual, type Bounds } from "@atlasdraw/common";
 import {
   lineSegment,
   pointFrom,
   pointRotateRads,
   type GlobalPoint,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
 import type {
   AppState,
   BoxSelectionMode,
   InteractiveCanvasAppState,
-} from "@excalidraw/excalidraw/types";
+} from "@atlasdraw/excalidraw/types";
 
 import {
   boundsContainBounds,

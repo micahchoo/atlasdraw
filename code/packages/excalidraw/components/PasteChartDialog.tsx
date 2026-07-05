@@ -1,8 +1,8 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-import { newTextElement } from "@excalidraw/element";
+import { newTextElement } from "@atlasdraw/element";
 
-import type { ChartType } from "@excalidraw/element/types";
+import type { ChartType } from "@atlasdraw/element/types";
 
 import { trackEvent } from "../analytics";
 import { isSpreadsheetValidForChartType, renderSpreadsheet } from "../charts";

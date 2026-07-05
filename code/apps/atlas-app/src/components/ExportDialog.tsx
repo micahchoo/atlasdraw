@@ -207,7 +207,8 @@ export function ExportDialog({
                 <div className={styles.settingRow}>
                   <span className={styles.settingLabel}>Bundle</span>
                   <span className={styles.settingHint}>
-                    scene.json + data/*.geojson + style.json + manifest.json
+                    Complete map document — drawing, data layers, and basemap
+                    style in one portable file
                   </span>
                 </div>
               </>

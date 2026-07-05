@@ -9,7 +9,7 @@
 //
 // See docs/architecture/adr/0010-yjs-e2ee-threat-model.md
 
-import type { ExcalidrawElement } from "@excalidraw/excalidraw";
+import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
 
 // ---------------------------------------------------------------------------
 // Base64url helpers (mirrors code/packages/data/src/yjs-crypto.ts)

@@ -20,11 +20,11 @@ import {
   pointFrom,
   type Radians,
   type ElementsSegmentsMap,
-} from "@excalidraw/math";
+} from "@atlasdraw/math";
 
-import { getElementLineSegments } from "@excalidraw/element";
+import { getElementLineSegments } from "@atlasdraw/element";
 
-import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
 import { Excalidraw } from "../index";
 
