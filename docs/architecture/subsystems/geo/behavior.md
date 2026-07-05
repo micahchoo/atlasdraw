@@ -101,33 +101,6 @@ Excalidraw canvas re-renders (all elements repositioned)
 
 ---
 
-## `geoToExcalidraw` Flow
-
-Called at import time (file open, drag-drop, paste):
-
-```
-GeoJSON.Feature (any geometry type)
-  │
-  ▼
-geoToExcalidraw(feature, opts?)
-  │
-  ├── geometry.type === "Point"
-  │     └── GeoAnchor { kind:"point", lng, lat, zRef:currentZoom, projection:"mercator" }
-  │
-  ├── geometry.type === "LineString"|"MultiLineString"
-  │     └── GeoAnchor { kind:"polyline", coordinates:[...], zRef, projection:"mercator" }
-  │
-  ├── geometry.type === "Polygon"|"MultiPolygon"
-  │     └── GeoAnchor { kind:"polyline", coordinates:outerRing, zRef, projection:"mercator" }
-  │         (inner rings stored in feature.properties for future rendering)
-  │
-  └── Returns ExcalidrawElementSkeleton with:
-        customData: { geo: GeoAnchor, scaleMode: opts.scaleMode ?? "geographic" }
-        x/y/width/height: 0 initially — CoordinateSync fills real values on first sync
-```
-
----
-
 ## Endorheic Basins (State Accumulation)
 
 `packages/geo` is designed to be stateless at the module level. The only stateful entity is a `CoordinateSync` instance, which holds:
