@@ -1,6 +1,19 @@
 # Atlasdraw — Phase Overview
 
-**Last updated:** 2026-05-03  
+> [!IMPORTANT]
+> **Historical planning snapshot (2026-05-03) — superseded by events.**
+> v1.0 shipped 2026-05-15 (see `CHANGELOG.md`), covering Phases 0–6 with one
+> major scope change: **Q-P6-1** cut the Embed SDK / `AtlasdrawAPI`, the Felt
+> importer, and the `packages/sdk` surface freeze from v1.0, so the Phase 6
+> summary below describes a plan that was deliberately narrowed before
+> shipping. Escalations E-01/E-02 (resolved 2026-05-11, Option C) and E-03
+> (resolved 2026-05-25, Option A) are closed in
+> `docs/decisions/escalations.md` — the "Open Escalations" table below is
+> corrected but the phase narratives are kept as written for provenance.
+> Phase 7 (v1.5) has not started; its plugin-sandbox design is flagged for
+> revision (seeds issue `atlasdraw-c547`).
+
+**Last updated:** 2026-05-03 (plan content) · 2026-07-04 (status banner + escalations table)  
 **Source:** `docs/decisions/open-questions-resolution.md`, `docs/decisions/escalations.md`, phase plans `docs/superpowers/plans/`  
 **Audit:** `docs/decisions/cross-phase-audit.md`
 
@@ -124,13 +137,13 @@ Six quasi-independent features shipped as a milestone bundle, each with its own 
 
 ---
 
-## Open Escalations
+## Escalations (all resolved — see `docs/decisions/escalations.md`)
 
-| ID | Status | Blocks | Resolution path |
-|----|--------|--------|----------------|
-| **E-01** | Open — awaiting maintainer decision | Phase 5 Task 8 wiring (stub may proceed); Phase 6 `setPersistence` wiring; Phase 7 DiffEngine if Option B | Maintainer selects Option A/B/C; write ADR 0007; Phase 6 evaluates Option B if C selected |
-| **E-02** | Informational — blocked on E-01 | Phase 7 Task 10 (DiffEngine) if E-01 = Option B | Gate: confirm E-01 resolution before Task 10 |
-| **E-03** | Open — awaiting maintainer confirmation | Phase 3 GeoAnchor serialization tasks; Phase 5 GeoAnchor consumption | Maintainer confirms discriminated union (Phase 1/spec §3.1) is authoritative; executing-plans agents for P3/P5 correct their pre-work checklist |
+| ID | Status | Resolution |
+|----|--------|-----------|
+| **E-01** | **Resolved 2026-05-11 — Option C** | Yjs-layer E2EE deferred; server-trusted relay; threat-model ADR shipped at `docs/architecture/adr/0010-yjs-e2ee-threat-model.md`; `yjs-crypto.ts` remains an unwired stub |
+| **E-02** | **Resolved 2026-05-11** (in tandem with E-01) | Unblocked on the plaintext-Y.Doc assumption; re-open only if E-01 is ever revisited as Option B |
+| **E-03** | **Resolved 2026-05-25 — Option A** | GeoAnchor discriminated union (Phase 1 / spec §3.1) confirmed authoritative |
 
 ---
 
