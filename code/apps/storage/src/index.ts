@@ -5,13 +5,14 @@
 // StorageClient contract from ./types so routes are adapter-agnostic.
 
 import * as Sentry from "@sentry/node";
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 
 import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
 import { logger } from "./logger";
 import { registerQuotaMiddleware } from "./middleware/quota";
+import { registerRateLimitMiddleware } from "./middleware/rate-limit";
 import { registerWorkspaceMiddleware } from "./middleware/workspace";
 import { registerBillingRoutes } from "./routes/billing";
 import { registerHealthRoute } from "./routes/health";
@@ -64,10 +65,20 @@ async function main(): Promise<void> {
   // Fastify v5: pass a pre-built pino instance via loggerInstance, not
   // logger. The `logger` key only accepts boolean | pino-options-object
   // and rejects an instantiated logger with FST_ERR_LOG_INVALID_LOGGER_CONFIG.
+  // Assert to the plain FastifyInstance. The concrete instance Fastify()
+  // infers from `loggerInstance` carries a specific pino Logger generic that
+  // is structurally incompatible with the FastifyInstance param every
+  // registerX(app, …) helper takes — a known Fastify-v5 typing friction. The
+  // instance is compatible at runtime; the assertion collapses the spurious
+  // variance error that otherwise fires at each registration call site.
   const app = Fastify({
     loggerInstance: logger,
     bodyLimit: 50 * 1024 * 1024, // 50 MiB
-  });
+    // The API sits behind Caddy — trust the proxy so `request.ip` (used by the
+    // rate limiter) is the real client address from X-Forwarded-For, not
+    // Caddy's.
+    trustProxy: true,
+  }) as unknown as FastifyInstance;
 
   app.addContentTypeParser(
     "application/octet-stream",
@@ -86,6 +97,12 @@ async function main(): Promise<void> {
         });
 
   registerHealthRoute(app, config.STORAGE_MODE);
+  // Per-IP rate limit for the internet-facing HTTP API (SECURITY.md row 7).
+  // onRequest hook — runs before body parsing; /health is exempt internally.
+  registerRateLimitMiddleware(app, {
+    max: config.RATE_LIMIT_MAX,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+  });
   // Phase 6 A9: workspace middleware runs as a global preHandler. It
   // bypasses /health internally and either requires (managed) or attaches
   // (self-host) `X-Workspace-ID` for every other route.

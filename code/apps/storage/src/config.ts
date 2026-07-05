@@ -56,6 +56,12 @@ const BaseSchema = z.object({
   STRIPE_PRICE_PRO_25: z.string().optional(),
   // Site URL used for Stripe checkout success/cancel redirects.
   SITE_URL: z.string().default("http://localhost:3000"),
+  // Per-IP fixed-window rate limit for the HTTP API. RATE_LIMIT_MAX requests
+  // per RATE_LIMIT_WINDOW_MS window; /health is always exempt. Set
+  // RATE_LIMIT_MAX=0 to disable (e.g. when an upstream proxy already throttles).
+  // Defaults are generous — they exist to blunt abuse, not to shape normal use.
+  RATE_LIMIT_MAX: z.coerce.number().int().nonnegative().default(120),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({
