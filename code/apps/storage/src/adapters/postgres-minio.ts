@@ -7,6 +7,7 @@
 import {
   CreateBucketCommand,
   GetObjectCommand,
+  ListBucketsCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -14,6 +15,7 @@ import { nanoid } from "nanoid";
 import { Pool } from "pg";
 
 import { ID_RE, SHARE_TTL_MS } from "../constants";
+import { logger } from "../logger";
 
 import type {
   MapRecord,
@@ -100,6 +102,21 @@ export function createPostgresMinioAdapter(opts: {
   blobSecretKey: string;
 }): StorageClient {
   const pool = new Pool({ connectionString: opts.databaseUrl });
+  // node-postgres requirement, not optional: an idle client that the server
+  // drops (restart, `terminating connection due to administrator command`,
+  // network blip) emits an 'error' event on the Pool. Node's default
+  // behavior for an unhandled 'error' event is to throw and crash the
+  // process — discovered via ISSUES.md Issue 8's forced dependency-down
+  // check (stopping the postgres container mid-session crashed the whole
+  // storage process, not just failed one request). The pool itself already
+  // removes the broken client and reconnects on next use; this handler only
+  // stops that removal from taking the process down with it.
+  pool.on("error", (err) => {
+    logger.warn(
+      { err },
+      "postgres pool idle-client error (client removed, pool continues)",
+    );
+  });
   const s3 = new S3Client({
     endpoint: opts.blobEndpoint,
     region: "us-east-1",
@@ -408,6 +425,15 @@ export function createPostgresMinioAdapter(opts: {
         [customerId],
       );
       return res.rows[0] ? rowToWorkspace(res.rows[0]) : null;
+    },
+
+    async ping(): Promise<void> {
+      // Ping via ListBuckets, not HeadBucket on our own bucket — the bucket
+      // may not exist yet (lazily created on first write) even though MinIO
+      // itself is perfectly healthy. ListBuckets checks connectivity +
+      // credentials without depending on our bucket's existence.
+      await pool.query("SELECT 1");
+      await s3.send(new ListBucketsCommand({}));
     },
 
     async close(): Promise<void> {

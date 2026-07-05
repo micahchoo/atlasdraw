@@ -98,6 +98,15 @@ export interface StorageClient {
    */
   getBlob(id: string): Promise<Buffer | null>;
 
+  /**
+   * Verify the adapter's dependencies are actually reachable right now —
+   * DB connection for both adapters, plus the blob store for postgres-minio.
+   * Resolves on success, rejects on failure. Consumed by the `/health` route
+   * (ISSUES.md Issue 8) so readiness reflects real dependency state instead
+   * of an unconditional 200.
+   */
+  ping(): Promise<void>;
+
   // ─── Phase 6 A13b/A13c: workspaces table ────────────────────────────
   //
   // Managed-mode features (quotas + Stripe billing) but live on the

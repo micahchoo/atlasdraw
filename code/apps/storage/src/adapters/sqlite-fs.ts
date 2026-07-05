@@ -335,6 +335,13 @@ export function createSqliteFsAdapter(opts: {
       return row ? rowToWorkspace(row) : null;
     },
 
+    async ping(): Promise<void> {
+      // Also confirms the blobs dir is still there — same filesystem the
+      // sqlite file lives on, so a disk-level failure would hit both.
+      db.prepare("SELECT 1").get();
+      fs.accessSync(blobsDir, fs.constants.R_OK | fs.constants.W_OK);
+    },
+
     async close(): Promise<void> {
       db.close();
     },

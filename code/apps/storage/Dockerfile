@@ -6,6 +6,7 @@ WORKDIR /repo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
+RUN corepack enable
 COPY code/package.json code/yarn.lock ./code/
 COPY code/apps/storage/package.json ./code/apps/storage/
 COPY code/packages ./code/packages

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — optional Redis adapter for multi-instance scaling.
 //
@@ -12,23 +11,30 @@
 import { createAdapter } from "@socket.io/redis-adapter";
 import { Redis } from "ioredis";
 
+import { logger } from "./logger";
+
 import type { Server as SocketIOServer } from "socket.io";
 
 /**
  * Optionally attach the Redis pub/sub adapter to the Socket.IO server.
  *
- * - If `REDIS_URL` env var is unset/falsy: log "[realtime] Redis adapter disabled"
- *   and return immediately.
+ * - If `REDIS_URL` env var is unset/falsy: log "Redis adapter disabled" and
+ *   return `null` — there is nothing for the caller to close on shutdown.
  * - If `REDIS_URL` is set: create two ioredis clients (pub + sub), call
- *   `io.adapter(createAdapter(...))` with channel key `atlasdraw:sio`, and log
- *   success. Redis connection errors are logged as WARN — they do not crash the
+ *   `io.adapter(createAdapter(...))` with channel key `atlasdraw:sio`, log
+ *   success, and return the two clients so the caller can `.quit()` them on
+ *   graceful shutdown (ISSUES.md Issue 8) — without this, `docker compose
+ *   stop` left these connections open until the OS reaped the process.
+ *   Redis connection errors are logged as WARN — they do not crash the
  *   process.
  */
-export function attachRedisAdapterIfConfigured(io: SocketIOServer): void {
+export function attachRedisAdapterIfConfigured(
+  io: SocketIOServer,
+): { pubClient: Redis; subClient: Redis } | null {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
-    console.log("[realtime] Redis adapter disabled");
-    return;
+    logger.info("Redis adapter disabled");
+    return null;
   }
 
   const pubClient = new Redis(redisUrl);
@@ -36,15 +42,15 @@ export function attachRedisAdapterIfConfigured(io: SocketIOServer): void {
 
   // Log Redis connection errors without crashing.
   pubClient.on("error", (err: Error) => {
-    console.warn("[realtime] Redis pub client error:", err.message);
+    logger.warn({ err }, "Redis pub client error");
   });
   subClient.on("error", (err: Error) => {
-    console.warn("[realtime] Redis sub client error:", err.message);
+    logger.warn({ err }, "Redis sub client error");
   });
 
   io.adapter(createAdapter(pubClient, subClient, { key: "atlasdraw:sio" }));
 
-  console.log(
-    "[realtime] Redis adapter attached — channel prefix atlasdraw:sio",
-  );
+  logger.info("Redis adapter attached — channel prefix atlasdraw:sio");
+
+  return { pubClient, subClient };
 }

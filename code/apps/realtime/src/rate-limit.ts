@@ -15,6 +15,8 @@
 // byte length only (Buffer.byteLength of the serialized JSON), never the
 // content.
 
+import { logger } from "./logger";
+
 import type { Socket } from "socket.io";
 
 // ---------------------------------------------------------------------------
@@ -126,9 +128,14 @@ export function checkRateLimit(
   // --- Payload size check ---
   const payloadSize = Buffer.byteLength(JSON.stringify(payload));
   if (payloadSize > config.maxPayloadBytes) {
-    console.warn(
-      `[realtime] WARN socket=${socket.id} event=${eventType} oversized ` +
-        `(${payloadSize} B, max ${config.maxPayloadBytes} B)`,
+    logger.warn(
+      {
+        socketId: socket.id,
+        event: eventType,
+        payloadSize,
+        maxPayloadBytes: config.maxPayloadBytes,
+      },
+      "oversized payload",
     );
     return {
       pass: false,
@@ -150,9 +157,15 @@ export function checkRateLimit(
 
   entry.count += 1;
   if (entry.count > config.maxPerWindow) {
-    console.warn(
-      `[realtime] WARN socket=${socket.id} event=${eventType} rate-limited ` +
-        `(${entry.count - 1}/${config.maxPerWindow} per ${config.windowMs} ms)`,
+    logger.warn(
+      {
+        socketId: socket.id,
+        event: eventType,
+        count: entry.count - 1,
+        maxPerWindow: config.maxPerWindow,
+        windowMs: config.windowMs,
+      },
+      "rate-limited",
     );
     return { pass: false, reason: "rate_limited" };
   }

@@ -10,17 +10,48 @@ import {
   createPostgresMinioAdapter,
 } from "./postgres-minio";
 
-const queryMock = vi.fn();
 const s3SendMock = vi.fn();
 
-vi.mock("pg", () => {
-  class Pool {
-    query = queryMock;
-    // eslint-disable-next-line @typescript-eslint/no-useless-constructor
-    constructor(_opts?: unknown) {}
+// vi.mock factories are hoisted above every import/const in this file, so
+// anything they reference must go through vi.hoisted() — a plain top-level
+// const (other than the literal vi.fn() pattern Vitest special-cases) throws
+// a TDZ ReferenceError. MiniEmitter mirrors real pg.Pool being an
+// EventEmitter (on/emit), without importing node:events (same hoisting
+// problem). constructedPools tracks instances so the idle-client 'error'
+// test below can emit on the one the adapter actually wired a handler onto,
+// without changing the adapter's public API.
+const { queryMock, constructedPools, MockPool } = vi.hoisted(() => {
+  class MiniEmitter {
+    private listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    on(event: string, fn: (...args: unknown[]) => void): void {
+      const list = this.listeners.get(event) ?? [];
+      list.push(fn);
+      this.listeners.set(event, list);
+    }
+    emit(event: string, ...args: unknown[]): void {
+      const list = this.listeners.get(event) ?? [];
+      if (event === "error" && list.length === 0) {
+        // Mirrors real EventEmitter/pg.Pool: an unhandled 'error' event throws.
+        throw args[0];
+      }
+      for (const fn of list) {
+        fn(...args);
+      }
+    }
   }
-  return { Pool };
+  const queryMock = vi.fn();
+  const constructedPools: MiniEmitter[] = [];
+  class MockPool extends MiniEmitter {
+    query = queryMock;
+    constructor(_opts?: unknown) {
+      super();
+      constructedPools.push(this);
+    }
+  }
+  return { queryMock, constructedPools, MockPool };
 });
+
+vi.mock("pg", () => ({ Pool: MockPool }));
 
 vi.mock("@aws-sdk/client-s3", () => {
   class S3Client {
@@ -46,11 +77,18 @@ vi.mock("@aws-sdk/client-s3", () => {
       this.input = input;
     }
   }
+  class ListBucketsCommand {
+    public input: unknown;
+    constructor(input: unknown) {
+      this.input = input;
+    }
+  }
   return {
     S3Client,
     PutObjectCommand,
     GetObjectCommand,
     CreateBucketCommand,
+    ListBucketsCommand,
   };
 });
 
@@ -248,5 +286,55 @@ describe("postgres-minio adapter", () => {
 
     const result = await client.getBlob(id);
     expect(result).toBeNull();
+  });
+
+  // ISSUES.md Issue 8 — /health now pings both dependencies for real.
+  describe("ping", () => {
+    it("resolves when both postgres and S3 are reachable", async () => {
+      const client = makeAdapter();
+      await expect(client.ping()).resolves.toBeUndefined();
+      expect(queryMock).toHaveBeenCalledWith("SELECT 1");
+    });
+
+    it("checks S3 via ListBuckets, not HeadBucket on our own (possibly-unmade) bucket", async () => {
+      const client = makeAdapter();
+      await client.ping();
+      const listBucketsCall = s3SendMock.mock.calls
+        .map(([c]) => c)
+        .find((c) => c?.constructor?.name === "ListBucketsCommand");
+      expect(listBucketsCall).toBeDefined();
+    });
+
+    it("rejects when postgres is down", async () => {
+      const client = makeAdapter();
+      queryMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+      await expect(client.ping()).rejects.toThrow("ECONNREFUSED");
+    });
+
+    it("rejects when MinIO/S3 is down", async () => {
+      const client = makeAdapter();
+      s3SendMock.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+      await expect(client.ping()).rejects.toThrow("ECONNREFUSED");
+    });
+  });
+
+  // ISSUES.md Issue 8 (forced check): stopping the postgres container mid-
+  // session crashed the ENTIRE storage process, not just the in-flight
+  // request — an idle Pool client whose connection the server terminated
+  // emits an 'error' event, and node's default EventEmitter behavior for an
+  // unhandled 'error' event is to throw. Found by actually stopping a real
+  // postgres container against a running server, not by reasoning about it.
+  it("does not crash when the pool emits an idle-client error (postgres restart/termination)", () => {
+    makeAdapter();
+    const pool = constructedPools[constructedPools.length - 1]!;
+    expect(() => {
+      pool.emit(
+        "error",
+        Object.assign(
+          new Error("terminating connection due to administrator command"),
+          { code: "57P01" },
+        ),
+      );
+    }).not.toThrow();
   });
 });

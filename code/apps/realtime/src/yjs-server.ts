@@ -34,6 +34,8 @@
 import { WebSocketServer } from "ws";
 import { setupWSConnection, docs } from "y-websocket/bin/utils";
 
+import { logger } from "./logger";
+
 import type http from "http";
 
 // ---------------------------------------------------------------------------
@@ -72,9 +74,9 @@ function scheduleEviction(docName: string): void {
     if (ydoc !== undefined) {
       ydoc.destroy();
       docs.delete(docName);
-      console.warn(
-        `[realtime] room ${docName} evicted` +
-          ` after TTL=${ROOM_TTL_MS}ms (no persistence wired)`,
+      logger.warn(
+        { docName, ttlMs: ROOM_TTL_MS },
+        "room evicted (no persistence wired)",
       );
     }
   }, ROOM_TTL_MS);
@@ -101,8 +103,13 @@ function scheduleEviction(docName: string): void {
  * The y-websocket connection runs on the **same** `http.Server` as
  * Socket.IO but on a **separate** TCP stream. This is the Q-9 split —
  * eliminates head-of-line blocking between Yjs catch-up and cursor events.
+ *
+ * Returns a `close()` function (ISSUES.md Issue 8) that sends a normal
+ * WebSocket close frame to every connected client before terminating the
+ * `WebSocketServer` — used on SIGTERM/SIGINT so `docker compose stop`
+ * drains in-flight y-websocket sessions instead of hard-killing them.
  */
-export function registerYjsHandler(server: http.Server): void {
+export function registerYjsHandler(server: http.Server): { close(): void } {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
@@ -133,6 +140,15 @@ export function registerYjsHandler(server: http.Server): void {
       socket.destroy();
     }
   });
+
+  return {
+    close(): void {
+      for (const client of wss.clients) {
+        client.close(1001, "server shutting down");
+      }
+      wss.close();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

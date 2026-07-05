@@ -8,6 +8,7 @@ ARG VITE_REALTIME_WS_URL=
 # --- build stage ---
 FROM node:20-bookworm-slim AS build
 WORKDIR /repo
+RUN corepack enable
 COPY code/package.json code/yarn.lock ./code/
 COPY code/apps/atlas-app/package.json ./code/apps/atlas-app/
 COPY code/packages ./code/packages

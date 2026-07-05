@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/realtime — relay server entry point.
 //
@@ -14,6 +13,7 @@ import http from "http";
 
 import { Server as SocketIOServer } from "socket.io";
 
+import { logger } from "./logger";
 import { registerHealth } from "./health";
 import { registerSocketIOHandlers } from "./socket-io-server";
 import { registerYjsHandler } from "./yjs-server";
@@ -54,28 +54,61 @@ const io = new SocketIOServer(server, {
 // Health endpoint — registered before event handlers; passes `io` so the
 // response includes the real connection count.
 registerHealth(server, io);
-console.log("[realtime] health endpoint mounted on GET /health");
+logger.info("health endpoint mounted on GET /health");
 
 // Socket.IO event handlers — SCENE_UPDATE, MAP_CAMERA_UPDATE, CURSOR, COMMENT
 // with per-socket rate limiting (rate-limit.ts). Per ADR-0010, the relay never
 // inspects encrypted payload content.
 registerSocketIOHandlers(io);
-console.log("[realtime] Socket.IO event handlers registered on /socket.io");
+logger.info("Socket.IO event handlers registered on /socket.io");
 
 // ---------------------------------------------------------------------------
 // y-websocket upgrade handler — delegates to yjs-server.ts
 // ---------------------------------------------------------------------------
-registerYjsHandler(server);
-console.log("[realtime] y-websocket handler mounted on /yjs/:roomId");
+const yjsHandler = registerYjsHandler(server);
+logger.info("y-websocket handler mounted on /yjs/:roomId");
 
 // ---------------------------------------------------------------------------
 // Optional Redis adapter — opt-in multi-instance scaling
 // ---------------------------------------------------------------------------
-attachRedisAdapterIfConfigured(io);
+const redisClients = attachRedisAdapterIfConfigured(io);
 
 // ---------------------------------------------------------------------------
 // Listen
 // ---------------------------------------------------------------------------
 server.listen(PORT, () => {
-  console.log(`[realtime] relay listening on port ${PORT}`);
+  logger.info({ port: PORT }, "relay listening");
 });
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown (ISSUES.md Issue 8) — previously absent entirely, so
+// `docker compose stop` hard-killed every in-flight collaboration session.
+// Mirrors apps/storage/src/index.ts's shutdown shape: stop accepting new
+// work, drain what's connected, then exit.
+//
+// `io.close()` closes every Socket.IO socket, the Engine.IO transport, AND
+// the underlying `server` it was constructed with (Socket.IO owns it once
+// passed in) — so there is no separate `server.close()` call here; doing
+// both would double-close and throw ERR_SERVER_NOT_RUNNING. The y-websocket
+// upgrade path is a second, independent WebSocket server on the same TCP
+// listener (`noServer: true`), so its already-upgraded connections are
+// unaffected by the HTTP server closing and need their own drain step.
+// ---------------------------------------------------------------------------
+const shutdown = async (signal: string): Promise<void> => {
+  logger.info({ signal }, "received signal — shutting down");
+  await io.close();
+  yjsHandler.close();
+  if (redisClients) {
+    try {
+      await Promise.all([
+        redisClients.pubClient.quit(),
+        redisClients.subClient.quit(),
+      ]);
+    } catch (err) {
+      logger.warn({ err }, "error quitting Redis clients during shutdown");
+    }
+  }
+  process.exit(0);
+};
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

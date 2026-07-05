@@ -2,6 +2,7 @@
 # --- build stage ---
 FROM node:20-bookworm-slim AS build
 WORKDIR /repo
+RUN corepack enable
 COPY code/package.json code/yarn.lock ./code/
 COPY code/apps/realtime/package.json ./code/apps/realtime/
 COPY code/packages ./code/packages

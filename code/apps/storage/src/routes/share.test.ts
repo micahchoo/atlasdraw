@@ -54,6 +54,7 @@ function wrapWithSpy(inner: StorageClient): SpyClient {
     countWorkspaceMaps: inner.countWorkspaceMaps.bind(inner),
     findWorkspaceByStripeCustomerId:
       inner.findWorkspaceByStripeCustomerId.bind(inner),
+    ping: inner.ping.bind(inner),
   };
 }
 

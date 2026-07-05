@@ -132,4 +132,16 @@ describe("sqlite-fs adapter", () => {
     expect(await client.getBlob("../../etc/passwd")).toBeNull();
     expect(await client.getBlob("a".repeat(22))).toBeNull();
   });
+
+  // ISSUES.md Issue 8 — /health now pings the adapter for real.
+  it("ping resolves when the db + blobs dir are reachable", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    await expect(client.ping()).resolves.toBeUndefined();
+  });
+
+  it("ping rejects once the underlying db is closed", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    await client.close();
+    await expect(client.ping()).rejects.toThrow();
+  });
 });

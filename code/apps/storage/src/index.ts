@@ -96,7 +96,7 @@ async function main(): Promise<void> {
           blobSecretKey: config.BLOB_SECRET_KEY,
         });
 
-  registerHealthRoute(app, config.STORAGE_MODE);
+  registerHealthRoute(app, config.STORAGE_MODE, client);
   // Per-IP rate limit for the internet-facing HTTP API (SECURITY.md row 7).
   // onRequest hook — runs before body parsing; /health is exempt internally.
   registerRateLimitMiddleware(app, {

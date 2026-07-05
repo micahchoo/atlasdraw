@@ -263,6 +263,7 @@ __metadata:
     "@socket.io/redis-adapter": "npm:^8.3.0"
     "@types/node": "npm:*"
     ioredis: "npm:^5.4.0"
+    pino: "npm:10.3.1"
     socket.io: "npm:^4.7.0"
     socket.io-client: "npm:^4.7.0"
     tsx: "npm:^4.7.0"
