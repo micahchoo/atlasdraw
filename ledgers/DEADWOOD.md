@@ -33,8 +33,8 @@ to stay.
 
 | module | inbound references | class | action | commit | test run |
 |---|---|---|---|---|---|
-| src/components/MapEditor.tsx | 1 src (App.tsx), 6 test files. 1,719 lines, 65 imports, 16 useState / 17 useEffect / 7 useCallback. | god | split plan below — not executed | — | — |
-| src/state/collab.ts | 4 src, 3 test. 585-line class; two live connections (Socket.IO + raw WebSocket), peers, cursor, room key, comments layer, hand-rolled snapshot-retry state machine. | god | split plan below — not executed | — | — |
+| src/components/MapEditor.tsx | 1 src (App.tsx), 6 test files. Was 1,719 lines / 65 imports / 16 useState / 17 useEffect / 7 useCallback. | god → resolved | **executed, all 5 cuts** — 1,798→1,171 lines (~35%): useCollabDataLayer, useConvertToDataLayer, usePersistenceWiring (+ state/remoteMapIdCache.ts), useMapEditorKeyboard, useExcalidrawChangeHandler | 0979132, 1a91cd3, 9cf4598, b41fb5f, aeed264, 7f4ab75 | vitest 49/49 files, tsc clean (final cut) |
+| src/state/collab.ts | 4 src, 3 test. Was 585-line class; two live connections (Socket.IO + raw WebSocket), peers, cursor, room key, comments layer, hand-rolled snapshot-retry state machine. | god → resolved | **executed, all 3 cuts** — 585→226 lines (~61%): CommentsChannel, YjsChannel, SceneChannel; CollabState is now a thin facade | 1557aaf, a676219, ed8ad1e | vitest 51/51 files, tsc clean (final cut); collab.test.ts (16/16) passes unmodified throughout — the black-box safety net proving each extraction preserved behavior |
 
 ## Healthy rows
 
@@ -130,12 +130,19 @@ sense:
   code, not vitest's — the first "test run: pass" entry for index.ts was
   unverified. All worktree runs captured real exit codes.
 
-## Split plans (god rows)
+## Split plans (god rows) — EXECUTED 2026-07-05
 
-Plans only — execution is future work, one extraction per PR-sized change.
-Line references are as of commit `86ee294` (the tree the analysis read);
-re-anchor with grep before executing, since MapEditor.tsx gained ~90 lines
-in `180b839`.
+Originally written as plans-only; executed in full the same run (user
+request: "do the full cut plan"). Both god rows are resolved — see the
+God rows table above for final line counts and commit hashes. The plans
+below are kept verbatim as the design record; **Execution notes** at the
+end of each section captures what actually happened, including the one
+real deviation from plan.
+
+Line references in the plan text below are as of commit `86ee294` (the
+tree the analysis read) — stale by the time of execution; each cut was
+re-anchored via fresh grep against current HEAD before editing, per this
+file's own caveat.
 
 ### MapEditor.tsx (1,719 lines → hub component + 5 hooks)
 
@@ -178,6 +185,21 @@ useExportPNG), `syncNow` (coordinate sync ↔ change handler),
 `activeWorkspaceIdRef` (workspace ↔ share client), `spaceHeldRef` (keyboard
 ↔ change handler).
 
+**Execution notes:** followed the plan's order exactly (Cuts 1–5 as listed
+above). One addition not in the original plan: `inferGeometryType` (a
+module-scope helper `useCollabDataLayer` needed) was also called by
+`handleConvert` inside Cut 2's territory, so it moved to a new shared
+`src/lib/geometryType.ts` rather than living inside either hook — a small,
+obvious seam the line-number analysis hadn't surfaced. Cut 2 also caught a
+real doc-drift bug via the pre-commit lint gate: `currentConvertibleSelection`/
+`handleConvert` were already unused outside the (now-extracted) context-menu
+effect — there is no MainMenu "Convert" item despite the plan's own "W-B
+MainMenu.Item" language, only the W-C right-click surface; comments were
+corrected rather than carrying the stale claim forward (commit `9cf4598`).
+Characterization tests were added for every cut per the plan's guidance
+(45 new test cases total, one file per hook) since none of the five had any
+prior coverage. Final result: 1,798→1,171 lines (~35%), 5 new hooks.
+
 ### state/collab.ts (585-line CollabState → 3 channels + thin facade)
 
 Field/method groups and their coupling: the Socket.IO channel is the spine —
@@ -216,3 +238,21 @@ Bonus finding (method-level deadwood, logged not fixed): `emitSceneUpdate`
 have **zero non-test consumers** anywhere in src — confirmed by full-src
 grep. The split can drop them instead of carrying them; decide at execution
 time.
+
+**Execution notes:** followed the plan's order exactly (CommentsChannel →
+YjsChannel → SceneChannel → facade). The undo-attach coupling resolved
+exactly as planned: `SceneChannel.connect()` takes an `onSocketConnect`
+callback, and `CollabState` calls `yjsChannel.attachUndo(socketId)` from
+inside it — `SceneChannel` never references `YjsChannel`. Decision on the
+bonus finding: **carried forward, not dropped.** Re-confirmed post-split
+that `emitSceneUpdate`/`onSceneUpdate`/`undoManager` still have zero non-test
+consumers, but removing public API is a separate judgment call from a
+structural move — bundling a deletion into a "just a refactor" commit risks
+hiding a real behavior change. Still open for a future verdict (a
+capability-reach row, per the deletion-sweep pattern's own rule for
+feature-shaped candidates). collab.test.ts's 16 cases — which already
+exercised exactly the code that moved into SceneChannel, through
+CollabState's public interface — passed unmodified after each of the three
+cuts; no dedicated SceneChannel-level test file was added given that
+redundancy (CommentsChannel and YjsChannel, which had zero prior coverage,
+each got one). Final result: 585→226 lines (~61%), 3 new channel classes.

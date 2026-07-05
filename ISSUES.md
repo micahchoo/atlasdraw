@@ -207,9 +207,14 @@ a failed save or open ever tells the user it failed.
 > modules classified; 2 dead modules deleted; CursorOverlay + PresenceList
 > verdicted **pursue** and mounted (gated on `collab.active`, offset
 > below WorkspaceSwitcher in managed mode; 5 new tests, vitest 45/45,
-> tsc clean). Both god split plans written (execution is separate,
-> unscheduled follow-on work — see Issue 4's ledger, not blocking done).
-> Wiring the mount surfaced a real, deeper bug — queued below as Issue 9.
+> tsc clean). Wiring the mount surfaced a real, deeper bug — queued below
+> as Issue 9. Both god split plans were then executed in full (user
+> request): MapEditor.tsx 1,798→1,171 lines (5 new hooks), collab.ts
+> 585→226 lines (3 new channel classes + thin facade); 60 new
+> characterization test cases across both splits (none needed for Cut 2's
+> useConvertToDataLayer or collab.ts's SceneChannel — both already
+> covered end-to-end by existing tests); vitest 51/51 files and tsc clean
+> throughout every one of the 8 cuts.
 
 **Symptom:** `MapEditor.tsx` is 1,728 lines with 65 imports, 16 `useState`,
 17 `useEffect`, and 7 `useCallback` in a single component (line-counted
