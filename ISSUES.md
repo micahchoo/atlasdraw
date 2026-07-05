@@ -17,6 +17,20 @@ as a separate finding, since it's the same doc-drift pattern.
 
 ## Issue 1 — The two places that actually gate access (workspace isolation, the realtime relay) don't
 
+> **Status: done 2026-07-04** — ledger: `SECURITY.md` (branch
+> `security/managed-mode-trust-boundary`, merged to `main`). All 9 rows
+> resolved, sweep complete, a second pass added no rows. The 3 HIGH rows
+> (workspace-scoped read/write, share-token minting, `/yjs` room auth) plus
+> 2 LOW rows: **documented + gated, not ACL-enforced** — maintainer verdict
+> was self-host-only posture (`MANAGED_MODE` defaults off, warns loudly at
+> boot, gap recorded in `docs/security/managed-mode-trust-boundary.md`);
+> building real workspace ACLs was explicitly declined as out-of-scope
+> feature work, not a partial fix. The 3 MED rows that harden even a
+> single-tenant deployment were actually fixed in code: Socket.IO CORS is
+> now env-driven (`CORS_ORIGIN`), the realtime relay moved behind Caddy/TLS
+> (host port 4001 no longer published), and storage gained a per-IP
+> rate-limit middleware (4 new tests, 114 storage tests green).
+
 **Symptom:** `apps/storage/src/routes/maps.ts` tags `workspace_id` on
 `POST /maps` (line 33-41) but `GET /maps/:id` (line 47-58) and
 `PUT /maps/:id` (line 60-79) call `client.getMap(id)` / `updateMap(id, body)`
@@ -145,6 +159,20 @@ the row after its fix. Done when re-running the full diff finds nothing.
 
 ## Issue 3 — The `.atlasdraw` save/export/import journey breaks at three different seams, one of them shipped as a fake dialog option
 
+> **Status: done 2026-07-05** — ledger: `JOURNEY.md` (on `main`). Walked
+> against a real Chromium via playwright-cli; all 5 ranked findings fixed,
+> one commit each (`86ee294`, `180b839`, `2210352`, `694a95c`, `8b279ad`):
+> the fake `.atlasdraw` export card now downloads a real bundle, save/open
+> failures surface as toasts instead of console-only, lat/lng CSVs import
+> with a success toast (address-only CSVs get an honest geocoder-hint
+> error), the vendored error dialog now has a close button + Escape, and
+> the onboarding tour/menu name CSV as an importable format. Final
+> end-to-end re-walk from a wiped browser state hit no dead ends. Full
+> atlas-app suite green (371 tests, +7 new). Accepted remaining friction:
+> address-only CSV geocoding needs an operator-configured endpoint (by
+> design, ADR-0006 zero call-home) and a dedicated Import menu item/file
+> picker stays with Direction 1 as commissioned spec work, not built here.
+
 **Symptom:** `ExportDialog.tsx` offers a `.atlasdraw` format card (lines 22,
 51-52, dispatched to `onExportAtlasdraw`), but `handleExportAtlasdraw`
 (`MapEditor.tsx:1086-1097`, confirmed by direct read) does nothing but
@@ -264,6 +292,29 @@ holding a plan or a recorded reason to stay.
 ---
 
 ## Issue 5 — Two concerns each built once for real and then rebuilt from scratch elsewhere, leaving the real one dead
+
+> **Status: done 2026-07-05** — ledger: `CANON.md` (on `main`). Verified the
+> premise before migrating anything, and it only held for half of what it
+> claimed. **Crypto:** real duplication, narrow — the base64url helpers
+> (not the full encrypt/decrypt functions) were genuinely copy-pasted
+> between `yjs-crypto.ts` and `scene-crypto.ts`; consolidated into a new
+> shared `packages/data/src/base64url.ts` (`205429b`). `encryptUpdate`/
+> `decryptUpdate` vs. `encryptScene`/`decryptScene` were correctly left
+> alone — different payloads, different channels, and the former is an
+> ADR-0010-mandated deliberate unwired stub, not a duplicate to pick a
+> winner between. **Geo:** `geoToExcalidraw`/`excalidrawToGeo` were not a
+> third reprojection implementation — zero consumers repo-wide, superseded
+> by a different architecture (`useGeoJsonDrop`'s MapLibre data-layer
+> pipeline) rather than duplicated; deleted as confirmed-dead code
+> (`9505990`), not migrated. `CoordinateSync`/`useGeoAnchor` were never
+> duplicates either (inverse operations, different lifecycles) — both
+> already share the real canonicalized primitives in `packages/geo`;
+> left untouched. Added `.claude/rules/canonicalization-verify-first.md` so
+> a future sweep re-checks a "duplicate" claim against the code before
+> migrating. All affected workspaces green (geo 42/42, data 143/143,
+> basemap 73/73, atlas-app 366/366); root `tsc` clean. Incidental fix along
+> the way: `packages/geo/src/bounds.ts` had a stale import that broke
+> per-package (not root) typecheck since 2026-05-25 — corrected (`f26d585`).
 
 **Symptom:** `packages/geo/src/index.ts:12-13` exports `geoToExcalidraw` /
 `excalidrawToGeo` — reprojection helpers with zero consumers outside their
@@ -830,12 +881,15 @@ actually include.
 
 ## Top recommendation
 
-**Issue 1 — trust-boundary sweep (workspace isolation + realtime auth).**
-This is the one finding in the whole pass that's a live, exploitable gap in
-a mode the project already ships (`MANAGED_MODE=true`), not a UX rough edge
-or a doc inconsistency. Per this skill's own rule, growth proposals wait
-while a security finding like this stands — run this one first, regardless
-of which other issue or direction interests you next.
+**Superseded 2026-07-05** — Issues 1-5 are all done (see their Status
+lines). Of what's left, **Issue 9 — the CollabContext.Provider gap** is the
+new highest-leverage pick: it's Strong-rated and, like the original Issue 1,
+a live correctness gap in a currently-shipped feature (the Yjs data-layer
+CRDT sync may have carried no real data since Phase 5), not a UX rough edge.
+Issue 6 (zero test coverage on the highest-risk paths) is the other
+open Strong issue and doesn't compete with Issue 9 — both can run in
+parallel. Issues 7 and 8 are rated Worth exploring, lower priority than
+either.
 
 ## Top direction
 
