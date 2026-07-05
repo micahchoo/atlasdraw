@@ -21,6 +21,21 @@ import { attachRedisAdapterIfConfigured } from "./redis-adapter";
 
 const PORT = parseInt(process.env.PORT ?? "4001", 10);
 
+// CORS origin allow-list. Defaults to "*" (any origin) to preserve the
+// single-tenant self-host default, but operators SHOULD pin it to their own
+// domain(s) once the relay sits behind Caddy at the same origin. Set
+// CORS_ORIGIN to a comma-separated list, e.g. "https://atlas.example.com".
+const corsOrigin = (() => {
+  const raw = process.env.CORS_ORIGIN;
+  if (!raw || raw.trim() === "" || raw.trim() === "*") {
+    return "*";
+  }
+  return raw
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+})();
+
 // ---------------------------------------------------------------------------
 // HTTP Server
 // ---------------------------------------------------------------------------
@@ -31,7 +46,7 @@ const server = http.createServer();
 // ---------------------------------------------------------------------------
 const io = new SocketIOServer(server, {
   cors: {
-    origin: "*",
+    origin: corsOrigin,
     methods: ["GET", "POST"],
   },
 });
