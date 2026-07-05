@@ -11,7 +11,7 @@ Friction scale: 0 = smooth · 1 = hesitation · 2 = had to guess / workaround ·
 | # | Step | Expected | Actual | Friction | Fix commit | Re-walk |
 |---|------|----------|--------|----------|-----------|---------|
 | 1 | Open app first time | Editor loads, orientation offered | 5-step tour appears; map + canvas load cleanly | 0 | — | — |
-| 2 | Learn how to import my CSV | Tour or UI mentions CSV/data import | Tour step 5/5 says only "Import GeoJSON by dragging files onto the map"; MainMenu has Open/Save/Export/Share but **no Import item** — CSV/Shapefile never mentioned anywhere in the UI despite README listing them as shipped | 1 | pending | re-walked: tour now says “Import data by dragging GeoJSON or CSV files onto the map”. An Import… menu item + file picker is Direction 1’s commissioned spec work, deliberately not built here |
+| 2 | Learn how to import my CSV | Tour or UI mentions CSV/data import | Tour step 5/5 says only "Import GeoJSON by dragging files onto the map"; MainMenu has Open/Save/Export/Share but **no Import item** — CSV/Shapefile never mentioned anywhere in the UI despite README listing them as shipped | 1 | 8b279ad | re-walked: tour now says “Import data by dragging GeoJSON or CSV files onto the map”. An Import… menu item + file picker is Direction 1’s commissioned spec work, deliberately not built here |
 | 3 | Drag `places.csv` onto the map | Points appear, or a message saying how to import CSV | Nothing at first (looked silent); ~2s later a generic Excalidraw modal "Error — Couldn't load invalid file". No mention of CSV, no hint that only `.geojson` works. The tested CSV parser in `@atlasdraw/data` is unreachable | 3 | 2210352 | re-walked: lat/lng CSV imports (3 features, success toast); address-only CSV gets an honest geocoder-hint error toast |
 | 4 | Dismiss the error dialog | Close button or Escape | Dialog renders **no close button** and Escape does nothing; only discoverable dismissal is clicking the backdrop margin around the modal | 2 | 694a95c | re-walked: X button renders, focus lands in dialog, Escape dismisses |
 | 5 | Workaround: convert CSV→GeoJSON in another tool, drag that in | (shouldn't be needed) | Works — `places.geojson` layer appears in Layers panel with visibility/reorder controls | 2 (workaround itself) | 2210352 | workaround no longer needed for lat/lng CSVs (see row 3) |
@@ -33,3 +33,16 @@ Friction scale: 0 = smooth · 1 = hesitation · 2 = had to guess / workaround ·
 5. **Import affordance copy** (row 2) — tour and menu never mention what formats are importable; no Import menu item.
 
 Non-journey observations (not scored, for other ledgers): dev-only font 404 (`Excalifont…woff2` via esm.sh); hamburger menu button has no accessible name; rectangle drag produced no element once (unreproduced).
+
+## Outcome (2026-07-05)
+
+All five ranked findings fixed, one commit each (86ee294, 180b839, 2210352,
+694a95c, 8b279ad), full atlas-app suite green (371 tests, +7 new). Final
+end-to-end re-walk from a wiped browser state: drop `places-latlng.csv` →
+"3 features imported" toast → Export dialog `.atlasdraw` card downloads a
+real bundle containing the CSV layer → Reset canvas → Open… restores it with
+an "Opened … 1 layer" toast. No dead ends remain; every failure path observed
+in the walk now surfaces to the user. Remaining accepted friction:
+address-only CSVs still require an operator-configured geocoder (honest error
+with a pointer, by design — ADR-0006 zero call-home); the Import menu item /
+file picker stays with Direction 1 as commissioned spec work.
