@@ -20,6 +20,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 import { MapEditor } from "../MapEditor";
+import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 import type maplibregl from "maplibre-gl";
@@ -240,14 +241,22 @@ afterEach(() => {
 
 describe("MapEditor — MainMenu Layers item (W-B)", () => {
   it("renders the Layers panel MainMenu item", async () => {
-    const { getByTestId } = render(<MapEditor />);
+    const { getByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(getByTestId("main-menu-layers")).toBeTruthy();
     });
   });
 
   it("clicking the Layers item calls excalidrawAPI.toggleSidebar({name:'default', tab:'layers'})", async () => {
-    const { getByTestId } = render(<MapEditor />);
+    const { getByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await waitFor(() => getByTestId("main-menu-layers"));
 
     // Wait for the Excalidraw stub's useEffect to fire setExcalidrawAPI so
@@ -268,7 +277,11 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
   });
 
   it("clicking a second time fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
-    const { getByTestId } = render(<MapEditor />);
+    const { getByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await waitFor(() => getByTestId("main-menu-layers"));
 
     fireEvent.click(item);
@@ -288,7 +301,11 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
   });
 
   it("registers the Layers tab via registerSidebarTab", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(mockFakeExcalidrawAPI.registerSidebarTab).toHaveBeenCalled();
     });
@@ -301,14 +318,22 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
   });
 
   it("renders the Basemap MainMenu item (T6)", async () => {
-    const { getByTestId } = render(<MapEditor />);
+    const { getByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(getByTestId("main-menu-basemap")).toBeTruthy();
     });
   });
 
   it("clicking Basemap item opens the picker dialog (T6)", async () => {
-    const { getByTestId, queryByTestId } = render(<MapEditor />);
+    const { getByTestId, queryByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await waitFor(() => getByTestId("main-menu-basemap"));
 
     // Dialog is not mounted initially.

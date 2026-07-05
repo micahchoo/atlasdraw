@@ -98,6 +98,8 @@ import {
 
 import styles from "../styles/MapEditor.module.css";
 
+import { useToast } from "./ToastProvider";
+
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { PrintDialog } from "./PrintDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -272,8 +274,24 @@ function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
 // itself replaced by this single door.
 // ---------------------------------------------------------------------------
 
+/** User-facing outcome channel for the document handlers (toast in the app;
+ * omitted in tests and non-UI callers). */
+export interface DocumentNotify {
+  success: (msg: string) => void;
+  error: (msg: string) => void;
+}
+
+/** Picker dismissals are a user choice, not a failure — never report them. */
+function isPickerCancel(err: unknown): boolean {
+  return (
+    err instanceof DOMException &&
+    (err.name === "AbortError" || err.name === "NotAllowedError")
+  );
+}
+
 export async function saveAtlasDocument(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
+  notify?: DocumentNotify,
 ): Promise<void> {
   if (!excalidrawAPI) {
     return;
@@ -287,14 +305,22 @@ export async function saveAtlasDocument(
       selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
     );
     usePersistenceStore.getState().clearDirty();
+    notify?.success("Map saved as .atlasdraw");
   } catch (err) {
+    if (isPickerCancel(err)) {
+      return;
+    }
     // eslint-disable-next-line no-console
     console.warn("[atlasdraw] saveToDisk failed", err);
+    notify?.error(
+      `Couldn't save the map${err instanceof Error ? ` — ${err.message}` : ""}`,
+    );
   }
 }
 
 export async function openAtlasDocument(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
+  notify?: DocumentNotify,
 ): Promise<void> {
   if (!excalidrawAPI) {
     return;
@@ -315,10 +341,20 @@ export async function openAtlasDocument(
         layerCount: loaded.manifest.layers.length,
         sceneLength: loaded.scene.length,
       });
+      const n = loaded.manifest.layers.length;
+      notify?.success(
+        `Opened "${loaded.manifest.title}" — ${n} layer${n === 1 ? "" : "s"}`,
+      );
     }
   } catch (err) {
+    if (isPickerCancel(err)) {
+      return;
+    }
     // eslint-disable-next-line no-console
     console.warn("[atlasdraw] openFromDisk failed", err);
+    notify?.error(
+      "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
+    );
   }
 }
 
@@ -365,6 +401,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { map, onMapReady } = useMapRef();
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
+  const toast = useToast();
+  // Stable outcome channel for save/open — see DocumentNotify above.
+  const documentNotify = useMemo<DocumentNotify>(
+    () => ({ success: toast.success, error: toast.error }),
+    [toast.success, toast.error],
+  );
   // Stores the user-chosen background color, intercepted from Excalidraw's
   // ChangeCanvasBackground picker. Applied as CSS backgroundColor on the root
   // container so it shows behind both layers as a fallback.
@@ -658,14 +700,27 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       usePersistenceStore.setState({ isDirty: true, isDraining: true });
     });
 
-    const dispose = startAutoSave(store, getDoc, undefined, undefined, () => {
-      usePersistenceStore.getState().clearDirty();
-      usePersistenceStore.getState().setDraining(false);
-      usePersistenceStore.getState().setLastSavedAt(Date.now());
-      if (!store.remoteSaveFailed()) {
-        usePersistenceStore.getState().setRemoteSaveFailed(false);
-      }
-    });
+    const dispose = startAutoSave(
+      store,
+      getDoc,
+      undefined,
+      undefined,
+      () => {
+        usePersistenceStore.getState().clearDirty();
+        usePersistenceStore.getState().setDraining(false);
+        usePersistenceStore.getState().setLastSavedAt(Date.now());
+        if (!store.remoteSaveFailed()) {
+          usePersistenceStore.getState().setRemoteSaveFailed(false);
+        }
+      },
+      () => {
+        // The store already logged the error; the user just needs to know
+        // the "Saved" indicator is stale.
+        documentNotify.error(
+          "Auto-save failed — recent changes may not be saved",
+        );
+      },
+    );
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 
     return () => {
@@ -676,7 +731,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       usePersistenceStore.getState().setPersistenceStore(null);
       void store.close();
     };
-  }, [excalidrawAPI]);
+  }, [excalidrawAPI, documentNotify]);
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
@@ -741,7 +796,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         !e.shiftKey
       ) {
         e.preventDefault();
-        void saveAtlasDocument(excalidrawAPI);
+        void saveAtlasDocument(excalidrawAPI, documentNotify);
         return;
       }
       if (
@@ -751,7 +806,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         !e.shiftKey
       ) {
         e.preventDefault();
-        void openAtlasDocument(excalidrawAPI);
+        void openAtlasDocument(excalidrawAPI, documentNotify);
         return;
       }
       // Keyboard shortcuts: bare `?`.
@@ -776,7 +831,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showShortcuts, excalidrawAPI]);
+  }, [showShortcuts, excalidrawAPI, documentNotify]);
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
   // Selector form so the component re-renders ONLY on isDirty flips, not on
@@ -1086,8 +1141,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const handleExportAtlasdraw = useCallback(() => {
     // Same single door as the MainMenu "Save" item and Cmd+S — the
     // .atlasdraw card is just another entry point to it.
-    void saveAtlasDocument(excalidrawAPI);
-  }, [excalidrawAPI]);
+    void saveAtlasDocument(excalidrawAPI, documentNotify);
+  }, [excalidrawAPI, documentNotify]);
 
   // Intercept ChangeCanvasBackground: keep Excalidraw transparent so the map
   // shows through, and store the chosen color in mapBg for CSS + export.
@@ -1295,13 +1350,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 Export defaults are disabled via EXCALIDRAW_UI_OPTIONS;
                 Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
             <MainMenu.Item
-              onSelect={() => void openAtlasDocument(excalidrawAPI)}
+              onSelect={() =>
+                void openAtlasDocument(excalidrawAPI, documentNotify)
+              }
               data-testid="main-menu-open"
             >
               Open…
             </MainMenu.Item>
             <MainMenu.Item
-              onSelect={() => void saveAtlasDocument(excalidrawAPI)}
+              onSelect={() =>
+                void saveAtlasDocument(excalidrawAPI, documentNotify)
+              }
               data-testid="main-menu-save"
             >
               Save
@@ -1671,7 +1730,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               category: "File",
               hint: "⌘O",
               keywords: ["load", "file", "atlasdraw", "excalidraw", "import"],
-              onSelect: () => void openAtlasDocument(excalidrawAPI),
+              onSelect: () =>
+                void openAtlasDocument(excalidrawAPI, documentNotify),
             },
             {
               id: "save",
@@ -1679,7 +1739,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               category: "File",
               hint: "⌘S",
               keywords: ["disk", "file", "atlasdraw"],
-              onSelect: () => void saveAtlasDocument(excalidrawAPI),
+              onSelect: () =>
+                void saveAtlasDocument(excalidrawAPI, documentNotify),
             },
             {
               id: "share",

@@ -15,6 +15,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 import { MapEditor } from "../MapEditor";
+import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 import type maplibregl from "maplibre-gl";
@@ -219,14 +220,22 @@ afterEach(() => {
 
 describe("MapEditor — MainMenu 'Edit basemap style' item (A4)", () => {
   it("renders the Edit basemap style MainMenu item", async () => {
-    const { getByTestId } = render(<MapEditor />);
+    const { getByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     await waitFor(() => {
       expect(getByTestId("main-menu-edit-style")).toBeTruthy();
     });
   });
 
   it("clicking the Edit basemap style item mounts the Maputnik dialog with the active basemap style URL", async () => {
-    const { getByTestId, queryByTestId } = render(<MapEditor />);
+    const { getByTestId, queryByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await waitFor(() => getByTestId("main-menu-edit-style"));
 
     // Dialog is not mounted initially.
@@ -247,7 +256,11 @@ describe("MapEditor — MainMenu 'Edit basemap style' item (A4)", () => {
   });
 
   it("closing the dialog unmounts it (close button)", async () => {
-    const { getByTestId, queryByTestId } = render(<MapEditor />);
+    const { getByTestId, queryByTestId } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     fireEvent.click(await waitFor(() => getByTestId("main-menu-edit-style")));
 
     await waitFor(() => {

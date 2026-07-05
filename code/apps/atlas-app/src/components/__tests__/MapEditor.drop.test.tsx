@@ -22,6 +22,7 @@ import { render, fireEvent, waitFor } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 import { MapEditor } from "../MapEditor";
+import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 import type maplibregl from "maplibre-gl";
@@ -243,7 +244,11 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
       "registerDataLayer",
     );
 
-    const { container } = render(<MapEditor />);
+    const { container } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     // Root div is the immediate child of the test container.
     const root = container.firstChild as HTMLElement;
     expect(root).toBeTruthy();
@@ -297,7 +302,11 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
       "registerDataLayer",
     );
 
-    const { container } = render(<MapEditor />);
+    const { container } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const root = container.firstChild as HTMLElement;
 
     const txtFileLike = {

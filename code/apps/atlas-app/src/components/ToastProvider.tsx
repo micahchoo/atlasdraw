@@ -114,8 +114,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toasts, dismiss]);
 
+  // Stable context identity: consumers hang effects off useToast()'s
+  // callbacks (e.g. MapEditor's persistence wiring) — a fresh value object
+  // per render would re-fire all of them on every toast.
+  const contextValue = React.useMemo(() => ({ add, dismiss }), [add, dismiss]);
+
   return (
-    <ToastContext.Provider value={{ add, dismiss }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       {toasts.length > 0 && (
         <div

@@ -366,7 +366,14 @@ export function createPersistenceStore(
               },
             ],
           });
-          await setStoredFileHandle(handle);
+          // Best-effort: retaining the handle only skips the next picker.
+          // If IDB rejects it (private mode, quota), the save must still run.
+          try {
+            await setStoredFileHandle(handle);
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn("[persistence] could not retain file handle", err);
+          }
         }
         const writable = await handle.createWritable();
         await writable.write(blob);
@@ -500,6 +507,7 @@ export function startAutoSave(
   intervalMs = 5000,
   maxFlushMs = 30000,
   onSaved?: () => void,
+  onSaveError?: (err: unknown) => void,
 ): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -529,6 +537,7 @@ export function startAutoSave(
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error("[persistence] auto-save failed", err);
+        onSaveError?.(err);
       });
   };
 

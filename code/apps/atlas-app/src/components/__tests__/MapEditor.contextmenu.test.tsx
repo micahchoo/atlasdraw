@@ -30,6 +30,7 @@ import { render, waitFor, cleanup } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 import { MapEditor } from "../MapEditor";
+import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
 import type maplibregl from "maplibre-gl";
@@ -320,7 +321,11 @@ const awaitConvertItem = async () => {
 
 describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)", () => {
   it("registers the convert item with the expected name + label", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
     expect(item.name).toBe("atlasConvertToDataLayer");
     expect(item.label).toBe("Convert selection to data layer");
@@ -329,7 +334,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("predicate returns true for a single geo polygon selection", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
     const result = item.predicate([fakeRectangleEl], {
       selectedElementIds: { "anno-1": true },
@@ -338,7 +347,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("predicate returns false for a text selection (non-convertible type)", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
     const textEl = { ...fakeRectangleEl, id: "anno-text", type: "text" };
     const result = item.predicate([textEl], {
@@ -348,7 +361,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("predicate returns true for a single geo arrow selection", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
     const arrowEl = { ...fakeRectangleEl, id: "anno-arrow", type: "arrow" };
     const result = item.predicate([arrowEl], {
@@ -358,7 +375,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("predicate returns false for multi-selection", async () => {
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
     const result = item.predicate(
       [fakeRectangleEl, { ...fakeRectangleEl, id: "anno-2" }],
@@ -373,7 +394,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
       "registerDataLayer",
     );
 
-    render(<MapEditor />);
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     const item = await awaitConvertItem();
 
     // Wait for excalidrawAPI wiring to complete (handleConvert reads it).
@@ -410,7 +435,11 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("unmount invokes the unregister fn returned by registerContextMenuItem", async () => {
-    const { unmount } = render(<MapEditor />);
+    const { unmount } = render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
     await awaitConvertItem();
     expect(registerContextMenuItemUnregister).not.toHaveBeenCalled();
     unmount();
