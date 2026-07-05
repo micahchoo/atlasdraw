@@ -582,9 +582,19 @@ as storage. Done when every row reads pass.
 
 ## Issue 9 — Collab presence/cursor UI and the Yjs data-layer sync both read a `CollabState` instance nobody ever connects
 
-**Status: queued** (surfaced 2026-07-05 while wiring Issue 4's CursorOverlay/
-PresenceList mount — logged, not fixed, per loop discipline: out-of-scope
-findings land here, not folded into the ledger that found them)
+> **Status: done 2026-07-05** — ledger: `COLLABWIRING.md`. Confirmed via a
+> forced test (not just grep) that peer data mutated on the real, connected
+> `CollabState` never reached `CursorOverlay`/`PresenceList`. Fixed: mounted
+> `<CollabContext.Provider>` in `MapEditor` from the real `collabState`
+> instance; discovered the Provider alone wasn't sufficient since `peers` is
+> a mutated `Map` invisible to React, so added a `subscribe`/`getSnapshot`
+> reactive contract to `CollabState` (each channel now calls an `onChange`
+> callback on peer/doc mutation) consumed via `useSyncExternalStore` in both
+> `MapEditor` and `useCollab`'s fallback path. Rewrote
+> `MapEditor.collab-presence.test.tsx` (its old approach — an outer fake
+> Provider — is now shadowed by MapEditor's own inner one) plus 9 new tests
+> across `collab.test.ts`/`useCollab.test.ts`. Full suite: 62 files, 515
+> tests, green.
 
 **Symptom:** `useCollab()` (`hooks/useCollab.ts`) returns the current
 `CollabContext` value if a `<CollabContext.Provider>` is mounted —  but
