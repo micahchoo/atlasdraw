@@ -65,7 +65,10 @@ import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
+import { inferGeometryType } from "../lib/geometryType";
+
 import { useMapRef } from "../hooks/useMapRef";
+import { useCollabDataLayer } from "../hooks/useCollabDataLayer";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
@@ -125,24 +128,6 @@ import type { LayerLegendEntry } from "../lib/print-pdf";
 
 import type maplibregl from "maplibre-gl";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
-
-/**
- * Pick a MapLibre layer kind for the FeatureCollection's first feature.
- * Wave 2b stays simple: one geometry kind per dropped file. Mixed-geometry
- * collections (Phase 5) will need split-by-type rendering. Points fall back
- * to "circle"; unknown/empty falls back to "circle" too (renders nothing
- * harmlessly).
- */
-function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
-  const t = fc.features[0]?.geometry?.type;
-  if (t === "Polygon" || t === "MultiPolygon") {
-    return "fill";
-  }
-  if (t === "LineString" || t === "MultiLineString") {
-    return "line";
-  }
-  return "circle";
-}
 
 // ---------------------------------------------------------------------------
 // GeoJSON export helpers
@@ -844,75 +829,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const registry = useLayerRegistry();
   useGeoJsonDrop(rootRef, map, registry.registerDataLayer);
 
-  // ---------------------------------------------------------------------------
-  // Phase 5 Task 9 — Collab data layer: MapLibre source + layer lifecycle.
-  // ---------------------------------------------------------------------------
-
-  const COLLAB_DATA_ID = "collab-data";
-  const hasCollabFeatures = !!yjsLayer.features;
-
-  // Effect 1: add/remove the map source+layer when collab activates/deactivates.
-  useEffect(() => {
-    if (!map) {
-      return;
-    }
-
-    if (yjsLayer.features) {
-      if (!map.getSource(COLLAB_DATA_ID)) {
-        map.addSource(COLLAB_DATA_ID, {
-          type: "geojson",
-          data: yjsLayer.features,
-        });
-        const geometryType = inferGeometryType(yjsLayer.features);
-        map.addLayer(
-          compileLayer(
-            COLLAB_DATA_ID,
-            defaultLayerStyle(yjsLayer.features),
-            geometryType,
-          ),
-        );
-      }
-    } else {
-      // Collab deactivated — remove source and layer.
-      try {
-        if (map.getLayer(COLLAB_DATA_ID)) {
-          map.removeLayer(COLLAB_DATA_ID);
-        }
-        if (map.getSource(COLLAB_DATA_ID)) {
-          map.removeSource(COLLAB_DATA_ID);
-        }
-      } catch {
-        /* Guard against redundant cleanup */
-      }
-    }
-
-    return () => {
-      try {
-        if (map.getLayer(COLLAB_DATA_ID)) {
-          map.removeLayer(COLLAB_DATA_ID);
-        }
-        if (map.getSource(COLLAB_DATA_ID)) {
-          map.removeSource(COLLAB_DATA_ID);
-        }
-      } catch {
-        /* Guard against redundant cleanup on unmount */
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, hasCollabFeatures]);
-
-  // Effect 2: push GeoJSON data updates to the existing map source.
-  useEffect(() => {
-    if (!map || !yjsLayer.features) {
-      return;
-    }
-    const src = map.getSource(COLLAB_DATA_ID) as
-      | maplibregl.GeoJSONSource
-      | undefined;
-    if (src) {
-      src.setData(yjsLayer.features);
-    }
-  }, [map, yjsLayer.features]);
+  // Phase 5 Task 9 — Collab data layer: renders the live Yjs FeatureCollection
+  // as a MapLibre source+layer (extracted to useCollabDataLayer hook).
+  useCollabDataLayer(map, yjsLayer.features);
 
   // W-B — Convert annotation → data layer via MainMenu.Item.
   //
