@@ -9,31 +9,9 @@
 //
 // See docs/architecture/adr/0010-yjs-e2ee-threat-model.md
 
+import { uint8ArrayToBase64Url, base64UrlToUint8Array } from "@atlasdraw/data";
+
 import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
-
-// ---------------------------------------------------------------------------
-// Base64url helpers (mirrors code/packages/data/src/yjs-crypto.ts)
-// ---------------------------------------------------------------------------
-
-function uint8ArrayToBase64Url(buf: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < buf.length; i++) {
-    binary += String.fromCharCode(buf[i]);
-  }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function base64UrlToUint8Array(s: string): Uint8Array {
-  const binary = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
 
 // ---------------------------------------------------------------------------
 // Public API

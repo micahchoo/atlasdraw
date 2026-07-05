@@ -80,6 +80,11 @@ export { toGeoJSON, observeLayer } from "./yjs-snapshot";
 // See ADR-0010: docs/architecture/adr/0010-yjs-e2ee-threat-model.md
 export { encryptUpdate, decryptUpdate } from "./yjs-crypto";
 
+// Base64url helpers shared by yjs-crypto.ts and, downstream, atlas-app's
+// scene-crypto.ts — both frame AES-GCM IV/ciphertext the same way over
+// different payload shapes (raw Yjs updates vs. Excalidraw scene JSON).
+export { uint8ArrayToBase64Url, base64UrlToUint8Array } from "./base64url";
+
 // Phase 5 Task 12 — Undo behavior under distributed state.
 // Yjs UndoManager wrapped with per-user origin scoping so User A's undo
 // never silently removes User B's work.
