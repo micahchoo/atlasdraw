@@ -652,8 +652,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
     // T13: register an imperative `forceSave` that bypasses the debounce
     // (option (b) from the T13 brief — hold the store + getDoc pair here,
-    // call store.save(getDoc())). ShareDialog / useShareLink consume this
-    // via useAutosave().forceSave to guarantee a fresh snapshot before
+    // call store.save(getDoc())). useShareLink consumes this via
+    // usePersistenceStore to guarantee a fresh snapshot before
     // share-link minting.
     const getDoc = () =>
       selectDocument(excalidrawAPI, useLayerRegistryStore.getState());
