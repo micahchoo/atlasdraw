@@ -22,8 +22,8 @@ to stay.
 
 | module | inbound references | class | action | commit | test run |
 |---|---|---|---|---|---|
-| src/index.ts | 0 src, 0 test. Not the app entry (`index.html` → `main.tsx`); package.json has no `main`/`exports`; nothing imports `@atlasdraw/atlas-app`; no directory-style (`from ".."`) or dynamic imports resolve to it. A Phase-1 "demo entry" barrel re-exporting App + a roadmap comment. | dead | deleted | ae87a66 on `tend/deadwood-deletions` (first attempt 16ce333 was unintentionally reverted by concurrent-session commit 180b839 — see run notes) | isolated worktree: vitest 45/45 files exit 0; tsc exit 0 |
-| src/hooks/useAutosave.ts | 0 src, 1 test (its own `__tests__/useAutosave.test.tsx`). Header names ShareDialog/useShareLink as consumers; both now read `usePersistenceStore` directly (`useShareLink.ts:25,95,100`). Superseded facade. | dead | deleted (with its test file; also unstaled the `useAutosave().forceSave` comment at MapEditor.tsx:656) | e906f1e on `tend/deadwood-deletions` | isolated worktree: vitest 44/44 files exit 0; tsc exit 0 |
+| src/index.ts | 0 src, 0 test. Not the app entry (`index.html` → `main.tsx`); package.json has no `main`/`exports`; nothing imports `@atlasdraw/atlas-app`; no directory-style (`from ".."`) or dynamic imports resolve to it. A Phase-1 "demo entry" barrel re-exporting App + a roadmap comment. | dead | deleted, merged to `tend/deadwood-sweep` | ae87a66 on `tend/deadwood-deletions`, merged bbf6424 (first attempt 16ce333 was unintentionally reverted by concurrent-session commit 180b839 — see run notes) | post-merge on `tend/deadwood-sweep`: vitest 44/44 files exit 0; `yarn test:typecheck` exit 0 |
+| src/hooks/useAutosave.ts | 0 src, 1 test (its own `__tests__/useAutosave.test.tsx`). Header names ShareDialog/useShareLink as consumers; both now read `usePersistenceStore` directly (`useShareLink.ts:25,95,100`). Superseded facade. | dead | deleted (with its test file; also unstaled the `useAutosave().forceSave` comment at MapEditor.tsx:656), merged to `tend/deadwood-sweep` | e906f1e on `tend/deadwood-deletions`, merged bbf6424 | post-merge on `tend/deadwood-sweep`: vitest 44/44 files exit 0; `yarn test:typecheck` exit 0 |
 | src/components/CursorOverlay.tsx | 0 src, 0 test. Complete 139-line collab cursor UI consuming `useCollab`; built Phase 5 Wave 3 (bd233e3, T11 "cursor UI"); `MapEditor.tsx:412-413` comment plans to render it, no mount ever landed. `protocol/realtime-events.ts:132` still documents it as the consumer of cursor events. | dead (feature-shaped) | **verdict required** — pursue (mount it) / reject (delete). Not auto-deleted per sweep rule: feature-shaped dead is a capability-reach row first. | — | — |
 | src/components/PresenceList.tsx | 0 src, 0 test. Complete 92-line presence UI consuming `useCollab`; same T11 commit, same never-mounted state as CursorOverlay. | dead (feature-shaped) | **verdict required** — same cluster as CursorOverlay (one verdict covers both). | — | — |
 
@@ -118,8 +118,12 @@ sense:
   correlated only because the tree kept changing between runs.
 - Fix phase therefore moved to an isolated worktree
   (`tend/deadwood-deletions`, cut from `2210352`), where both deletions were
-  re-verified against a quiescent tree. **Merge that branch once the
-  journey-walk session is done.**
+  re-verified against a quiescent tree.
+- **Merged 2026-07-05 (`bbf6424`)** — the journey-walk branch had only
+  touched `MapEditor.tsx`'s comment text near the deletion sites, so the
+  merge auto-resolved with no conflicts (confirmed via `git merge-tree`
+  dry run first). Re-verified post-merge: vitest 44/44 files exit 0,
+  `yarn test:typecheck` exit 0. Worktree and its branch removed.
 - Process lesson (also harvested): `vitest run | tail` gates on tail's exit
   code, not vitest's — the first "test run: pass" entry for index.ts was
   unverified. All worktree runs captured real exit codes.
