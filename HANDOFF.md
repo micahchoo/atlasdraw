@@ -1,134 +1,114 @@
-# Handoff — 2026-05-11 (Phase 5 Wave 0 — T0+T1 done; T2 needs config-format decision)
+# Handoff — 2026-07-05 (ISSUES.md fully closed: 9/9 Issues + 5/5 Directions verdicted and built)
 
 ## Goal
 
-User opened with `/check-handoff` resuming the 2026-05-11 Phase 4 CLOSED handoff. After my recommendation (C → A: Phase 4 polish, then Phase 5 entry), the user iterated: *"do it"* → polish → *"3+2"* (warm-up seed + Phase 5 entry blocked on E-01) → *"1+2"* (write ADR + brainstorm) → *"1+3"* (plan amendments + dispatch Wave 0 T1) → `/handoff`. Net effect: ship Phase 4 closing polish, ship the Phase 4 P1 test-debt warm-up, resolve E-01/E-02 with maintainer confirmation of Option C, ship ADR-0010 as Phase 5 Task 0 hard gate, and ship Phase 5 Wave 0 Task 1 (`@atlasdraw/protocol` workspace).
+Session opened mid-stream on `tend/deadwood-sweep` (a branch already carrying
+Issues 1-5 done from prior sessions, plus uncommitted Issue 6 coverage-climb
+work sitting in the working tree). User asked me to check dangling branches,
+merge to main, then work through what remained in `ISSUES.md`. Net effect
+across the session: merged and pushed all outstanding branch work, closed
+Issues 6-9, resolved all 5 "Directions" (surplus-capability decision items)
+with maintainer verdicts, then ran full `/grill-with-docs` design interviews
+for the two commissioned specs and **built both** on explicit "proceed".
 
 ## Progress
 
-### Completed this session — six commits pushed (origin/main at `6e4e3c9`)
+### Completed this session — main pushed once (`origin/main` at `62c19ec`), then 4 more local commits not yet pushed
 
 | # | Commit | What |
-|---|---|---|
-| 1 | `5bb50b9` | **Phase 4 post-ship polish** — plan marked `✅ COMPLETE` at top of `docs/superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md`; `docs/security/dependabot-2026-05-11.md` triage of 25 alerts (1 actionable, 5 non-applicable, 19 tolerated); parent seed `atlasdraw-4579` closed `outcome:success`. |
-| 2 | `c95cf02` | **atlasdraw-3601 paste-image round-trip test** — new test in `code/apps/atlas-app/src/state/hydrate.test.ts:362-404` asserts paste-image → `selectDocument` → `hydrate` → `addFiles` round-trip preserves byte-identical dataURL. Closes the gap the 2026-05-10 reopen named: prior tests stubbed each direction independently. 11/11 pass. |
-| 3 | `a23328e` | **E-01 closed Option C + E-02 unblocked** — `docs/decisions/escalations.md` E-01 Decision block (2026-05-11, maintainer confirmed via AskUserQuestion) and E-02 Decision block (unblocked under plaintext Y.Doc assumption). Seeds closed: `atlasdraw-4f26`, `atlasdraw-fef0`. |
-| 4 | `b5567d3` | **ADR-0010 Yjs E2EE threat model** — `docs/architecture/adr/0010-yjs-e2ee-threat-model.md` (167 lines). Trust-boundary diagram, A1-A5 attacker scenarios, Phase 5 immediate consequences, Phase 6 inherited obligations. **Path drift from plan**: plan literal said `decisions/0007-yjs-e2ee-threat-model.md`; shipped at `docs/architecture/adr/0010-...` (Phase 4 established adr home; 0007 already taken by storage-dual-mode). Plan Task 0 scrub-noted. |
-| 5 | `bab51b4` | **Phase 5 pre-dispatch scrub notes** on Task 1 and Task 2 of the Phase 5 plan, plus `docs/self-host/production.md` Security-Hardening subsection "Future: real-time relay trust boundary (Phase 5+)" linking ADR-0010. |
-| 6 | `6e4e3c9` | **Phase 5 Wave 0 Task 1** — `@atlasdraw/protocol` workspace scaffolded (`code/packages/protocol/{package.json,tsconfig.json,src/index.ts,src/realtime-events.ts,src/room-key.ts}`). CollabEvent discriminated union (SCENE_UPDATE / MAP_CAMERA_UPDATE / CURSOR / COMMENT). RoomKey + `parseRoomFragment(hash)` with Web Crypto AES-GCM import + base64url decode + 32-byte validation. `yarn workspace @atlasdraw/protocol test:typecheck` → 0 errors. |
+|---|--------|------|
+| 1 | (branch merge) | Fast-forwarded `main` through 14 pre-existing `tend/deadwood-sweep` commits (Issue 4/5 god-module splits, CollabContext gap surfacing). |
+| 2 | `2a7cebc`/`b5296d3` | Two small pre-existing fixes found sitting uncommitted: `@atlasdraw/excalidraw` barrel wasn't re-exporting `ExcalidrawImperativeAPI`; `MapCanvas.tsx` missing `renderWorldCopies: false`. |
+| 3 | `5a99d4c`+`f8841e1` | **Issue 6 closed** — coverage climb for 10 zero/low-coverage hooks (`COVERAGE.md`), 431→496 tests. Two real bugs fixed along the way. |
+| 4 | `ec5fdd8`+`7f1d5b4` | **Issue 7 closed** — silence audit (`SILENCE.md`, 27 rows). Fixed a tracked-but-never-rendered `remoteSaveFailed` flag, unsurfaced initial-load failure, mixed alert/uncaught-rethrow, fake "Connected" status in `SettingsDialog`. |
+| 5 | `4bbea59`+`d73803a` | **Issue 8 closed** — realtime operational parity (`NEGSPACE.md`). Real `/health` check, graceful shutdown, structured logging. Found and fixed a `pg.Pool` missing `error` listener that crashed the whole storage process on a dropped connection. |
+| 6 | `c8f07f5`+`62c19ec` | **Issue 9 closed** — `CollabContext.Provider` gap (`COLLABWIRING.md`). Added `subscribe`/`getSnapshot` reactivity via `useSyncExternalStore` so peer-map mutations actually re-render. |
+| 7 | (push) | Pushed `main` to `origin/main` at `62c19ec`. Moved this working directory's checkout from `tend/deadwood-sweep` to `main`. |
+| 8 | `bd38381`+`5175fbb` | **All 5 ISSUES.md Directions resolved** with maintainer verdicts (`pursue pursue park pursue reject`). Two verdicts changed after verification (Direction 1 rescoped, Direction 2 flipped to reject). `pro_25` billing tier actually removed from code. |
+| 9 | `2726900` | **Direction 1 built**: `feat(atlas-app,data): implement Direction 1 — Shapefile import + file-picker UI`. See below. |
+| 10 | `e67786c` | **Direction 4 built**: `feat(basemap,tools): implement Direction 4 — plugin registration API`. See below. |
+| 11 | `8f7b333` | `docs(issues): mark Directions 1 and 4 built, not just specced` — `ISSUES.md`/`CAPABILITY.md`/`HEADROOM.md` status blocks updated to match. |
 
-### Phase 5 — Wave 0 scoreboard
+### ISSUES.md final state
 
-| Task | Status | Source |
-|---|---|---|
-| T0 — Yjs E2EE Threat-Model ADR | ✅ | this session (`b5567d3`); path drifted to `docs/architecture/adr/0010-` |
-| T1 — Wire Protocol Event Types | ✅ | this session (`6e4e3c9`) |
-| T2 — Config Schema (Realtime Feature Flag) | ⬚ **needs config-format decision** | plan spec assumes `config.toml`; Phase 4 reality is `.env`/`VITE_*`. Scrub-noted at plan line 209 (block immediately before `### Task 2:`). |
+- **Issues 1-9: all done.**
+- **Directions 1-5: all verdicted, and every "pursue" is now built** (not just specced):
+  - **Direction 1 (built)** — Shapefile import + file-picker. `useGeoJsonDrop.ts` renamed to `useDataFileImport.ts`, widened to a `"zip"` ext, `parseShapefile` wired through the same drop pipeline, a new "Import…" `MainMenu.Item` opens a native file picker (reusing `state/persistence.ts`'s `fallbackOpen` hidden-`<input type="file">` pattern), explicit toast for unsupported file types on deliberate picks, `ShapefileParseError` per-code toasts. Closed `shapefile.test.ts`'s long-standing no-happy-path-test gap with a real fixture (`packages/data/__fixtures__/point.zip`, built via Python's `pyshp` since `ogr2ogr` wasn't available here).
+  - **Direction 4 (built)** — plugin registration API. `registerBasemap`/`listBasemaps` added to `packages/basemap/src/BasemapRegistry.ts`; `registerTool`/`getTool`/`listTools` added to `packages/tools/src/index.ts`. Both are a private, duplicated `Registry<T>` factory — **not** shared via `@atlasdraw/common`, because that package is deliberately excluded from the root tsconfig's composite project graph that `basemap`/`tools` belong to (discovered via a real `tsc` rootDir violation mid-implementation, not up front). `SettingsDialog.tsx`'s `getBasemap("__all__")` sentinel-string hack replaced with real `listBasemaps()`.
+  - Direction 2 (graduated style method) rejected — false premise on verification, nothing to build.
+  - Direction 3 (Yjs E2EE stub) parked — `docs/decisions/escalations.md` E-01 gets a "RE-OPENED, not closed" status block.
+  - Direction 5 (Pro+ tier) rejected and executed — `pro_25` fully removed from `WorkspacePlan`/config/quota/billing.
 
-### Closed seeds (this session)
+### Test counts after Direction 1 + 4
 
-- `atlasdraw-4579` — Phase 4 parent. `outcome:success`.
-- `atlasdraw-3601` — P1 Excalidraw `addFiles()` round-trip test debt. `outcome:success`.
-- `atlasdraw-4f26` — HELD: E-01 Yjs E2EE option. Resolved Option C. `outcome:success`.
-- `atlasdraw-fef0` — HELD: E-02 DiffEngine dependency. Unblocked by Option C. `outcome:success`.
-
-### Open after this session
-
-- ⬚ **Phase 5 Wave 0 Task 2** — needs maintainer call on config format. Plan says `infra/config.toml.example` ([realtime] stanza in TOML); Phase 4 shipped `infra/.env.example` with `VITE_*` env vars. Question: does atlas-app read TOML or env? Scrub-noted at plan §Task 2.
-- ⬚ **Phase 5 Wave 0 Task 0 follow-ups** (per ADR-0010 gate checklist): (a) self-host README disclosure paragraph (production.md done, README.md skipped this session — too early-stage for the first-run doc); (b) Task 2 config-block must include ADR-0010 reference comment when shipped.
-- ⬚ **Phase 5 Task 1 optional follow-up** — unit tests for `parseRoomFragment` (null on malformed, 32-byte gate, round-trip with `crypto.subtle.exportKey` — though we explicitly imported as non-extractable, so round-trip exportKey will reject; test that path). Plan Task 1 doesn't require tests; left as a follow-up.
-- ⬚ **Dependabot triage doc may need rescan**: `code/yarn.lock` fast-uri entries should already be patched (3.0.6/3.1.2 are at fix-line per advisory); GH may need a refresh. See `docs/security/dependabot-2026-05-11.md`.
-- ⬚ **Pre-existing dirty (not this session's)**: `.mulch/expertise/meta.jsonl` and `.mulch/mulch.config.yaml` (pre-existing modifications from prior sessions, untouched here), `code/packages/cli/src/atlasdraw.ts` (yarn-install mode-bit drift, never committed), `.claude/skills/playwright-cli/` (untracked from prior session), `code/.husky/post-*` hooks (untracked).
+atlas-app 63 files/525 tests, packages/data 13 files/144 tests, packages/basemap 7 files/76 tests, packages/tools 12 files/77 tests, packages/storage 13 files/122 tests — all green.
 
 ## What Worked
 
-- **Pre-dispatch scrub as a habit**, not a per-task ceremony. The Phase 5 plan was authored 2026-05-03, before Phase 4 closed. Before dispatching Task 1, a quick `ls code/packages/protocol/` confirmed the workspace doesn't exist → drift caught before a worker hit it. Recorded as the second scrub-note on Task 1.
-- **Inline execution over worker dispatch for bounded scope.** Task 1's post-scrub scope (5 files, ~200 LOC, no business logic) was small enough that worker dispatch overhead exceeded its value. Inline took ~2 min; would have spent that on writing the brief alone.
-- **The TypeScript strict-mode `Uint8Array<ArrayBuffer>` annotation.** Initial impl typed `Uint8Array | null` which gave the inferred `Uint8Array<ArrayBufferLike>`; `crypto.subtle.importKey` rejected it because `ArrayBufferLike` includes `SharedArrayBuffer`. Fix: type as `Uint8Array<ArrayBuffer>` AND construct with explicit `new ArrayBuffer(len)`. Quick fix once diagnosed.
-- **AskUserQuestion for the E-01 decision.** Three options with previews rendered cleanly; maintainer picked C in one click. Beat asking three follow-ups inline.
-- **Scrub-note pattern preserves original-spec record.** When path-drifting from plan literal (Task 0 `decisions/0007-...` → `docs/architecture/adr/0010-...`), only fix references in the NEW Decision block I wrote in escalations.md; leave plan body refs intact as historical spec. Convention from Phase 4; held in Phase 5.
+- **Verifying ISSUES.md premises before acting, every time** — caught two false/stale premises this session (Direction 2's "always linear" claim, Direction 1's "CSV unreachable" claim) before commissioning wasted work.
+- **Running a real research subagent before the grilling interview started**, so every recommended answer was grounded in actual file contents (parser signatures, existing conventions, wiring patterns) rather than assumption. Per the `grilling` skill's own instruction to explore the codebase instead of guessing wherever possible.
+- **Correcting the design mid-implementation rather than silently deviating or blindly following a stale plan.** The grilling interview's own recommendation for Direction 4 — share one `Registry<T>` via `@atlasdraw/common` — didn't survive contact with the actual composite-graph boundary. Reverted that path fully (verified via `git diff --stat packages/common/` showing zero diff), duplicated the ~15-line primitive instead, and documented the discovery transparently in both code comments and the ledger (`HEADROOM.md`'s "Interview outcome vs. what actually shipped" section) rather than pretending the original plan shipped as designed.
+- **Bisecting a real OOM crash in a new test file** (`MapEditor.import.test.tsx`) down to an unstable mock-object reference feeding a `useEffect` whose own dep was itself unstable — fixed by hoisting the mock to a stable module-level const, matching an already-working sibling test's pattern.
+- **AskUserQuestion for premise-mismatch cases** rather than silently picking a side. Both resolved in one round with the recommended option.
 
-## What Didn't Work
+## What Didn't Work / Known Friction
 
-- **Plan-literal drift was, again, recursive** (per existing mulch record `mx-04ac8d`). Found three layers this session: (1) ADR path collision (plan said `decisions/0007-...`; ADR home is `docs/architecture/adr/`; 0007 already taken); (2) Task 1 workspace doesn't exist (plan only spec'd `src/` files); (3) Task 1 verify uses `pnpm -F`, yarn classic monorepo. Each was a 30s grep to catch pre-dispatch; would have been a worker retry to catch post-dispatch.
-- **Config-format ambiguity on Task 2.** Plan spec says `infra/config.toml.example`; Phase 4 shipped `infra/.env.example`. Did not resolve mid-session — flagged for handoff to avoid asking the user a mid-flight clarifying question we can defer.
-- **Bash cwd persisted across tool invocations** unexpectedly. After `cd code && yarn workspace ...`, the next `git add code/packages/...` failed because cwd was already `code/`. Fix: prepend absolute path. Worth a `[NOTE]` — Bash tool documentation says new shells per invocation, but cwd appears to persist.
-- **PostToolUse hook `~/.claude/scripts/failure-journal-hook.sh:506` syntax error.** Fired on multiple Bash post-hooks. Unrelated to this session's work; flagged but not fixed (outside project scope).
+- **`tsc --build` is still broken repo-wide** on a pre-existing `"ignoreDeprecations": "6.0"` value incompatible with installed TypeScript 5.9.3 — pre-existing, not fixed, not touched this pass either. All new work verified via `vitest` + direct runtime checks instead.
+- **`apps/storage`'s own `tsc -p tsconfig.build.json` build script is separately broken** on real, pre-existing type errors — also pre-existing, also not fixed.
+- Initial attempt at Direction 4 (shared `@atlasdraw/common` registry) cost a full create-then-revert cycle before landing on the per-package duplication — see Key Decisions below for why that wasn't avoidable without violating the plan-then-build order the user asked for (interview first, verify only surfaces at implementation time for a boundary this specific).
 
 ## Key Decisions
 
-- **E-01 = Option C** (maintainer 2026-05-11 via AskUserQuestion). Phase 5 ships server-trusted Yjs relay; `yjs-crypto.ts` lands as stub; ADR-0010 documents the threat model; Phase 6 inherits Option B evaluation. Rationale: matches Hocuspocus/y-sweet/Liveblocks production practice; Option B adds ~1 week risky custom-protocol work; ADR documents the bounded trade-off.
-- **ADR-0010 path = `docs/architecture/adr/0010-yjs-e2ee-threat-model.md`** (drifted from plan's `decisions/0007-...`). Rationale: Phase 4 established `docs/architecture/adr/` as the ADR home with 0006-0009; 0007 collides with `storage-dual-mode.md`. Bumped to 0010. Documented in plan scrub note + escalations.md Decision block.
-- **CollabEvent payload shape preserved from plan spec.** SCENE_UPDATE/COMMENT carry `EncryptedPayload` (`{ iv, ciphertext }`); MAP_CAMERA_UPDATE + CURSOR are plaintext by design per ADR-0010 §"What the relay can see." No structural changes; just typed.
-- **`parseRoomFragment` is async.** Web Crypto's `importKey` returns a Promise. Plan spec said the function returns `RoomKey | null` (sync); reality requires `Promise<RoomKey | null>`. Documented inline. Future Task 7 (`CollabState.connect()`) must `await`.
-- **Non-extractable `CryptoKey` for AES-GCM import.** `crypto.subtle.importKey(..., false, ["encrypt", "decrypt"])`. Hardens against accidental key exposure; aligns with ADR-0008 share-link key handling.
-- **`RealtimeConfig` co-located with `realtime-events.ts`** (plan Step 3 said export-from-realtime-events; the scrub-note offered "or its own `realtime-config.ts`"). Kept it in realtime-events.ts to match plan literal; semantically distinct but small enough not to warrant a separate file.
-- **Production.md gets the realtime-relay trust-boundary disclosure paragraph; README.md does not.** README is the first-run friendly doc for current users; cluttering with Phase 5 disclaimers hurts UX. production.md is operator-facing; right home for a forward-looking hardening note.
-- **Skip the Phase 6 contract-row path edit (plan line 56)** per established scrub-note convention: plan body text remains the historical-spec record; scrub note covers the drift.
+- **CollabState needed a full `subscribe`/`getSnapshot` reactive contract, not just a mounted Provider** (Issue 9).
+- **Direction 2 verdict flipped from "pursue" to "reject"** after verification — `StylePanel.tsx` already computes genuinely distinct quantile breakpoints; equal-interval is correctly identical to linear by definition; the compiler's `["linear"]` is MapLibre's interpolation-curve parameter, not a break-selection shortcut.
+- **Direction 1 verdict kept "pursue" but rescoped** — CSV import + Photon geocoding were already wired; only Shapefile import was genuinely orphaned. Scoped interview and build accordingly.
+- **Direction 5 got executed, not just decided** — `pro_25` removed end-to-end, not deprecated-in-place.
+- **Direction 3 got "park," not "pursue" or "reject."** Not pursue: the real fix (Option B, a custom log-replay relay) is a week-scale rewrite. Not reject: permanently closing E2EE is a bigger call than park commits to.
+- **Direction 4's shared-registry plan was abandoned mid-implementation, not mid-design.** The grilling interview did ask about "different enough shapes" for basemap vs. tool registries, but the actual blocker (the composite tsconfig graph excluding `@atlasdraw/common`) only surfaced as a real `tsc` error once code existed — a case where the codebase-grounded interview still couldn't fully substitute for building it. Documented in `HEADROOM.md` rather than silently reverted.
+- **Direction 1's file input covers all three formats in one `.accept` string** (`.geojson,.csv,.zip`) via one unified `MainMenu.Item`, not per-format pickers — matches how drag-drop already dispatches by extension through the same `processDataDrop` pipeline.
 
 ## Trajectory
 
-**How we got here.** Session opened with `/check-handoff` resuming the 2026-05-11 Phase 4 CLOSED handoff. Validated state (all files referenced exist, push state matches `992e1fd`, working tree drift is pre-existing). User said *"do it"* on my recommendation (C → A). Started with bookkeeping — wrote `docs/security/dependabot-2026-05-11.md` triage (found 2 critical + 4 high alerts; vitest RCE is non-applicable without `--api` flag, fast-uri already at fix-line, most others are vendored `dev-docs` surface), marked Phase 4 plan `✅ COMPLETE`, closed parent seed `atlasdraw-4579`. Committed (`5bb50b9`). User then said *"3+2"* — warm-up seed + Phase 5 entry with E-01 options. Tackled `atlasdraw-3601` first: inspected existing hydrate.test.ts, found two existing tests that stubbed each direction (`Blobs to BinaryFileData` and `empty-files skip`) but no full round-trip test through `selectDocument`. Wrote a paste-image round-trip test asserting byte-identical dataURL preservation. 11/11 pass. Committed + closed seed (`c95cf02`). Then loaded E-01 escalation + summarized A/B/C with AskUserQuestion previews. Maintainer picked C. Wrote Decision blocks in `escalations.md` (E-01 RESOLVED + E-02 UNBLOCKED), closed both HELD seeds, committed (`a23328e`). User said *"1+2"* — write the threat-model ADR + brainstorm Phase 5 entry. Wrote ADR-0010 (167 lines: trust boundary, A1-A5 attacker scenarios, Phase 5 + Phase 6 + Phase 7 implications), scrub-noted Task 0 with the path drift, committed (`b5567d3`). Brainstorming pass: read plan's Open Questions section, found all 5 OQs already RESOLVED (OQ-1 was today's E-01 closure); found three small plan-amendment chores; flagged two drift risks. User said *"1+3"* — land plan amendments + dispatch Wave 0 T1. Pre-dispatch scrub on T1: discovered `code/packages/protocol/` workspace doesn't exist. Scrub-noted T1 (workspace scaffold needed + pnpm→yarn) and T2 (config-format ambiguity + ADR-0010 reference comment requirement). Added production.md forward-looking trust-boundary disclosure. Committed (`bab51b4`). Then inline-executed T1: scaffolded workspace mirroring `packages/data/` shape, wrote `realtime-events.ts` + `room-key.ts` + `index.ts`, hit a TS strict-mode wart (`Uint8Array<ArrayBufferLike>` not assignable to `BufferSource`), fixed by typing `Uint8Array<ArrayBuffer>` + explicit `new ArrayBuffer(len)`. Typecheck clean. Committed (`6e4e3c9`).
+**How we got here.** Session opened with dangling-branch cleanup + a merge to `main`, then a fast walk through Issues 6-9 (each its own sweep-triage-fix-resweep loop), a push to `origin/main`, a branch-to-main directory move, then all 5 Directions verdicted in one line ("pursue pursue park pursue reject") — two of which got corrected after verification before being acted on. That left two commissioned-but-unbuilt spec interviews sitting in `CAPABILITY.md`/`HEADROOM.md`. User asked to run `/grill-with-docs` against both. That invoked the `grilling` skill: a real `Explore` research pass grounded every question in actual code before asking; user answered "do as recommended" through most of Direction 1's four questions, then said "do as recommended for the rest" to bulk-confirm everything remaining (rest of Direction 1 plus all of Direction 4) rather than continuing one-at-a-time. Final "proceed" authorized implementation. Both Directions were built, tested green, and committed as two focused commits; Direction 4's implementation immediately surfaced the `@atlasdraw/common` composite-graph boundary the interview's own recommendation hadn't accounted for, corrected transparently. Ledger docs (`ISSUES.md`, `CAPABILITY.md`, `HEADROOM.md`) then updated from "commissioned" to "built" language and committed.
 
-**Hard calls.** ADR-0010 numbering: keep plan literal `decisions/0007-...` (and accept the 0007 collision) vs follow Phase 4 ADR home convention (bump to 0010). Chose the latter — Phase 4 established the convention, plan was pre-Phase-4. Inline vs worker for T1: bounded scope (5 files, type defs only, no business logic) means dispatch overhead exceeds value. Chose inline; saved ~5 min and a context-heavier brief. Whether to fix all 13 plan-body refs to the old `0007-...` path or just my new Decision block refs: chose the latter, per established scrub-note convention. Whether to ship Task 2 inline alongside T1: chose to stop after T1 — Task 2 needs the config-format decision (TOML vs env) which is a maintainer call, not an inline decision.
+**Hard calls.** Whether to keep the `@atlasdraw/common` sharing attempt as a "future TODO" comment versus fully reverting and duplicating: fully reverted, since the boundary is a *documented, deliberate* architectural choice (root tsconfig's own comment), not a bug to route around — duplicating ~15 trivial lines twice is cheaper than fighting that boundary or leaving a half-built shared package no one imports yet.
 
-**Shaky ground.** **(1)** `parseRoomFragment` returns `Promise<RoomKey | null>` but the plan literal said `RoomKey | null` (sync). Future Task 7 (`CollabState.connect()`) must `await` — consumers that copy the plan literal will get a type error. Not a bug, just plan-vs-code drift. **(2)** `RealtimeConfig.wsUrl` is optional in the type; the plan spec didn't define when unset means same-origin vs disabled. I documented "same-origin (resolved by client at runtime)" inline. Future Task 2 + Task 7 must respect this. **(3)** TypeScript strict-mode `Uint8Array<ArrayBuffer>` (not `<ArrayBufferLike>`) annotation depends on the TS version's lib.dom.d.ts shape. If TS or @types changes, the annotation may need revisiting. Tested on the lockfile's current TS (5.x via the workspace devDep). **(4)** No unit tests for `parseRoomFragment`. The plan doesn't require them; future tests should cover: null-on-no-comma, null-on-empty-roomId, null-on-non-32-byte-key, null-on-invalid-base64url, success-on-32-byte-key, and the non-extractable property (try `exportKey` and assert rejection). **(5)** `infra/config.toml.example` does not exist and may not be the right surface — Phase 4 standardized on `.env.example` with `VITE_*` env vars. Task 2 needs maintainer to choose: continue plan literal (introduce TOML), or amend Task 2 to use the existing env-var convention.
+**Shaky ground.**
+1. **`main` is 4 commits ahead of `origin/main` (`62c19ec`), not pushed** — the Directions-resolution, Direction 1 build, Direction 4 build, and doc-update commits. Not requested this round.
+2. **GitHub flagged 52 Dependabot vulnerabilities** on the last push (13 critical, 9 high, 22 moderate, 8 low) — still completely untriaged.
+3. **The uncommitted noise files persist**: `.mulch/expertise/meta.jsonl`, `.seeds/issues.jsonl`, `.claude/skills/librarian/SKILL.md`, `code/bench/results/*.json`, plus untracked `Et6ZJ_xdtT9_0ghOD3LnM/` and `node-compile-cache/`. Still unexplained — read as background/concurrent-session artifacts, never investigated to confirm.
+4. **Repo-wide broken `tsc --build`** and `apps/storage`'s separately-broken build script both remain unfixed, worked around via `vitest`+`tsx` all session.
 
-**Invisible context.** The user reads commit messages, not prose narrative — each commit body explains the why; the HANDOFF is for the next agent. The user invoked `/check-handoff` at session open and `/handoff` at close — session ceremonies. Auto mode active throughout; single-word prompts ("do it", "3+2", "1+2", "1+3") signal "execute my recommendation"; never assume the user wants more prompts than necessary. AskUserQuestion is the right tool for **structural decisions** (E-01 A/B/C with previews) where the user picks from a finite set; not for tactical questions ("should I commit?" — just commit and let them say "no" via Ctrl-C). The pre-dispatch scrub pattern (per `mx-04ac8d`) is now load-bearing for Phase 5; each task brief needs a fresh scrub because the plan predates Phase 4 close, so every Phase-4-shaped expectation is potentially stale.
+**Invisible context.** User gives terse, high-density prompts ("pursue pursue park pursue reject" = five verdicts in Direction order; "do as recommended for the rest" = bulk-confirm and stop the one-at-a-time interview) and expects them mapped precisely, but wants a pause via AskUserQuestion when execution would contradict verified reality, and expects transparent correction (not silent deviation, not blind adherence) when an already-confirmed design turns out wrong at implementation time. Ledger files (`SILENCE.md`, `NEGSPACE.md`, `COLLABWIRING.md`, `CAPABILITY.md`, `HEADROOM.md`, `DARKDATA.md`, `ISSUES.md`) are the real audit trail, each meant to stand alone for a future reader — chat prose is not.
 
 ## Active Skills & Routing
 
-- `check-handoff` at session start — validated 2026-05-11 Phase 4 CLOSED state.
-- `brainstorming` at user request for Phase 5 entry. Used in **constraint-confirmation mode** (cycle 2+ — plan exists, decision locked) rather than full design loop. Found all 5 OQs already RESOLVED; surfaced two drift risks. Did NOT route post-spec (no need for writing-plans; plan exists).
-- `handoff` at session close.
-- **`[eval: knowledge-restored]`** — passed (no new `context add` needed; ml + qmd handled queries).
-- **`[eval: no-rediscovery]`** — passed (didn't re-investigate prior-session decisions; trusted 2026-05-11 handoff state).
-- **Pending routing for next session**:
-  - **AskUserQuestion** for the Task 2 config-format call (TOML vs env). Maintainer decision.
-  - **executing-plans or inline** for Phase 5 Tasks 2, 3, 4 (Wave 0 close): config schema (T2), apps/realtime server skeleton (T3), packages/data YjsLayer type model (T4). Wave 0 closes when T2-T4 land.
-  - **writing-plans** NOT needed (Phase 5 plan exists and was validated as constraint-current this session).
-  - **adversarial-api-testing** for Phase 6 Stripe-webhook tasks per `atlasdraw-94e2`; not Phase 5.
+- **`grilling`** (invoked via the user typing `/grill-with-docs`, which internally routes to `grilling` + `domain-modeling`) ran to completion for both commissioned specs this session. Its own rule ("do not enact the plan until confirmed") was honored — no code was written until the user said "proceed" after the bulk-confirm.
+- **AskUserQuestion** used twice for Direction premise mismatches, both resolved in one round.
+- No further skill routing pending — both commissioned specs from the prior handoff are now closed out.
 
 ## Infrastructure Delta
 
-This session changed:
+This session changed (cumulative, including this final phase):
 
-- **Plugins**: unchanged.
-- **Hooks**: unchanged. **Note**: `~/.claude/scripts/failure-journal-hook.sh:506` has a bash syntax error firing on every Bash post-hook (`/home/micah/.claude/scripts/failure-journal-hook.sh: line 506: syntax error near unexpected token 'newline'`; `if|for|while|until|case|\[\[`). Unrelated to project work; flagged for maintainer fix outside project scope.
-- **Skills**: unchanged in `~/.claude/skills/`. `.claude/skills/playwright-cli/` remains untracked (carried from prior session, not added by this session).
-- **Pipelines**: unchanged.
-- **Overrides**: unchanged.
-- **CI workflows**: unchanged. GH Pages workflow ran successfully on each push.
-- **Mulch**: no new records this session — drift fixes were instance-level (plan scrub notes) rather than convention-level. Existing records `mx-04ac8d` (plan-literal drift is recursive) and `mx-cb3eb8` (pre-dispatch scrub recurrence for cross-phase plans) both fired correctly.
-- **Seeds**: 4 closures (`atlasdraw-4579`, `atlasdraw-3601`, `atlasdraw-4f26`, `atlasdraw-fef0`).
-- **ADRs (new file surface)**: `docs/architecture/adr/0010-yjs-e2ee-threat-model.md`.
-- **Decisions surface**: `docs/decisions/escalations.md` updated with E-01 Decision (RESOLVED) + E-02 Decision (RESOLVED) blocks.
-- **Security docs (new file surface)**: `docs/security/` directory created with `dependabot-2026-05-11.md`.
-- **New workspace**: `code/packages/protocol/` (5 files: package.json, tsconfig.json, src/{index,realtime-events,room-key}.ts).
+- **New ledger files (repo root)**: `SILENCE.md`, `NEGSPACE.md`, `COLLABWIRING.md`, `CAPABILITY.md`, `HEADROOM.md`, `DARKDATA.md`.
+- **Docs updated**: `ISSUES.md` (all Issues/Directions carry Status/Verdict blocks, Directions 1+4 now say "built"), `CAPABILITY.md`/`HEADROOM.md` (interview-outcome sections added), `docs/decisions/escalations.md` (E-01 re-opened), `CHANGELOG.md` (Pro+ tier removal).
+- **Renamed**: `apps/atlas-app/src/hooks/useGeoJsonDrop.ts` → `useDataFileImport.ts` (+ test file).
+- **New files**: `apps/atlas-app/src/components/__tests__/MapEditor.import.test.tsx`, `packages/data/__fixtures__/point.zip`, `packages/tools/src/registry.test.ts`.
+- **New API surface**: `registerBasemap`/`listBasemaps` (`@atlasdraw/basemap`), `registerTool`/`getTool`/`listTools` (`@atlasdraw/tools`), `importFile` (returned from `useDataFileImport`), `StorageClient.ping()`, `CollabState.subscribe`/`getSnapshot`.
+- **Removed API surface**: `WorkspacePlan`'s `"pro_25"` member, `STRIPE_PRICE_PRO_25`, `QuotaLimits.pro_25`, `BillingRoutesOptions.stripePricePro25`, `SettingsDialog.tsx`'s `getBasemap("__all__")` sentinel hack.
+- **Dockerfiles**: all three app Dockerfiles gained `RUN corepack enable`.
+- **Git**: `tend/deadwood-sweep` branch is stale (safe to delete, not yet asked to). `main` is 4 commits ahead of `origin/main`, unpushed.
 
 ## Knowledge State
 
-- **Indexed**: no `context add` calls this session. Existing tier 0/1 indexes covered: Web Crypto API (`crypto.subtle.importKey`), TS strict-mode `Uint8Array` generics, base64url decoding, AES-GCM convention. No gaps required `context add`.
-- **Productive tiers**: `grep` via Bash (plan-literal verification — scrub-note workflow), `Read` (selective hydrate.test.ts + escalations.md inspection), `qmd` (not used this session). `foxhound` not invoked substantively. `ml search` not invoked (relied on the session-priming mulch context block).
-- **Gaps**: None encountered. If next session enters Task 6 (`y-websocket` integration), index `y-websocket@latest` and `@y/websocket-server@latest` docs — both were referenced from research notes but neither is `context add`-installed.
+- **Productive tools this session**: `Bash` + real docker containers (found the `pg.Pool` crash bug), an `Explore` subagent run before the grilling interview to ground every recommendation in real code, `AskUserQuestion` for premise-mismatch pauses, bisection-via-`it.skip()` for the OOM crash root-cause.
+- **Gaps**: repo-wide broken `tsc --build` and `apps/storage`'s separately-broken build script both still block normal typecheck-based verification; every fix this session was verified via `vitest` + direct `tsx`/runtime execution instead. A future session should either fix these or explicitly route around them the same way.
 
 ## Next Steps
 
-1. **Decide Phase 5 Task 2 config format**. Maintainer call: keep plan literal (introduce `infra/config.toml.example` + a TOML parser in atlas-app) OR amend Task 2 to use the existing `.env`/`VITE_*` convention from Phase 4. Recommended: **the env-var convention** — Phase 4 shipped it, atlas-app already reads `VITE_STORAGE_BASE_URL`, adding `VITE_REALTIME_ENABLED` + `VITE_REALTIME_WS_URL` is structurally identical and avoids introducing a TOML parser. Amend Task 2 with a scrub note documenting the convention choice.
-2. **Land Phase 5 Task 2** (Realtime Feature Flag config). Modify `code/apps/atlas-app/src/config.ts` to add `realtime: RealtimeConfig` to `AppConfig`. Default `{ enabled: false }`. Read from `VITE_REALTIME_ENABLED` (string '1' or 'true' → true) and `VITE_REALTIME_WS_URL` (optional). Mirror the existing `enableBackendPersistence` pattern. Add to `infra/.env.example` (not `config.toml.example`). Verify with the atlas-app's existing test pattern.
-3. **Land Phase 5 Tasks 3 + 4 (Wave 0 close)**. T3: `apps/realtime/` Node app skeleton (Fastify or plain http; plan says forked from excalidraw-room) with `/socket.io` + `/yjs/:roomId` + `/health`. T4: `packages/data/src/yjs-layer.ts` YjsLayer class with Y.Doc + Y.Map<FeatureId, Y.Map<...>> + Y.Array geometry. Both reference `@atlasdraw/protocol` types (now exists).
-4. **Optional polish on Task 1**: unit tests for `parseRoomFragment` (5 cases — see "Shaky ground" #4 above). Cheap, prevents regression as Task 7 consumes it.
-5. **Fix `~/.claude/scripts/failure-journal-hook.sh:506`** (environment, not project scope) — bash syntax error firing on every Bash post-hook. Doesn't block work but spams stderr.
-6. **Dependabot rescan** (optional): the triage doc notes fast-uri entries should clear after a `yarn-deduplicate` pass. Run when bandwidth permits.
-
-## Context Files
-
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md` — Phase 5 plan. Three 2026-05-11 scrub notes (Task 0, Task 1, Task 2). Open Questions section (lines 747-799) all RESOLVED.
-- `docs/architecture/adr/0010-yjs-e2ee-threat-model.md` — Phase 5 Task 0 hard gate. Defines the relay trust boundary (what the relay can see); Phase 6 inherits two work items.
-- `docs/decisions/escalations.md` E-01 + E-02 — Decision blocks at lines ~83-110 and ~157+ document Option C selection and the unblock.
-- `code/packages/protocol/src/realtime-events.ts` + `room-key.ts` — Phase 5 protocol types, consumed by Tasks 3, 5, 6, 7, 8.
-- `code/apps/atlas-app/src/config.ts` — Task 2 change-site for the `realtime` config field.
-- `code/apps/atlas-app/src/state/hydrate.test.ts:362-404` — atlasdraw-3601 paste-image round-trip test; ensures Phase 4 image hydration doesn't regress.
-- `docs/security/dependabot-2026-05-11.md` — Phase 4 alert triage; reference before Phase 5 introduces new server deps.
-- `HANDOFF-expertise.md` (from 2026-05-11 Phase 4 CLOSED handoff) — structured mulch records still apply; not regenerated this session (no new mulch records added).
-- `.claude/rules/excalidraw-api.md` — load-bearing project rule; did NOT fire this session (no Excalidraw API changes), still relevant for any Phase 5 task that touches Excalidraw types (T10 scene-encryption adapter).
+1. **Decide whether to push `main`** (4 commits ahead of `origin/main`). Not yet requested.
+2. **Triage the 52 Dependabot alerts** — still completely untouched.
+3. **Consider fixing the repo-wide broken `tsc --build`** and `apps/storage`'s separately-broken build script.
+4. **Optional cleanup**: delete the now-redundant `tend/deadwood-sweep` branch; investigate whether the persistent uncommitted noise files are safe to discard or belong to an active concurrent session.
+5. **Phase 7 proper** (the actual Worker-sandboxed plugin loader with integrity hashing) sits on top of the registration primitive Direction 4 just shipped — a separate, much larger piece of work, explicitly out of scope for this pass.
