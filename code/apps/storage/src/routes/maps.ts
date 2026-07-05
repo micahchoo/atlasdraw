@@ -44,6 +44,13 @@ export function registerMapRoutes(
     return reply.code(201).send(record);
   });
 
+  // SECURITY (managed mode): the GET and PUT below resolve a map by id ALONE.
+  // They do NOT compare the map's stored workspace_id to request.workspace, so
+  // in MANAGED_MODE=true any accepted X-Workspace-ID can read or overwrite any
+  // map by knowing its id. This is unenforced by design — managed mode is not
+  // multi-tenant-safe. See docs/security/managed-mode-trust-boundary.md
+  // (SECURITY.md row 1). Do not add an ownership check here in isolation; it
+  // must be threaded through the adapter getMap/updateMap contract.
   fastify.get<{ Params: IdParams }>(
     "/maps/:id",
     async (request: FastifyRequest<{ Params: IdParams }>, reply) => {

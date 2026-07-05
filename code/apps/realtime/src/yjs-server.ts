@@ -18,8 +18,15 @@
 //
 // Under ADR-0010 Option C the relay sees plaintext Yjs ops for both Y.Doc
 // families — by design. Comment text is NOT encrypted; the trust posture is
-// the same as the data-layer Y.Doc (relay-trusted; SaaS deployments rely on
-// workspace ACL at the path-routing boundary).
+// relay-trusted single-tenant self-host.
+//
+// SECURITY (managed mode): the "workspace ACL at the path-routing boundary"
+// that SaaS deployments would need DOES NOT EXIST. The upgrade handler below
+// takes the whole path suffix verbatim as the docName with no auth, and the
+// Caddy front door has no /yjs route. Any client that knows a roomId can
+// connect to /yjs/${roomId} and read/write another room's PLAINTEXT data
+// layers and comments. Not multi-tenant-safe — see
+// docs/security/managed-mode-trust-boundary.md (SECURITY.md row 3).
 //
 // See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 6
 //     docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A2

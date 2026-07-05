@@ -27,6 +27,20 @@ export * from "./config";
 async function main(): Promise<void> {
   const config = loadConfig();
 
+  // Managed mode ships the *surface* of multi-tenancy (X-Workspace-ID,
+  // per-workspace quotas, billing) but does NOT enforce cross-tenant
+  // isolation on map read/update/share, the realtime relay, or workspace
+  // enumeration — see docs/security/managed-mode-trust-boundary.md. Announce
+  // that boundary loudly at boot so it can't be mistaken for tenant-safe.
+  if (config.MANAGED_MODE) {
+    logger.warn(
+      "MANAGED_MODE is ON. This mode is NOT multi-tenant-safe: map " +
+        "read/update/share are not workspace-scoped and the realtime relay " +
+        "is unauthenticated. Do NOT expose to untrusted tenants. See " +
+        "docs/security/managed-mode-trust-boundary.md.",
+    );
+  }
+
   // T18: opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009.
   // beforeSend scrubs Authorization headers and request IPs — operators who
   // wire this DSN should still document the data flow in their privacy notice.

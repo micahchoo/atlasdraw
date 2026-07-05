@@ -13,8 +13,13 @@
 //       routes treat absence as "default tenant" — preserving Phase 4
 //       backward compatibility for null-workspace records.
 //
-// Per Q-P6-1, the workspace value at this layer is opaque — DB-backed
-// validation lives in Wave 3 A13b, not here.
+// Per Q-P6-1, the workspace value at this layer is opaque. It is a
+// client-supplied assertion, NOT a credential — the header is trusted
+// verbatim, never validated against a workspaces table or an authenticated
+// user. The route handlers do not enforce workspace ownership either, so
+// managed mode is not multi-tenant-safe in its current form. The DB-backed
+// validation once scoped as "Wave 3 A13b" was never built. See
+// docs/security/managed-mode-trust-boundary.md (SECURITY.md rows 1-4).
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 

@@ -28,6 +28,11 @@ export function registerWorkspaceRoutes(
     if (!opts.managed) {
       return reply.code(404).send({ error: "not found" });
     }
+    // SECURITY (managed mode): this returns EVERY workspace row (id + plan)
+    // with no per-user auth — full tenant enumeration. Unenforced by design;
+    // managed mode is not multi-tenant-safe. A real deployment must add a
+    // scope-by-authenticated-user gate here. See
+    // docs/security/managed-mode-trust-boundary.md (SECURITY.md row 4).
     const workspaces = await opts.client.listWorkspaces();
     return reply.code(200).send({ workspaces });
   });
