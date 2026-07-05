@@ -1,7 +1,7 @@
 {
   "name": "@atlasdraw/cli",
   "version": "0.0.0",
-  "description": "Headless tooling: lint, convert, render",
+  "description": "Headless tooling for .atlasdraw files: lint, convert",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
