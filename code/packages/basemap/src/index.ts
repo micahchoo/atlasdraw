@@ -10,7 +10,12 @@ export type { MapCanvasProps, MapCanvasInitialView } from "./MapCanvas";
 export type { LayerStyle, StyleExpression } from "./style";
 export { compileLayer, defaultLayerStyle } from "./style-compiler";
 
-export { BASEMAPS, getBasemap } from "./BasemapRegistry";
+export {
+  BASEMAPS,
+  getBasemap,
+  registerBasemap,
+  listBasemaps,
+} from "./BasemapRegistry";
 export type { BasemapConfig } from "./BasemapRegistry";
 
 export { registerPmtilesProtocol } from "./pmtiles-protocol";

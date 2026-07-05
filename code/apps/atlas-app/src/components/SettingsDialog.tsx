@@ -11,7 +11,7 @@
 
 import React, { useEffect, useState } from "react";
 
-import { getBasemap, type BasemapConfig } from "@atlasdraw/basemap";
+import { listBasemaps, type BasemapConfig } from "@atlasdraw/basemap";
 
 import styles from "../styles/SettingsDialog.module.css";
 
@@ -149,7 +149,11 @@ function BasemapTab({
   activeId: string;
   onSelect: (id: BasemapConfig["id"]) => void;
 }) {
-  const basemaps = getBasemap("__all__") as unknown as BasemapConfig[];
+  // ISSUES.md Direction 4: was `getBasemap("__all__") as unknown as
+  // BasemapConfig[]` — a sentinel-string hack exploiting the pre-widening
+  // closed id union (double-cast required to bypass the type error).
+  // listBasemaps() is the real, typed replacement.
+  const basemaps = listBasemaps();
 
   if (!Array.isArray(basemaps) || basemaps.length === 0) {
     return <p className={styles.fieldLabel}>No basemaps registered.</p>;
