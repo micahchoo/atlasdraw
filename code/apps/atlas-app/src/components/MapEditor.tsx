@@ -1084,18 +1084,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   }, [excalidrawAPI]);
 
   const handleExportAtlasdraw = useCallback(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-    // Open Excalidraw's JSON export dialog which now hosts our
-    // renderCustomUI cards via renderAtlasdrawExportCards.
-    void excalidrawAPI.updateScene; // no-op: access pattern ensures the API is ready
-    // Delegate to Excalidraw's built-in export dialog.
-    // The renderCustomUI already adds .atlasdraw cards there.
-    // Unified export dialog coming in next iteration.
-    window.alert(
-      'Use "Export" from the MainMenu → Export → .atlasdraw card. Unified export dialog coming in next iteration.',
-    );
+    // Same single door as the MainMenu "Save" item and Cmd+S — the
+    // .atlasdraw card is just another entry point to it.
+    void saveAtlasDocument(excalidrawAPI);
   }, [excalidrawAPI]);
 
   // Intercept ChangeCanvasBackground: keep Excalidraw transparent so the map
