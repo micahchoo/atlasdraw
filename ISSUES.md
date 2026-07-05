@@ -203,8 +203,14 @@ a failed save or open ever tells the user it failed.
 
 ## Issue 4 — Two structural hotspots (one component, one class) that concentrate the app's complexity
 
-> **Status: running — ledger: ledgers/DEADWOOD.md** (started 2026-07-04,
-> branch `tend/deadwood-sweep`)
+> **Status: running — ledger: ledgers/DEADWOOD.md** (started 2026-07-04.
+> All 66 modules classified; 2 dead modules deleted on branch
+> `tend/deadwood-deletions` — cut in an isolated worktree because a
+> concurrent journey-walk session was committing to the main checkout;
+> merge it when that session is done. Both god split plans written.
+> Remaining before `done`: maintainer verdict on 2 feature-shaped dead
+> modules, CursorOverlay + PresenceList — built Phase 5 T11, never
+> mounted.)
 
 **Symptom:** `MapEditor.tsx` is 1,728 lines with 65 imports, 16 `useState`,
 17 `useEffect`, and 7 `useCallback` in a single component (line-counted

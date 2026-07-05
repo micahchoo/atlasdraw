@@ -22,8 +22,8 @@ to stay.
 
 | module | inbound references | class | action | commit | test run |
 |---|---|---|---|---|---|
-| src/index.ts | 0 src, 0 test. Not the app entry (`index.html` → `main.tsx`); package.json has no `main`/`exports`; nothing imports `@atlasdraw/atlas-app`. A Phase-1 "demo entry" barrel re-exporting App + a roadmap comment. | dead | deleted | `chore(deadwood): delete dead demo barrel src/index.ts` | vitest 45 files / 369 pass; root tsc clean |
-| src/hooks/useAutosave.ts | 0 src, 1 test (its own `__tests__/useAutosave.test.tsx`). Header names ShareDialog/useShareLink as consumers; both now read `usePersistenceStore` directly (`useShareLink.ts:25,95,100`). Superseded facade. | dead | delete (with its test file) | — | — |
+| src/index.ts | 0 src, 0 test. Not the app entry (`index.html` → `main.tsx`); package.json has no `main`/`exports`; nothing imports `@atlasdraw/atlas-app`; no directory-style (`from ".."`) or dynamic imports resolve to it. A Phase-1 "demo entry" barrel re-exporting App + a roadmap comment. | dead | deleted | ae87a66 on `tend/deadwood-deletions` (first attempt 16ce333 was unintentionally reverted by concurrent-session commit 180b839 — see run notes) | isolated worktree: vitest 45/45 files exit 0; tsc exit 0 |
+| src/hooks/useAutosave.ts | 0 src, 1 test (its own `__tests__/useAutosave.test.tsx`). Header names ShareDialog/useShareLink as consumers; both now read `usePersistenceStore` directly (`useShareLink.ts:25,95,100`). Superseded facade. | dead | deleted (with its test file; also unstaled the `useAutosave().forceSave` comment at MapEditor.tsx:656) | e906f1e on `tend/deadwood-deletions` | isolated worktree: vitest 44/44 files exit 0; tsc exit 0 |
 | src/components/CursorOverlay.tsx | 0 src, 0 test. Complete 139-line collab cursor UI consuming `useCollab`; built Phase 5 Wave 3 (bd233e3, T11 "cursor UI"); `MapEditor.tsx:412-413` comment plans to render it, no mount ever landed. `protocol/realtime-events.ts:132` still documents it as the consumer of cursor events. | dead (feature-shaped) | **verdict required** — pursue (mount it) / reject (delete). Not auto-deleted per sweep rule: feature-shaped dead is a capability-reach row first. | — | — |
 | src/components/PresenceList.tsx | 0 src, 0 test. Complete 92-line presence UI consuming `useCollab`; same T11 commit, same never-mounted state as CursorOverlay. | dead (feature-shaped) | **verdict required** — same cluster as CursorOverlay (one verdict covers both). | — | — |
 
@@ -100,6 +100,113 @@ Inbound = non-test / test-only referencing files.
 | src/state/workspace.ts | 3 / 1 | healthy | keep |
 | src/tools/seedToElement.ts | 1 / 1 | healthy | keep |
 
+## Run notes — concurrent-session incident (2026-07-04/05)
+
+A second agent session (the Issue 3 journey walk, ledger `JOURNEY.md`) was
+active in the same checkout during this run, committing onto whatever branch
+was checked out — including this run's branch (`86ee294`, `180b839`,
+`2210352` are its commits). Consequences, recorded so the history makes
+sense:
+
+- **16ce333 (this run's first index.ts deletion) was silently reverted** by
+  `180b839`: that session's `commit -a` swept the shared git index, which
+  held this run's diagnostic restore of the file.
+- A storm of 18 test failures mid-run ("useToast must be used within a
+  ToastProvider") was **not** caused by either deletion — it was the other
+  session's half-landed Issue 7 fix (useToast added to MapEditor before its
+  tests were wrapped in ToastProvider). Deleting/restoring index.ts appeared
+  correlated only because the tree kept changing between runs.
+- Fix phase therefore moved to an isolated worktree
+  (`tend/deadwood-deletions`, cut from `2210352`), where both deletions were
+  re-verified against a quiescent tree. **Merge that branch once the
+  journey-walk session is done.**
+- Process lesson (also harvested): `vitest run | tail` gates on tail's exit
+  code, not vitest's — the first "test run: pass" entry for index.ts was
+  unverified. All worktree runs captured real exit codes.
+
 ## Split plans (god rows)
 
-_(filled in during this run — plans only, execution is future work)_
+Plans only — execution is future work, one extraction per PR-sized change.
+Line references are as of commit `86ee294` (the tree the analysis read);
+re-anchor with grep before executing, since MapEditor.tsx gained ~90 lines
+in `180b839`.
+
+### MapEditor.tsx (1,719 lines → hub component + 5 hooks)
+
+Structure: component body 364–1719; JSX 1247–1717; `excalidrawAPI` is the
+universal dependency nearly every concern reads — it stays in MapEditor and
+is passed down. Much of the file is already thin hook wiring
+(useCoordinateSync, useGeoAnchor, useLayerRegistrySync, useToolState…); the
+split extracts the five concerns whose logic still lives inline. Cut order,
+cheapest/safest first:
+
+1. **`useCollabDataLayer(map, features)`** — move lines 794–858 (two
+   effects: MapLibre source/layer add/remove + data push) plus
+   `COLLAB_DATA_ID`/`hasCollabFeatures`; import or move `inferGeometryType`
+   (132–141). Self-contained lifecycle, no shared refs. No existing test —
+   add a characterization test, but blast radius is small.
+2. **`useConvertToDataLayer(map, excalidrawAPI, registry)`** — move
+   `currentConvertibleSelection` (879–903), `handleConvert` (905–945), the
+   `registerContextMenuItem` effect (1022–1064). Best-covered inline concern:
+   `MapEditor.contextmenu.test.tsx` exercises registration, predicate, the
+   full perform pipeline, and unregister-on-unmount.
+3. **`usePersistenceWiring(excalidrawAPI)`** — move the 587–679 effect
+   (PersistenceStore creation, remoteSave, forceSave registration, IDB
+   load+hydrate, startAutoSave, teardown); relocate the remote-id IndexedDB
+   cache (module scope 179–237) to `state/remoteMapIdCache.ts`. Indirect
+   coverage via `MapEditor.atlasdraw-export.test.tsx`; the autosave
+   debounce/forceSave path is untested — add coverage first (overlaps
+   Issue 6's climb).
+4. **`useMapEditorKeyboard(...)`** — move the space-held effect (517–534)
+   and main shortcut effect (726–779). Caveat: `spaceHeldRef` is read by
+   `handleExcalidrawChange`, so either keep the ref in MapEditor and pass it
+   in, or do 4+5 together. No keyboard test exists — characterization first.
+5. **`useExcalidrawChangeHandler(...)`** — hardest, last: the 1109–1238
+   mega-callback fuses five concerns (background intercept + scroll-lock +
+   space-pan, coord-sync consumer, autosave markDirty, aria announce) and
+   owns six refs (490–515). Entirely uncovered today — write
+   characterization tests per sub-concern before touching it.
+
+Coupling to respect (the expensive seams): `mapBg` (bg-intercept ↔
+useExportPNG), `syncNow` (coordinate sync ↔ change handler),
+`activeWorkspaceIdRef` (workspace ↔ share client), `spaceHeldRef` (keyboard
+↔ change handler).
+
+### state/collab.ts (585-line CollabState → 3 channels + thin facade)
+
+Field/method groups and their coupling: the Socket.IO channel is the spine —
+`connect()` (276–493) alone wires sockets, Yjs, crypto, comments, undo, and
+the snapshot-retry machine. Presence is pure Socket.IO handler state;
+comments are nearly independent; undo needs both `_socket.id` and
+`_yjsLayer.doc` at connect time (305–308) — that handoff is the one
+cross-module wire to design deliberately.
+
+Extraction order:
+
+1. **`CommentsChannel`** — `_commentsLayer`, the lazy `get commentsLayer`
+   factory (213–266), create/destroy in connect (477–482) / disconnect
+   (539–540). Near-zero coupling; depends only on `getAppConfig`,
+   `localStorage`, and roomId/workspaceId args. No existing coverage — add a
+   small characterization test.
+2. **`YjsChannel`** — `_yjsWs`, `_yjsLayer`, `_undoManager`; the Yjs half of
+   connect (465–492), `yjsDoc`/`undoManager` getters, teardown (533–537).
+   Resolve the undo coupling by passing the origin id in
+   (`attachUndo(originId)`) from the facade after socket connect.
+3. **`SceneChannel`** — everything else: `_socket`, `_currentRoomId`,
+   `_roomKey`, `_peers`, `_localCursor`, the scene-update passthrough, and
+   the whole snapshot state machine (88–97, 557–583). Keep crypto + snapshot
+   + presence together — they're entangled through `_socket`/`_roomKey`;
+   peeling presence into a `PresenceTracker` is an optional later step.
+   **`state/collab.test.ts` covers exactly this piece end-to-end** (snapshot
+   pull, retries, joining window, disconnect idempotency) — retarget those
+   tests at SceneChannel and extract against a green suite.
+4. **`CollabState` stays as a thin facade** — `active` + constructor, owns
+   the three channels, fans out connect/disconnect, re-exposes the read
+   getters. Consumers (MapEditor, useCollabRoom, useYjsLayer, ShareDialog,
+   useCollab context) see no interface change.
+
+Bonus finding (method-level deadwood, logged not fixed): `emitSceneUpdate`
+(503), the `onSceneUpdate` setter (161), and the `undoManager` getter (151)
+have **zero non-test consumers** anywhere in src — confirmed by full-src
+grep. The split can drop them instead of carrying them; decide at execution
+time.
