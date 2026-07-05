@@ -504,6 +504,23 @@ reported and every forced failure was observed.
 
 ## Issue 8 — The realtime relay skips every operational safeguard storage already has
 
+> **Status: done 2026-07-05** — ledger: `NEGSPACE.md`. Probed against real
+> local postgres/minio containers (test credentials), not reasoned about.
+> Fixed: storage's `/health` now pings the adapter (real 503 when
+> postgres/minio are down, was an unconditional 200); realtime gained
+> SIGTERM/SIGINT handling that closes Socket.IO, drains y-websocket clients
+> with a real close frame, and quits Redis clients if configured; realtime's
+> raw `console.log`/`console.warn` are now structured `pino` logging
+> matching storage's. **A more severe bug surfaced while forcing the health
+> check**: `pg.Pool` had no `error` listener, so a stopped postgres
+> container didn't just fail the health probe — it crashed the entire
+> storage process (unhandled EventEmitter `error` throws by default); fixed
+> alongside the health-check row. Incidental: all three app Dockerfiles were
+> missing `corepack enable`, breaking any fresh build — fixed; a deeper,
+> pre-existing Dockerfile COPY-scope issue and storage's own broken `tsc`
+> build were left flagged, not fixed (out of scope). Storage 122 tests (13
+> files), realtime 22 tests (6 files), both green.
+
 **Symptom:** `apps/storage/src/index.ts:126-133` handles SIGTERM/SIGINT and
 drains the adapter + HTTP server before exit; `apps/realtime/src/index.ts`
 has no such handling at all (grep for `SIGTERM|SIGINT` returns nothing) — it
