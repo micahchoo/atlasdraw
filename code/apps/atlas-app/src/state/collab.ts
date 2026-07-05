@@ -14,14 +14,15 @@
 // are stored as peer viewport overlays only — local camera is never updated.
 
 import { io, type Socket } from "socket.io-client";
-import { YjsLayer, CollabUndoManager } from "@atlasdraw/data";
 
+import type { CollabUndoManager } from "@atlasdraw/data";
 import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
 
 import { getAppConfig } from "../config/app-config";
 import { encryptScene, decryptScene } from "../collab/scene-crypto";
 
 import { CommentsChannel } from "./commentsChannel";
+import { YjsChannel } from "./yjsChannel";
 
 import type { CommentsLayer } from "./comments";
 
@@ -61,9 +62,9 @@ export interface PeerMeta {
 
 export class CollabState {
   private _socket: Socket | null = null;
-  private _yjsWs: WebSocket | null = null;
-  private _yjsLayer: YjsLayer | null = null;
-  private _undoManager: CollabUndoManager | null = null;
+  // Yjs CRDT data-layer sync channel (separate TCP, per Q9). Extracted to
+  // YjsChannel.
+  private _yjsChannel: YjsChannel = new YjsChannel();
   private _peers: Map<string, PeerMeta> = new Map();
   private _localCursor: CursorState = { x: 0, y: 0 };
   private _roomKey: CryptoKey | null = null;
@@ -131,7 +132,7 @@ export class CollabState {
    * Null before connect() or after disconnect().
    */
   get yjsDoc() {
-    return this._yjsLayer?.doc ?? null;
+    return this._yjsChannel.doc;
   }
 
   /**
@@ -147,7 +148,7 @@ export class CollabState {
    * See @atlasdraw/data CollabUndoManager (Phase 5 Task 12).
    */
   get undoManager(): CollabUndoManager | null {
-    return this._undoManager;
+    return this._yjsChannel.undoManager;
   }
 
   /**
@@ -243,17 +244,10 @@ export class CollabState {
     this._socket.on("connect", () => {
       this._socket?.emit("JOIN_ROOM", { roomId });
 
-      // Phase 5 Task 12: Create CollabUndoManager with the socket.id as
-      // local origin so undo only affects this client's data-layer ops.
-      // All local Yjs mutations must be tagged with this origin via
-      //   ydoc.transact(fn, socket.id)
-      // to be tracked.
-      if (this._yjsLayer) {
-        this._undoManager = new CollabUndoManager(
-          this._yjsLayer.doc,
-          this._socket!.id,
-        );
-      }
+      // Phase 5 Task 12: attach the CollabUndoManager now that socket.id
+      // (the local origin) is known. All local Yjs mutations must be tagged
+      // with this origin via ydoc.transact(fn, socket.id) to be tracked.
+      this._yjsChannel.attachUndo(this._socket!.id);
 
       // Q-P5-1: open the 5 s joining window and pull a SCENE_SNAPSHOT from
       // the relay-elected peer. Retries up to 3 times total on a 2 s
@@ -401,16 +395,10 @@ export class CollabState {
       },
     );
 
-    // -----------------------------------------------------------------------
-    // Yjs WebSocket — CRDT data-layer sync channel (separate TCP, per Q9)
-    //
-    // Lifecycle only in Task 7. Actual y-protocols bidirectional sync is wired
-    // by the useYjsLayer hook (Task 9). The WebSocket is held open here so
-    // the relay's in-memory Y.Doc and room-join state is available when Task 9
-    // calls setupWSConnection or the equivalent.
-    // -----------------------------------------------------------------------
-    this._yjsLayer = new YjsLayer();
-    this._yjsWs = new WebSocket(`${wsUrl}/yjs/${roomId}`);
+    // Yjs WebSocket — CRDT data-layer sync channel (separate TCP, per Q9).
+    // Lifecycle only; actual y-protocols bidirectional sync is wired by the
+    // useYjsLayer hook.
+    this._yjsChannel.connect(wsUrl, roomId);
 
     // -----------------------------------------------------------------------
     // Phase 6 A3 — anchored comments Y.Doc on a separate WebSocket.
@@ -420,16 +408,6 @@ export class CollabState {
     // Trust posture: plaintext on relay per ADR-0010 (same as data-layer doc).
     // -----------------------------------------------------------------------
     this._commentsChannel.connect(wsUrl, roomId, workspaceId ?? null);
-
-    this._yjsWs.onopen = () => {
-      // WebSocket ready — Task 9 will bind Yjs sync here.
-    };
-    this._yjsWs.onerror = () => {
-      // Yjs WS error — deferred to Task 9 error handling & retry.
-    };
-    this._yjsWs.onclose = () => {
-      // Yjs WS closed — deferred to Task 9 reconnection logic.
-    };
   }
 
   /**
@@ -470,11 +448,7 @@ export class CollabState {
 
     this._socket?.close();
     this._socket = null;
-    this._yjsWs?.close();
-    this._yjsWs = null;
-    this._undoManager = null;
-    this._yjsLayer?.doc.destroy();
-    this._yjsLayer = null;
+    this._yjsChannel.disconnect();
     // Phase 6 A3 — tear down the comments Y.Doc + provider in lockstep.
     this._commentsChannel.disconnect();
     this._peers.clear();
