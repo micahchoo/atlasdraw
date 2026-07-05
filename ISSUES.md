@@ -430,6 +430,25 @@ pass.
 
 ## Issue 7 — Failures in the save/settings surface are disposed of by disappearing, not by telling anyone
 
+> **Status: done 2026-07-05** — ledger: `SILENCE.md`. The two seeded
+> findings (MapEditor open/save, auto-save failure) turned out already
+> fixed by Issue 3/4 — this pass re-swept fresh rather than trusting the
+> pre-split line numbers. Real gaps found and fixed: `usePersistenceWiring`'s
+> initial `load()` failure was console-only (now toasts); the
+> `remoteSaveFailed` Zustand flag was tracked but had zero UI consumers
+> (now toasts once on the ok→failed edge, not every autosave tick);
+> `useConvertToDataLayer`'s outer catch mixed a `window.alert` with an
+> unguarded rethrow inside a vendored context-menu `onClick` (now toasts
+> both branches); `useExportPNG` and `AssetLibraryPanel` each had a
+> `window.alert`/console-only path folded into `ToastProvider`.
+> `SettingsDialog`'s Storage/Collaboration tabs read two env vars
+> (`VITE_STORAGE_MODE`, `VITE_REALTIME_URL`) that don't exist in
+> `app-config.ts`'s schema and hardcoded a fake "Connected" status — now
+> reads the real config and does a live `/health` fetch. `window.alert` is
+> now zero-hits repo-wide outside tests — one notification path. 27 rows
+> in SILENCE.md, all surfaced/reported/accepted; 5 new/updated test files,
+> full atlas-app suite 61 files / 506 tests green.
+
 **Symptom:** `openAtlasDocument`/`saveAtlasDocument` (`MapEditor.tsx:275-323`)
 catch every failure and route it to `console.warn("[atlasdraw]
 openFromDisk failed", err)` / `"saveToDisk failed"` — no toast, no dialog,
