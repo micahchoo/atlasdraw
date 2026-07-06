@@ -184,7 +184,10 @@ no user demand for in-app history surfaces *and* the local-first
 not owed as a feature) — in which case the honest fix is a doc line, not a
 build, and this hands to tend.
 
-**Status:** queued.
+**Status:** parked 2026-07-05 — deferred by maintainer. Rests on unverified
+pull (claim-to-test) and is a bigger build than D1 with no surface to reuse;
+re-open by running the `struggling-moment scan` for history/restore demand
+first, or on any user request for in-app versioning.
 
 ---
 
