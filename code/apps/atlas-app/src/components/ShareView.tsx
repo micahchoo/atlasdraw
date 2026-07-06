@@ -15,49 +15,22 @@
 // driven from a remote document.
 
 import React, { useEffect, useState } from "react";
-import LZString from "lz-string";
 import { Excalidraw } from "@atlasdraw/excalidraw";
-import { read, type AtlasdrawDocument } from "@atlasdraw/data";
 
+import { type HttpStorageClient } from "../services/createHttpStorageClient";
 import {
-  createHttpStorageClient,
-  ShareExpiredError,
-  type HttpStorageClient,
-} from "../services/createHttpStorageClient";
-import { getAppConfig } from "../config/app-config";
+  loadShareDocument,
+  tokenFromPath,
+  type ShareLoadResult,
+} from "../state/loadShareDocument";
 
-type ViewState =
-  | { kind: "loading" }
-  | { kind: "ready"; doc: AtlasdrawDocument }
-  | { kind: "not-found" }
-  | { kind: "expired" }
-  | { kind: "error"; message: string };
+type ViewState = { kind: "loading" } | ShareLoadResult;
 
 export interface ShareViewProps {
   /** Test seam — override the HTTP client. */
   client?: HttpStorageClient;
   /** Test seam — override the location source for path / hash. */
   location?: { pathname: string; hash: string };
-}
-
-function decodeHashDoc(hash: string): AtlasdrawDocument {
-  // Hash form: `#v1:<encoded>`. Strip the leading `#`.
-  const stripped = hash.startsWith("#") ? hash.slice(1) : hash;
-  if (!stripped.startsWith("v1:")) {
-    throw new Error("Unsupported share-link version.");
-  }
-  const enc = stripped.slice("v1:".length);
-  const json = LZString.decompressFromBase64(enc);
-  if (!json) {
-    throw new Error("Corrupted share-link payload.");
-  }
-  return JSON.parse(json) as AtlasdrawDocument;
-}
-
-function tokenFromPath(pathname: string): string | null {
-  // `/m/<token>` — extract token. Reject anything else.
-  const m = /^\/m\/([A-Za-z0-9_-]{21})\/?$/.exec(pathname);
-  return m ? m[1] : null;
 }
 
 export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
@@ -71,63 +44,10 @@ export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
     let cancelled = false;
 
     void (async () => {
-      // Hash form takes precedence — if both happen to be set, hash wins.
-      if (loc.pathname === "/m" && loc.hash.startsWith("#v1:")) {
-        try {
-          const doc = decodeHashDoc(loc.hash);
-          if (!cancelled) {
-            setState({ kind: "ready", doc });
-          }
-        } catch (err) {
-          if (!cancelled) {
-            setState({
-              kind: "error",
-              message:
-                err instanceof Error ? err.message : "Failed to decode link.",
-            });
-          }
-        }
-        return;
-      }
-
-      const token = tokenFromPath(loc.pathname);
-      if (!token) {
-        if (!cancelled) {
-          setState({ kind: "error", message: "Invalid share link." });
-        }
-        return;
-      }
-
-      const cfg = getAppConfig();
-      const httpClient =
-        client ??
-        createHttpStorageClient({ baseUrl: cfg.storageBaseUrl ?? "" });
-      try {
-        const buf = await httpClient.getShareBlob(token);
-        if (!buf) {
-          if (!cancelled) {
-            setState({ kind: "not-found" });
-          }
-          return;
-        }
-        const doc = await read(new Blob([buf]));
-        if (!cancelled) {
-          setState({ kind: "ready", doc });
-        }
-      } catch (err) {
-        if (err instanceof ShareExpiredError) {
-          if (!cancelled) {
-            setState({ kind: "expired" });
-          }
-          return;
-        }
-        if (!cancelled) {
-          setState({
-            kind: "error",
-            message:
-              err instanceof Error ? err.message : "Failed to load shared map.",
-          });
-        }
+      const token = tokenFromPath(loc.pathname, "/m/");
+      const result = await loadShareDocument(loc.hash, token, client);
+      if (!cancelled) {
+        setState(result);
       }
     })();
 

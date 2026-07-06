@@ -24,6 +24,7 @@ import { ToastProvider } from "./components/ToastProvider";
 import { BillingPage } from "./components/BillingPage";
 import { MapEditor } from "./components/MapEditor";
 import { ShareView } from "./components/ShareView";
+import { EmbedView } from "./components/EmbedView";
 import { getAppConfig } from "./config/app-config";
 import { createHttpStorageClient } from "./services/createHttpStorageClient";
 import { resolveWorkspaceFromEnv } from "./state/workspace";
@@ -44,6 +45,15 @@ function pickView() {
   }
   const path = window.location.pathname;
   const hash = window.location.hash;
+  // D1 (flag VITE_EMBED_ENABLED): read-only MAP embed. Distinct from ShareView
+  // (`/m`) — mounts the full MapLibre stack chromeless for cross-origin
+  // <iframe> use. `/embed#v1:<lz>` (hash) and `/embed/<token>` (token).
+  if (
+    (path === "/embed" || path.startsWith("/embed/")) &&
+    import.meta.env.VITE_EMBED_ENABLED === "true"
+  ) {
+    return <EmbedView />;
+  }
   // Q-P5-2: a `#room:` fragment under `/m` is a path mismatch — never grant
   // write capability via the share-view path. Treat as read-only.
   if (path === "/m" && hash.startsWith("#room:")) {
