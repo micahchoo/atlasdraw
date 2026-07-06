@@ -35,6 +35,7 @@ import type {
   Excalidraw,
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
+import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
@@ -139,7 +140,11 @@ export function useExcalidrawChangeHandler({
           }
         }
         excalidrawAPI?.updateScene({
-          appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
+          appState: {
+            scrollX: 0,
+            scrollY: 0,
+            zoom: { value: 1 as NormalizedZoomValue },
+          },
         });
         return;
       }

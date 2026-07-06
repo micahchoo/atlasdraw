@@ -25,7 +25,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { MapCanvas, type MapCanvasInitialView } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
-import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type {
+  ExcalidrawElement,
+  ExcalidrawImperativeAPI,
+} from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useMapRef } from "../hooks/useMapRef";
@@ -224,9 +227,7 @@ const EmbedCanvas: React.FC<{
 
   const initialData = useMemo(
     () => ({
-      elements: (doc.scene ?? []) as unknown as NonNullable<
-        React.ComponentProps<typeof Excalidraw>["initialData"]
-      >["elements"],
+      elements: (doc.scene ?? []) as unknown as readonly ExcalidrawElement[],
       appState: { viewBackgroundColor: "transparent" },
     }),
     [doc],

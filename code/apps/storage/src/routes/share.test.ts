@@ -28,6 +28,7 @@ function wrapWithSpy(inner: StorageClient): SpyClient {
   const calls = { createShareToken: 0, resolveToken: 0, getBlob: 0 };
   return {
     calls,
+    close: inner.close.bind(inner),
     createMap: inner.createMap.bind(inner),
     getMap: inner.getMap.bind(inner),
     updateMap: inner.updateMap.bind(inner),

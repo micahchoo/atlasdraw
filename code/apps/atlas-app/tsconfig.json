@@ -1,15 +1,10 @@
 {
-  "extends": "../../packages/tsconfig.base.json",
+  "// note": "ignoreDeprecations is 6.0 here because this app resolves its own TypeScript 6.0.x (via `typescript: *`), which needs 6.0 to silence the inherited moduleResolution=node10 deprecation. The packages build under the root's pinned TS 5.9.3 which needs 5.0 (tsconfig.base.json). Unify the monorepo TS version to drop this split.",
+  "extends": ["../../packages/tsconfig.base.json", "../../packages/tsconfig.vendored-built.json"],
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "noEmit": true
+    "noEmit": true,
+    "ignoreDeprecations": "6.0"
   },
-  "references": [
-    { "path": "../../packages/basemap" },
-    { "path": "../../packages/data" },
-    { "path": "../../packages/geo" },
-    { "path": "../../packages/tools" }
-  ],
+  "references": [{ "path": "../../packages/basemap" }, { "path": "../../packages/data" }, { "path": "../../packages/geo" }, { "path": "../../packages/tools" }],
   "include": ["src/**/*"]
 }

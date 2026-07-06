@@ -1,0 +1,17 @@
+{
+  "// note": "Consumers of the vendored engine (atlas-app + the composite packages basemap/data/geo/tools) extend this AFTER tsconfig.base.json so `@atlasdraw/{common,element,excalidraw,math,utils}` resolve to their BUILT declarations (dist/types) instead of source. This stops every consumer's `tsc` from dragging the whole vendored engine's source into its program (the TS6059 rootDir cascade + upstream-fork type noise) and lets it typecheck against the vendored public API only. Requires `yarn build:packages` to have produced dist/types first (the gate does this). Base keeps pointing at source so the vendored packages' own `gen:types` self-build still works from a clean tree.",
+  "compilerOptions": {
+    "paths": {
+      "@atlasdraw/common": ["./common/dist/types/common/src/index.d.ts"],
+      "@atlasdraw/common/*": ["./common/dist/types/common/src/*"],
+      "@atlasdraw/element": ["./element/dist/types/element/src/index.d.ts"],
+      "@atlasdraw/element/*": ["./element/dist/types/element/src/*"],
+      "@atlasdraw/excalidraw": ["./excalidraw/dist/types/excalidraw/index.d.ts"],
+      "@atlasdraw/excalidraw/*": ["./excalidraw/dist/types/excalidraw/*"],
+      "@atlasdraw/math": ["./math/dist/types/math/src/index.d.ts"],
+      "@atlasdraw/math/*": ["./math/dist/types/math/src/*"],
+      "@atlasdraw/utils": ["./utils/dist/types/utils/src/index.d.ts"],
+      "@atlasdraw/utils/*": ["./utils/dist/types/utils/src/*"]
+    }
+  }
+}

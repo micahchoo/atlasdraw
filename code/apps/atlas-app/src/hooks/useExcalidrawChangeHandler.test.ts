@@ -8,10 +8,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawImperativeAPI,
-} from "@atlasdraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type { OrderedExcalidrawElement } from "@atlasdraw/element/types";
 import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -37,8 +35,8 @@ const NO_FILES = {} as BinaryFiles;
  * the handler under test never reads. */
 function fakeElements(
   partials: ReadonlyArray<Record<string, unknown>>,
-): readonly ExcalidrawElement[] {
-  return partials as unknown as readonly ExcalidrawElement[];
+): readonly OrderedExcalidrawElement[] {
+  return partials as unknown as readonly OrderedExcalidrawElement[];
 }
 
 function makeGeoElement(

@@ -15,10 +15,11 @@ import LZString from "lz-string";
 import React, { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import { useShareLink } from "../useShareLink";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 
 // ---------------------------------------------------------------------------
@@ -96,6 +97,8 @@ function makeMockClient(): HttpStorageClient & {
     createShareToken: createShareTokenSpy,
     resolveToken: vi.fn(async () => null),
     getShareBlob: vi.fn(async () => null),
+    listWorkspaces: vi.fn(),
+    createCheckoutSession: vi.fn(),
     createMapSpy,
     createShareTokenSpy,
   };

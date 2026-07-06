@@ -140,8 +140,9 @@ async function main(): Promise<void> {
   // SENTRY_DSN is unset); captureException is a no-op if init was skipped.
   app.setErrorHandler((error, _request, reply) => {
     Sentry.captureException(error);
-    reply.status(error.statusCode || 500).send({
-      error: error.message || "Internal Server Error",
+    const err = error as { statusCode?: number; message?: string };
+    reply.status(err.statusCode || 500).send({
+      error: err.message || "Internal Server Error",
     });
   });
 

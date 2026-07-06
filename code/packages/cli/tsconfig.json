@@ -1,5 +1,5 @@
 {
-  "extends": "../tsconfig.base.json",
+  "extends": ["../tsconfig.base.json", "../tsconfig.vendored-built.json"],
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
@@ -7,10 +7,6 @@
     "incremental": true,
     "types": ["node"]
   },
-  "references": [
-    { "path": "../data" }
-  ],
-  "include": [
-    "src/**/*"
-  ]
+  "references": [{ "path": "../data" }],
+  "include": ["src/**/*"]
 }

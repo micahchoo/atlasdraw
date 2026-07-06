@@ -12,7 +12,7 @@ function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "atlasdraw-migrate-"));
 }
 
-function tmpDb(): Database {
+function tmpDb(): Database.Database {
   return new Database(":memory:");
 }
 

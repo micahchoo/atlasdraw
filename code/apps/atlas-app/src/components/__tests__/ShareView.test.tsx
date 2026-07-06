@@ -32,6 +32,8 @@ function stubClient(
     createShareToken: vi.fn(),
     resolveToken: vi.fn(),
     getShareBlob: vi.fn(async () => null),
+    listWorkspaces: vi.fn(),
+    createCheckoutSession: vi.fn(),
     ...overrides,
   };
 }

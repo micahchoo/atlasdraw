@@ -17,6 +17,8 @@
 import React, { useEffect, useState } from "react";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
+import type { ExcalidrawElement } from "@atlasdraw/excalidraw";
+
 import { type HttpStorageClient } from "../services/createHttpStorageClient";
 import {
   loadShareDocument,
@@ -122,7 +124,8 @@ export const ShareView: React.FC<ShareViewProps> = ({ client, location }) => {
         <Excalidraw
           viewModeEnabled
           initialData={{
-            elements: doc.scene ?? [],
+            elements: (doc.scene ??
+              []) as unknown as readonly ExcalidrawElement[],
             appState: { viewBackgroundColor: "#ffffff" },
           }}
         />

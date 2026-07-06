@@ -39,7 +39,7 @@ import {
 
 import { DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
-import { PinTool, type ScaleMode } from "@atlasdraw/tools";
+import { PinTool } from "@atlasdraw/tools";
 
 import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
 
@@ -48,7 +48,7 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import type { GeoAnchor } from "@atlasdraw/geo";
+import type { GeoAnchor, ScaleMode } from "@atlasdraw/geo";
 
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
@@ -725,7 +725,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const handleExcalidrawChange = useExcalidrawChangeHandler({
     excalidrawAPI,
     map,
-    syncNow,
+    syncNow: syncNow ?? undefined,
     announceMapEditor,
     setMapBg,
     spaceHeldRef,
@@ -1071,7 +1071,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             activeBasemapId={activeBasemapId}
             onBasemapChange={setActiveBasemapId}
             onCloseRequest={() => setShowSettings(false)}
-            workspaceId={activeWorkspaceId}
+            workspaceId={activeWorkspaceId ?? undefined}
           />
         )}
 
@@ -1117,7 +1117,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               .entries.map<LayerLegendEntry>((e) => ({
                 id: e.id,
                 name: e.label,
-                color: e.kind === "data" ? e.style.fillColor : "#868e96",
+                color:
+                  e.kind === "data"
+                    ? e.style.fillColor ?? "#868e96"
+                    : "#868e96",
               }))}
             onCloseRequest={() => setShowPrintDialog(false)}
           />

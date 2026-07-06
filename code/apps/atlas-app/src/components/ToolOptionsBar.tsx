@@ -11,9 +11,10 @@
 
 import React from "react";
 
-import styles from "../styles/ToolOptionsBar.module.css";
+import type { AtlasdrawTool } from "@atlasdraw/tools";
+import type { ScaleMode } from "@atlasdraw/geo";
 
-import type { AtlasdrawTool, ScaleMode } from "@atlasdraw/tools";
+import styles from "../styles/ToolOptionsBar.module.css";
 
 // ---------------------------------------------------------------------------
 // Props

@@ -7,7 +7,7 @@
     "allowSyntheticDefaultImports": true,
     "module": "ESNext",
     "moduleResolution": "Node",
-    "ignoreDeprecations": "6.0",
+    "ignoreDeprecations": "5.0",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
     "emitDeclarationOnly": true,

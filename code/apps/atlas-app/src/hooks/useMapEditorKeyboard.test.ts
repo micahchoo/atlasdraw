@@ -78,7 +78,7 @@ describe("useMapEditorKeyboard — shortcut bindings", () => {
 
     fireKey({ key: "k", metaKey: true });
     expect(params.setShowQuickActions).toHaveBeenCalledTimes(1);
-    const updater = params.setShowQuickActions.mock.calls[0][0];
+    const updater = vi.mocked(params.setShowQuickActions).mock.calls[0][0];
     expect(updater(false)).toBe(true);
   });
 
@@ -122,7 +122,7 @@ describe("useMapEditorKeyboard — shortcut bindings", () => {
 
     fireKey({ key: "?" });
     expect(params.setShowShortcuts).toHaveBeenCalledTimes(1);
-    const updater = params.setShowShortcuts.mock.calls[0][0];
+    const updater = vi.mocked(params.setShowShortcuts).mock.calls[0][0];
     expect(updater(false)).toBe(true);
   });
 

@@ -286,6 +286,8 @@ export const Excalidraw = React.memo(ExcalidrawBase, areEqual);
 Excalidraw.displayName = "Excalidraw";
 
 export type { ExcalidrawImperativeAPI } from "./types";
+export type { BinaryFileData, DataURL } from "./types";
+export type { ExcalidrawElement, FileId } from "@atlasdraw/element/types";
 
 export {
   getSceneVersion,

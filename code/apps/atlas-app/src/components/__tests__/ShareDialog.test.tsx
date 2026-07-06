@@ -19,10 +19,11 @@ import {
 
 import * as protocol from "@atlasdraw/protocol";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import { ShareDialog } from "../ShareDialog";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 import type { CollabState } from "../../state/collab";
 
@@ -53,6 +54,8 @@ function stubClient(): HttpStorageClient {
     createShareToken: vi.fn(),
     resolveToken: vi.fn(),
     getShareBlob: vi.fn(),
+    listWorkspaces: vi.fn(),
+    createCheckoutSession: vi.fn(),
   };
 }
 

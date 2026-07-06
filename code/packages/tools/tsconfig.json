@@ -1,13 +1,11 @@
 {
-  "extends": "../tsconfig.base.json",
+  "extends": ["../tsconfig.base.json", "../tsconfig.vendored-built.json"],
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": true,
     "incremental": true
   },
-  "references": [
-    { "path": "../geo" }
-  ],
+  "references": [{ "path": "../geo" }],
   "include": ["src/**/*"]
 }

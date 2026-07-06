@@ -25,7 +25,10 @@ const MIGRATIONS_TABLE = "_migrations";
 // SQLite
 // ---------------------------------------------------------------------------
 
-export function migrateSqliteSync(db: Database, migrationsDir: string): void {
+export function migrateSqliteSync(
+  db: Database.Database,
+  migrationsDir: string,
+): void {
   const existingTables = listTablesSqlite(db);
   const hasMigrationsTable = existingTables.has(MIGRATIONS_TABLE);
 
@@ -80,7 +83,7 @@ export function migrateSqliteSync(db: Database, migrationsDir: string): void {
   runAll();
 }
 
-function listTablesSqlite(db: Database): Set<string> {
+function listTablesSqlite(db: Database.Database): Set<string> {
   const rows = db
     .prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",

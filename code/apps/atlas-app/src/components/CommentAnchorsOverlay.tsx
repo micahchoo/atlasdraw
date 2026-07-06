@@ -22,6 +22,8 @@ import React, { useEffect, useState } from "react";
 
 import { sceneCoordsToViewportCoords } from "@atlasdraw/common";
 
+import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
+
 import { useCollab } from "../hooks/useCollab";
 
 import {
@@ -226,7 +228,7 @@ export function CommentAnchorsOverlay(
       const { x, y } = sceneCoordsToViewportCoords(
         { sceneX: e.x + e.width, sceneY: e.y },
         appState as {
-          zoom: { value: number };
+          zoom: { value: NormalizedZoomValue };
           offsetLeft: number;
           offsetTop: number;
           scrollX: number;
