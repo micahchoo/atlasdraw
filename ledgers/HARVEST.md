@@ -21,6 +21,14 @@ One dated section per tend session. Row: lesson | general rule | stored where.
 | `api.updateScene({elements})` silently dropped hand-authored Excalidraw elements (getSceneElements → []); they need `restore`, which `initialData.elements` runs but raw updateScene does not. | To load a scene into Excalidraw, pass it via `initialData.elements` (restored on mount), not a raw `updateScene`. Post-load geo `syncNow()` fires a frame later, after the scene commits. | `ledgers/PROBE-embed.md` §Build; code comment in `EmbedView.tsx` |
 | A concurrent agent session edited `packages/excalidraw` in this shared checkout mid-build. Committing my vulnerable work (dep-fix, graft docs) first + staging only my files explicitly (never `-a`) kept its churn out of every commit. | In a shared checkout with an active concurrent session: commit your work early, stage by explicit path, verify `git diff --cached --name-only` before every commit, never `commit -a`. | memory `concurrent-sessions-shared-checkout`; this ledger |
 
+## 2026-07-05 — Embed build Phase A.2 (D1)
+
+| lesson | general rule | stored where |
+|---|---|---|
+| A full-suite run showed 1 failure (`geoOpKnownHazards.repro.test.ts` `it.fails` → "Expect test to fail") that was NOT my code — the concurrent session had modified `useGeoAnchor.ts`/`CoordinateSync.ts` (uncommitted) and their geo-hazard fix made an `it.fails` repro pass. My committed tree (explicit-path staging) excluded all of it. | A single unexplained suite failure during shared-checkout work: `git status` the failing area first — a concurrent session's uncommitted fix flipping an `it.fails` repro is a phantom, not your regression. Confirm it sits in files you never staged before diagnosing your own diff. | memory `concurrent-sessions-shared-checkout`; this ledger |
+| Hiding Excalidraw's view-mode chrome needed `!important` — its own `.layer-ui__wrapper__footer { display:flex }` out-specifies a plain scoped selector. Done in a feature-scoped `EmbedView.module.css`, not the `excalidraw-theme.css` token-override layer the vendored-chrome rule guards. | The vendored-chrome rule bans overrides in `excalidraw-theme.css` specifically; a feature-scoped display hide (e.g. embed chrome) in its own module is legitimate — but grep the real class names first (App-menu_top / layer-ui__wrapper__footer / help-icon) rather than guessing. | code comment in `EmbedView.module.css` |
+| A React `<noscript>` can't provide a scripts-blocked fallback for an SPA route — the app never boots without JS, so the noscript in the React tree never renders. | Scripts-blocked fallbacks for SPA routes need SSR or a pre-rendered static page, not a React `<noscript>`. Don't fake it; document the requirement. | ADR-0012; `BUILD-embed.md`; EmbedView header |
+
 ## 2026-07-05 — Thin-slice probe (D1 embed)
 
 | lesson | general rule | stored where |

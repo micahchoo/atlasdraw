@@ -137,7 +137,7 @@ named persona.
    without response-header control that the `docker compose up` self-host
    story can't provide by default (ADR the trade-off instead of shipping).
 
-**Status:** built (Phase A) 2026-07-05 — `feat/map-embed` (commit `b47e2d8`). Gate cleared first (`fix/dep-bumps` `193e87d`, Dependabot runtime highs patched). `EmbedView` + `/embed` route mount the real MapLibre stack read-only; validated in-browser — live SF basemap + geo-anchored annotations render in a cross-origin iframe, tile-CORS risk retired. Phase A = basemap + annotations; data layers / chrome params / snippet / frame-ancestors ADR / PNG fallback remain (`BUILD-embed.md`). Ledgers: `PROBE-embed.md`, spec `PRFAQ.md`.
+**Status:** committed to build → **shipped to `main`** 2026-07-05 (Phases A + A.2). Gate cleared first (`fix/dep-bumps` `193e87d`). `EmbedView` + `/embed` route mount the real MapLibre stack read-only, enabled by default; validated in-browser — chromeless live SF basemap + geo-anchored annotations in a cross-origin iframe, tile-CORS risk retired. Shipped: basemap, camera, annotations, GeoJSON data layers, `?lock=1`, stripped chrome, ShareDialog embed-snippet, `EMBED_FRAME_ANCESTORS` (ADR-0012). Only deferred: scripts-blocked `<noscript>` PNG fallback (needs SSR). Ledgers: `PROBE-embed.md`, `BUILD-embed.md`, spec `PRFAQ.md`.
 
 ---
 

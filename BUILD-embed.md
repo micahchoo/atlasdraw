@@ -1,13 +1,17 @@
 # Build brief — Read-only map embed (post-probe, rescoped)
 
-> **PHASE A BUILT 2026-07-05** — `feat/map-embed` `b47e2d8` (on `fix/dep-bumps`).
-> Done: rows 1 (route), 2 (EmbedView two-layer stack), 3 (basemap resolve),
-> 4 (camera), 6 (transparent bg + UIOptions), plus the shared `loadShareDocument`
-> and the geo-anchor reprojection (`useCoordinateSync`, restore-via-initialData).
-> Validated in-browser (see `ledgers/PROBE-embed.md` §Build). **Remaining:**
-> row 5's data-layer rendering (`useLayerRegistrySync` + Map-normalized load),
-> 9 (URL-param chrome), 10 (ShareDialog snippet), 11 (frame-ancestors + ADR),
-> 12 (PNG fallback). Gate still applies before any deploy/ship.
+> **PHASES A + A.2 BUILT 2026-07-05** — `feat/map-embed` (`b47e2d8`, `f9b7cc4`,
+> on `fix/dep-bumps`). Merged to `main`. Done: rows 1 (route), 2 (two-layer
+> stack), 3 (basemap), 4 (camera), 5 (data layers — `useLayerRegistrySync` +
+> Map-guarded registration; token-mode docs only), 6 (transparent bg + stripped
+> chrome via `EmbedView.module.css`), 9 (`?lock=1` camera lock — URL param),
+> 10 (ShareDialog "Embed this map" snippet), 11 (`EMBED_FRAME_ANCESTORS` → Caddy
+> CSP + ADR-0012), plus shared `loadShareDocument` and geo reprojection. Enabled
+> by default (`VITE_EMBED_ENABLED=false` to opt out). Validated in-browser
+> (`ledgers/PROBE-embed.md` §Build). **Only remaining:** row 12 (scripts-blocked
+> `<noscript>` PNG fallback) — needs SSR / a pre-rendered static embed page, not
+> possible in a pure SPA (a React `<noscript>` never renders when JS is off).
+> Deferred, documented in ADR-0012 and EmbedView's header.
 
 **Pursue hand-off for DIVERGENCES.md D1.** Written 2026-07-05 as graft's exit:
 building is a fresh session's job. This brief is self-contained — a session
