@@ -1,6 +1,6 @@
 {
-  "runAt": "2026-05-06T16:43:15.334Z",
-  "node": "v20.19.4",
+  "runAt": "2026-07-05T04:43:28.269Z",
+  "node": "v24.14.0",
   "platform": "linux",
   "warmup": 3,
   "iterations": 20,
@@ -8,37 +8,37 @@
     {
       "label": "parse 1k points",
       "iterations": 20,
-      "mean_ms": 0.741,
-      "p95_ms": 0.786,
-      "p99_ms": 0.844
+      "mean_ms": 0.881,
+      "p95_ms": 0.914,
+      "p99_ms": 0.916
     },
     {
       "label": "parse 10k points",
       "iterations": 20,
-      "mean_ms": 6.83,
-      "p95_ms": 7.208,
-      "p99_ms": 7.249
+      "mean_ms": 7.652,
+      "p95_ms": 11.784,
+      "p99_ms": 14.083
     },
     {
       "label": "parse + requireHomogeneousGeometry 10k points",
       "iterations": 20,
-      "mean_ms": 6.817,
-      "p95_ms": 7.026,
-      "p99_ms": 7.038
+      "mean_ms": 6.892,
+      "p95_ms": 8.947,
+      "p99_ms": 10.094
     },
     {
       "label": "parse + requireHomogeneousGeometry 50k points",
       "iterations": 20,
-      "mean_ms": 35.947,
-      "p95_ms": 45.627,
-      "p99_ms": 46.022
+      "mean_ms": 37.729,
+      "p95_ms": 61.829,
+      "p99_ms": 63.247
     },
     {
       "label": "validate 5k geo-anchored annotations",
       "iterations": 20,
-      "mean_ms": 0.563,
-      "p95_ms": 0.643,
-      "p99_ms": 0.644
+      "mean_ms": 0.556,
+      "p95_ms": 0.603,
+      "p99_ms": 0.66
     }
   ]
 }
