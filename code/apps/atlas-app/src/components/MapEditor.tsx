@@ -82,6 +82,7 @@ import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
 import { getAppConfig } from "../config/app-config";
+import { fitMapToContent } from "../lib/fitMapToContent";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -102,6 +103,7 @@ import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
+import { GeoSearchControl } from "./GeoSearchControl";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
@@ -736,6 +738,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [map],
   );
 
+  // "Scroll back to content" reframes the MAP on the geographic bounds of the
+  // drawn content — Excalidraw's canvas is scroll-locked (the map is the
+  // camera), so its default calculateScrollCenter is a no-op here. Returns true
+  // when handled so the vendored button skips that default. CoordinateSync then
+  // re-projects the elements onto the reframed map (a plain camera move — no
+  // change to the reprojection math).
+  const handleScrollBackToContent = useCallback(
+    (elements: readonly ExcalidrawElement[]): boolean =>
+      fitMapToContent(map, elements),
+    [map],
+  );
+
   return (
     <CollabContext.Provider value={collabValue}>
       <div
@@ -770,6 +784,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             onChange={handleExcalidrawChange}
             getBackgroundCanvas={getBackgroundCanvas}
             UIOptions={EXCALIDRAW_UI_OPTIONS}
+            // Geo-search sits on the same toolbar as the drawing tools, via the
+            // vendored `renderToolbarExtras` slot. Always mounted: it defaults
+            // to an offline local place index (no call-home); it only calls out
+            // if VITE_GEOCODER_ENDPOINT is configured (see useGeocoderSearch).
+            renderToolbarExtras={() => <GeoSearchControl map={map} />}
+            onScrollBackToContent={handleScrollBackToContent}
           >
             {/* LayerPanel mounts as a tab inside DefaultSidebar via
               registerSidebarTab (see useEffect above). No <Sidebar> child

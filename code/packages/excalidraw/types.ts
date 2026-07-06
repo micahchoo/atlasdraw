@@ -631,6 +631,29 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  /**
+   * Atlasdraw addition (ADR-0010, fully-owned fork): render custom content
+   * INSIDE the shapes toolbar Island, appended after the tool buttons (see
+   * LayerUI). The atlas app mounts its geo-search control here so it sits on
+   * the same toolbar as the drawing tools. Mirrors the renderTopLeftUI /
+   * renderTopRightUI render-prop pattern; args are provided for parity and may
+   * be ignored.
+   */
+  renderToolbarExtras?: (
+    isMobile: boolean,
+    appState: UIAppState,
+  ) => JSX.Element | null;
+  /**
+   * Atlasdraw addition (ADR-0010): override the "scroll back to content"
+   * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the
+   * MapLibre map is the real camera), so the default `calculateScrollCenter` is
+   * a no-op. When provided, this is called with the current scene elements;
+   * return `true` if handled (e.g. the app moved the map to frame the geo
+   * content), or `false` to fall back to the default scroll behavior.
+   */
+  onScrollBackToContent?: (
+    elements: readonly NonDeletedExcalidrawElement[],
+  ) => boolean;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
   zenModeEnabled?: boolean;

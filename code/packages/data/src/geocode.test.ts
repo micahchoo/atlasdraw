@@ -277,3 +277,137 @@ describe("PhotonGeocoder — error paths", () => {
     );
   });
 });
+
+describe("PhotonGeocoder.geocodeCandidates — multi-result place search", () => {
+  it("returns ALL valid features in server order (best first)", async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse(
+        photonFC([
+          {
+            coords: [-122.68, 45.52],
+            name: "Portland",
+            city: "Portland",
+            country: "USA",
+            osm_value: "city",
+          },
+          {
+            coords: [-70.26, 43.66],
+            name: "Portland",
+            city: "Portland",
+            country: "USA",
+            osm_value: "city",
+          },
+        ]),
+      ),
+    );
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    const results = await g.geocodeCandidates("Portland");
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({ lng: -122.68, lat: 45.52 });
+    expect(results[1]).toMatchObject({ lng: -70.26, lat: 43.66 });
+    expect(results[0].displayName).toBe("Portland, Portland, USA");
+    expect(results[0].confidence).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("uses the passed limit (not limitPerQuery) in the request URL", async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse(photonFC([{ coords: [0, 0] }])),
+    );
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example", limitPerQuery: 1 },
+      fetchMock as unknown as typeof fetch,
+    );
+    await g.geocodeCandidates("berlin", 7);
+    const url = (fetchMock.mock.calls[0] as unknown as [string])[0];
+    expect(url).toBe("https://photon.example/api?q=berlin&limit=7");
+  });
+
+  it("returns [] for an empty/whitespace query without fetching", async () => {
+    const fetchMock = vi.fn();
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    expect(await g.geocodeCandidates("")).toEqual([]);
+    expect(await g.geocodeCandidates("   ")).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns [] on an empty FeatureCollection", async () => {
+    const fetchMock = vi.fn(async () => okResponse(photonFC([])));
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    expect(await g.geocodeCandidates("nowhere")).toEqual([]);
+  });
+
+  it("skips malformed features but keeps the valid ones", async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse({
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", geometry: {}, properties: {} }, // no coords
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [5, 6] },
+            properties: { name: "Good", osm_value: "city" },
+          },
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: ["x", "y"] },
+            properties: {},
+          }, // non-numeric coords
+        ],
+      }),
+    );
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    const results = await g.geocodeCandidates("mixed");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ lng: 5, lat: 6, displayName: "Good" });
+  });
+
+  it("caches per (limit, query) separately from geocode()", async () => {
+    const fetchMock = vi.fn(async () =>
+      okResponse(photonFC([{ coords: [1, 2], osm_value: "city" }])),
+    );
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    await g.geocodeCandidates("Rome"); // miss → fetch
+    await g.geocodeCandidates("rome"); // case-insensitive cache hit
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // A different limit is a different cache key → a fresh fetch.
+    await g.geocodeCandidates("Rome", 10);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates GeocoderNetworkError / GeocoderResponseError like geocode()", async () => {
+    const netFail = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      vi.fn(async () => {
+        throw new TypeError("ECONNREFUSED");
+      }) as unknown as typeof fetch,
+    );
+    await expect(netFail.geocodeCandidates("x")).rejects.toBeInstanceOf(
+      GeocoderNetworkError,
+    );
+
+    const httpFail = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      vi.fn(
+        async () => new Response("nope", { status: 503 }),
+      ) as unknown as typeof fetch,
+    );
+    await expect(httpFail.geocodeCandidates("x")).rejects.toBeInstanceOf(
+      GeocoderResponseError,
+    );
+  });
+});

@@ -185,6 +185,9 @@ export class PhotonGeocoder {
   private readonly endpoint: string;
   private readonly limitPerQuery: number;
   private readonly cache: LruCache<GeocodeResult | null>;
+  // Separate cache for candidate lists (geocodeCandidates) — the single-result
+  // `cache` above stores GeocodeResult|null and can't hold arrays.
+  private readonly candidatesCache: LruCache<GeocodeResult[]>;
   // Allow tests to inject a fetch stub; defaults to globalThis.fetch.
   private readonly fetchImpl: typeof fetch;
 
@@ -198,6 +201,9 @@ export class PhotonGeocoder {
     this.endpoint = config.endpoint.replace(/\/+$/, "");
     this.limitPerQuery = config.limitPerQuery ?? DEFAULT_LIMIT;
     this.cache = new LruCache<GeocodeResult | null>(
+      config.cacheSize ?? DEFAULT_CACHE_SIZE,
+    );
+    this.candidatesCache = new LruCache<GeocodeResult[]>(
       config.cacheSize ?? DEFAULT_CACHE_SIZE,
     );
     this.fetchImpl = fetchImpl ?? globalThis.fetch.bind(globalThis);
@@ -222,12 +228,52 @@ export class PhotonGeocoder {
       return cached;
     }
 
-    // Note: the operator-configured endpoint is the only outbound URL.
-    // See ADR-0006 / ADR-0011 — atlasdraw never calls home; this fetch
-    // only fires when an operator has opted in by supplying `endpoint`.
-    const url = `${this.endpoint}/api?q=${encodeURIComponent(query)}&limit=${
-      this.limitPerQuery
-    }`;
+    const body = await this.fetchPhotonBody(query, this.limitPerQuery);
+    const result = parsePhotonResponse(body);
+    this.cache.set(key, result);
+    return result;
+  }
+
+  /**
+   * Geocode a free-text query to a ranked list of candidate places (best
+   * first) — for interactive place-search UIs where the user disambiguates
+   * (e.g. "Portland, OR" vs "Portland, ME"). Same endpoint and error contract
+   * as {@link geocode}: throws `GeocoderNetworkError` / `GeocoderResponseError`,
+   * returns `[]` for an empty query or an empty result set. Results are
+   * LRU-cached per `(limit, query)`, keyed separately from `geocode`'s cache.
+   */
+  async geocodeCandidates(query: string, limit = 5): Promise<GeocodeResult[]> {
+    if (query.trim() === "") {
+      return [];
+    }
+    const key = `${limit}:${query.toLowerCase().trim()}`;
+
+    const cached = this.candidatesCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const body = await this.fetchPhotonBody(query, limit);
+    const results = parsePhotonFeatures(body);
+    this.candidatesCache.set(key, results);
+    return results;
+  }
+
+  /**
+   * Shared transport for {@link geocode} and {@link geocodeCandidates}: builds
+   * the Photon URL, fetches, and returns the parsed JSON body.
+   *
+   * Note: the operator-configured endpoint is the only outbound URL. See
+   * ADR-0006 / ADR-0011 — atlasdraw never calls home; this fetch only fires
+   * when an operator has opted in by supplying `endpoint`.
+   */
+  private async fetchPhotonBody(
+    query: string,
+    limit: number,
+  ): Promise<unknown> {
+    const url = `${this.endpoint}/api?q=${encodeURIComponent(
+      query,
+    )}&limit=${limit}`;
 
     let res: Response;
     try {
@@ -248,9 +294,8 @@ export class PhotonGeocoder {
       );
     }
 
-    let body: unknown;
     try {
-      body = await res.json();
+      return await res.json();
     } catch (err) {
       throw new GeocoderResponseError(
         res.status,
@@ -259,10 +304,6 @@ export class PhotonGeocoder {
         }`,
       );
     }
-
-    const result = parsePhotonResponse(body);
-    this.cache.set(key, result);
-    return result;
   }
 
   /** Cache stats for tests / debug. */
@@ -312,4 +353,45 @@ function parsePhotonResponse(body: unknown): GeocodeResult | null {
     displayName: buildDisplayName(first.properties),
     confidence: confidenceFromOsmValue(first.properties?.osm_value),
   };
+}
+
+/**
+ * Parse ALL valid features from a Photon FeatureCollection into ranked
+ * candidates (server order preserved, best first). Features with missing or
+ * non-finite coordinates are skipped rather than failing the whole list.
+ * Kept separate from `parsePhotonResponse` so the single-result `geocode`
+ * path's semantics stay exactly as they were.
+ */
+function parsePhotonFeatures(body: unknown): GeocodeResult[] {
+  if (!body || typeof body !== "object") {
+    return [];
+  }
+  const features = (body as { features?: unknown }).features;
+  if (!Array.isArray(features)) {
+    return [];
+  }
+
+  const results: GeocodeResult[] = [];
+  for (const f of features) {
+    const feature = f as PhotonFeature;
+    const coords = feature.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) {
+      continue;
+    }
+    const lng = coords[0];
+    const lat = coords[1];
+    if (typeof lng !== "number" || typeof lat !== "number") {
+      continue;
+    }
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+      continue;
+    }
+    results.push({
+      lng,
+      lat,
+      displayName: buildDisplayName(feature.properties),
+      confidence: confidenceFromOsmValue(feature.properties?.osm_value),
+    });
+  }
+  return results;
 }
