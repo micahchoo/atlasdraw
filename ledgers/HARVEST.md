@@ -12,6 +12,15 @@ One dated section per tend session. Row: lesson | general rule | stored where.
 | CursorOverlay/PresenceList are complete, never-mounted feature UI — deleting them would have destroyed shippable Phase 5 work | Feature-shaped dead code is a capability-reach row, not a deletion row: verdict before delete. (Already encoded in the deletion-sweep pattern; this run confirmed why.) | DEADWOOD.md verdict rows |
 | An 18-test failure storm correlated perfectly with a file deletion — and the correlation was spurious (the tree was mutating between runs) | When a deterministic-looking failure has no mechanism after two honest attempts, stop hypothesizing and check whether the world is changing under you (concurrent writers, caches, clock) before debugging the code. | project memory `concurrent-sessions-shared-checkout.md` |
 
+## 2026-07-05 — Embed build (D1 Phase A)
+
+| lesson | general rule | stored where |
+|---|---|---|
+| The gate re-triage found the Dependabot picture had shifted since May onto the shipped runtime manifests — a claim I'd repeated from the stale doc. Triaging by dependency `scope` (not manifest attribution) showed criticals were all dev-only vitest, and the real runtime highs (ws/tmp/undici) were version-bump fixes. | Before repeating a prior triage's "not burning" conclusion, re-run it and split by dependency **scope** (runtime vs development) — a stale security doc contradicted on its face must be re-verified, not cited. | `docs/security/dependabot-2026-07-05.md`; memory `embed-wedge-cut-by-conflation.md` |
+| Force transitive-dep security bumps via yarn `resolutions` scoped to the vulnerable descriptor (`"ws@^6.2.1": "^6.2.4"`), not a global name override that can break other consumers. | Transitive security bump = a scoped `resolutions` entry + `yarn install`, then verify the resolved version in the lockfile and re-run the affected suites (own exit code, not a pipe's). | this ledger; `docs/security/dependabot-2026-07-05.md` |
+| `api.updateScene({elements})` silently dropped hand-authored Excalidraw elements (getSceneElements → []); they need `restore`, which `initialData.elements` runs but raw updateScene does not. | To load a scene into Excalidraw, pass it via `initialData.elements` (restored on mount), not a raw `updateScene`. Post-load geo `syncNow()` fires a frame later, after the scene commits. | `ledgers/PROBE-embed.md` §Build; code comment in `EmbedView.tsx` |
+| A concurrent agent session edited `packages/excalidraw` in this shared checkout mid-build. Committing my vulnerable work (dep-fix, graft docs) first + staging only my files explicitly (never `-a`) kept its churn out of every commit. | In a shared checkout with an active concurrent session: commit your work early, stage by explicit path, verify `git diff --cached --name-only` before every commit, never `commit -a`. | memory `concurrent-sessions-shared-checkout`; this ledger |
+
 ## 2026-07-05 — Thin-slice probe (D1 embed)
 
 | lesson | general rule | stored where |

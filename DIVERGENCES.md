@@ -137,7 +137,7 @@ named persona.
    without response-header control that the `docker compose up` self-host
    story can't provide by default (ADR the trade-off instead of shipping).
 
-**Status:** committed to build 2026-07-05 — pursue verdict after probe (`ledgers/PROBE-embed.md`). Cross-origin embedding CONFIRMED feasible; "≈90% built" premise FALSIFIED → rescoped to a MapLibre-stack graft. Hand-off: `BUILD-embed.md`. Gated on Dependabot re-triage + push before code lands. Spec: PRFAQ.md.
+**Status:** built (Phase A) 2026-07-05 — `feat/map-embed` (commit `b47e2d8`). Gate cleared first (`fix/dep-bumps` `193e87d`, Dependabot runtime highs patched). `EmbedView` + `/embed` route mount the real MapLibre stack read-only; validated in-browser — live SF basemap + geo-anchored annotations render in a cross-origin iframe, tile-CORS risk retired. Phase A = basemap + annotations; data layers / chrome params / snippet / frame-ancestors ADR / PNG fallback remain (`BUILD-embed.md`). Ledgers: `PROBE-embed.md`, spec `PRFAQ.md`.
 
 ---
 

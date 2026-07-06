@@ -66,3 +66,32 @@ while silently assuming ShareView renders a map. The riskiest assumption was
 actually A1 (the reuse premise); the understand phase caught it before any code. A
 kill criterion that bakes in an unverified premise ("reuse X") tests the wrong
 thing — name the premise as its own assumption. Kill criterion was NOT moved.
+
+## Build — Phase A (2026-07-05, `feat/map-embed` `b47e2d8`)
+
+Pursue → built. New `EmbedView` + flag-gated `/embed` route mount the real
+MapLibre stack read-only (MapCanvas + `useBasemapStyle` from
+`manifest.basemap.id` at `manifest.camera`, transparent Excalidraw over it,
+geo-anchored annotations reprojected via `useCoordinateSync`). Shared
+`loadShareDocument` extracted from ShareView (no duplication). Behind
+`VITE_EMBED_ENABLED`.
+
+**In-browser validation** (`scratchpad/embed-final.png`): live OpenFreeMap SF
+basemap + red geo-anchored rectangle + blue label render inside a genuinely
+cross-origin iframe (`localhost:5199` framed in `127.0.0.1:8137`), no
+postMessage handshake, no framing-header change — **deferred tile-CORS risk
+retired** (real map tiles load cross-origin). Tests: `loadShareDocument` (11),
+`EmbedView` dispatch (2); atlas-app 557 green.
+
+**Build lesson:** `api.updateScene({elements})` silently **dropped** hand-authored
+scene elements (they need Excalidraw's `restore`, which `initialData.elements`
+runs automatically) — the "found null" console warnings and `getSceneElements()`
+returning `[]` were the tell. Load a scene via `initialData.elements`, not raw
+`updateScene`. Also: the post-load `syncNow()` must fire after the scene commits
+(a frame later), not synchronously.
+
+**Remaining (Phase A.2+, `BUILD-embed.md`):** GeoJSON data-layer rendering,
+URL-param chrome config, ShareDialog embed-snippet, `EMBED_FRAME_ANCESTORS`
+header + ADR, PNG `<noscript>` fallback. Gate note: the build landed on a
+feature branch (no deploy); before it ships, keep the Dependabot posture
+current.
