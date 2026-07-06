@@ -9,7 +9,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import LZString from "lz-string";
 
-import { EmbedView } from "./EmbedView";
+import { EmbedView, parseEmbedOptions } from "./EmbedView";
+import { toEmbedUrl } from "./ShareDialog";
 
 // Excalidraw renders a heavy canvas (Path2D, fonts) unavailable in jsdom —
 // mock it to a sentinel, matching ShareView.test. The real map+annotation
@@ -61,5 +62,43 @@ describe("EmbedView", () => {
     // Ready → EmbedCanvas mounts the (stubbed) MapCanvas under Excalidraw.
     expect(await screen.findByTestId("embed-canvas")).toBeTruthy();
     expect(screen.getByTestId("map-canvas-stub")).toBeTruthy();
+  });
+
+  it("dispatches with ?lock=1 without error", async () => {
+    render(
+      <EmbedView
+        location={{
+          pathname: "/embed",
+          hash: hashFor(mapDoc),
+          search: "?lock=1",
+        }}
+      />,
+    );
+    expect(await screen.findByTestId("embed-canvas")).toBeTruthy();
+  });
+});
+
+describe("parseEmbedOptions", () => {
+  it("defaults lock to false", () => {
+    expect(parseEmbedOptions("")).toEqual({ lock: false });
+  });
+  it("enables lock on ?lock=1", () => {
+    expect(parseEmbedOptions("?lock=1")).toEqual({ lock: true });
+  });
+  it("treats any other lock value as false", () => {
+    expect(parseEmbedOptions("?lock=yes")).toEqual({ lock: false });
+  });
+});
+
+describe("toEmbedUrl", () => {
+  it("repoints a hash share URL at /embed", () => {
+    expect(toEmbedUrl("https://x.test/m#v1:AAA")).toBe(
+      "https://x.test/embed#v1:AAA",
+    );
+  });
+  it("repoints a token share URL at /embed", () => {
+    expect(toEmbedUrl("https://x.test/m/abc123DEF456ghi789JKL")).toBe(
+      "https://x.test/embed/abc123DEF456ghi789JKL",
+    );
   });
 });

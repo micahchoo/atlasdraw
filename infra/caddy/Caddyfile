@@ -35,6 +35,12 @@
 	}
 
 	handle {
+		# D1: allow the map embed (/embed) to be framed cross-origin. Default
+		# `*` (zero-config first run); operators tighten to an allowlist via
+		# EMBED_FRAME_ANCESTORS in .env. CSP frame-ancestors — not
+		# X-Frame-Options, which can't express an allowlist. See
+		# docs/architecture/adr/0012-embed-frame-ancestors.md.
+		header Content-Security-Policy "frame-ancestors {$EMBED_FRAME_ANCESTORS:*}"
 		reverse_proxy web:3000
 	}
 

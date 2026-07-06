@@ -45,12 +45,13 @@ function pickView() {
   }
   const path = window.location.pathname;
   const hash = window.location.hash;
-  // D1 (flag VITE_EMBED_ENABLED): read-only MAP embed. Distinct from ShareView
-  // (`/m`) — mounts the full MapLibre stack chromeless for cross-origin
-  // <iframe> use. `/embed#v1:<lz>` (hash) and `/embed/<token>` (token).
+  // D1: read-only MAP embed. Distinct from ShareView (`/m`) — mounts the full
+  // MapLibre stack chromeless for cross-origin <iframe> use. `/embed#v1:<lz>`
+  // (hash) and `/embed/<token>` (token). Enabled by default; operators opt out
+  // with VITE_EMBED_ENABLED=false.
   if (
     (path === "/embed" || path.startsWith("/embed/")) &&
-    import.meta.env.VITE_EMBED_ENABLED === "true"
+    import.meta.env.VITE_EMBED_ENABLED !== "false"
   ) {
     return <EmbedView />;
   }

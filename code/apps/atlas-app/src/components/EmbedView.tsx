@@ -6,16 +6,20 @@
 // editor uses, chromeless, so a finished map embeds in a cross-origin
 // <iframe> as a live map:
 //   - MapLibre basemap (from manifest.basemap.id) at the authored camera
+//   - GeoJSON data layers (token-mode docs) rendered via the layer registry
 //   - geo-anchored Excalidraw annotations, reprojected via CoordinateSync
 //
 // Routes (App.tsx):
-//   /embed#v1:<lz>   — hash mode (self-contained)
-//   /embed/<token>   — token mode
+//   /embed#v1:<lz>   — hash mode (self-contained; annotations only — hash
+//                       payloads lose their data-layer FeatureCollections to
+//                       JSON serialization)
+//   /embed/<token>   — token mode (full document, incl. data layers)
 //
-// Phase A scope: basemap + geo-anchored annotations. GeoJSON data layers
-// (manifest.layers) are NOT rendered here yet — hash-mode payloads lose their
-// layer FeatureCollections to JSON serialization, and rendering token-mode
-// data layers needs useLayerRegistrySync + Map-normalized hydrate (Phase A.2).
+// URL params: ?lock=1 disables map pan/zoom (camera-locked presentation).
+//
+// Deferred: a real scripts-blocked <noscript> PNG fallback needs SSR or a
+// pre-rendered static embed page — a React <noscript> never renders when JS
+// is off (the whole SPA doesn't boot). Tracked in BUILD-embed.md.
 
 import React, { useEffect, useMemo, useState } from "react";
 import { MapCanvas, type MapCanvasInitialView } from "@atlasdraw/basemap";
@@ -27,13 +31,16 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
+import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
+import { useLayerRegistryStore } from "../state/layerRegistry";
 import { getAppConfig } from "../config/app-config";
 import {
   loadShareDocument,
   tokenFromPath,
   type ShareLoadResult,
 } from "../state/loadShareDocument";
-import styles from "../styles/MapEditor.module.css";
+import mapStyles from "../styles/MapEditor.module.css";
+import styles from "../styles/EmbedView.module.css";
 
 // Read-only: disable Excalidraw's own persistence actions. The transparent
 // background (so map tiles show through — contrast ShareView's opaque
@@ -48,11 +55,21 @@ const EMBED_UI_OPTIONS = {
 
 type ViewState = { kind: "loading" } | ShareLoadResult;
 
+interface EmbedOptions {
+  /** ?lock=1 — disable map pan/zoom for a fixed-camera presentation. */
+  lock: boolean;
+}
+
+export function parseEmbedOptions(search: string): EmbedOptions {
+  const params = new URLSearchParams(search);
+  return { lock: params.get("lock") === "1" };
+}
+
 export interface EmbedViewProps {
   /** Test seam — override the HTTP client. */
   client?: Parameters<typeof loadShareDocument>[2];
-  /** Test seam — override the location source for path / hash. */
-  location?: { pathname: string; hash: string };
+  /** Test seam — override the location source for path / hash / search. */
+  location?: { pathname: string; hash: string; search?: string };
 }
 
 export const EmbedView: React.FC<EmbedViewProps> = ({ client, location }) => {
@@ -78,6 +95,15 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ client, location }) => {
     };
   }, [client, location]);
 
+  const options = useMemo(
+    () =>
+      parseEmbedOptions(
+        location?.search ??
+          (typeof window !== "undefined" ? window.location.search : ""),
+      ),
+    [location],
+  );
+
   if (state.kind === "loading") {
     return <EmbedMessage testid="embed-loading" title="Loading map…" />;
   }
@@ -100,10 +126,13 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ client, location }) => {
   }
   // ready — mount the map stack with the document in hand so MapCanvas gets
   // the authored camera at construction (initialView is consumed once).
-  return <EmbedCanvas doc={state.doc} />;
+  return <EmbedCanvas doc={state.doc} options={options} />;
 };
 
-const EmbedCanvas: React.FC<{ doc: AtlasdrawDocument }> = ({ doc }) => {
+const EmbedCanvas: React.FC<{
+  doc: AtlasdrawDocument;
+  options: EmbedOptions;
+}> = ({ doc, options }) => {
   const { map, onMapReady } = useMapRef();
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
 
@@ -113,6 +142,47 @@ const EmbedCanvas: React.FC<{ doc: AtlasdrawDocument }> = ({ doc }) => {
 
   // Keep geo-anchored annotations pinned to the map on pan/zoom.
   const { syncNow } = useCoordinateSync(map, api);
+
+  // Render the document's GeoJSON data layers onto the map (registry → map).
+  useLayerRegistrySync(map, api);
+
+  // Register the document's data layers into the registry so the sync above
+  // draws them. Token-mode docs carry `layers` as a Map<id, FeatureCollection>;
+  // hash-mode payloads lose it to JSON serialization (plain object) → skipped.
+  useEffect(() => {
+    const registry = useLayerRegistryStore.getState();
+    const clearAll = () => {
+      const r = useLayerRegistryStore.getState();
+      for (const id of r.entries.map((e) => e.id)) {
+        r.remove(id);
+      }
+    };
+    clearAll();
+    const layers = doc.layers;
+    if (layers instanceof Map) {
+      for (const entry of doc.manifest?.layers ?? []) {
+        if (entry.kind === "annotation") {
+          continue;
+        }
+        const fc = layers.get(entry.id);
+        if (!fc) {
+          continue;
+        }
+        registry.registerDataLayer({
+          id: entry.id,
+          fc,
+          label: entry.label,
+          style: entry.style as unknown as Parameters<
+            typeof registry.registerDataLayer
+          >[0]["style"],
+        });
+        if (entry.visible === false) {
+          registry.setVisibility(entry.id, false);
+        }
+      }
+    }
+    return clearAll;
+  }, [doc]);
 
   // Elements load via `initialData` below (Excalidraw runs them through
   // `restore`, which fills the internal fields a raw `updateScene` assumes
@@ -127,6 +197,30 @@ const EmbedCanvas: React.FC<{ doc: AtlasdrawDocument }> = ({ doc }) => {
     const raf = requestAnimationFrame(() => syncNow?.());
     return () => cancelAnimationFrame(raf);
   }, [map, api, syncNow]);
+
+  // ?lock=1 — pin the camera. Disable every MapLibre interaction handler.
+  useEffect(() => {
+    if (!map || !options.lock) {
+      return;
+    }
+    const handlers = [
+      map.dragPan,
+      map.scrollZoom,
+      map.boxZoom,
+      map.dragRotate,
+      map.keyboard,
+      map.doubleClickZoom,
+      map.touchZoomRotate,
+    ];
+    for (const h of handlers) {
+      h?.disable?.();
+    }
+    return () => {
+      for (const h of handlers) {
+        h?.enable?.();
+      }
+    };
+  }, [map, options.lock]);
 
   const initialData = useMemo(
     () => ({
@@ -144,17 +238,17 @@ const EmbedCanvas: React.FC<{ doc: AtlasdrawDocument }> = ({ doc }) => {
     : undefined;
 
   return (
-    <div className={styles.root} data-testid="embed-canvas">
-      <div className={styles.mapLayer}>
+    <div className={styles.embedRoot} data-testid="embed-canvas">
+      <div className={mapStyles.mapLayer}>
         <MapCanvas
           initialView={initialView}
           onMapReady={onMapReady}
-          className={styles.fullSize}
+          className={mapStyles.fullSize}
         />
       </div>
       {/* Top layer: transparent, read-only Excalidraw. pointer-events:none
           (from .excalidrawLayer) so the map underneath stays pannable. */}
-      <div className={styles.excalidrawLayer}>
+      <div className={mapStyles.excalidrawLayer}>
         <Excalidraw
           initialData={initialData}
           viewModeEnabled

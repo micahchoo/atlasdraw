@@ -19,11 +19,12 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { generateRoomKey } from "@atlasdraw/protocol";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 
 import { FocusTrap } from "./FocusTrap";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 import type { CollabState } from "../state/collab";
 
@@ -356,6 +357,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   {READONLY_MODE_HINT[view.mode]}
                 </p>
               )}
+              {view.kind === "readonly-success" && (
+                <EmbedSnippet shareUrl={currentUrl} />
+              )}
               {view.kind === "collab-success" && (
                 <p
                   data-testid="share-dialog-mode-hint"
@@ -393,6 +397,89 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
           </div>
         </div>
       </FocusTrap>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Embed snippet (D1) — a read-only share URL doubles as a map embed. The embed
+// route (`/embed…`) mounts the same document chromeless for cross-origin
+// <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
+// ---------------------------------------------------------------------------
+
+/** `/m#v1:<enc>` → `/embed#v1:<enc>` · `/m/<token>` → `/embed/<token>`. */
+export function toEmbedUrl(shareUrl: string): string {
+  return shareUrl.replace(/\/m(#v1:|\/)/, "/embed$1");
+}
+
+const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
+  const [copied, setCopied] = useState(false);
+  const snippet = `<iframe src="${toEmbedUrl(
+    shareUrl,
+  )}" width="800" height="500" style="border:0;border-radius:8px" loading="lazy" title="Atlasdraw map"></iframe>`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked — the textarea is selectable as a manual fallback.
+    }
+  };
+
+  return (
+    <div data-testid="embed-snippet-section" style={{ marginTop: "0.25rem" }}>
+      <label
+        style={{
+          display: "block",
+          margin: "0 0 0.25rem 0",
+          fontSize: "0.75rem",
+          fontWeight: 600,
+          color: "var(--ad-ink-secondary, #495057)",
+        }}
+      >
+        Embed this map
+      </label>
+      <textarea
+        readOnly
+        value={snippet}
+        data-testid="embed-snippet"
+        onFocus={(e) => e.currentTarget.select()}
+        rows={2}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "6px 8px",
+          border: "1px solid #ced4da",
+          borderRadius: "4px",
+          fontSize: "0.75rem",
+          fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
+          background: "#f8f9fa",
+          color: "var(--ad-ink, #212529)",
+          resize: "vertical",
+        }}
+      />
+      <button
+        type="button"
+        onClick={copy}
+        data-testid="embed-snippet-copy"
+        style={{
+          marginTop: "0.375rem",
+          padding: "5px 12px",
+          border: "1px solid var(--ad-accent, #1971c2)",
+          borderRadius: "4px",
+          background: copied ? "#37b24d" : "transparent",
+          color: copied
+            ? "var(--ad-ink-inverse, #fff)"
+            : "var(--ad-accent, #1971c2)",
+          fontSize: "0.8125rem",
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        {copied ? "Copied" : "Copy embed code"}
+      </button>
     </div>
   );
 };

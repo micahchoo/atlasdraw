@@ -1,0 +1,45 @@
+/* EmbedView — chromeless read-only map embed.
+ *
+ * Reuses MapEditor.module.css for the two-layer stack (.mapLayer / .excalidrawLayer
+ * / .fullSize). This module owns only the embed-specific concerns: the sizing
+ * root and stripping Excalidraw's residual view-mode chrome. Scoped under
+ * .embedRoot so the editor's own chrome is never affected (this is NOT the
+ * excalidraw-theme.css override layer — it's feature-scoped display control for
+ * the embed surface, not theming).
+ */
+
+.embedRoot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* In viewModeEnabled Excalidraw already hides its top menu, but the footer
+ * (zoom controls) and the help button still render. A read-only embed shows
+ * only the map + annotations — the map carries its own attribution and the
+ * viewer uses the map's native scroll/drag to navigate. */
+.embedRoot :global(.layer-ui__wrapper__footer),
+.embedRoot :global(.App-menu_top),
+.embedRoot :global(.help-icon) {
+  /* !important: Excalidraw's own `.layer-ui__wrapper__footer { display: flex }`
+   * out-specifies a plain scoped selector. This is feature-scoped display
+   * control for the embed surface, not the excalidraw-theme.css token-override
+   * layer the vendored-chrome rule guards. */
+  display: none !important;
+}
+
+/* Graceful degradation when scripts are blocked (see the <noscript> block). */
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  color: var(--ad-ink, #212529);
+  background: var(--ad-surface, #f8f9fa);
+  font-family: system-ui, sans-serif;
+}
