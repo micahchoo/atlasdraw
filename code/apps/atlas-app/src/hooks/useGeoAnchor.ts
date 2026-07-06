@@ -42,7 +42,13 @@
  */
 
 import { useEffect } from "react";
-import { unprojectPoint, projectPoint, isGeoCustomData } from "@atlasdraw/geo";
+import {
+  unprojectPoint,
+  projectPoint,
+  isGeoCustomData,
+  computeScaleFactor,
+  clampHybridFactor,
+} from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -90,8 +96,24 @@ interface LastSync {
   w0?: number;
   h0?: number;
   fontSize0?: number;
+  strokeWidth0?: number;
+  /** Projected fontSize as written by the last sync — style-edit detector. */
+  fs?: number;
+  /** Projected strokeWidth as written by the last sync — style-edit detector. */
+  sw?: number;
+  /** scaleMode at the last sync — mode-toggle detector. */
+  mode?: string;
   pts?: ReadonlyArray<readonly [number, number]>;
 }
+
+/** `customData` of an anchored element, including the sync-protocol state. */
+type AnchoredCustomData = GeoCustomData & { _lastSync?: LastSync };
+
+/** An element whose `customData` carries a geo anchor (+ protocol state). */
+type AnchoredElement = ElementGeoFields & {
+  customData: AnchoredCustomData;
+  [k: string]: unknown;
+};
 
 /**
  * Element shape we care about across the discriminated union. The public
@@ -105,6 +127,8 @@ interface ElementGeoFields {
   y: number;
   width: number;
   height: number;
+  fontSize?: number;
+  strokeWidth?: number;
   /** Present on linear / freedraw elements (LocalPoint = [dx, dy] relative to x,y). */
   points?: ReadonlyArray<readonly [number, number]>;
 }
@@ -177,15 +201,127 @@ function buildGeoCustomData(
   return null;
 }
 
+/** Screen-space tolerance for move/resize detection (px). Float drift only —
+ * user drags are multi-pixel. */
+const SCREEN_TOL = 0.01;
+/** Tolerance for style-field (strokeWidth/fontSize) change detection. */
+const STYLE_TOL = 1e-6;
+
+/** The scale factor the sync layer applies to sizes for a given mode. */
+function effectiveFactor(
+  scaleMode: string,
+  zoom: number,
+  zRef: number,
+): number {
+  if (scaleMode === "screen") {
+    return 1;
+  }
+  const factor = computeScaleFactor(zoom, zRef);
+  return scaleMode === "hybrid" ? clampHybridFactor(factor) : factor;
+}
+
 /**
- * If the element's current screen position diverges from what its geo anchor
- * projects to (i.e. the user moved or resized it), return a new element with
- * `customData.geo` updated to the reverse-projected position. Returns null when
- * the position is within float tolerance — indicating `syncMapToScene` just
- * wrote those values and no user-initiated change occurred.
+ * In hybrid mode `_projectElement` scales projected spans/points by
+ * `clamped/raw`; reverse-projection must divide displayed geometry by the
+ * same ratio or the clamp gets baked into the anchor on every re-anchor.
+ */
+function hybridAdj(scaleMode: string, zoom: number, zRef: number): number {
+  if (scaleMode !== "hybrid") {
+    return 1;
+  }
+  const factor = computeScaleFactor(zoom, zRef);
+  return clampHybridFactor(factor) / factor;
+}
+
+/**
+ * A coherent `_lastSync` snapshot for the element's CURRENT state: positions
+ * as-is, size/style baselines re-based so `baseline * factor == displayed`.
+ * Written on every re-anchor — never clear `_lastSync` to undefined, or the
+ * next sync adopts already-scaled sizes as new baselines and compounds them.
+ */
+function buildReanchorSnapshot(
+  el: ElementGeoFields,
+  customData: AnchoredCustomData,
+  map: maplibregl.Map,
+): LastSync {
+  const f = effectiveFactor(
+    customData.scaleMode,
+    map.getZoom(),
+    customData.geo.zRef,
+  );
+  const snap: LastSync = {
+    x: el.x,
+    y: el.y,
+    w: el.width,
+    h: el.height,
+    w0: el.width / f,
+    h0: el.height / f,
+    mode: customData.scaleMode,
+  };
+  if (el.fontSize !== undefined) {
+    snap.fontSize0 = el.fontSize / f;
+    snap.fs = el.fontSize;
+  }
+  if (el.strokeWidth !== undefined) {
+    snap.strokeWidth0 = el.strokeWidth / f;
+    snap.sw = el.strokeWidth;
+  }
+  if (el.points) {
+    snap.pts = el.points.map(([dx, dy]) => [dx, dy] as [number, number]);
+  }
+  return snap;
+}
+
+/** User edited strokeWidth/fontSize since the last sync wrote them. */
+function styleChanged(el: ElementGeoFields, lastSync: LastSync): boolean {
+  return (
+    (lastSync.sw !== undefined &&
+      el.strokeWidth !== undefined &&
+      Math.abs(el.strokeWidth - lastSync.sw) > STYLE_TOL) ||
+    (lastSync.fs !== undefined &&
+      el.fontSize !== undefined &&
+      Math.abs(el.fontSize - lastSync.fs) > STYLE_TOL)
+  );
+}
+
+/**
+ * Style-only change: keep the anchor, re-base the style baselines so the
+ * next sync preserves the user's value instead of reverting it.
+ */
+function rebaseStyle(
+  el: AnchoredElement,
+  customData: AnchoredCustomData,
+  lastSync: LastSync,
+  map: maplibregl.Map,
+): AnchoredElement {
+  const f = effectiveFactor(
+    customData.scaleMode,
+    map.getZoom(),
+    customData.geo.zRef,
+  );
+  const nextSync: LastSync = { ...lastSync, mode: customData.scaleMode };
+  if (el.strokeWidth !== undefined && lastSync.sw !== undefined) {
+    nextSync.strokeWidth0 = el.strokeWidth / f;
+    nextSync.sw = el.strokeWidth;
+  }
+  if (el.fontSize !== undefined && lastSync.fs !== undefined) {
+    nextSync.fontSize0 = el.fontSize / f;
+    nextSync.fs = el.fontSize;
+  }
+  return { ...el, customData: { ...customData, _lastSync: nextSync } };
+}
+
+/**
+ * If the element's current screen state diverges from what the last sync
+ * wrote (i.e. the user moved, resized, or restyled it), return a new element
+ * with `customData.geo` and/or the `_lastSync` baselines updated. Returns
+ * null when everything matches within float tolerance — indicating
+ * `syncMapToScene` just wrote those values and no user change occurred.
  *
- * `zRef` is intentionally preserved from the existing anchor so scale-factor
- * computation (`2^(currentZoom - zRef)`) stays anchored to creation zoom.
+ * `zRef` is preserved from the existing anchor so scale-factor computation
+ * (`2^(currentZoom - zRef)`) stays anchored to creation zoom — EXCEPT on a
+ * scale-mode toggle, where zRef and all baselines are re-based to the
+ * current camera so the toggle preserves the current visual.
  *
  * NOTE: for `bbox` kind, `Math.max(1, span)` clamping in `_projectElement`
  * means elements smaller than 1 screen-pixel produce a slightly inexact
@@ -195,44 +331,86 @@ function buildGeoCustomData(
  * @internal
  */
 function reanchorIfMoved(
-  el: ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown },
+  el: AnchoredElement,
   map: maplibregl.Map,
-):
-  | (ElementGeoFields & { customData: GeoCustomData; [k: string]: unknown })
-  | null {
-  const existingGeo = el.customData.geo;
-  const lastSync = (el.customData as { _lastSync?: LastSync })._lastSync;
+): AnchoredElement | null {
+  const customData = el.customData;
+  const existingGeo = customData.geo;
+  const lastSync = customData._lastSync;
+  const scaleMode = customData.scaleMode;
+
+  // Scale-mode toggle since the last sync: re-base zRef + baselines to the
+  // current camera so the next sync keeps the size the user is looking at
+  // (otherwise clamped/unclamped factor swaps pop the geometry).
+  if (lastSync?.mode !== undefined && lastSync.mode !== scaleMode) {
+    const rebasedGeo = { ...existingGeo, zRef: map.getZoom() } as GeoAnchor;
+    const rebasedData: AnchoredCustomData = { ...customData, geo: rebasedGeo };
+    return {
+      ...el,
+      customData: {
+        ...rebasedData,
+        _lastSync: buildReanchorSnapshot(el, rebasedData, map),
+      },
+    };
+  }
 
   switch (existingGeo.kind) {
     case "point": {
-      let moved: boolean;
       if (lastSync !== undefined) {
         // Primary path: compare against the exact values _projectElement wrote.
         // Timing-immune — no map projection call needed for detection.
-        moved =
+        const moved =
           Math.abs(el.x - lastSync.x) > GEO_TOLERANCE ||
           Math.abs(el.y - lastSync.y) > GEO_TOLERANCE;
-      } else {
-        // Fallback: element predates _lastSync — use geo-space comparison.
+        // Width/height changes matter too: point-geographic sizes derive
+        // from w0/h0 baselines — an undetected resize gets reverted by the
+        // next sync.
+        const resized =
+          (lastSync.w !== undefined &&
+            Math.abs(el.width - lastSync.w) > SCREEN_TOL) ||
+          (lastSync.h !== undefined &&
+            Math.abs(el.height - lastSync.h) > SCREEN_TOL);
+        if (!moved && !resized) {
+          if (styleChanged(el, lastSync)) {
+            return rebaseStyle(el, customData, lastSync, map);
+          }
+          return null;
+        }
         const cur = unprojectPoint(map, el.x, el.y);
-        moved =
-          Math.abs(cur.lng - existingGeo.lng) > GEO_TOLERANCE ||
-          Math.abs(cur.lat - existingGeo.lat) > GEO_TOLERANCE;
+        const newAnchor: GeoAnchor = {
+          ...existingGeo,
+          lng: cur.lng,
+          lat: cur.lat,
+        };
+        const newData: AnchoredCustomData = { ...customData, geo: newAnchor };
+        return {
+          ...el,
+          customData: {
+            ...newData,
+            _lastSync: buildReanchorSnapshot(el, newData, map),
+          },
+        };
       }
+      // Fallback: element predates _lastSync — use geo-space comparison.
+      const cur = unprojectPoint(map, el.x, el.y);
+      const moved =
+        Math.abs(cur.lng - existingGeo.lng) > GEO_TOLERANCE ||
+        Math.abs(cur.lat - existingGeo.lat) > GEO_TOLERANCE;
       if (!moved) {
         return null;
       }
-      // Re-anchor: unproject current screen position → new geo anchor.
-      const cur = unprojectPoint(map, el.x, el.y);
       const newAnchor: GeoAnchor = {
         ...existingGeo,
         lng: cur.lng,
         lat: cur.lat,
       };
-      // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+      const newData: AnchoredCustomData = { ...customData, geo: newAnchor };
       return {
         ...el,
-        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+        customData: {
+          ...newData,
+          _lastSync: buildReanchorSnapshot(el, newData, map),
+        },
       };
     }
     case "bbox": {
@@ -244,7 +422,6 @@ function reanchorIfMoved(
       // corrupt the anchor. Screen-space comparison with the same clamping
       // logic is immune: it returns null whenever the element matches what
       // _projectElement would have written — including the clamped 1px case.
-      const SCREEN_TOL = 0.01; // float drift only; user drags are multi-pixel
       let moved: boolean;
       if (lastSync?.w !== undefined && lastSync?.h !== undefined) {
         // Primary path: compare against the exact values _projectElement wrote.
@@ -254,6 +431,9 @@ function reanchorIfMoved(
           Math.abs(el.y - lastSync.y) > SCREEN_TOL ||
           Math.abs(el.width - lastSync.w) > SCREEN_TOL ||
           Math.abs(el.height - lastSync.h) > SCREEN_TOL;
+        if (!moved && styleChanged(el, lastSync)) {
+          return rebaseStyle(el, customData, lastSync, map);
+        }
       } else {
         // Fallback: element predates _lastSync — use screen-space comparison
         // reconstructed from the geo anchor (existing behaviour).
@@ -272,17 +452,27 @@ function reanchorIfMoved(
         return null;
       }
       // User moved or resized — re-anchor from current screen position.
+      // Hybrid mode: displayed spans carry the clamp adjustment; divide it
+      // out or the clamp gets baked into the anchor.
+      const adj = hybridAdj(scaleMode, map.getZoom(), existingGeo.zRef);
       const nw = unprojectPoint(map, el.x, el.y);
-      const se = unprojectPoint(map, el.x + el.width, el.y + el.height);
+      const se = unprojectPoint(
+        map,
+        el.x + el.width / adj,
+        el.y + el.height / adj,
+      );
       const west = Math.min(nw.lng, se.lng);
       const east = Math.max(nw.lng, se.lng);
       const north = Math.max(nw.lat, se.lat);
       const south = Math.min(nw.lat, se.lat);
       const newAnchor: GeoAnchor = { ...existingGeo, west, east, north, south };
-      // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+      const newData: AnchoredCustomData = { ...customData, geo: newAnchor };
       return {
         ...el,
-        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+        customData: {
+          ...newData,
+          _lastSync: buildReanchorSnapshot(el, newData, map),
+        },
       };
     }
     case "polyline": {
@@ -291,34 +481,43 @@ function reanchorIfMoved(
         return null;
       }
       if (lastSync?.pts && lastSync.pts.length === pts.length) {
-        // Primary path: compare screen-space points against _lastSync snapshot.
-        // Timing-immune — no map projection call needed for detection.
-        const unchanged = pts.every(
+        // Primary path: compare screen-space position AND points against the
+        // _lastSync snapshot. Timing-immune. x/y matter: a whole-polyline
+        // drag changes only x/y — relative points stay identical — and an
+        // undetected move gets snapped back by the next sync.
+        const movedXY =
+          Math.abs(el.x - lastSync.x) > SCREEN_TOL ||
+          Math.abs(el.y - lastSync.y) > SCREEN_TOL;
+        const ptsUnchanged = pts.every(
           ([dx, dy], i) =>
             Math.abs(dx - lastSync.pts![i][0]) <= GEO_TOLERANCE &&
             Math.abs(dy - lastSync.pts![i][1]) <= GEO_TOLERANCE,
         );
-        if (unchanged) {
+        if (!movedXY && ptsUnchanged) {
+          if (styleChanged(el, lastSync)) {
+            return rebaseStyle(el, customData, lastSync, map);
+          }
           return null;
         }
-        // Points moved — compute new geo coords and re-anchor.
+        // Moved or reshaped — compute new geo coords and re-anchor. Hybrid
+        // mode: displayed points carry the clamp adjustment; divide it out.
+        const adj = hybridAdj(scaleMode, map.getZoom(), existingGeo.zRef);
         const newCoords: Array<[number, number]> = pts.map(([dx, dy]) => {
-          const ll = unprojectPoint(map, el.x + dx, el.y + dy);
+          const ll = unprojectPoint(map, el.x + dx / adj, el.y + dy / adj);
           return [ll.lng, ll.lat];
         });
         const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
-        // Clear _lastSync so CoordinateSync writes a fresh one on next sync.
+        const newData: AnchoredCustomData = { ...customData, geo: newAnchor };
         return {
           ...el,
           customData: {
-            ...el.customData,
-            geo: newAnchor,
-            _lastSync: undefined,
+            ...newData,
+            _lastSync: buildReanchorSnapshot(el, newData, map),
           },
         };
       }
-      // Fallback: element predates _lastSync (or screen mode) — use geo-space
-      // comparison against existingGeo.coordinates (existing behaviour).
+      // Fallback: element predates _lastSync — use geo-space comparison
+      // against existingGeo.coordinates (existing behaviour).
       const newCoords: Array<[number, number]> = pts.map(([dx, dy]) => {
         const ll = unprojectPoint(map, el.x + dx, el.y + dy);
         return [ll.lng, ll.lat];
@@ -335,9 +534,13 @@ function reanchorIfMoved(
         return null;
       }
       const newAnchor: GeoAnchor = { ...existingGeo, coordinates: newCoords };
+      const newData: AnchoredCustomData = { ...customData, geo: newAnchor };
       return {
         ...el,
-        customData: { ...el.customData, geo: newAnchor, _lastSync: undefined },
+        customData: {
+          ...newData,
+          _lastSync: buildReanchorSnapshot(el, newData, map),
+        },
       };
     }
   }
@@ -414,7 +617,14 @@ export function buildGeoAnchorHandler(
     });
 
     if (dirty) {
-      excalidrawAPI.updateScene({ elements: next as never });
+      // NEVER: stamps and re-anchors are derived protocol state, not user
+      // intent. Recording them as history entries splits a user gesture into
+      // two undo steps — undo then lands between the gesture and its
+      // re-anchor, and this handler re-anchors again, defeating the undo.
+      excalidrawAPI.updateScene({
+        elements: next as never,
+        captureUpdate: "NEVER",
+      });
     }
   };
 }

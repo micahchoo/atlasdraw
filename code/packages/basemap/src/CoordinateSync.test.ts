@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 
+import type { GeoCustomData } from "@atlasdraw/geo";
+
 import {
   CoordinateSync,
   type ExcalidrawAPI,
   type ExcalidrawElementLike,
 } from "./CoordinateSync";
-
-import type { GeoCustomData } from "./types.js";
 
 // MapLibre Map test double — only the methods CoordinateSync touches.
 function makeMap(project = vi.fn().mockReturnValue({ x: 100, y: 200 })) {
@@ -157,7 +157,15 @@ describe("CoordinateSync.syncMapToScene", () => {
       _lastSync?: unknown;
     };
     expect(resultData.geo).toEqual(pointCustomData.geo);
-    expect(resultData._lastSync).toEqual({ x: 500, y: 400 });
+    // Screen arm writes a FULL snapshot (w/h/mode) so reanchorIfMoved can
+    // use the timing-immune primary path (fuzzer class E fix).
+    expect(resultData._lastSync).toEqual({
+      x: 500,
+      y: 400,
+      w: 8,
+      h: 8,
+      mode: "screen",
+    });
   });
 
   it("Test C: captureUpdate: 'NEVER' is passed to updateScene", () => {
@@ -236,7 +244,13 @@ describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
       _lastSync?: unknown;
     };
     expect(resultData.geo).toEqual(bboxCustomData.geo);
-    expect(resultData._lastSync).toEqual({ x: 100, y: 100, w: 200, h: 150 });
+    expect(resultData._lastSync).toEqual({
+      x: 100,
+      y: 100,
+      w: 200,
+      h: 150,
+      mode: "geographic",
+    });
   });
 
   it("clamps width/height to >= 1 when projection inverts (rotated/pitched camera)", () => {

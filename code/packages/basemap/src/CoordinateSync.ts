@@ -80,13 +80,22 @@ export class CoordinateSync {
       case "point": {
         const { x, y } = projectPoint(this._map, anchor.lng, anchor.lat);
         if (scaleMode === "screen") {
+          // Full snapshot (w/h/mode included) so reanchorIfMoved can use the
+          // timing-immune primary path — a partial {x,y} forces the geo-space
+          // fallback, which mis-detects camera moves as user moves.
           return {
             ...el,
             x,
             y,
             customData: {
               ...(el.customData as Record<string, unknown>),
-              _lastSync: { x, y },
+              _lastSync: {
+                x,
+                y,
+                w: el.width,
+                h: el.height,
+                mode: "screen",
+              },
             },
           };
         }
@@ -111,12 +120,17 @@ export class CoordinateSync {
           h: height,
           w0,
           h0,
+          mode: scaleMode,
         };
         if (fontSize0 !== undefined) {
           newSync.fontSize0 = fontSize0;
+          // Projected value as written — reanchorIfMoved compares against it
+          // to detect user style edits without re-deriving from the camera.
+          newSync.fs = fontSize;
         }
         if (strokeWidth0 !== undefined) {
           newSync.strokeWidth0 = strokeWidth0;
+          newSync.sw = strokeWidth;
         }
         return {
           ...el,
@@ -135,13 +149,20 @@ export class CoordinateSync {
       case "bbox": {
         const nw = projectPoint(this._map, anchor.west, anchor.north);
         if (scaleMode === "screen") {
+          // Full snapshot — see the point/screen arm.
           return {
             ...el,
             x: nw.x,
             y: nw.y,
             customData: {
               ...(el.customData as Record<string, unknown>),
-              _lastSync: { x: nw.x, y: nw.y },
+              _lastSync: {
+                x: nw.x,
+                y: nw.y,
+                w: el.width,
+                h: el.height,
+                mode: "screen",
+              },
             },
           };
         }
@@ -162,9 +183,11 @@ export class CoordinateSync {
             y: nw.y,
             w: Math.max(1, projectedWidth * adj),
             h: Math.max(1, projectedHeight * adj),
+            mode: scaleMode,
           };
           if (strokeWidth0 !== undefined) {
             nextSync.strokeWidth0 = strokeWidth0;
+            nextSync.sw = strokeWidth;
           }
           return {
             ...el,
@@ -190,9 +213,11 @@ export class CoordinateSync {
           y: nw.y,
           w: projectedWidth,
           h: projectedHeight,
+          mode: scaleMode,
         };
         if (strokeWidth0 !== undefined) {
           nextSync.strokeWidth0 = strokeWidth0;
+          nextSync.sw = strokeWidth;
         }
         return {
           ...el,
@@ -224,7 +249,7 @@ export class CoordinateSync {
               height: 1,
               customData: {
                 ...(el.customData as Record<string, unknown>),
-                _lastSync: { x: origin.x, y: origin.y },
+                _lastSync: { x: origin.x, y: origin.y, mode: "screen" },
               },
             };
           }
@@ -238,7 +263,13 @@ export class CoordinateSync {
             height: Math.max(1, Math.max(...sys) - Math.min(...sys)),
             customData: {
               ...(el.customData as Record<string, unknown>),
-              _lastSync: { x: origin.x, y: origin.y },
+              // Full snapshot (pts/mode included) — see the point/screen arm.
+              _lastSync: {
+                x: origin.x,
+                y: origin.y,
+                pts: screenPoints.map((p) => [p[0], p[1]]),
+                mode: "screen",
+              },
             },
           };
         }
@@ -269,9 +300,11 @@ export class CoordinateSync {
           x: origin.x,
           y: origin.y,
           pts: points,
+          mode: scaleMode,
         };
         if (strokeWidth0 !== undefined) {
           nextSync.strokeWidth0 = strokeWidth0;
+          nextSync.sw = strokeWidth;
         }
         return {
           ...el,

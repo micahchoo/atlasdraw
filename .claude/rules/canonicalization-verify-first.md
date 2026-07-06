@@ -13,6 +13,11 @@ source: hand-written
 
 # Base64url helpers live in one place; reprojection is not triplicated — verify before "consolidating"
 
+> Hunting a bug where an element jumps/drifts after a *sequence* of
+> operations (zoom, move, paste, undo…)? That's not a duplication problem —
+> use `Skill('geo-op-idempotency-hunt')` for the systematic sequence-matrix
+> hunt before editing CoordinateSync or useGeoAnchor.
+
 `uint8ArrayToBase64Url`/`base64UrlToUint8Array` live in exactly one place:
 `packages/data/src/base64url.ts`, exported from the package barrel.
 `yjs-crypto.ts` and `scene-crypto.ts` both import it. If you need base64url

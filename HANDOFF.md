@@ -1,3 +1,51 @@
+# Handoff — 2026-07-06 (geo-op idempotency: skill + fuzzer built, 6 bug classes fixed, UNCOMMITTED)
+
+## State: working tree carries a complete, verified, uncommitted change set
+
+Session goal (met): build a hunting prompt for non-idempotent drawing↔map
+operations, fuzz the layer, fix what it found. All work is in the working
+tree on branch `feat/map-embed` (NOT this session's branch choice — tree is
+shared with a parallel embed session; commit geo work separately).
+
+### Deliverables
+
+- `.claude/skills/geo-op-idempotency-hunt/` — new project skill (+ evals/).
+- `code/apps/atlas-app/src/hooks/geoOpFuzz.harness.ts` — deterministic
+  sequence fuzzer vs real buildGeoAnchorHandler + CoordinateSync.
+- `.../geoOpSequence.fuzz.test.ts` — 500 seeds; KNOWN_FAILURES contract
+  (only class G parked). `.../geoOpKnownHazards.repro.test.ts` — 12 tests:
+  A–F regression repros (green) + class G `it.fails` (open).
+- **Fixed (classes A–F)** in `useGeoAnchor.ts` (reanchorIfMoved protocol
+  overhaul: polyline x/y compare, point w/h compare, style rebase via sw/fs,
+  mode-toggle zRef rebase, coherent snapshots instead of clearing _lastSync,
+  captureUpdate NEVER) and `CoordinateSync.ts` (full screen-arm snapshots,
+  mode/sw/fs fields). Two assertions updated in `CoordinateSync.test.ts`
+  (+ fixed its dead `./types.js` type-import).
+- Verified: 166 tests green across basemap/geo/atlas-app hook suites incl.
+  500-seed fuzz. tsc: basemap clean; atlas-app's 537 errors are the embed
+  session's pre-existing churn, none in these files.
+
+### Seeds
+
+- Closed: atlasdraw-c1d6/720b/311a/e58e/6623/fa09/8500 (classes A–F+umbrella).
+- Open: atlasdraw-7f0a (class G world-wrap at ±180 — needs world-edge policy;
+  bbox west<east schema can't represent dateline straddle). atlasdraw-0697
+  (skill eval run).
+
+### Next steps
+
+1. Commit the geo work (2 prod files, 3 test files, skill dir, rule cross-ref
+   in `.claude/rules/canonicalization-verify-first.md`) separately from embed.
+2. User-reported symptom "stroke changes differently than object on resize"
+   matches fixed classes C/D; repro'd green post-fix in
+   geoOpKnownHazards.repro.test.ts ("C/D user-report" tests). If still seen
+   live, the running build predates the fix — reload dev server / rebuild.
+3. Fuzzer expansion roadmap (deferred until A–F fixes verified live): atlas
+   tool channel, redo/delete, second onChange writer, stale-camera op,
+   adversarial value profile (confirms hazards 4/5). In SKILL.md Phase 2b.
+
+---
+
 # Handoff — 2026-07-05 (ISSUES.md fully closed: 9/9 Issues + 5/5 Directions verdicted and built)
 
 ## Goal

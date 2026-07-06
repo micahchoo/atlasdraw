@@ -1,0 +1,35 @@
+{
+  "skill_name": "geo-op-idempotency-hunt",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "When I draw a rectangle on the map, zoom in a couple of notches, and hit undo, the rectangle ends up in the wrong place — it seems to re-anchor itself somewhere else. Can you figure out what's going on and fix it?",
+      "expected_output": "Skill triggers. Builds/consults the sequence matrix, identifies the undo × _lastSync hazard (undo restores x/y + _lastSync from a different camera era), writes a failing vitest repro at the factory level (buildGeoAnchorHandler with a mocked map whose zoom changed between edit and undo), then proposes a protocol-level fix (validate _lastSync against current camera) rather than a per-channel patch. Runs the full invariant suite after fixing.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Audit the anchoring and zoom behavior of drawings for robustness — I don't have a specific bug, I just want to know what sequences of operations can corrupt an element's position or size.",
+      "expected_output": "Skill triggers proactively (no named bug). Produces the operation-channel matrix, triages all seven known hazards (confirmed-and-fixed / deferred-with-issue / not-reproducible with proving test), prioritizes stock-Excalidraw channels (paste/undo/duplicate) that bypass the _lastSync protocol, and writes property tests for idempotency, round-trip epsilon, and zoom-in-then-out identity across all 3 scale modes × 3 anchor kinds.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Pasted pins keep jumping to a slightly different spot the first time I pan the map after pasting. Fix it.",
+      "expected_output": "Skill triggers. Identifies hazard 1 (paste deep-clones geo AND stale _lastSync at a new offset, so the next onChange reads it as user-moved and spuriously re-anchors). Failing repro test first; fix at the protocol or clone-sanitization layer (strip/refresh _lastSync on paste path), not by making screen coords authoritative.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "The pin toolbar button looks misaligned when the map is zoomed — the icon inside the button is off-center. Fix the styling.",
+      "expected_output": "NEGATIVE: skill should NOT trigger despite the words 'pin', 'map', 'zoomed'. This is a CSS/UI concern — atlasdraw-ui-conventions is the right skill. No sequence matrix, no anchor tests.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Refactor CoordinateSync and useGeoAnchor — they both have the same point/bbox/polyline switch, looks like copy-paste. Merge them into one shared reprojection function.",
+      "expected_output": "NEGATIVE-ISH: the canonicalization-verify-first rule governs (the two switches are deliberately separate — different direction and lifecycle; do not merge). If geo-op-idempotency-hunt loads via path triggers, it must reinforce the do-not-merge constraint, not perform the merge.",
+      "files": []
+    }
+  ]
+}
