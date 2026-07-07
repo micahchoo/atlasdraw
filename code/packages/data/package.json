@@ -26,7 +26,7 @@
   "devDependencies": {
     "@types/geojson": "*",
     "@types/papaparse": "^5.3.0",
-    "typescript": "*",
+    "typescript": "5.9.3",
     "vitest": "*"
   }
 }

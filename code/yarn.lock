@@ -72,7 +72,7 @@ __metadata:
     react-dom: "npm:19.0.0"
     sass: "npm:^1.77.0"
     socket.io-client: "npm:^4.7.0"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     vite: "npm:^5.0.12"
     vitest: "npm:3.0.6"
     y-websocket: "npm:^2.0.0"
@@ -90,7 +90,7 @@ __metadata:
     maplibre-gl: "npm:^4.7.1"
     pmtiles: "npm:^4.4.0"
     protomaps-themes-base: "npm:^4.5.0"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
   peerDependencies:
     react: ">=18.0.0"
   languageName: unknown
@@ -113,7 +113,7 @@ __metadata:
     "@atlasdraw/data": "npm:0.0.0"
     "@types/node": "npm:*"
     commander: "npm:^11.0.0"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     ulid: "npm:^2.3.0"
     vitest: "npm:3.0.6"
   bin:
@@ -139,7 +139,7 @@ __metadata:
     jszip: "npm:^3.10.0"
     papaparse: "npm:^5.4.0"
     shpjs: "npm:^6.2.0"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     ulid: "npm:^2.3.0"
     vitest: "npm:*"
     yjs: "npm:^13.6.20"
@@ -228,7 +228,7 @@ __metadata:
   dependencies:
     fast-check: "npm:4.7.0"
     maplibre-gl: "npm:^4.7.1"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     vitest: "npm:*"
   peerDependencies:
     maplibre-gl: ">=4.0.0"
@@ -250,7 +250,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@atlasdraw/protocol@workspace:packages/protocol"
   dependencies:
-    typescript: "npm:5.x"
+    typescript: "npm:5.9.3"
     vitest: "npm:*"
   languageName: unknown
   linkType: soft
@@ -267,7 +267,7 @@ __metadata:
     socket.io: "npm:^4.7.0"
     socket.io-client: "npm:^4.7.0"
     tsx: "npm:^4.7.0"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     vitest: "npm:*"
     ws: "npm:^8.16.0"
     y-protocols: "npm:^1.0.6"
@@ -279,7 +279,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@atlasdraw/sdk@workspace:packages/sdk"
   dependencies:
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
 
@@ -300,7 +300,7 @@ __metadata:
     pino: "npm:10.3.1"
     stripe: "npm:^17.0.0"
     tmp: "npm:^0.2"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     vitest: "npm:*"
     zod: "npm:^3.22.0"
   languageName: unknown
@@ -314,7 +314,7 @@ __metadata:
     "@turf/circle": "npm:7.3.5"
     "@turf/distance": "npm:7.3.5"
     "@types/react": "npm:*"
-    typescript: "npm:*"
+    typescript: "npm:5.9.3"
     vitest: "npm:*"
   peerDependencies:
     react: ">=18"
@@ -18874,17 +18874,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:*":
-  version: 6.0.3
-  resolution: "typescript@npm:6.0.3"
-  bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
-  checksum: 10/0ef2357a4cffd916b52b683a021cdab0f81eea4e9aa35f2d254581c9a5106da02224e3392e1b0ed42b7a48f80c966e5f52b8e1a27941fa0523c1705a9c2e0330
-  languageName: node
-  linkType: hard
-
-"typescript@npm:5.9.3, typescript@npm:5.x":
+"typescript@npm:5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -18894,17 +18884,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A*#optional!builtin<compat/typescript>":
-  version: 6.0.3
-  resolution: "typescript@patch:typescript@npm%3A6.0.3#optional!builtin<compat/typescript>::version=6.0.3&hash=5786d5"
-  bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
-  checksum: 10/22b67a18dafedf9b1468b64ca20d9aa02ea61d449b65413d8aa6552aeb63f52ef369e86beb25b6b4c91a803d9726ee5c196f391a9b64201263263410a4223ee6
-  languageName: node
-  linkType: hard
-
-"typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>, typescript@patch:typescript@npm%3A5.x#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:

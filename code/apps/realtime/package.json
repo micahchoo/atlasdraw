@@ -27,7 +27,7 @@
     "@types/node": "*",
     "socket.io-client": "^4.7.0",
     "tsx": "^4.7.0",
-    "typescript": "*",
+    "typescript": "5.9.3",
     "vitest": "*"
   }
 }

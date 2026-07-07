@@ -27,7 +27,7 @@
     "@types/pg": "*",
     "@types/tmp": "*",
     "tmp": "^0.2",
-    "typescript": "*",
+    "typescript": "5.9.3",
     "vitest": "*"
   }
 }
