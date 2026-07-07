@@ -53,6 +53,10 @@ yarn--*/
 # Build / process caches at repo root
 playwright-transform-cache-*/
 v8-compile-cache-*/
+node-compile-cache/
+
+# Stray tool artifact dir (content-addressed 'web/' store; not ours)
+Et6ZJ_xdtT9_0ghOD3LnM/
 
 # Autoresearch session artifacts (machine-local; regenerated per loop)
 autoresearch-metrics.json

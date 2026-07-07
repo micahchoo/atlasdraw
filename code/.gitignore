@@ -22,6 +22,24 @@ package-lock.json
 yarn-debug.log*
 yarn-error.log*
 packages/excalidraw/types
+
+# Emitted TypeScript declarations that leak co-located into the vendored
+# engine source (the real build emits to dist/, ignored above). Hand-written
+# declarations in these packages are re-included below.
+packages/common/**/*.d.ts
+packages/element/**/*.d.ts
+packages/math/**/*.d.ts
+packages/utils/**/*.d.ts
+packages/excalidraw/**/*.d.ts
+!packages/common/global.d.ts
+!packages/element/global.d.ts
+!packages/math/global.d.ts
+!packages/utils/global.d.ts
+!packages/excalidraw/css.d.ts
+!packages/excalidraw/global.d.ts
+!packages/excalidraw/pwacompat.d.ts
+!packages/excalidraw/react-app-env.d.ts
+!packages/excalidraw/vite-env.d.ts
 coverage
 dev-dist
 html
