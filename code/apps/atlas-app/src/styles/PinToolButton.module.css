@@ -1,6 +1,9 @@
-/* PinToolButton — Pin tool toggle on the collar tool strip.
- * Renders inside the `.excalidraw` scope (portaled collar strip), so it uses
- * Excalidraw CSS vars with fallbacks to match the native tool buttons. */
+/* PinToolButton — pin-tool toggle on the collar tool strip.
+ *
+ * Renders INSIDE the Excalidraw toolbar (`.excalidraw` scope), portaled into
+ * the collar strip → uses Excalidraw CSS vars (with fallbacks) to match the
+ * native tool buttons. Same treatment as GeoSearchControl's toolbar button.
+ */
 
 .button {
   display: flex;
@@ -25,10 +28,11 @@
   outline-offset: -2px;
 }
 
+/* Engaged (pin tool active) — mirror the active tool-button treatment. */
 .buttonActive,
 .buttonActive:hover {
-  background: var(--color-primary-light, #e5eef6);
-  color: var(--color-primary, #1971c2);
+  background: var(--color-primary, #6965db);
+  color: var(--color-primary-contrast, #ffffff);
 }
 
 .icon {

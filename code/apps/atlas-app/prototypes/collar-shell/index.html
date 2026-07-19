@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PROTOTYPE — THROWAWAY. Do not ship, do not import from app code.
+
+     Question: does the "Collar" shell concept (map-sheet frame: neatline +
+     collar marginalia, replacing Excalidraw's floating-island layout) feel
+     right at real screen proportions, over a real map?
+
+     Three structural expressions, switchable via ?variant= (a|b|c),
+     cycle with ← / → or the bottom pill:
+       a — Full collar   frame on all four sides, graticule left+top,
+                         layer sheet-edges in the frame, legend fold-out
+       b — Broadside     collar top+bottom only, map bleeds to the sides,
+                         corner coordinate chips, floating sheet-tabs
+       c — Field sheet   vellum margin all around, boxed title block,
+                         double-rule neatline, legend printed on the plate
+
+     Run: open this file in a browser (network needed for OSM tiles + CDN).
+     Verdict goes in NOTES.md next to this file, then delete or absorb.
+     ═══════════════════════════════════════════════════════════════════ -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — Collar shell</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+    />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <style>
+      /* ── tokens (copied from src/styles/tokens.css — prototype is standalone) ── */
+      :root {
+        --ad-surface: #f2e8d5;
+        --ad-surface-raised: #faf6ee;
+        --ad-surface-inset: #e8ddc8;
+        --ad-ink: #2d2218;
+        --ad-ink-secondary: #544a3d;
+        --ad-ink-tertiary: #8a7e6e;
+        --ad-ink-inverse: #faf6ee;
+        --ad-accent: #1971c2;
+        --ad-accent-hover: #1864ab;
+        --ad-accent-subtle: #e5eef6;
+        --ad-hairline: rgba(0, 0, 0, 0.06);
+        --ad-rule: rgba(0, 0, 0, 0.11);
+        --ad-emphasis: rgba(0, 0, 0, 0.2);
+        --ad-danger: #d64045;
+        --ad-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+        --ad-font-mono: ui-monospace, "Cascadia Code", "Fira Code",
+          "JetBrains Mono", monospace;
+        --ad-shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.08),
+          0 0 0 1px rgba(0, 0, 0, 0.04);
+        /* prototype-only: the neatline rule — inkier than UI borders, it is print, not chrome */
+        --ad-neatline: rgba(45, 34, 24, 0.65);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        font-family: var(--ad-font-sans);
+        color: var(--ad-ink);
+        background: var(--ad-surface);
+        font-size: 12px;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        cursor: pointer;
+      }
+
+      .shell {
+        height: 100vh;
+        display: grid;
+      }
+
+      /* ── shared: collar head (title / search / menu) ─────────────────────── */
+      .head {
+        grid-area: head;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--ad-hairline);
+      }
+      .wordmark {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        color: var(--ad-ink-secondary);
+      }
+      .sheet-name {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .sheet-name::before {
+        content: "· ";
+        font-weight: 400;
+        color: var(--ad-ink-tertiary);
+      }
+      .head-spacer {
+        flex: 1;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 220px;
+        padding: 5px 8px;
+        background: var(--ad-surface-inset);
+        border: 1px solid var(--ad-rule);
+        border-radius: 4px;
+        color: var(--ad-ink-tertiary);
+      }
+      .icon-btn {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 4px;
+        color: var(--ad-ink-secondary);
+      }
+      .icon-btn:hover {
+        background: var(--ad-surface-inset);
+      }
+
+      /* ── shared: tool strip — flush in the collar, never floating ────────── */
+      .tools {
+        grid-area: tools;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--ad-rule);
+      }
+      .tool {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 32px;
+        border-radius: 4px;
+        color: var(--ad-ink-secondary);
+        position: relative;
+      }
+      .tool:hover {
+        background: var(--ad-surface-inset);
+      }
+      .tool[aria-pressed="true"] {
+        background: var(--ad-accent-subtle);
+        color: var(--ad-accent);
+      }
+      .tool[aria-pressed="true"]::after {
+        content: "";
+        position: absolute;
+        left: 6px;
+        right: 6px;
+        bottom: -1px;
+        height: 2px;
+        background: var(--ad-accent);
+      }
+      .tool-sep {
+        width: 1px;
+        height: 18px;
+        background: var(--ad-rule);
+        margin: 0 6px;
+      }
+      .tool-hint {
+        margin-left: auto;
+        color: var(--ad-ink-tertiary);
+        font-size: 11px;
+      }
+      .tool-hint kbd {
+        font-family: var(--ad-font-mono);
+        font-size: 10px;
+        padding: 1px 4px;
+        border: 1px solid var(--ad-rule);
+        border-radius: 3px;
+        background: var(--ad-surface-raised);
+      }
+
+      /* ── shared: the plate (map + neatline) ──────────────────────────────── */
+      .plate {
+        grid-area: map;
+        position: relative;
+        background: var(--ad-surface-inset);
+      }
+      .plate.neat {
+        border: 1.5px solid var(--ad-neatline);
+      }
+      .plate.neat::after {
+        /* inner rule of the double neatline */
+        content: "";
+        position: absolute;
+        inset: 2px;
+        pointer-events: none;
+        border: 0.5px solid var(--ad-neatline);
+        z-index: 5;
+      }
+      #map {
+        position: absolute;
+        inset: 0;
+      }
+      /* pull the basemap into the vellum world */
+      #map canvas {
+        filter: sepia(0.18) saturate(0.82) brightness(1.02);
+      }
+
+      /* fake crisp annotations — what user ink looks like against the frame */
+      .annot {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 4;
+      }
+      .annot svg.strokes {
+        width: 100%;
+        height: 100%;
+      }
+      .annot .chip {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        padding: 3px 7px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--ad-surface-raised);
+        border: 1px solid var(--ad-emphasis);
+        border-radius: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .annot .pin {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        color: var(--ad-danger);
+      }
+
+      /* ── shared: graticule ───────────────────────────────────────────────── */
+      .lon-ticks {
+        grid-area: lon;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 0 2px;
+        font-family: var(--ad-font-mono);
+        font-size: 9.5px;
+        color: var(--ad-ink-tertiary);
+      }
+      .lon-ticks span {
+        border-left: 1px solid var(--ad-emphasis);
+        padding: 0 0 1px 3px;
+      }
+      .lat-ticks {
+        grid-area: lat;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-end;
+        padding: 2px 0;
+        font-family: var(--ad-font-mono);
+        font-size: 9.5px;
+        color: var(--ad-ink-tertiary);
+      }
+      .lat-ticks span {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        border-top: 1px solid var(--ad-emphasis);
+        padding: 3px 1px 0 0;
+      }
+
+      /* ── shared: marginalia (bottom collar) ──────────────────────────────── */
+      .foot {
+        grid-area: foot;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 12px;
+        border-top: 1px solid var(--ad-rule);
+        font-family: var(--ad-font-mono);
+        font-size: 10.5px;
+        color: var(--ad-ink-secondary);
+      }
+      .scalebar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .scalebar .bar {
+        display: flex;
+        height: 5px;
+        border: 1px solid var(--ad-ink);
+        border-radius: 1px;
+        overflow: hidden;
+      }
+      .scalebar .bar i {
+        display: block;
+        height: 100%;
+      }
+      .scalebar .bar i:nth-child(odd) {
+        background: var(--ad-ink);
+      }
+      .scalebar .bar i:nth-child(even) {
+        background: var(--ad-surface-raised);
+      }
+      .foot .spacer {
+        flex: 1;
+      }
+      .foot .attrib {
+        font-family: var(--ad-font-sans);
+        font-size: 10px;
+        color: var(--ad-ink-tertiary);
+      }
+
+      /* ── shared: layer sheet-edges ───────────────────────────────────────── */
+      .tabs {
+        grid-area: tabs;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 0 10px 4px;
+      }
+      .tab {
+        writing-mode: vertical-rl;
+        padding: 10px 5px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--ad-ink-secondary);
+        background: var(--ad-surface-raised);
+        border: 1px solid var(--ad-rule);
+        border-right: 0;
+        border-radius: 4px 0 0 4px;
+        box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.05);
+      }
+      .tab:hover {
+        background: var(--ad-surface);
+      }
+      .tab[aria-expanded="true"] {
+        color: var(--ad-accent);
+        border-left: 2px solid var(--ad-accent);
+        padding-left: 4px;
+      }
+
+      /* ── shared: legend (properties) ─────────────────────────────────────── */
+      .legend {
+        position: absolute;
+        z-index: 30;
+        width: 232px;
+        background: var(--ad-surface-raised);
+        border: 1px solid var(--ad-rule);
+        border-radius: 6px;
+        box-shadow: var(--ad-shadow-raised);
+        padding: 12px;
+      }
+      .legend[hidden] {
+        display: none;
+      }
+      .legend h2 {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        color: var(--ad-ink-secondary);
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--ad-rule);
+      }
+      .legend h2 small {
+        float: right;
+        font-weight: 400;
+        letter-spacing: 0;
+        color: var(--ad-ink-tertiary);
+      }
+      .lrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .lrow label {
+        width: 52px;
+        font-size: 11px;
+        color: var(--ad-ink-secondary);
+      }
+      .swatch {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        border: 1px solid var(--ad-emphasis);
+      }
+      .swatch[aria-pressed="true"] {
+        outline: 2px solid var(--ad-accent);
+        outline-offset: 1px;
+      }
+      .wline {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        height: 22px;
+        border: 1px solid var(--ad-rule);
+        border-radius: 4px;
+      }
+      .wline[aria-pressed="true"] {
+        border-color: var(--ad-accent);
+        background: var(--ad-accent-subtle);
+      }
+      .wline i {
+        display: block;
+        width: 70%;
+        background: var(--ad-ink);
+        border-radius: 2px;
+      }
+      .lrow input[type="range"] {
+        flex: 1;
+        accent-color: var(--ad-accent);
+      }
+      .llayers {
+        margin-top: 4px;
+        padding-top: 8px;
+        border-top: 1px solid var(--ad-hairline);
+      }
+      .llayer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 2px;
+        font-size: 12px;
+      }
+      .llayer .eye {
+        margin-left: auto;
+        color: var(--ad-ink-tertiary);
+      }
+      .llayer .key {
+        width: 18px;
+        text-align: center;
+        color: var(--ad-accent);
+        font-weight: 700;
+      }
+
+      /* ══ variant A — full collar ═════════════════════════════════════════ */
+      [data-variant="a"] .shell {
+        grid-template-rows: 40px 42px 18px 1fr 34px;
+        grid-template-columns: 46px 1fr 34px;
+        grid-template-areas:
+          "head head head"
+          "tools tools tools"
+          ".    lon  ."
+          "lat  map  tabs"
+          "foot foot foot";
+      }
+      [data-variant="a"] .legend {
+        top: 118px;
+        right: 42px;
+      }
+
+      /* ══ variant B — broadside ═══════════════════════════════════════════ */
+      [data-variant="b"] .shell {
+        grid-template-rows: 46px 1fr 34px;
+        grid-template-columns: 1fr;
+        grid-template-areas: "head" "map" "foot";
+      }
+      [data-variant="b"] .head {
+        border-bottom: 1px solid var(--ad-rule);
+      }
+      [data-variant="b"] .head .tools-inline {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      [data-variant="b"] .tabs {
+        position: absolute;
+        right: 0;
+        top: 64px;
+        z-index: 20;
+        padding: 0 0 0 4px;
+      }
+      [data-variant="b"] .corner {
+        position: absolute;
+        z-index: 6;
+        padding: 2px 6px;
+        font-family: var(--ad-font-mono);
+        font-size: 9.5px;
+        color: var(--ad-ink-secondary);
+        background: color-mix(
+          in srgb,
+          var(--ad-surface-raised) 85%,
+          transparent
+        );
+        border: 1px solid var(--ad-hairline);
+        border-radius: 3px;
+      }
+      [data-variant="b"] .corner.nw {
+        top: 8px;
+        left: 8px;
+      }
+      [data-variant="b"] .corner.se {
+        bottom: 8px;
+        right: 8px;
+      }
+      [data-variant="b"] .legend {
+        top: 64px;
+        right: 40px;
+      }
+
+      /* ══ variant C — field sheet ═════════════════════════════════════════ */
+      [data-variant="c"] .shell {
+        padding: 10px 14px 12px;
+        grid-template-rows: 46px 40px 16px 1fr 34px;
+        grid-template-columns: 40px 1fr 40px;
+        grid-template-areas:
+          "head head head"
+          "tools tools tools"
+          ".    lon  ."
+          "lat  map  lat2"
+          "foot foot foot";
+      }
+      [data-variant="c"] .head {
+        border-bottom: 0;
+        padding: 0 2px;
+      }
+      [data-variant="c"] .titleblock {
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1px;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--ad-neatline);
+        border-radius: 2px;
+      }
+      [data-variant="c"] .titleblock .wordmark {
+        font-size: 9px;
+      }
+      [data-variant="c"] .tools {
+        border: 1px solid var(--ad-neatline);
+        border-radius: 2px;
+        margin: 0 2px;
+        padding: 0 8px;
+      }
+      [data-variant="c"] .lat-ticks.mirror {
+        align-items: flex-start;
+      }
+      [data-variant="c"] .lat-ticks.mirror span {
+        transform: none;
+        border-top: 1px solid var(--ad-emphasis);
+        padding: 3px 0 0 1px;
+      }
+      [data-variant="c"] .foot {
+        border-top: 0;
+        padding: 6px 2px 0;
+      }
+      [data-variant="c"] .legend {
+        /* printed on the plate: overlaps the neatline like a quad legend box */
+        bottom: 52px;
+        right: 26px;
+        top: auto;
+        border: 1px solid var(--ad-neatline);
+        border-radius: 2px;
+        box-shadow: none;
+      }
+
+      /* ── prototype switcher — deliberately NOT part of the design ────────── */
+      .proto-bar {
+        position: fixed;
+        left: 50%;
+        bottom: 46px;
+        transform: translateX(-50%);
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        background: #1d1d1f;
+        color: #f5f5f5;
+        border-radius: 999px;
+        padding: 4px 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        font-size: 12px;
+      }
+      .proto-bar button {
+        color: #f5f5f5;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+      }
+      .proto-bar button:hover {
+        background: #3a3a3c;
+      }
+      .proto-bar .plabel {
+        padding: 0 10px;
+        white-space: nowrap;
+      }
+      .proto-bar .plabel b {
+        color: #ffd60a;
+        font-weight: 600;
+        margin-right: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      "use strict";
+
+      /* ── icons (16px, stroke currentColor) ─────────────────────────────────── */
+      const I = (d, extra = "") =>
+        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+        stroke="currentColor" stroke-width="1.4" stroke-linecap="round"
+        stroke-linejoin="round" aria-hidden="true">${d}${extra}</svg>`;
+      const ICONS = {
+        select: I(`<path d="M3.5 2.5 L12.5 8 L8.2 9.2 L6 13.5 Z"/>`),
+        pen: I(
+          `<path d="M3 13 L3.6 10.4 L10.8 3.2 A1.3 1.3 0 0 1 12.8 5.2 L5.6 12.4 Z"/>`,
+        ),
+        line: I(`<path d="M3 13 L13 3"/>`),
+        shape: I(`<rect x="3" y="3" width="10" height="10" rx="1"/>`),
+        text: I(`<path d="M3.5 4.5 V3 H12.5 V4.5 M8 3 V13 M6 13 H10"/>`),
+        pin: I(
+          `<path d="M8 14 C8 14 3.5 9.4 3.5 6.4 A4.5 4.5 0 0 1 12.5 6.4 C12.5 9.4 8 14 8 14 Z"/><circle cx="8" cy="6.4" r="1.6"/>`,
+        ),
+        search: I(`<circle cx="7" cy="7" r="4"/><path d="M10 10 L13.5 13.5"/>`),
+        menu: I(`<path d="M3 4.5 H13 M3 8 H13 M3 11.5 H13"/>`),
+        eye: I(
+          `<path d="M1.8 8 C3.5 4.8 6 3.4 8 3.4 C10 3.4 12.5 4.8 14.2 8 C12.5 11.2 10 12.6 8 12.6 C6 12.6 3.5 11.2 1.8 8 Z"/><circle cx="8" cy="8" r="1.8"/>`,
+        ),
+      };
+
+      /* ── shared partials ───────────────────────────────────────────────────── */
+      const TOOLS = [
+        ["select", "Select"],
+        ["pen", "Draw"],
+        ["line", "Line"],
+        ["shape", "Shape"],
+        ["text", "Text"],
+        ["pin", "Pin", true],
+      ];
+      const toolBtns = () =>
+        TOOLS.map(
+          ([k, label, sep]) =>
+            (sep ? `<span class="tool-sep"></span>` : "") +
+            `<button class="tool" aria-pressed="${
+              k === "pen"
+            }" title="${label}">${ICONS[k]}</button>`,
+        ).join("");
+
+      const toolStrip = () => `
+  <div class="tools">
+    ${toolBtns()}
+    <span class="tool-hint"><kbd>⌘K</kbd> anything</span>
+  </div>`;
+
+      const headBar = () => `
+  <header class="head">
+    <span class="wordmark">ATLASDRAW</span><span class="sheet-name">Harbor Survey</span>
+    <span class="head-spacer"></span>
+    <div class="search">${ICONS.search}<span>Search places…</span></div>
+    <button class="icon-btn" title="Menu">${ICONS.menu}</button>
+  </header>`;
+
+      const lonTicks = () =>
+        `<div class="lon-ticks" data-lon>${"<span></span>".repeat(5)}</div>`;
+      const latTicks = (cls = "") =>
+        `<div class="lat-ticks ${cls}" data-lat>${"<span></span>".repeat(
+          4,
+        )}</div>`;
+
+      const marginalia = () => `
+  <footer class="foot">
+    <span class="scalebar"><span class="bar" data-bar></span><span data-bar-label></span></span>
+    <span data-center>—</span>
+    <span>WGS 84 · EPSG:3857</span>
+    <span class="spacer"></span>
+    <span class="attrib">basemap © OpenStreetMap</span>
+    <span data-ratio>1:—</span>
+  </footer>`;
+
+      const layerTabs = () => `
+  <nav class="tabs">
+    <button class="tab" aria-expanded="false" data-tab="basemap">Basemap</button>
+    <button class="tab" aria-expanded="true"  data-tab="ink">Survey ink</button>
+    <button class="tab" aria-expanded="false" data-tab="notes">Notes</button>
+  </nav>`;
+
+      const legendPanel = () => `
+  <aside class="legend" data-legend>
+    <h2>LEGEND <small>Survey ink</small></h2>
+    <div class="lrow"><label>Stroke</label>
+      <button class="swatch" style="background:#2d2218" title="Ink"></button>
+      <button class="swatch" aria-pressed="true" style="background:#1971c2" title="Blueprint"></button>
+      <button class="swatch" style="background:#d64045" title="Red pencil"></button>
+      <button class="swatch" style="background:#2f9e44" title="Field green"></button>
+      <button class="swatch" style="background:#e67700" title="Amber"></button>
+    </div>
+    <div class="lrow"><label>Width</label>
+      <button class="wline"><i style="height:1px"></i></button>
+      <button class="wline" aria-pressed="true"><i style="height:2px"></i></button>
+      <button class="wline"><i style="height:4px"></i></button>
+    </div>
+    <div class="lrow"><label>Opacity</label><input type="range" value="100"></div>
+    <div class="llayers">
+      <div class="llayer"><span class="key">—</span> Survey ink <button class="eye icon-btn">${ICONS.eye}</button></div>
+      <div class="llayer"><span class="key">◦</span> Notes <button class="eye icon-btn">${ICONS.eye}</button></div>
+      <div class="llayer"><span class="key">▦</span> Basemap · OSM <button class="eye icon-btn">${ICONS.eye}</button></div>
+    </div>
+  </aside>`;
+
+      const annotations = () => `
+  <div class="annot">
+    <svg class="strokes" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+      <path d="M 120 800 C 280 720, 360 580, 500 540 S 740 440, 880 300"
+            fill="none" stroke="#1971c2" stroke-width="2.5"
+            vector-effect="non-scaling-stroke" stroke-linecap="round"/>
+      <path d="M 560 660 L 730 615 L 775 730 L 620 770 Z"
+            fill="rgba(25,113,194,0.10)" stroke="#1971c2" stroke-width="1.5"
+            vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    </svg>
+    <span class="chip" style="left:50%; top:49%">Pier 3 — dock survey</span>
+    <span class="pin" style="left:66.5%; top:69%">
+      <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 15 C8 15 3 9.8 3 6.4 A5 5 0 0 1 13 6.4 C13 9.8 8 15 8 15 Z"/>
+        <circle cx="8" cy="6.4" r="1.8" fill="#faf6ee"/>
+      </svg>
+    </span>
+  </div>`;
+
+      const plate = (neat = true, extra = "") => `
+  <div class="plate ${neat ? "neat" : ""}">
+    <div id="map"></div>
+    ${annotations()}
+    ${extra}
+  </div>`;
+
+      /* ── the three variants ────────────────────────────────────────────────── */
+      const VARIANTS = {
+        a: {
+          name: "Full collar",
+          html: () => `
+      <div class="shell">
+        ${headBar()}
+        ${toolStrip()}
+        ${lonTicks()}
+        ${latTicks()}
+        ${plate()}
+        ${layerTabs()}
+        ${marginalia()}
+        ${legendPanel()}
+      </div>`,
+        },
+        b: {
+          name: "Broadside",
+          html: () => `
+      <div class="shell">
+        <header class="head">
+          <span class="wordmark">ATLASDRAW</span><span class="sheet-name">Harbor Survey</span>
+          <span class="tool-sep"></span>
+          <div class="tools-inline">${toolBtns()}</div>
+          <span class="head-spacer"></span>
+          <div class="search">${ICONS.search}<span>Search places…</span></div>
+          <button class="icon-btn" title="Menu">${ICONS.menu}</button>
+        </header>
+        ${plate(
+          false,
+          `
+          <span class="corner nw" data-corner-nw>—</span>
+          <span class="corner se" data-corner-se>—</span>`,
+        )}
+        ${layerTabs()}
+        ${marginalia()}
+        ${legendPanel()}
+      </div>`,
+        },
+        c: {
+          name: "Field sheet",
+          html: () => `
+      <div class="shell">
+        <header class="head">
+          <span class="titleblock">
+            <span class="wordmark">ATLASDRAW · SHEET 1 OF 1</span>
+            <span class="sheet-name" style="margin-left:-2px">Harbor Survey</span>
+          </span>
+          <span class="head-spacer"></span>
+          <div class="search">${ICONS.search}<span>Search places…</span></div>
+          <button class="icon-btn" title="Menu">${ICONS.menu}</button>
+        </header>
+        ${toolStrip()}
+        ${lonTicks()}
+        ${latTicks()}
+        ${plate()}
+        <div class="lat-ticks mirror" style="grid-area:lat2" data-lat2>${"<span></span>".repeat(
+          4,
+        )}</div>
+        ${marginalia()}
+        ${legendPanel()}
+      </div>`,
+        },
+      };
+
+      /* ── boot ──────────────────────────────────────────────────────────────── */
+      const ORDER = ["a", "b", "c"];
+      const params = new URLSearchParams(location.search);
+      let v = (params.get("variant") || "a").toLowerCase();
+      if (!VARIANTS[v]) v = "a";
+      document.body.dataset.variant = v;
+      document.getElementById("app").innerHTML = VARIANTS[v].html();
+
+      /* switcher pill */
+      const bar = document.createElement("div");
+      bar.className = "proto-bar";
+      bar.innerHTML = `
+  <button data-go="-1" title="Previous (←)">‹</button>
+  <span class="plabel"><b>PROTOTYPE</b>${v.toUpperCase()} · ${
+        VARIANTS[v].name
+      }</span>
+  <button data-go="1" title="Next (→)">›</button>`;
+      document.body.appendChild(bar);
+      const go = (d) => {
+        const next =
+          ORDER[(ORDER.indexOf(v) + d + ORDER.length) % ORDER.length];
+        location.search = "?variant=" + next;
+      };
+      bar
+        .querySelectorAll("[data-go]")
+        .forEach((b) => b.addEventListener("click", () => go(+b.dataset.go)));
+      addEventListener("keydown", (e) => {
+        if (e.target.closest("input, textarea, [contenteditable]")) return;
+        if (e.key === "ArrowLeft") go(-1);
+        if (e.key === "ArrowRight") go(1);
+      });
+
+      /* legend toggle via sheet-tabs */
+      document.querySelectorAll("[data-tab]").forEach((t) =>
+        t.addEventListener("click", () => {
+          const legend = document.querySelector("[data-legend]");
+          const open = t.getAttribute("aria-expanded") === "true";
+          document
+            .querySelectorAll("[data-tab]")
+            .forEach((x) => x.setAttribute("aria-expanded", "false"));
+          if (!open) {
+            t.setAttribute("aria-expanded", "true");
+            legend.hidden = false;
+          } else legend.hidden = true;
+        }),
+      );
+
+      /* map */
+      const map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+            },
+          },
+          layers: [{ id: "osm", type: "raster", source: "osm" }],
+        },
+        center: [-122.3385, 47.6015],
+        zoom: 14.3,
+        attributionControl: false,
+      });
+
+      /* ── live marginalia + graticule ───────────────────────────────────────── */
+      const fmt = (n, dp, pos, neg) =>
+        Math.abs(n).toFixed(dp) + "°" + (n >= 0 ? pos : neg);
+      const set = (sel, txt) => {
+        const el = document.querySelector(sel);
+        if (el) el.textContent = txt;
+      };
+      const fillTicks = (sel, from, to, dp, pos, neg) => {
+        const box = document.querySelector(sel);
+        if (!box) return;
+        const spans = box.querySelectorAll("span");
+        spans.forEach((s, i) => {
+          const t = i / (spans.length - 1);
+          s.textContent = fmt(from + (to - from) * t, dp, pos, neg);
+        });
+      };
+      const niceScale = (mpp) => {
+        for (const m of [
+          50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000,
+        ]) {
+          const px = m / mpp;
+          if (px >= 64 && px <= 150) return { m, px };
+        }
+        return { m: 1000, px: 1000 / mpp };
+      };
+      function update() {
+        const c = map.getCenter();
+        const b = map.getBounds();
+        const mpp =
+          (156543.03392 * Math.cos((c.lat * Math.PI) / 180)) /
+          2 ** map.getZoom();
+        set(
+          "[data-center]",
+          `${fmt(c.lat, 4, "N", "S")}  ${fmt(c.lng, 4, "E", "W")}`,
+        );
+        const ratio = Math.round(mpp * 3779.5);
+        set(
+          "[data-ratio]",
+          "1:" +
+            (ratio >= 1000
+              ? (Math.round(ratio / 100) / 10).toLocaleString("en-US") + "k"
+              : ratio),
+        );
+        const { m, px } = niceScale(mpp);
+        const barEl = document.querySelector("[data-bar]");
+        if (barEl) {
+          barEl.style.width = px + "px";
+          barEl.innerHTML = "<i></i>".repeat(4);
+          barEl.querySelectorAll("i").forEach((i) => (i.style.width = "25%"));
+          set("[data-bar-label]", m >= 1000 ? m / 1000 + " km" : m + " m");
+        }
+        fillTicks("[data-lon]", b.getWest(), b.getEast(), 3, "E", "W");
+        fillTicks("[data-lat]", b.getNorth(), b.getSouth(), 3, "N", "S");
+        fillTicks("[data-lat2]", b.getNorth(), b.getSouth(), 3, "N", "S");
+        set(
+          "[data-corner-nw]",
+          `${fmt(b.getNorth(), 3, "N", "S")} ${fmt(b.getWest(), 3, "E", "W")}`,
+        );
+        set(
+          "[data-corner-se]",
+          `${fmt(b.getSouth(), 3, "N", "S")} ${fmt(b.getEast(), 3, "E", "W")}`,
+        );
+      }
+      map.on("move", update);
+      map.on("load", update);
+      update();
+    </script>
+  </body>
+</html>

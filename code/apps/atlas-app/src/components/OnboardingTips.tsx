@@ -52,13 +52,13 @@ const STEPS: Step[] = [
     position: { top: 80, left: 24 },
   },
   {
-    title: "Everything lives in the menu",
-    body: "Tools, layers, export, share, basemap settings — all accessible from the top-left hamburger menu. Click it to explore.",
+    title: "Your document lives in the menu",
+    body: "Open, save, import, export, and share from the top-left hamburger menu. Layers and the basemap live in the sidebar's Layers panel.",
     position: { top: 12, left: 12 },
   },
   {
     title: "Draw with atlas tools",
-    body: 'Select "Pin to map" or other tools from the menu to start annotating. Your marks reproject on every camera move — they stay where you drew them.',
+    body: "Pick the pin tool from the toolbar to start annotating. Your marks reproject on every camera move — they stay where you drew them.",
     position: { top: 80, left: 24 },
   },
   {

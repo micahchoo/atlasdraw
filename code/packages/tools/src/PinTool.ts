@@ -10,8 +10,9 @@
 // the Pin button. The overlay captures pointerdown, builds a `ToolContext`
 // from the current (map, excalidrawAPI) tuple, and calls `onPointerDown` here.
 //
-// scaleMode: per Spec §3.4, point markers use scaleMode:"screen" — they keep
-// their visual size as the map zooms (a 16x16 pin stays 16x16 px). The
+// scaleMode: always "geographic" (maintainer decision, 2026-07-19: geographic
+// is the ONLY creation mode; Spec §3.4's screen-fixed pins are superseded —
+// "screen"/"hybrid" survive only as render support for legacy documents). The
 // CoordinateSync hook re-projects the element's (lng,lat) → (x,y) on every
 // camera move so the pin appears stuck to its geographic location.
 //
@@ -37,7 +38,7 @@ export const PinTool: AtlasdrawTool = {
   label: "Pin",
   icon: "pin",
   cursor: "crosshair",
-  defaultScaleMode: "screen",
+  defaultScaleMode: "geographic",
 
   onPointerDown(e, ctx) {
     // Container-relative pixel → geographic. ctx.map.unproject is the only map
@@ -50,8 +51,8 @@ export const PinTool: AtlasdrawTool = {
       type: "custom",
       customType: "pin",
       geo: { kind: "point", lng, lat, zRef },
-      // Spec §3.4: pin markers stay screen-fixed in size as the map zooms.
-      scaleMode: "screen",
+      // Geographic — the only creation mode (maintainer decision, 2026-07-19).
+      scaleMode: "geographic",
       data: { label: "Pin" },
     });
   },

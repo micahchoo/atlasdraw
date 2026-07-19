@@ -16,6 +16,35 @@ Think: a well-organized drafting table, not an analytics dashboard.
 
 ---
 
+## Shell Direction — The Collar (chosen 2026-07-18)
+
+The color/typography layer above is established, but the *structural shell*
+(floating island toolbar, left properties island, hamburger) was inherited
+wholesale from Excalidraw and is the main reason the product still reads as
+Excalidraw. Direction exploration compared three silhouettes (Collar /
+Instrument Rail / Plotting Desk); **the Collar won**.
+
+**The concept:** chrome is a printed map-sheet frame, not floating islands.
+Tools sit flush in the top collar; live coordinates and graticule ticks print
+along the neatline; the bottom margin is true marginalia (scale bar, datum,
+projection, zoom, attribution — grown from the existing StatusBar); element
+properties unfold from the frame edge as a **legend**; layers appear as sheet
+edges in the frame. Nothing floats over the map at rest.
+
+**Signature:** the neatline + collar — live coordinates and scale printed in
+the frame, like a USGS quad's margin. Could only be a map product.
+
+**Status:** direction chosen; structural expression (frame weight, legend
+placement) being validated in the throwaway prototype at
+`code/apps/atlas-app/prototypes/collar-shell/` (verdict in its NOTES.md).
+Implementation will restructure vendored chrome at the source (sanctioned by
+ADR 0010) and **supersedes the "slot first" rule for the shell only** — the
+interaction model (selection, shortcuts, tool semantics) stays Excalidraw's.
+Until the shell build starts, existing components keep following
+atlasdraw-ui-conventions as-is.
+
+---
+
 ## Color Primitives
 
 Defined in `code/apps/atlas-app/src/styles/tokens.css` as `--ad-*` custom
@@ -25,9 +54,9 @@ properties. Import happens once in `main.tsx`.
 
 | Token | Value | Role |
 |---|---|---|
-| `--ad-surface` | `#f5efe0` | Base page, sidebar — unmistakably paper-toned |
-| `--ad-surface-raised` | `#fcfaf6` | Dialogs, dropdowns — tracing paper over vellum |
-| `--ad-surface-inset` | `#ede6d8` | Input backgrounds — depression in paper |
+| `--ad-surface` | `#f2e8d5` | Base page, sidebar — unmistakably paper-toned |
+| `--ad-surface-raised` | `#faf6ee` | Dialogs, dropdowns — tracing paper over vellum |
+| `--ad-surface-inset` | `#e8ddc8` | Input backgrounds — depression in paper |
 
 6% off pure white with a warm cast. The eye registers "paper" immediately.
 Stacked with raised and inset, the three levels produce perceptible
@@ -37,10 +66,10 @@ drafting-table depth without shadows.
 
 | Token | Value | Role |
 |---|---|---|
-| `--ad-ink` | `#1a1712` | Primary text — unmistakably warm near-black |
-| `--ad-ink-secondary` | `#3d3830` | Supporting text — warm dark gray |
-| `--ad-ink-tertiary` | `#7a7266` | Metadata, placeholders — warm mid-gray |
-| `--ad-ink-inverse` | `#fcfaf6` | Text on accent — warm white |
+| `--ad-ink` | `#2d2218` | Primary text — unmistakably warm near-black |
+| `--ad-ink-secondary` | `#544a3d` | Supporting text — warm dark gray |
+| `--ad-ink-tertiary` | `#8a7e6e` | Metadata, placeholders — warm mid-gray |
+| `--ad-ink-inverse` | `#faf6ee` | Text on accent — warm white |
 
 ### Accent
 
@@ -48,7 +77,7 @@ drafting-table depth without shadows.
 |---|---|---|
 | `--ad-accent` | `#1971c2` | Primary action, active state, focus |
 | `--ad-accent-hover` | `#1864ab` | Hover on accent backgrounds |
-| `--ad-accent-subtle` | `#e5eed9` | Accent tint — warm vellum undertone |
+| `--ad-accent-subtle` | `#e5eef6` | Accent tint — warm vellum undertone |
 
 Blueprint/cyanotype blue — inherited from the existing atlas-app palette
 (Excalidraw-aligned `$color-blue-8`). Framed through the drafting-room:
@@ -58,9 +87,9 @@ architectural blueprints, cyanotype reproduction, technical drawing annotations.
 
 | Token | Value | Role |
 |---|---|---|
-| `--ad-hairline` | `rgba(0,0,0,0.07)` | Section dividers inside panels |
-| `--ad-rule` | `rgba(0,0,0,0.13)` | Card edges, input borders |
-| `--ad-emphasis` | `rgba(0,0,0,0.22)` | Active input, panel boundary |
+| `--ad-hairline` | `rgba(0,0,0,0.06)` | Section dividers inside panels |
+| `--ad-rule` | `rgba(0,0,0,0.11)` | Card edges, input borders |
+| `--ad-emphasis` | `rgba(0,0,0,0.2)` | Active input, panel boundary |
 | `--ad-focus-ring` | `#1971c2` | Focus indicator (opaque solid for a11y) |
 
 RGBA borders blend with whatever surface they sit on — no need to define

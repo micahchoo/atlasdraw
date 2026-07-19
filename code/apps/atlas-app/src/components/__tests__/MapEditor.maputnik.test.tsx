@@ -8,7 +8,13 @@
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import {
+  render,
+  fireEvent,
+  waitFor,
+  cleanup,
+  act,
+} from "@testing-library/react";
 
 // ---------------------------------------------------------------------------
 // SUT
@@ -17,6 +23,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
+import { useBasemapStore } from "../../state/basemap";
 
 import type maplibregl from "maplibre-gl";
 
@@ -215,36 +222,47 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   useLayerRegistryStore.setState({ entries: [] });
+  useBasemapStore.setState({
+    activeBasemapId: "protomaps-light",
+    styleEditorOpen: false,
+  });
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe("MapEditor — MainMenu 'Edit basemap style' item (A4)", () => {
-  it("renders the Edit basemap style MainMenu item", async () => {
-    const { getByTestId } = render(
+// IA restructure: the "Edit basemap style" trigger moved from the MainMenu
+// into LayerPanel's Basemap section, which raises `styleEditorOpen` on the
+// shared basemap store; MapEditor mounts MaputnikDialog off that flag. The
+// trigger button itself is covered in MapEditor.layers-toggle.test.tsx —
+// here we drive the store directly and verify the MapEditor side.
+describe("MapEditor — Maputnik style-editor mount (A4)", () => {
+  it("does not mount the Maputnik dialog by default", async () => {
+    const { queryByTestId, getByTestId } = render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
     await waitFor(() => {
-      expect(getByTestId("main-menu-edit-style")).toBeTruthy();
+      expect(getByTestId("excalidraw-stub")).toBeTruthy();
     });
+    expect(queryByTestId("maputnik-dialog-iframe")).toBeNull();
   });
 
-  it("clicking the Edit basemap style item mounts the Maputnik dialog with the active basemap style URL", async () => {
+  it("raising styleEditorOpen mounts the dialog with the active basemap style URL", async () => {
     const { getByTestId, queryByTestId } = render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
-    const item = await waitFor(() => getByTestId("main-menu-edit-style"));
 
     // Dialog is not mounted initially.
     expect(queryByTestId("maputnik-dialog-iframe")).toBeNull();
 
-    fireEvent.click(item);
+    act(() => {
+      useBasemapStore.getState().setStyleEditorOpen(true);
+    });
 
     const iframe = (await waitFor(() =>
       getByTestId("maputnik-dialog-iframe"),
@@ -258,13 +276,15 @@ describe("MapEditor — MainMenu 'Edit basemap style' item (A4)", () => {
     expect(iframe.src).toContain("maputnik.github.io/editor/");
   });
 
-  it("closing the dialog unmounts it (close button)", async () => {
+  it("closing the dialog unmounts it and clears the store flag (close button)", async () => {
     const { getByTestId, queryByTestId } = render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
-    fireEvent.click(await waitFor(() => getByTestId("main-menu-edit-style")));
+    act(() => {
+      useBasemapStore.getState().setStyleEditorOpen(true);
+    });
 
     await waitFor(() => {
       expect(getByTestId("maputnik-dialog-iframe")).toBeTruthy();

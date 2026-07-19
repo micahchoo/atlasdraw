@@ -128,7 +128,8 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
     const el = listRef.current?.querySelector(
       `[data-action-index="${selectedIndex}"]`,
     );
-    el?.scrollIntoView({ block: "nearest" });
+    // Optional call — jsdom doesn't implement scrollIntoView.
+    el?.scrollIntoView?.({ block: "nearest" });
   }, [selectedIndex]);
 
   return (
@@ -180,6 +181,7 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
                         .filter(Boolean)
                         .join(" ")}
                       data-action-index={idx}
+                      data-testid={`quick-action-${a.id}`}
                       onClick={() => {
                         a.onSelect();
                         onClose();

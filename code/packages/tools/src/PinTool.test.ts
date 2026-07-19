@@ -113,13 +113,13 @@ describe("PinTool", () => {
     });
   });
 
-  it("emits a seed with scaleMode='screen' (Spec §3.4 — pins stay screen-sized)", () => {
+  it("emits a seed with scaleMode='geographic' (the only creation mode)", () => {
     const { ctx, addElement } = makeCtx();
 
     PinTool.onPointerDown(makePointerEvent(), ctx);
 
     const seed = addElement.mock.calls[0][0] as AtlasdrawElementSeed;
-    expect(seed.scaleMode).toBe("screen");
+    expect(seed.scaleMode).toBe("geographic");
   });
 
   it("emits a seed.data.label = 'Pin'", () => {

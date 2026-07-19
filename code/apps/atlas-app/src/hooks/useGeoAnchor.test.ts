@@ -96,6 +96,32 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     vi.clearAllMocks();
   });
 
+  it("always stamps scaleMode 'geographic' (the only creation mode)", () => {
+    const { updateScene, trigger } = setup();
+    trigger([
+      { id: "rect-sm", type: "rectangle", x: 0, y: 0, width: 10, height: 10 },
+      {
+        id: "line-sm",
+        type: "line",
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        points: [
+          [0, 0],
+          [10, 10],
+        ],
+      },
+      { id: "text-sm", type: "text", x: 5, y: 5, width: 20, height: 10 },
+    ]);
+    expect(updateScene).toHaveBeenCalledTimes(1);
+    const stamped = updateScene.mock.calls[0][0].elements as SceneElement[];
+    expect(stamped).toHaveLength(3);
+    for (const el of stamped) {
+      expect(el.customData?.scaleMode).toBe("geographic");
+    }
+  });
+
   it("rectangle stamps bbox + geographic", () => {
     const { updateScene, trigger } = setup();
     trigger([
@@ -200,7 +226,7 @@ describe("useGeoAnchor — native auto-anchor (Wave 4 T18)", () => {
     });
   });
 
-  it("arrow stamps polyline + hybrid", () => {
+  it("arrow stamps polyline + geographic", () => {
     const { updateScene, trigger } = setup();
     trigger([
       {

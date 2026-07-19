@@ -3,7 +3,7 @@
 //
 // Thin wrapper over `@react-aria/focus`'s FocusScope. We share one canonical
 // trap across every atlas-app modal (BasemapPickerDialog, MaputnikDialog,
-// PrintDialog, AssetLibraryPanel, StylePanel, ShareDialog) so they all get:
+// ExportDialog, AssetLibraryPanel, StylePanel, ShareDialog) so they all get:
 //   - contain   — Tab/Shift+Tab cycle within the modal, never escape it.
 //   - restoreFocus — when the modal unmounts, focus returns to whichever
 //     element opened it (the menu item, button, etc).

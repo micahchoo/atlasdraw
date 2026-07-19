@@ -9,11 +9,28 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { MaputnikDialog } from "../components/MaputnikDialog";
-import { BasemapPickerDialog } from "../components/BasemapPickerDialog";
+import { ExportDialog } from "../components/ExportDialog";
 
 afterEach(() => {
   cleanup();
 });
+
+// BasemapPickerDialog was deleted in the IA restructure (basemap picking
+// moved into LayerPanel's Basemap section — a sidebar surface, not a modal).
+// ExportDialog stands in as the second modal-under-test: it wires FocusTrap
+// and its own Escape handler the same way.
+function renderExportDialog(onClose: () => void = () => {}) {
+  return render(
+    <ExportDialog
+      onCloseRequest={onClose}
+      onExportPNG={() => {}}
+      onExportGeoJSON={() => {}}
+      onExportAtlasdraw={() => {}}
+      getMapCanvas={() => null}
+      layers={[]}
+    />,
+  );
+}
 
 describe("keyboard nav — focus on open", () => {
   it("MaputnikDialog auto-focuses the close button on mount", () => {
@@ -32,16 +49,10 @@ describe("keyboard nav — focus on open", () => {
     expect(document.activeElement).toBe(close);
   });
 
-  it("BasemapPickerDialog auto-focuses a button on mount", () => {
-    render(
-      <BasemapPickerDialog
-        activeId="protomaps-light"
-        onSelect={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
-    // BasemapPickerDialog focuses the first button via panel.querySelector
-    // in its effect. The active element should be inside the dialog.
+  it("ExportDialog auto-focuses inside the dialog on mount", () => {
+    renderExportDialog();
+    // FocusTrap (react-aria FocusScope, autoFocus) moves focus to the first
+    // focusable element. The active element should be inside the dialog.
     const dialog = screen.getByRole("dialog");
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
@@ -61,15 +72,9 @@ describe("keyboard nav — Escape closes", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("BasemapPickerDialog: Escape triggers onCloseRequest", () => {
+  it("ExportDialog: Escape triggers onCloseRequest", () => {
     const onClose = vi.fn();
-    render(
-      <BasemapPickerDialog
-        activeId="protomaps-light"
-        onSelect={() => {}}
-        onCloseRequest={onClose}
-      />,
-    );
+    renderExportDialog(onClose);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
@@ -82,13 +87,7 @@ describe("keyboard nav — restore focus on unmount", () => {
     document.body.appendChild(opener);
     opener.focus();
 
-    const { unmount } = render(
-      <BasemapPickerDialog
-        activeId="protomaps-light"
-        onSelect={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    const { unmount } = renderExportDialog();
     // Sanity: focus has moved into the dialog.
     expect(document.activeElement).not.toBe(opener);
 

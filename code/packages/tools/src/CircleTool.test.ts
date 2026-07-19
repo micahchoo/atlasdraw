@@ -129,7 +129,7 @@ describe("CircleTool", () => {
     expect(addElement).toHaveBeenCalledTimes(2);
     const textSeed = addElement.mock.calls[1][0] as AtlasdrawElementSeed;
     expect(textSeed.type).toBe("text");
-    expect(textSeed.scaleMode).toBe("screen");
+    expect(textSeed.scaleMode).toBe("geographic");
     expect(typeof textSeed.data?.text).toBe("string");
     expect(textSeed.data?.text as string).toContain("km");
   });

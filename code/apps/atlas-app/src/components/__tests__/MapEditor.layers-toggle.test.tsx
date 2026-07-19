@@ -22,6 +22,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
+import { useBasemapStore } from "../../state/basemap";
 
 import type maplibregl from "maplibre-gl";
 
@@ -29,22 +30,8 @@ import type maplibregl from "maplibre-gl";
 // Mocks (hoisted)
 // ---------------------------------------------------------------------------
 
-vi.mock("@atlasdraw/basemap", () => ({
-  MapCanvas: () =>
-    React.createElement("div", { "data-testid": "map-canvas-stub" }),
-  compileLayer: vi.fn(),
-  defaultLayerStyle: vi.fn(),
-  registerPmtilesProtocol: vi.fn(),
-  getBasemap: vi.fn((id: string) => ({
-    id,
-    label: id,
-    styleFile: `${id}.json`,
-    requiresRemote: false,
-  })),
-  buildStyle: vi.fn(() =>
-    Promise.resolve({ version: 8, sources: {}, layers: [] }),
-  ),
-  BASEMAPS: [
+vi.mock("@atlasdraw/basemap", () => {
+  const BASEMAPS_FIXTURE = [
     {
       id: "protomaps-light",
       label: "Light",
@@ -63,17 +50,35 @@ vi.mock("@atlasdraw/basemap", () => ({
       styleFile: "openfreemap-bright.json",
       requiresRemote: true,
     },
-  ],
-  resolveStyle: vi.fn(() =>
-    Promise.resolve({ version: 8, sources: {}, layers: [] }),
-  ),
-  BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
-    constructor(public readonly basemapId: string) {
-      super(`Basemap ${basemapId} requires allow_remote=true`);
-      this.name = "BasemapRemoteGatedError";
-    }
-  },
-}));
+  ];
+  return {
+    MapCanvas: () =>
+      React.createElement("div", { "data-testid": "map-canvas-stub" }),
+    compileLayer: vi.fn(),
+    defaultLayerStyle: vi.fn(),
+    registerPmtilesProtocol: vi.fn(),
+    getBasemap: vi.fn((id: string) => ({
+      id,
+      label: id,
+      styleFile: `${id}.json`,
+      requiresRemote: false,
+    })),
+    buildStyle: vi.fn(() =>
+      Promise.resolve({ version: 8, sources: {}, layers: [] }),
+    ),
+    BASEMAPS: BASEMAPS_FIXTURE,
+    listBasemaps: vi.fn(() => BASEMAPS_FIXTURE),
+    resolveStyle: vi.fn(() =>
+      Promise.resolve({ version: 8, sources: {}, layers: [] }),
+    ),
+    BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {
+      constructor(public readonly basemapId: string) {
+        super(`Basemap ${basemapId} requires allow_remote=true`);
+        this.name = "BasemapRemoteGatedError";
+      }
+    },
+  };
+});
 
 const mockToggleSidebarSpy = vi.fn();
 
@@ -236,39 +241,47 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   useLayerRegistryStore.setState({ entries: [] });
+  useBasemapStore.setState({
+    activeBasemapId: "protomaps-light",
+    styleEditorOpen: false,
+  });
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe("MapEditor — MainMenu Layers item (W-B)", () => {
-  it("renders the Layers panel MainMenu item", async () => {
-    const { getByTestId } = render(
+// IA restructure: the "Layers panel" MainMenu item was ejected (the menu
+// holds document/app actions only). The panel's affordances are now the
+// vendored sidebar trigger and the ⌘K quick-actions palette; these tests
+// drive the palette, which exercises the same toggleSidebar wiring.
+describe("MapEditor — Layers panel affordances (W-B)", () => {
+  async function renderAndOpenPalette() {
+    const utils = render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
+    // Wait for the Excalidraw stub's useEffect to fire setExcalidrawAPI so
+    // the palette actions have a non-null api reference.
     await waitFor(() => {
-      expect(getByTestId("main-menu-layers")).toBeTruthy();
+      expect(utils.getByTestId("excalidraw-stub")).toBeTruthy();
     });
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    await waitFor(() => {
+      expect(utils.getByTestId("quick-actions-panel")).toBeTruthy();
+    });
+    return utils;
+  }
+
+  it("the quick-actions palette lists the Layers panel action", async () => {
+    const utils = await renderAndOpenPalette();
+    expect(utils.getByTestId("quick-action-layers")).toBeTruthy();
   });
 
-  it("clicking the Layers item calls excalidrawAPI.toggleSidebar({name:'default', tab:'layers'})", async () => {
-    const { getByTestId } = render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await waitFor(() => getByTestId("main-menu-layers"));
-
-    // Wait for the Excalidraw stub's useEffect to fire setExcalidrawAPI so
-    // the onSelect handler has a non-null api reference.
-    await waitFor(() => {
-      expect(mockFakeExcalidrawAPI.toggleSidebar).toBeDefined();
-    });
-
-    fireEvent.click(item);
+  it("selecting the action calls excalidrawAPI.toggleSidebar({name:'default', tab:'layers'})", async () => {
+    const utils = await renderAndOpenPalette();
+    fireEvent.click(utils.getByTestId("quick-action-layers"));
 
     await waitFor(() => {
       expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(1);
@@ -279,16 +292,15 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     });
   });
 
-  it("clicking a second time fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
-    const { getByTestId } = render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await waitFor(() => getByTestId("main-menu-layers"));
+  it("re-invoking the action fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
+    const utils = await renderAndOpenPalette();
+    fireEvent.click(utils.getByTestId("quick-action-layers"));
 
-    fireEvent.click(item);
-    fireEvent.click(item);
+    // The palette closes on select — reopen and invoke again.
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    fireEvent.click(
+      await waitFor(() => utils.getByTestId("quick-action-layers")),
+    );
 
     await waitFor(() => {
       expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(2);
@@ -319,36 +331,57 @@ describe("MapEditor — MainMenu Layers item (W-B)", () => {
     expect(arg.label).toBe("Layers");
     expect(arg.content).toBeTruthy();
   });
+});
 
-  it("renders the Basemap MainMenu item (T6)", async () => {
-    const { getByTestId } = render(
+// ---------------------------------------------------------------------------
+// IA restructure: the basemap is presented as a LAYER — bottom of the stack
+// in LayerPanel — replacing the MainMenu "Basemap: …" item + standalone
+// BasemapPickerDialog. These tests render the registered Layers-tab content
+// (the same element MapEditor hands to registerSidebarTab) and drive the
+// Basemap section against the shared basemap store.
+// ---------------------------------------------------------------------------
+
+describe("LayerPanel Basemap section (IA restructure)", () => {
+  async function renderLayersTabContent() {
+    render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
     await waitFor(() => {
-      expect(getByTestId("main-menu-basemap")).toBeTruthy();
+      expect(mockFakeExcalidrawAPI.registerSidebarTab).toHaveBeenCalled();
     });
+    const arg = (
+      mockFakeExcalidrawAPI.registerSidebarTab as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0];
+    return render(arg.content as React.ReactElement);
+  }
+
+  it("shows the active basemap row; picker options expand on toggle", async () => {
+    const utils = await renderLayersTabContent();
+    expect(utils.getByTestId("layer-basemap-row")).toBeTruthy();
+    // Options are collapsed initially.
+    expect(utils.queryByTestId("basemap-option-protomaps-light")).toBeNull();
+
+    fireEvent.click(utils.getByTestId("layer-basemap-toggle"));
+
+    expect(utils.getByTestId("basemap-option-protomaps-light")).toBeTruthy();
+    expect(utils.getByTestId("basemap-option-protomaps-dark")).toBeTruthy();
+    expect(utils.getByTestId("basemap-option-openfreemap-bright")).toBeTruthy();
   });
 
-  it("clicking Basemap item opens the picker dialog (T6)", async () => {
-    const { getByTestId, queryByTestId } = render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await waitFor(() => getByTestId("main-menu-basemap"));
+  it("selecting a basemap updates the shared store and collapses the picker", async () => {
+    const utils = await renderLayersTabContent();
+    fireEvent.click(utils.getByTestId("layer-basemap-toggle"));
+    fireEvent.click(utils.getByTestId("basemap-option-protomaps-dark"));
 
-    // Dialog is not mounted initially.
-    expect(queryByTestId("basemap-option-protomaps-light")).toBeNull();
+    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(utils.queryByTestId("basemap-option-protomaps-light")).toBeNull();
+  });
 
-    fireEvent.click(item);
-
-    // Dialog renders all three basemap options.
-    await waitFor(() => {
-      expect(getByTestId("basemap-option-protomaps-light")).toBeTruthy();
-    });
-    expect(getByTestId("basemap-option-protomaps-dark")).toBeTruthy();
-    expect(getByTestId("basemap-option-openfreemap-bright")).toBeTruthy();
+  it("'Edit style' raises the style-editor flag (MapEditor mounts Maputnik)", async () => {
+    const utils = await renderLayersTabContent();
+    fireEvent.click(utils.getByTestId("layer-basemap-edit-style"));
+    expect(useBasemapStore.getState().styleEditorOpen).toBe(true);
   });
 });

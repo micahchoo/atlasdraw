@@ -15,8 +15,10 @@
 //     subsequent geo updates do not re-size the ellipse — the radius is carried
 //     in seed.data.radiusKm and consumed by downstream readouts/exports
 //     (Phase 2 Wave 2 convert-to-data-layer + Phase 6 styling overlays).
-//   * Companion text: type "text", scaleMode "screen", geo:point pinned at
-//     the dragging edge. The label tracks the cursor; data.text holds the
+//   * Companion text: type "text", scaleMode "geographic" (maintainer
+//     decision, 2026-07-19: geographic is the only creation mode — the
+//     earlier screen-fixed label is superseded), geo:point pinned at the
+//     dragging edge. The label tracks the cursor; data.text holds the
 //     km string. data.circleId links text → circle for co-deletion (Phase 6
 //     concern; just record the link here per spec).
 //
@@ -74,7 +76,7 @@ export const CircleTool: AtlasdrawTool = {
     const textId = ctx.excalidraw.addElement({
       type: "text",
       geo: { kind: "point", lng, lat, zRef },
-      scaleMode: "screen",
+      scaleMode: "geographic",
       data: { text: formatKm(0), circleId },
     });
 

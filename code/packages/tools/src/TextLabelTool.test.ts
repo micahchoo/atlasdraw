@@ -5,7 +5,7 @@
 // Mirrors PinTool.test.ts shape (same MockCtx + makePointerEvent helpers).
 // Two acceptance assertions per the task brief:
 //
-//   1. "creates text element with screen scaleMode at click location" —
+//   1. "creates text element with geographic scaleMode at click location" —
 //      seed.type==="text", seed.geo.kind==="point", seed.scaleMode==="geographic",
 //      seed.data.text==="Label" (placeholder; T25 — Excalidraw native double-click edits).
 //
@@ -105,7 +105,7 @@ describe("TextLabelTool", () => {
     expect(TextLabelTool.defaultScaleMode).toBe("geographic");
   });
 
-  it("creates text element with screen scaleMode at click location", () => {
+  it("creates text element with geographic scaleMode at click location", () => {
     const { ctx, unproject, addElement } = makeCtx({
       lng: -73.98,
       lat: 40.75,

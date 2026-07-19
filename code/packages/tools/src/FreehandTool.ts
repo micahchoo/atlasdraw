@@ -19,10 +19,9 @@
 // at this layer keeps the tool host-agnostic (PinTool's fire-and-forget
 // pattern would over-collect — Pin is single-shot, Freehand is a gesture).
 //
-// scaleMode: per Phase 2 plan T05, freehand strokes use scaleMode:"hybrid"
-// — vertices are geo-anchored (re-projected on camera move) but stroke width
-// stays in screen pixels so a thin line stays thin while the path follows
-// the terrain.
+// scaleMode: "geographic" (maintainer decision, 2026-07-19: geographic is the
+// ONLY creation mode — Phase 2 plan T05's "hybrid" strokes are superseded;
+// hybrid/screen survive only as render support for legacy documents).
 //
 // RDP epsilon: 0.00001 degrees (~1.1 m at the equator). Tight enough that a
 // hand-drawn stroke at street-zoom retains shape; loose enough to collapse
@@ -153,7 +152,7 @@ export const FreehandTool: AtlasdrawTool = {
   label: "Freehand",
   icon: "pen",
   cursor: "crosshair",
-  defaultScaleMode: "hybrid",
+  defaultScaleMode: "geographic",
 
   onPointerDown(e: ToolPointerEvent, ctx: ToolContext) {
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
@@ -210,7 +209,7 @@ export const FreehandTool: AtlasdrawTool = {
     ctx.excalidraw.addElement({
       type: "freedraw",
       geo: { kind: "polyline", coordinates: simplified, zRef },
-      scaleMode: "hybrid",
+      scaleMode: "geographic",
     });
   },
 };
