@@ -90,6 +90,14 @@
     height: 100%;
   }
 
+  // Undo/redo relocated from the floating Footer cluster: flush at the
+  // strip's right end, no island chrome.
+  .App-collar-strip .App-collar-strip__undoredo {
+    margin-left: auto;
+    background: transparent;
+    box-shadow: none;
+  }
+
   &.App-collar-menu-host {
     display: grid;
     place-items: center;

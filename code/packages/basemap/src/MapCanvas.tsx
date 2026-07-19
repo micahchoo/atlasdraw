@@ -52,6 +52,13 @@ export interface MapCanvasProps {
 
   /** Applied to the container div. Use for sizing (width/height). */
   className?: string;
+
+  /**
+   * Hide MapLibre's floating attribution control. Only set this when the
+   * hosting view prints attribution itself (e.g. the editor's Collar
+   * marginalia) — attribution must stay visible somewhere.
+   */
+  hideAttribution?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +99,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
   initialView,
   onMapReady,
   className,
+  hideAttribution,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   // Hold the map instance for the unmount cleanup; not exposed via state to
@@ -126,6 +134,10 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // Prevent horizontal world tiling at low zoom — a single world copy
       // avoids the disorienting 1.5x repetition at zoom 0.
       renderWorldCopies: false,
+      // Collar shell: the editor prints attribution in its marginalia bar;
+      // other views keep MapLibre's floating control. Mount-time only (like
+      // initialView — changes after mount are ignored).
+      ...(hideAttribution ? { attributionControl: false as const } : {}),
     });
 
     mapRef.current = map;

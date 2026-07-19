@@ -32,6 +32,7 @@ import {
   SelectedShapeActions,
   ShapesSwitcher,
   CompactShapeActions,
+  UndoRedoActions,
 } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { LockButton } from "./LockButton";
@@ -547,6 +548,12 @@ const LayerUI = ({
                   />
                 </>
               )}
+              {/* Undo/redo live in the collar near the tools — the floating
+                bottom-left Footer cluster is not rendered in collar mode. */}
+              <UndoRedoActions
+                renderAction={actionManager.renderAction}
+                className="App-collar-strip__undoredo"
+              />
             </div>
           )}
         </Section>
@@ -756,12 +763,16 @@ const LayerUI = ({
             {renderWelcomeScreen && <tunnels.WelcomeScreenCenterTunnel.Out />}
             {renderFixedSideContainer()}
             {renderCollarLegend()}
-            <Footer
-              appState={appState}
-              actionManager={actionManager}
-              showExitZenModeBtn={showExitZenModeBtn}
-              renderWelcomeScreen={renderWelcomeScreen}
-            />
+            {/* Collar mode: nothing floats at rest — zoom readout lives in
+              the app's marginalia, undo/redo in the collar strip (above). */}
+            {!collarMode && (
+              <Footer
+                appState={appState}
+                actionManager={actionManager}
+                showExitZenModeBtn={showExitZenModeBtn}
+                renderWelcomeScreen={renderWelcomeScreen}
+              />
+            )}
             {(appState.toast || appState.scrolledOutside) && (
               <div className="floating-status-stack">
                 {appState.toast && (

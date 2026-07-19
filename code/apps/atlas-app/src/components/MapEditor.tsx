@@ -788,6 +788,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               initialView={initialView}
               onMapReady={onMapReady}
               className={styles.fullSize}
+              // Attribution is printed in the Collar marginalia (StatusBar)
+              // — no floating control over the plate.
+              hideAttribution
             />
           </div>
 

@@ -1,27 +1,24 @@
-/* StatusBar — thin footer instrument readout. z:10 (toolbar band), bottom edge.
+/* StatusBar — the Collar's bottom marginalia. Fills the collar foot row
+ * (the row provides the surface + top rule). Mono for data, quiet labels.
  * Uses --ad-* design tokens from tokens.css. */
 
 .bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 28px;
-  padding: 0 var(--ad-space-2);
-  background: var(--ad-surface);
-  border-top: 1px solid var(--ad-hairline);
+  gap: var(--ad-space-4);
+  width: 100%;
+  height: 100%;
+  padding: 0 var(--ad-space-3);
+  box-sizing: border-box;
+  font-family: var(--ad-font-mono);
+  font-size: 10.5px;
+  color: var(--ad-ink-secondary);
   pointer-events: none;
   user-select: none;
 }
 
-.group {
-  display: flex;
-  align-items: center;
-  gap: var(--ad-space-3);
+.spacer {
+  flex: 1;
 }
 
 .label {
@@ -33,10 +30,11 @@
 
 .value {
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 400;
   color: var(--ad-ink-secondary);
   tab-size: 4;
+  white-space: nowrap;
 }
 
 .coord {
@@ -49,6 +47,47 @@
   min-width: 5ch;
   text-align: right;
 }
+
+/* --- segmented scale bar (printed quad style) --------------------------- */
+
+.scalebar {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-compact);
+}
+
+.scalebarBar {
+  display: flex;
+  height: 5px;
+  border: 1px solid var(--ad-ink);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.scalebarBar i {
+  display: block;
+  height: 100%;
+  width: 25%;
+}
+
+.scalebarBar i:nth-child(odd) {
+  background: var(--ad-ink);
+}
+
+.scalebarBar i:nth-child(even) {
+  background: var(--ad-surface-raised);
+}
+
+/* --- attribution (sans, quieter) ---------------------------------------- */
+
+.attrib {
+  font-family: var(--ad-font-sans);
+  font-size: 10px;
+  color: var(--ad-ink-tertiary);
+  white-space: nowrap;
+}
+
+/* --- state dots ---------------------------------------------------------- */
 
 .dot {
   display: inline-block;
