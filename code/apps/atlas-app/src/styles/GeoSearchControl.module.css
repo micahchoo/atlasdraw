@@ -45,6 +45,46 @@
   flex-shrink: 0;
 }
 
+/* --- collar head-bar variant (outside Excalidraw scope — --ad-* tokens) - */
+
+.collarButton {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-compact);
+  width: 220px;
+  padding: 5px 8px;
+  background: var(--ad-surface-inset);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  color: var(--ad-ink-tertiary);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collarButton:hover {
+  border-color: var(--ad-emphasis);
+}
+
+.collarButton:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -1px;
+}
+
+.collarButtonActive,
+.collarButtonActive:hover {
+  border-color: var(--ad-accent);
+  color: var(--ad-ink-secondary);
+}
+
+.collarLabel {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* --- popover (portaled to body — atlas hex palette) -------------------- */
 
 .popover {

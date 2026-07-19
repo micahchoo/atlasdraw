@@ -16,6 +16,7 @@
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, waitFor } from "@testing-library/react";
+import { getByTestId } from "@testing-library/dom";
 
 // ---------------------------------------------------------------------------
 // SUT import — must come AFTER vi.mock declarations.
@@ -249,8 +250,9 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
         <MapEditor />
       </ToastProvider>,
     );
-    // Root div is the immediate child of the test container.
-    const root = container.firstChild as HTMLElement;
+    // The drop surface is the map-editor root (the Collar plate content),
+    // not the outer CollarShell frame.
+    const root = getByTestId(container, "map-editor-root");
     expect(root).toBeTruthy();
 
     // jsdom 22's File polyfill omits Blob.prototype.text(), so building a
@@ -307,7 +309,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
         <MapEditor />
       </ToastProvider>,
     );
-    const root = container.firstChild as HTMLElement;
+    const root = getByTestId(container, "map-editor-root");
 
     const txtFileLike = {
       name: "notes.txt",
@@ -336,7 +338,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
         <MapEditor />
       </ToastProvider>,
     );
-    const root = container.firstChild as HTMLElement;
+    const root = getByTestId(container, "map-editor-root");
 
     const csv =
       "name,lat,lng\nCity Hall,37.7793,-122.4193\nFerry Building,37.7955,-122.3937\n";
@@ -374,7 +376,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
         <MapEditor />
       </ToastProvider>,
     );
-    const root = container.firstChild as HTMLElement;
+    const root = getByTestId(container, "map-editor-root");
 
     const csv = "name,address\nCity Hall,1 Dr Carlton B Goodlett Pl\n";
     const csvFileLike = {

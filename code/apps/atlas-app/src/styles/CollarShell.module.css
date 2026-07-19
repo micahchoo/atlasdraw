@@ -1,0 +1,116 @@
+/* CollarShell — printed map-sheet frame (variant A: full collar).
+ * Grid matches the collar-shell prototype:
+ *   rows: head 40 / tools 42 / lon ticks 18 / plate 1fr / marginalia 34
+ *   cols: lat ticks 46 / plate 1fr / sheet-edge tabs 34
+ * All chrome sits IN the frame; the plate is the only map surface. */
+
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 40px 42px 18px 1fr 34px;
+  grid-template-columns: 46px 1fr 34px;
+  grid-template-areas:
+    "head head head"
+    "tools tools tools"
+    ".    lon  ."
+    "lat  map  tabs"
+    "foot foot foot";
+  background: var(--ad-surface);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+}
+
+/* --- head bar (wordmark · sheet name · search · menu) ------------------- */
+
+.head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-3);
+  padding: 0 var(--ad-space-3);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.wordmark {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ad-ink-secondary);
+  user-select: none;
+}
+
+.sheetName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sheetName::before {
+  content: "· ";
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+}
+
+.headSpacer {
+  flex: 1;
+}
+
+/* --- flush tool strip — never a floating island ------------------------- */
+
+.tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-1);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ad-rule);
+}
+
+/* --- graticule cells ---------------------------------------------------- */
+
+.lonCell {
+  grid-area: lon;
+}
+
+.latCell {
+  grid-area: lat;
+}
+
+/* --- the plate: double-rule neatline around the map --------------------- */
+
+.plate {
+  grid-area: map;
+  position: relative;
+  background: var(--ad-surface-inset);
+  border: 1.5px solid var(--ad-neatline);
+}
+
+/* Inner rule of the double neatline. z-index 6: paints above the map,
+ * Excalidraw canvas (1) and the atlas tool overlay (5), below the toolbar
+ * band (10) — pointer-events: none, decoration only (print, not chrome). */
+.plate::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  pointer-events: none;
+  border: 0.5px solid var(--ad-neatline);
+  z-index: 6;
+}
+
+/* --- layer sheet-edge tabs (right frame column) ------------------------- */
+
+.tabs {
+  grid-area: tabs;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-space-compact);
+  padding: 10px 0 10px 4px;
+}
+
+/* --- bottom marginalia --------------------------------------------------- */
+
+.foot {
+  grid-area: foot;
+  position: relative;
+  border-top: 1px solid var(--ad-rule);
+}

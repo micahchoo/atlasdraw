@@ -32,6 +32,13 @@ const optionId = (index: number) => `geo-search-option-${index}`;
 
 interface GeoSearchControlProps {
   map: maplibregl.Map | null;
+  /**
+   * "toolbar" (default) — icon-only button matching Excalidraw tool buttons
+   * (renders inside the `.excalidraw` scope via renderToolbarExtras).
+   * "collar" — search-field-shaped affordance for the Collar head bar
+   * (outside the Excalidraw scope; --ad-* tokens).
+   */
+  variant?: "toolbar" | "collar";
 }
 
 interface PopoverPos {
@@ -54,7 +61,10 @@ const SearchIcon = () => (
   </svg>
 );
 
-export function GeoSearchControl({ map }: GeoSearchControlProps) {
+export function GeoSearchControl({
+  map,
+  variant = "toolbar",
+}: GeoSearchControlProps) {
   const {
     enabled,
     query,
@@ -187,9 +197,15 @@ export function GeoSearchControl({ map }: GeoSearchControlProps) {
       <button
         ref={buttonRef}
         type="button"
-        className={[styles.button, open ? styles.buttonActive : ""]
-          .filter(Boolean)
-          .join(" ")}
+        className={
+          variant === "collar"
+            ? [styles.collarButton, open ? styles.collarButtonActive : ""]
+                .filter(Boolean)
+                .join(" ")
+            : [styles.button, open ? styles.buttonActive : ""]
+                .filter(Boolean)
+                .join(" ")
+        }
         onClick={() => setOpen((v) => !v)}
         aria-label="Search places"
         aria-expanded={open}
@@ -198,6 +214,11 @@ export function GeoSearchControl({ map }: GeoSearchControlProps) {
         data-testid="geo-search-button"
       >
         <SearchIcon />
+        {variant === "collar" && (
+          <span className={styles.collarLabel} aria-hidden="true">
+            Search places…
+          </span>
+        )}
       </button>
 
       {open &&

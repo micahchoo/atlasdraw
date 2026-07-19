@@ -1,0 +1,40 @@
+/* GraticuleTicks — printed lon/lat tick labels in the Collar frame.
+ * Mono, tertiary ink, tick marks drawn as 1px borders (--ad-emphasis).
+ * Matches the collar-shell prototype (variant A). */
+
+.lon {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 2px;
+  font-family: var(--ad-font-mono);
+  font-size: 9.5px;
+  color: var(--ad-ink-tertiary);
+  user-select: none;
+}
+
+.lon span {
+  border-left: 1px solid var(--ad-emphasis);
+  padding: 0 0 1px 3px;
+}
+
+.lat {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 100%;
+  padding: 2px 0;
+  font-family: var(--ad-font-mono);
+  font-size: 9.5px;
+  color: var(--ad-ink-tertiary);
+  user-select: none;
+}
+
+.lat span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  border-top: 1px solid var(--ad-emphasis);
+  padding: 3px 1px 0 0;
+}

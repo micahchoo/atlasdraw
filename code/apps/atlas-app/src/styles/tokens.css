@@ -38,6 +38,9 @@
   --ad-rule: rgba(0, 0, 0, 0.11); /* standard */
   --ad-emphasis: rgba(0, 0, 0, 0.2); /* strong */
   --ad-focus-ring: #1971c2; /* focus (opaque for a11y) */
+  /* The neatline rule (Collar shell) — inkier than UI borders because it is
+   * print, not chrome. From the collar-shell prototype (variant A). */
+  --ad-neatline: rgba(45, 34, 24, 0.65);
 
   /* Markup — semantic colors -------------------------------------------------- */
 

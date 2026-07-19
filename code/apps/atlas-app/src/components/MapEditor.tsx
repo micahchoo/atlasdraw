@@ -92,6 +92,7 @@ import styles from "../styles/MapEditor.module.css";
 
 import { useToast } from "./ToastProvider";
 
+import { CollarShell } from "./CollarShell";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { PrintDialog } from "./PrintDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -752,515 +753,531 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   return (
     <CollabContext.Provider value={collabValue}>
-      <div
-        ref={rootRef}
-        className={styles.root}
-        style={{ backgroundColor: mapBg }}
+      {/* Collar shell (variant A) — the printed map-sheet frame. The plate
+        (children) hosts the MapLibre + Excalidraw stack; head bar carries
+        the wordmark, sheet name and geo-search; marginalia grows out of
+        StatusBar in the foot row. */}
+      <CollarShell
+        map={map}
+        sheetName="Untitled atlasdraw"
+        headExtras={<GeoSearchControl map={map} variant="collar" />}
+        foot={<StatusBar map={map} />}
       >
-        {/* Bottom layer: MapLibre GL map */}
-        <div className={styles.mapLayer}>
-          <MapCanvas
-            initialView={initialView}
-            onMapReady={onMapReady}
-            className={styles.fullSize}
-          />
-        </div>
+        <div
+          ref={rootRef}
+          className={styles.root}
+          style={{ backgroundColor: mapBg }}
+          data-testid="map-editor-root"
+        >
+          {/* Bottom layer: MapLibre GL map */}
+          <div className={styles.mapLayer}>
+            <MapCanvas
+              initialView={initialView}
+              onMapReady={onMapReady}
+              className={styles.fullSize}
+            />
+          </div>
 
-        {/* Top layer: Excalidraw canvas, transparent background.
+          {/* Top layer: Excalidraw canvas, transparent background.
           pointer-events: none (from .excalidrawLayer) — toggled to auto via
           .excalidrawLayerActive when isDrawingMode is true (Flow B gate). */}
-        <div
-          className={[
-            styles.excalidrawLayer,
-            isDrawingMode ? styles.excalidrawLayerActive : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          <Excalidraw
-            initialData={EXCALIDRAW_INITIAL_DATA}
-            gridModeEnabled={false}
-            onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
-            onChange={handleExcalidrawChange}
-            getBackgroundCanvas={getBackgroundCanvas}
-            UIOptions={EXCALIDRAW_UI_OPTIONS}
-            // Geo-search sits on the same toolbar as the drawing tools, via the
-            // vendored `renderToolbarExtras` slot. Always mounted: it defaults
-            // to an offline local place index (no call-home); it only calls out
-            // if VITE_GEOCODER_ENDPOINT is configured (see useGeocoderSearch).
-            renderToolbarExtras={() => <GeoSearchControl map={map} />}
-            onScrollBackToContent={handleScrollBackToContent}
+          <div
+            className={[
+              styles.excalidrawLayer,
+              isDrawingMode ? styles.excalidrawLayerActive : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
-            {/* LayerPanel mounts as a tab inside DefaultSidebar via
+            <Excalidraw
+              initialData={EXCALIDRAW_INITIAL_DATA}
+              gridModeEnabled={false}
+              onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
+              onChange={handleExcalidrawChange}
+              getBackgroundCanvas={getBackgroundCanvas}
+              UIOptions={EXCALIDRAW_UI_OPTIONS}
+              // Geo-search moved to the Collar head bar (see <CollarShell
+              // headExtras> above) — the collar variant of the same control.
+              onScrollBackToContent={handleScrollBackToContent}
+            >
+              {/* LayerPanel mounts as a tab inside DefaultSidebar via
               registerSidebarTab (see useEffect above). No <Sidebar> child
               here — DefaultSidebar's trigger button + dockable shell are
               shared. */}
 
-            {/* MainMenu — passing <MainMenu> as a child of <Excalidraw>
+              {/* MainMenu — passing <MainMenu> as a child of <Excalidraw>
               REPLACES the default menu via tunnel (MainMenu.tsx:30 +
               LayerUI.tsx:109-126). To preserve Excalidraw's hardwon
               menu, we render its DefaultItems alongside our atlas
               additions. Order mirrors LayerUI's default with atlas
               items inserted into logical groups. */}
-            <MainMenu>
-              {/* One format, one door: the .atlasdraw bundle is the only
+              <MainMenu>
+                {/* One format, one door: the .atlasdraw bundle is the only
                 save/open surface. Excalidraw's LoadScene/SaveToActiveFile/
                 Export defaults are disabled via EXCALIDRAW_UI_OPTIONS;
                 Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
-              <MainMenu.Item
-                onSelect={() =>
-                  void openAtlasDocument(excalidrawAPI, documentNotify)
-                }
-                data-testid="main-menu-open"
-              >
-                Open…
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() =>
-                  void saveAtlasDocument(excalidrawAPI, documentNotify)
-                }
-                data-testid="main-menu-save"
-              >
-                Save
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() => setShowAboutDialog(true)}
-                data-testid="main-menu-about"
-              >
-                ℹ About Atlasdraw
-              </MainMenu.Item>
-              {/* Phase 4 T8 — Share link. Root-level mounted (same pattern as
+                <MainMenu.Item
+                  onSelect={() =>
+                    void openAtlasDocument(excalidrawAPI, documentNotify)
+                  }
+                  data-testid="main-menu-open"
+                >
+                  Open…
+                </MainMenu.Item>
+                <MainMenu.Item
+                  onSelect={() =>
+                    void saveAtlasDocument(excalidrawAPI, documentNotify)
+                  }
+                  data-testid="main-menu-save"
+                >
+                  Save
+                </MainMenu.Item>
+                <MainMenu.Item
+                  onSelect={() => setShowAboutDialog(true)}
+                  data-testid="main-menu-about"
+                >
+                  ℹ About Atlasdraw
+                </MainMenu.Item>
+                {/* Phase 4 T8 — Share link. Root-level mounted (same pattern as
                 AboutDialog) so MainMenu auto-close doesn't unmount the
                 dialog before the link is copied. */}
-              <MainMenu.Item
-                onSelect={() => setShowShareDialog(true)}
-                data-testid="main-menu-share"
-              >
-                🔗 Share map
-              </MainMenu.Item>
-              <MainMenu.Separator />
-              {isDirty && (
                 <MainMenu.Item
-                  onSelect={() => {
-                    /* indicator-only; no action */
-                  }}
-                  data-testid="main-menu-unsaved-indicator"
-                  aria-label="Unsaved changes"
+                  onSelect={() => setShowShareDialog(true)}
+                  data-testid="main-menu-share"
                 >
-                  ● Unsaved
+                  🔗 Share map
                 </MainMenu.Item>
-              )}
-              <MainMenu.Item
-                onSelect={handleImportFile}
-                data-testid="main-menu-import"
-              >
-                Import…
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() => setShowExport(true)}
-                data-testid="main-menu-export"
-              >
-                Export…
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() => setShowSettings(true)}
-                data-testid="main-menu-settings"
-              >
-                Settings…
-              </MainMenu.Item>
-              <MainMenu.Separator />
-              <MainMenu.Item
-                onSelect={() =>
-                  setActiveAtlasTool(isPinActive ? null : PinTool)
-                }
-                data-testid="main-menu-pin"
-                aria-pressed={isPinActive}
-              >
-                {isPinActive ? "✓ Pin to map" : "Pin to map"}
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() =>
-                  excalidrawAPI?.toggleSidebar({
-                    name: DEFAULT_SIDEBAR.name,
-                    tab: "layers",
-                  })
-                }
-                data-testid="main-menu-layers"
-              >
-                Layers panel
-              </MainMenu.Item>
-              <MainMenu.Separator />
-              <MainMenu.DefaultItems.SearchMenu />
-              {/* Atlasdraw's own Help entry — not MainMenu.DefaultItems.Help,
+                <MainMenu.Separator />
+                {isDirty && (
+                  <MainMenu.Item
+                    onSelect={() => {
+                      /* indicator-only; no action */
+                    }}
+                    data-testid="main-menu-unsaved-indicator"
+                    aria-label="Unsaved changes"
+                  >
+                    ● Unsaved
+                  </MainMenu.Item>
+                )}
+                <MainMenu.Item
+                  onSelect={handleImportFile}
+                  data-testid="main-menu-import"
+                >
+                  Import…
+                </MainMenu.Item>
+                <MainMenu.Item
+                  onSelect={() => setShowExport(true)}
+                  data-testid="main-menu-export"
+                >
+                  Export…
+                </MainMenu.Item>
+                <MainMenu.Item
+                  onSelect={() => setShowSettings(true)}
+                  data-testid="main-menu-settings"
+                >
+                  Settings…
+                </MainMenu.Item>
+                <MainMenu.Separator />
+                <MainMenu.Item
+                  onSelect={() =>
+                    setActiveAtlasTool(isPinActive ? null : PinTool)
+                  }
+                  data-testid="main-menu-pin"
+                  aria-pressed={isPinActive}
+                >
+                  {isPinActive ? "✓ Pin to map" : "Pin to map"}
+                </MainMenu.Item>
+                <MainMenu.Item
+                  onSelect={() =>
+                    excalidrawAPI?.toggleSidebar({
+                      name: DEFAULT_SIDEBAR.name,
+                      tab: "layers",
+                    })
+                  }
+                  data-testid="main-menu-layers"
+                >
+                  Layers panel
+                </MainMenu.Item>
+                <MainMenu.Separator />
+                <MainMenu.DefaultItems.SearchMenu />
+                {/* Atlasdraw's own Help entry — not MainMenu.DefaultItems.Help,
                 which opens Excalidraw's vendored HelpDialog (links to
                 docs.excalidraw.com / github.com/excalidraw / Excalidraw+)
                 and collides with our own "?" shortcut binding above. */}
-              <MainMenu.Item
-                onSelect={() => setShowShortcuts(true)}
-                data-testid="main-menu-shortcuts"
-              >
-                Keyboard shortcuts
-              </MainMenu.Item>
-              <MainMenu.DefaultItems.ClearCanvas />
-              {/* Phase 4 T6 — Basemap picker replaces the canvas background
+                <MainMenu.Item
+                  onSelect={() => setShowShortcuts(true)}
+                  data-testid="main-menu-shortcuts"
+                >
+                  Keyboard shortcuts
+                </MainMenu.Item>
+                <MainMenu.DefaultItems.ClearCanvas />
+                {/* Phase 4 T6 — Basemap picker replaces the canvas background
                 picker. Previously ChangeCanvasBackground set a solid color
                 behind Excalidraw; now we switch the MapLibre basemap style.
                 The dialog is rendered inside the Excalidraw tree so it
                 inherits focus trap + Escape handling from the vendored
                 Dialog primitive (atlasdraw-50c0). */}
-              <MainMenu.Item
-                onSelect={() => setShowBasemapPicker(true)}
-                data-testid="main-menu-basemap"
-              >
-                {(() => {
-                  const active = getBasemap(activeBasemapId);
-                  if (!active) {
-                    return "🗺 Basemap";
-                  }
-                  const source = active.requiresRemote ? "Remote" : "Local";
-                  return `🗺 Basemap: ${active.label} · ${source}`;
-                })()}
-              </MainMenu.Item>
-              {/* Phase 6 A4 — "Edit basemap style" opens the Maputnik modal,
+                <MainMenu.Item
+                  onSelect={() => setShowBasemapPicker(true)}
+                  data-testid="main-menu-basemap"
+                >
+                  {(() => {
+                    const active = getBasemap(activeBasemapId);
+                    if (!active) {
+                      return "🗺 Basemap";
+                    }
+                    const source = active.requiresRemote ? "Remote" : "Local";
+                    return `🗺 Basemap: ${active.label} · ${source}`;
+                  })()}
+                </MainMenu.Item>
+                {/* Phase 6 A4 — "Edit basemap style" opens the Maputnik modal,
                 pointed at the active basemap's vendored style JSON URL. */}
-              <MainMenu.Item
-                onSelect={() => setMaputnikOpen(true)}
-                data-testid="main-menu-edit-style"
-              >
-                Edit basemap style
-              </MainMenu.Item>
-              {/* Phase 6 A12 — Asset library info panel. Pushes the 3 bundled
+                <MainMenu.Item
+                  onSelect={() => setMaputnikOpen(true)}
+                  data-testid="main-menu-edit-style"
+                >
+                  Edit basemap style
+                </MainMenu.Item>
+                {/* Phase 6 A12 — Asset library info panel. Pushes the 3 bundled
                 atlas fixtures (wildfire / transit / hazard) into Excalidraw's
                 built-in library via updateLibrary; the dialog itself just
                 lists what's available + a button to open Excalidraw's library
                 sidebar tab. Root-level mounted (same pattern as Maputnik /
                 Basemap pickers) so MainMenu auto-close doesn't unmount it. */}
-              <MainMenu.Item
-                onSelect={() => setShowAssetLibrary(true)}
-                data-testid="main-menu-asset-library"
-              >
-                Asset library
-              </MainMenu.Item>
-              <MainMenu.DefaultItems.ToggleTheme />
-            </MainMenu>
-          </Excalidraw>
-        </div>
+                <MainMenu.Item
+                  onSelect={() => setShowAssetLibrary(true)}
+                  data-testid="main-menu-asset-library"
+                >
+                  Asset library
+                </MainMenu.Item>
+                <MainMenu.DefaultItems.ToggleTheme />
+              </MainMenu>
+            </Excalidraw>
+          </div>
 
-        {/* Phase 6 A3 — anchored comment overlay. Iterates the live
+          {/* Phase 6 A3 — anchored comment overlay. Iterates the live
           CommentsLayer and renders one bubble per unresolved comment,
           projected to screen coords. Doubles as the pending-anchor picker
           (next map click or single-element selection). z-index 10 (toolbar
           band); the container is pointer-events: none so non-anchor clicks
           pass through. */}
-        <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
+          <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
 
-        {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
+          {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
           (no-op for single-player deployments, Q1). Both components already
           no-op internally when there are no peers; the active gate just
           skips mounting them at all when realtime is disabled. Wiring was
           orphaned when CollabWrapper (the original Task 11 mount point) was
           deleted 2026-05-25 as an unused gateway — see ledgers/DEADWOOD.md. */}
-        {collabValue.active && (
-          <>
-            <CursorOverlay />
-            {/* PresenceList shares WorkspaceSwitcher's top-right z:10 slot
+          {collabValue.active && (
+            <>
+              <CursorOverlay />
+              {/* PresenceList shares WorkspaceSwitcher's top-right z:10 slot
               (top:12/right:12) — offset below it in managed mode so the two
               don't overlap when both are showing (hosted collab session). */}
-            <PresenceList topOffset={getAppConfig().managed ? 56 : undefined} />
-          </>
-        )}
+              <PresenceList
+                topOffset={getAppConfig().managed ? 56 : undefined}
+              />
+            </>
+          )}
 
-        {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
+          {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
           renders null; managed-mode renders a top-right dropdown that
           lists workspaces and routes free-tier users to /billing for an
           upgrade. The HTTP client is the same shared instance used by
           ShareDialog so X-Workspace-ID flows through autosave too. */}
-        <WorkspaceSwitcher
-          client={getShareClient()}
-          activeId={activeWorkspaceId}
-          onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
-        />
+          <WorkspaceSwitcher
+            client={getShareClient()}
+            activeId={activeWorkspaceId}
+            onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
+          />
 
-        {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
+          {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
           active. Captures pointerdown above Excalidraw (zIndex 5) so map clicks
           flow into our tool dispatcher instead of becoming Excalidraw selection
           rectangles. Unmounted otherwise so map pan/zoom is unaffected. */}
-        {activeAtlasTool && (
-          <>
-            <div
-              className={styles.atlasToolOverlay}
-              data-testid="atlas-tool-overlay"
-              onPointerDown={(reactEvent) => {
-                dispatchPointerDown({
-                  clientX: reactEvent.clientX,
-                  clientY: reactEvent.clientY,
-                  pointerId: reactEvent.pointerId,
-                  pointerType:
-                    (reactEvent.pointerType as "mouse" | "pen" | "touch") ??
-                    "mouse",
-                  button: reactEvent.button,
-                  shiftKey: reactEvent.shiftKey,
-                  altKey: reactEvent.altKey,
-                  ctrlKey: reactEvent.ctrlKey,
-                  metaKey: reactEvent.metaKey,
-                });
-              }}
-              style={{ cursor: activeAtlasTool.cursor }}
-            />
-            <ToolOptionsBar
-              tool={activeAtlasTool}
-              scaleMode={toolScaleMode}
-              onScaleModeChange={setToolScaleMode}
-            />
-          </>
-        )}
+          {activeAtlasTool && (
+            <>
+              <div
+                className={styles.atlasToolOverlay}
+                data-testid="atlas-tool-overlay"
+                onPointerDown={(reactEvent) => {
+                  dispatchPointerDown({
+                    clientX: reactEvent.clientX,
+                    clientY: reactEvent.clientY,
+                    pointerId: reactEvent.pointerId,
+                    pointerType:
+                      (reactEvent.pointerType as "mouse" | "pen" | "touch") ??
+                      "mouse",
+                    button: reactEvent.button,
+                    shiftKey: reactEvent.shiftKey,
+                    altKey: reactEvent.altKey,
+                    ctrlKey: reactEvent.ctrlKey,
+                    metaKey: reactEvent.metaKey,
+                  });
+                }}
+                style={{ cursor: activeAtlasTool.cursor }}
+              />
+              <ToolOptionsBar
+                tool={activeAtlasTool}
+                scaleMode={toolScaleMode}
+                onScaleModeChange={setToolScaleMode}
+              />
+            </>
+          )}
 
-        {/* Phase 4 T6 — Basemap picker. Rendered at the root level (NOT inside
+          {/* Phase 4 T6 — Basemap picker. Rendered at the root level (NOT inside
           MainMenu) so MainMenu auto-close on item click doesn't unmount it.
           The dialog manages its own focus trap, Escape, and click-outside. */}
-        {showBasemapPicker && (
-          <BasemapPickerDialog
-            activeId={activeBasemapId}
-            onSelect={setActiveBasemapId}
-            onCloseRequest={() => setShowBasemapPicker(false)}
-          />
-        )}
+          {showBasemapPicker && (
+            <BasemapPickerDialog
+              activeId={activeBasemapId}
+              onSelect={setActiveBasemapId}
+              onCloseRequest={() => setShowBasemapPicker(false)}
+            />
+          )}
 
-        {/* Phase 6 A12 — Asset library info panel. Same root-level pattern as
+          {/* Phase 6 A12 — Asset library info panel. Same root-level pattern as
           the basemap picker / Maputnik modal — MainMenu auto-close on item
           click would otherwise unmount it. Panel mounts → pushes the 3
           bundled .excalidrawlib fixtures into Excalidraw's built-in library
           via updateLibrary({ libraryItems, merge: true }); button opens
           Excalidraw's library sidebar tab so the user can browse + stamp. */}
-        {showAssetLibrary && (
-          <AssetLibraryPanel
-            excalidrawAPI={excalidrawAPI}
-            onCloseRequest={() => setShowAssetLibrary(false)}
-          />
-        )}
+          {showAssetLibrary && (
+            <AssetLibraryPanel
+              excalidrawAPI={excalidrawAPI}
+              onCloseRequest={() => setShowAssetLibrary(false)}
+            />
+          )}
 
-        {/* Phase 6 A4 — Maputnik "Edit basemap style" modal. Hosted at the root
+          {/* Phase 6 A4 — Maputnik "Edit basemap style" modal. Hosted at the root
           level (same pattern as the basemap picker) so MainMenu auto-close
           doesn't unmount it. Iframe sandbox is intentionally restrictive —
           see MaputnikDialog header comment for security posture. */}
-        {maputnikOpen &&
-          (() => {
-            const active = getBasemap(activeBasemapId);
-            const styleFile = active?.styleFile ?? "protomaps-light.json";
-            const origin =
-              typeof window !== "undefined" ? window.location.origin : "";
-            const activeStyleUrl = `${origin}/styles/${styleFile}`;
-            return (
-              <MaputnikDialog
-                activeStyleUrl={activeStyleUrl}
-                maputnikUrl={getAppConfig().maputnikUrl}
-                onCloseRequest={() => setMaputnikOpen(false)}
-              />
-            );
-          })()}
+          {maputnikOpen &&
+            (() => {
+              const active = getBasemap(activeBasemapId);
+              const styleFile = active?.styleFile ?? "protomaps-light.json";
+              const origin =
+                typeof window !== "undefined" ? window.location.origin : "";
+              const activeStyleUrl = `${origin}/styles/${styleFile}`;
+              return (
+                <MaputnikDialog
+                  activeStyleUrl={activeStyleUrl}
+                  maputnikUrl={getAppConfig().maputnikUrl}
+                  onCloseRequest={() => setMaputnikOpen(false)}
+                />
+              );
+            })()}
 
-        {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
+          {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
           picker so MainMenu auto-close doesn't unmount it. */}
-        {showAboutDialog && (
-          <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
-        )}
+          {showAboutDialog && (
+            <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
+          )}
 
-        {/* Settings — tabbed modal replacing standalone BasemapPickerDialog. */}
-        {showSettings && (
-          <SettingsDialog
-            activeBasemapId={activeBasemapId}
-            onBasemapChange={setActiveBasemapId}
-            onCloseRequest={() => setShowSettings(false)}
-            workspaceId={activeWorkspaceId ?? undefined}
-          />
-        )}
+          {/* Settings — tabbed modal replacing standalone BasemapPickerDialog. */}
+          {showSettings && (
+            <SettingsDialog
+              activeBasemapId={activeBasemapId}
+              onBasemapChange={setActiveBasemapId}
+              onCloseRequest={() => setShowSettings(false)}
+              workspaceId={activeWorkspaceId ?? undefined}
+            />
+          )}
 
-        {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw). */}
-        {showExport && (
-          <ExportDialog
-            onCloseRequest={() => setShowExport(false)}
-            onExportPNG={handleExportPNG}
-            onExportPDF={() => setShowPrintDialog(true)}
-            onExportGeoJSON={handleExportGeoJSON}
-            onExportAtlasdraw={handleExportAtlasdraw}
-          />
-        )}
+          {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw). */}
+          {showExport && (
+            <ExportDialog
+              onCloseRequest={() => setShowExport(false)}
+              onExportPNG={handleExportPNG}
+              onExportPDF={() => setShowPrintDialog(true)}
+              onExportGeoJSON={handleExportGeoJSON}
+              onExportAtlasdraw={handleExportAtlasdraw}
+            />
+          )}
 
-        {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
+          {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
           (selectDocument needs the imperative API). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
           firing the read-only generate. Receives the editor's CollabState so
           the Collaborate path reuses the same socket as the editor. */}
-        {showShareDialog && excalidrawAPI && (
-          <ShareDialog
-            onCloseRequest={() => setShowShareDialog(false)}
-            getDoc={() =>
-              selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
-            }
-            client={getShareClient()}
-            collabState={collabState}
-          />
-        )}
+          {showShareDialog && excalidrawAPI && (
+            <ShareDialog
+              onCloseRequest={() => setShowShareDialog(false)}
+              getDoc={() =>
+                selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
+              }
+              client={getShareClient()}
+              collabState={collabState}
+            />
+          )}
 
-        {/* Phase 6 A10 — PrintDialog (PDF export). Root-level mount so the
+          {/* Phase 6 A10 — PrintDialog (PDF export). Root-level mount so the
           MainMenu auto-close on item-select doesn't unmount the dialog.
           getMapCanvas returns the live MapLibre canvas at submit time, so
           the PDF reflects the user's current viewport (not the moment the
           dialog opened). Legend entries are derived from the layer
           registry: annotation entries have no color of their own → use a
           neutral grey; data layers carry style.fillColor. */}
-        {showPrintDialog && (
-          <PrintDialog
-            getMapCanvas={() => map?.getCanvas() ?? null}
-            layers={useLayerRegistryStore
-              .getState()
-              .entries.map<LayerLegendEntry>((e) => ({
-                id: e.id,
-                name: e.label,
-                color:
-                  e.kind === "data"
-                    ? e.style.fillColor ?? "#868e96"
-                    : "#868e96",
-              }))}
-            onCloseRequest={() => setShowPrintDialog(false)}
-          />
-        )}
+          {showPrintDialog && (
+            <PrintDialog
+              getMapCanvas={() => map?.getCanvas() ?? null}
+              layers={useLayerRegistryStore
+                .getState()
+                .entries.map<LayerLegendEntry>((e) => ({
+                  id: e.id,
+                  name: e.label,
+                  color:
+                    e.kind === "data"
+                      ? e.style.fillColor ?? "#868e96"
+                      : "#868e96",
+                }))}
+              onCloseRequest={() => setShowPrintDialog(false)}
+            />
+          )}
 
-        {/* Phase 5 collab integration — inline banner when the URL fragment
+          {/* Phase 5 collab integration — inline banner when the URL fragment
           carries a malformed `#room:` link. Surfaces useCollabRoom's parse
           error to the user without blocking the editor. */}
-        {collabRoomError && (
-          <div
-            data-testid="collab-room-error"
-            role="alert"
-            style={{
-              position: "absolute",
-              top: 12,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 10,
-              background: "var(--ad-danger, #d64045)0d",
-              border:
-                "1px solid color-mix(in srgb, var(--ad-danger, #d64045) 25%, transparent)",
-              color: "var(--ad-danger, #c92a2a)",
-              padding: "6px 12px",
-              borderRadius: "var(--ad-radius-md, 6px)",
-              fontSize: 13,
-              boxShadow: "var(--ad-shadow-tracing, 0 1px 3px rgba(0,0,0,0.12))",
-            }}
-          >
-            {collabRoomError}
-          </div>
-        )}
+          {collabRoomError && (
+            <div
+              data-testid="collab-room-error"
+              role="alert"
+              style={{
+                position: "absolute",
+                top: 12,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 10,
+                background: "var(--ad-danger, #d64045)0d",
+                border:
+                  "1px solid color-mix(in srgb, var(--ad-danger, #d64045) 25%, transparent)",
+                color: "var(--ad-danger, #c92a2a)",
+                padding: "6px 12px",
+                borderRadius: "var(--ad-radius-md, 6px)",
+                fontSize: 13,
+                boxShadow:
+                  "var(--ad-shadow-tracing, 0 1px 3px rgba(0,0,0,0.12))",
+              }}
+            >
+              {collabRoomError}
+            </div>
+          )}
 
-        <StatusBar map={map} />
+          {onboarding.show && <OnboardingTips onDismiss={onboarding.dismiss} />}
 
-        {onboarding.show && <OnboardingTips onDismiss={onboarding.dismiss} />}
+          {showShortcuts && (
+            <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />
+          )}
 
-        {showShortcuts && (
-          <KeyboardShortcuts onClose={() => setShowShortcuts(false)} />
-        )}
-
-        {showQuickActions && (
-          <QuickActions
-            actions={[
-              {
-                id: "pin",
-                label: "Pin to map",
-                category: "Tools",
-                hint: "P",
-                keywords: ["marker", "point"],
-                onSelect: () => setActiveAtlasTool(PinTool),
-              },
-              {
-                id: "layers",
-                label: "Layers panel",
-                category: "View",
-                keywords: ["sidebar"],
-                onSelect: () =>
-                  excalidrawAPI?.toggleSidebar({
-                    name: DEFAULT_SIDEBAR.name,
-                    tab: "layers",
-                  }),
-              },
-              {
-                id: "comments",
-                label: "Comments panel",
-                category: "View",
-                keywords: ["sidebar", "threads"],
-                onSelect: () =>
-                  excalidrawAPI?.toggleSidebar({
-                    name: DEFAULT_SIDEBAR.name,
-                    tab: "comments",
-                  }),
-              },
-              {
-                id: "export-png",
-                label: "Export composite PNG",
-                category: "Export",
-                hint: "⌘⇧E",
-                keywords: ["image", "screenshot", "composite"],
-                onSelect: handleExportPNG,
-              },
-              {
-                id: "export-pdf",
-                label: "Export PDF",
-                category: "Export",
-                keywords: ["print", "document"],
-                onSelect: () => setShowPrintDialog(true),
-              },
-              {
-                id: "open",
-                label: "Open map…",
-                category: "File",
-                hint: "⌘O",
-                keywords: ["load", "file", "atlasdraw", "excalidraw", "import"],
-                onSelect: () =>
-                  void openAtlasDocument(excalidrawAPI, documentNotify),
-              },
-              {
-                id: "save",
-                label: "Save map",
-                category: "File",
-                hint: "⌘S",
-                keywords: ["disk", "file", "atlasdraw"],
-                onSelect: () =>
-                  void saveAtlasDocument(excalidrawAPI, documentNotify),
-              },
-              {
-                id: "share",
-                label: "Share map",
-                category: "File",
-                keywords: ["link", "collaborate", "invite"],
-                onSelect: () => setShowShareDialog(true),
-              },
-              {
-                id: "basemap",
-                label: "Change basemap",
-                category: "View",
-                keywords: ["style", "tiles", "background"],
-                onSelect: () => setShowBasemapPicker(true),
-              },
-              {
-                id: "about",
-                label: "About Atlasdraw",
-                category: "Help",
-                keywords: ["version", "license"],
-                onSelect: () => setShowAboutDialog(true),
-              },
-              {
-                id: "shortcuts",
-                label: "Keyboard shortcuts",
-                category: "Help",
-                hint: "?",
-                keywords: ["keys", "hotkeys"],
-                onSelect: () => setShowShortcuts(true),
-              },
-            ]}
-            onClose={() => setShowQuickActions(false)}
-          />
-        )}
-      </div>
+          {showQuickActions && (
+            <QuickActions
+              actions={[
+                {
+                  id: "pin",
+                  label: "Pin to map",
+                  category: "Tools",
+                  hint: "P",
+                  keywords: ["marker", "point"],
+                  onSelect: () => setActiveAtlasTool(PinTool),
+                },
+                {
+                  id: "layers",
+                  label: "Layers panel",
+                  category: "View",
+                  keywords: ["sidebar"],
+                  onSelect: () =>
+                    excalidrawAPI?.toggleSidebar({
+                      name: DEFAULT_SIDEBAR.name,
+                      tab: "layers",
+                    }),
+                },
+                {
+                  id: "comments",
+                  label: "Comments panel",
+                  category: "View",
+                  keywords: ["sidebar", "threads"],
+                  onSelect: () =>
+                    excalidrawAPI?.toggleSidebar({
+                      name: DEFAULT_SIDEBAR.name,
+                      tab: "comments",
+                    }),
+                },
+                {
+                  id: "export-png",
+                  label: "Export composite PNG",
+                  category: "Export",
+                  hint: "⌘⇧E",
+                  keywords: ["image", "screenshot", "composite"],
+                  onSelect: handleExportPNG,
+                },
+                {
+                  id: "export-pdf",
+                  label: "Export PDF",
+                  category: "Export",
+                  keywords: ["print", "document"],
+                  onSelect: () => setShowPrintDialog(true),
+                },
+                {
+                  id: "open",
+                  label: "Open map…",
+                  category: "File",
+                  hint: "⌘O",
+                  keywords: [
+                    "load",
+                    "file",
+                    "atlasdraw",
+                    "excalidraw",
+                    "import",
+                  ],
+                  onSelect: () =>
+                    void openAtlasDocument(excalidrawAPI, documentNotify),
+                },
+                {
+                  id: "save",
+                  label: "Save map",
+                  category: "File",
+                  hint: "⌘S",
+                  keywords: ["disk", "file", "atlasdraw"],
+                  onSelect: () =>
+                    void saveAtlasDocument(excalidrawAPI, documentNotify),
+                },
+                {
+                  id: "share",
+                  label: "Share map",
+                  category: "File",
+                  keywords: ["link", "collaborate", "invite"],
+                  onSelect: () => setShowShareDialog(true),
+                },
+                {
+                  id: "basemap",
+                  label: "Change basemap",
+                  category: "View",
+                  keywords: ["style", "tiles", "background"],
+                  onSelect: () => setShowBasemapPicker(true),
+                },
+                {
+                  id: "about",
+                  label: "About Atlasdraw",
+                  category: "Help",
+                  keywords: ["version", "license"],
+                  onSelect: () => setShowAboutDialog(true),
+                },
+                {
+                  id: "shortcuts",
+                  label: "Keyboard shortcuts",
+                  category: "Help",
+                  hint: "?",
+                  keywords: ["keys", "hotkeys"],
+                  onSelect: () => setShowShortcuts(true),
+                },
+              ]}
+              onClose={() => setShowQuickActions(false)}
+            />
+          )}
+        </div>
+      </CollarShell>
     </CollabContext.Provider>
   );
 }

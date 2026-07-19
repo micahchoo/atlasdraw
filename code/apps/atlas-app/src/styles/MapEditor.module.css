@@ -29,6 +29,12 @@
   z-index: 0;
 }
 
+/* Collar shell: pull the basemap into the vellum world. CSS filter only —
+ * not baked into the WebGL canvas, so PNG/PDF exports are unaffected. */
+.mapLayer canvas {
+  filter: sepia(0.18) saturate(0.82) brightness(1.02);
+}
+
 .excalidrawLayer {
   position: absolute;
   inset: 0;
