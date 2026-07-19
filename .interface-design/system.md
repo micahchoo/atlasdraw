@@ -34,14 +34,21 @@ edges in the frame. Nothing floats over the map at rest.
 **Signature:** the neatline + collar — live coordinates and scale printed in
 the frame, like a USGS quad's margin. Could only be a map product.
 
-**Status:** direction chosen; structural expression (frame weight, legend
-placement) being validated in the throwaway prototype at
-`code/apps/atlas-app/prototypes/collar-shell/` (verdict in its NOTES.md).
-Implementation will restructure vendored chrome at the source (sanctioned by
-ADR 0010) and **supersedes the "slot first" rule for the shell only** — the
-interaction model (selection, shortcuts, tool semantics) stays Excalidraw's.
-Until the shell build starts, existing components keep following
-atlasdraw-ui-conventions as-is.
+**Status:** **v1 shipped to main 2026-07-19** (expression A "Full collar",
+chosen via the throwaway prototype at
+`code/apps/atlas-app/prototypes/collar-shell/`; the prototype stays as the
+visual reference until the follow-ups below land, then gets deleted).
+Vendored chrome was restructured at the source (sanctioned by ADR 0010) via
+opt-in `collarToolbarTarget`/`collarMenuTarget` props; this **supersedes the
+"slot first" rule for the shell only** — the interaction model (selection,
+shortcuts, tool semantics) stays Excalidraw's.
+
+Follow-ups (review-logged, not yet built): active-tool accent underline in
+the strip (the prototype's flush-strip signature); LEGEND sublabel; open
+sidebar is still the stock floating panel, not frame-integrated (plus a
+pre-existing tab-header overlap glitch); zen-mode/Footer interactions
+unhandled in collar mode; no responsive collapse of the collar (MobileMenu
+path unchanged); sheet name needs a live document-title source.
 
 ---
 
