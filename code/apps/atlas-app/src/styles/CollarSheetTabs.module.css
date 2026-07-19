@@ -1,0 +1,34 @@
+/* CollarSheetTabs — sheet-edge tabs in the right frame column.
+ * Vertical writing mode, raised paper edge peeking from under the plate
+ * (prototype variant A: .tab). */
+
+.tab {
+  writing-mode: vertical-rl;
+  padding: 10px 5px;
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ad-ink-secondary);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-right: 0;
+  border-radius: var(--ad-radius-sm) 0 0 var(--ad-radius-sm);
+  box-shadow: -1px 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.tab:hover {
+  background: var(--ad-surface);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -2px;
+}
+
+.tabExpanded {
+  color: var(--ad-accent);
+  border-left: 2px solid var(--ad-accent);
+  padding-left: 4px;
+}

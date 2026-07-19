@@ -156,6 +156,9 @@ const mockFakeExcalidrawAPI = {
   registerContextMenuItem: registerContextMenuItemSpy,
   // Sidebar-tab fork — MapEditor's layers-tab effect calls this on mount.
   registerSidebarTab: vi.fn(() => vi.fn()),
+  // Collar shell — CollarSheetTabs subscribes to appState commits via
+  // onChange to track the open sidebar tab. Stub returns an unsubscribe fn.
+  onChange: vi.fn(() => vi.fn()),
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {

@@ -207,6 +207,11 @@ const LayerUI = ({
     !appState.viewModeEnabled &&
     appState.openDialog?.name !== "elementLinkSelector";
 
+  const shouldRenderSelectedShapeActions = showSelectedShapeActions(
+    appState,
+    elements,
+  );
+
   const renderJSONExportDialog = () => {
     if (!UIOptions.canvasActions.export) {
       return null;
@@ -306,11 +311,6 @@ const LayerUI = ({
   };
 
   const renderFixedSideContainer = () => {
-    const shouldRenderSelectedShapeActions = showSelectedShapeActions(
-      appState,
-      elements,
-    );
-
     const shouldShowStats =
       appState.stats.open &&
       !appState.zenModeEnabled &&
@@ -345,7 +345,11 @@ const LayerUI = ({
                   isCompactStylesPanel,
               })}
             >
-              {shouldRenderSelectedShapeActions && renderSelectedShapeActions()}
+              {/* collar mode: the properties panel renders as the LEGEND at
+                the right frame edge instead (renderCollarLegend below). */}
+              {!collarMode &&
+                shouldRenderSelectedShapeActions &&
+                renderSelectedShapeActions()}
             </div>
           </Stack.Col>
           {!collarMode && shouldRenderToolbar && (
@@ -459,7 +463,10 @@ const LayerUI = ({
               editorInterface.formFactor === "phone",
               appState,
             )}
-            {!appState.viewModeEnabled &&
+            {/* collar mode: the sidebar opens via the app's sheet-edge tabs
+              in the collar frame — no floating trigger button. */}
+            {!collarMode &&
+              !appState.viewModeEnabled &&
               appState.openDialog?.name !== "elementLinkSelector" &&
               // hide button when sidebar docked
               (!isSidebarDocked ||
@@ -545,6 +552,21 @@ const LayerUI = ({
         </Section>
       </div>,
       collarToolbarTarget,
+    );
+  };
+
+  // Collar shell: element properties as the LEGEND panel, unfolding from the
+  // right frame edge (appears on selection — not at-rest chrome). Reuses
+  // renderSelectedShapeActions; the collar CSS neutralizes the Island float.
+  const renderCollarLegend = () => {
+    if (!collarMode || !shouldRenderSelectedShapeActions) {
+      return null;
+    }
+    return (
+      <div className="App-collar-legend" data-testid="collar-legend">
+        <div className="App-collar-legend__header">LEGEND</div>
+        {renderSelectedShapeActions()}
+      </div>
     );
   };
 
@@ -733,6 +755,7 @@ const LayerUI = ({
           >
             {renderWelcomeScreen && <tunnels.WelcomeScreenCenterTunnel.Out />}
             {renderFixedSideContainer()}
+            {renderCollarLegend()}
             <Footer
               appState={appState}
               actionManager={actionManager}

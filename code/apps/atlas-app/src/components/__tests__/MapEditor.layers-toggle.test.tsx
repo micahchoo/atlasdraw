@@ -89,6 +89,9 @@ const mockFakeExcalidrawAPI = {
   // Sidebar-tab fork — MapEditor mounts LayerPanel as a tab inside
   // Excalidraw's DefaultSidebar via this API. Stub returns an unregister fn.
   registerSidebarTab: vi.fn(() => vi.fn()),
+  // Collar shell — CollarSheetTabs subscribes to appState commits via
+  // onChange to track the open sidebar tab. Stub returns an unsubscribe fn.
+  onChange: vi.fn(() => vi.fn()),
 };
 
 // MainMenu / MainMenu.Item passthrough is defined INSIDE the vi.mock factory

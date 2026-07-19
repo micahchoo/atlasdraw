@@ -93,6 +93,7 @@ import styles from "../styles/MapEditor.module.css";
 import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
+import { CollarSheetTabs } from "./CollarSheetTabs";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { PrintDialog } from "./PrintDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -772,6 +773,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
+        tabs={<CollarSheetTabs excalidrawAPI={excalidrawAPI} />}
         foot={<StatusBar map={map} />}
       >
         <div

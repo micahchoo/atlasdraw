@@ -132,6 +132,47 @@
     pointer-events: none;
   }
 
+  // Collar shell: element properties as the LEGEND panel, unfolding from the
+  // right frame edge (transient — only while a selection/tool wants it).
+  // Styled with --ad-* tokens (fallbacks for non-collar consumers are moot:
+  // this class only renders in collar mode, but keep them for safety).
+  .App-collar-legend {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 4;
+    width: 232px;
+    box-sizing: border-box;
+    padding: 12px;
+    background: var(--ad-surface-raised, var(--island-bg-color));
+    border: 1px solid var(--ad-rule, var(--default-border-color));
+    border-radius: var(--ad-radius-md, 6px);
+    box-shadow: var(--ad-shadow-raised, var(--shadow-island));
+    pointer-events: var(--ui-pointerEvents);
+
+    &__header {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--ad-ink-secondary, var(--text-primary-color));
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--ad-rule, var(--default-border-color));
+      user-select: none;
+    }
+
+    // Neutralize the floating-island treatment — the legend card is the
+    // surface now. Positioning/width comes from the legend wrapper.
+    .Island {
+      position: static;
+      width: 100%;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+      border: 0;
+    }
+  }
+
   .disable-view-mode {
     display: flex;
     justify-content: center;

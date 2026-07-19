@@ -147,6 +147,9 @@ const mockFakeExcalidrawAPI = {
   toggleSidebar: vi.fn(),
   registerContextMenuItem: vi.fn(() => vi.fn()),
   registerSidebarTab: vi.fn(() => vi.fn()),
+  // Collar shell — CollarSheetTabs subscribes to appState commits via
+  // onChange to track the open sidebar tab. Stub returns an unsubscribe fn.
+  onChange: vi.fn(() => vi.fn()),
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {
