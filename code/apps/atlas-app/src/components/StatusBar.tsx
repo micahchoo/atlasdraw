@@ -40,9 +40,12 @@ function metersPerPixel(lat: number, zoom: number): number {
   return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
 }
 
-/** Pick a round scale-bar length that renders between 64 and 150 px. */
+/** Pick a round scale-bar length that renders between 64 and 150 px.
+ * Steps extend beyond the prototype's table so continental zoom levels
+ * still get a real bar (prototype launched at z14 and never hit them). */
 const SCALE_STEPS = [
-  50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000,
+  50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000,
+  500000, 1000000, 2000000, 5000000,
 ] as const;
 
 function niceScale(mpp: number): { meters: number; px: number } {

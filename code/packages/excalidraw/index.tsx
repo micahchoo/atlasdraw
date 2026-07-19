@@ -73,6 +73,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     renderTopLeftUI,
     renderTopRightUI,
     renderToolbarExtras,
+    collarToolbarTarget,
+    collarMenuTarget,
     onScrollBackToContent,
     langCode = defaultLang.code,
     viewModeEnabled,
@@ -186,6 +188,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           renderToolbarExtras={renderToolbarExtras}
+          collarToolbarTarget={collarToolbarTarget}
+          collarMenuTarget={collarMenuTarget}
           onScrollBackToContent={onScrollBackToContent}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
