@@ -1,3 +1,139 @@
+# Handoff — 2026-07-18 (IA restructure: menu regroup, export unification, basemap-as-layer, pin-to-toolbar — UNCOMMITTED)
+
+## State: large uncommitted change in `code/apps/atlas-app/` (working tree, no branch/commit — user has not asked to commit).
+
+Session: drew a UI-surface wireframe on the tldraw board (`atlasdraw-ui-wireframe`),
+reviewed the ideal IA, then built phases 1–4 of the restructure. All verified:
+**595 atlas-app tests green, `yarn test:typecheck` exit 0**, plus a live Playwright
+smoke against the user's dev server (port 5175) — menu regroup, dark-basemap switch
+from LayerPanel, unified Export PDF pane, toolbar pin drop, and StatusBar "unsaved"
+all confirmed rendering/working.
+
+### What changed (all in code/apps/atlas-app/src/)
+1. **Menu = document + app scope only** (`MapEditor.tsx`): Open/Save/Import/Export/
+   Share · Reset canvas · Settings/Shortcuts/About/Theme. Ejected: Pin (→ toolbar
+   `PinToolButton` via `renderToolbarExtras`, new component + css), "● Unsaved"
+   (→ `StatusBar` `dirty` prop, amber `dotWarn` + "unsaved" text), Layers panel /
+   Find-on-canvas / Asset library (→ ⌘K palette; `quick-action-<id>` testids added
+   to `QuickActions.tsx`), basemap items (→ see 3). Emoji stripped from labels.
+   OnboardingTips copy updated to match.
+2. **Export unification**: `PrintDialog.tsx` DELETED; its real PDF machinery
+   (letter/a4/tabloid, orientation, title, error state, `exportPDFImpl` seam)
+   absorbed into `ExportDialog.tsx` as a wired PDF pane (the old pane was
+   decorative unwired selects). `initialFormat` prop; ⌘K "Export PDF" opens it
+   preselected. ExportDialog gained Escape-to-close (was a gap). Tests ported to
+   `__tests__/ExportDialog.test.tsx`; keyboard-nav tests re-pointed at ExportDialog.
+3. **Basemap-as-layer**: new `state/basemap.ts` Zustand store (`activeBasemapId`,
+   `styleEditorOpen`). `LayerPanel.tsx` gained a Basemap section (bottom of stack):
+   active row + Local/Remote badge, expandable picker (`basemap-option-<id>`),
+   "Edit style" → raises store flag → MapEditor mounts MaputnikDialog.
+   `BasemapPickerDialog.tsx` DELETED. SettingsDialog Basemap tab unchanged
+   (props now bound to the store via MapEditor).
+4. Tests reworked: `MapEditor.layers-toggle.test.tsx` (palette-driven layers tests
+   + new Basemap-section tests; mock gained `listBasemaps`), `MapEditor.maputnik.test.tsx`
+   (store-driven). `QuickActions.tsx` `scrollIntoView` now optional-called (jsdom).
+
+### Scale modes: GEOGRAPHIC IS NOW THE ONLY CREATION MODE (final state, 2026-07-19)
+Journey (same session, three decisions): (1) diagnosed "Geo and Screen behave
+the same" — the ToolOptionsBar toggle was display-only; `buildGeoCustomData`
+hardcoded "geographic" and atlas tools hardcoded their defaults; built a
+shared anchor-mode store + toggle-for-all-tools (toolbar merge). (2) Maintainer
+switched the default to hybrid — this made the geo-op fuzzer surface UNKNOWN
+signatures (hybrid→geographic toggleScale re-base drift + class G re-keyed
+|hybrid) — triage interrupted by (3) maintainer decision: **geo is the only
+way to make annotations.** A subagent then removed the whole mode-selection
+surface (verified independently after):
+
+- `state/anchorMode.ts` + its test DELETED; `ToolContext.getAnchorMode` removed
+  (types.ts + useAtlasdrawTool back to byte-identical with HEAD).
+- `buildGeoCustomData` stamps "geographic" unconditionally (3-param again).
+- All `packages/tools` seeds + `defaultScaleMode` → "geographic" (Pin was
+  "screen" per spec §3.4 — overridden by maintainer decision; Arrow/Freehand
+  were "hybrid"; CircleTool's companion text was "screen").
+- ToolOptionsBar = label + Escape hint only (no toggle); mounts for atlas
+  tools only. PinToolButton on the toolbar unchanged.
+- Screen/hybrid REMAIN render-supported (CoordinateSync/scaleMode.ts
+  untouched) for legacy documents — creation-side removal only.
+
+**Verified:** atlas-app 596 + tools 77 tests, typecheck all exit 0 (run
+directly, not trusted from the subagent); fuzzer green again (creation back
+to geographic keys). Live: pin stamped geographic, 16→64px over zoom 4→6 (2²).
+
+**Latent bug parked (no repro committed):** the fuzzer-found
+hybrid→geographic toggleScale re-base drift (width jump when toggling out of
+hybrid while its ±2-zoom clamp is active) is now UNREACHABLE from the UI but
+still real at the reanchor-protocol level — minimal repros are in this
+session's fuzz output (seeds 20/35 at SEED_COUNT=500 with hybrid-stamped
+creation). If scale-mode editing ever returns, run the geo-op-idempotency-hunt
+skill and triage these first.
+
+### Deliberately deferred (next session candidates)
+- Toolbar merge core is DONE (see above). Remaining polish: the other atlas
+  tools (Rect/Circle/Polygon/Polyline/Arrow/Freehand/TextLabel) still aren't
+  reachable from any UI (only Pin is); wire them or delete them.
+- StylePanel fold into the Layers tab (still a floating dialog).
+- Geo-search vs canvas-search merge; AssetLibraryPanel fold into Library tab;
+  collab chrome capability-cluster gating.
+
+### Landmines
+- The IA review + wireframe live on tldraw board `atlasdraw-ui-wireframe`.
+- `.claude/skills/run-atlas-app/` is a new untracked skill (created by another
+  session today) — not mine, don't delete.
+- Editor tsserver may still show `@atlasdraw/common` .d.ts noise; CLI gate is green.
+
+---
+
+# Handoff — 2026-07-06 (typecheck gate resurrected + geo-search shipped + TS unified + hygiene — ALL COMMITTED & PUSHED)
+
+## State: clean. `origin/main` == local `main` == `feat/map-embed` at `8f68d4d`.
+
+Session opened on `/tend`, got redirected to a series of ship-it tasks. Everything
+below is committed and pushed; working tree carries only background-noise churn
+(`.mulch`, `.seeds`, `code/bench/results`, `.claude/skills/librarian`) + gitignored
+build output (`dist/`).
+
+### What shipped (main, in order)
+- `9c9861b` **geocoder place-search toolbar control** — a parallel session's
+  uncommitted WIP; committed on request (via new first-class `renderToolbarExtras`
+  prop on the owned Excalidraw fork). 107 tests verified before commit.
+- `b7a426f` background tracking-artifact churn (chore).
+- `04c1051` **fix(build): resurrect the repo-wide typecheck gate** — the big one.
+  `yarn test:typecheck` was a no-op (`tsc` on `files:[]`) and `tsc -b` was dead
+  (invalid `ignoreDeprecations`). Now: `build:types` → `tsc -b` → per-app
+  `tsc --noEmit`, all green. New `packages/tsconfig.vendored-built.json` makes
+  consumers resolve the vendored engine to `dist/types` (not source). Fixed ~40
+  real type errors the dead gate hid (incl. missing `@atlasdraw/excalidraw` barrel
+  re-exports, `ScaleMode` from geo-not-tools, storage `Database`-as-type). See
+  memory `[[typecheck-gate-and-ts-version-skew]]`.
+- `3499271` **pin all workspaces to TypeScript 5.9.3** — 10 workspaces declared
+  `typescript:"*"` and floated to 6.0.x, skewing the deprecation silencer. `yarn
+  install` deduped to one hoisted 5.9.3; reverted the app tsconfig `"6.0"` →
+  inherit base `"5.0"`. Gate re-verified exit 0.
+- `8f68d4d` **gitignore leaked vendored .d.ts + stray caches** — deleted 403 stale
+  co-located `.d.ts` + `node-compile-cache/` + `Et6ZJ_xdtT9_0ghOD3LnM/`; added
+  targeted ignores (5 vendored packages' `*.d.ts`, hand-written ones negated).
+
+### Verified
+Full `yarn test:typecheck` exit 0 (all workspaces, single TS 5.9.3). atlas-app 592
+tests, storage 122 tests green. Every commit through lint-staged.
+
+### Landmines / notes
+- **LSP/tsserver is stale** — showed `Cannot find name 'Promise'/'window'` all
+  session after the build/install/tsconfig churn. The CLI `tsc` is authoritative
+  and green; **restart the TS server** to clear the editor.
+- **Root disk `/` is 100% full** (npm/npx cache). Git + builds work (repo on
+  `/mnt/Ghar`; TMPDIR=/tmp). `npx` fails with ENOSPC — invoke local
+  `node_modules/.bin/tsc`, not npx.
+- CI (`test.yml`) runs `yarn test:typecheck` → now really builds+checks (adds
+  build time; catches type errors going forward). No workflow-file change needed.
+
+### Still open (unchanged)
+- **46 Dependabot vulns** (13 critical) — untriaged.
+- The `/tend` pass this session interrupted: prior ISSUES.md all closed; fresh
+  backlog would be Dependabot triage + (dead-gate now DONE).
+
+---
+
 # Handoff — 2026-07-06 (geo-op idempotency: skill + fuzzer built, 6 bug classes fixed, UNCOMMITTED)
 
 ## State: working tree carries a complete, verified, uncommitted change set
