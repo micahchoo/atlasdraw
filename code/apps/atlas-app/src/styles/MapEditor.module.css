@@ -14,6 +14,15 @@
  *   z-index 2  — CursorOverlay SVG (pointer-events: none, cursor dots)
  *   z-index 10 — PresenceList sidebar widget (absolute, top-right)
  *                Same band as toolbar buttons — different screen region.
+ *
+ * Collar shell additions (classes live outside this file but share the ladder
+ * — recorded here because MapEditor.module.css is the ladder's canonical home,
+ * see .claude/skills/atlasdraw-ui-conventions/SKILL.md):
+ *   z-index 4  — .App-collar-legend (packages/excalidraw/components/
+ *                LayerUI.scss): collar-mode selection legend over the plate,
+ *                below the atlas tool overlay (5) so tool capture still wins.
+ *   z-index 6  — .plate::after (CollarShell.module.css): the printed inner
+ *                double-neatline rule, above the map but below chrome (10).
  */
 
 .root {
@@ -83,4 +92,24 @@
   z-index: 5;
   pointer-events: auto;
   /* No background — the map and Excalidraw show through. */
+}
+
+/* Collab-room parse-error banner — centered pill at the top of the plate,
+ * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
+ * from the --ad-danger token with a consistent #d64045 fallback; the tinted
+ * background is a low-alpha mix (color-mix already used for the border). */
+.collabRoomError {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 6px 12px;
+  border-radius: var(--ad-radius-md, 6px);
+  font-size: 13px;
+  color: var(--ad-danger, #d64045);
+  background: color-mix(in srgb, var(--ad-danger, #d64045) 8%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--ad-danger, #d64045) 25%, transparent);
+  box-shadow: var(--ad-shadow-tracing, 0 1px 3px rgba(0, 0, 0, 0.12));
 }

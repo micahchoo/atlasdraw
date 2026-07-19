@@ -10,6 +10,7 @@ const localConfig: BasemapConfig = {
   label: "Light",
   styleFile: "does-not-exist.json", // forces fallback placeholder path
   requiresRemote: false,
+  attribution: "© Protomaps © OpenStreetMap",
 };
 
 const remoteConfig: BasemapConfig = {
@@ -17,6 +18,7 @@ const remoteConfig: BasemapConfig = {
   label: "Bright",
   styleFile: "does-not-exist-remote.json",
   requiresRemote: true,
+  attribution: "© OpenFreeMap © OpenMapTiles © OpenStreetMap",
 };
 
 describe("buildStyle", () => {

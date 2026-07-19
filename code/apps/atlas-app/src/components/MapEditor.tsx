@@ -767,7 +767,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
         tabs={<CollarSheetTabs excalidrawAPI={excalidrawAPI} />}
-        foot={<StatusBar map={map} dirty={isDirty} />}
+        foot={
+          <StatusBar
+            map={map}
+            dirty={isDirty}
+            attribution={getBasemap(activeBasemapId)?.attribution}
+          />
+        }
       >
         <div
           ref={rootRef}
@@ -1078,22 +1084,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             <div
               data-testid="collab-room-error"
               role="alert"
-              style={{
-                position: "absolute",
-                top: 12,
-                left: "50%",
-                transform: "translateX(-50%)",
-                zIndex: 10,
-                background: "var(--ad-danger, #d64045)0d",
-                border:
-                  "1px solid color-mix(in srgb, var(--ad-danger, #d64045) 25%, transparent)",
-                color: "var(--ad-danger, #c92a2a)",
-                padding: "6px 12px",
-                borderRadius: "var(--ad-radius-md, 6px)",
-                fontSize: 13,
-                boxShadow:
-                  "var(--ad-shadow-tracing, 0 1px 3px rgba(0,0,0,0.12))",
-              }}
+              className={styles.collabRoomError}
             >
               {collabRoomError}
             </div>

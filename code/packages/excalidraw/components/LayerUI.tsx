@@ -311,6 +311,47 @@ const LayerUI = ({
     );
   };
 
+  // Shared drawing-tool sequence for both toolbar hosts — the floating top
+  // toolbar (renderFixedSideContainer) and the collar strip
+  // (renderCollarToolbar). Single home for tool ORDERING: pen mode, lock,
+  // divider, shapes switcher, then the atlas-app renderToolbarExtras slot
+  // (geo-search / pin). The LaserPointerButton and undo/redo differ in
+  // wrapping between the two hosts (separate Island vs. inline strip), so they
+  // stay in each caller. `isMobile` is the first arg passed to
+  // renderToolbarExtras (always false in collar mode — desktop/tablet only).
+  const renderToolbarToolButtons = (isMobile: boolean) => (
+    <>
+      <PenModeButton
+        zenModeEnabled={appState.zenModeEnabled}
+        checked={appState.penMode}
+        onChange={() => onPenModeToggle(null)}
+        title={t("toolBar.penMode")}
+        penDetected={appState.penDetected}
+      />
+      <LockButton
+        checked={appState.activeTool.locked}
+        onChange={onLockToggle}
+        title={t("toolBar.lock")}
+      />
+      <div className="App-toolbar__divider" />
+      <ShapesSwitcher
+        setAppState={setAppState}
+        activeTool={appState.activeTool}
+        UIOptions={UIOptions}
+        app={app}
+      />
+      {/* Atlasdraw addition: host for atlas-app controls (geo-search / pin)
+        that sit on the same toolbar as the drawing tools. Generic slot — no
+        atlas import here; the app injects content via renderToolbarExtras. */}
+      {renderToolbarExtras && (
+        <>
+          <div className="App-toolbar__divider" />
+          {renderToolbarExtras(isMobile, appState)}
+        </>
+      )}
+    </>
+  );
+
   const renderFixedSideContainer = () => {
     const shouldShowStats =
       appState.stats.open &&
@@ -382,40 +423,8 @@ const LayerUI = ({
                         />
                         {heading}
                         <Stack.Row gap={spacing.toolbarInnerRowGap}>
-                          <PenModeButton
-                            zenModeEnabled={appState.zenModeEnabled}
-                            checked={appState.penMode}
-                            onChange={() => onPenModeToggle(null)}
-                            title={t("toolBar.penMode")}
-                            penDetected={appState.penDetected}
-                          />
-                          <LockButton
-                            checked={appState.activeTool.locked}
-                            onChange={onLockToggle}
-                            title={t("toolBar.lock")}
-                          />
-
-                          <div className="App-toolbar__divider" />
-
-                          <ShapesSwitcher
-                            setAppState={setAppState}
-                            activeTool={appState.activeTool}
-                            UIOptions={UIOptions}
-                            app={app}
-                          />
-                          {/* Atlasdraw addition: host for atlas-app controls
-                              (geo-search) that sit on the same toolbar as the
-                              drawing tools. Generic slot — no atlas import here;
-                              the app injects content via the renderToolbarExtras
-                              prop. */}
-                          {renderToolbarExtras && (
-                            <>
-                              <div className="App-toolbar__divider" />
-                              {renderToolbarExtras(
-                                editorInterface.formFactor === "phone",
-                                appState,
-                              )}
-                            </>
+                          {renderToolbarToolButtons(
+                            editorInterface.formFactor === "phone",
                           )}
                         </Stack.Row>
                       </Island>
@@ -509,32 +518,8 @@ const LayerUI = ({
               )}
             >
               {heading}
-              <PenModeButton
-                zenModeEnabled={appState.zenModeEnabled}
-                checked={appState.penMode}
-                onChange={() => onPenModeToggle(null)}
-                title={t("toolBar.penMode")}
-                penDetected={appState.penDetected}
-              />
-              <LockButton
-                checked={appState.activeTool.locked}
-                onChange={onLockToggle}
-                title={t("toolBar.lock")}
-              />
-              <div className="App-toolbar__divider" />
-              <ShapesSwitcher
-                setAppState={setAppState}
-                activeTool={appState.activeTool}
-                UIOptions={UIOptions}
-                app={app}
-              />
-              {renderToolbarExtras && (
-                <>
-                  <div className="App-toolbar__divider" />
-                  {/* collar mode is desktop/tablet only — isMobile is false */}
-                  {renderToolbarExtras(false, appState)}
-                </>
-              )}
+              {/* collar mode is desktop/tablet only — isMobile is false */}
+              {renderToolbarToolButtons(false)}
               {isCollaborating && (
                 <>
                   <div className="App-toolbar__divider" />

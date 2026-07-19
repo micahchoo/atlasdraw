@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-07-05T04:43:26.347Z",
+  "runAt": "2026-07-19T07:37:51.040Z",
   "node": "v24.14.0",
   "platform": "linux",
   "warmup": 3,
@@ -8,23 +8,23 @@
     {
       "label": "parse 1k points",
       "iterations": 20,
-      "mean_ms": 0.82,
-      "p95_ms": 1.117,
-      "p99_ms": 1.163
+      "mean_ms": 0.732,
+      "p95_ms": 0.897,
+      "p99_ms": 0.913
     },
     {
       "label": "parse 10k points",
       "iterations": 20,
-      "mean_ms": 8.57,
-      "p95_ms": 11.071,
-      "p99_ms": 13.339
+      "mean_ms": 8.174,
+      "p95_ms": 12.334,
+      "p99_ms": 13.469
     },
     {
       "label": "parse + requireHomogeneousGeometry 10k points",
       "iterations": 20,
-      "mean_ms": 7.569,
-      "p95_ms": 9.136,
-      "p99_ms": 9.548
+      "mean_ms": 7.516,
+      "p95_ms": 11.707,
+      "p99_ms": 12.193
     }
   ]
 }

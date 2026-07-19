@@ -78,6 +78,15 @@ interface StatusBarProps {
   map: maplibregl.Map | null;
   /** Persistence dirty flag — true when there are unsaved changes. */
   dirty?: boolean;
+  /**
+   * Data credit for the active basemap, printed in the marginalia. Derived by
+   * MapEditor from the basemap definition (BasemapConfig.attribution) so the
+   * credit matches what's actually rendered — the app ships a Protomaps vector
+   * basemap, not raster OSM. Falls back to a conservative OSM-only credit
+   * (never wrong, since all bundled basemaps derive from OSM data) when the
+   * active basemap can't be resolved.
+   */
+  attribution?: string;
 }
 
 interface Readout {
@@ -90,7 +99,11 @@ interface Readout {
 
 // ---------------------------------------------------------------------------
 
-export function StatusBar({ map, dirty = false }: StatusBarProps) {
+export function StatusBar({
+  map,
+  dirty = false,
+  attribution = "© OpenStreetMap",
+}: StatusBarProps) {
   const [readout, setReadout] = useState<Readout | null>(null);
   const [online, setOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -175,7 +188,7 @@ export function StatusBar({ map, dirty = false }: StatusBarProps) {
       <span className={styles.spacer} />
 
       <span className={styles.attrib} data-testid="status-bar-attribution">
-        basemap © OpenStreetMap
+        {attribution}
       </span>
 
       {readout && (

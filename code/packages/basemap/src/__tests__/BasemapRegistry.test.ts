@@ -66,6 +66,7 @@ describe("BasemapRegistry — registerBasemap/listBasemaps", () => {
       label: "Test Only",
       styleFile: "test-only.json",
       requiresRemote: false,
+      attribution: "© Test",
     });
 
     expect(getBasemap("test-only-basemap")).toMatchObject({
@@ -81,6 +82,7 @@ describe("BasemapRegistry — registerBasemap/listBasemaps", () => {
         label: "Duplicate",
         styleFile: "x.json",
         requiresRemote: false,
+        attribution: "© Test",
       }),
     ).toThrow(/already registered/);
   });

@@ -58,7 +58,9 @@ only, with an explicit comment in `MapEditor.module.css` explaining why.
 |---|---|---|
 | Map (MapLibre GL) | 0 | `.mapLayer` |
 | Excalidraw canvas | 1 | `.excalidrawLayer` — Excalidraw's own toolbar/sidebar float internally above this |
+| Collar legend (selection) | 4 | `.App-collar-legend` (`packages/excalidraw/components/LayerUI.scss`) — collar-mode selection legend panel over the plate |
 | Atlas tool overlay | 5 | `.atlasToolOverlay` — transparent, interaction capture only, no visual chrome |
+| Collar neatline (inner) | 6 | `.plate::after` (`CollarShell.module.css`) — printed inner double-neatline rule, above the map but below chrome |
 | Toolbar buttons / banners | 10 | `.pinButton` and siblings, demo banners |
 | Context menus | 100 | `position:fixed`, dismiss on `onMouseLeave` |
 

@@ -56,6 +56,14 @@ export interface BasemapConfig {
   styleFile: string;
   /** True if the style references remote tile endpoints (no pmtiles substitution). */
   requiresRemote: boolean;
+  /**
+   * Data credit for this basemap, shown in the map marginalia (StatusBar).
+   * Matches the actual tiles/data each style loads — the Protomaps styles
+   * render Protomaps vector tiles built from OpenStreetMap, so crediting only
+   * OSM (or worse, a raster-OSM string) would be wrong. Keep in sync with the
+   * source declared in `./styles/<styleFile>`.
+   */
+  attribution: string;
 }
 
 const registry = createRegistry<BasemapConfig>();
@@ -78,24 +86,28 @@ export const BASEMAPS: ReadonlyArray<BasemapConfig> = [
     label: "Light",
     styleFile: "protomaps-light.json",
     requiresRemote: false,
+    attribution: "© Protomaps © OpenStreetMap",
   },
   {
     id: "protomaps-dark",
     label: "Dark",
     styleFile: "protomaps-dark.json",
     requiresRemote: false,
+    attribution: "© Protomaps © OpenStreetMap",
   },
   {
     id: "openfreemap-bright",
     label: "Bright",
     styleFile: "openfreemap-bright.json",
     requiresRemote: true,
+    attribution: "© OpenFreeMap © OpenMapTiles © OpenStreetMap",
   },
   {
     id: "osm-standard",
     label: "OSM",
     styleFile: "osm-standard.json",
     requiresRemote: true,
+    attribution: "© OpenStreetMap contributors",
   },
 ] as const;
 
