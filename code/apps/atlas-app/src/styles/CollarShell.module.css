@@ -66,6 +66,37 @@
   border-bottom: 1px solid var(--ad-rule);
 }
 
+/* Host for the portaled Excalidraw toolbar (collar mode). Fills the strip;
+ * the ⌘K hint sits after it at the right edge. */
+.toolStripHost {
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.toolHint {
+  flex: none;
+  color: var(--ad-ink-tertiary);
+  font-size: 11px;
+  user-select: none;
+}
+
+.toolHint kbd {
+  font-family: var(--ad-font-mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  border: 1px solid var(--ad-rule);
+  border-radius: 3px;
+  background: var(--ad-surface-raised);
+}
+
+/* Host for the portaled main-menu trigger (collar mode). */
+.menuHost {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
 /* --- graticule cells ---------------------------------------------------- */
 
 .lonCell {

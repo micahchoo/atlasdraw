@@ -2186,6 +2186,8 @@ class App extends React.Component<AppProps, AppState> {
       renderTopRightUI,
       renderTopLeftUI,
       renderToolbarExtras,
+      collarToolbarTarget,
+      collarMenuTarget,
       onScrollBackToContent,
       renderCustomStats,
     } = this.props;
@@ -2284,6 +2286,8 @@ class App extends React.Component<AppProps, AppState> {
                               renderTopLeftUI={renderTopLeftUI}
                               renderTopRightUI={renderTopRightUI}
                               renderToolbarExtras={renderToolbarExtras}
+                              collarToolbarTarget={collarToolbarTarget}
+                              collarMenuTarget={collarMenuTarget}
                               onScrollBackToContent={onScrollBackToContent}
                               renderCustomStats={renderCustomStats}
                               showExitZenModeBtn={

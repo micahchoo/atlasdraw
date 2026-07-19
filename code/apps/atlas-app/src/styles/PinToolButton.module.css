@@ -1,0 +1,38 @@
+/* PinToolButton — Pin tool toggle on the collar tool strip.
+ * Renders inside the `.excalidraw` scope (portaled collar strip), so it uses
+ * Excalidraw CSS vars with fallbacks to match the native tool buttons. */
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--default-button-size, 2rem);
+  height: var(--default-button-size, 2rem);
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-lg, 0.5rem);
+  background: transparent;
+  color: var(--icon-fill-color, #1b1b1f);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--button-hover-bg, #f1f3f5);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-primary, #6965db);
+  outline-offset: -2px;
+}
+
+.buttonActive,
+.buttonActive:hover {
+  background: var(--color-primary-light, #e5eef6);
+  color: var(--color-primary, #1971c2);
+}
+
+.icon {
+  width: var(--default-icon-size, 1rem);
+  height: var(--default-icon-size, 1rem);
+  flex-shrink: 0;
+}

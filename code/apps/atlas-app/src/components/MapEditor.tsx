@@ -105,6 +105,7 @@ import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
 import { GeoSearchControl } from "./GeoSearchControl";
+import { PinToolButton } from "./PinToolButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
@@ -449,6 +450,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Root container ref — used by useMapWheelRouter to intercept wheel events
   // in capture phase before they reach the Excalidraw layer (atlasdraw-5afc).
   const rootRef = useRef<HTMLDivElement>(null);
+  // Collar shell portal hosts — Excalidraw's toolbar renders flush into the
+  // collar tool strip, and the main-menu trigger into the head bar, via the
+  // vendored collarToolbarTarget / collarMenuTarget props. State (not refs)
+  // so Excalidraw re-renders once the hosts mount.
+  const [toolStripHost, setToolStripHost] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [menuHost, setMenuHost] = useState<HTMLDivElement | null>(null);
   // Phase 6 A14b — aria-live selection-change announcer, read inside
   // useExcalidrawChangeHandler.
   const announceMapEditor = useAnnounce();
@@ -761,6 +770,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         map={map}
         sheetName="Untitled atlasdraw"
         headExtras={<GeoSearchControl map={map} variant="collar" />}
+        toolStripHostRef={setToolStripHost}
+        menuHostRef={setMenuHost}
         foot={<StatusBar map={map} />}
       >
         <div
@@ -796,8 +807,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onChange={handleExcalidrawChange}
               getBackgroundCanvas={getBackgroundCanvas}
               UIOptions={EXCALIDRAW_UI_OPTIONS}
-              // Geo-search moved to the Collar head bar (see <CollarShell
-              // headExtras> above) — the collar variant of the same control.
+              // Collar mode: toolbar + main menu render flush in the collar
+              // frame (portal hosts provided by CollarShell above). Geo-search
+              // lives in the head bar; the Pin tool rides the toolbar-extras
+              // slot so it sits with the drawing tools, per the prototype.
+              collarToolbarTarget={toolStripHost}
+              collarMenuTarget={menuHost}
+              renderToolbarExtras={() => (
+                <PinToolButton
+                  active={isPinActive}
+                  onToggle={() =>
+                    setActiveAtlasTool(isPinActive ? null : PinTool)
+                  }
+                />
+              )}
               onScrollBackToContent={handleScrollBackToContent}
             >
               {/* LayerPanel mounts as a tab inside DefaultSidebar via

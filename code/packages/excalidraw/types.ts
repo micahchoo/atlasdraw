@@ -644,6 +644,22 @@ export interface ExcalidrawProps {
     appState: UIAppState,
   ) => JSX.Element | null;
   /**
+   * Atlasdraw addition (ADR-0010, Collar shell): when set, the desktop editor
+   * chrome enters "collar mode" — the shapes toolbar renders flush into this
+   * host element (a row of the app's Collar frame) via a React portal instead
+   * of a floating Island. When null/undefined the stock floating-island
+   * layout renders unchanged (vendored tests + reference app unaffected).
+   * The mobile layout (MobileMenu) ignores collar mode entirely.
+   */
+  collarToolbarTarget?: HTMLElement | null;
+  /**
+   * Atlasdraw addition (ADR-0010, Collar shell): host element for the main
+   * menu trigger + dropdown (typically the Collar head bar). Only honored
+   * together with collar mode; when unset the menu renders in its stock
+   * top-left position.
+   */
+  collarMenuTarget?: HTMLElement | null;
+  /**
    * Atlasdraw addition (ADR-0010): override the "scroll back to content"
    * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the
    * MapLibre map is the real camera), so the default `calculateScrollCenter` is

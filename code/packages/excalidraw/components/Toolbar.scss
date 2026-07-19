@@ -60,4 +60,51 @@
     min-width: 11.875rem;
     z-index: 1;
   }
+
+  // --- Atlasdraw Collar shell (ADR-0010) ---------------------------------
+  // Portal hosts re-establish the .excalidraw scope inside the app's collar
+  // frame (the hosts live OUTSIDE the editor container). Chrome sits flush
+  // in the frame: no Island, no shadow — the collar row is the surface.
+  // Styled with the app's --ad-* tokens (fallbacks keep it usable if the
+  // token sheet is absent).
+  &.App-collar-host {
+    position: relative;
+    overflow: visible; // .excalidraw base clips; dropdowns must escape
+    background: transparent;
+  }
+
+  .App-collar-shapes-section {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+
+  // Flush tool strip. Also carries .App-toolbar (eraser hover treatment)
+  // and .App-toolbar-container (ToolIcon sizing) — both defined elsewhere.
+  .App-collar-strip.App-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+  }
+
+  &.App-collar-menu-host {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+
+    .dropdown-menu-button {
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+      color: var(--ad-ink-secondary, var(--color-on-surface));
+
+      &:hover {
+        background: var(--ad-surface-inset, var(--button-hover-bg));
+      }
+    }
+  }
 }

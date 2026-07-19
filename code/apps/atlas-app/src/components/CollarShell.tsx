@@ -27,8 +27,14 @@ interface CollarShellProps {
   sheetName: string;
   /** Head-bar slot, right-aligned (search, menu trigger). */
   headExtras?: React.ReactNode;
-  /** Flush tool-strip row content (phase 2: the Excalidraw toolbar). */
-  toolStrip?: React.ReactNode;
+  /**
+   * Callback ref for the tool-strip host element. Excalidraw's toolbar
+   * portals here in collar mode (see the `collarToolbarTarget` prop on the
+   * vendored `<Excalidraw>`).
+   */
+  toolStripHostRef?: (el: HTMLDivElement | null) => void;
+  /** Callback ref for the head-bar main-menu host (`collarMenuTarget`). */
+  menuHostRef?: (el: HTMLDivElement | null) => void;
   /** Right frame column — layer sheet-edge tabs (phase 3). */
   tabs?: React.ReactNode;
   /** Bottom marginalia row (scale bar, coords, datum, attribution). */
@@ -41,7 +47,8 @@ export function CollarShell({
   map,
   sheetName,
   headExtras,
-  toolStrip,
+  toolStripHostRef,
+  menuHostRef,
   tabs,
   foot,
   children,
@@ -55,10 +62,14 @@ export function CollarShell({
         </span>
         <span className={styles.headSpacer} />
         {headExtras}
+        <div className={styles.menuHost} ref={menuHostRef} />
       </header>
 
       <div className={styles.tools} data-testid="collar-tools">
-        {toolStrip}
+        <div className={styles.toolStripHost} ref={toolStripHostRef} />
+        <span className={styles.toolHint} aria-hidden="true">
+          <kbd>⌘K</kbd> anything
+        </span>
       </div>
 
       <div className={styles.lonCell}>

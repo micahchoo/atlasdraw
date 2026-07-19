@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import React from "react";
+import { createPortal } from "react-dom";
 
 import {
   CLASSES,
@@ -92,6 +93,8 @@ interface LayerUIProps {
   renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
   renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
   renderToolbarExtras?: ExcalidrawProps["renderToolbarExtras"];
+  collarToolbarTarget?: ExcalidrawProps["collarToolbarTarget"];
+  collarMenuTarget?: ExcalidrawProps["collarMenuTarget"];
   onScrollBackToContent?: ExcalidrawProps["onScrollBackToContent"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
@@ -153,6 +156,8 @@ const LayerUI = ({
   renderTopLeftUI,
   renderTopRightUI,
   renderToolbarExtras,
+  collarToolbarTarget,
+  collarMenuTarget,
   onScrollBackToContent,
   renderCustomStats,
   UIOptions,
@@ -189,6 +194,18 @@ const LayerUI = ({
   const TunnelsJotaiProvider = tunnels.tunnelsJotai.Provider;
 
   const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
+
+  // Atlasdraw Collar shell (ADR-0010): when the host app provides a collar
+  // toolbar target, desktop chrome renders flush into the app's frame (via
+  // portals) instead of floating over the canvas. Stock island layout is
+  // untouched when the prop is absent; the phone layout always ignores it.
+  const collarMode =
+    collarToolbarTarget != null && editorInterface.formFactor !== "phone";
+  const menuInCollar = collarMode && collarMenuTarget != null;
+
+  const shouldRenderToolbar =
+    !appState.viewModeEnabled &&
+    appState.openDialog?.name !== "elementLinkSelector";
 
   const renderJSONExportDialog = () => {
     if (!UIOptions.canvasActions.export) {
@@ -303,11 +320,25 @@ const LayerUI = ({
     return (
       <FixedSideContainer side="top">
         <div className="App-menu App-menu_top">
+          {/* Collar mode: the toolbar (and its HintViewer host Island) are
+            portaled into the app frame, so tool hints get their own
+            full-width host at the top of the canvas area instead. */}
+          {collarMode && (
+            <div className="App-collar-hint-host">
+              {/* collar mode is desktop/tablet only — isMobile is false */}
+              <HintViewer
+                appState={appState}
+                isMobile={false}
+                editorInterface={editorInterface}
+                app={app}
+              />
+            </div>
+          )}
           <Stack.Col
             gap={spacing.menuTopGap}
             className={clsx("App-menu_top__left")}
           >
-            {renderCanvasActions()}
+            {!menuInCollar && renderCanvasActions()}
             <div
               className={clsx("selected-shape-actions-container", {
                 "selected-shape-actions-container--compact":
@@ -317,99 +348,98 @@ const LayerUI = ({
               {shouldRenderSelectedShapeActions && renderSelectedShapeActions()}
             </div>
           </Stack.Col>
-          {!appState.viewModeEnabled &&
-            appState.openDialog?.name !== "elementLinkSelector" && (
-              <Section heading="shapes" className="shapes-section">
-                {(heading: React.ReactNode) => (
-                  <div style={{ position: "relative" }}>
-                    {renderWelcomeScreen && (
-                      <tunnels.WelcomeScreenToolbarHintTunnel.Out />
-                    )}
-                    <Stack.Col gap={spacing.toolbarColGap} align="start">
-                      <Stack.Row
-                        gap={spacing.toolbarRowGap}
-                        className={clsx("App-toolbar-container", {
+          {!collarMode && shouldRenderToolbar && (
+            <Section heading="shapes" className="shapes-section">
+              {(heading: React.ReactNode) => (
+                <div style={{ position: "relative" }}>
+                  {renderWelcomeScreen && (
+                    <tunnels.WelcomeScreenToolbarHintTunnel.Out />
+                  )}
+                  <Stack.Col gap={spacing.toolbarColGap} align="start">
+                    <Stack.Row
+                      gap={spacing.toolbarRowGap}
+                      className={clsx("App-toolbar-container", {
+                        "zen-mode": appState.zenModeEnabled,
+                      })}
+                    >
+                      <Island
+                        padding={spacing.islandPadding}
+                        className={clsx("App-toolbar", {
                           "zen-mode": appState.zenModeEnabled,
+                          "App-toolbar--compact": isCompactStylesPanel,
                         })}
                       >
-                        <Island
-                          padding={spacing.islandPadding}
-                          className={clsx("App-toolbar", {
-                            "zen-mode": appState.zenModeEnabled,
-                            "App-toolbar--compact": isCompactStylesPanel,
-                          })}
-                        >
-                          <HintViewer
-                            appState={appState}
-                            isMobile={editorInterface.formFactor === "phone"}
-                            editorInterface={editorInterface}
+                        <HintViewer
+                          appState={appState}
+                          isMobile={editorInterface.formFactor === "phone"}
+                          editorInterface={editorInterface}
+                          app={app}
+                        />
+                        {heading}
+                        <Stack.Row gap={spacing.toolbarInnerRowGap}>
+                          <PenModeButton
+                            zenModeEnabled={appState.zenModeEnabled}
+                            checked={appState.penMode}
+                            onChange={() => onPenModeToggle(null)}
+                            title={t("toolBar.penMode")}
+                            penDetected={appState.penDetected}
+                          />
+                          <LockButton
+                            checked={appState.activeTool.locked}
+                            onChange={onLockToggle}
+                            title={t("toolBar.lock")}
+                          />
+
+                          <div className="App-toolbar__divider" />
+
+                          <ShapesSwitcher
+                            setAppState={setAppState}
+                            activeTool={appState.activeTool}
+                            UIOptions={UIOptions}
                             app={app}
                           />
-                          {heading}
-                          <Stack.Row gap={spacing.toolbarInnerRowGap}>
-                            <PenModeButton
-                              zenModeEnabled={appState.zenModeEnabled}
-                              checked={appState.penMode}
-                              onChange={() => onPenModeToggle(null)}
-                              title={t("toolBar.penMode")}
-                              penDetected={appState.penDetected}
-                            />
-                            <LockButton
-                              checked={appState.activeTool.locked}
-                              onChange={onLockToggle}
-                              title={t("toolBar.lock")}
-                            />
-
-                            <div className="App-toolbar__divider" />
-
-                            <ShapesSwitcher
-                              setAppState={setAppState}
-                              activeTool={appState.activeTool}
-                              UIOptions={UIOptions}
-                              app={app}
-                            />
-                            {/* Atlasdraw addition: host for atlas-app controls
+                          {/* Atlasdraw addition: host for atlas-app controls
                               (geo-search) that sit on the same toolbar as the
                               drawing tools. Generic slot — no atlas import here;
                               the app injects content via the renderToolbarExtras
                               prop. */}
-                            {renderToolbarExtras && (
-                              <>
-                                <div className="App-toolbar__divider" />
-                                {renderToolbarExtras(
-                                  editorInterface.formFactor === "phone",
-                                  appState,
-                                )}
-                              </>
-                            )}
-                          </Stack.Row>
+                          {renderToolbarExtras && (
+                            <>
+                              <div className="App-toolbar__divider" />
+                              {renderToolbarExtras(
+                                editorInterface.formFactor === "phone",
+                                appState,
+                              )}
+                            </>
+                          )}
+                        </Stack.Row>
+                      </Island>
+                      {isCollaborating && (
+                        <Island
+                          style={{
+                            marginLeft: spacing.collabMarginLeft,
+                            alignSelf: "center",
+                            height: "fit-content",
+                          }}
+                        >
+                          <LaserPointerButton
+                            title={t("toolBar.laser")}
+                            checked={
+                              appState.activeTool.type === TOOL_TYPE.laser
+                            }
+                            onChange={() =>
+                              app.setActiveTool({ type: TOOL_TYPE.laser })
+                            }
+                            isMobile
+                          />
                         </Island>
-                        {isCollaborating && (
-                          <Island
-                            style={{
-                              marginLeft: spacing.collabMarginLeft,
-                              alignSelf: "center",
-                              height: "fit-content",
-                            }}
-                          >
-                            <LaserPointerButton
-                              title={t("toolBar.laser")}
-                              checked={
-                                appState.activeTool.type === TOOL_TYPE.laser
-                              }
-                              onChange={() =>
-                                app.setActiveTool({ type: TOOL_TYPE.laser })
-                              }
-                              isMobile
-                            />
-                          </Island>
-                        )}
-                      </Stack.Row>
-                    </Stack.Col>
-                  </div>
-                )}
-              </Section>
-            )}
+                      )}
+                    </Stack.Row>
+                  </Stack.Col>
+                </div>
+              )}
+            </Section>
+          )}
           <div
             className={clsx(
               "layer-ui__wrapper__top-right zen-mode-transition",
@@ -448,6 +478,89 @@ const LayerUI = ({
           </div>
         </div>
       </FixedSideContainer>
+    );
+  };
+
+  // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
+  // full-width strip portaled into the app's collar tool row. The wrapper
+  // re-establishes the `.excalidraw` scope (CSS custom properties) because
+  // the collar rows live outside the editor container. No Island — the
+  // collar frame provides the surface.
+  const renderCollarToolbar = () => {
+    if (!collarMode || !collarToolbarTarget || !shouldRenderToolbar) {
+      return null;
+    }
+    return createPortal(
+      <div className="excalidraw App-collar-host App-collar-strip-host">
+        <Section heading="shapes" className="App-collar-shapes-section">
+          {(heading: React.ReactNode) => (
+            <div
+              className={clsx(
+                "App-collar-strip App-toolbar App-toolbar-container",
+                { "App-toolbar--compact": isCompactStylesPanel },
+              )}
+            >
+              {heading}
+              <PenModeButton
+                zenModeEnabled={appState.zenModeEnabled}
+                checked={appState.penMode}
+                onChange={() => onPenModeToggle(null)}
+                title={t("toolBar.penMode")}
+                penDetected={appState.penDetected}
+              />
+              <LockButton
+                checked={appState.activeTool.locked}
+                onChange={onLockToggle}
+                title={t("toolBar.lock")}
+              />
+              <div className="App-toolbar__divider" />
+              <ShapesSwitcher
+                setAppState={setAppState}
+                activeTool={appState.activeTool}
+                UIOptions={UIOptions}
+                app={app}
+              />
+              {renderToolbarExtras && (
+                <>
+                  <div className="App-toolbar__divider" />
+                  {/* collar mode is desktop/tablet only — isMobile is false */}
+                  {renderToolbarExtras(false, appState)}
+                </>
+              )}
+              {isCollaborating && (
+                <>
+                  <div className="App-toolbar__divider" />
+                  <LaserPointerButton
+                    title={t("toolBar.laser")}
+                    checked={appState.activeTool.type === TOOL_TYPE.laser}
+                    onChange={() =>
+                      app.setActiveTool({ type: TOOL_TYPE.laser })
+                    }
+                    isMobile
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </Section>
+      </div>,
+      collarToolbarTarget,
+    );
+  };
+
+  // Collar shell: main-menu trigger in the app's head bar. The dropdown is
+  // Radix popper-positioned, so it anchors to the trigger wherever it lives.
+  const renderCollarMenu = () => {
+    if (!menuInCollar || !collarMenuTarget) {
+      return null;
+    }
+    return createPortal(
+      <div className="excalidraw App-collar-host App-collar-menu-host">
+        <div style={{ position: "relative" }}>
+          <tunnels.MainMenuTunnel.Out />
+        </div>
+      </div>,
+      collarMenuTarget,
     );
   };
 
@@ -606,6 +719,8 @@ const LayerUI = ({
       )}
       {editorInterface.formFactor !== "phone" && (
         <>
+          {renderCollarToolbar()}
+          {renderCollarMenu()}
           <div
             className="layer-ui__wrapper"
             style={

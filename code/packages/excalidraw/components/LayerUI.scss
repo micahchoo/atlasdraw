@@ -120,6 +120,18 @@
     }
   }
 
+  // Atlasdraw Collar shell (ADR-0010): with the toolbar portaled into the
+  // app frame, tool hints get a full-width host pinned to the top of the
+  // canvas area (the HintViewer inside positions itself below it).
+  .App-collar-hint-host {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 0;
+    pointer-events: none;
+  }
+
   .disable-view-mode {
     display: flex;
     justify-content: center;
