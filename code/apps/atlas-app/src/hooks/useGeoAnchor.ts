@@ -4,22 +4,18 @@
  *
  * Phase 2 Wave 4 Task T18 expanded the scope from bbox-only (rectangle/ellipse/
  * diamond) to ALL native tools, dispatching to the appropriate `GeoAnchor.kind`
- * + `scaleMode` per the matrix below:
+ * per the matrix below. `scaleMode` is always `"geographic"` (maintainer
+ * decision, 2026-07-19: geo-anchored geographic is the ONLY creation mode;
+ * "screen"/"hybrid" remain render-supported in scaleMode.ts/CoordinateSync
+ * for legacy documents, but no creation path stamps them).
  *
- *   | type                              | kind     | scaleMode    |
- *   |-----------------------------------|----------|--------------|
- *   | rectangle, ellipse, diamond       | bbox     | geographic   |
- *   | image, iframe, embeddable         | bbox     | geographic   |
- *   | frame, magicframe                 | bbox     | geographic   |
- *   | line, arrow, freedraw             | polyline | geographic   |
- *   | text                              | point    | geographic   |
- *
- * Rationale (per Wave 4 plan addendum):
- *   - bbox / geographic: shape size is meaningful in world units; resize with zoom.
- *   - polyline / geographic: vertex coordinates scale fully with projection, matching
- *     bbox behavior — lines cover consistent real-world distance at any zoom.
- *   - point / geographic: text labels scale with the map projection alongside
- *     other geo-anchored shapes (fontSize, width, height all scale by factor).
+ *   | type                              | kind     |
+ *   |-----------------------------------|----------|
+ *   | rectangle, ellipse, diamond       | bbox     |
+ *   | image, iframe, embeddable         | bbox     |
+ *   | frame, magicframe                 | bbox     |
+ *   | line, arrow, freedraw             | polyline |
+ *   | text                              | point    |
  *
  * Lifecycle: subscribes via `excalidrawAPI.onChange`. While `appState.newElement`
  * is non-null, the element is mid-drag — we skip stamping so the final geometry
@@ -56,7 +52,7 @@ import type { GeoCustomData, GeoAnchor } from "@atlasdraw/geo";
 
 import type maplibregl from "maplibre-gl";
 
-/** Bbox-shaped tools — anchored as `kind:"bbox"` with `scaleMode:"geographic"`. */
+/** Bbox-shaped tools — anchored as `kind:"bbox"`. */
 const BBOX_TOOL_TYPES = new Set([
   "rectangle",
   "ellipse",
@@ -67,9 +63,9 @@ const BBOX_TOOL_TYPES = new Set([
   "frame",
   "magicframe",
 ]);
-/** Polyline-shaped tools — anchored as `kind:"polyline"` with `scaleMode:"geographic"`. */
+/** Polyline-shaped tools — anchored as `kind:"polyline"`. */
 const POLYLINE_TOOL_TYPES = new Set(["line", "arrow", "freedraw"]);
-/** Point-anchored tools — anchored as `kind:"point"` with `scaleMode:"geographic"`. */
+/** Point-anchored tools — anchored as `kind:"point"`. */
 const POINT_TOOL_TYPES = new Set(["text"]);
 
 /**
@@ -137,6 +133,10 @@ interface ElementGeoFields {
  * Build the GeoCustomData for an element based on its `type`. Returns null when
  * the element type is not in any auto-anchor bucket, or when required fields
  * (e.g. `points` for a polyline) are missing.
+ *
+ * `scaleMode` is always `"geographic"` — the only creation mode (maintainer
+ * decision, 2026-07-19). "screen"/"hybrid" survive only as render support
+ * for previously saved documents.
  */
 function buildGeoCustomData(
   el: ElementGeoFields,
@@ -596,7 +596,8 @@ export function buildGeoAnchorHandler(
         return el;
       }
 
-      // New element — stamp geo for the first time.
+      // New element — stamp geo for the first time. Always scaleMode
+      // "geographic" (the only creation mode; see header).
       const geoCustomData = buildGeoCustomData(
         el as unknown as ElementGeoFields,
         map,

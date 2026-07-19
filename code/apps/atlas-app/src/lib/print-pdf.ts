@@ -6,7 +6,7 @@
 // legend, scale bar, and north arrow. Pure function — takes a captured
 // `mapCanvas` plus a flat `LayerLegendEntry[]`; never reaches into MapLibre,
 // the layer registry, or React state itself. All upstream coupling is the
-// caller's job (see `PrintDialog.tsx`).
+// caller's job (see the PDF pane in `ExportDialog.tsx`).
 //
 // Source plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A10
 // Origin spec: docs/superpowers/plans/2026-05-03-atlasdraw-phase-6-v1-embeds-comments.md §Task 13

@@ -1,18 +1,16 @@
 /**
- * ToolOptionsBar — context-sensitive controls for the active atlas tool.
+ * ToolOptionsBar — the options bar for the active atlas drawing tool.
  *
- * Appears centered below Excalidraw's toolbar when an atlas tool is active.
- * Shows the tool label, a scale-mode segmented toggle, and placeholder slots
- * for future stroke/fill controls. Uses --ad-* design tokens throughout.
+ * Appears centered below Excalidraw's toolbar while an atlas tool (pin, …)
+ * is active. Shows the tool label and an optional "Escape to cancel" hint.
+ * (The Geo/Screen/Hybrid scale-mode toggle that briefly lived here was
+ * removed 2026-07-19: "geographic" is the only creation mode.)
  *
  * Design: drafting instrument panel — compact, precise, disappears when not
  * needed. Same surface temperature as the raised dialog level.
  */
 
 import React from "react";
-
-import type { AtlasdrawTool } from "@atlasdraw/tools";
-import type { ScaleMode } from "@atlasdraw/geo";
 
 import styles from "../styles/ToolOptionsBar.module.css";
 
@@ -21,63 +19,35 @@ import styles from "../styles/ToolOptionsBar.module.css";
 // ---------------------------------------------------------------------------
 
 interface ToolOptionsBarProps {
-  tool: AtlasdrawTool;
-  scaleMode: ScaleMode;
-  onScaleModeChange: (mode: ScaleMode) => void;
+  /** Display label for the active tool ("Pin", "Rectangle", …). */
+  label: string;
+  /** Atlas tools cancel on Escape; native tools have their own lifecycle. */
+  showEscapeHint?: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Scale mode options
-// ---------------------------------------------------------------------------
-
-const SCALE_MODES: { value: ScaleMode; label: string }[] = [
-  { value: "geographic", label: "Geo" },
-  { value: "screen", label: "Screen" },
-  { value: "hybrid", label: "Hybrid" },
-];
 
 // ---------------------------------------------------------------------------
 
 export function ToolOptionsBar({
-  tool,
-  scaleMode,
-  onScaleModeChange,
+  label,
+  showEscapeHint = false,
 }: ToolOptionsBarProps) {
   return (
     <div
       className={styles.bar}
       role="toolbar"
-      aria-label={`${tool.label} options`}
+      aria-label={`${label} options`}
       data-testid="tool-options-bar"
     >
       {/* Tool identity */}
-      <span className={styles.toolLabel}>{tool.label}</span>
-
-      <span className={styles.separator} />
-
-      {/* Scale mode toggle */}
-      <div className={styles.modeGroup} data-testid="scale-mode-toggle">
-        {SCALE_MODES.map((m) => (
-          <button
-            key={m.value}
-            type="button"
-            className={[
-              styles.modeButton,
-              scaleMode === m.value ? styles.modeButtonActive : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onClick={() => onScaleModeChange(m.value)}
-            aria-pressed={scaleMode === m.value}
-            data-testid={`scale-mode-${m.value}`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <span className={styles.toolLabel}>{label}</span>
 
       {/* Future: stroke width + fill color slots */}
-      <span className={styles.hint}>Escape to cancel</span>
+      {showEscapeHint && (
+        <>
+          <span className={styles.separator} />
+          <span className={styles.hint}>Escape to cancel</span>
+        </>
+      )}
     </div>
   );
 }

@@ -182,3 +182,28 @@
 .exportBtn:hover {
   background: var(--ad-accent-hover);
 }
+
+/* --- PDF pane (absorbed from the former PrintDialog) -------------------- */
+
+.settingInput {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+  min-width: 160px;
+}
+
+.errorText {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  color: var(--ad-danger, #c92a2a);
+  padding: var(--ad-space-1) 0;
+}
+
+.exportBtn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

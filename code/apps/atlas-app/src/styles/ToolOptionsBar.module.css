@@ -39,43 +39,6 @@
   white-space: nowrap;
 }
 
-/* ScaleMode toggle — segmented button group */
-.modeGroup {
-  display: flex;
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  overflow: hidden;
-}
-
-.modeButton {
-  padding: 2px 8px;
-  border: none;
-  background: transparent;
-  font-family: var(--ad-font-sans);
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--ad-ink-secondary);
-  cursor: pointer;
-  transition: background 100ms ease;
-}
-
-.modeButton:not(:last-child) {
-  border-right: 1px solid var(--ad-rule);
-}
-
-.modeButton:hover {
-  background: var(--ad-accent-subtle);
-}
-
-.modeButtonActive {
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-}
-
-.modeButtonActive:hover {
-  background: var(--ad-accent-hover);
-}
-
 /* Hint — keyboard shortcut or status */
 .hint {
   font-family: var(--ad-font-sans);

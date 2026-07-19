@@ -96,10 +96,10 @@ describe("ArrowTool", () => {
     expect(ArrowTool.label).toBe("Arrow");
     expect(ArrowTool.icon).toBe("arrow");
     expect(ArrowTool.cursor).toBe("crosshair");
-    expect(ArrowTool.defaultScaleMode).toBe("hybrid");
+    expect(ArrowTool.defaultScaleMode).toBe("geographic");
   });
 
-  it("creates arrow with hybrid scaleMode and two-coord polyline anchor", () => {
+  it("creates arrow with geographic scaleMode and two-coord polyline anchor", () => {
     // Down at tail (-73.98, 40.75); move to (-73.97, 40.76); up at (-73.96, 40.77).
     const tail = { lng: -73.98, lat: 40.75 };
     const mid = { lng: -73.97, lat: 40.76 };
@@ -126,7 +126,7 @@ describe("ArrowTool", () => {
     expect(addElement).toHaveBeenCalledTimes(1);
     const seed = addElement.mock.calls[0][0] as AtlasdrawElementSeed;
     expect(seed.type).toBe("arrow");
-    expect(seed.scaleMode).toBe("hybrid");
+    expect(seed.scaleMode).toBe("geographic");
     // Initial seed: head==tail (zero-length arrow).
     expect(seed.geo).toEqual({
       kind: "polyline",

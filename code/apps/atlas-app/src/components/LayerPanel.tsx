@@ -20,7 +20,12 @@
 
 import React, { useCallback, useRef, useState } from "react";
 
+import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
+
+import type { BasemapConfig } from "@atlasdraw/basemap";
+
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+import { useBasemapStore } from "../state/basemap";
 
 import styles from "../styles/LayerPanel.module.css";
 
@@ -510,6 +515,89 @@ function AnnotationLayerRow({
 }
 
 // ---------------------------------------------------------------------------
+// Basemap section — IA restructure (2026-07-18): the basemap IS a layer, the
+// bottom of the stack, so it's managed here — not from the MainMenu (which
+// previously held a "Basemap: …" item + standalone BasemapPickerDialog) and
+// not only from the Settings tab. Reads/writes the shared basemap store;
+// "Edit style" raises the store flag that mounts MaputnikDialog in MapEditor.
+// ---------------------------------------------------------------------------
+
+function BasemapSection() {
+  const activeBasemapId = useBasemapStore((s) => s.activeBasemapId);
+  const setActiveBasemapId = useBasemapStore((s) => s.setActiveBasemapId);
+  const setStyleEditorOpen = useBasemapStore((s) => s.setStyleEditorOpen);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const active = getBasemap(activeBasemapId);
+  const basemaps = listBasemaps() as BasemapConfig[];
+
+  const sourceBadge = (remote: boolean) => (
+    <span
+      className={remote ? styles.sourceBadgeRemote : styles.sourceBadgeLocal}
+    >
+      {remote ? "Remote" : "Local"}
+    </span>
+  );
+
+  return (
+    <section aria-label="Basemap" className={styles.section}>
+      <h3 className={styles.heading}>Basemap</h3>
+      <div className={styles.basemapRow} data-testid="layer-basemap-row">
+        <button
+          type="button"
+          className={styles.basemapToggle}
+          onClick={() => setPickerOpen((p) => !p)}
+          aria-expanded={pickerOpen}
+          data-testid="layer-basemap-toggle"
+          title={pickerOpen ? "Hide basemap choices" : "Change basemap"}
+        >
+          <span className={styles.basemapName}>
+            {active?.label ?? activeBasemapId}
+          </span>
+          {sourceBadge(active?.requiresRemote ?? false)}
+        </button>
+        <button
+          type="button"
+          className={styles.detailBtn}
+          onClick={() => setStyleEditorOpen(true)}
+          data-testid="layer-basemap-edit-style"
+          title="Open the Maputnik style editor"
+        >
+          Edit style
+        </button>
+      </div>
+      {pickerOpen && (
+        <div className={styles.basemapOptions} role="listbox">
+          {basemaps.map((b) => {
+            const isActive = b.id === activeBasemapId;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                role="option"
+                aria-selected={isActive}
+                className={joinClass(
+                  styles.basemapOption,
+                  isActive && styles.basemapOptionActive,
+                )}
+                onClick={() => {
+                  setActiveBasemapId(b.id);
+                  setPickerOpen(false);
+                }}
+                data-testid={`basemap-option-${b.id}`}
+              >
+                <span className={styles.basemapName}>{b.label}</span>
+                {sourceBadge(b.requiresRemote)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // LayerPanel
 // ---------------------------------------------------------------------------
 
@@ -591,6 +679,7 @@ export function LayerPanel() {
           ))
         )}
       </section>
+      <BasemapSection />
       {stylePanelLayerId && (
         <StylePanel
           layerId={stylePanelLayerId}

@@ -37,7 +37,7 @@ import {
   setExportElementTransformer,
 } from "@atlasdraw/excalidraw";
 
-import { DEFAULT_SIDEBAR } from "@atlasdraw/common";
+import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import { PinTool } from "@atlasdraw/tools";
 
@@ -48,9 +48,7 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import type { GeoAnchor, ScaleMode } from "@atlasdraw/geo";
-
-import type { BasemapConfig } from "@atlasdraw/basemap";
+import type { GeoAnchor } from "@atlasdraw/geo";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
@@ -78,6 +76,7 @@ import { CollabState } from "../state/collab";
 import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
+import { useBasemapStore } from "../state/basemap";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -93,17 +92,16 @@ import styles from "../styles/MapEditor.module.css";
 import { useToast } from "./ToastProvider";
 
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { PrintDialog } from "./PrintDialog";
 import { ShareDialog } from "./ShareDialog";
 import { AboutDialog } from "./AboutDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { MaputnikDialog } from "./MaputnikDialog";
-import { BasemapPickerDialog } from "./BasemapPickerDialog";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
 import { GeoSearchControl } from "./GeoSearchControl";
+import { PinToolButton } from "./PinToolButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
@@ -112,7 +110,7 @@ import { LayerPanel } from "./LayerPanel";
 import { useAnnounce } from "./AriaAnnouncer";
 import { OnboardingTips, useOnboarding } from "./OnboardingTips";
 import { SettingsDialog } from "./SettingsDialog";
-import { ExportDialog } from "./ExportDialog";
+import { ExportDialog, type ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
 
@@ -329,22 +327,27 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // for now because the composite export draws the MapLibre canvas directly —
   // any map-level background layer would already be baked into that canvas.
   const [mapBg, setMapBg] = useState("transparent");
-  // Phase 4 T6 — active basemap, replacing the canvas background picker slot.
-  const [activeBasemapId, setActiveBasemapId] =
-    useState<BasemapConfig["id"]>("protomaps-light");
-  const [showBasemapPicker, setShowBasemapPicker] = useState(false);
-  // Phase 6 A4 — Maputnik "Edit basemap style" modal.
-  const [maputnikOpen, setMaputnikOpen] = useState(false);
+  // Basemap state lives in the shared store (state/basemap.ts) — the picker
+  // and Maputnik trigger moved into LayerPanel's Basemap section (basemap =
+  // bottom of the layer stack, IA restructure), which mounts as a sidebar
+  // tab and therefore can't take props from here.
+  const activeBasemapId = useBasemapStore((s) => s.activeBasemapId);
+  const setActiveBasemapId = useBasemapStore((s) => s.setActiveBasemapId);
+  const maputnikOpen = useBasemapStore((s) => s.styleEditorOpen);
+  const setMaputnikOpen = useBasemapStore((s) => s.setStyleEditorOpen);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  // Phase 6 A10 — PDF export modal.
-  const [showPrintDialog, setShowPrintDialog] = useState(false);
   // Phase 6 A12 — Asset library info panel + dialog. Pushes the 3 bundled
   // .excalidrawlib fixtures (wildfire / transit / hazard) into Excalidraw's
   // built-in library via updateLibrary({ libraryItems, merge: true }).
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showExport, setShowExport] = useState(false);
+  // Unified export surface — non-null opens the dialog with that format
+  // card preselected ("png" from the menu, "pdf" from quick actions).
+  // The PDF path lives inside ExportDialog now; the former chained
+  // PrintDialog modal is gone.
+  const [exportDialogFormat, setExportDialogFormat] =
+    useState<ExportFormat | null>(null);
   // Phase 6 A13a — active workspace (managed mode only). Seeded from the
   // A9 env resolver so the boot path still works; the WorkspaceSwitcher
   // updates this when the user picks one. Self-host: stays at the env-
@@ -533,15 +536,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { activeAtlasTool, setActiveAtlasTool, dispatchPointerDown } =
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
-
-  // Tool options bar — scaleMode tracks the active tool's default, user can
-  // toggle per-session. Resets to the tool's default when tool changes.
-  const [toolScaleMode, setToolScaleMode] = useState<ScaleMode>("geographic");
-  useEffect(() => {
-    if (activeAtlasTool) {
-      setToolScaleMode(activeAtlasTool.defaultScaleMode);
-    }
-  }, [activeAtlasTool?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyboard shortcuts panel — toggled with `?`.
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -784,11 +778,24 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             onChange={handleExcalidrawChange}
             getBackgroundCanvas={getBackgroundCanvas}
             UIOptions={EXCALIDRAW_UI_OPTIONS}
-            // Geo-search sits on the same toolbar as the drawing tools, via the
-            // vendored `renderToolbarExtras` slot. Always mounted: it defaults
-            // to an offline local place index (no call-home); it only calls out
-            // if VITE_GEOCODER_ENDPOINT is configured (see useGeocoderSearch).
-            renderToolbarExtras={() => <GeoSearchControl map={map} />}
+            // Toolbar extras (vendored `renderToolbarExtras` slot): the pin
+            // tool toggle + geo-search sit ON the drawing-tools toolbar. Pin
+            // lives here — not in the MainMenu — because it's a tool, and the
+            // toolbar is where tools live (IA restructure; first step of the
+            // atlas-tools/toolbar merge). Geo-search is always mounted: it
+            // defaults to an offline local place index (no call-home); it only
+            // calls out if VITE_GEOCODER_ENDPOINT is configured.
+            renderToolbarExtras={() => (
+              <>
+                <PinToolButton
+                  active={isPinActive}
+                  onToggle={() =>
+                    setActiveAtlasTool(isPinActive ? null : PinTool)
+                  }
+                />
+                <GeoSearchControl map={map} />
+              </>
+            )}
             onScrollBackToContent={handleScrollBackToContent}
           >
             {/* LayerPanel mounts as a tab inside DefaultSidebar via
@@ -824,10 +831,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 Save
               </MainMenu.Item>
               <MainMenu.Item
-                onSelect={() => setShowAboutDialog(true)}
-                data-testid="main-menu-about"
+                onSelect={handleImportFile}
+                data-testid="main-menu-import"
               >
-                ℹ About Atlasdraw
+                Import…
+              </MainMenu.Item>
+              <MainMenu.Item
+                onSelect={() => setExportDialogFormat("png")}
+                data-testid="main-menu-export"
+              >
+                Export…
               </MainMenu.Item>
               {/* Phase 4 T8 — Share link. Root-level mounted (same pattern as
                 AboutDialog) so MainMenu auto-close doesn't unmount the
@@ -836,61 +849,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 onSelect={() => setShowShareDialog(true)}
                 data-testid="main-menu-share"
               >
-                🔗 Share map
+                Share map
               </MainMenu.Item>
               <MainMenu.Separator />
-              {isDirty && (
-                <MainMenu.Item
-                  onSelect={() => {
-                    /* indicator-only; no action */
-                  }}
-                  data-testid="main-menu-unsaved-indicator"
-                  aria-label="Unsaved changes"
-                >
-                  ● Unsaved
-                </MainMenu.Item>
-              )}
-              <MainMenu.Item
-                onSelect={handleImportFile}
-                data-testid="main-menu-import"
-              >
-                Import…
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() => setShowExport(true)}
-                data-testid="main-menu-export"
-              >
-                Export…
-              </MainMenu.Item>
+              <MainMenu.DefaultItems.ClearCanvas />
+              <MainMenu.Separator />
               <MainMenu.Item
                 onSelect={() => setShowSettings(true)}
                 data-testid="main-menu-settings"
               >
                 Settings…
               </MainMenu.Item>
-              <MainMenu.Separator />
-              <MainMenu.Item
-                onSelect={() =>
-                  setActiveAtlasTool(isPinActive ? null : PinTool)
-                }
-                data-testid="main-menu-pin"
-                aria-pressed={isPinActive}
-              >
-                {isPinActive ? "✓ Pin to map" : "Pin to map"}
-              </MainMenu.Item>
-              <MainMenu.Item
-                onSelect={() =>
-                  excalidrawAPI?.toggleSidebar({
-                    name: DEFAULT_SIDEBAR.name,
-                    tab: "layers",
-                  })
-                }
-                data-testid="main-menu-layers"
-              >
-                Layers panel
-              </MainMenu.Item>
-              <MainMenu.Separator />
-              <MainMenu.DefaultItems.SearchMenu />
               {/* Atlasdraw's own Help entry — not MainMenu.DefaultItems.Help,
                 which opens Excalidraw's vendored HelpDialog (links to
                 docs.excalidraw.com / github.com/excalidraw / Excalidraw+)
@@ -901,47 +870,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               >
                 Keyboard shortcuts
               </MainMenu.Item>
-              <MainMenu.DefaultItems.ClearCanvas />
-              {/* Phase 4 T6 — Basemap picker replaces the canvas background
-                picker. Previously ChangeCanvasBackground set a solid color
-                behind Excalidraw; now we switch the MapLibre basemap style.
-                The dialog is rendered inside the Excalidraw tree so it
-                inherits focus trap + Escape handling from the vendored
-                Dialog primitive (atlasdraw-50c0). */}
               <MainMenu.Item
-                onSelect={() => setShowBasemapPicker(true)}
-                data-testid="main-menu-basemap"
+                onSelect={() => setShowAboutDialog(true)}
+                data-testid="main-menu-about"
               >
-                {(() => {
-                  const active = getBasemap(activeBasemapId);
-                  if (!active) {
-                    return "🗺 Basemap";
-                  }
-                  const source = active.requiresRemote ? "Remote" : "Local";
-                  return `🗺 Basemap: ${active.label} · ${source}`;
-                })()}
-              </MainMenu.Item>
-              {/* Phase 6 A4 — "Edit basemap style" opens the Maputnik modal,
-                pointed at the active basemap's vendored style JSON URL. */}
-              <MainMenu.Item
-                onSelect={() => setMaputnikOpen(true)}
-                data-testid="main-menu-edit-style"
-              >
-                Edit basemap style
-              </MainMenu.Item>
-              {/* Phase 6 A12 — Asset library info panel. Pushes the 3 bundled
-                atlas fixtures (wildfire / transit / hazard) into Excalidraw's
-                built-in library via updateLibrary; the dialog itself just
-                lists what's available + a button to open Excalidraw's library
-                sidebar tab. Root-level mounted (same pattern as Maputnik /
-                Basemap pickers) so MainMenu auto-close doesn't unmount it. */}
-              <MainMenu.Item
-                onSelect={() => setShowAssetLibrary(true)}
-                data-testid="main-menu-asset-library"
-              >
-                Asset library
+                About Atlasdraw
               </MainMenu.Item>
               <MainMenu.DefaultItems.ToggleTheme />
+              {/* IA restructure — the menu holds document + app scope only:
+                document ops above the first separator, canvas reset, then
+                app-level entries. Ejected to their objects' homes:
+                  "Pin to map"        → toolbar (PinToolButton, renderToolbarExtras)
+                  "● Unsaved"         → StatusBar dirty indicator
+                  "Layers panel"      → sidebar trigger + ⌘K palette
+                  "Find on canvas"    → ⌘F + sidebar Search tab + ⌘K palette
+                  Basemap/Edit style  → LayerPanel Basemap section
+                  "Asset library"     → ⌘K palette */}
             </MainMenu>
           </Excalidraw>
         </div>
@@ -1007,23 +951,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               }}
               style={{ cursor: activeAtlasTool.cursor }}
             />
-            <ToolOptionsBar
-              tool={activeAtlasTool}
-              scaleMode={toolScaleMode}
-              onScaleModeChange={setToolScaleMode}
-            />
+            <ToolOptionsBar label={activeAtlasTool.label} showEscapeHint />
           </>
-        )}
-
-        {/* Phase 4 T6 — Basemap picker. Rendered at the root level (NOT inside
-          MainMenu) so MainMenu auto-close on item click doesn't unmount it.
-          The dialog manages its own focus trap, Escape, and click-outside. */}
-        {showBasemapPicker && (
-          <BasemapPickerDialog
-            activeId={activeBasemapId}
-            onSelect={setActiveBasemapId}
-            onCloseRequest={() => setShowBasemapPicker(false)}
-          />
         )}
 
         {/* Phase 6 A12 — Asset library info panel. Same root-level pattern as
@@ -1075,14 +1004,29 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           />
         )}
 
-        {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw). */}
-        {showExport && (
+        {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw).
+          The PDF pane needs the live MapLibre canvas (at export time, so the
+          PDF reflects the current viewport) and the layer registry projected
+          to legend shape: annotation entries have no color of their own → use
+          a neutral grey; data layers carry style.fillColor. */}
+        {exportDialogFormat && (
           <ExportDialog
-            onCloseRequest={() => setShowExport(false)}
+            initialFormat={exportDialogFormat}
+            onCloseRequest={() => setExportDialogFormat(null)}
             onExportPNG={handleExportPNG}
-            onExportPDF={() => setShowPrintDialog(true)}
             onExportGeoJSON={handleExportGeoJSON}
             onExportAtlasdraw={handleExportAtlasdraw}
+            getMapCanvas={() => map?.getCanvas() ?? null}
+            layers={useLayerRegistryStore
+              .getState()
+              .entries.map<LayerLegendEntry>((e) => ({
+                id: e.id,
+                name: e.label,
+                color:
+                  e.kind === "data"
+                    ? e.style.fillColor ?? "#868e96"
+                    : "#868e96",
+              }))}
           />
         )}
 
@@ -1099,30 +1043,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             }
             client={getShareClient()}
             collabState={collabState}
-          />
-        )}
-
-        {/* Phase 6 A10 — PrintDialog (PDF export). Root-level mount so the
-          MainMenu auto-close on item-select doesn't unmount the dialog.
-          getMapCanvas returns the live MapLibre canvas at submit time, so
-          the PDF reflects the user's current viewport (not the moment the
-          dialog opened). Legend entries are derived from the layer
-          registry: annotation entries have no color of their own → use a
-          neutral grey; data layers carry style.fillColor. */}
-        {showPrintDialog && (
-          <PrintDialog
-            getMapCanvas={() => map?.getCanvas() ?? null}
-            layers={useLayerRegistryStore
-              .getState()
-              .entries.map<LayerLegendEntry>((e) => ({
-                id: e.id,
-                name: e.label,
-                color:
-                  e.kind === "data"
-                    ? e.style.fillColor ?? "#868e96"
-                    : "#868e96",
-              }))}
-            onCloseRequest={() => setShowPrintDialog(false)}
           />
         )}
 
@@ -1153,7 +1073,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           </div>
         )}
 
-        <StatusBar map={map} />
+        <StatusBar map={map} dirty={isDirty} />
 
         {onboarding.show && <OnboardingTips onDismiss={onboarding.dismiss} />}
 
@@ -1168,7 +1088,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 id: "pin",
                 label: "Pin to map",
                 category: "Tools",
-                hint: "P",
                 keywords: ["marker", "point"],
                 onSelect: () => setActiveAtlasTool(PinTool),
               },
@@ -1195,6 +1114,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   }),
               },
               {
+                id: "find",
+                label: "Find on canvas",
+                category: "View",
+                hint: "⌘F",
+                keywords: ["search", "text", "sidebar"],
+                onSelect: () =>
+                  excalidrawAPI?.toggleSidebar({
+                    name: DEFAULT_SIDEBAR.name,
+                    tab: CANVAS_SEARCH_TAB,
+                  }),
+              },
+              {
+                id: "asset-library",
+                label: "Asset library",
+                category: "View",
+                keywords: ["stamps", "fixtures", "wildfire", "transit"],
+                onSelect: () => setShowAssetLibrary(true),
+              },
+              {
                 id: "export-png",
                 label: "Export composite PNG",
                 category: "Export",
@@ -1207,7 +1145,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 label: "Export PDF",
                 category: "Export",
                 keywords: ["print", "document"],
-                onSelect: () => setShowPrintDialog(true),
+                onSelect: () => setExportDialogFormat("pdf"),
               },
               {
                 id: "open",
@@ -1238,8 +1176,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 id: "basemap",
                 label: "Change basemap",
                 category: "View",
-                keywords: ["style", "tiles", "background"],
-                onSelect: () => setShowBasemapPicker(true),
+                keywords: ["style", "tiles", "background", "layers"],
+                // Basemap lives in the Layers panel now (bottom of the stack).
+                onSelect: () =>
+                  excalidrawAPI?.toggleSidebar({
+                    name: DEFAULT_SIDEBAR.name,
+                    tab: "layers",
+                  }),
               },
               {
                 id: "about",

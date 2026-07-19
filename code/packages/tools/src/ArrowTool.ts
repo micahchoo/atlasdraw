@@ -12,9 +12,9 @@
 // `apps/atlas-app/src/hooks/useAtlasdrawTool.ts`) dispatches pointer events
 // to this tool when the Arrow button is active.
 //
-// scaleMode: "hybrid" — arrows are body-geographic (endpoints anchored to
-// lng/lat) but stroke-screen (the line itself stays a constant pixel width
-// regardless of zoom). See Spec §3.4 / patterns.md P-04 for the hybrid contract.
+// scaleMode: "geographic" (maintainer decision, 2026-07-19: geographic is the
+// ONLY creation mode — the earlier "hybrid" arrows are superseded; hybrid/
+// screen survive only as render support for legacy documents).
 //
 // updateScene anti-pattern: do NOT call ctx.excalidraw.updateScene — it is
 // not exposed on ToolContext. The preview pattern uses
@@ -60,7 +60,7 @@ export const ArrowTool: AtlasdrawTool = {
   label: "Arrow",
   icon: "arrow",
   cursor: "crosshair",
-  defaultScaleMode: "hybrid",
+  defaultScaleMode: "geographic",
 
   onPointerDown(e, ctx) {
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
@@ -78,7 +78,7 @@ export const ArrowTool: AtlasdrawTool = {
         ],
         zRef,
       },
-      scaleMode: "hybrid",
+      scaleMode: "geographic",
     };
 
     previewId = ctx.excalidraw.addElement(seed);

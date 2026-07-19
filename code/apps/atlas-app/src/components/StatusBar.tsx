@@ -39,11 +39,13 @@ function fmtZoom(zoom: number): string {
 
 interface StatusBarProps {
   map: maplibregl.Map | null;
+  /** Persistence dirty flag — true when there are unsaved changes. */
+  dirty?: boolean;
 }
 
 // ---------------------------------------------------------------------------
 
-export function StatusBar({ map }: StatusBarProps) {
+export function StatusBar({ map, dirty = false }: StatusBarProps) {
   const [center, setCenter] = useState<{ lng: number; lat: number } | null>(
     null,
   );
@@ -108,11 +110,18 @@ export function StatusBar({ map }: StatusBarProps) {
             {fmtZoom(zoom)}×
           </span>
         )}
+        {dirty && (
+          <span className={styles.label} data-testid="status-bar-unsaved">
+            unsaved
+          </span>
+        )}
         <span
-          className={[styles.dot, styles.dotOk].join(" ")}
+          className={[styles.dot, dirty ? styles.dotWarn : styles.dotOk].join(
+            " ",
+          )}
           data-testid="status-bar-save-dot"
-          aria-label="Saved"
-          title="All changes saved"
+          aria-label={dirty ? "Unsaved changes" : "Saved"}
+          title={dirty ? "Unsaved changes" : "All changes saved"}
         />
       </div>
     </div>

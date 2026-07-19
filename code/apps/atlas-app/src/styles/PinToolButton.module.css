@@ -1,0 +1,42 @@
+/* PinToolButton — pin-tool toggle on the drawing-tools toolbar.
+ *
+ * Renders INSIDE the Excalidraw toolbar (`.excalidraw` scope) → uses
+ * Excalidraw CSS vars (with fallbacks) to match the native tool buttons.
+ * Same treatment as GeoSearchControl's toolbar button.
+ */
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--default-button-size, 2rem);
+  height: var(--default-button-size, 2rem);
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-lg, 0.5rem);
+  background: transparent;
+  color: var(--icon-fill-color, #1b1b1f);
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--button-hover-bg, #f1f3f5);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--color-primary, #6965db);
+  outline-offset: -2px;
+}
+
+/* Engaged (pin tool active) — mirror the active tool-button treatment. */
+.buttonActive,
+.buttonActive:hover {
+  background: var(--color-primary, #6965db);
+  color: var(--color-primary-contrast, #ffffff);
+}
+
+.icon {
+  width: var(--default-icon-size, 1rem);
+  height: var(--default-icon-size, 1rem);
+  flex-shrink: 0;
+}

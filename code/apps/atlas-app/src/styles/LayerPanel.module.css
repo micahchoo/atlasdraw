@@ -290,3 +290,85 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+/* --- Basemap section (IA restructure: basemap = bottom of the layer stack) */
+
+.basemapRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 6px;
+}
+
+/* Active-basemap disclosure — a text button so the whole name is clickable. */
+.basemapToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--ad-rule, #dee2e6);
+  border-radius: 4px;
+  background: var(--ad-surface-raised, #ffffff);
+  color: var(--ad-ink, #212529);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.basemapToggle:hover {
+  background: var(--ad-surface-inset, #f8f9fa);
+}
+
+.basemapName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Source badges — same colors as the kind badges: Local = blue (like data
+ * layers, self-contained), Remote = amber (like annotations, external). */
+.sourceBadgeLocal {
+  composes: kindBadge;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.sourceBadgeRemote {
+  composes: kindBadge;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.basemapOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 8px 8px;
+}
+
+.basemapOption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ad-ink, #212529);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.basemapOption:hover {
+  background: var(--ad-surface-inset, #f8f9fa);
+}
+
+.basemapOptionActive {
+  border-color: var(--ad-accent, #1971c2);
+  font-weight: 600;
+}

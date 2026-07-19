@@ -144,10 +144,10 @@ describe("FreehandTool contract", () => {
     expect(FreehandTool.label).toBe("Freehand");
     expect(FreehandTool.icon).toBe("pen");
     expect(FreehandTool.cursor).toBe("crosshair");
-    expect(FreehandTool.defaultScaleMode).toBe("hybrid");
+    expect(FreehandTool.defaultScaleMode).toBe("geographic");
   });
 
-  it("emits a freedraw seed with scaleMode 'hybrid' on commit", () => {
+  it("emits a freedraw seed with scaleMode 'geographic' on commit", () => {
     const { ctx, added } = makeCtx();
     FreehandTool.onPointerDown(ev(0, 0), ctx);
     FreehandTool.onPointerMove?.(ev(10, 5), ctx);
@@ -157,7 +157,7 @@ describe("FreehandTool contract", () => {
     expect(added).toHaveLength(1);
     const seed = added[0]!;
     expect(seed.type).toBe("freedraw");
-    expect(seed.scaleMode).toBe("hybrid");
+    expect(seed.scaleMode).toBe("geographic");
     expect(seed.geo.kind).toBe("polyline");
     if (seed.geo.kind === "polyline") {
       expect(seed.geo.coordinates.length).toBeGreaterThanOrEqual(2);

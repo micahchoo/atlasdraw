@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A10 — PrintDialog tests.
+// ExportDialog tests — ported from PrintDialog.test.tsx when the PDF pane
+// was absorbed into the unified export surface (IA restructure).
 //
 // Don't exercise real pdf-lib here — print-pdf.test.ts already covers the
-// generator. The dialog is tested with an injected `exportPDFImpl` mock so we
-// can assert which PrintOptions the dialog forwards.
+// generator. The PDF pane is tested with an injected `exportPDFImpl` mock so
+// we can assert which PrintOptions the dialog forwards.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { PrintDialog } from "../PrintDialog";
+import { ExportDialog } from "../ExportDialog";
 
 import type { LayerLegendEntry, PrintOptions } from "../../lib/print-pdf";
 
@@ -56,96 +57,91 @@ function makeCanvas(): HTMLCanvasElement {
   } as unknown as HTMLCanvasElement;
 }
 
-describe("PrintDialog", () => {
-  it("renders all form fields with correct defaults", () => {
-    render(
-      <PrintDialog
-        getMapCanvas={() => makeCanvas()}
-        layers={LAYERS}
-        onCloseRequest={() => {}}
-      />,
-    );
+type Overrides = Partial<React.ComponentProps<typeof ExportDialog>>;
+
+function renderDialog(overrides: Overrides = {}) {
+  const props = {
+    onCloseRequest: vi.fn(),
+    onExportPNG: vi.fn(),
+    onExportGeoJSON: vi.fn(),
+    onExportAtlasdraw: vi.fn(),
+    getMapCanvas: () => makeCanvas(),
+    layers: LAYERS,
+    ...overrides,
+  };
+  render(<ExportDialog {...props} />);
+  return props;
+}
+
+describe("ExportDialog", () => {
+  it("defaults to the PNG card; export runs the PNG handler and closes", () => {
+    const props = renderDialog();
     expect(screen.getByRole("dialog")).toBeTruthy();
-    // Page size radios.
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    expect(props.onExportPNG).toHaveBeenCalledTimes(1);
+    expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("initialFormat preselects the format card", () => {
+    renderDialog({ initialFormat: "pdf" });
+    // The PDF pane's settings are visible without clicking the card.
+    expect(screen.getByTestId("export-pdf-page-size")).toBeTruthy();
+  });
+
+  it("PDF pane renders form fields with correct defaults", () => {
+    renderDialog({ initialFormat: "pdf" });
     expect(
-      (screen.getByTestId("print-dialog-page-size-letter") as HTMLInputElement)
-        .checked,
-    ).toBe(true);
+      (screen.getByTestId("export-pdf-page-size") as HTMLSelectElement).value,
+    ).toBe("letter");
+    // Orientation defaults to landscape (more common for maps).
     expect(
-      (screen.getByTestId("print-dialog-page-size-a4") as HTMLInputElement)
-        .checked,
-    ).toBe(false);
-    // Orientation toggle defaults to landscape (more common for maps).
+      (screen.getByTestId("export-pdf-orientation") as HTMLSelectElement).value,
+    ).toBe("landscape");
     expect(
-      (
-        screen.getByTestId(
-          "print-dialog-orientation-landscape",
-        ) as HTMLInputElement
-      ).checked,
-    ).toBe(true);
-    // Default title.
-    const titleInput = screen.getByTestId(
-      "print-dialog-title-input",
-    ) as HTMLInputElement;
-    expect(titleInput.value).toBe("Untitled map");
-    // Submit button visible.
-    expect(screen.getByTestId("print-dialog-submit")).toBeTruthy();
+      (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,
+    ).toBe("Untitled map");
+    expect(screen.getByTestId("export-dialog-export")).toBeTruthy();
   });
 
   it("Escape closes the dialog", () => {
-    const onClose = vi.fn();
-    render(
-      <PrintDialog
-        getMapCanvas={() => makeCanvas()}
-        layers={LAYERS}
-        onCloseRequest={onClose}
-      />,
-    );
+    const props = renderDialog();
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
   });
 
   it("Cancel button closes the dialog", () => {
-    const onClose = vi.fn();
-    render(
-      <PrintDialog
-        getMapCanvas={() => makeCanvas()}
-        layers={LAYERS}
-        onCloseRequest={onClose}
-      />,
-    );
-    fireEvent.click(screen.getByTestId("print-dialog-cancel"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    const props = renderDialog();
+    fireEvent.click(screen.getByTestId("export-dialog-cancel"));
+    expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
   });
 
-  it("submit calls exportPDFImpl with the chosen options and closes the dialog", async () => {
+  it("PDF export calls exportPDFImpl with the chosen options and closes", async () => {
     const handles = stubUrlAndAnchorClick();
     const exportMock = vi
       .fn<(opts: PrintOptions) => Promise<Blob>>()
       .mockResolvedValue(
         new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
       );
-    const onClose = vi.fn();
     const canvas = makeCanvas();
-    render(
-      <PrintDialog
-        getMapCanvas={() => canvas}
-        layers={LAYERS}
-        onCloseRequest={onClose}
-        exportPDFImpl={exportMock}
-      />,
-    );
+    const props = renderDialog({
+      initialFormat: "pdf",
+      getMapCanvas: () => canvas,
+      exportPDFImpl: exportMock,
+    });
 
     // Change a few fields.
-    fireEvent.click(screen.getByTestId("print-dialog-page-size-a4"));
-    fireEvent.click(screen.getByTestId("print-dialog-orientation-portrait"));
-    const titleInput = screen.getByTestId(
-      "print-dialog-title-input",
-    ) as HTMLInputElement;
-    fireEvent.change(titleInput, { target: { value: "Trail map" } });
+    fireEvent.change(screen.getByTestId("export-pdf-page-size"), {
+      target: { value: "a4" },
+    });
+    fireEvent.change(screen.getByTestId("export-pdf-orientation"), {
+      target: { value: "portrait" },
+    });
+    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
+      target: { value: "Trail map" },
+    });
 
     // Submit.
-    fireEvent.click(screen.getByTestId("print-dialog-submit"));
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
     // Wait one microtask flush for the promise to settle.
     await Promise.resolve();
     await Promise.resolve();
@@ -162,7 +158,7 @@ describe("PrintDialog", () => {
     expect(handles.createUrl).toHaveBeenCalled();
     expect(handles.click).toHaveBeenCalled();
     expect(handles.revokeUrl).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+    expect(props.onCloseRequest).toHaveBeenCalled();
 
     handles.createUrl.mockRestore();
     handles.revokeUrl.mockRestore();
@@ -171,20 +167,19 @@ describe("PrintDialog", () => {
 
   it("surfaces an error when the map canvas isn't ready", async () => {
     const exportMock = vi.fn<(opts: PrintOptions) => Promise<Blob>>();
-    render(
-      <PrintDialog
-        getMapCanvas={() => null}
-        layers={LAYERS}
-        onCloseRequest={() => {}}
-        exportPDFImpl={exportMock}
-      />,
-    );
-    fireEvent.click(screen.getByTestId("print-dialog-submit"));
+    const props = renderDialog({
+      initialFormat: "pdf",
+      getMapCanvas: () => null,
+      exportPDFImpl: exportMock,
+    });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
     await Promise.resolve();
     expect(exportMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId("print-dialog-error").textContent).toMatch(
+    expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
       /not ready/i,
     );
+    // Errors keep the dialog open so the user can retry.
+    expect(props.onCloseRequest).not.toHaveBeenCalled();
   });
 
   it("falls back to 'Untitled map' when title is whitespace", async () => {
@@ -192,19 +187,15 @@ describe("PrintDialog", () => {
     const exportMock = vi
       .fn<(opts: PrintOptions) => Promise<Blob>>()
       .mockResolvedValue(new Blob([], { type: "application/pdf" }));
-    render(
-      <PrintDialog
-        getMapCanvas={() => makeCanvas()}
-        layers={[]}
-        onCloseRequest={() => {}}
-        exportPDFImpl={exportMock}
-      />,
-    );
-    const titleInput = screen.getByTestId(
-      "print-dialog-title-input",
-    ) as HTMLInputElement;
-    fireEvent.change(titleInput, { target: { value: "   " } });
-    fireEvent.click(screen.getByTestId("print-dialog-submit"));
+    renderDialog({
+      initialFormat: "pdf",
+      layers: [],
+      exportPDFImpl: exportMock,
+    });
+    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
     await Promise.resolve();
     await Promise.resolve();
 
