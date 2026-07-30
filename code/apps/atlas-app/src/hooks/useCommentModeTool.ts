@@ -48,7 +48,7 @@
 // else reads them, and because they must survive only as long as the effect
 // that owns the restore.
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -88,6 +88,33 @@ export function useCommentModeTool({
     atlasToolRef.current = atlasTool;
   }, [atlasTool]);
 
+  /**
+   * Picking a tool is the exit — for both toolbars, because "which toolbar was
+   * it?" is not a distinction the user made.
+   *
+   * What differs is what the teardown should still put back. Dropping a memory
+   * here is how this tells the teardown to leave that tool alone:
+   *
+   *   - an Excalidraw tool was picked → drop both. The editor already holds the
+   *     tool the user asked for, and they did not ask for the old atlas tool.
+   *   - an atlas tool was picked → drop only the atlas memory. The Excalidraw
+   *     tool is still the borrowed `hand`, which was never anyone's choice, so
+   *     the teardown restoring it is exactly right.
+   */
+  const exitBecauseToolPicked = useCallback((which: "excalidraw" | "atlas") => {
+    previousAtlasToolRef.current = null;
+    if (which === "excalidraw") {
+      previousToolRef.current = null;
+    }
+    setCommentMode(false);
+  }, []);
+
+  // True from the moment the mode writes its own `setAtlasTool(null)` until that
+  // null is visible in a render. Without it, entering the mode with Pin already
+  // armed would exit immediately — the watcher below runs in the commit after
+  // the entry effect, while `atlasTool` still holds the pre-entry value.
+  const clearingAtlasToolRef = useRef(false);
+
   useEffect(() => {
     if (!active) {
       return;
@@ -98,6 +125,7 @@ export function useCommentModeTool({
     previousToolRef.current = previous;
     previousAtlasToolRef.current = atlasToolRef.current;
 
+    clearingAtlasToolRef.current = true;
     setAtlasTool(null);
     if (previous !== COMMENT_MODE_TOOL) {
       excalidrawAPI?.setActiveTool({ type: COMMENT_MODE_TOOL });
@@ -116,11 +144,7 @@ export function useCommentModeTool({
             if (!next || next === COMMENT_MODE_TOOL) {
               return;
             }
-            // Forget both memories first: the exit must not overwrite the tool
-            // the user just asked for.
-            previousToolRef.current = null;
-            previousAtlasToolRef.current = null;
-            setCommentMode(false);
+            exitBecauseToolPicked("excalidraw");
           })
         : undefined;
 
@@ -142,5 +166,30 @@ export function useCommentModeTool({
         setAtlasTool(restoreAtlasTool);
       }
     };
-  }, [active, excalidrawAPI, setAtlasTool]);
+  }, [active, excalidrawAPI, setAtlasTool, exitBecauseToolPicked]);
+
+  // The atlas toolbar gets the same exit-on-pick as Excalidraw's.
+  //
+  // The entry effect drops the atlas tool once, and `atlasTool` is deliberately
+  // not one of its dependencies, so before this nothing noticed a tool being
+  // re-armed mid-mode. An armed atlas tool puts MapEditor's `atlasToolOverlay`
+  // over the plate and takes its pointer events, so the anchor picker can never
+  // fire — while the crosshair, the on-plate hint and the rail's `aria-pressed`
+  // all still claim the mode is live. Exactly the lie the Excalidraw branch
+  // exists to prevent, and it was reachable: the Pin button stays mounted and
+  // enabled during the mode.
+  //
+  // DECLARED AFTER the entry effect on purpose. React runs effects in
+  // declaration order, so on the commit that turns the mode on, the entry effect
+  // has already set the guard below before this one looks.
+  useEffect(() => {
+    if (!active || atlasTool === null) {
+      clearingAtlasToolRef.current = false;
+      return;
+    }
+    if (clearingAtlasToolRef.current) {
+      return;
+    }
+    exitBecauseToolPicked("atlas");
+  }, [active, atlasTool, exitBecauseToolPicked]);
 }

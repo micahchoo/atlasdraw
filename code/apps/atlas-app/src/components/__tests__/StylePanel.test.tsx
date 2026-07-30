@@ -48,20 +48,28 @@ const STYLE_PANEL_CSS = path.join(
 );
 
 /**
- * The declarations inside `.panel { … }`, read from the stylesheet as written.
+ * Every declaration block whose selector mentions `.panel`, concatenated.
  *
  * The runtime cannot answer this question: vitest injects no CSS modules, so
  * `getComputedStyle(panel).position` is `""` whether or not the rule exists.
  * The stylesheet is the only place the dialog framing can come back, so the
  * stylesheet is what gets asserted.
+ *
+ * ALL matching blocks, not the first `^\.panel {`: a `@media` block, a
+ * `.panel.foo` compound or a second `.panel` rule further down could put the
+ * framing back without this test noticing, which is the same
+ * looks-like-a-check-but-isn't problem that let the original version of this
+ * test pass against `position: absolute`.
  */
 function panelRuleBody(): string {
   const css = readFileSync(STYLE_PANEL_CSS, "utf8");
-  const match = /^\.panel\s*\{([^}]*)\}/m.exec(css);
-  if (!match) {
-    throw new Error(`.panel rule not found in ${STYLE_PANEL_CSS}`);
+  const blocks = [...css.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => /(^|[\s,])\.panel\b/.test(selector))
+    .map(([, , body]) => body);
+  if (blocks.length === 0) {
+    throw new Error(`no .panel rule found in ${STYLE_PANEL_CSS}`);
   }
-  return match[1];
+  return blocks.join("\n");
 }
 
 beforeEach(() => {
@@ -207,8 +215,15 @@ describe("StylePanel", () => {
     expect(screen.getByTestId("style-panel").className).toContain("panel");
 
     const rule = panelRuleBody();
-    expect(rule).not.toMatch(/(^|[\s;])position\s*:/);
+    // The defect was the whole dialog framing: `position: absolute` +
+    // `right: 20px` + `z-index: 100` + `width: 280px`, a box wider than its
+    // container and under a stacking context above itself. Each part is named,
+    // rather than banning `position` outright — a `position: relative` for an
+    // absolutely-positioned child is not this bug, and a test that forbids it
+    // will get deleted the first time someone needs one.
+    expect(rule).not.toMatch(/position\s*:\s*(absolute|fixed)/);
     expect(rule).not.toMatch(/(^|[\s;])z-index\s*:/);
+    expect(rule).not.toMatch(/(^|[\s;])(top|right|bottom|left)\s*:/);
     // `width: 100%` is fine — it's the card's width. A px width is the defect:
     // 280px inside a 294px `overflow: hidden` sidebar body.
     expect(rule).not.toMatch(/width\s*:\s*\d+px/);

@@ -44,8 +44,12 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "yarn --cwd /mnt/Ghar/2TA/DevStuff/atlasdraw/code workspace @atlasdraw/atlas-app dev",
+    // No `--cwd`: playwright runs this from the config file's own directory, so
+    // yarn walks up to whichever workspace root actually contains this config.
+    // It used to name one developer's main checkout absolutely, which meant an
+    // e2e run from a git worktree started the OTHER tree's dev server and
+    // silently tested code that was not the code under test.
+    command: "yarn workspace @atlasdraw/atlas-app dev",
     url: "http://localhost:5174",
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,

@@ -82,11 +82,22 @@
   color: var(--ad-ink-tertiary);
 }
 
+/* The two padding values are named because `.rowTopSticky` has to cancel them
+ * to span the scroll port flush. Hardcoding them there couples the two rules
+ * with nothing saying so — change the padding and the pinned strip silently
+ * develops a gutter. */
 .row {
+  --row-pad-y: 6px;
+  --row-pad-x: 8px;
+  /* Height of the pinned header, so focus scrolled to the top of the port lands
+   * below it rather than behind it. Measured in Chromium at the narrow/short
+   * worst case: 45px including the hairline, rounded up to the 4px grid. */
+  --sticky-header-clearance: 48px;
+
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px 8px;
+  padding: var(--row-pad-y) var(--row-pad-x);
   border-bottom: 1px solid var(--default-border-color, var(--ad-rule));
   transition: box-shadow 0.15s ease;
 }
@@ -147,14 +158,20 @@
  * own z-index, or the card body it is pinned above paints over it. The ⋯ menu
  * is a descendant, so it still paints above this. The negative-margin/padding
  * pair makes the pinned strip span the row's full width instead of leaving a
- * transparent gutter where `.row`'s padding is. */
+ * transparent gutter where `.row`'s padding is.
+ *
+ * The border is not decoration: the background resolves to the same token the
+ * rows sit on, so without an edge the card body's text slides out from under
+ * the pinned header with nothing marking the boundary. A hairline is the
+ * elevation model's own answer here, not a shadow. */
 .rowTopSticky {
   position: sticky;
   top: 0;
   z-index: 2;
-  margin: -6px -8px 0;
-  padding: 6px 8px;
+  margin: calc(-1 * var(--row-pad-y)) calc(-1 * var(--row-pad-x)) 0;
+  padding: var(--row-pad-y) var(--row-pad-x);
   background: var(--sidebar-bg-color, var(--ad-surface));
+  border-bottom: 1px solid var(--default-border-color, var(--ad-rule));
 }
 
 .rowAnnotation {
@@ -413,11 +430,21 @@
 
 /* --- Data layer detail accordion ------------------------------------------ */
 
+/* `scroll-margin-top` clears the pinned header: when Tab moves focus to a
+ * control below the fold the browser scrolls it to the top of the port, which is
+ * where `.rowTopSticky` is sitting — so without this the control the user just
+ * focused lands behind it. Applied to the whole body so it covers every control
+ * inside, not just the ones there today. */
 .detail {
   margin-top: var(--ad-space-2);
   padding: var(--ad-space-2) 0 0;
   border-top: 1px solid var(--ad-hairline);
   min-width: 0;
+  scroll-margin-top: var(--sticky-header-clearance);
+}
+
+.detail * {
+  scroll-margin-top: var(--sticky-header-clearance);
 }
 
 .detailHeading {

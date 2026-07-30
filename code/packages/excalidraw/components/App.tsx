@@ -344,6 +344,7 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
+import { isCollarMode } from "../collar";
 import {
   getDefaultAppState,
   isEraserActive,
@@ -2255,9 +2256,10 @@ class App extends React.Component<AppProps, AppState> {
     // own frame and this is not a phone. Published as a container class so the
     // *sheet margin* treatment of the sidebar can live in CSS (see
     // Sidebar.scss) instead of being threaded through every subcomponent.
-    const collarMode =
-      collarToolbarTarget != null &&
-      this.editorInterface.formFactor !== "phone";
+    const collarMode = isCollarMode(
+      collarToolbarTarget,
+      this.editorInterface.formFactor,
+    );
 
     const sceneNonce = this.scene.getSceneNonce();
     const { elementsMap, visibleElements } =

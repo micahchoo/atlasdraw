@@ -723,9 +723,10 @@ export interface ExcalidrawProps {
    *   further right than the width says, so atlasdraw's resize handle would
    *   float over the map instead of straddling the panel.
    *
-   * `collar` is the phone gate as well as the treatment gate — the same
-   * `collarToolbarTarget != null && formFactor !== "phone"` expression that
-   * publishes `.excalidraw--collar`, so a host cannot re-derive it wrong.
+   * `collar` is the phone gate as well as the treatment gate. It comes from
+   * `isCollarMode()` in `collar.ts` — the same call that publishes
+   * `.excalidraw--collar` from App.tsx, so the class and this field cannot
+   * disagree, and a host never has to re-derive either.
    *
    * `shrunk` is read from the same expression that drives the wrapper's own
    * width and the collar legend's offset — deliberately, because computing

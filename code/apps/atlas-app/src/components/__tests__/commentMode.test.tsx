@@ -168,6 +168,74 @@ describe("useCommentModeTool — the editor is borrowed, not taken", () => {
     expect(setAtlasTool).toHaveBeenCalledWith(null);
   });
 
+  it("exits when an atlas tool is armed mid-mode, and keeps that tool", () => {
+    // Entering drops the Pin, but the Pin button stays mounted and enabled, so
+    // the tool can come back while the mode still claims to be live. An armed
+    // atlas tool owns the plate's pointer events, so the anchor picker could
+    // never fire again — the mode's own definition of a lie.
+    const { api } = makeFakeAPI();
+    const setAtlasTool = vi.fn();
+    const { rerender } = renderHook(
+      ({ tool }) =>
+        useCommentModeTool({
+          excalidrawAPI: api,
+          atlasTool: tool,
+          setAtlasTool,
+        }),
+      { initialProps: { tool: null as AtlasdrawTool | null } },
+    );
+
+    act(() => setCommentMode(true));
+    expect(isCommentModeActive()).toBe(true);
+
+    // What clicking the Pin button does: setActiveAtlasTool(PinTool), which
+    // re-renders this hook's owner with a non-null atlasTool.
+    act(() => rerender({ tool: fakePinTool }));
+
+    expect(isCommentModeActive()).toBe(false);
+    // The pick IS the exit, so the tool the user just armed must survive it.
+    expect(setAtlasTool).not.toHaveBeenLastCalledWith(fakePinTool);
+    expect(setAtlasTool).toHaveBeenCalledTimes(1); // only the entry's null
+  });
+
+  it("restores the borrowed Excalidraw tool when an atlas tool is what exits", () => {
+    // Asymmetric on purpose: the user asked for the Pin, not for `hand`. `hand`
+    // was borrowed, so it goes back — unlike the Excalidraw-pick case, where the
+    // editor already holds what was asked for.
+    const { api, currentTool } = makeFakeAPI("rectangle");
+    const setAtlasTool = vi.fn();
+    const { rerender } = renderHook(
+      ({ tool }) =>
+        useCommentModeTool({
+          excalidrawAPI: api,
+          atlasTool: tool,
+          setAtlasTool,
+        }),
+      { initialProps: { tool: null as AtlasdrawTool | null } },
+    );
+
+    act(() => setCommentMode(true));
+    expect(currentTool()).toBe("hand");
+
+    act(() => rerender({ tool: fakePinTool }));
+
+    expect(currentTool()).toBe("rectangle");
+  });
+
+  it("does not exit on entry just because an atlas tool was already armed", () => {
+    // The watcher runs in the same commit as the entry effect, where `atlasTool`
+    // still holds its pre-entry value. Reading that as a user pick would make
+    // `c` a no-op for anyone with the Pin armed.
+    const { api } = makeFakeAPI();
+    const setAtlasTool = vi.fn();
+    mount(api, fakePinTool, setAtlasTool);
+
+    act(() => setCommentMode(true));
+
+    expect(isCommentModeActive()).toBe(true);
+    expect(setAtlasTool).toHaveBeenCalledWith(null);
+  });
+
   it("puts the Pin tool back on exit, like the Excalidraw tool", () => {
     // "Borrowed, not taken" covers both tool systems or it covers neither:
     // Escape has to leave you where you were, and where you were included an

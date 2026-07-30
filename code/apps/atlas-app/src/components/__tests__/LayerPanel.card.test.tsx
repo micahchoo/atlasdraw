@@ -529,6 +529,12 @@ describe("scale (step 6)", () => {
 // ---------------------------------------------------------------------------
 
 describe("the panel is its own scroll port (step 6)", () => {
+  let restoreScrollIntoView: (() => void) | null = null;
+  afterEach(() => {
+    restoreScrollIntoView?.();
+    restoreScrollIntoView = null;
+  });
+
   const rule = (selector: string) => {
     const css = readFileSync(
       path.join(
@@ -573,12 +579,27 @@ describe("the panel is its own scroll port (step 6)", () => {
     // The ninth card of 25 opens below the fold. jsdom has no scrollIntoView,
     // so the component guards on it — that guard is why this asserts on a
     // stub rather than on a scroll position.
+    //
+    // Restored after the assertion: patching Element.prototype and leaving it
+    // there would silently hand the stub to every later test in the file.
+    const original = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      "scrollIntoView",
+    );
     const scrollIntoView = vi.fn();
     Object.defineProperty(Element.prototype, "scrollIntoView", {
       value: scrollIntoView,
       configurable: true,
       writable: true,
     });
+    restoreScrollIntoView = () => {
+      if (original) {
+        Object.defineProperty(Element.prototype, "scrollIntoView", original);
+      } else {
+        delete (Element.prototype as unknown as Record<string, unknown>)
+          .scrollIntoView;
+      }
+    };
     seedMany(25, "District");
     render(<LayerPanel />);
 

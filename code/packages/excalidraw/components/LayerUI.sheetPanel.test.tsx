@@ -325,16 +325,52 @@ describe("sidebar tab bodies can shrink below their content", () => {
     throw new Error(`unbalanced braces after ${selector}`);
   };
 
-  /** Declarations directly on the block, excluding its nested rules. */
-  const ownDeclarations = (selector: string) =>
-    block(selector).replace(/[\w[\]"=.:#&-]+\s*\{[^}]*\}/g, "");
+  /**
+   * Declarations directly on the block, with nested rules removed.
+   *
+   * Brace-matched rather than regex-stripped. A `.../\{[^}]*\}/` strip stops at
+   * the first nested rule's own closing brace, so one nested rule with a nested
+   * rule inside it leaks the inner declarations up — and `.sidebar-tabs-root`
+   * would then read `[role="tabpanel"]`'s `min-height: 0` as its own and pass
+   * with its own declaration deleted. Reproduced before rewriting this.
+   */
+  const ownDeclarations = (selector: string) => {
+    const body = block(selector);
+    let depth = 0;
+    let out = "";
+    // Start past the block's own opening brace.
+    for (let i = body.indexOf("{") + 1; i < body.length; i++) {
+      const ch = body[i];
+      if (ch === "{") {
+        if (depth === 0) {
+          // A nested rule's SELECTOR sits at depth 0, ahead of this brace, and
+          // has already been collected. Drop back to the end of the last real
+          // declaration so the selector text does not read as one.
+          out = out.slice(0, Math.max(out.lastIndexOf(";") + 1, 0));
+        }
+        depth++;
+      } else if (ch === "}") {
+        depth--;
+      } else if (depth === 0) {
+        out += ch;
+      }
+    }
+    return out;
+  };
 
   it("the tabs root can shrink", () => {
     expect(ownDeclarations(".sidebar-tabs-root")).toMatch(/min-height\s*:\s*0/);
   });
 
   it("the tab panel can shrink", () => {
-    expect(block('[role="tabpanel"]')).toMatch(/min-height\s*:\s*0/);
+    expect(ownDeclarations('[role="tabpanel"]')).toMatch(/min-height\s*:\s*0/);
+  });
+
+  it("ownDeclarations does not leak a nested rule's declarations upward", () => {
+    // Guards the helper itself: `.sidebar-tabs-root` contains the tabpanel rule,
+    // whose selector is the one thing that must not show up as the root's own.
+    expect(ownDeclarations(".sidebar-tabs-root")).not.toContain("tabpanel");
+    expect(ownDeclarations(".sidebar-tabs-root")).not.toContain("tablist");
   });
 
   it("the sidebar still clips rather than scrolling as a whole", () => {

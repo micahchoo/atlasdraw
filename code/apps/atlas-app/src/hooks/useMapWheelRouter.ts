@@ -60,16 +60,32 @@ const LINE_HEIGHT_PX = 25; // when deltaMode === DOM_DELTA_LINE
  * a port already at its limit still keeps the event, because scrolling to the
  * bottom of the layer list and having the map lurch is worse than a wheel that
  * does nothing.
+ *
+ * The walk stops AT `root`: the editor root is the map's own surface, so if it
+ * ever reports overflow that must not disable zoom.
+ *
+ * Known edge, pinned by a test rather than worked around: an element with only
+ * `overflow-x: auto` computes `overflow-y: auto` too (CSS Overflow 3 coerces
+ * `visible` to `auto` when the other axis is not `visible`). Such a box claims
+ * the wheel if a space-taking horizontal scrollbar has shrunk its `clientHeight`
+ * below `scrollHeight` — on overlay-scrollbar platforms, which is every one this
+ * ships to, it does not. `.attrTable` in LayerPanel.module.css is the shape in
+ * question, and it is inside the layer panel, which is itself a scroll port, so
+ * the answer there is the same either way.
+ *
+ * Reads `scrollHeight`/`clientHeight` before `getComputedStyle` on purpose. The
+ * hot path is a wheel over the map, which walks the full ancestor chain and
+ * returns false; the cheap integer compare short-circuits style resolution for
+ * every ancestor that is not overflowing, which is nearly all of them.
  */
 function targetOwnsWheel(target: EventTarget | null, root: HTMLElement) {
   let el = target instanceof Element ? target : null;
   while (el && el !== root) {
-    const overflowY = getComputedStyle(el).overflowY;
-    if (
-      (overflowY === "auto" || overflowY === "scroll") &&
-      el.scrollHeight > el.clientHeight
-    ) {
-      return true;
+    if (el.scrollHeight > el.clientHeight) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") {
+        return true;
+      }
     }
     el = el.parentElement;
   }

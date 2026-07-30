@@ -21,6 +21,7 @@ import type { NonDeletedExcalidrawElement } from "@atlasdraw/element/types";
 
 import { actionToggleStats } from "../actions";
 import { trackEvent } from "../analytics";
+import { isCollarMode } from "../collar";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
 import { useAtom, useAtomValue } from "../editor-jotai";
@@ -202,8 +203,10 @@ const LayerUI = ({
   // toolbar target, desktop chrome renders flush into the app's frame (via
   // portals) instead of floating over the canvas. Stock island layout is
   // untouched when the prop is absent; the phone layout always ignores it.
-  const collarMode =
-    collarToolbarTarget != null && editorInterface.formFactor !== "phone";
+  const collarMode = isCollarMode(
+    collarToolbarTarget,
+    editorInterface.formFactor,
+  );
   const menuInCollar = collarMode && collarMenuTarget != null;
 
   const shouldRenderToolbar =

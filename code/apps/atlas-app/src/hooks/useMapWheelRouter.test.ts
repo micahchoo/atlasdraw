@@ -230,6 +230,28 @@ describe("useMapWheelRouter", () => {
     expect(map.easeTo).not.toHaveBeenCalled();
   });
 
+  it("a horizontal-only scroll port claims the wheel once it has vertical slack", () => {
+    // Pinning a known edge rather than pretending it away: `overflow-x: auto`
+    // makes the computed `overflow-y` `auto` as well (CSS Overflow 3 coerces
+    // `visible` when the other axis is not `visible`), so such a box is eligible.
+    // It only fires if a space-taking horizontal scrollbar shrinks clientHeight
+    // below scrollHeight, which overlay-scrollbar platforms never do. If this
+    // ever needs to change, change it here first.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+    const { child } = makeScrollPort(container, {
+      overflowY: "auto", // what the browser computes for overflow-x: auto
+      scrollHeight: 415,
+      clientHeight: 400,
+    });
+
+    fireWheel(child);
+
+    expect(map.easeTo).not.toHaveBeenCalled();
+  });
+
   it("does not treat the container itself as a scroll port", () => {
     // The walk stops AT the container: the editor root is the map's own
     // surface, and if it ever reports overflow that must not disable zoom.
