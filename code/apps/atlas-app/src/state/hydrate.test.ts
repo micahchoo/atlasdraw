@@ -161,6 +161,38 @@ describe("hydrate", () => {
     });
   });
 
+  it("replays renamedByUser so a reopened rename still beats the generator", async () => {
+    const { api } = makeAPI();
+    const loaded: AtlasdrawDocument = {
+      manifest: baseManifest({
+        layers: [
+          {
+            kind: "annotation",
+            id: "anno-1",
+            label: "Ward 3",
+            visible: true,
+            renamedByUser: true,
+          },
+        ],
+      }),
+      scene: [],
+      layers: new Map(),
+      styleRef: {},
+      files: new Map(),
+    };
+
+    await hydrate(loaded, api);
+
+    const registry = useLayerRegistryStore.getState();
+    expect(registry.entries[0]).toMatchObject({ renamedByUser: true });
+
+    // The behaviour the flag exists for, exercised end to end after a reopen.
+    registry.updateAnnotationLabel("anno-1", "Rectangle near 40.7°N, 74.0°W");
+    expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
+      label: "Ward 3",
+    });
+  });
+
   it("registers data layers and seeds the FC store", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {

@@ -111,6 +111,28 @@ describe("ManifestSchema", () => {
     expect(ManifestSchema.safeParse(m).success).toBe(true);
   });
 
+  it("round-trips renamedByUser on an annotation layer entry", () => {
+    const m = {
+      ...baseManifest,
+      layers: [
+        {
+          kind: "annotation",
+          id: "elem-1",
+          label: "Ward 3",
+          visible: true,
+          renamedByUser: true,
+        },
+      ],
+    };
+    const parsed = ManifestSchema.safeParse(m);
+    expect(parsed.success).toBe(true);
+    // A zod object strips what it doesn't declare, so "parses fine" is not the
+    // assertion that matters — the flag has to come out the other side.
+    expect(parsed.success && parsed.data.layers[0]).toMatchObject({
+      renamedByUser: true,
+    });
+  });
+
   it("accepts data layer entry with dl: prefix", () => {
     const m = {
       ...baseManifest,

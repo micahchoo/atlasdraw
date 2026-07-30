@@ -45,6 +45,16 @@ export type AnnotationLayerEntry = {
   label: string;
   visible: boolean;
   order: number;
+  /**
+   * `label` came from the user, not from generateLayerLabel.
+   *
+   * Annotation labels are generated from the element's type and geo-anchor,
+   * and useLayerRegistrySync re-generates them on scene changes — so without a
+   * marker, a rename would survive exactly until the shape next moved. Set by
+   * `renameLayer`, read by `updateAnnotationLabel` (the auto path), and
+   * persisted through the manifest so it also holds across a save/reopen.
+   */
+  renamedByUser?: boolean;
 };
 
 /**
@@ -106,13 +116,26 @@ export interface ILayerRegistry {
   entries: LayerRegistryEntry[];
   registerAnnotation(elementId: string, label?: string): void;
   /**
-   * Set an entry's display label. Named for its first caller
-   * (useLayerRegistrySync, which mirrors Excalidraw text elements), but the
-   * lookup is by id and kind-agnostic — the LayerPanel's data-layer rename
-   * uses it too. Renaming the action would touch nine call sites in
-   * useLayerRegistrySync for no behavioural gain, so the docs carry the load.
+   * The **generated**-label path: set an entry's display label from
+   * useLayerRegistrySync's `generateLayerLabel`, which re-runs whenever the
+   * scene changes.
+   *
+   * No-ops on an entry the user renamed (`renamedByUser`). The guard lives
+   * here rather than at the call site because this is the single choke point —
+   * a future caller cannot reintroduce the clobber by forgetting to check.
+   * User-initiated renames go through `renameLayer` instead.
    */
   updateAnnotationLabel(elementId: string, label: string): void;
+  /**
+   * The **user**-typed-label path: set an entry's display label and, for
+   * annotations, mark it as the user's, which permanently retires automatic
+   * naming for that entry. Kind-agnostic by id; on data layers it is a plain
+   * label write, since nothing regenerates those.
+   *
+   * There is deliberately no "back to auto" action. A name someone typed is a
+   * decision, and a name that reverts on its own is worse than no rename.
+   */
+  renameLayer(id: string, label: string): void;
   registerDataLayer(opts: {
     id: string;
     fc: FeatureCollection;
@@ -190,8 +213,25 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
     updateAnnotationLabel: (elementId, label) =>
       set((s) => {
         const e = s.entries.find((x) => x.id === elementId);
-        if (e) {
-          e.label = label;
+        if (!e) {
+          return;
+        }
+        // See the interface doc: the generator loses to the user, always.
+        if (e.kind === "annotation" && e.renamedByUser) {
+          return;
+        }
+        e.label = label;
+      }),
+
+    renameLayer: (id, label) =>
+      set((s) => {
+        const e = s.entries.find((x) => x.id === id);
+        if (!e) {
+          return;
+        }
+        e.label = label;
+        if (e.kind === "annotation") {
+          e.renamedByUser = true;
         }
       }),
 

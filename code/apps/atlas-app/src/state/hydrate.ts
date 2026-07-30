@@ -75,6 +75,13 @@ export async function hydrate(
   for (const entry of loaded.manifest.layers) {
     if (entry.kind === "annotation") {
       registry.registerAnnotation(entry.id, entry.label);
+      if (entry.renamedByUser) {
+        // Same label, second call: registerAnnotation has no slot for the
+        // flag, and renameLayer is the action that owns setting it. Follows
+        // the setVisibility follow-up below rather than widening register's
+        // signature with a positional boolean.
+        registry.renameLayer(entry.id, entry.label);
+      }
     } else {
       const fc = loaded.layers.get(entry.id);
       if (!fc) {

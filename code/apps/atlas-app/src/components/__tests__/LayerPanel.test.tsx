@@ -427,3 +427,112 @@ describe("LayerPanel — Threads section (Step 5)", () => {
     expect(screen.getByTestId("comments-filter-show-resolved")).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Renaming a layer by clicking its name
+// ---------------------------------------------------------------------------
+//
+// Data layers already had two doors into the rename editor (the ⋯ menu and the
+// expanded card's button) — those are covered in LayerPanel.card.test.tsx. What
+// is new here is that the name itself is the third door, and that annotations
+// have any door at all.
+
+describe("LayerPanel — rename by clicking the name", () => {
+  it("opens an editor on an annotation's name and commits on Enter", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    const input = screen.getByTestId("layer-rename-input-el-1");
+    fireEvent.change(input, { target: { value: "Ward 3" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1"),
+    ).toMatchObject({ label: "Ward 3", renamedByUser: true });
+    expect(screen.getByText("Ward 3")).toBeTruthy();
+  });
+
+  it("commits an annotation rename on blur", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    const input = screen.getByTestId("layer-rename-input-el-1");
+    fireEvent.change(input, { target: { value: "Ward 3" } });
+    fireEvent.blur(input);
+
+    expect(
+      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1")
+        ?.label,
+    ).toBe("Ward 3");
+  });
+
+  it("Escape abandons an annotation rename and leaves no flag behind", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    const input = screen.getByTestId("layer-rename-input-el-1");
+    fireEvent.change(input, { target: { value: "oops" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    const entry = useLayerRegistryStore
+      .getState()
+      .entries.find((e) => e.id === "el-1");
+    expect(entry?.label).toBe("Rectangle");
+    // An abandoned rename must not retire automatic naming for the shape.
+    expect(entry).not.toHaveProperty("renamedByUser", true);
+    expect(screen.getByTestId("layer-name-el-1")).toBeTruthy();
+  });
+
+  it("treats a cleared box as a cancel, not as a blank name", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    const input = screen.getByTestId("layer-rename-input-el-1");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1")
+        ?.label,
+    ).toBe("Rectangle");
+  });
+
+  it("opens the same editor from a data layer's name", () => {
+    useLayerRegistryStore.getState().registerDataLayer({
+      id: "dl:test-1",
+      fc: emptyFc(1),
+      label: "parcels.geojson",
+      style: { fillColor: "#ff0000", opacity: 1 },
+    });
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-dl:test-1"));
+    const input = screen.getByTestId("layer-rename-input-dl:test-1");
+    fireEvent.change(input, { target: { value: "Parcels" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(
+      useLayerRegistryStore.getState().entries.find((e) => e.id === "dl:test-1")
+        ?.label,
+    ).toBe("Parcels");
+  });
+
+  it("suspends drag-to-reorder on the row being renamed", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    // A draggable ancestor turns a press-and-sweep over the input's text into
+    // a row drag, so the name you meant to replace can't be selected.
+    expect(screen.getByTestId("layer-row-el-1").getAttribute("draggable")).toBe(
+      "true",
+    );
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    expect(screen.getByTestId("layer-row-el-1").getAttribute("draggable")).toBe(
+      "false",
+    );
+  });
+});

@@ -257,6 +257,48 @@ describe("buildSceneDiffHandler — Excalidraw → registry sync (Bug A)", () =>
     handler([{ id: "abc-123" }]);
     expect(registerAnnotation).toHaveBeenCalledWith("abc-123", "abc-123");
   });
+
+  // The stubs above prove the handler *calls* updateAnnotationLabel. Whether a
+  // user's rename survives that call is a property of the two together, so
+  // this one wires the real store in.
+  it("does not overwrite a name the user typed, on any later scene change", () => {
+    useLayerRegistryStore.setState({ entries: [] });
+    const store = useLayerRegistryStore.getState();
+    const knownIds = new Set<string>();
+    const handler = buildSceneDiffHandler({
+      knownIds,
+      registerAnnotation: (id, label) => store.registerAnnotation(id, label),
+      updateAnnotationLabel: (id, label) =>
+        store.updateAnnotationLabel(id, label),
+      remove: (id) => store.remove(id),
+      existsInRegistry: (id) =>
+        useLayerRegistryStore.getState().entries.some((e) => e.id === id),
+    });
+
+    handler([{ id: "a", type: "rectangle" }]);
+    store.renameLayer("a", "Ward 3");
+
+    // The shape acquires a geo anchor, then moves — two more scene changes,
+    // each one a chance for the generator to take the name back.
+    const anchored = (lat: number, lng: number): SyncSceneElement => ({
+      id: "a",
+      type: "rectangle",
+      customData: {
+        schemaVersion: 1,
+        projection: "mercator",
+        scaleMode: "geographic",
+        geo: { kind: "point", lng, lat, zRef: 10 },
+      },
+    });
+    handler([anchored(40.7128, -74.006)]);
+    handler([anchored(40.9, -74.2)]);
+
+    expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
+      id: "a",
+      label: "Ward 3",
+      renamedByUser: true,
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

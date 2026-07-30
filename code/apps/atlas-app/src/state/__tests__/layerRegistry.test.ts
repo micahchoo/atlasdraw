@@ -82,6 +82,58 @@ describe("layerRegistry", () => {
         store.updateAnnotationLabel("nonexistent", "X"),
       ).not.toThrow();
     });
+
+    it("leaves a user-renamed annotation alone", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1", "Rectangle");
+      store.renameLayer("el-1", "Ward 3");
+
+      // What useLayerRegistrySync's enrichment loop does on every scene
+      // change once the shape has a geo anchor. Before the guard it landed,
+      // and the rename was gone the first time the user nudged the shape.
+      store.updateAnnotationLabel("el-1", "Rectangle near 40.7°N, 74.0°W");
+
+      expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
+        label: "Ward 3",
+      });
+    });
+  });
+
+  describe("renameLayer", () => {
+    it("sets the label and marks an annotation as user-renamed", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1", "Rectangle");
+      store.renameLayer("el-1", "Ward 3");
+
+      expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
+        id: "el-1",
+        label: "Ward 3",
+        renamedByUser: true,
+      });
+    });
+
+    it("renames a data layer without inventing a renamedByUser flag", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerDataLayer({
+        id: "dl:abc-123",
+        fc: emptyFc(1),
+        label: "layer_1.geojson",
+        style: { fillColor: "#f00" },
+      });
+      store.renameLayer("dl:abc-123", "Parcels");
+
+      const entry = useLayerRegistryStore.getState().entries[0];
+      // Nothing regenerates data layer labels, so the flag would be a field
+      // with no reader — and it is not in DataLayerEntry.
+      expect(entry).toMatchObject({ label: "Parcels" });
+      expect(entry).not.toHaveProperty("renamedByUser");
+    });
+
+    it("is a no-op when the entry does not exist", () => {
+      const store = useLayerRegistryStore.getState();
+      expect(() => store.renameLayer("nonexistent", "X")).not.toThrow();
+      expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+    });
   });
 
   describe("registerDataLayer", () => {

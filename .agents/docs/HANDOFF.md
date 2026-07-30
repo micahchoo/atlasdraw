@@ -1,3 +1,96 @@
+# Handoff — 2026-07-30 (renaming layers — UNCOMMITTED)
+
+## State: branch `feat/layer-rename`, worktree `/mnt/Ghar/2TA/DevStuff/worktrees/atlasdraw/layer-rename/atlasdraw`. Staged nothing, committed nothing (user has not asked to commit).
+
+Ask (MIXI, atlasdraw channel): "I want to be able to rename layers."
+
+Half of it already shipped. Data layers had rename behind the ⋯ menu and the
+expanded card's button. **Annotations had none** — `AnnotationLayerRow` rendered
+the name as a dead `<span>`.
+
+The feature is not the input box. Annotation labels are *generated*
+(`generateLayerLabel` → "Rectangle near 20.8°N, 73.4°E") and
+`useLayerRegistrySync`'s enrichment loop re-stamps that label on every scene
+change once the shape has a geo anchor. Add an editor without a guard and a
+rename dies the first time the user nudges the shape — silently.
+
+### The guard
+
+`AnnotationLayerEntry.renamedByUser?: boolean`. Set by the new `renameLayer`
+action (the user path); read by `updateAnnotationLabel` (the generator path),
+which no-ops on a flagged entry.
+
+The check lives **in the store, not in the sync loop** — it is the single choke
+point both paths go through, so a future caller cannot reintroduce the clobber
+by forgetting to check. There is deliberately no "back to auto" action; MIXI was
+asked directly and said a rename should never revert.
+
+The flag persists. Without that, save → reopen → nudge loses the name on a
+document that already looked settled. `manifest-schema.ts` grew an optional
+`renamedByUser` on annotation entries (optional ⇒ older files still parse);
+`selectDocument` emits it only when true, so untouched annotations don't grow a
+field in every manifest; `hydrate` replays it via a second `renameLayer(id,
+same label)` call, following the existing `setVisibility` follow-up idiom rather
+than widening `registerAnnotation` with a positional boolean.
+
+### What changed
+
+| File | Move |
+|---|---|
+| `packages/data/src/manifest-schema.ts` | optional `renamedByUser` on annotation entries |
+| `state/layerRegistry.ts` | field + `renameLayer` action + guard in `updateAnnotationLabel` |
+| `state/selectDocument.ts` | emit the flag when set |
+| `state/hydrate.ts` | replay the flag |
+| `components/LayerPanel.tsx` | `LayerNameField`/`LayerNameInput`; annotation row gets an editor; the data card's bespoke input collapses into the shared one; `SortableRow` gains `dragDisabled` |
+| `styles/LayerPanel.module.css` | `.labelButton` — button that still reads as a label |
+
+Two notes on the panel:
+
+- `LayerNameInput` is split from `LayerNameField` so the draft seeds from
+  `initial` in a `useState` initializer. Editing is a mount, cancelling is an
+  unmount — no effect syncing `label` into a draft. Interaction contract is
+  copied from `SheetNameField` on purpose: click/Enter to commit, Escape to
+  cancel, blank = cancel not blank-name.
+- `dragDisabled` drops `draggable` on the row being renamed. The whole row is
+  the drag source, so press-and-sweep over the input's text started a reorder
+  instead of selecting the word. This also fixes the pre-existing data-layer
+  rename, which had the same trap.
+
+### Verification (all at this worktree state)
+
+- **Full typecheck gate green**: `yarn test:typecheck` (= `build:types` +
+  `tsc -b` + atlas-app/storage/realtime) — exit 0, zero TS errors. This is the
+  gate the sheet-name session could not run; it fails in a worktree whose
+  `node_modules` is a symlink to main. Fix: hardlink main's per-workspace
+  `node_modules` (`cp -al`, same filesystem, no extra disk).
+- **atlas-app suite 857/857 pass, 82 files** (+13 new).
+- **Lint/prettier**: the repo is not clean on `main` — 17 `import/order`
+  warnings and 3 unformatted files. Compared file-for-file against `main`: the
+  sets are identical, so this branch adds none.
+- **Root vitest is not clean either**: 90 failures. Verified as environmental,
+  not this branch — stashing all changes in this same worktree reproduces the
+  same 11 files / 90 failures. (Main shows 80; the extra 10 are
+  `Sidebar`/`DefaultSidebar` `useTunnels` nulls that appear once
+  `packages/*/dist` exists, which `build:types` creates.)
+- **Real browser** (`e2e/layer-panel-rename.spec.ts`, new): rename an
+  annotation, then move the shape far enough that the generator would produce a
+  *different* "near …" string — the typed name holds. Plus Escape-cancels. All
+  6 layer-panel e2e specs pass. Shapes go in via `updateScene`, not a pointer
+  drag; the drag path is unreliable headless and
+  `phase-1-geo-foundation.spec.ts` already carries a `test.fixme` for it.
+
+### Traps for the next session
+
+- **Port 5174 is shared.** `playwright.config.ts` has `reuseExistingServer`, and
+  a dev server from the *main* checkout usually holds 5174 — an e2e run from a
+  worktree then silently tests main's code. Check
+  `ls -l /proc/<pid>/cwd` before trusting a run, or serve on another port.
+- **First-run onboarding blocks the sidebar.** Its scrim swallows every click.
+  Set `localStorage["atlasdraw-onboarding-dismissed"] = "1"` in an
+  `addInitScript`, before the app boots.
+- `code/bench/results/*.json` get rewritten by test runs. They are not part of
+  this change; `git checkout --` them before diffing.
+
 # Handoff — 2026-07-30 (editable canvas name in the collar head bar — UNCOMMITTED)
 
 ## State: branch `feat/sheet-name-edit`, worktree `/mnt/Ghar/2TA/DevStuff/worktrees/atlasdraw/sheet-name/atlasdraw`. Staged nothing, committed nothing (user has not asked to commit).
