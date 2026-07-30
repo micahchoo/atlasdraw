@@ -264,7 +264,8 @@ describe("useCommentModeTool — the editor is borrowed, not taken", () => {
 //
 // `classifyTool` only routes clicks to MapLibre for `hand`, so the instant the
 // active tool is anything else the anchor picker is unreachable — while the
-// crosshair, the on-plate hint and the rail's `aria-pressed` all keep saying
+// crosshair, the on-plate hint and the toolbar toggle's `aria-pressed` all
+// keep saying
 // the mode is live. Chosen resolution: picking a real tool EXITS the mode. The
 // cases below pin every signal to that one decision.
 // ---------------------------------------------------------------------------

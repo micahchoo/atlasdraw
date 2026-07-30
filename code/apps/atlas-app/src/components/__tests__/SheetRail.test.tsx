@@ -340,9 +340,10 @@ describe("SheetRail — keyboard + ARIA", () => {
     expect(container.querySelector("[role=tablist]")).toBe(null);
     expect(container.querySelector("[role=tab]")).toBe(null);
 
-    // Scoped to `tab` items in Step 5: `aria-expanded` is asserted below, and
-    // the mode item deliberately does NOT carry it (nothing is disclosed).
-    // The mode item's own contract is pinned in "SheetRail — comment mode".
+    // Every rail item is a `tab` item now — comment mode moved to the
+    // drawing-tools toolbar (see CommentModeButton.test.tsx). The selector
+    // stays scoped so a future non-tab occupant fails loudly rather than
+    // silently inheriting the disclosure contract asserted below.
     const buttons = Array.from(
       container.querySelectorAll<HTMLElement>("[data-rail-item=tab]"),
     );
@@ -456,158 +457,6 @@ describe("SheetRail — keyboard + ARIA", () => {
       name: DEFAULT_SIDEBAR.name,
       tab: CANVAS_SEARCH_TAB,
     });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Step 5 — the mode item
-//
-// The rail's first non-tab occupant. These cases exist to stop it drifting
-// back into looking like a tab: no panel is disclosed, so `aria-expanded` and
-// `aria-controls` would both be lies, and `toggleSidebar` must never be
-// called. The badge cases pin the a11y contract — a count a screen reader
-// cannot reach is a coloured dot, which is the failure mode the design doc
-// warns about when comments stop having a permanent surface.
-// ---------------------------------------------------------------------------
-
-describe("SheetRail — comment mode", () => {
-  it("renders a mode toggle that is not a tab", () => {
-    const { api, toggleSidebar } = makeFakeAPI();
-    render(<SheetRail excalidrawAPI={api} onToggleCommentMode={() => {}} />);
-
-    const mode = screen.getByTestId("sheet-rail-mode-comment");
-    expect(mode.tagName).toBe("BUTTON");
-    expect(mode.getAttribute("data-rail-item")).toBe("mode");
-    // A toolbar toggle, not a disclosure: pressed, not expanded, and it
-    // controls no panel.
-    expect(mode.getAttribute("aria-pressed")).toBe("false");
-    expect(mode.hasAttribute("aria-expanded")).toBe(false);
-    expect(mode.hasAttribute("aria-controls")).toBe(false);
-    // icon-only, same as the tabs
-    expect(mode.textContent).toBe("");
-    expect(mode.getAttribute("aria-label")).toBe("Comment mode");
-    expect(toggleSidebar).not.toHaveBeenCalled();
-  });
-
-  it("toggles the mode on click and never touches the sidebar", () => {
-    const { api, toggleSidebar } = makeFakeAPI();
-    let toggles = 0;
-    render(
-      <SheetRail excalidrawAPI={api} onToggleCommentMode={() => toggles++} />,
-    );
-
-    fireEvent.click(screen.getByTestId("sheet-rail-mode-comment"));
-    expect(toggles).toBe(1);
-    expect(toggleSidebar).not.toHaveBeenCalled();
-  });
-
-  it("reflects the active mode as aria-pressed", () => {
-    const { api } = makeFakeAPI();
-    render(
-      <SheetRail
-        excalidrawAPI={api}
-        commentMode
-        onToggleCommentMode={() => {}}
-      />,
-    );
-    expect(
-      screen
-        .getByTestId("sheet-rail-mode-comment")
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
-  });
-
-  it("is absent when the host does not supply a toggle", () => {
-    const { api } = makeFakeAPI();
-    render(<SheetRail excalidrawAPI={api} />);
-    expect(screen.queryByTestId("sheet-rail-mode-comment")).toBe(null);
-  });
-
-  it("puts the open-thread count in the accessible name, not only the badge", () => {
-    const { api } = makeFakeAPI();
-    const { rerender } = render(
-      <SheetRail
-        excalidrawAPI={api}
-        onToggleCommentMode={() => {}}
-        openThreadCount={3}
-      />,
-    );
-
-    // The badge glyph itself is aria-hidden — announcing "3" twice is noise —
-    // so the ONLY path to the count for a screen reader is the button's name.
-    // `getByRole(name:)` runs the real accessible-name computation.
-    expect(
-      screen.getByRole("button", { name: "Comment mode, 3 open threads" }),
-    ).toBe(screen.getByTestId("sheet-rail-mode-comment"));
-    const badge = screen.getByTestId("sheet-rail-comment-badge");
-    expect(badge.textContent).toBe("3");
-    expect(badge.getAttribute("aria-hidden")).toBe("true");
-
-    // singular, because "1 open threads" is the tell of a count nobody read
-    rerender(
-      <SheetRail
-        excalidrawAPI={api}
-        onToggleCommentMode={() => {}}
-        openThreadCount={1}
-      />,
-    );
-    expect(
-      screen.getByTestId("sheet-rail-mode-comment").getAttribute("aria-label"),
-    ).toBe("Comment mode, 1 open thread");
-
-    // and the badge caps rather than blowing out the 32px rail
-    rerender(
-      <SheetRail
-        excalidrawAPI={api}
-        onToggleCommentMode={() => {}}
-        openThreadCount={140}
-      />,
-    );
-    expect(screen.getByTestId("sheet-rail-comment-badge").textContent).toBe(
-      "99+",
-    );
-  });
-
-  it("shows no badge at zero", () => {
-    const { api } = makeFakeAPI();
-    render(
-      <SheetRail
-        excalidrawAPI={api}
-        onToggleCommentMode={() => {}}
-        openThreadCount={0}
-      />,
-    );
-    expect(screen.queryByTestId("sheet-rail-comment-badge")).toBe(null);
-    expect(
-      screen.getByTestId("sheet-rail-mode-comment").getAttribute("aria-label"),
-    ).toBe("Comment mode");
-  });
-
-  it("joins the roving tabindex after the tabs", () => {
-    const { api } = makeFakeAPI();
-    const { container } = render(
-      <SheetRail excalidrawAPI={api} onToggleCommentMode={() => {}} />,
-    );
-
-    const items = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-rail-item]"),
-    );
-    // 3 tabs + 1 mode, mode last
-    expect(items).toHaveLength(4);
-    expect(items[3].getAttribute("data-rail-item")).toBe("mode");
-    expect(
-      items.filter((b) => b.getAttribute("tabindex") === "0"),
-    ).toHaveLength(1);
-
-    // arrows cross the tab/mode boundary in both directions — one rail, one
-    // keyboard model, regardless of what kind of control a slot holds
-    act(() => items[2].focus());
-    fireEvent.keyDown(items[2], { key: "ArrowDown" });
-    expect(document.activeElement).toBe(items[3]);
-    fireEvent.keyDown(items[3], { key: "ArrowDown" });
-    expect(document.activeElement).toBe(items[0]);
-    fireEvent.keyDown(items[0], { key: "End" });
-    expect(document.activeElement).toBe(items[3]);
   });
 });
 
