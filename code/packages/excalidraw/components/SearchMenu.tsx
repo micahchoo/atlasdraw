@@ -1,7 +1,15 @@
 import { round } from "@atlasdraw/math";
 import clsx from "clsx";
 import debounce from "lodash.debounce";
-import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import {
   CLASSES,
@@ -37,7 +45,7 @@ import { atom, useAtom } from "../editor-jotai";
 import { useStable } from "../hooks/useStable";
 import { t } from "../i18n";
 
-import { useApp, useExcalidrawSetAppState } from "./App";
+import { useApp, useAppProps, useExcalidrawSetAppState } from "./App";
 import { Button } from "./Button";
 import { TextField } from "./TextField";
 import {
@@ -50,29 +58,54 @@ import {
 
 import "./SearchMenu.scss";
 
-import type { AppClassProperties, SearchMatch } from "../types";
+import type { AppClassProperties, SearchMatch, SearchSource } from "../types";
 
 const searchQueryAtom = atom<string>("");
 export const searchItemInFocusAtom = atom<number | null>(null);
 
 const SEARCH_DEBOUNCE = 350;
 
+type MatchPreview = {
+  indexInSearchQuery: number;
+  previewText: string;
+  moreBefore: boolean;
+  moreAfter: boolean;
+};
+
 type SearchMatchItem = {
   element: ExcalidrawTextElement | ExcalidrawFrameLikeElement;
   searchQuery: SearchQuery;
   index: number;
-  preview: {
-    indexInSearchQuery: number;
-    previewText: string;
-    moreBefore: boolean;
-    moreAfter: boolean;
-  };
+  preview: MatchPreview;
   matchedLines: SearchMatch["matchedLines"];
+};
+
+/**
+ * Atlasdraw addition — a hit in host-supplied text (`searchSources`).
+ *
+ * Deliberately NOT a `SearchMatchItem`: it has no element, so it has no
+ * `matchedLines`, cannot go into `appState.searchMatches` (which the renderer
+ * keys by element id), and cannot be scrolled to by the editor. It is a
+ * preview plus the host's callback, and nothing else.
+ */
+type SourceMatchItem = {
+  key: string;
+  preview: MatchPreview;
+  onSelect: () => void;
+};
+
+type SourceMatchGroup = {
+  id: string;
+  label: string;
+  icon?: ReactNode;
+  items: SourceMatchItem[];
 };
 
 type SearchMatches = {
   nonce: number | null;
   items: SearchMatchItem[];
+  /** One entry per source that produced at least one hit. */
+  sourceGroups: SourceMatchGroup[];
 };
 
 type SearchQuery = string & { _brand: "SearchQuery" };
@@ -80,6 +113,7 @@ type SearchQuery = string & { _brand: "SearchQuery" };
 export const SearchMenu = () => {
   const app = useApp();
   const setAppState = useExcalidrawSetAppState();
+  const { searchSources } = useAppProps();
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,6 +125,7 @@ export const SearchMenu = () => {
   const [searchMatches, setSearchMatches] = useState<SearchMatches>({
     nonce: null,
     items: [],
+    sourceGroups: [],
   });
   const searchedQueryRef = useRef<SearchQuery | null>(null);
   const lastSceneNonceRef = useRef<number | undefined>(undefined);
@@ -107,10 +142,11 @@ export const SearchMenu = () => {
       app.scene.getSceneNonce() !== lastSceneNonceRef.current
     ) {
       searchedQueryRef.current = null;
-      handleSearch(searchQuery, app, (matchItems, index) => {
+      handleSearch(searchQuery, app, searchSources, (matchItems, groups) => {
         setSearchMatches({
           nonce: randomInteger(),
           items: matchItems,
+          sourceGroups: groups,
         });
         searchedQueryRef.current = searchQuery;
         lastSceneNonceRef.current = app.scene.getSceneNonce();
@@ -133,6 +169,7 @@ export const SearchMenu = () => {
     searchQuery,
     elementsMap,
     app,
+    searchSources,
     setAppState,
     setFocusIndex,
     lastSceneNonceRef,
@@ -347,6 +384,16 @@ export const SearchMenu = () => {
       : t("search.multipleResults")
   }`;
 
+  // The header count and the prev/next arrows describe the CANVAS matches
+  // only — those are what the arrows traverse and what the renderer
+  // highlights. Host-supplied hits carry their own per-group count instead of
+  // inflating a number the arrows cannot reach. They do count for one thing:
+  // whether "no match" is true.
+  const sourceMatchCount = searchMatches.sourceGroups.reduce(
+    (total, group) => total + group.items.length,
+    0,
+  );
+
   return (
     <div className="layer-ui__search">
       <div className="layer-ui__search-header">
@@ -360,29 +407,35 @@ export const SearchMenu = () => {
             setInputValue(value);
             setIsSearching(true);
             const searchQuery = value.trim() as SearchQuery;
-            handleSearch(searchQuery, app, (matchItems, index) => {
-              setSearchMatches({
-                nonce: randomInteger(),
-                items: matchItems,
-              });
-              setFocusIndex(index);
-              searchedQueryRef.current = searchQuery;
-              lastSceneNonceRef.current = app.scene.getSceneNonce();
-              setAppState({
-                searchMatches: matchItems.length
-                  ? {
-                      focusedId: null,
-                      matches: matchItems.map((searchMatch) => ({
-                        id: searchMatch.element.id,
-                        focus: false,
-                        matchedLines: searchMatch.matchedLines,
-                      })),
-                    }
-                  : null,
-              });
+            handleSearch(
+              searchQuery,
+              app,
+              searchSources,
+              (matchItems, groups, index) => {
+                setSearchMatches({
+                  nonce: randomInteger(),
+                  items: matchItems,
+                  sourceGroups: groups,
+                });
+                setFocusIndex(index);
+                searchedQueryRef.current = searchQuery;
+                lastSceneNonceRef.current = app.scene.getSceneNonce();
+                setAppState({
+                  searchMatches: matchItems.length
+                    ? {
+                        focusedId: null,
+                        matches: matchItems.map((searchMatch) => ({
+                          id: searchMatch.element.id,
+                          focus: false,
+                          matchedLines: searchMatch.matchedLines,
+                        })),
+                      }
+                    : null,
+                });
 
-              setIsSearching(false);
-            });
+                setIsSearching(false);
+              },
+            );
           }}
           selectOnRender
         />
@@ -420,6 +473,7 @@ export const SearchMenu = () => {
         )}
 
         {searchMatches.items.length === 0 &&
+          sourceMatchCount === 0 &&
           searchQuery &&
           searchedQueryRef.current && (
             <div style={{ margin: "1rem auto" }}>{t("search.noMatch")}</div>
@@ -535,6 +589,30 @@ const MatchListBase = (props: MatchListProps) => {
           ))}
         </div>
       )}
+
+      {/* Atlasdraw addition — host-supplied groups (see `searchSources`).
+        Rendered last, after everything the canvas itself holds, and never
+        `highlighted`: `focusIndex` indexes the canvas matches, which is what
+        the arrows step through. These are click-only. */}
+      {props.matches.sourceGroups.map((group) => (
+        <div className="layer-ui__search-result-container" key={group.id}>
+          <div className="layer-ui__search-result-title">
+            {group.icon && <div className="title-icon">{group.icon}</div>}
+            <div>
+              {group.label} ({group.items.length})
+            </div>
+          </div>
+          {group.items.map((item) => (
+            <ListItem
+              key={item.key}
+              searchQuery={props.searchQuery}
+              preview={item.preview}
+              highlighted={false}
+              onClick={item.onSelect}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   );
 };
@@ -784,16 +862,71 @@ const escapeSpecialCharacters = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
 };
 
+/**
+ * Atlasdraw addition — run the query over host-supplied text.
+ *
+ * Shares the element path's regex and `getMatchPreview`, so a comment hit and
+ * a text-element hit are previewed and highlighted by the same code. Sources
+ * that produce nothing are dropped, so `sourceGroups` is only ever the groups
+ * worth rendering a heading for.
+ */
+const searchSourceEntries = (
+  searchQuery: SearchQuery,
+  sources: readonly SearchSource[],
+): SourceMatchGroup[] => {
+  const groups: SourceMatchGroup[] = [];
+
+  for (const source of sources) {
+    const items: SourceMatchItem[] = [];
+    // Fresh per source: `lastIndex` on a /g regex is stateful, and reusing one
+    // across entries would silently skip matches.
+    const regex = new RegExp(escapeSpecialCharacters(searchQuery), "gi");
+
+    for (const entry of source.entries) {
+      let match = null;
+      regex.lastIndex = 0;
+
+      while ((match = regex.exec(entry.text)) !== null) {
+        items.push({
+          key: `${source.id}:${entry.id}:${match.index}`,
+          preview: getMatchPreview(entry.text, match.index, searchQuery),
+          onSelect: entry.onSelect,
+        });
+      }
+    }
+
+    if (items.length > 0) {
+      groups.push({
+        id: source.id,
+        label: source.label,
+        icon: source.icon,
+        items,
+      });
+    }
+  }
+
+  return groups;
+};
+
 const handleSearch = debounce(
   (
     searchQuery: SearchQuery,
     app: AppClassProperties,
-    cb: (matchItems: SearchMatchItem[], focusIndex: number | null) => void,
+    sources: readonly SearchSource[] | undefined,
+    cb: (
+      matchItems: SearchMatchItem[],
+      sourceGroups: SourceMatchGroup[],
+      focusIndex: number | null,
+    ) => void,
   ) => {
     if (!searchQuery || searchQuery === "") {
-      cb([], null);
+      cb([], [], null);
       return;
     }
+
+    const sourceGroups = sources?.length
+      ? searchSourceEntries(searchQuery, sources)
+      : [];
 
     const elements = app.scene.getNonDeletedElements();
     const texts = elements.filter((el) =>
@@ -870,7 +1003,7 @@ const handleSearch = debounce(
         visibleIds.has(matchItem.element.id),
       ) ?? null;
 
-    cb(matchItems, focusIndex);
+    cb(matchItems, sourceGroups, focusIndex);
   },
   SEARCH_DEBOUNCE,
 );

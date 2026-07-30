@@ -496,6 +496,37 @@ export type SearchMatch = {
   }[];
 };
 
+/**
+ * Atlasdraw addition — one searchable item contributed by the host via
+ * `ExcalidrawProps["searchSources"]`. See that prop for the rationale.
+ */
+export type SearchSourceEntry = {
+  /** Stable across renders for the same item — used as the React key. */
+  id: string;
+  /**
+   * The text to match against and preview. Every occurrence of the query in
+   * it becomes its own result, exactly as for a scene text element.
+   */
+  text: string;
+  /**
+   * Run when the user picks this result. The editor does nothing else with a
+   * host result — where to scroll, what to open and what to highlight are the
+   * host's to decide, because the editor cannot know what the item is.
+   */
+  onSelect: () => void;
+};
+
+/** Atlasdraw addition — a named group of `SearchSourceEntry`. */
+export type SearchSource = {
+  /** Stable per source — React key, and must not collide with another source. */
+  id: string;
+  /** Group heading in the results list, e.g. "Comments". */
+  label: string;
+  /** Optional glyph beside the heading, matching the Frames/Texts groups. */
+  icon?: React.ReactNode;
+  entries: readonly SearchSourceEntry[];
+};
+
 export type UIAppState = Omit<AppState, "cursorButton" | "scrollX" | "scrollY">;
 
 export type NormalizedZoomValue = number & { _brand: "normalizedZoom" };
@@ -643,6 +674,21 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  /**
+   * Atlasdraw addition: extra bodies of text the canvas search should cover,
+   * beyond the scene's own text elements and frame names.
+   *
+   * The motivating case is anchored comments, which live in a separate Y.Doc
+   * one layer up in atlas-app and are therefore unreachable from here.
+   * Rather than teach the editor about comments, the host hands over plain
+   * text + a callback and the editor keeps ownership of matching, previewing
+   * and highlighting — so a host-supplied hit reads and counts exactly like a
+   * native one.
+   *
+   * Pass a stable (memoized) array: `Excalidraw` is `React.memo`'d on a
+   * shallow prop compare, so a fresh array every render re-renders the editor.
+   */
+  searchSources?: readonly SearchSource[];
   /**
    * Atlasdraw addition (ADR-0010, Collar shell): when set, the desktop editor
    * chrome enters "collar mode" — the shapes toolbar renders flush into this
