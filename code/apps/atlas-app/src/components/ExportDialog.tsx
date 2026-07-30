@@ -23,6 +23,9 @@ import {
   type PageSize,
   type PrintOptions,
 } from "../lib/print-pdf";
+import { safeFileName } from "../lib/safeFileName";
+
+import { useDocumentTitleStore } from "../state/documentTitle";
 
 import styles from "../styles/ExportDialog.module.css";
 
@@ -130,7 +133,12 @@ export function ExportDialog({
   // PDF pane state (absorbed from PrintDialog).
   const [pageSize, setPageSize] = useState<PageSize>("letter");
   const [orientation, setOrientation] = useState<Orientation>("landscape");
-  const [title, setTitle] = useState("Untitled map");
+  // Seeded from the document name, then editable — a one-off PDF title
+  // shouldn't rename the map, so this stays local state and never writes
+  // back to the store. The dialog mounts fresh on each open (ExportDialog is
+  // conditionally rendered), so the seed re-reads the current name.
+  const documentTitle = useDocumentTitleStore((s) => s.title);
+  const [title, setTitle] = useState(documentTitle);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,14 +157,11 @@ export function ExportDialog({
       const blob = await exportPDFImpl({
         pageSize,
         orientation,
-        title: title.trim() || "Untitled map",
+        title: title.trim() || documentTitle,
         mapCanvas: canvas,
         layers,
       });
-      const safeName = `${(title.trim() || "Untitled map").replace(
-        /[^\w\- ]+/g,
-        "_",
-      )}.pdf`;
+      const safeName = `${safeFileName(title.trim() || documentTitle)}.pdf`;
       const url = URL.createObjectURL(blob);
       try {
         const a = document.createElement("a");

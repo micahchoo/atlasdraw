@@ -26,6 +26,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { useDocumentTitleStore } from "./documentTitle";
 import { usePersistenceStore } from "./usePersistenceStore";
 
 /**
@@ -64,6 +65,11 @@ export async function hydrate(
   }
   // Belt-and-braces: nuke any orphan FCs the registry didn't know about.
   useDataLayerFCStore.getState().clear();
+
+  // Step 1b — adopt the loaded document's name. Without this the collar head
+  // bar would keep showing the previous document's title and the next
+  // auto-save would write it back over the one we just opened.
+  useDocumentTitleStore.getState().setTitle(loaded.manifest.title);
 
   // Step 2 — replay manifest layer entries.
   for (const entry of loaded.manifest.layers) {

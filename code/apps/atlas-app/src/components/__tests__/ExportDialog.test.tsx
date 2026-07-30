@@ -6,12 +6,22 @@
 // generator. The PDF pane is tested with an injected `exportPDFImpl` mock so
 // we can assert which PrintOptions the dialog forwards.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ExportDialog } from "../ExportDialog";
+import {
+  DEFAULT_DOCUMENT_TITLE,
+  useDocumentTitleStore,
+} from "../../state/documentTitle";
 
 import type { LayerLegendEntry, PrintOptions } from "../../lib/print-pdf";
+
+// The PDF title seeds from the document-name store, which is a module
+// singleton — reset it so a rename in one test can't leak into the next.
+beforeEach(() => {
+  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
+});
 
 afterEach(() => {
   cleanup();
@@ -97,10 +107,19 @@ describe("ExportDialog", () => {
     expect(
       (screen.getByTestId("export-pdf-orientation") as HTMLSelectElement).value,
     ).toBe("landscape");
+    // Seeded from the document name, not a standalone "Untitled map".
     expect(
       (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,
-    ).toBe("Untitled map");
+    ).toBe(DEFAULT_DOCUMENT_TITLE);
     expect(screen.getByTestId("export-dialog-export")).toBeTruthy();
+  });
+
+  it("PDF title seeds from the current document name", () => {
+    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
+    renderDialog({ initialFormat: "pdf" });
+    expect(
+      (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,
+    ).toBe("Bidar ward survey");
   });
 
   it("Escape closes the dialog", () => {
@@ -182,7 +201,8 @@ describe("ExportDialog", () => {
     expect(props.onCloseRequest).not.toHaveBeenCalled();
   });
 
-  it("falls back to 'Untitled map' when title is whitespace", async () => {
+  it("falls back to the document name when the title is whitespace", async () => {
+    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
     const handles = stubUrlAndAnchorClick();
     const exportMock = vi
       .fn<(opts: PrintOptions) => Promise<Blob>>()
@@ -199,7 +219,7 @@ describe("ExportDialog", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(exportMock.mock.calls[0][0].title).toBe("Untitled map");
+    expect(exportMock.mock.calls[0][0].title).toBe("Bidar ward survey");
 
     handles.createUrl.mockRestore();
     handles.revokeUrl.mockRestore();

@@ -1,3 +1,80 @@
+# Handoff — 2026-07-30 (editable canvas name in the collar head bar — UNCOMMITTED)
+
+## State: branch `feat/sheet-name-edit`, worktree `/mnt/Ghar/2TA/DevStuff/worktrees/atlasdraw/sheet-name/atlasdraw`. Staged nothing, committed nothing (user has not asked to commit).
+
+Ask: "edit the name of the canvas by clicking on the name top left." The name at
+`CollarShell.tsx` was the string literal `"Untitled atlasdraw"`, hardcoded at the
+`MapEditor` call site — there was no document-title state anywhere in the app. So
+this is a small feature, not a wiring fix.
+
+Scope was agreed with the maintainer as items 1–6, 7 and 9 of a nine-surface
+propagation list (item 8 deliberately left).
+
+### What changed (all under code/apps/atlas-app/src/)
+
+New:
+- `state/documentTitle.ts` — Zustand store, shape copied from `state/basemap.ts`.
+  `setTitle` folds blank/whitespace to `DEFAULT_DOCUMENT_TITLE`, which is what
+  keeps `manifest.title` inside `ManifestSchema`'s `z.string().min(1)`.
+- `components/SheetNameField.tsx` — click/Enter/Space to edit, Enter or blur to
+  commit, Escape to cancel, cleared box treated as cancel. Commit calls
+  `markDirty()` so autosave picks the rename up. `Escape` calls
+  `stopPropagation` so it doesn't reach `useMapEditorKeyboard`.
+- `lib/safeFileName.ts` — title → filename stem, shared by the `.atlasdraw` save
+  picker and the PDF export (both used to hardcode their filenames).
+- `hooks/useCollabDocumentTitle.ts` — title on a `meta` root Y.Map, sibling of
+  YjsLayer's `layers`. Join rule: **the room wins** — adopt an existing title,
+  publish yours only into a room that has none.
+- `hooks/useBrowserTabTitle.ts` — `document.title` = `<name> — Atlasdraw`.
+  It had zero references app-wide before this.
+
+Modified:
+- `CollarShell.tsx` — `sheetName` is now a `ReactNode` slot, rendered bare as a
+  direct child of the head bar. The `·` separator moved into the frame so it
+  doesn't move when the slot swaps its label for an input.
+- `selectDocument.ts` — `manifest.title` reads the store (with a `title` option
+  for tests). **Contract change:** it now overrides `baseManifest.title`.
+- `hydrate.ts` — seeds the store from `loaded.manifest.title` on open.
+- `persistence.ts` — save filename derives from `doc.manifest.title`; the module
+  stays framework-free by taking the title off the doc, not the store.
+- `ExportDialog.tsx` — PDF title seeds from the store, never writes back.
+
+### The one contract change to know about
+
+`selectDocument` used to preserve `baseManifest.title`; a test asserted it. It
+cannot anymore: `hydrate` seeds the store from `manifest.title` on load, so the
+store holds the newer fact, and preserving the base value would make a rename
+literally unsaveable. That test was rewritten and two tests added naming the new
+contract. In practice nothing regressed — `baseManifest` is never passed by any
+production caller today (see the open item below).
+
+### Verification (all at this worktree state)
+
+- atlas-app suite: **76 files / 626 tests, all pass.**
+- Root suite: 9 failing files, all pre-existing — 8 `@atlasdraw/storage`
+  (better-sqlite3 native build) + `MermaidToExcalidraw` snapshot. `main` at
+  df9c36c fails those **plus** `DefaultSidebar` and `Sidebar` (flaky), so the
+  failing set here is a strict subset of main's.
+- ESLint over `apps/atlas-app/src`: warning set is byte-identical to main's.
+- Prettier clean.
+- Live browser check against a worktree dev server (Playwright, port 5176):
+  tab title, single `collar-sheet-name` node, click-to-edit with text
+  pre-selected, Enter commit, Escape discard, and — with a working control —
+  typing `r2v ellipse` in the field does **not** move Excalidraw's tool off
+  Selection, while `r` on the canvas does switch to Rectangle. No page errors.
+
+### Open, not done
+
+- **Item 8:** ShareView and EmbedView never render a title — a shared map is
+  anonymous. Untouched.
+- **`baseManifest` is never passed.** `usePersistenceWiring.ts:91` calls
+  `selectDocument(api, registry)` with no options, so every autosave mints a
+  fresh ULID and the document loses its identity. Predates this work.
+- The first-run onboarding scrim covers the head bar, so any UI automation must
+  set `localStorage["atlasdraw-onboarding-dismissed"] = "1"` first.
+
+---
+
 # Handoff — 2026-07-18 (IA restructure: menu regroup, export unification, basemap-as-layer, pin-to-toolbar — UNCOMMITTED)
 
 ## State: large uncommitted change in `code/apps/atlas-app/` (working tree, no branch/commit — user has not asked to commit).

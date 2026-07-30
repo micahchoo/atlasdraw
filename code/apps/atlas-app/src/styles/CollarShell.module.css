@@ -40,15 +40,59 @@
   user-select: none;
 }
 
-.sheetName {
-  font-size: 13px;
-  font-weight: 600;
+/* Wordmark · sheet name. The head bar's own gap is too wide to read as a
+ * separator, so the dot pulls in on both sides. */
+.sheetSeparator {
+  margin: 0 calc(-1 * var(--ad-space-3) + 2px);
+  color: var(--ad-ink-tertiary);
+  user-select: none;
 }
 
-.sheetName::before {
-  content: "· ";
-  font-weight: 400;
-  color: var(--ad-ink-tertiary);
+/* Sheet name — a button, but it must read as printed text at rest. The
+ * affordance is hover only; a permanent box next to the wordmark would be a
+ * floating island in a frame that has none. */
+.sheetName {
+  padding: 2px 5px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ad-radius-sm);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: text;
+}
+
+.sheetName:hover {
+  background: var(--ad-surface-inset);
+  border-color: var(--ad-rule);
+}
+
+.sheetName:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -1px;
+}
+
+/* Same box as .sheetName so committing the edit doesn't shift the head bar.
+ * Width is set inline — it tracks the text length (see SheetNameField). */
+.sheetNameInput {
+  padding: 2px 5px;
+  margin: 0;
+  border: 1px solid var(--ad-emphasis);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-inset);
+  color: var(--ad-ink);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.sheetNameInput:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -1px;
 }
 
 .headSpacer {

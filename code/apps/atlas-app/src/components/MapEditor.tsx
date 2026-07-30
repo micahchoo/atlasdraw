@@ -68,6 +68,8 @@ import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
+import { useBrowserTabTitle } from "../hooks/useBrowserTabTitle";
+import { useCollabDocumentTitle } from "../hooks/useCollabDocumentTitle";
 import { useDataFileImport } from "../hooks/useDataFileImport";
 import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
@@ -93,6 +95,7 @@ import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
 import { CollarSheetTabs } from "./CollarSheetTabs";
+import { SheetNameField } from "./SheetNameField";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
 import { AboutDialog } from "./AboutDialog";
@@ -430,6 +433,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // The map re-projection effect below syncs features to the MapLibre source.
   const yjsLayer = useYjsLayer(collabValue);
 
+  // Document name: mirror it into the browser tab, and — when a room is
+  // live — into the shared Y.Doc so collaborators see the same sheet name.
+  useBrowserTabTitle();
+  useCollabDocumentTitle(collabValue.yjsDoc);
+
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
   // Phase 6 A13a: thread `getWorkspaceId` so storage requests carry the
@@ -762,7 +770,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         StatusBar in the foot row. */}
       <CollarShell
         map={map}
-        sheetName="Untitled atlasdraw"
+        sheetName={<SheetNameField />}
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}

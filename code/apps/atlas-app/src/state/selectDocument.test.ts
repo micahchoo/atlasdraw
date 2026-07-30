@@ -12,6 +12,8 @@ import { selectDocument, documentFromExcalidrawJson } from "./selectDocument";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
+import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
+
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
@@ -53,8 +55,10 @@ const makeRegistry = (
 
 // FC store is a module-singleton — reset per test so we can't accidentally
 // inherit fcs registered by another test file in the same vitest worker.
+// Same for the title store: selectDocument now reads it for `manifest.title`.
 beforeEach(() => {
   useDataLayerFCStore.getState().clear();
+  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
 });
 
 // ---------------------------------------------------------------------------
@@ -98,10 +102,45 @@ describe("selectDocument", () => {
     });
 
     expect(doc.manifest.id).toBe(base.id);
-    expect(doc.manifest.title).toBe("My atlas");
     expect(doc.manifest.createdAt).toBe(base.createdAt);
     expect(doc.manifest.updatedAt).toBe(NOW);
     expect(doc.manifest.basemap.id).toBe("satellite");
+    // Title is NOT carried over from the base manifest — it comes from the
+    // live title store, which `hydrate` seeds on load. Preserving the base
+    // value here would make a rename in the collar head bar unsaveable.
+    expect(doc.manifest.title).toBe(DEFAULT_DOCUMENT_TITLE);
+  });
+
+  it("stamps the live document title over a stale base manifest title", () => {
+    const base: Manifest = {
+      id: "01J0000000000000000000000A",
+      version: 1,
+      title: "Name at load time",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      basemap: { type: "registry", id: "satellite" },
+      camera: { center: [-122.4, 37.78], zoom: 10, bearing: 0, pitch: 0 },
+      layers: [],
+      permissions: { publicView: false },
+    };
+    useDocumentTitleStore.getState().setTitle("Renamed in the collar");
+
+    const doc = selectDocument(makeAPI(), makeRegistry(), {
+      baseManifest: base,
+      now: () => NOW,
+    });
+
+    expect(doc.manifest.title).toBe("Renamed in the collar");
+  });
+
+  it("honours an explicit title override without touching the store", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry(), {
+      now: () => NOW,
+      title: "Injected",
+    });
+
+    expect(doc.manifest.title).toBe("Injected");
+    expect(useDocumentTitleStore.getState().title).toBe(DEFAULT_DOCUMENT_TITLE);
   });
 
   it("captures Excalidraw scene elements unchanged", () => {

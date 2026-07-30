@@ -23,8 +23,12 @@ import type maplibregl from "maplibre-gl";
 interface CollarShellProps {
   /** Live map — drives the graticule tick labels. */
   map: maplibregl.Map | null;
-  /** Sheet (document) name shown next to the wordmark. */
-  sheetName: string;
+  /**
+   * Sheet (document) name shown next to the wordmark. A slot, not a string —
+   * the editor fills it with `<SheetNameField>`, which owns the click-to-edit
+   * state. The shell stays layout-only (see the file header).
+   */
+  sheetName: React.ReactNode;
   /** Head-bar slot, right-aligned (search, menu trigger). */
   headExtras?: React.ReactNode;
   /**
@@ -57,9 +61,12 @@ export function CollarShell({
     <div className={styles.shell} data-testid="collar-shell">
       <header className={styles.head} data-testid="collar-head">
         <span className={styles.wordmark}>ATLASDRAW</span>
-        <span className={styles.sheetName} data-testid="collar-sheet-name">
-          {sheetName}
+        {/* Separator is frame decoration, so it stays with the frame — and
+          stays put when the slot swaps its label for an input. */}
+        <span className={styles.sheetSeparator} aria-hidden="true">
+          ·
         </span>
+        {sheetName}
         <span className={styles.headSpacer} />
         {headExtras}
         <div className={styles.menuHost} ref={menuHostRef} />

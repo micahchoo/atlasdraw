@@ -23,6 +23,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
 
 import type { FeatureCollection } from "geojson";
 
@@ -43,9 +44,14 @@ export type SelectDocumentOptions = {
    * bleed across the suite). Production callers leave this unset.
    */
   fcMap?: Record<string, FeatureCollection>;
+  /**
+   * Override the document title. Defaults to the live
+   * `useDocumentTitleStore` value — the name the user typed in the collar
+   * head bar. Tests inject a literal to stay independent of that singleton.
+   */
+  title?: string;
 };
 
-const DEFAULT_TITLE = "Untitled atlasdraw";
 const DEFAULT_BASEMAP_ID = "default";
 const DEFAULT_CAMERA = {
   center: [0, 0] as [number, number],
@@ -59,6 +65,9 @@ const DEFAULT_CAMERA = {
  *
  * Contract:
  *   - `manifest` — re-uses baseManifest.id/createdAt if provided; otherwise mints.
+ *                 `title` always comes from the live document-title store, so
+ *                 a rename in the collar head bar lands on the next auto-save
+ *                 tick even when a baseManifest carries the older name.
  *   - `scene`   — Excalidraw scene elements (camera state lives in appState
  *                 separately and is round-tripped through Excalidraw's own
  *                 .excalidraw save path; we don't duplicate it into the manifest).
@@ -73,6 +82,9 @@ export function selectDocument(
   options: SelectDocumentOptions = {},
 ): AtlasdrawDocument {
   const now = (options.now ?? (() => new Date().toISOString()))();
+  // ManifestSchema requires `title` to be non-empty (manifest-schema.ts:75);
+  // the store folds blank input back to its default, so this is never "".
+  const title = options.title ?? useDocumentTitleStore.getState().title;
 
   const elements = excalidrawAPI.getSceneElements();
 
@@ -102,13 +114,14 @@ export function selectDocument(
     options.baseManifest != null
       ? {
           ...options.baseManifest,
+          title,
           updatedAt: now,
           layers: manifestLayers,
         }
       : {
           id: ulid(),
           version: 1,
-          title: DEFAULT_TITLE,
+          title,
           createdAt: now,
           updatedAt: now,
           basemap: { type: "registry", id: DEFAULT_BASEMAP_ID },
@@ -213,7 +226,9 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
     manifest: {
       id: ulid(),
       version: 1,
-      title: DEFAULT_TITLE,
+      // A .excalidraw file carries no title, so this import genuinely has no
+      // name yet — the default, not the current document's name.
+      title: DEFAULT_DOCUMENT_TITLE,
       createdAt: now,
       updatedAt: now,
       basemap: { type: "registry", id: DEFAULT_BASEMAP_ID },

@@ -14,6 +14,8 @@
 import { openDB, type IDBPDatabase } from "idb";
 import { read, write, type AtlasdrawDocument } from "@atlasdraw/data";
 
+import { safeFileName } from "../lib/safeFileName";
+
 import { documentFromExcalidrawJson } from "./selectDocument";
 
 // ---------------------------------------------------------------------------
@@ -303,14 +305,14 @@ export function createPersistenceStore(
     }
   };
 
-  const fallbackDownload = (blob: Blob): void => {
+  const fallbackDownload = (blob: Blob, fileName: string): void => {
     if (typeof document === "undefined") {
       return;
     } // SSR/Node — no-op.
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "atlasdraw.atlasdraw";
+    a.download = fileName;
     a.style.display = "none";
     document.body.appendChild(a);
     a.click();
@@ -353,12 +355,16 @@ export function createPersistenceStore(
   const saveToDisk = async (doc: AtlasdrawDocument): Promise<void> => {
     return enqueueWrite(async () => {
       const blob = await write(doc);
+      // The document names its own file. This module stays framework-free
+      // (see usePersistenceStore's header), so the title arrives on the doc
+      // rather than by reaching into the title store.
+      const suggestedName = `${safeFileName(doc.manifest.title)}.atlasdraw`;
       const w = fsaWindow();
       if (hasFSA() && w && w.showSaveFilePicker) {
         let handle = await getStoredFileHandle();
         if (!handle) {
           handle = await w.showSaveFilePicker({
-            suggestedName: "atlasdraw.atlasdraw",
+            suggestedName,
             types: [
               {
                 description: "Atlasdraw document",
@@ -384,7 +390,7 @@ export function createPersistenceStore(
       console.info(
         "[persistence] File System Access API unavailable; using download/input path",
       );
-      fallbackDownload(blob);
+      fallbackDownload(blob, suggestedName);
     });
   };
 

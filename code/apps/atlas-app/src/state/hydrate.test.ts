@@ -16,6 +16,7 @@ import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { usePersistenceStore } from "./usePersistenceStore";
 import { selectDocument } from "./selectDocument";
+import { useDocumentTitleStore } from "./documentTitle";
 
 import type { FeatureCollection } from "geojson";
 
@@ -114,6 +115,24 @@ describe("hydrate", () => {
 
     expect(api.updateScene).toHaveBeenCalledTimes(1);
     expect(api.updateScene).toHaveBeenCalledWith({ elements: scene });
+  });
+
+  it("adopts the loaded document's title", async () => {
+    const { api } = makeAPI();
+    useDocumentTitleStore.setState({ title: "Name from the previous doc" });
+
+    await hydrate(
+      {
+        manifest: baseManifest({ title: "Bidar ward survey" }),
+        scene: [],
+        layers: new Map(),
+        styleRef: {},
+        files: new Map(),
+      },
+      api,
+    );
+
+    expect(useDocumentTitleStore.getState().title).toBe("Bidar ward survey");
   });
 
   it("registers annotation layers from the manifest", async () => {
