@@ -10,8 +10,9 @@
 // setPendingAnchor. After a successful submit the panel fires onSubmitted
 // which clears the picker so the next comment starts fresh.
 //
-// This is the body markup for the "comments" Sidebar tab — registered in
-// MapEditor via excalidrawAPI.registerSidebarTab.
+// Mounted by LayerPanel's ThreadsSection, inside the Layers tab. There is no
+// "comments" Sidebar tab any more — Step 5 turned comments into a mode and
+// demoted the list one level down.
 //
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 

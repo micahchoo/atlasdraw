@@ -197,6 +197,21 @@ describe("useMapEditorKeyboard — comment mode (`c`)", () => {
     expect(isCommentModeActive()).toBe(false);
   });
 
+  it("ignores auto-repeat, so holding `c` enters the mode exactly once", () => {
+    // Same guard, same reason as the Space tracker above: a held key repeats
+    // ~30×/s, and a toggle driven by that lands on repeat parity — plus every
+    // odd flip runs the exit path, which destroys an open draft.
+    renderHook(() => useMapEditorKeyboard(baseParams()));
+
+    fireKey({ key: "c" });
+    expect(isCommentModeActive()).toBe(true);
+
+    for (let i = 0; i < 5; i++) {
+      fireKey({ key: "c", repeat: true });
+    }
+    expect(isCommentModeActive()).toBe(true);
+  });
+
   it("leaves every Excalidraw C binding alone", () => {
     renderHook(() => useMapEditorKeyboard(baseParams()));
 

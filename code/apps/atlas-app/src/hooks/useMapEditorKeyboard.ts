@@ -153,8 +153,15 @@ export function useMapEditorKeyboard({
       // the Felt / Figma / FigJam precedent in the design doc; the modifier
       // combinations above are untouched, which is why every branch below
       // requires no ctrl/meta/alt/shift.
+      //
+      // `!e.repeat` for the same reason the Space tracker has it: auto-repeat
+      // fires ~30×/s while the key is held, and this branch is a TOGGLE, so
+      // every odd flip would tear down an open draft (the exit path calls
+      // clearAnchorPicker) and the resting state would come down to repeat
+      // parity. Held `c` must mean one entry, like every other toggle.
       if (
         e.key.toLowerCase() === "c" &&
+        !e.repeat &&
         !e.ctrlKey &&
         !e.metaKey &&
         !e.altKey &&

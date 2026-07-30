@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 A3 — CommentsPanel.
 //
-// Sidebar tab body listing all comments in chronological order. Provides
-// resolve/delete actions and a compose-bar with map/element anchor mode.
+// The chronological list of all comments, with resolve/delete actions and a
+// compose-bar carrying the map/element anchor toggle.
 //
-// Mount: registered via excalidrawAPI.registerSidebarTab({ name: "comments" })
-// from MapEditor (slot-first per atlasdraw-ui-conventions Rule 0 — Sidebar
-// tab, not a new floating panel).
+// Mount: no longer a sidebar tab of its own. Step 5 made comments a MODE (rail
+// toggle + `c`), and demoted this list to the collapsed Threads section of the
+// Layers tab — LayerPanel's ThreadsSection renders <CommentsPanelHost/>. It is
+// the review surface (read every thread, resolve the stale ones), not the
+// default one.
 //
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
+// Design (Step 5): PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §3
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";

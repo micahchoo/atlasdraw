@@ -48,7 +48,11 @@ const sidebarWidthVar = (container: HTMLElement) =>
 
 const renderEditor = async (props: {
   rightSidebarWidth?: number;
-  onSidebarLayoutChange?: (l: { open: boolean; shrunk: boolean }) => void;
+  onSidebarLayoutChange?: (l: {
+    open: boolean;
+    shrunk: boolean;
+    collar: boolean;
+  }) => void;
   collar?: boolean;
 }) => {
   const collarToolbarTarget = document.createElement("div");
@@ -153,6 +157,7 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
     expect(onSidebarLayoutChange).toHaveBeenCalledWith({
       open: false,
       shrunk: false,
+      collar: true,
     });
   });
 
@@ -168,6 +173,7 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
         expect(onSidebarLayoutChange).toHaveBeenLastCalledWith({
           open: true,
           shrunk: true,
+          collar: true,
         });
       });
       // The invariant: `shrunk` is the wrapper's own narrowing, nothing else.
@@ -189,6 +195,7 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
         expect(onSidebarLayoutChange).toHaveBeenLastCalledWith({
           open: true,
           shrunk: false,
+          collar: true,
         });
       });
       expect(container.querySelector(".sidebar.sidebar--docked")).toBe(null);
@@ -207,6 +214,7 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
         expect(onSidebarLayoutChange).toHaveBeenLastCalledWith({
           open: false,
           shrunk: false,
+          collar: true,
         });
       });
     });
@@ -226,8 +234,37 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
         expect(onSidebarLayoutChange).toHaveBeenLastCalledWith({
           open: true,
           shrunk: false,
+          collar: true,
         });
       });
+    });
+  });
+
+  it("reports collar:false for a non-collar host, whatever the sidebar does", async () => {
+    // The gate atlasdraw's resize handle needs. Without the collar treatment
+    // the sidebar is `width - space-factor * 2` wide (Sidebar.scss), so the
+    // handle's `right: width` misses the edge by 8px and becomes a col-resize
+    // target floating over the host's map. Same signal covers the phone, which
+    // drops collar mode for the same reason it drops the collar toolbar.
+    const onSidebarLayoutChange = vi.fn();
+    const { container } = await renderEditor({
+      collar: false,
+      onSidebarLayoutChange,
+    });
+
+    await withExcalidrawDimensions({ width: 1920, height: 1080 }, async () => {
+      await openSidebar(CANVAS_SEARCH_TAB);
+
+      await waitFor(() => {
+        expect(onSidebarLayoutChange).toHaveBeenLastCalledWith({
+          open: true,
+          shrunk: true,
+          collar: false,
+        });
+      });
+      expect(editorContainer(container).classList).not.toContain(
+        "excalidraw--collar",
+      );
     });
   });
 });

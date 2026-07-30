@@ -24,11 +24,14 @@ import * as Y from "yjs";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
+import type { AtlasdrawTool } from "@atlasdraw/tools";
+
 import { CollabContext } from "../../hooks/useCollab";
 import { useCommentModeTool } from "../../hooks/useCommentModeTool";
 import { CommentsLayer } from "../../state/comments";
 import {
   __resetForTest as __resetCommentMode,
+  isCommentModeActive,
   setCommentMode,
 } from "../../state/commentMode";
 import {
@@ -49,23 +52,49 @@ function makeLayer(): CommentsLayer {
   });
 }
 
-/** Enough of the imperative API for the mode wiring + the overlay. */
+/**
+ * Enough of the imperative API for the mode wiring + the overlay.
+ *
+ * `onChange` is a real emitter, because comment mode's exit-on-tool-pick reads
+ * `appState.activeTool` through it — a stub that never fires would make the
+ * transition untestable. Excalidraw notifies from componentDidUpdate with the
+ * current state (App.tsx:3730), so every emit here carries the live tool.
+ */
 function makeFakeAPI(initialTool = "rectangle") {
   let tool = initialTool;
+  type Listener = (elements: unknown, appState: unknown) => void;
+  const listeners = new Set<Listener>();
+  const emit = () => {
+    for (const l of Array.from(listeners)) {
+      l([], { activeTool: { type: tool } });
+    }
+  };
   const setActiveTool = vi.fn((next: { type: string }) => {
     tool = next.type;
+    emit();
   });
   return {
     api: {
       getAppState: () => ({ activeTool: { type: tool } }),
       setActiveTool,
       getSceneElements: () => [],
-      onChange: () => () => {},
+      onChange: (cb: Listener) => {
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
     } as unknown as ExcalidrawImperativeAPI,
     setActiveTool,
     currentTool: () => tool,
+    /** What a tool shortcut / the toolbar / the ⌘K palette does to appState. */
+    userPicksTool: (type: string) => {
+      tool = type;
+      act(() => emit());
+    },
   };
 }
+
+/** A stand-in for the one-shot atlas Pin tool. */
+const fakePinTool = { id: "pin" } as unknown as AtlasdrawTool;
 
 /** A MapLibre stand-in that records `once`/`off` so arming is observable. */
 function makeFakeMap() {
@@ -107,9 +136,13 @@ afterEach(() => {
 });
 
 describe("useCommentModeTool — the editor is borrowed, not taken", () => {
-  const mount = (api: ExcalidrawImperativeAPI, clearAtlasTool = vi.fn()) =>
+  const mount = (
+    api: ExcalidrawImperativeAPI,
+    atlasTool: AtlasdrawTool | null = null,
+    setAtlasTool = vi.fn(),
+  ) =>
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool }),
+      useCommentModeTool({ excalidrawAPI: api, atlasTool, setAtlasTool }),
     );
 
   it("swaps to `hand` on enter and back to the previous tool on exit", () => {
@@ -128,11 +161,24 @@ describe("useCommentModeTool — the editor is borrowed, not taken", () => {
 
   it("drops any active atlas tool so one click cannot do two things", () => {
     const { api } = makeFakeAPI();
-    const clearAtlasTool = vi.fn();
-    mount(api, clearAtlasTool);
+    const setAtlasTool = vi.fn();
+    mount(api, fakePinTool, setAtlasTool);
 
     act(() => setCommentMode(true));
-    expect(clearAtlasTool).toHaveBeenCalledTimes(1);
+    expect(setAtlasTool).toHaveBeenCalledWith(null);
+  });
+
+  it("puts the Pin tool back on exit, like the Excalidraw tool", () => {
+    // "Borrowed, not taken" covers both tool systems or it covers neither:
+    // Escape has to leave you where you were, and where you were included an
+    // armed Pin.
+    const { api } = makeFakeAPI();
+    const setAtlasTool = vi.fn();
+    mount(api, fakePinTool, setAtlasTool);
+
+    act(() => setCommentMode(true));
+    act(() => setCommentMode(false));
+    expect(setAtlasTool).toHaveBeenLastCalledWith(fakePinTool);
   });
 
   it("does not thrash the tool when it was already `hand`", () => {
@@ -142,6 +188,75 @@ describe("useCommentModeTool — the editor is borrowed, not taken", () => {
     act(() => setCommentMode(true));
     act(() => setCommentMode(false));
     expect(setActiveTool).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The mode cannot outlive the tool it needs.
+//
+// `classifyTool` only routes clicks to MapLibre for `hand`, so the instant the
+// active tool is anything else the anchor picker is unreachable — while the
+// crosshair, the on-plate hint and the rail's `aria-pressed` all keep saying
+// the mode is live. Chosen resolution: picking a real tool EXITS the mode. The
+// cases below pin every signal to that one decision.
+// ---------------------------------------------------------------------------
+
+describe("useCommentModeTool — a tool pick is an exit", () => {
+  const mount = (
+    api: ExcalidrawImperativeAPI,
+    atlasTool: AtlasdrawTool | null = null,
+    setAtlasTool = vi.fn(),
+  ) =>
+    renderHook(() =>
+      useCommentModeTool({ excalidrawAPI: api, atlasTool, setAtlasTool }),
+    );
+
+  it("leaves the mode when the active tool changes under it", () => {
+    const { api, userPicksTool } = makeFakeAPI("selection");
+    mount(api);
+
+    act(() => setCommentMode(true));
+    expect(isCommentModeActive()).toBe(true);
+
+    // `r` — the user wants a rectangle, not a thread.
+    userPicksTool("rectangle");
+    expect(isCommentModeActive()).toBe(false);
+  });
+
+  it("leaves the tool the user picked alone — no restore on that path", () => {
+    // The bug this replaces: exiting restored the pre-mode tool, silently
+    // undoing the keystroke that caused the exit.
+    const { api, currentTool, userPicksTool } = makeFakeAPI("ellipse");
+    mount(api);
+
+    act(() => setCommentMode(true));
+    expect(currentTool()).toBe("hand");
+
+    // The pick WAS the exit, so no later restore can overwrite it — not now,
+    // and not when a stray setCommentMode(false) arrives afterwards.
+    userPicksTool("rectangle");
+    expect(currentTool()).toBe("rectangle");
+    act(() => setCommentMode(false));
+    expect(currentTool()).toBe("rectangle");
+  });
+
+  it("does not re-arm the Pin tool on that path either", () => {
+    const { api, userPicksTool } = makeFakeAPI();
+    const setAtlasTool = vi.fn();
+    mount(api, fakePinTool, setAtlasTool);
+
+    act(() => setCommentMode(true));
+    userPicksTool("rectangle");
+    expect(setAtlasTool).toHaveBeenLastCalledWith(null);
+  });
+
+  it("stays in the mode when the tool is set to `hand` — that IS the mode", () => {
+    const { api, userPicksTool } = makeFakeAPI("selection");
+    mount(api);
+
+    act(() => setCommentMode(true));
+    userPicksTool("hand");
+    expect(isCommentModeActive()).toBe(true);
   });
 });
 
@@ -168,7 +283,11 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     const { api } = makeFakeAPI();
     // The mode's side effects live in useCommentModeTool, so mount it too.
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool: () => {} }),
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
     );
     renderOverlay(layer, fakeMap.map, api);
 
@@ -184,7 +303,11 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     const fakeMap = makeFakeMap();
     const { api } = makeFakeAPI();
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool: () => {} }),
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
     );
     renderOverlay(layer, fakeMap.map, api);
 
@@ -208,7 +331,11 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     const fakeMap = makeFakeMap();
     const { api } = makeFakeAPI();
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool: () => {} }),
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
     );
     renderOverlay(layer, fakeMap.map, api);
 
@@ -239,7 +366,11 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     const fakeMap = makeFakeMap();
     const { api } = makeFakeAPI();
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool: () => {} }),
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
     );
     renderOverlay(layer, fakeMap.map, api);
 
@@ -265,7 +396,11 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     const fakeMap = makeFakeMap();
     const { api } = makeFakeAPI();
     renderHook(() =>
-      useCommentModeTool({ excalidrawAPI: api, clearAtlasTool: () => {} }),
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
     );
     renderOverlay(layer, fakeMap.map, api);
 
@@ -280,6 +415,31 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     expect(screen.queryByTestId("comment-draft-bubble")).toBe(null);
     // still armed — cancelling a draft is not leaving the mode
     expect(fakeMap.clickListenerCount()).toBe(1);
+  });
+
+  it("disarms both pickers when a tool pick ends the mode", () => {
+    // The consequence that made this a bug rather than a cosmetic lie: the
+    // element picker stays armed, drawing a shape auto-selects it, and a draft
+    // composer opens on an element the user never asked to annotate.
+    const layer = makeLayer();
+    const fakeMap = makeFakeMap();
+    const { api, userPicksTool } = makeFakeAPI("selection");
+    renderHook(() =>
+      useCommentModeTool({
+        excalidrawAPI: api,
+        atlasTool: null,
+        setAtlasTool: () => {},
+      }),
+    );
+    renderOverlay(layer, fakeMap.map, api);
+
+    act(() => setCommentMode(true));
+    expect(fakeMap.clickListenerCount()).toBe(1);
+
+    userPicksTool("rectangle");
+    expect(isCommentModeActive()).toBe(false);
+    expect(fakeMap.clickListenerCount()).toBe(0);
+    expect(screen.queryByTestId("comment-draft-bubble")).toBe(null);
   });
 
   it("shows no draft outside comment mode, even with a pending anchor", () => {

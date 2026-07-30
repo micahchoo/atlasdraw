@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 Wave 1b A5 — StylePanel tests.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -31,6 +35,34 @@ const sampleFc: FeatureCollection = {
     },
   ],
 };
+
+// Resolved via dirname, not `new URL(…, import.meta.url)`: vite rewrites that
+// literal pattern into a served asset URL (http://localhost:3000/…), which
+// fileURLToPath rejects.
+const STYLE_PANEL_CSS = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "styles",
+  "StylePanel.module.css",
+);
+
+/**
+ * The declarations inside `.panel { … }`, read from the stylesheet as written.
+ *
+ * The runtime cannot answer this question: vitest injects no CSS modules, so
+ * `getComputedStyle(panel).position` is `""` whether or not the rule exists.
+ * The stylesheet is the only place the dialog framing can come back, so the
+ * stylesheet is what gets asserted.
+ */
+function panelRuleBody(): string {
+  const css = readFileSync(STYLE_PANEL_CSS, "utf8");
+  const match = /^\.panel\s*\{([^}]*)\}/m.exec(css);
+  if (!match) {
+    throw new Error(`.panel rule not found in ${STYLE_PANEL_CSS}`);
+  }
+  return match[1];
+}
 
 beforeEach(() => {
   useLayerRegistryStore.setState({ entries: [] });
@@ -170,10 +202,16 @@ describe("StylePanel", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByTestId("style-close")).toBeNull();
 
-    const panel = screen.getByTestId("style-panel");
-    const style = getComputedStyle(panel);
-    expect(style.position).not.toBe("absolute");
-    expect(style.zIndex).not.toBe("100");
+    // Ties the rule below to the element actually rendered — asserting the
+    // stylesheet is only a guard while `.panel` is still the panel's class.
+    expect(screen.getByTestId("style-panel").className).toContain("panel");
+
+    const rule = panelRuleBody();
+    expect(rule).not.toMatch(/(^|[\s;])position\s*:/);
+    expect(rule).not.toMatch(/(^|[\s;])z-index\s*:/);
+    // `width: 100%` is fine — it's the card's width. A px width is the defect:
+    // 280px inside a 294px `overflow: hidden` sidebar body.
+    expect(rule).not.toMatch(/width\s*:\s*\d+px/);
   });
 
   it("does not swallow Escape — the sidebar's own handlers still see it", () => {

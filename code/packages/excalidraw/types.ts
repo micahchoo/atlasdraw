@@ -716,6 +716,16 @@ export interface ExcalidrawProps {
    *   the sidebar, i.e. the sidebar occupies a reserved column rather than
    *   floating over the canvas. True only when open **and** docked **and**
    *   `editorInterface.canFitSidebar`.
+   * - `collar` — the collar-mode sidebar treatment is in force, i.e. the box is
+   *   exactly `--right-sidebar-width` wide (Sidebar.scss) rather than upstream's
+   *   `width - space-factor * 2`. Hosts that place chrome AT the panel's edge
+   *   need this: off collar mode (no toolbar target, or a phone) the edge is 8px
+   *   further right than the width says, so atlasdraw's resize handle would
+   *   float over the map instead of straddling the panel.
+   *
+   * `collar` is the phone gate as well as the treatment gate — the same
+   * `collarToolbarTarget != null && formFactor !== "phone"` expression that
+   * publishes `.excalidraw--collar`, so a host cannot re-derive it wrong.
    *
    * `shrunk` is read from the same expression that drives the wrapper's own
    * width and the collar legend's offset — deliberately, because computing
@@ -725,7 +735,11 @@ export interface ExcalidrawProps {
    *
    * Fired from an effect, so it is safe to `setState` in.
    */
-  onSidebarLayoutChange?: (layout: { open: boolean; shrunk: boolean }) => void;
+  onSidebarLayoutChange?: (layout: {
+    open: boolean;
+    shrunk: boolean;
+    collar: boolean;
+  }) => void;
   /**
    * Atlasdraw addition (ADR-0010): override the "scroll back to content"
    * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 A3 — pending-anchor picker store.
 //
-// The CommentsPanel (Sidebar tab body) and the MapEditor canvas overlay
-// (MapLibre click handler + Excalidraw selection observer) need to share a
-// single `pendingAnchor` slot:
+// The CommentsPanel (now the Threads section of the Layers tab, not a tab of
+// its own) and the MapEditor canvas overlay (MapLibre click handler +
+// Excalidraw selection observer) need to share a single `pendingAnchor` slot:
 //
 //   - Panel: "user wants to anchor on the map"        → setMode("map")
 //   - Map click → translate to {lng,lat}              → setAnchor({kind:"map",...})

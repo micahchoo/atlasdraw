@@ -519,6 +519,11 @@ const LayerUI = ({
   // the MapLibre plate by the sidebar's width instead of letting the panel
   // cover it, and anchors its resize handle at the panel's left edge.
   //
+  // `collar` rides along because "the panel's left edge is at `width` from the
+  // right" is only true under the collar treatment (Sidebar.scss); off it — no
+  // toolbar target, or a phone — the box is 8px narrower than the property and
+  // host chrome pinned to `width` lands over the map.
+  //
   // Sourced from `isUIShrunkForSidebar` on purpose: the host's reflow is the
   // third consumer of one condition, and re-deriving it host-side is how the
   // legend ended up double-offset (LayerUI.collarLegend.test.tsx). Effect, not
@@ -528,8 +533,14 @@ const LayerUI = ({
     onSidebarLayoutChange?.({
       open: isDefaultSidebarOpen,
       shrunk: isUIShrunkForSidebar,
+      collar: collarMode,
     });
-  }, [isDefaultSidebarOpen, isUIShrunkForSidebar, onSidebarLayoutChange]);
+  }, [
+    isDefaultSidebarOpen,
+    isUIShrunkForSidebar,
+    collarMode,
+    onSidebarLayoutChange,
+  ]);
 
   // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
   // full-width strip portaled into the app's collar tool row. The wrapper

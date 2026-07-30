@@ -55,6 +55,13 @@ const FILE_BYTES = new Uint8Array([
 const FILE_NAME = "asset.png";
 const FILE_TYPE = "image/png";
 
+// Import provenance on the points layer. Fixed values so the assertion can be
+// exact — "survives" means these two fields, not merely "the key is present".
+const POINTS_PROVENANCE = {
+  sourceFile: "cities.csv",
+  droppedCount: 4,
+};
+
 // ---------------------------------------------------------------------------
 // fixture builder
 // ---------------------------------------------------------------------------
@@ -126,6 +133,7 @@ function buildManifest(): Manifest {
         featureCount: 3,
         style: { color: "#ff0000", weight: 2 },
         source: `data/layer-${POINTS_LAYER_ID}.geojson`,
+        provenance: POINTS_PROVENANCE,
       },
       {
         kind: "data",
@@ -267,6 +275,46 @@ describe("T12 round-trip — write (zip) → read", () => {
 
     // styleRef — deep-equal.
     expect(back.styleRef).toEqual(doc.styleRef);
+  });
+});
+
+describe("round-trip — data-layer import provenance", () => {
+  // The layer card's provenance line is the only record of which file a layer
+  // came from and how many input records the import dropped; `label` stops
+  // answering "which file?" the moment anyone renames the layer.
+  //
+  // This needs its own case rather than riding the `toEqual(doc.manifest)`
+  // above: both sides of that comparison come out of `ManifestSchema.parse`, so
+  // deleting `provenance` from DataLayerEntrySchema strips it symmetrically and
+  // the equality still holds. Asserting literal values against the doc read
+  // back off the wire is the only shape that goes red.
+  it("survives write (zip) → read with its values intact", async () => {
+    const doc = buildSyntheticDoc();
+
+    const back = await read(await write(doc));
+
+    const layer = back.manifest.layers.find((l) => l.id === POINTS_LAYER_ID);
+    expect(layer?.kind).toBe("data");
+    expect(layer).toMatchObject({ provenance: POINTS_PROVENANCE });
+
+    // The optionality is real, not an accident of the fixture: the second data
+    // layer has no import event and must not acquire an invented one.
+    expect(
+      back.manifest.layers.find((l) => l.id === POLY_LAYER_ID),
+    ).not.toHaveProperty("provenance");
+  });
+
+  it("survives writeJSON → readJSON with its values intact", async () => {
+    const fileless: AtlasdrawDocument = {
+      ...buildSyntheticDoc(),
+      files: new Map<string, Blob>(),
+    };
+
+    const back = await readJSON(await writeJSON(fileless));
+
+    expect(
+      back.manifest.layers.find((l) => l.id === POINTS_LAYER_ID),
+    ).toMatchObject({ provenance: POINTS_PROVENANCE });
   });
 });
 

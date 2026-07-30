@@ -350,13 +350,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [sheetPanelLayout, setSheetPanelLayout] = useState({
     open: false,
     shrunk: false,
+    collar: false,
   });
   // Stable identity: `<Excalidraw>`'s memo comparator is a shallow prop compare,
   // so a fresh closure here would defeat it on every MapEditor render.
   const onSidebarLayoutChange = useCallback(
-    (layout: { open: boolean; shrunk: boolean }) => {
+    (layout: { open: boolean; shrunk: boolean; collar: boolean }) => {
       setSheetPanelLayout((prev) =>
-        prev.open === layout.open && prev.shrunk === layout.shrunk
+        prev.open === layout.open &&
+        prev.shrunk === layout.shrunk &&
+        prev.collar === layout.collar
           ? prev
           : layout,
       );
@@ -616,11 +619,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // anchor overlay and this component all have to agree about it and none is
   // an ancestor of the others.
   const commentMode = useCommentMode();
-  const clearAtlasTool = useCallback(
-    () => setActiveAtlasTool(null),
-    [setActiveAtlasTool],
-  );
-  useCommentModeTool({ excalidrawAPI, clearAtlasTool });
+  useCommentModeTool({
+    excalidrawAPI,
+    atlasTool: activeAtlasTool,
+    setAtlasTool: setActiveAtlasTool,
+  });
   // Badge count — derived from the live CommentsLayer, no parallel counter.
   // Passed explicitly: MapEditor provides CollabContext, so the context-reading
   // variant would construct a second, disconnected CollabState here.
@@ -1082,8 +1085,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           while the panel is open — its whole position is "the panel's edge",
           which does not exist otherwise. Rendered for the floating (undocked)
           panel too: the edge is in the same place either way, only the plate's
-          reflow depends on docking. */}
-          {sheetPanelLayout.open && (
+          reflow depends on docking.
+
+          Also gated on `collar`, because the handle's `right: width` is only
+          the panel's edge under the collar treatment. On a phone the editor
+          drops collar mode, the sidebar falls back to upstream's
+          `width - space-factor * 2` (286 of a 302px property), and the handle
+          becomes a 16px col-resize strip floating over the map — a hit target
+          for a drag that cannot mean anything. A phone has no pointer to hover
+          it with either. */}
+          {sheetPanelLayout.open && sheetPanelLayout.collar && (
             <SheetPanelResizer
               width={sheetPanelWidth}
               onWidth={setSheetPanelWidth}

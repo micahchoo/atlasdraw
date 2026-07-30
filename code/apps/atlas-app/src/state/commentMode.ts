@@ -8,7 +8,8 @@
 //
 //   SheetRail            — renders the toggle and its pressed state
 //   useMapEditorKeyboard — the keyboard toggle + Escape exit
-//   useCommentModeTool   — arms the anchor picker, swaps the Excalidraw tool
+//   useCommentModeTool   — arms the anchor picker, swaps the Excalidraw tool,
+//                          and exits the mode when the user picks a real tool
 //   CommentAnchorsOverlay— shows the draft composer at the picked anchor
 //   MapEditor            — the crosshair cursor + the on-plate hint
 //
@@ -58,11 +59,6 @@ export function setCommentMode(active: boolean): void {
 
 export function toggleCommentMode(): void {
   setCommentMode(!_active);
-}
-
-/** Subscribe outside React (used by the keyboard handler's Escape branch). */
-export function subscribeCommentMode(listener: () => void): () => void {
-  return _subscribe(listener);
 }
 
 export function useCommentMode(): boolean {

@@ -468,9 +468,11 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     const restored = useLayerRegistryStore
       .getState()
       .entries.find((e) => e.id === "dl:legacy");
-    if (restored?.kind === "data") {
-      expect(restored.provenance).toBeUndefined();
-    }
+    // Unconditional on purpose. Behind `if (restored?.kind === "data")` the
+    // only assertion in this test disappeared whenever hydrate skipped data
+    // layers entirely — the exact regression it exists to catch.
+    expect(restored?.kind).toBe("data");
+    expect(restored && "provenance" in restored).toBe(false);
   });
 
   it("preserves embedded files through selectDocument → hydrate (paste-image round-trip)", async () => {

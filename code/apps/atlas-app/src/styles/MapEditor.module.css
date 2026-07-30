@@ -117,10 +117,6 @@
   /* No background — the map and Excalidraw show through. */
 }
 
-/* Collab-room parse-error banner — centered pill at the top of the plate,
- * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
- * from the --ad-danger token with a consistent #d64045 fallback; the tinted
- * background is a low-alpha mix (color-mix already used for the border). */
 /* --- comment mode (Step 5) -------------------------------------------------
  *
  * Comment mode borrows the `hand` tool so map clicks reach MapLibre (see
@@ -169,6 +165,10 @@
   border-radius: var(--ad-radius-sm);
 }
 
+/* Collab-room parse-error banner — centered pill at the top of the plate,
+ * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
+ * from the --ad-danger token with a consistent #d64045 fallback; the tinted
+ * background is a low-alpha mix (color-mix already used for the border). */
 .collabRoomError {
   position: absolute;
   top: 12px;

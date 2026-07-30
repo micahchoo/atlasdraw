@@ -7,9 +7,9 @@
 // DefaultSidebar via `excalidrawAPI.registerSidebarTab({ content: <LayerPanel/> })`
 // — an element captured once, in an effect keyed on `excalidrawAPI`. Threading
 // the map in as a prop would mean adding `map` to that effect's deps, so the
-// tab would unregister and re-register the moment the map finished loading;
-// registration order is the rail's display order (SheetRail reads
-// getSidebarTabs()), so Layers would silently jump below Comments on every
+// tab would unregister and re-register the moment the map finished loading —
+// and registration order is the rail's display order (SheetRail reads
+// getSidebarTabs()), so the tab would move under any future sibling on every
 // startup. A store sidesteps the whole question: one writer, many readers, no
 // re-registration.
 //
