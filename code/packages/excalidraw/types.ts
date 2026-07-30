@@ -689,6 +689,44 @@ export interface ExcalidrawProps {
    */
   hideDefaultSidebarTabTriggers?: boolean;
   /**
+   * Atlasdraw addition (ADR-0010, Collar shell): width of the right sidebar in
+   * px, clamped to
+   * `[RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH]` by
+   * {@link clampRightSidebarWidth}. Unset ⇒ upstream's 302px, so vendored
+   * tests and the reference app are unaffected.
+   *
+   * The editor only *publishes* the value, as the `--right-sidebar-width`
+   * custom property on the editor container. `Sidebar.scss`, the
+   * `.layer-ui__wrapper` narrowing in `LayerUI` and the collar legend's offset
+   * all already read it, so a host that owns a resize handle (and the
+   * persistence for it) can drive the whole cascade from here. The editor
+   * deliberately holds no width state of its own — one owner, no two-way sync.
+   */
+  rightSidebarWidth?: number;
+  /**
+   * Atlasdraw addition (ADR-0010, Collar shell): notifies the host when the
+   * right sidebar's *layout* changes, so the host can reflow its own surfaces
+   * (in atlasdraw: narrow the MapLibre plate instead of letting the panel
+   * cover it, and place the resize handle at the panel's left edge).
+   *
+   * - `open` — a sidebar is open (docked or floating). Same `appState`
+   *   expression the editor uses for its own narrowing, so it is "whatever
+   *   sidebar owns the right edge", not specifically `DEFAULT_SIDEBAR`.
+   * - `shrunk` — the editor has narrowed `.layer-ui__wrapper` out from under
+   *   the sidebar, i.e. the sidebar occupies a reserved column rather than
+   *   floating over the canvas. True only when open **and** docked **and**
+   *   `editorInterface.canFitSidebar`.
+   *
+   * `shrunk` is read from the same expression that drives the wrapper's own
+   * width and the collar legend's offset — deliberately, because computing
+   * that condition twice is exactly what once double-offset the legend by
+   * ~604px (see `LayerUI.collarLegend.test.tsx`). A host reflow derived from
+   * an independent guess would be the third copy.
+   *
+   * Fired from an effect, so it is safe to `setState` in.
+   */
+  onSidebarLayoutChange?: (layout: { open: boolean; shrunk: boolean }) => void;
+  /**
    * Atlasdraw addition (ADR-0010): override the "scroll back to content"
    * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the
    * MapLibre map is the real camera), so the default `calculateScrollCenter` is

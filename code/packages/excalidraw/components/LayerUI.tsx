@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import React from "react";
+import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -96,6 +96,7 @@ interface LayerUIProps {
   renderToolbarExtras?: ExcalidrawProps["renderToolbarExtras"];
   collarToolbarTarget?: ExcalidrawProps["collarToolbarTarget"];
   collarMenuTarget?: ExcalidrawProps["collarMenuTarget"];
+  onSidebarLayoutChange?: ExcalidrawProps["onSidebarLayoutChange"];
   onScrollBackToContent?: ExcalidrawProps["onScrollBackToContent"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
@@ -159,6 +160,7 @@ const LayerUI = ({
   renderToolbarExtras,
   collarToolbarTarget,
   collarMenuTarget,
+  onSidebarLayoutChange,
   onScrollBackToContent,
   renderCustomStats,
   UIOptions,
@@ -511,6 +513,23 @@ const LayerUI = ({
    */
   const isUIShrunkForSidebar =
     !!appState.openSidebar && isSidebarDocked && editorInterface.canFitSidebar;
+
+  // Atlasdraw fork addition (ADR-0010, Collar shell): publish the sidebar's
+  // layout to the host so it can reflow its OWN surfaces — atlas-app narrows
+  // the MapLibre plate by the sidebar's width instead of letting the panel
+  // cover it, and anchors its resize handle at the panel's left edge.
+  //
+  // Sourced from `isUIShrunkForSidebar` on purpose: the host's reflow is the
+  // third consumer of one condition, and re-deriving it host-side is how the
+  // legend ended up double-offset (LayerUI.collarLegend.test.tsx). Effect, not
+  // render, so the host may setState from it.
+  const isDefaultSidebarOpen = !!appState.openSidebar;
+  useEffect(() => {
+    onSidebarLayoutChange?.({
+      open: isDefaultSidebarOpen,
+      shrunk: isUIShrunkForSidebar,
+    });
+  }, [isDefaultSidebarOpen, isUIShrunkForSidebar, onSidebarLayoutChange]);
 
   // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
   // full-width strip portaled into the app's collar tool row. The wrapper

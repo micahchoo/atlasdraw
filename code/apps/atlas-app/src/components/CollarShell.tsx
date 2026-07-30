@@ -46,6 +46,17 @@ interface CollarShellProps {
   tabs?: React.ReactNode;
   /** Bottom marginalia row (scale bar, coords, datum, attribution). */
   foot?: React.ReactNode;
+  /**
+   * Width in px that the open sheet panel reserves on the plate's right edge —
+   * 0 when the panel is closed or floating.
+   *
+   * Published as the `--ad-sheet-panel-inset` custom property on the shell so
+   * both surfaces that measure the *map* rather than the *plate* can subtract
+   * it: the MapLibre layer (`MapEditor.module.css`) and the longitude graticule
+   * (`.lonCell` below), whose 5 ticks are laid out west→east across the map's
+   * width. Inherited, so `MapEditor` never re-states the number.
+   */
+  panelInset?: number;
   /** The map plate: MapLibre + Excalidraw stack, confined to the neatline. */
   children: React.ReactNode;
 }
@@ -58,10 +69,16 @@ export function CollarShell({
   menuHostRef,
   tabs,
   foot,
+  panelInset = 0,
   children,
 }: CollarShellProps) {
   return (
-    <div className={styles.shell} data-testid="collar-shell">
+    <div
+      className={styles.shell}
+      style={{ ["--ad-sheet-panel-inset" as string]: `${panelInset}px` }}
+      data-testid="collar-shell"
+      data-panel-inset={panelInset}
+    >
       <header className={styles.head} data-testid="collar-head">
         <span className={styles.wordmark}>ATLASDRAW</span>
         {/* Separator is frame decoration, so it stays with the frame — and

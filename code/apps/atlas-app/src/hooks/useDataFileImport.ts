@@ -122,6 +122,14 @@ export function useDataFileImport(
     label: string;
     style: LayerStyle;
   }) => void,
+  /**
+   * Called after a layer has been added to the map AND registered — i.e. only
+   * on the success path, never after a parse/render failure. Import is the one
+   * "what did I just get?" beat where both personas want the sheet panel (design
+   * doc §5), so MapEditor uses this to open it. Optional: the two existing
+   * MapEditor import tests construct the hook without it.
+   */
+  onImported?: () => void,
 ): UseDataFileImportResult {
   const toast = useToast();
 
@@ -146,6 +154,7 @@ export function useDataFileImport(
         toast.success(
           `${file.name}: ${n} feature${n === 1 ? "" : "s"} imported`,
         );
+        onImported?.();
       } catch (err) {
         if (err instanceof GeoJSONParseError) {
           console.error("[MapEditor] GeoJSON parse failed:", err.message);
@@ -178,7 +187,7 @@ export function useDataFileImport(
         toast.error(`${file.name}: import failed unexpectedly`);
       }
     },
-    [map, registerDataLayer, toast],
+    [map, registerDataLayer, toast, onImported],
   );
 
   const importFile = useCallback(

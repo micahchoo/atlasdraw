@@ -79,6 +79,7 @@ import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
+import { useSheetPanelStore } from "../state/sheetPanel";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -95,6 +96,7 @@ import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
 import { SheetRail } from "./SheetRail";
+import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
@@ -272,7 +274,16 @@ export async function openAtlasDocument(
 // reads initialData once on mount; passing a fresh literal each render is
 // harmless today but brittle if a future Excalidraw version memoizes on it.
 const EXCALIDRAW_INITIAL_DATA = {
-  appState: { viewBackgroundColor: "transparent" },
+  appState: {
+    viewBackgroundColor: "transparent",
+    // The sheet panel is the plate's right MARGIN, not a floating overlay —
+    // "nothing floats over the map at rest" (.interface-design/system.md).
+    // Docked is also the only state in which the editor reserves a column for
+    // it, which is what lets the map reflow instead of being covered. The dock
+    // toggle in the panel header still works; this is the default, not a lock,
+    // and it is a *preference* key so a user who undocks keeps that choice.
+    defaultSidebarDockedPreference: true,
+  },
 } as const;
 
 // One format, one door: disable Excalidraw's own persistence actions
@@ -312,6 +323,39 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
   const toast = useToast();
+
+  // --- sheet panel: width, and whether the plate reflows for it -------------
+  //
+  // Width is the app's, persisted in state/sheetPanel.ts and published back
+  // into the editor as `rightSidebarWidth` (which becomes
+  // `--right-sidebar-width`). `sheetPanelLayout` comes the other way, from the
+  // editor's own `isUIShrunkForSidebar` — the one expression that also drives
+  // the UI-wrapper narrowing and the collar legend's offset, so the map's
+  // reflow can't drift out of step with them the way a re-derived copy would.
+  const sheetPanelWidth = useSheetPanelStore((s) => s.width);
+  const setSheetPanelWidth = useSheetPanelStore((s) => s.setWidth);
+  const resetSheetPanelWidth = useSheetPanelStore((s) => s.resetWidth);
+  const [sheetPanelLayout, setSheetPanelLayout] = useState({
+    open: false,
+    shrunk: false,
+  });
+  // Stable identity: `<Excalidraw>`'s memo comparator is a shallow prop compare,
+  // so a fresh closure here would defeat it on every MapEditor render.
+  const onSidebarLayoutChange = useCallback(
+    (layout: { open: boolean; shrunk: boolean }) => {
+      setSheetPanelLayout((prev) =>
+        prev.open === layout.open && prev.shrunk === layout.shrunk
+          ? prev
+          : layout,
+      );
+    },
+    [],
+  );
+  // The plate only gives up pixels when the editor has actually reserved a
+  // column (docked + wide enough). An undocked panel floats, exactly as
+  // upstream Excalidraw does, and the map keeps its full width.
+  const platePanelInset = sheetPanelLayout.shrunk ? sheetPanelWidth : 0;
+
   // Stable outcome channel for save/open — see DocumentNotify above.
   const documentNotify = useMemo<DocumentNotify>(
     () => ({ success: toast.success, error: toast.error }),
@@ -584,10 +628,38 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // deliberate "Import…" menu action below (native file picker), so both
   // trigger paths funnel through the same parse+dispatch pipeline.
   const registry = useLayerRegistry();
+  // Design doc §5 — the panel defaults closed (Priya's four-minute map never
+  // opens it) but a successful import is the one moment both personas want it:
+  // it is the "what did I just get?" beat, and where provenance lives. Once per
+  // session only, and only if the user hasn't already expressed a preference by
+  // opening or closing it — after that their choice wins, which is the whole
+  // point of the resolution.
+  const autoOpenedRef = useRef(false);
+  const userTouchedPanelRef = useRef(false);
+  useEffect(() => {
+    if (sheetPanelLayout.open) {
+      userTouchedPanelRef.current = true;
+    }
+  }, [sheetPanelLayout.open]);
+  const openSheetPanelForImport = useCallback(() => {
+    if (autoOpenedRef.current || userTouchedPanelRef.current) {
+      return;
+    }
+    autoOpenedRef.current = true;
+    excalidrawAPI?.toggleSidebar({
+      name: DEFAULT_SIDEBAR.name,
+      // Same literal the tab is registered under below and the MainMenu item
+      // opens; there is no shared constant for it yet and inventing one here
+      // would be a rename across three call sites, not this step's work.
+      tab: "layers",
+      force: true,
+    });
+  }, [excalidrawAPI]);
   const { importFile } = useDataFileImport(
     rootRef,
     map,
     registry.registerDataLayer,
+    openSheetPanelForImport,
   );
 
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
@@ -775,6 +847,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
         tabs={<SheetRail excalidrawAPI={excalidrawAPI} />}
+        panelInset={platePanelInset}
         foot={
           <StatusBar
             map={map}
@@ -830,6 +903,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               // is exactly one rail. Two rails is what let the hardcoded one
               // drift, and four labelled triggers in a 294px header clipped.
               hideDefaultSidebarTabTriggers
+              // Sheet-panel width: ours to own (SheetPanelResizer edits it,
+              // state/sheetPanel.ts persists it), the editor's to publish as
+              // --right-sidebar-width and clamp. `onSidebarLayoutChange` is the
+              // return path that tells us when to reflow the plate.
+              rightSidebarWidth={sheetPanelWidth}
+              onSidebarLayoutChange={onSidebarLayoutChange}
               renderToolbarExtras={() => (
                 <PinToolButton
                   active={isPinActive}
@@ -968,6 +1047,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             activeId={activeWorkspaceId}
             onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
           />
+
+          {/* Sheet-panel resize handle, at the panel's left edge. Mounted only
+          while the panel is open — its whole position is "the panel's edge",
+          which does not exist otherwise. Rendered for the floating (undocked)
+          panel too: the edge is in the same place either way, only the plate's
+          reflow depends on docking. */}
+          {sheetPanelLayout.open && (
+            <SheetPanelResizer
+              width={sheetPanelWidth}
+              onWidth={setSheetPanelWidth}
+              onReset={resetSheetPanelWidth}
+            />
+          )}
 
           {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
           active. Captures pointerdown above Excalidraw (zIndex 5) so map clicks

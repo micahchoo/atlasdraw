@@ -14,6 +14,11 @@
  *   z-index 2  — CursorOverlay SVG (pointer-events: none, cursor dots)
  *   z-index 10 — PresenceList sidebar widget (absolute, top-right)
  *                Same band as toolbar buttons — different screen region.
+ *   z-index 10 — .handle (SheetPanelResizer.module.css): the sheet panel's
+ *                left-edge drag handle. Same band, again a distinct region.
+ *                It must sit over the right sidebar, whose internal
+ *                --zIndex-ui-library (120) is private to .excalidrawLayer's
+ *                stacking context and so resolves at 1 out here.
  *
  * Collar shell additions (classes live outside this file but share the ladder
  * — recorded here because MapEditor.module.css is the ladder's canonical home,
@@ -32,9 +37,27 @@
   overflow: hidden;
 }
 
+/* The map REFLOWS for the open sheet panel instead of being covered by it
+ * (design doc §5: the panel must not eat Priya's map to earn its keep). The
+ * inset is `--ad-sheet-panel-inset`, published on the collar shell and 0px
+ * whenever the panel is closed or floating — see CollarShell's `panelInset`.
+ *
+ * Only the MAP narrows, not `.excalidrawLayer`. Two reasons, and they are the
+ * same reason: the sidebar is a DOM child of the Excalidraw container, so
+ * narrowing that container would drag the panel inward with it and reflow
+ * nothing; and a docked sidebar overlaying a full-width canvas is Excalidraw's
+ * own behaviour, which ADR-0010 keeps. What matters for geo correctness is that
+ * both layers keep a shared top-left origin — `map.project()` returns
+ * map-container pixels which `CoordinateSync` writes straight into scene
+ * coordinates (the scene is scroll-locked at 0,0, zoom 1). Insetting from the
+ * RIGHT leaves that origin untouched, so anchored elements stay on their
+ * features; MapLibre re-centres and `map.resize()` re-projects them.
+ *
+ * `right` after `inset` on purpose — later declaration wins for the longhand. */
 .mapLayer {
   position: absolute;
   inset: 0;
+  right: var(--ad-sheet-panel-inset, 0px);
   z-index: 0;
 }
 

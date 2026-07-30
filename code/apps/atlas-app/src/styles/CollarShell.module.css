@@ -143,8 +143,15 @@
 
 /* --- graticule cells ---------------------------------------------------- */
 
+/* The lon ticks are 5 labels spread west→east across the MAP's width, so they
+ * have to narrow with it when the sheet panel reserves part of the plate.
+ * `--ad-sheet-panel-inset` comes from the shell's inline style (see
+ * CollarShell's `panelInset`); 0px is the closed/floating case. Without this
+ * the labels stay stretched over the panel and every reading is wrong by the
+ * panel's share of the span. */
 .lonCell {
   grid-area: lon;
+  padding-right: var(--ad-sheet-panel-inset, 0px);
 }
 
 .latCell {

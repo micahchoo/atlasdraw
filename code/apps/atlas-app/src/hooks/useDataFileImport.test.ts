@@ -164,6 +164,7 @@ let lastImportFile: ((file: File) => void) | null = null;
 function Harness({
   map,
   registerDataLayer,
+  onImported,
 }: {
   map: maplibregl.Map | null;
   registerDataLayer: (opts: {
@@ -172,9 +173,15 @@ function Harness({
     label: string;
     style: LayerStyle;
   }) => void;
+  onImported?: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const { importFile } = useDataFileImport(rootRef, map, registerDataLayer);
+  const { importFile } = useDataFileImport(
+    rootRef,
+    map,
+    registerDataLayer,
+    onImported,
+  );
   lastImportFile = importFile;
   return React.createElement("div", { ref: rootRef, "data-testid": "root" });
 }
@@ -182,17 +189,19 @@ function Harness({
 function renderHarness(
   map: maplibregl.Map | null,
   registerDataLayer = vi.fn(),
+  onImported = vi.fn(),
 ) {
   const { getByTestId, findByTestId, unmount } = render(
     React.createElement(
       ToastProvider,
       null,
-      React.createElement(Harness, { map, registerDataLayer }),
+      React.createElement(Harness, { map, registerDataLayer, onImported }),
     ),
   );
   return {
     root: getByTestId("root"),
     registerDataLayer,
+    onImported,
     findByTestId,
     unmount,
   };
@@ -524,5 +533,49 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
     expect(toast.textContent).toMatch(/notes\.txt/);
     expect(parseMock).not.toHaveBeenCalled();
     expect(registerDataLayer).not.toHaveBeenCalled();
+  });
+});
+
+// The sheet panel defaults closed (design doc §5) and a successful import is the
+// one moment both personas want it open. So `onImported` has to be exactly
+// "a layer reached the map AND the registry" — firing it on a failure would pop
+// a panel open to show the user nothing.
+describe("useDataFileImport — onImported (success-only signal)", () => {
+  it("fires after the layer is registered", async () => {
+    const map = makeMockMap();
+    const { root, registerDataLayer, onImported } = renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(onImported).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires once per import, not once per feature", async () => {
+    const map = makeMockMap();
+    const { root, onImported } = renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+  });
+
+  it("does NOT fire when the parse fails", async () => {
+    parseMock.mockRejectedValueOnce(new FakeGeoJSONParseError("bad json"));
+    const map = makeMockMap();
+    const { root, onImported, findByTestId } = renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
+
+    await findByTestId("toast-error");
+    expect(onImported).not.toHaveBeenCalled();
+  });
+
+  it("does NOT fire when there is no map to import onto", async () => {
+    const { root, onImported } = renderHarness(null);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
+
+    await Promise.resolve();
+    expect(onImported).not.toHaveBeenCalled();
   });
 });

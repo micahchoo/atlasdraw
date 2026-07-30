@@ -1,0 +1,52 @@
+/* SheetPanelResizer — drag handle straddling the sheet panel's left edge.
+ *
+ * `right` is set inline (it tracks the live panel width — the one justified
+ * inline style per the conventions skill); `translateX(50%)` then centres the
+ * 7px hit area on that edge so the grab target overhangs the panel by half its
+ * width instead of sitting entirely inside the map.
+ *
+ * Z-index 10 — the ladder's toolbar/banner band. See the component header for
+ * why that clears the sidebar's own 120.
+ */
+
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  transform: translateX(50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Nothing at rest: the collar frame has no floating chrome, and a permanent
+   * bar here would read as a second neatline. The affordance is the cursor. */
+  background: transparent;
+  cursor: col-resize;
+  /* The panel edge is a printed rule, not a scroll surface. */
+  touch-action: none;
+}
+
+.handle:hover,
+.handle:focus-visible {
+  background: var(--ad-surface-inset);
+}
+
+.handle:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Grip — a short hairline tick, visible only once the handle is engaged, so the
+ * user gets confirmation they found the edge and not the panel body. */
+.grip {
+  width: 1px;
+  height: 22px;
+  background: var(--ad-emphasis);
+  opacity: 0;
+}
+
+.handle:hover .grip,
+.handle:focus-visible .grip {
+  opacity: 1;
+}

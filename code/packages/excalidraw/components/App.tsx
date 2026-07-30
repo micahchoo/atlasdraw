@@ -41,6 +41,7 @@ import {
   MAX_ALLOWED_FILE_BYTES,
   MIME_TYPES,
   MQ_RIGHT_SIDEBAR_MIN_WIDTH,
+  clampRightSidebarWidth,
   POINTER_BUTTON,
   ROUNDNESS,
   SCROLL_TIMEOUT,
@@ -2243,9 +2244,20 @@ class App extends React.Component<AppProps, AppState> {
       renderToolbarExtras,
       collarToolbarTarget,
       collarMenuTarget,
+      rightSidebarWidth,
+      onSidebarLayoutChange,
       onScrollBackToContent,
       renderCustomStats,
     } = this.props;
+
+    // Atlasdraw fork addition (ADR-0010, Collar shell): "collar mode" is the
+    // same condition LayerUI derives — the host portaled the toolbar into its
+    // own frame and this is not a phone. Published as a container class so the
+    // *sheet margin* treatment of the sidebar can live in CSS (see
+    // Sidebar.scss) instead of being threaded through every subcomponent.
+    const collarMode =
+      collarToolbarTarget != null &&
+      this.editorInterface.formFactor !== "phone";
 
     const sceneNonce = this.scene.getSceneNonce();
     const { elementsMap, visibleElements } =
@@ -2291,12 +2303,21 @@ class App extends React.Component<AppProps, AppState> {
             this.state.viewModeEnabled ||
             this.state.openDialog?.name === "elementLinkSelector",
           "excalidraw--mobile": this.editorInterface.formFactor === "phone",
+          // Atlasdraw fork addition (ADR-0010, Collar shell).
+          "excalidraw--collar": collarMode,
         })}
         style={{
           ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
             ? POINTER_EVENTS.disabled
             : POINTER_EVENTS.enabled,
-          ["--right-sidebar-width" as any]: "302px",
+          // Atlasdraw fork addition: was the inline literal `"302px"`. The
+          // value is the host's (it owns the resize handle and its
+          // persistence); the editor's job is to clamp it and publish it, so
+          // every downstream reader — Sidebar.scss, the `.layer-ui__wrapper`
+          // narrowing, the collar legend offset — keeps working unchanged.
+          ["--right-sidebar-width" as any]: `${clampRightSidebarWidth(
+            rightSidebarWidth,
+          )}px`,
         }}
         ref={this.excalidrawContainerRef}
         onDrop={this.handleAppOnDrop}
@@ -2343,6 +2364,7 @@ class App extends React.Component<AppProps, AppState> {
                               renderToolbarExtras={renderToolbarExtras}
                               collarToolbarTarget={collarToolbarTarget}
                               collarMenuTarget={collarMenuTarget}
+                              onSidebarLayoutChange={onSidebarLayoutChange}
                               onScrollBackToContent={onScrollBackToContent}
                               renderCustomStats={renderCustomStats}
                               showExitZenModeBtn={

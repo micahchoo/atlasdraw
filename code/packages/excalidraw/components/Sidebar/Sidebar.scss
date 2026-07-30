@@ -1,5 +1,19 @@
 @use "../../css/variables.module" as *;
 
+// Atlasdraw fork addition (ADR-0010, Collar shell): in collar mode the panel is
+// the sheet's right MARGIN, so it is flush — no floating-island gutter.
+// Upstream sizes the sidebar at `--right-sidebar-width - var(--space-factor)*2`
+// (302 → 294px), which leaves an 8px strip between the sidebar and everything
+// that stepped aside for it: `.layer-ui__wrapper`'s narrowing, the collar
+// legend's offset, and the host's reflowed map plate all offset by the FULL
+// custom property. Dropping the subtraction makes the property mean exactly one
+// thing — the width of the box, hence the width of the hole everyone else
+// leaves. Not nested inside `.excalidraw` below because `.excalidraw--collar`
+// is the *same element* as `.excalidraw`, not an ancestor of it.
+.excalidraw.excalidraw--collar .sidebar {
+  width: var(--right-sidebar-width);
+}
+
 .excalidraw {
   .sidebar {
     display: flex;
