@@ -31,6 +31,39 @@
   color: var(--text-primary-color, var(--ad-ink));
 }
 
+/* Threads section (Step 5) — the demoted comments list. The heading IS the
+ * disclosure, so it resets the button chrome and inherits the h3's type
+ * instead of introducing a second heading style. */
+.threadsDisclosure {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-1);
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.threadsDisclosure:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}
+
+.threadsCount {
+  margin-left: auto;
+  font-family: var(--ad-font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  padding: 1px 5px;
+  color: var(--ad-ink-inverse);
+  background: var(--ad-accent);
+  border-radius: 7px;
+}
+
 .empty {
   margin: 0;
   padding: 4px 8px;

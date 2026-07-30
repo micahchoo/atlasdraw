@@ -23,7 +23,18 @@
   display: flex;
 }
 
+/* Mode items sit below the tab items with a printed rule between them — the
+ * rail hosts two different kinds of control (open a panel / change what a
+ * click does) and the separation should be visible, not just in the DOM. */
+.slotMode {
+  margin-top: var(--ad-space-2);
+  padding-top: var(--ad-space-2);
+  border-top: 1px solid var(--ad-hairline);
+}
+
 .trigger {
+  /* Anchors .badge. */
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;
@@ -58,10 +69,46 @@
   border-left: 2px solid var(--ad-accent);
 }
 
+/* Engaged MODE (aria-pressed), as opposed to an open TAB (.triggerOpen). Same
+ * accent edge signature so the rail reads as one control set, plus a filled
+ * accent tint because a mode persists until you turn it off — a stronger
+ * commitment than a panel being open. */
+.triggerOn {
+  color: var(--ad-accent);
+  background: var(--ad-accent-subtle);
+  border-left: 2px solid var(--ad-accent);
+}
+
 .icon {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* --- open-thread badge ---------------------------------------------------- */
+
+/* Sits on the top-left shoulder of the mode glyph: the rail's right edge is
+ * flush against the sheet panel and its left edge carries the accent mark, so
+ * the shoulder is the only corner with clearance. Purely decorative — the
+ * count is in the button's aria-label (see SheetRail.tsx). */
+.badge {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ad-font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ad-ink-inverse);
+  background: var(--ad-accent);
+  border-radius: 7px;
 }
 
 /* Icons arrive as vendored SVG nodes with their own width/height attributes;

@@ -63,6 +63,9 @@ import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
+import { useCommentModeTool } from "../hooks/useCommentModeTool";
+import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
+import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
@@ -113,7 +116,6 @@ import { PinToolButton } from "./PinToolButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
-import { CommentsPanelHost } from "./CommentsPanelHost";
 import { LayerPanel } from "./LayerPanel";
 import { useAnnounce } from "./AriaAnnouncer";
 import { OnboardingTips, useOnboarding } from "./OnboardingTips";
@@ -609,6 +611,21 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
+  // Step 5 — comment MODE (replaces the comments sidebar tab). The boolean
+  // lives in state/commentMode.ts because the rail, the keyboard handler, the
+  // anchor overlay and this component all have to agree about it and none is
+  // an ancestor of the others.
+  const commentMode = useCommentMode();
+  const clearAtlasTool = useCallback(
+    () => setActiveAtlasTool(null),
+    [setActiveAtlasTool],
+  );
+  useCommentModeTool({ excalidrawAPI, clearAtlasTool });
+  // Badge count — derived from the live CommentsLayer, no parallel counter.
+  // Passed explicitly: MapEditor provides CollabContext, so the context-reading
+  // variant would construct a second, disconnected CollabState here.
+  const openThreadCount = useOpenThreadCountFor(collabValue.commentsLayer);
+
   // Keyboard shortcuts panel — toggled with `?`.
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Quick-actions palette — Cmd+K / Ctrl+K.
@@ -756,36 +773,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     });
   }, [excalidrawAPI]);
 
-  // Phase 6 A3 — anchored comments Sidebar tab. Same DefaultSidebar surface
-  // as Layers; opens via toggleSidebar({name: DEFAULT_SIDEBAR.name, tab:
-  // "comments"}). CommentsPanelHost wires useCollab().commentsLayer
-  // internally and renders body markup only.
-  useEffect(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-    return excalidrawAPI.registerSidebarTab({
-      name: "comments",
-      label: "Comments",
-      icon: (
-        <svg
-          width={16}
-          height={16}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M2 3h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9l-3 3v-3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-          <path d="M5 7h6M5 9h4" />
-        </svg>
-      ),
-      content: <CommentsPanelHost />,
-    });
-  }, [excalidrawAPI]);
+  // Step 5 — the "comments" sidebar tab is GONE. Comments are a mode now (rail
+  // toggle + `C`), and the chronological list survives one level down, as the
+  // Threads section of the Layers tab's Sheet scope (LayerPanel). Nothing
+  // calls registerSidebarTab({name: "comments"}) any more; the rail is driven
+  // off getSidebarTabs(), so the entry disappears from it automatically.
+  // Rationale + precedent: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §3.
 
   // W-B — Composite PNG export (extracted to useExportPNG hook).
   const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg, toast);
@@ -856,7 +849,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
-        tabs={<SheetRail excalidrawAPI={excalidrawAPI} />}
+        tabs={
+          <SheetRail
+            excalidrawAPI={excalidrawAPI}
+            commentMode={commentMode}
+            onToggleCommentMode={toggleCommentMode}
+            openThreadCount={openThreadCount}
+          />
+        }
         panelInset={platePanelInset}
         foot={
           <StatusBar
@@ -868,9 +868,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       >
         <div
           ref={rootRef}
-          className={styles.root}
+          className={[styles.root, commentMode ? styles.commentMode : ""]
+            .filter(Boolean)
+            .join(" ")}
           style={{ backgroundColor: mapBg }}
           data-testid="map-editor-root"
+          data-comment-mode={commentMode ? "on" : undefined}
         >
           {/* Bottom layer: MapLibre GL map */}
           <div className={styles.mapLayer}>
@@ -1028,6 +1031,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           band); the container is pointer-events: none so non-anchor clicks
           pass through. */}
           <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
+
+          {/* Step 5 — comment mode's on-plate affordance. A mode with no
+          visible state is a trap: the crosshair cursor (.commentMode above)
+          says "this click does something different" and this hint says what,
+          and how to get out. role="status" so entering the mode is announced
+          rather than only drawn. */}
+          {commentMode && (
+            <div
+              className={styles.commentModeHint}
+              role="status"
+              data-testid="comment-mode-hint"
+            >
+              Click the map or an element to start a thread
+              <span className={styles.commentModeHintKey}>Esc</span>
+              to exit
+            </div>
+          )}
 
           {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
           (no-op for single-player deployments, Q1). Both components already
@@ -1233,15 +1253,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                     }),
                 },
                 {
+                  // Step 5 — was "Comments panel" → toggleSidebar({tab:
+                  // "comments"}), a tab that no longer exists. The palette
+                  // entry now enters the mode; the list view is reachable as
+                  // the Threads section of the Layers tab.
                   id: "comments",
-                  label: "Comments panel",
+                  label: commentMode ? "Exit comment mode" : "Comment mode",
                   category: "View",
-                  keywords: ["sidebar", "threads"],
-                  onSelect: () =>
-                    excalidrawAPI?.toggleSidebar({
-                      name: DEFAULT_SIDEBAR.name,
-                      tab: "comments",
-                    }),
+                  hint: "C",
+                  keywords: ["comment", "threads", "annotate", "review"],
+                  onSelect: toggleCommentMode,
                 },
                 {
                   id: "find",

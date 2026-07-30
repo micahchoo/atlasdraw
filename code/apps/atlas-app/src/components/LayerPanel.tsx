@@ -50,6 +50,7 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
 import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
@@ -58,6 +59,7 @@ import { fitMapToLayer } from "../lib/fitMapToContent";
 import styles from "../styles/LayerPanel.module.css";
 
 import { useAnnounce } from "./AriaAnnouncer";
+import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
 
 import type {
@@ -973,6 +975,47 @@ function AnnotationLayerRow({
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Threads section — Step 5 (2026-07-30)
+//
+// The demoted CommentsPanel. It used to be its own sidebar tab; comments are a
+// mode now (rail toggle + `C`, threads anchored on the map). What the tab was
+// genuinely good at — "read every thread in order, resolve the stale ones" —
+// is Marcus's review pass in the PRD, and that survives here, one level down,
+// in the same Sheet scope as Basemap / Data Layers / Annotations.
+//
+// Collapsed by default, deliberately: it is the review surface, not the
+// default one, and an always-open chronological list is exactly the 90%-empty
+// column the tab was. The disclosure carries the open-thread count so the
+// section still tells you there is something to read while closed.
+// ---------------------------------------------------------------------------
+
+function ThreadsSection() {
+  const [open, setOpen] = useState(false);
+  const openThreads = useOpenThreadCount();
+
+  return (
+    <section aria-label="Threads" className={styles.section}>
+      <h3 className={styles.heading}>
+        <button
+          type="button"
+          className={styles.threadsDisclosure}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="threads-disclosure"
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+          <span>Threads</span>
+          {openThreads > 0 && (
+            <span className={styles.threadsCount}>{openThreads} open</span>
+          )}
+        </button>
+      </h3>
+      {open && <CommentsPanelHost />}
+    </section>
+  );
+}
+
 // Basemap section — IA restructure (2026-07-18): the basemap IS a layer, the
 // bottom of the stack, so it's managed here — not from the MainMenu (which
 // previously held a "Basemap: …" item + standalone BasemapPickerDialog) and
@@ -1190,6 +1233,7 @@ export function LayerPanel() {
           ))
         )}
       </section>
+      <ThreadsSection />
       <section aria-label="Annotations" className={styles.section}>
         <h3 className={styles.heading}>Annotations</h3>
         {annotations.length === 0 ? (

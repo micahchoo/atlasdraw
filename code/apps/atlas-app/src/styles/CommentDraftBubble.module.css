@@ -1,0 +1,99 @@
+/* SPDX-License-Identifier: AGPL-3.0-only
+ * Step 5 — CommentDraftBubble styles.
+ *
+ * Positioned absolutely inside CommentAnchorsOverlay; left/top are inline
+ * style values from the same projection that places a finished CommentAnchor,
+ * so the draft appears where the thread will live.
+ *
+ * Z-index 11: one above the placed anchors (.anchor is 10, the toolbar band).
+ * The draft is transient and must never be occluded by a thread bubble that
+ * happens to project to the same pixel. Both resolve inside the overlay
+ * container, so this stays inside the ladder's toolbar band rather than
+ * opening a new one.
+ */
+
+.draft {
+  position: absolute;
+  z-index: 11;
+  /* Same tip-of-the-pin origin as .anchor, offset right so the bubble does not
+   * cover the point being annotated. */
+  transform: translate(12px, -100%);
+  width: 240px;
+  padding: var(--ad-space-2);
+  box-sizing: border-box;
+  pointer-events: auto;
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-raised);
+}
+
+.provenance {
+  font-size: 11px;
+  color: var(--ad-ink-tertiary);
+  margin-bottom: var(--ad-space-1);
+}
+
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 56px;
+  padding: var(--ad-space-1) var(--ad-space-compact);
+  font: inherit;
+  color: var(--ad-ink);
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -2px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ad-space-1);
+  margin-top: var(--ad-space-2);
+}
+
+.button {
+  height: 24px;
+  padding: 0 var(--ad-space-2);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--ad-surface);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 1px;
+}
+
+.button:disabled {
+  color: var(--ad-ink-tertiary);
+  cursor: default;
+}
+
+.buttonPrimary:not(:disabled) {
+  color: var(--ad-ink-inverse);
+  background: var(--ad-accent);
+  border-color: var(--ad-accent);
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  background: var(--ad-accent-hover);
+}

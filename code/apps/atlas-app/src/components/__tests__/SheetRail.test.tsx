@@ -129,12 +129,13 @@ const DEFAULT_FAKE_TABS: readonly SidebarTabDescriptor[] = [
     icon: <svg data-testid="icon-layers" />,
     stock: false,
   },
-  {
-    name: "comments",
-    label: "Comments",
-    icon: <svg data-testid="icon-comments" />,
-    stock: false,
-  },
+  // Step 5: the `comments` entry is GONE from this fixture, because MapEditor
+  // no longer calls registerSidebarTab({name: "comments"}) — comments became a
+  // mode (design doc §3). The fixture's job is to model what the fork's
+  // `getSidebarTabs()` actually returns for this app; leaving a tab in it that
+  // nothing registers would make every assertion below pin a fiction. Three
+  // tabs still exercises everything four did: stock-before-registered
+  // ordering, roving focus with wrap, and one-expanded-at-a-time.
 ];
 
 /**
@@ -186,11 +187,22 @@ const makeFakeAPI = (
   };
 };
 
-/** Accessible names of the rail's buttons, in DOM order. */
+/**
+ * Accessible names of the rail's TAB buttons, in DOM order.
+ *
+ * Step 5 narrowed this from `[data-testid^=sheet-rail-]` to the `tab` items.
+ * The rail now hosts two kinds of control and the selector had to learn the
+ * difference rather than lump them: a tab discloses a sidebar panel
+ * (`aria-expanded`), a mode changes what a plate click does (`aria-pressed`).
+ * Every assertion this helper feeds is still asserting the same thing it
+ * always was — "the rail is exactly the API's tab list, in API order" — which
+ * is why the expected arrays below are unchanged apart from `comments`
+ * leaving the fixture. The mode item has its own assertions further down.
+ */
 const railNames = (root: HTMLElement): string[] =>
-  Array.from(
-    root.querySelectorAll<HTMLElement>("[data-testid^=sheet-rail-]"),
-  ).map((btn) => btn.getAttribute("aria-label") ?? "");
+  Array.from(root.querySelectorAll<HTMLElement>("[data-rail-item=tab]")).map(
+    (btn) => btn.getAttribute("aria-label") ?? "",
+  );
 
 describe("SheetRail — driven by the API tab list", () => {
   it("renders one trigger per API tab, in API order, search included", () => {
@@ -202,15 +214,24 @@ describe("SheetRail — driven by the API tab list", () => {
     // drift — `TABS` was a hardcoded 3-entry literal, so in collar mode (where
     // LayerUI hides the floating sidebar trigger) canvas Search had no
     // affordance at all. The rail is now derived from `getSidebarTabs()`, the
-    // same list `DefaultSidebar` renders, so all four tabs are reachable and
+    // same list `DefaultSidebar` renders, so every tab is reachable and
     // stock tabs come first because the fork hardcodes them first.
     expect(railNames(container)).toEqual([
       "Find on canvas",
       "Library",
       "Layers",
-      "Comments",
     ]);
     expect(screen.getByTestId(`sheet-rail-${CANVAS_SEARCH_TAB}`)).toBeTruthy();
+  });
+
+  // Step 5. The rail is DERIVED, so demoting comments out of the tab list is
+  // the only thing needed to remove it from the rail — there is no second
+  // hardcoded array to keep in sync. That is the property the CollarSheetTabs
+  // rewrite bought, asserted from the other direction.
+  it("has no comments TAB, because nothing registers one any more", () => {
+    const { api } = makeFakeAPI();
+    render(<SheetRail excalidrawAPI={api} />);
+    expect(screen.queryByTestId("sheet-rail-comments")).toBe(null);
   });
 
   it("renders nothing until the API exists", () => {
@@ -253,7 +274,7 @@ describe("SheetRail — driven by the API tab list", () => {
 
     await emit({ name: DEFAULT_SIDEBAR.name, tab: "layers" });
     expect(expanded("layers")).toBe("true");
-    expect(expanded("comments")).toBe("false");
+    expect(expanded(LIBRARY_SIDEBAR_TAB)).toBe("false");
 
     // a different sidebar *name* clears the highlight even if the tab matches
     await emit({ name: "layers" } as unknown as AppState["openSidebar"]);
@@ -266,12 +287,7 @@ describe("SheetRail — driven by the API tab list", () => {
     // falling back to `DEFAULT_SIDEBAR.defaultTab`) and out of this step's
     // scope — see the fork-side suite, section 3.
     await emit({ name: DEFAULT_SIDEBAR.name });
-    for (const tab of [
-      CANVAS_SEARCH_TAB,
-      LIBRARY_SIDEBAR_TAB,
-      "layers",
-      "comments",
-    ]) {
+    for (const tab of [CANVAS_SEARCH_TAB, LIBRARY_SIDEBAR_TAB, "layers"]) {
       expect(expanded(tab)).toBe("false");
     }
   });
@@ -297,7 +313,6 @@ describe("SheetRail — driven by the API tab list", () => {
         "Find on canvas",
         "Library",
         "Layers",
-        "Comments",
         "Sheet",
       ]);
     });
@@ -325,10 +340,13 @@ describe("SheetRail — keyboard + ARIA", () => {
     expect(container.querySelector("[role=tablist]")).toBe(null);
     expect(container.querySelector("[role=tab]")).toBe(null);
 
+    // Scoped to `tab` items in Step 5: `aria-expanded` is asserted below, and
+    // the mode item deliberately does NOT carry it (nothing is disclosed).
+    // The mode item's own contract is pinned in "SheetRail — comment mode".
     const buttons = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-testid^=sheet-rail-]"),
+      container.querySelectorAll<HTMLElement>("[data-rail-item=tab]"),
     );
-    expect(buttons).toHaveLength(4);
+    expect(buttons).toHaveLength(3);
     for (const btn of buttons) {
       expect(btn.tagName).toBe("BUTTON");
       expect(btn.getAttribute("type")).toBe("button");
@@ -355,7 +373,7 @@ describe("SheetRail — keyboard + ARIA", () => {
 
     const railButtons = () =>
       Array.from(
-        container.querySelectorAll<HTMLElement>("[data-testid^=sheet-rail-]"),
+        container.querySelectorAll<HTMLElement>("[data-rail-item=tab]"),
       );
 
     // closed: no reference at all
@@ -399,7 +417,7 @@ describe("SheetRail — keyboard + ARIA", () => {
     const { container } = render(<SheetRail excalidrawAPI={api} />);
 
     const buttons = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-testid^=sheet-rail-]"),
+      container.querySelectorAll<HTMLElement>("[data-rail-item]"),
     );
 
     // INVERTED. WAS: "puts all three triggers in the tab order (no roving
@@ -432,14 +450,164 @@ describe("SheetRail — keyboard + ARIA", () => {
     const { api, toggleSidebar } = makeFakeAPI();
     const { container } = render(<SheetRail excalidrawAPI={api} />);
 
-    const first = container.querySelector<HTMLElement>(
-      "[data-testid^=sheet-rail-]",
-    )!;
+    const first = container.querySelector<HTMLElement>("[data-rail-item=tab]")!;
     fireEvent.click(first);
     expect(toggleSidebar).toHaveBeenCalledWith({
       name: DEFAULT_SIDEBAR.name,
       tab: CANVAS_SEARCH_TAB,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Step 5 — the mode item
+//
+// The rail's first non-tab occupant. These cases exist to stop it drifting
+// back into looking like a tab: no panel is disclosed, so `aria-expanded` and
+// `aria-controls` would both be lies, and `toggleSidebar` must never be
+// called. The badge cases pin the a11y contract — a count a screen reader
+// cannot reach is a coloured dot, which is the failure mode the design doc
+// warns about when comments stop having a permanent surface.
+// ---------------------------------------------------------------------------
+
+describe("SheetRail — comment mode", () => {
+  it("renders a mode toggle that is not a tab", () => {
+    const { api, toggleSidebar } = makeFakeAPI();
+    render(<SheetRail excalidrawAPI={api} onToggleCommentMode={() => {}} />);
+
+    const mode = screen.getByTestId("sheet-rail-mode-comment");
+    expect(mode.tagName).toBe("BUTTON");
+    expect(mode.getAttribute("data-rail-item")).toBe("mode");
+    // A toolbar toggle, not a disclosure: pressed, not expanded, and it
+    // controls no panel.
+    expect(mode.getAttribute("aria-pressed")).toBe("false");
+    expect(mode.hasAttribute("aria-expanded")).toBe(false);
+    expect(mode.hasAttribute("aria-controls")).toBe(false);
+    // icon-only, same as the tabs
+    expect(mode.textContent).toBe("");
+    expect(mode.getAttribute("aria-label")).toBe("Comment mode");
+    expect(toggleSidebar).not.toHaveBeenCalled();
+  });
+
+  it("toggles the mode on click and never touches the sidebar", () => {
+    const { api, toggleSidebar } = makeFakeAPI();
+    let toggles = 0;
+    render(
+      <SheetRail excalidrawAPI={api} onToggleCommentMode={() => toggles++} />,
+    );
+
+    fireEvent.click(screen.getByTestId("sheet-rail-mode-comment"));
+    expect(toggles).toBe(1);
+    expect(toggleSidebar).not.toHaveBeenCalled();
+  });
+
+  it("reflects the active mode as aria-pressed", () => {
+    const { api } = makeFakeAPI();
+    render(
+      <SheetRail
+        excalidrawAPI={api}
+        commentMode
+        onToggleCommentMode={() => {}}
+      />,
+    );
+    expect(
+      screen
+        .getByTestId("sheet-rail-mode-comment")
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("is absent when the host does not supply a toggle", () => {
+    const { api } = makeFakeAPI();
+    render(<SheetRail excalidrawAPI={api} />);
+    expect(screen.queryByTestId("sheet-rail-mode-comment")).toBe(null);
+  });
+
+  it("puts the open-thread count in the accessible name, not only the badge", () => {
+    const { api } = makeFakeAPI();
+    const { rerender } = render(
+      <SheetRail
+        excalidrawAPI={api}
+        onToggleCommentMode={() => {}}
+        openThreadCount={3}
+      />,
+    );
+
+    // The badge glyph itself is aria-hidden — announcing "3" twice is noise —
+    // so the ONLY path to the count for a screen reader is the button's name.
+    // `getByRole(name:)` runs the real accessible-name computation.
+    expect(
+      screen.getByRole("button", { name: "Comment mode, 3 open threads" }),
+    ).toBe(screen.getByTestId("sheet-rail-mode-comment"));
+    const badge = screen.getByTestId("sheet-rail-comment-badge");
+    expect(badge.textContent).toBe("3");
+    expect(badge.getAttribute("aria-hidden")).toBe("true");
+
+    // singular, because "1 open threads" is the tell of a count nobody read
+    rerender(
+      <SheetRail
+        excalidrawAPI={api}
+        onToggleCommentMode={() => {}}
+        openThreadCount={1}
+      />,
+    );
+    expect(
+      screen.getByTestId("sheet-rail-mode-comment").getAttribute("aria-label"),
+    ).toBe("Comment mode, 1 open thread");
+
+    // and the badge caps rather than blowing out the 32px rail
+    rerender(
+      <SheetRail
+        excalidrawAPI={api}
+        onToggleCommentMode={() => {}}
+        openThreadCount={140}
+      />,
+    );
+    expect(screen.getByTestId("sheet-rail-comment-badge").textContent).toBe(
+      "99+",
+    );
+  });
+
+  it("shows no badge at zero", () => {
+    const { api } = makeFakeAPI();
+    render(
+      <SheetRail
+        excalidrawAPI={api}
+        onToggleCommentMode={() => {}}
+        openThreadCount={0}
+      />,
+    );
+    expect(screen.queryByTestId("sheet-rail-comment-badge")).toBe(null);
+    expect(
+      screen.getByTestId("sheet-rail-mode-comment").getAttribute("aria-label"),
+    ).toBe("Comment mode");
+  });
+
+  it("joins the roving tabindex after the tabs", () => {
+    const { api } = makeFakeAPI();
+    const { container } = render(
+      <SheetRail excalidrawAPI={api} onToggleCommentMode={() => {}} />,
+    );
+
+    const items = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-rail-item]"),
+    );
+    // 3 tabs + 1 mode, mode last
+    expect(items).toHaveLength(4);
+    expect(items[3].getAttribute("data-rail-item")).toBe("mode");
+    expect(
+      items.filter((b) => b.getAttribute("tabindex") === "0"),
+    ).toHaveLength(1);
+
+    // arrows cross the tab/mode boundary in both directions — one rail, one
+    // keyboard model, regardless of what kind of control a slot holds
+    act(() => items[2].focus());
+    fireEvent.keyDown(items[2], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[3]);
+    fireEvent.keyDown(items[3], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(items[0], { key: "End" });
+    expect(document.activeElement).toBe(items[3]);
   });
 });
 

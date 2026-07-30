@@ -393,3 +393,37 @@ describe("LayerPanel", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Step 5 — the demoted comments list
+//
+// CommentsPanel used to be its own sidebar tab. Comments are a mode now, and
+// the "read every thread" pass (Marcus's JTBD) survives one level down, as a
+// section of the Sheet scope alongside Basemap / Data Layers / Annotations.
+// These cases pin that it is REACHABLE and that it is not the default — an
+// always-open chronological list is exactly the 90%-empty column the tab was.
+// ---------------------------------------------------------------------------
+
+describe("LayerPanel — Threads section (Step 5)", () => {
+  it("offers Threads in the Sheet scope, alongside the other sections", () => {
+    render(<LayerPanel />);
+    expect(screen.getByLabelText("Threads")).toBeTruthy();
+    expect(screen.getByLabelText("Data Layers")).toBeTruthy();
+    expect(screen.getByLabelText("Annotations")).toBeTruthy();
+    expect(screen.getByLabelText("Basemap")).toBeTruthy();
+  });
+
+  it("is collapsed by default and discloses the list on demand", () => {
+    render(<LayerPanel />);
+    const disclosure = screen.getByTestId("threads-disclosure");
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("comments-panel")).toBe(null);
+
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    // the SAME CommentsPanel body, "show resolved" and all — demoted, not
+    // rewritten
+    expect(screen.getByTestId("comments-panel")).toBeTruthy();
+    expect(screen.getByTestId("comments-filter-show-resolved")).toBeTruthy();
+  });
+});

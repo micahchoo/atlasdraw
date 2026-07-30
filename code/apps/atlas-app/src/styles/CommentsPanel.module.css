@@ -1,15 +1,23 @@
 /* SPDX-License-Identifier: AGPL-3.0-only
  * Phase 6 A3 — CommentsPanel styles.
  *
- * Mounted as a Sidebar tab body via excalidrawAPI.registerSidebarTab — see
- * MapEditor.tsx for the surface registration. Colors and spacing follow
- * .claude/skills/atlasdraw-ui-conventions/SKILL.md.
+ * Step 5 (2026-07-30): this is no longer a whole sidebar tab body. Comments
+ * are a mode; the list is the Threads SECTION of the Layers tab, a sibling of
+ * Basemap / Data Layers / Annotations. Two rules had to change with it, both
+ * for the same reason — the panel used to own the full column height and now
+ * owns a slice of a flowing stack. See .root and .list.
+ *
+ * Colors and spacing follow .claude/skills/atlasdraw-ui-conventions/SKILL.md.
  */
 
 .root {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  /* WAS `height: 100%`. Inside an auto-height <section> that resolves to
+   * auto anyway for layout purposes but still let the composer paint outside
+   * the section's box — the compose hint landed on top of the "Annotations"
+   * heading below it. Explicit `auto` so the section grows to fit. */
+  height: auto;
   font-family: system-ui, sans-serif;
   font-size: 12px;
   color: var(--ad-ink);
@@ -42,6 +50,10 @@
 
 .list {
   flex: 1 1 auto;
+  /* `flex: 1` used to be handed the whole column. As a section it must not
+   * grow without bound — 40 threads would push Annotations and Basemap off
+   * the panel entirely — so it scrolls inside a cap instead. */
+  max-height: 320px;
   overflow-y: auto;
   padding: var(--ad-space-1) 0;
 }

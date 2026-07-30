@@ -121,6 +121,54 @@
  * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
  * from the --ad-danger token with a consistent #d64045 fallback; the tinted
  * background is a low-alpha mix (color-mix already used for the border). */
+/* --- comment mode (Step 5) -------------------------------------------------
+ *
+ * Comment mode borrows the `hand` tool so map clicks reach MapLibre (see
+ * useCommentModeTool). `hand` paints a grab cursor, which would say "drag the
+ * map" when the mode means "place a thread here" — so override it on the
+ * plate. `!important` is unavoidable: MapLibre writes `cursor` as an INLINE
+ * style on its own canvas, which no amount of selector weight outranks.
+ */
+.commentMode :global(.maplibregl-canvas-container),
+.commentMode :global(.maplibregl-canvas),
+.commentMode canvas {
+  cursor: crosshair !important;
+}
+
+/* Mode hint — bottom-centre of the plate, out of the way of the collar and of
+ * the point being annotated. Same toolbar/banner band (10) as
+ * .collabRoomError, which it deliberately mirrors: both are transient
+ * one-line statements about editor state. */
+.commentModeHint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-1);
+  padding: var(--ad-space-1) var(--ad-space-3);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-tracing);
+  pointer-events: none;
+}
+
+.commentModeHintKey {
+  font-family: var(--ad-font-mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  color: var(--ad-ink-secondary);
+  background: var(--ad-surface-inset);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius-sm);
+}
+
 .collabRoomError {
   position: absolute;
   top: 12px;
