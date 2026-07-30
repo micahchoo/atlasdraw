@@ -84,8 +84,10 @@ describe("LayerPanel", () => {
 
     render(<LayerPanel />);
 
-    // Pre: visible=true → button label is "Hide layer"
-    const hideBtn = screen.getByLabelText("Hide layer");
+    // Pre: visible=true → button label is "Hide <label>". The label carries the
+    // layer name now: at 25 layers, 25 buttons all called "Hide layer" is not
+    // an accessible name, it's a coin flip.
+    const hideBtn = screen.getByLabelText("Hide Buildings");
     fireEvent.click(hideBtn);
 
     const entry = useLayerRegistryStore
@@ -104,7 +106,10 @@ describe("LayerPanel", () => {
 
     render(<LayerPanel />);
 
-    const fillInput = screen.getByLabelText("fill") as HTMLInputElement;
+    // Symbology lives in the card body now, so it has to be opened first.
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:test-3"));
+
+    const fillInput = screen.getByLabelText("Fill") as HTMLInputElement;
     fireEvent.change(fillInput, { target: { value: "#ff8800" } });
 
     const entry = useLayerRegistryStore

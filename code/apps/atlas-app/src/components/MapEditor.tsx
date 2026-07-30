@@ -80,6 +80,7 @@ import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
+import { useMapInstanceStore } from "../state/mapInstance";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -323,6 +324,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
   const toast = useToast();
+
+  // Publish the map for components that render outside this tree — LayerPanel
+  // is handed to `registerSidebarTab` as an already-constructed element, so
+  // "zoom to layer" cannot reach the map by prop. See state/mapInstance.ts for
+  // why a store beats adding `map` to that effect's dependency list.
+  useEffect(() => {
+    useMapInstanceStore.getState().setMap(map);
+    return () => useMapInstanceStore.getState().setMap(null);
+  }, [map]);
 
   // --- sheet panel: width, and whether the plate reflows for it -------------
   //

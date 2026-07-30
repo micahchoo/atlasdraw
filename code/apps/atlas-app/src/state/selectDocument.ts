@@ -107,6 +107,10 @@ export function selectDocument(
       // Convention from manifest-schema: `data/layer-<id>.geojson` — the zip
       // writer in @atlasdraw/data follows the same template.
       source: `data/layer-${entry.id}.geojson`,
+      // Import provenance rides along so a reopened document can still answer
+      // "which file was this, and what did the import drop?" — the label alone
+      // can't, because rename overwrites it (PRD §3 persona C).
+      ...(entry.provenance ? { provenance: entry.provenance } : {}),
     };
   });
 

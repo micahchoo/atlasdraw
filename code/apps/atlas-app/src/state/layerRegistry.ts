@@ -48,6 +48,34 @@ export type AnnotationLayerEntry = {
 };
 
 /**
+ * Where a data layer came from, and what it cost to get here.
+ *
+ * `label` is user-editable (rename), so it stops being an answer to "which
+ * file was this?" the moment anyone renames a layer — hence `sourceFile` as a
+ * separate, immutable record.
+ *
+ * `droppedCount` is the number of input records the import could not put on
+ * the map: CSV rows with unparseable coordinates and no geocode, plus features
+ * whose geometry is `null` (RFC-legal, renders nothing). GeoJSON and shapefile
+ * imports reject the whole file rather than drop records, so 0 there is a fact,
+ * not a default. Note the two contributions sit on opposite sides of
+ * `featureCount` — a skipped CSV row is not in the FeatureCollection, a
+ * null-geometry feature is — so this is deliberately a count and not a ratio;
+ * the panel says "2 dropped", never "2 of N".
+ *
+ * PRD §3 persona C (Dr. Ana) needs this to reproduce an import; before this it
+ * existed only in a 4-second toast that didn't even carry the drop count.
+ * Optional on the entry because converted annotations and collaboratively
+ * received layers have no import event to describe.
+ */
+export type LayerProvenance = {
+  /** File name as the user supplied it, before any rename. */
+  sourceFile: string;
+  /** Input records that did not survive into the FeatureCollection. */
+  droppedCount: number;
+};
+
+/**
  * Data layer — backed by a GeoJSON FeatureCollection rendered through MapLibre.
  * id is namespaced "dl:<uuid>" to never collide with annotation ids (which mirror
  * Excalidraw element ids). featureCount is cached for LayerPanel display.
@@ -60,6 +88,7 @@ export type DataLayerEntry = {
   order: number;
   featureCount: number;
   style: LayerStyle;
+  provenance?: LayerProvenance;
 };
 
 export type LayerRegistryEntry = AnnotationLayerEntry | DataLayerEntry;
@@ -76,12 +105,20 @@ export type LayerRegistryEntry = AnnotationLayerEntry | DataLayerEntry;
 export interface ILayerRegistry {
   entries: LayerRegistryEntry[];
   registerAnnotation(elementId: string, label?: string): void;
+  /**
+   * Set an entry's display label. Named for its first caller
+   * (useLayerRegistrySync, which mirrors Excalidraw text elements), but the
+   * lookup is by id and kind-agnostic — the LayerPanel's data-layer rename
+   * uses it too. Renaming the action would touch nine call sites in
+   * useLayerRegistrySync for no behavioural gain, so the docs carry the load.
+   */
   updateAnnotationLabel(elementId: string, label: string): void;
   registerDataLayer(opts: {
     id: string;
     fc: FeatureCollection;
     label: string;
     style: LayerStyle;
+    provenance?: LayerProvenance;
   }): void;
   convertAnnotationToDataLayer(elementId: string, fc: FeatureCollection): void;
   setVisibility(id: string, visible: boolean): void;
@@ -158,7 +195,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         }
       }),
 
-    registerDataLayer: ({ id, fc, label, style }) => {
+    registerDataLayer: ({ id, fc, label, style, provenance }) => {
       if (!id.startsWith("dl:")) {
         throw new Error(
           `data layer id must start with dl: prefix (received "${id}")`,
@@ -183,6 +220,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           order: 0, // see registerAnnotation — reindexByKind owns the value
           featureCount: fc.features.length,
           style,
+          ...(provenance ? { provenance } : {}),
         });
         reindexByKind(s.entries);
       });

@@ -273,6 +273,61 @@ describe("useDataFileImport — drag-and-drop", () => {
     expect(callArg.fc).toBe(POLY_FC);
   });
 
+  // Provenance — PRD §3 persona C. Before this it lived in a 4-second toast
+  // that didn't even carry the drop count, and `label` stops answering "which
+  // file?" the first time anyone renames the layer.
+  it("records the source filename on the registry entry, separately from the label", async () => {
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+    fireEvent.drop(root, {
+      dataTransfer: { files: [makeFile("parcels.geojson")] },
+    });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(registerDataLayer.mock.calls[0][0].provenance).toEqual({
+      sourceFile: "parcels.geojson",
+      droppedCount: 0,
+    });
+  });
+
+  it("counts null-geometry features as dropped — they pass validation but never render", async () => {
+    parseMock.mockResolvedValue({
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: null },
+        POLY_FC.features[0],
+        { type: "Feature", properties: {}, geometry: null },
+      ],
+    });
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+    fireEvent.drop(root, {
+      dataTransfer: { files: [makeFile("sparse.geojson")] },
+    });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(registerDataLayer.mock.calls[0][0].provenance.droppedCount).toBe(2);
+  });
+
+  it("records CSV rows the parser skipped, which the FeatureCollection cannot report", async () => {
+    // parseCSV drops unparseable rows internally; the only way out is onStats.
+    parseCSVMock.mockImplementation(
+      async (_blob: Blob, opts?: { onStats?: (s: unknown) => void }) => {
+        opts?.onStats?.({ read: 12, emitted: 9, dropped: 3 });
+        return POLY_FC;
+      },
+    );
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("sites.csv")] } });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(registerDataLayer.mock.calls[0][0].provenance).toEqual({
+      sourceFile: "sites.csv",
+      droppedCount: 3,
+    });
+  });
+
   it("CSV path with no geocoder configured calls parseCSV without geocoder options", async () => {
     parseCSVMock.mockResolvedValue(POLY_FC);
     const map = makeMockMap();
@@ -280,7 +335,11 @@ describe("useDataFileImport — drag-and-drop", () => {
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("pts.csv")] } });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
-    expect(parseCSVMock).toHaveBeenCalledWith(expect.anything(), undefined);
+    // Options are always passed now (the hook needs `onStats` to record how
+    // many rows the parse dropped), but `geocoder` must stay absent so the
+    // reader makes no network calls — ADR-0006/0011.
+    const [, csvOpts] = parseCSVMock.mock.calls[0];
+    expect(csvOpts.geocoder).toBeUndefined();
     expect(photonGeocoderCtor).not.toHaveBeenCalled();
   });
 

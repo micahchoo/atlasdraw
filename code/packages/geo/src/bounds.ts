@@ -4,6 +4,10 @@
 //
 // Iterates geo-anchored elements, unions their lng/lat extents into a single
 // box. Used by viewport "zoom to fit" and persistence camera defaults.
+//
+// The FeatureCollection equivalent ("zoom to layer") lives in atlas-app's
+// lib/fitMapToContent.ts rather than here: @atlasdraw/geo deliberately carries
+// no GeoJSON type dependency, and a data layer is never an Excalidraw element.
 
 import { isGeoCustomData } from "./types.js";
 

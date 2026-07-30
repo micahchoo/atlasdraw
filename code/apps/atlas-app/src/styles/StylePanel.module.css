@@ -1,69 +1,25 @@
 /* StylePanel.module.css
  *
- * Per-layer style editor surface — opens as a floating dialog above the
- * LayerPanel. Lives at z-index 100 (context-menu band; modal-ish surface
- * with no scrim because it's panel-attached, not viewport-blocking).
+ * Symbology section of a LayerPanel data-layer card. In normal flow, sized by
+ * the card — NOT a floating dialog.
+ *
+ * It used to be `position:absolute; top:20px; right:20px; width:280px;
+ * z-index:100`, rendered inside a ~294px `overflow:hidden` sidebar body at
+ * z-120 — wider than its container and beneath a stacking context above it, so
+ * it was clipped and occluded simultaneously. Sheet-panel step 4 folded it into
+ * the card; the rule that caused the defect is gone rather than tuned. Do not
+ * reintroduce position/width/z-index here: the card owns layout.
  *
  * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
- *   - Atlas-side palette hex literals (this surface may live outside the
- *     `.excalidraw` scope when LayerPanel opens it from a portal-less render).
- *   - Inline SVG icons (none in this file yet — the close button uses ×).
- *   - aria-pressed on the tab buttons; aria-label on the close.
+ *   - `--ad-*` tokens only.
+ *   - aria-selected on the tab buttons; the tablist carries its own label.
  */
 
 .panel {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 100;
-  width: 280px;
-  max-height: 80vh;
-  overflow: auto;
-  background: var(--ad-surface-raised);
-  border: 1px solid var(--ad-rule);
-  border-radius: 6px;
-  box-shadow: var(--ad-shadow-raised);
-  font-family: system-ui, sans-serif;
+  width: 100%;
+  min-width: 0;
+  font-family: var(--ad-font-sans);
   color: var(--ad-ink);
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--ad-rule);
-}
-
-.title {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.closeBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-size: 16px;
-  cursor: pointer;
-  color: var(--ad-ink);
-}
-
-.closeBtn:hover {
-  background: var(--ad-surface-inset);
-  border-radius: 4px;
-}
-
-.empty {
-  margin: 0;
-  padding: 12px;
-  font-size: 12px;
-  color: var(--ad-ink-tertiary);
 }
 
 /* --- tab strip ------------------------------------------------------------ */
@@ -75,14 +31,19 @@
 
 .tab {
   flex: 1;
-  padding: 6px 8px;
+  min-width: 0;
+  padding: 6px 4px;
   border: none;
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: 12px;
+  background: transparent;
+  color: var(--ad-ink-secondary);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
   font-weight: 400;
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab:hover {
@@ -98,7 +59,7 @@
 /* --- body / fields -------------------------------------------------------- */
 
 .body {
-  padding: 12px;
+  padding: var(--ad-space-2) 0 0;
 }
 
 .tabBody {

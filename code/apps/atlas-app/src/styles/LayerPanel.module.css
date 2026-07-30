@@ -80,7 +80,20 @@
   cursor: grabbing;
 }
 
+/* The header line of a row: grip, the row's own content, reorder arrows. The
+ * card's expanded body is a sibling BELOW this line, so it spans the row's
+ * full width instead of being squeezed between the grip and the arrows. */
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .rowAnnotation {
+  display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: row;
   align-items: center;
   gap: 6px;
@@ -88,21 +101,190 @@
 
 .rowHeader {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .label {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 400;
   color: var(--text-primary-color, var(--ad-ink));
 }
 
+/* Disclosure caret — a bare 20px hit target, not a full icon button: it sits
+ * inside a row that already carries four bordered buttons, and a fifth box
+ * would read as another action rather than as structure. */
+.disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--ad-radius-sm);
+  background: transparent;
+  color: var(--ad-ink-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.disclosure:hover {
+  background: var(--ad-surface-inset);
+  color: var(--ad-ink);
+}
+
+.renameInput {
+  flex: 1;
+  min-width: 0;
+  padding: 1px var(--ad-space-1);
+  border: 1px solid var(--ad-emphasis);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+}
+
+/* --- filter (appears at >= 10 data layers) --------------------------------- */
+
+.filterRow {
+  padding: 0 var(--ad-space-2) var(--ad-space-1);
+}
+
+.filterInput {
+  width: 100%;
+  padding: 3px var(--ad-space-2);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-inset);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+}
+
+.filterInput:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -1px;
+}
+
+/* --- ⋯ overflow menu ------------------------------------------------------- */
+
+.menuWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Anchored to the trigger and right-aligned so it opens INSIDE the panel's
+ * horizontal bounds. The sidebar body clips overflow — the same clipping that
+ * used to eat StylePanel — so a menu that grows leftward is the only kind that
+ * stays readable at 260px. */
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--ad-space-1);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  background: var(--ad-surface-raised);
+  box-shadow: var(--ad-shadow-raised);
+}
+
+.menuItem {
+  padding: var(--ad-space-1) var(--ad-space-2);
+  border: none;
+  border-radius: var(--ad-radius-sm);
+  background: transparent;
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--ad-accent-subtle);
+}
+
+.menuItemDanger {
+  color: var(--ad-danger);
+}
+
+.menuItemDanger:hover {
+  background: var(--ad-danger);
+  color: var(--ad-ink-inverse);
+}
+
+.menuConfirmText {
+  margin: 0;
+  padding: var(--ad-space-1) var(--ad-space-2);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  color: var(--ad-ink-secondary);
+}
+
 .featureCount {
+  flex-shrink: 0;
+  font-family: var(--ad-font-mono);
   font-size: 11px;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
   color: var(--ad-ink-tertiary);
+}
+
+/* Reorder arrows as one 32px-tall column instead of two 32px squares — see
+ * SortableRow. Each button keeps a >= 24px-wide hit target; the pair together
+ * occupies the height of a single icon button. */
+.reorderStack {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 24px;
+  border: 1px solid var(--default-border-color, var(--ad-rule));
+  border-radius: var(--ad-radius-sm);
+  overflow: hidden;
+  background: var(--island-bg-color, var(--ad-surface-raised));
+}
+
+.reorderBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary-color, var(--ad-ink));
+  cursor: pointer;
+}
+
+.reorderBtn .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.reorderBtn:hover:not(:disabled) {
+  background: var(--button-hover-bg, var(--ad-surface-inset));
+}
+
+.reorderBtn:disabled {
+  color: var(--ad-ink-tertiary);
+  cursor: not-allowed;
+}
+
+.reorderBtn + .reorderBtn {
+  border-top: 1px solid var(--ad-hairline);
 }
 
 .kindBadge {
@@ -165,20 +347,35 @@
 /* --- Data layer detail accordion ------------------------------------------ */
 
 .detail {
+  margin-top: var(--ad-space-2);
   padding: var(--ad-space-2) 0 0;
   border-top: 1px solid var(--ad-hairline);
+  min-width: 0;
 }
 
-.detailMeta {
-  display: flex;
-  gap: var(--ad-space-3);
-  margin-bottom: var(--ad-space-2);
+.detailHeading {
+  margin: var(--ad-space-3) 0 var(--ad-space-1);
+  font-family: var(--ad-font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ad-ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.metaItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* Provenance as a definition list: label/value pairs, two columns, so the
+ * source filename gets the room to wrap that a flex row would deny it. */
+.provenance {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--ad-space-2);
+  margin: 0 0 var(--ad-space-2);
+}
+
+.provenance dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .metaLabel {

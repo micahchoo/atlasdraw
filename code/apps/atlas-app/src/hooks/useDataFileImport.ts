@@ -50,7 +50,7 @@ import { addDataLayerToMap } from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import type { LayerStyle } from "../state/layerRegistry";
+import type { LayerProvenance, LayerStyle } from "../state/layerRegistry";
 
 type DataFileExt = "geojson" | "csv" | "zip";
 
@@ -69,26 +69,49 @@ function detectExt(fileName: string): DataFileExt | null {
   return null;
 }
 
-/** Parse a dropped/picked file by extension. Throws the parser's own error types. */
+/**
+ * Parse a dropped/picked file by extension. Throws the parser's own error types.
+ *
+ * Returns the FC alongside the number of input records the parse discarded.
+ * Only CSV discards anything (a row with no usable coordinates is skipped so
+ * one bad line can't fail a 10k-row file); GeoJSON and shapefile reject the
+ * whole file instead, so 0 from those branches is a fact rather than a
+ * placeholder. The count is recorded as layer provenance — see
+ * `LayerProvenance` in state/layerRegistry.
+ */
 async function parseDroppedFile(
   file: File,
   ext: DataFileExt,
-): Promise<FeatureCollection> {
+): Promise<{ fc: FeatureCollection; dropped: number }> {
   if (ext === "csv") {
     const geocoderConfig = getAppConfig().geocoder;
-    return parseCSV(
-      file,
-      geocoderConfig
+    let dropped = 0;
+    const fc = await parseCSV(file, {
+      ...(geocoderConfig
         ? {
             geocoder: new PhotonGeocoder({ endpoint: geocoderConfig.endpoint }),
           }
-        : undefined,
-    );
+        : {}),
+      onStats: (stats) => {
+        dropped = stats.dropped;
+      },
+    });
+    return { fc, dropped };
   }
   if (ext === "zip") {
-    return parseShapefile(file);
+    return { fc: await parseShapefile(file), dropped: 0 };
   }
-  return parse(file);
+  return { fc: await parse(file), dropped: 0 };
+}
+
+/**
+ * Features that made it into the FC but will never render: `geometry: null` is
+ * RFC 7946-legal and survives `parse()`'s validation, yet MapLibre draws
+ * nothing for it. Counted as dropped so the panel's number matches what the
+ * user can actually see on the map.
+ */
+function countNullGeometries(fc: FeatureCollection): number {
+  return fc.features.reduce((n, f) => (f.geometry ? n : n + 1), 0);
 }
 
 /** Human-readable message per ShapefileParseError code. */
@@ -121,6 +144,7 @@ export function useDataFileImport(
     fc: FeatureCollection;
     label: string;
     style: LayerStyle;
+    provenance?: LayerProvenance;
   }) => void,
   /**
    * Called after a layer has been added to the map AND registered — i.e. only
@@ -139,7 +163,7 @@ export function useDataFileImport(
         return;
       }
       try {
-        const fc = await parseDroppedFile(file, ext);
+        const { fc, dropped } = await parseDroppedFile(file, ext);
         requireHomogeneousGeometry(fc);
         const id = `dl:${crypto.randomUUID()}`;
         const style = defaultLayerStyle(fc);
@@ -149,7 +173,16 @@ export function useDataFileImport(
         // addDataLayerToMap owns the addSource/addLayer + orphan-source
         // rollback so an imported layer and a re-added one are byte-identical.
         addDataLayerToMap(map, id, fc, style);
-        registerDataLayer({ id, fc, label: file.name, style });
+        registerDataLayer({
+          id,
+          fc,
+          label: file.name,
+          style,
+          provenance: {
+            sourceFile: file.name,
+            droppedCount: dropped + countNullGeometries(fc),
+          },
+        });
         const n = fc.features.length;
         toast.success(
           `${file.name}: ${n} feature${n === 1 ? "" : "s"} imported`,

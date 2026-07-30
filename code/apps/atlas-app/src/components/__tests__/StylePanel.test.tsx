@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe("StylePanel", () => {
   it("opens on the single-color tab by default and switches between tabs", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     const singleTab = screen.getByTestId("style-tab-single");
     const catTab = screen.getByTestId("style-tab-categorical");
@@ -65,7 +65,7 @@ describe("StylePanel", () => {
   });
 
   it("single-color tab Apply writes fillColor and clears expression", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     const colorInput = screen.getByTestId(
       "style-single-color",
@@ -84,7 +84,7 @@ describe("StylePanel", () => {
   });
 
   it("categorical tab: adding a stop and applying writes an expression of kind 'categorical'", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     fireEvent.click(screen.getByTestId("style-tab-categorical"));
 
@@ -117,7 +117,7 @@ describe("StylePanel", () => {
   });
 
   it("graduated tab: compute-stops with linear method produces evenly-spaced stops", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     fireEvent.click(screen.getByTestId("style-tab-graduated"));
 
@@ -157,19 +157,40 @@ describe("StylePanel", () => {
     }
   });
 
-  it("calls onClose when the close button is clicked", () => {
-    const onClose = vi.fn();
-    render(<StylePanel layerId="dl:t1" onClose={onClose} />);
+  // Replaces the two former dialog tests ("closes on ×" / "closes on Escape").
+  // Sheet-panel step 4 folded this component into the layer card, so there is
+  // no dialog to close and nothing to trap focus in — the card's disclosure
+  // owns open/closed now (see LayerPanel.card.test.tsx). What remains to pin
+  // here is that the surface is genuinely NOT a dialog any more, because the
+  // defect it caused (a 280px absolutely-positioned box inside a 294px
+  // overflow:hidden sidebar) came straight from that framing.
+  it("renders in normal flow — no dialog role, no fixed width, no z-index", () => {
+    render(<StylePanel layerId="dl:t1" />);
 
-    fireEvent.click(screen.getByTestId("style-close"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByTestId("style-close")).toBeNull();
+
+    const panel = screen.getByTestId("style-panel");
+    const style = getComputedStyle(panel);
+    expect(style.position).not.toBe("absolute");
+    expect(style.zIndex).not.toBe("100");
   });
 
-  it("calls onClose when Escape is pressed", () => {
-    const onClose = vi.fn();
-    render(<StylePanel layerId="dl:t1" onClose={onClose} />);
+  it("does not swallow Escape — the sidebar's own handlers still see it", () => {
+    render(<StylePanel layerId="dl:t1" />);
 
+    const onEscape = vi.fn();
+    window.addEventListener("keydown", onEscape);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    window.removeEventListener("keydown", onEscape);
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    // Still mounted: Escape is no longer this component's business.
+    expect(screen.getByTestId("style-panel")).toBeTruthy();
+  });
+
+  it("renders nothing when the layer vanishes from the registry mid-render", () => {
+    const { container } = render(<StylePanel layerId="dl:gone" />);
+    expect(container.innerHTML).toBe("");
   });
 });

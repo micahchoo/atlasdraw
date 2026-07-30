@@ -98,6 +98,9 @@ export async function hydrate(
         style: entry.style as unknown as Parameters<
           typeof registry.registerDataLayer
         >[0]["style"],
+        // Absent on documents written before provenance existed — the panel
+        // shows "unknown source" rather than guessing from the label.
+        provenance: entry.provenance,
       });
     }
     if (!entry.visible) {
