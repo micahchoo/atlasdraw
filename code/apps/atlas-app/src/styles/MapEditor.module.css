@@ -14,6 +14,11 @@
  *   z-index 2  — CursorOverlay SVG (pointer-events: none, cursor dots)
  *   z-index 10 — PresenceList sidebar widget (absolute, top-right)
  *                Same band as toolbar buttons — different screen region.
+ *   z-index 10 — .handle (SheetPanelResizer.module.css): the sheet panel's
+ *                left-edge drag handle. Same band, again a distinct region.
+ *                It must sit over the right sidebar, whose internal
+ *                --zIndex-ui-library (120) is private to .excalidrawLayer's
+ *                stacking context and so resolves at 1 out here.
  *
  * Collar shell additions (classes live outside this file but share the ladder
  * — recorded here because MapEditor.module.css is the ladder's canonical home,
@@ -32,9 +37,27 @@
   overflow: hidden;
 }
 
+/* The map REFLOWS for the open sheet panel instead of being covered by it
+ * (design doc §5: the panel must not eat Priya's map to earn its keep). The
+ * inset is `--ad-sheet-panel-inset`, published on the collar shell and 0px
+ * whenever the panel is closed or floating — see CollarShell's `panelInset`.
+ *
+ * Only the MAP narrows, not `.excalidrawLayer`. Two reasons, and they are the
+ * same reason: the sidebar is a DOM child of the Excalidraw container, so
+ * narrowing that container would drag the panel inward with it and reflow
+ * nothing; and a docked sidebar overlaying a full-width canvas is Excalidraw's
+ * own behaviour, which ADR-0010 keeps. What matters for geo correctness is that
+ * both layers keep a shared top-left origin — `map.project()` returns
+ * map-container pixels which `CoordinateSync` writes straight into scene
+ * coordinates (the scene is scroll-locked at 0,0, zoom 1). Insetting from the
+ * RIGHT leaves that origin untouched, so anchored elements stay on their
+ * features; MapLibre re-centres and `map.resize()` re-projects them.
+ *
+ * `right` after `inset` on purpose — later declaration wins for the longhand. */
 .mapLayer {
   position: absolute;
   inset: 0;
+  right: var(--ad-sheet-panel-inset, 0px);
   z-index: 0;
 }
 
@@ -92,6 +115,54 @@
   z-index: 5;
   pointer-events: auto;
   /* No background — the map and Excalidraw show through. */
+}
+
+/* --- comment mode (Step 5) -------------------------------------------------
+ *
+ * Comment mode borrows the `hand` tool so map clicks reach MapLibre (see
+ * useCommentModeTool). `hand` paints a grab cursor, which would say "drag the
+ * map" when the mode means "place a thread here" — so override it on the
+ * plate. `!important` is unavoidable: MapLibre writes `cursor` as an INLINE
+ * style on its own canvas, which no amount of selector weight outranks.
+ */
+.commentMode :global(.maplibregl-canvas-container),
+.commentMode :global(.maplibregl-canvas),
+.commentMode canvas {
+  cursor: crosshair !important;
+}
+
+/* Mode hint — bottom-centre of the plate, out of the way of the collar and of
+ * the point being annotated. Same toolbar/banner band (10) as
+ * .collabRoomError, which it deliberately mirrors: both are transient
+ * one-line statements about editor state. */
+.commentModeHint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-1);
+  padding: var(--ad-space-1) var(--ad-space-3);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-tracing);
+  pointer-events: none;
+}
+
+.commentModeHintKey {
+  font-family: var(--ad-font-mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  color: var(--ad-ink-secondary);
+  background: var(--ad-surface-inset);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius-sm);
 }
 
 /* Collab-room parse-error banner — centered pill at the top of the plate,

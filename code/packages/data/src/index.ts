@@ -47,7 +47,7 @@ export {
   CSV_HEURISTIC_THRESHOLD,
   CSV_HEURISTIC_THRESHOLD_SMALL_DATASET,
 } from "./csv";
-export type { CsvReadOptions } from "./csv";
+export type { CsvReadOptions, CsvImportStats } from "./csv";
 
 // Phase 6 A7 — Photon-compatible geocoder client + LRU cache.
 // Operator-configured; no default endpoint (ADR-0006 / ADR-0011).

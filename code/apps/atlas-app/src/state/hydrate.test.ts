@@ -392,6 +392,89 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     expect(api2.updateScene).toHaveBeenCalledWith({ elements: sceneElements });
   });
 
+  // Sheet-panel step 4: the layer card's provenance line is the ONLY place an
+  // import's source file and drop count are recorded, and `label` stops
+  // answering "which file?" the moment anyone renames the layer. If it does
+  // not survive save/open, Dr. Ana's reproducibility need (PRD §3 persona C)
+  // is met for one session only.
+  it("carries layer provenance through save → open, and a rename does not erase it", async () => {
+    const reg = useLayerRegistryStore.getState();
+    reg.registerDataLayer({
+      id: "dl:provenanced",
+      fc: sampleFC,
+      label: "sites_2026.csv",
+      style: {},
+      provenance: { sourceFile: "sites_2026.csv", droppedCount: 7 },
+    });
+    // The rename that would otherwise destroy the only record of the filename.
+    useLayerRegistryStore
+      .getState()
+      .updateAnnotationLabel("dl:provenanced", "Field sites");
+
+    const { api } = makeAPI();
+    const snap = selectDocument(api, useLayerRegistryStore.getState());
+
+    const manifestEntry = snap.manifest.layers.find(
+      (l) => l.id === "dl:provenanced",
+    );
+    expect(manifestEntry).toMatchObject({
+      label: "Field sites",
+      provenance: { sourceFile: "sites_2026.csv", droppedCount: 7 },
+    });
+
+    for (const id of useLayerRegistryStore
+      .getState()
+      .entries.map((e) => e.id)) {
+      useLayerRegistryStore.getState().remove(id);
+    }
+    const { api: api2 } = makeAPI();
+    await hydrate(snap, api2);
+
+    const restored = useLayerRegistryStore
+      .getState()
+      .entries.find((e) => e.id === "dl:provenanced");
+    expect(restored?.kind).toBe("data");
+    if (restored?.kind === "data") {
+      expect(restored.label).toBe("Field sites");
+      expect(restored.provenance).toEqual({
+        sourceFile: "sites_2026.csv",
+        droppedCount: 7,
+      });
+    }
+  });
+
+  it("hydrates a pre-provenance document without inventing one", async () => {
+    const reg = useLayerRegistryStore.getState();
+    reg.registerDataLayer({
+      id: "dl:legacy",
+      fc: sampleFC,
+      label: "old.geojson",
+      style: {},
+    });
+    const { api } = makeAPI();
+    const snap = selectDocument(api, useLayerRegistryStore.getState());
+    expect(
+      snap.manifest.layers.find((l) => l.id === "dl:legacy"),
+    ).not.toHaveProperty("provenance");
+
+    for (const id of useLayerRegistryStore
+      .getState()
+      .entries.map((e) => e.id)) {
+      useLayerRegistryStore.getState().remove(id);
+    }
+    const { api: api2 } = makeAPI();
+    await hydrate(snap, api2);
+
+    const restored = useLayerRegistryStore
+      .getState()
+      .entries.find((e) => e.id === "dl:legacy");
+    // Unconditional on purpose. Behind `if (restored?.kind === "data")` the
+    // only assertion in this test disappeared whenever hydrate skipped data
+    // layers entirely — the exact regression it exists to catch.
+    expect(restored?.kind).toBe("data");
+    expect(restored && "provenance" in restored).toBe(false);
+  });
+
   it("preserves embedded files through selectDocument → hydrate (paste-image round-trip)", async () => {
     // Simulate the post-paste Excalidraw state: getFiles() returns a BinaryFiles
     // record keyed by file id, with the image's bytes as a base64 data URL.

@@ -2,7 +2,7 @@
 // packages/data/src/csv.test.ts
 // Phase 3 Wave 1 Task 6 — colocated tests for CSV parser.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CSVParseError,
@@ -10,6 +10,8 @@ import {
   CSV_HEURISTIC_THRESHOLD_SMALL_DATASET,
   parseCSV,
 } from "./csv.js";
+
+import type { CsvImportStats } from "./csv.js";
 
 const csvBlob = (text: string): Blob => new Blob([text], { type: "text/csv" });
 
@@ -264,5 +266,55 @@ describe("parseCSV — malformed-row tolerance", () => {
       csvBlob("lat,lng,name\n40.7,-74,NYC\n,,empty\n34.0,-118,LA"),
     );
     expect(fc.features).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Row accounting. CSV is the only format here that drops silently — a row with
+// unparseable coordinates is skipped so one bad line can't fail a 10k-row file.
+// The FeatureCollection alone can't say how much of the file survived, so the
+// caller records `dropped` as layer provenance and the sheet panel shows it.
+// ---------------------------------------------------------------------------
+
+describe("parseCSV — onStats row accounting", () => {
+  it("reports read = emitted when every row has coordinates", async () => {
+    const stats: CsvImportStats[] = [];
+    await parseCSV(csvBlob("name,lat,lng\na,1,2\nb,3,4\n"), {
+      onStats: (s) => stats.push(s),
+    });
+    expect(stats).toEqual([{ read: 2, emitted: 2, dropped: 0 }]);
+  });
+
+  it("counts rows whose coordinates don't parse", async () => {
+    const stats: CsvImportStats[] = [];
+    await parseCSV(
+      csvBlob("name,lat,lng\na,1,2\nbad,,\nc,3,4\nalsobad,notanumber,9\n"),
+      { onStats: (s) => stats.push(s) },
+    );
+    expect(stats).toEqual([{ read: 4, emitted: 2, dropped: 2 }]);
+  });
+
+  it("counts out-of-range coordinates as dropped, not as features", async () => {
+    const stats: CsvImportStats[] = [];
+    const fc = await parseCSV(
+      csvBlob("name,lat,lng\ngood,45,9\nbadlat,910,9\n"),
+      { onStats: (s) => stats.push(s) },
+    );
+    expect(fc.features).toHaveLength(1);
+    expect(stats[0]).toEqual({ read: 2, emitted: 1, dropped: 1 });
+  });
+
+  it("fires exactly once, and only after the collection is complete", async () => {
+    const onStats = vi.fn();
+    const fc = await parseCSV(csvBlob("name,lat,lng\na,1,2\nb,,\n"), {
+      onStats,
+    });
+    expect(onStats).toHaveBeenCalledTimes(1);
+    expect(onStats.mock.calls[0][0].emitted).toBe(fc.features.length);
+  });
+
+  it("is optional — omitting it is the pre-existing behaviour", async () => {
+    const fc = await parseCSV(csvBlob("name,lat,lng\na,1,2\n"));
+    expect(fc.features).toHaveLength(1);
   });
 });

@@ -55,6 +55,17 @@ const DataLayerEntrySchema = z.object({
   // Path within the zip to the layer's GeoJSON. Atlasdraw.ts writer follows
   // the convention `data/layer-<id>.geojson`.
   source: z.string().min(1),
+  // Import provenance — the original file name and how many input records the
+  // import dropped. Optional because documents written before this field
+  // existed, converted annotations, and collaboratively-received layers have
+  // no import event to describe; the panel renders "unknown" rather than
+  // inventing one.
+  provenance: z
+    .object({
+      sourceFile: z.string().min(1),
+      droppedCount: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 export const LayerEntrySchema = z.discriminatedUnion("kind", [

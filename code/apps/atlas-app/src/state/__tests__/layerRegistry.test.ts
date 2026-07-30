@@ -341,4 +341,106 @@ describe("layerRegistry", () => {
       expect(entries[0].id).toBe("el-1");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // P3 — reorder is kind-scoped. `order` is the index within the entry's own
+  // stack, and an entry can never cross into the other stack.
+  // -------------------------------------------------------------------------
+  describe("mixed-kind reorder", () => {
+    const seedMixed = () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerDataLayer({
+        id: "dl:d1",
+        fc: emptyFc(1),
+        label: "D1",
+        style: {},
+      });
+      store.registerDataLayer({
+        id: "dl:d2",
+        fc: emptyFc(1),
+        label: "D2",
+        style: {},
+      });
+      store.registerAnnotation("a1");
+      store.registerAnnotation("a2");
+      store.registerAnnotation("a3");
+    };
+    const ids = () => useLayerRegistryStore.getState().entries.map((e) => e.id);
+    const orderOf = (id: string) =>
+      useLayerRegistryStore.getState().entries.find((e) => e.id === id)?.order;
+
+    it("numbers order per kind, not globally", () => {
+      seedMixed();
+      expect(orderOf("dl:d1")).toBe(0);
+      expect(orderOf("dl:d2")).toBe(1);
+      expect(orderOf("a1")).toBe(0);
+      expect(orderOf("a3")).toBe(2);
+    });
+
+    it("moves the first annotation to the last annotation slot", () => {
+      seedMixed();
+      useLayerRegistryStore.getState().reorder("a1", 2);
+
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "a2", "a3", "a1"]);
+      expect(orderOf("a1")).toBe(2);
+      expect(orderOf("a2")).toBe(0);
+      // Data layers untouched.
+      expect(orderOf("dl:d1")).toBe(0);
+      expect(orderOf("dl:d2")).toBe(1);
+    });
+
+    it("cannot splice an annotation into the data-layer stack", () => {
+      seedMixed();
+      // Index 0 of the annotation stack is where a1 already is → no-op.
+      useLayerRegistryStore.getState().reorder("a1", 0);
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "a1", "a2", "a3"]);
+
+      // Even a wildly out-of-range index only clamps inside the group.
+      useLayerRegistryStore.getState().reorder("a1", 99);
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "a2", "a3", "a1"]);
+      expect(
+        useLayerRegistryStore
+          .getState()
+          .entries.filter((e) => e.kind === "data")
+          .map((e) => e.id),
+      ).toEqual(["dl:d1", "dl:d2"]);
+    });
+
+    it("reordering data layers leaves annotation order alone", () => {
+      seedMixed();
+      useLayerRegistryStore.getState().reorder("dl:d1", 1);
+
+      expect(ids()).toEqual(["dl:d2", "dl:d1", "a1", "a2", "a3"]);
+      expect(orderOf("dl:d1")).toBe(1);
+      expect(orderOf("a1")).toBe(0);
+      expect(orderOf("a2")).toBe(1);
+      expect(orderOf("a3")).toBe(2);
+    });
+
+    it("keeps order contiguous per kind after a mid-stack remove", () => {
+      seedMixed();
+      useLayerRegistryStore.getState().remove("a2");
+
+      expect(orderOf("a1")).toBe(0);
+      expect(orderOf("a3")).toBe(1);
+      expect(orderOf("dl:d1")).toBe(0);
+    });
+
+    it("re-closes the annotation stack when one is converted to a data layer", () => {
+      seedMixed();
+      useLayerRegistryStore
+        .getState()
+        .convertAnnotationToDataLayer("a1", emptyFc(1));
+
+      expect(orderOf("a2")).toBe(0);
+      expect(orderOf("a3")).toBe(1);
+      // The converted layer lands on top of the data stack (3rd data layer).
+      const converted = useLayerRegistryStore
+        .getState()
+        .entries.find(
+          (e) => e.kind === "data" && e.id.startsWith("dl:") && e.order === 2,
+        );
+      expect(converted).toBeDefined();
+    });
+  });
 });

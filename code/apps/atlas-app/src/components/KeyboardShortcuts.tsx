@@ -111,6 +111,14 @@ const SHORTCUTS: Shortcut[] = [
 
   // --- Atlas ---
   {
+    // Step 5. Bare `c` was verified unbound in Excalidraw before being taken —
+    // its only C bindings are Ctrl/Cmd+Alt+C (copy styles), Alt+Shift+C (copy
+    // as PNG) and the native Ctrl+C copy, all of which still work.
+    keys: ["C"],
+    label: "Comment mode (Esc to exit)",
+    category: "Atlas",
+  },
+  {
     keys: ["Escape"],
     label: "Cancel active atlas tool",
     category: "Atlas",

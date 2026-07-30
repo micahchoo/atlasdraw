@@ -27,6 +27,13 @@ export type SidebarProps<P = {}> = {
   onDock?: (docked: boolean) => void;
   docked?: boolean;
   className?: string;
+  /**
+   * Atlasdraw fork addition — DOM `id` on the sidebar island. Needed so a
+   * trigger rail rendered outside the editor's React tree has a stable
+   * `aria-controls` target (`DefaultSidebar` passes
+   * `DEFAULT_SIDEBAR_DOM_ID`). Forwarded straight to the `<Island>`.
+   */
+  id?: string;
   // NOTE sidebars we use internally inside the editor must have this flag set.
   // It indicates that this sidebar should have lower precedence over host
   // sidebars, if both are open.

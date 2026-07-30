@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 6 Wave 1b A5 — StylePanel tests.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
@@ -32,6 +36,42 @@ const sampleFc: FeatureCollection = {
   ],
 };
 
+// Resolved via dirname, not `new URL(…, import.meta.url)`: vite rewrites that
+// literal pattern into a served asset URL (http://localhost:3000/…), which
+// fileURLToPath rejects.
+const STYLE_PANEL_CSS = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "styles",
+  "StylePanel.module.css",
+);
+
+/**
+ * Every declaration block whose selector mentions `.panel`, concatenated.
+ *
+ * The runtime cannot answer this question: vitest injects no CSS modules, so
+ * `getComputedStyle(panel).position` is `""` whether or not the rule exists.
+ * The stylesheet is the only place the dialog framing can come back, so the
+ * stylesheet is what gets asserted.
+ *
+ * ALL matching blocks, not the first `^\.panel {`: a `@media` block, a
+ * `.panel.foo` compound or a second `.panel` rule further down could put the
+ * framing back without this test noticing, which is the same
+ * looks-like-a-check-but-isn't problem that let the original version of this
+ * test pass against `position: absolute`.
+ */
+function panelRuleBody(): string {
+  const css = readFileSync(STYLE_PANEL_CSS, "utf8");
+  const blocks = [...css.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => /(^|[\s,])\.panel\b/.test(selector))
+    .map(([, , body]) => body);
+  if (blocks.length === 0) {
+    throw new Error(`no .panel rule found in ${STYLE_PANEL_CSS}`);
+  }
+  return blocks.join("\n");
+}
+
 beforeEach(() => {
   useLayerRegistryStore.setState({ entries: [] });
   useDataLayerFCStore.getState().clear();
@@ -49,7 +89,7 @@ afterEach(() => {
 
 describe("StylePanel", () => {
   it("opens on the single-color tab by default and switches between tabs", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     const singleTab = screen.getByTestId("style-tab-single");
     const catTab = screen.getByTestId("style-tab-categorical");
@@ -65,7 +105,7 @@ describe("StylePanel", () => {
   });
 
   it("single-color tab Apply writes fillColor and clears expression", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     const colorInput = screen.getByTestId(
       "style-single-color",
@@ -84,7 +124,7 @@ describe("StylePanel", () => {
   });
 
   it("categorical tab: adding a stop and applying writes an expression of kind 'categorical'", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     fireEvent.click(screen.getByTestId("style-tab-categorical"));
 
@@ -117,7 +157,7 @@ describe("StylePanel", () => {
   });
 
   it("graduated tab: compute-stops with linear method produces evenly-spaced stops", () => {
-    render(<StylePanel layerId="dl:t1" onClose={() => {}} />);
+    render(<StylePanel layerId="dl:t1" />);
 
     fireEvent.click(screen.getByTestId("style-tab-graduated"));
 
@@ -157,19 +197,53 @@ describe("StylePanel", () => {
     }
   });
 
-  it("calls onClose when the close button is clicked", () => {
-    const onClose = vi.fn();
-    render(<StylePanel layerId="dl:t1" onClose={onClose} />);
+  // Replaces the two former dialog tests ("closes on ×" / "closes on Escape").
+  // Sheet-panel step 4 folded this component into the layer card, so there is
+  // no dialog to close and nothing to trap focus in — the card's disclosure
+  // owns open/closed now (see LayerPanel.card.test.tsx). What remains to pin
+  // here is that the surface is genuinely NOT a dialog any more, because the
+  // defect it caused (a 280px absolutely-positioned box inside a 294px
+  // overflow:hidden sidebar) came straight from that framing.
+  it("renders in normal flow — no dialog role, no fixed width, no z-index", () => {
+    render(<StylePanel layerId="dl:t1" />);
 
-    fireEvent.click(screen.getByTestId("style-close"));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByTestId("style-close")).toBeNull();
+
+    // Ties the rule below to the element actually rendered — asserting the
+    // stylesheet is only a guard while `.panel` is still the panel's class.
+    expect(screen.getByTestId("style-panel").className).toContain("panel");
+
+    const rule = panelRuleBody();
+    // The defect was the whole dialog framing: `position: absolute` +
+    // `right: 20px` + `z-index: 100` + `width: 280px`, a box wider than its
+    // container and under a stacking context above itself. Each part is named,
+    // rather than banning `position` outright — a `position: relative` for an
+    // absolutely-positioned child is not this bug, and a test that forbids it
+    // will get deleted the first time someone needs one.
+    expect(rule).not.toMatch(/position\s*:\s*(absolute|fixed)/);
+    expect(rule).not.toMatch(/(^|[\s;])z-index\s*:/);
+    expect(rule).not.toMatch(/(^|[\s;])(top|right|bottom|left)\s*:/);
+    // `width: 100%` is fine — it's the card's width. A px width is the defect:
+    // 280px inside a 294px `overflow: hidden` sidebar body.
+    expect(rule).not.toMatch(/width\s*:\s*\d+px/);
   });
 
-  it("calls onClose when Escape is pressed", () => {
-    const onClose = vi.fn();
-    render(<StylePanel layerId="dl:t1" onClose={onClose} />);
+  it("does not swallow Escape — the sidebar's own handlers still see it", () => {
+    render(<StylePanel layerId="dl:t1" />);
 
+    const onEscape = vi.fn();
+    window.addEventListener("keydown", onEscape);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    window.removeEventListener("keydown", onEscape);
+
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    // Still mounted: Escape is no longer this component's business.
+    expect(screen.getByTestId("style-panel")).toBeTruthy();
+  });
+
+  it("renders nothing when the layer vanishes from the registry mid-render", () => {
+    const { container } = render(<StylePanel layerId="dl:gone" />);
+    expect(container.innerHTML).toBe("");
   });
 });

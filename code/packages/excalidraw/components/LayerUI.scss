@@ -150,6 +150,20 @@
     box-shadow: var(--ad-shadow-raised, var(--shadow-island));
     pointer-events: var(--ui-pointerEvents);
 
+    // An UNDOCKED (overlay) right sidebar owns `right: 0` and a higher
+    // stacking context (--zIndex-ui-library: 120 vs the legend's 4), so at
+    // `right: 8px` the legend was hidden *behind* the sidebar. Step inboard of
+    // it instead of raising z-index — the legend must stay under the host
+    // app's tool overlay (5) so tool pointer capture still wins.
+    //
+    // Undocked only: a DOCKED sidebar narrows `.layer-ui__wrapper` (above),
+    // which already puts everything inside it — this legend included — inboard
+    // of the sidebar. `LayerUI.tsx` gates the class accordingly; applying it
+    // in both states summed the two offsets (~604px).
+    &--beside-sidebar {
+      right: calc(var(--right-sidebar-width, 302px) + 8px);
+    }
+
     &__header {
       font-size: 11px;
       font-weight: 600;

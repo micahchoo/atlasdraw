@@ -82,6 +82,8 @@ vi.mock("@atlasdraw/basemap", () => {
 
 const mockToggleSidebarSpy = vi.fn();
 
+const EMPTY_SIDEBAR_TABS: never[] = [];
+
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
@@ -94,9 +96,16 @@ const mockFakeExcalidrawAPI = {
   // Sidebar-tab fork — MapEditor mounts LayerPanel as a tab inside
   // Excalidraw's DefaultSidebar via this API. Stub returns an unregister fn.
   registerSidebarTab: vi.fn(() => vi.fn()),
-  // Collar shell — CollarSheetTabs subscribes to appState commits via
-  // onChange to track the open sidebar tab. Stub returns an unsubscribe fn.
+  // Collar shell — SheetRail subscribes to appState commits via onChange to
+  // track the open sidebar tab. Stub returns an unsubscribe fn.
   onChange: vi.fn(() => vi.fn()),
+  // ...and reads the tab list off the imperative API (getSidebarTabs /
+  // onSidebarTabsChange, the fork's `useSyncExternalStore` pair). Empty list
+  // ⇒ SheetRail renders nothing, which is all these suites need. The snapshot
+  // reference MUST be stable — a fresh `[]` per call makes
+  // `useSyncExternalStore` re-render forever.
+  getSidebarTabs: () => EMPTY_SIDEBAR_TABS,
+  onSidebarTabsChange: vi.fn(() => vi.fn()),
 };
 
 // MainMenu / MainMenu.Item passthrough is defined INSIDE the vi.mock factory

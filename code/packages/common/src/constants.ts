@@ -437,6 +437,49 @@ export const DEFAULT_SIDEBAR = {
   defaultTab: LIBRARY_SIDEBAR_TAB,
 } as const;
 
+/**
+ * Atlasdraw fork addition — DOM `id` of the `DefaultSidebar` island. Host
+ * apps that drive the sidebar from a trigger rail outside the editor's React
+ * tree need a stable target for `aria-controls`; `DefaultSidebar` renders the
+ * island itself, so the host can't supply one.
+ */
+export const DEFAULT_SIDEBAR_DOM_ID = "excalidraw-default-sidebar";
+
+/**
+ * Atlasdraw fork addition — the right sidebar's width, in px.
+ *
+ * Upstream hardcodes `--right-sidebar-width: 302px` as an inline literal in
+ * `App.tsx`'s container style. Everything downstream (`Sidebar.scss`,
+ * `LayerUI`'s wrapper narrowing, the collar legend's offset) already reads the
+ * custom property, so the value only needed a source that can change. These
+ * are it, plus the `rightSidebarWidth` prop on `<Excalidraw>`.
+ *
+ * `DEFAULT` is upstream's 302 unchanged — an existing user sees no shift.
+ * `MIN`/`MAX` bracket the design doc's stated span (§4: "Ana can give the
+ * panel 500px […] Priya can keep it at 260px or closed").
+ */
+export const RIGHT_SIDEBAR_DEFAULT_WIDTH = 302;
+export const RIGHT_SIDEBAR_MIN_WIDTH = 260;
+export const RIGHT_SIDEBAR_MAX_WIDTH = 560;
+
+/**
+ * Atlasdraw fork addition — clamp any candidate sidebar width into
+ * `[RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH]`, falling back to
+ * {@link RIGHT_SIDEBAR_DEFAULT_WIDTH} for `null`/`undefined`/`NaN`.
+ *
+ * Shared deliberately: the editor clamps the prop it is handed and the host
+ * clamps what it persists and what a drag produces. One function so a value
+ * that survived one gate cannot fail the other.
+ */
+export const clampRightSidebarWidth = (width: number | null | undefined) => {
+  if (width == null || !Number.isFinite(width)) {
+    return RIGHT_SIDEBAR_DEFAULT_WIDTH;
+  }
+  return Math.round(
+    Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, width)),
+  );
+};
+
 export const LIBRARY_DISABLED_TYPES = new Set([
   "iframe",
   "embeddable",

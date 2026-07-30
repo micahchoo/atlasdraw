@@ -19,6 +19,16 @@ import type { LayerStyle, StyleExpression } from "./style";
 // the compiler itself constructs the array directly.
 type PaintValue = string | number | unknown[];
 
+/** MapLibre layer kinds this compiler emits, keyed off the source geometry. */
+export type LayerGeometryType = "fill" | "line" | "circle";
+
+/**
+ * A layer's paint block, keyed by MapLibre paint property name. Every key is
+ * always present (defaults fill the gaps), which is what lets callers diff two
+ * compiled paints and push only the properties that differ.
+ */
+export type CompiledPaint = Record<string, PaintValue>;
+
 /**
  * Compile a `StyleExpression` into a MapLibre expression array.
  * Returns `fallback` (literal) when stops are empty — there's nothing to match
@@ -53,38 +63,77 @@ function compileExpression(expr: StyleExpression): PaintValue {
 }
 
 /**
- * Build a MapLibre LayerSpecification from id + LayerStyle. Geometry-type-aware:
+ * Compile a LayerStyle into just the MapLibre *paint* block for a geometry kind:
  * - "fill"   → Polygon/MultiPolygon (uses fillColor + opacity + strokeColor as outline)
  * - "line"   → LineString/MultiLineString (uses strokeColor + strokeWidth + opacity)
  * - "circle" → Point/MultiPoint (uses fillColor + strokeColor + strokeWidth + opacity)
  *
- * The id is used as both the layer id and the source id (set by caller via map.addSource).
+ * Split out of `compileLayer` so incremental style edits have exactly one
+ * LayerStyle → paint translation to lean on: `compileLayer` uses it to build a
+ * whole layer spec for `addLayer`, and atlas-app's registry sync diffs two
+ * compiled paints to derive the `setPaintProperty` calls for a style patch.
+ * A second translation would be free to drift from this one.
  *
  * Phase 6 (A6): when `style.expression` is set, the geometry's primary color
  * paint property (`fill-color` / `line-color` / `circle-color`) receives the
  * compiled expression. Stroke / width / opacity remain flat literals.
  */
-export function compileLayer(
-  id: string,
+export function compilePaint(
   style: LayerStyle,
-  geometryType: "fill" | "line" | "circle",
-): maplibregl.LayerSpecification {
+  geometryType: LayerGeometryType,
+): CompiledPaint {
   const exprPaint: PaintValue | undefined = style.expression
     ? compileExpression(style.expression)
     : undefined;
 
   if (geometryType === "fill") {
     return {
+      "fill-color": exprPaint ?? style.fillColor ?? "#0aa",
+      "fill-opacity": style.opacity ?? 0.5,
+      "fill-outline-color": style.strokeColor ?? "#077",
+    };
+  }
+  if (geometryType === "line") {
+    return {
+      "line-color": exprPaint ?? style.strokeColor ?? "#077",
+      "line-width": style.strokeWidth ?? 1,
+      "line-opacity": style.opacity ?? 1,
+    };
+  }
+  // circle (point)
+  return {
+    "circle-color": exprPaint ?? style.fillColor ?? "#0aa",
+    "circle-stroke-color": style.strokeColor ?? "#077",
+    "circle-stroke-width": style.strokeWidth ?? 1,
+    "circle-opacity": style.opacity ?? 1,
+    "circle-radius": 5,
+  };
+}
+
+/**
+ * Build a MapLibre LayerSpecification from id + LayerStyle. The paint block
+ * comes from `compilePaint`; this function only picks the layer `type`.
+ *
+ * The id is used as both the layer id and the source id (set by caller via map.addSource).
+ */
+export function compileLayer(
+  id: string,
+  style: LayerStyle,
+  geometryType: LayerGeometryType,
+): maplibregl.LayerSpecification {
+  // CompiledPaint is an open record (so it stays diffable); each branch narrows
+  // it to the paint type its layer kind declares.
+  const paint = compilePaint(style, geometryType);
+
+  if (geometryType === "fill") {
+    return {
       id,
       type: "fill",
       source: id,
-      paint: {
-        "fill-color": (exprPaint ?? style.fillColor ?? "#0aa") as
-          | string
-          | maplibregl.ExpressionSpecification,
-        "fill-opacity": style.opacity ?? 0.5,
-        "fill-outline-color": style.strokeColor ?? "#077",
-      },
+      paint: paint as Extract<
+        maplibregl.LayerSpecification,
+        { type: "fill" }
+      >["paint"],
     };
   }
   if (geometryType === "line") {
@@ -92,13 +141,10 @@ export function compileLayer(
       id,
       type: "line",
       source: id,
-      paint: {
-        "line-color": (exprPaint ?? style.strokeColor ?? "#077") as
-          | string
-          | maplibregl.ExpressionSpecification,
-        "line-width": style.strokeWidth ?? 1,
-        "line-opacity": style.opacity ?? 1,
-      },
+      paint: paint as Extract<
+        maplibregl.LayerSpecification,
+        { type: "line" }
+      >["paint"],
     };
   }
   // circle (point)
@@ -106,15 +152,10 @@ export function compileLayer(
     id,
     type: "circle",
     source: id,
-    paint: {
-      "circle-color": (exprPaint ?? style.fillColor ?? "#0aa") as
-        | string
-        | maplibregl.ExpressionSpecification,
-      "circle-stroke-color": style.strokeColor ?? "#077",
-      "circle-stroke-width": style.strokeWidth ?? 1,
-      "circle-opacity": style.opacity ?? 1,
-      "circle-radius": 5,
-    },
+    paint: paint as Extract<
+      maplibregl.LayerSpecification,
+      { type: "circle" }
+    >["paint"],
   };
 }
 

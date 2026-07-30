@@ -24,17 +24,24 @@ import { sceneCoordsToViewportCoords } from "@atlasdraw/common";
 
 import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
+import type { CommentAnchor as CommentAnchorData } from "@atlasdraw/protocol";
+
 import { useCollab } from "../hooks/useCollab";
 
+import { useCommentMode } from "../state/commentMode";
 import {
+  setAnchorMode,
   setPendingAnchor,
   usePendingAnchor,
+  wantsElementAnchor,
+  wantsMapAnchor,
 } from "../state/comments-anchor-picker";
 
 import styles from "../styles/CommentAnchorsOverlay.module.css";
 
 import { useAnnounce } from "./AriaAnnouncer";
 import { CommentAnchor } from "./CommentAnchor";
+import { CommentDraftBubble } from "./CommentDraftBubble";
 
 import type { Comment } from "../state/comments";
 import type maplibregl from "maplibre-gl";
@@ -68,7 +75,12 @@ export function CommentAnchorsOverlay(
 ): React.JSX.Element | null {
   const { map, excalidrawAPI } = props;
   const { commentsLayer } = useCollab();
-  const { mode: pickerMode } = usePendingAnchor();
+  const {
+    mode: pickerMode,
+    anchor: pendingAnchor,
+    arm: pickerArm,
+  } = usePendingAnchor();
+  const commentMode = useCommentMode();
 
   // Snapshot of comments (re-renders on Yjs change).
   const [comments, setComments] = useState<ReadonlyArray<Comment>>(
@@ -101,7 +113,7 @@ export function CommentAnchorsOverlay(
   // When the panel signals "I want a map anchor", capture the next map click
   // as a {lng, lat} pair and publish it as the pendingAnchor.
   useEffect(() => {
-    if (!map || pickerMode !== "map") {
+    if (!map || !wantsMapAnchor(pickerMode)) {
       return;
     }
     const handler = (
@@ -119,13 +131,14 @@ export function CommentAnchorsOverlay(
       // so removing covers the unmount-before-click case.
       map.off("click", handler);
     };
-  }, [map, pickerMode]);
+    // `pickerArm` is the re-arm signal — see PickerState.arm.
+  }, [map, pickerMode, pickerArm]);
 
   // ---- Anchor picker: element mode --------------------------------------
   // When the panel signals "I want an element anchor", capture the next
   // single-element Excalidraw selection as its elementId.
   useEffect(() => {
-    if (!excalidrawAPI || pickerMode !== "element") {
+    if (!excalidrawAPI || !wantsElementAnchor(pickerMode)) {
       return;
     }
     if (typeof excalidrawAPI.onChange !== "function") {
@@ -152,7 +165,7 @@ export function CommentAnchorsOverlay(
         unsub();
       }
     };
-  }, [excalidrawAPI, pickerMode]);
+  }, [excalidrawAPI, pickerMode, pickerArm]);
 
   // Reprojection trigger: bump a tick when the map moves or the Excalidraw
   // scroll/zoom changes. We then recompute screen positions inline.
@@ -186,62 +199,82 @@ export function CommentAnchorsOverlay(
     };
   }, [excalidrawAPI]);
 
-  if (!commentsLayer || comments.length === 0) {
+  // The draft bubble is the mode's composer, so the overlay can no longer
+  // bail purely on "no comments yet" — placing the FIRST thread happens in
+  // exactly that state. It still bails when there is no session, because then
+  // there is nowhere to write and nothing to project.
+  const draftVisible = commentMode && pendingAnchor != null;
+  if (!commentsLayer || (comments.length === 0 && !draftVisible)) {
     return null;
   }
 
-  const projected: ProjectedAnchor[] = [];
-  // `tick` reads as a dep so the closure here re-runs on each bump.
+  // `tick` reads as a dep so the closures below re-run on each bump.
   void tick;
 
+  /**
+   * Anchor → overlay-container pixels. Returns null when the anchor cannot be
+   * placed right now (no map, or an element anchor whose element is gone).
+   * Shared by the placed threads and the draft so both land on the same pixel.
+   */
+  const project = (
+    anchor: CommentAnchorData,
+  ): { screenX: number; screenY: number } | null => {
+    if (anchor.kind === "map") {
+      if (!map) {
+        return null;
+      }
+      const p = map.project([anchor.lng, anchor.lat]);
+      return { screenX: p.x, screenY: p.y };
+    }
+    if (!excalidrawAPI) {
+      return null;
+    }
+    const el = excalidrawAPI
+      .getSceneElements()
+      .find((e: { id: string }) => e.id === anchor.elementId);
+    if (!el) {
+      return null;
+    }
+    // Element top-right corner — using Excalidraw element shape: x,y is
+    // top-left scene-coords; width/height are scene units.
+    const e = el as unknown as {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    const { x, y } = sceneCoordsToViewportCoords(
+      { sceneX: e.x + e.width, sceneY: e.y },
+      excalidrawAPI.getAppState() as {
+        zoom: { value: NormalizedZoomValue };
+        offsetLeft: number;
+        offsetTop: number;
+        scrollX: number;
+        scrollY: number;
+      },
+    );
+    return { screenX: x, screenY: y };
+  };
+
+  const projected: ProjectedAnchor[] = [];
   for (const c of comments) {
     if (c.resolved) {
       // Resolved comments are filtered from the panel by default; keep them
       // out of the canvas overlay too so the map stays clean.
       continue;
     }
-    if (c.anchor.kind === "map") {
-      if (!map) {
-        continue;
-      }
-      const p = map.project([c.anchor.lng, c.anchor.lat]);
-      projected.push({ comment: c, screenX: p.x, screenY: p.y });
-    } else if (c.anchor.kind === "element") {
-      if (!excalidrawAPI) {
-        continue;
-      }
-      const elementId = c.anchor.elementId;
-      const elements = excalidrawAPI.getSceneElements();
-      const el = elements.find((e: { id: string }) => e.id === elementId);
-      if (!el) {
-        continue;
-      }
-      // Element top-right corner — using Excalidraw element shape: x,y is
-      // top-left scene-coords; width/height are scene units.
-      const e = el as unknown as {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      };
-      const appState = excalidrawAPI.getAppState();
-      const { x, y } = sceneCoordsToViewportCoords(
-        { sceneX: e.x + e.width, sceneY: e.y },
-        appState as {
-          zoom: { value: NormalizedZoomValue };
-          offsetLeft: number;
-          offsetTop: number;
-          scrollX: number;
-          scrollY: number;
-        },
-      );
-      projected.push({ comment: c, screenX: x, screenY: y });
+    const p = project(c.anchor);
+    if (p) {
+      projected.push({ comment: c, ...p });
     }
   }
 
   const authorId = commentsLayer
     ? `client-${commentsLayer.doc.clientID}`
     : "anonymous";
+
+  const draftPoint =
+    draftVisible && pendingAnchor ? project(pendingAnchor) : null;
 
   return (
     <div className={styles.overlay} data-testid="comment-anchors-overlay">
@@ -256,6 +289,28 @@ export function CommentAnchorsOverlay(
           onEdit={(id, newText) => commentsLayer.editComment(id, newText)}
         />
       ))}
+      {draftPoint && pendingAnchor && (
+        <CommentDraftBubble
+          screenX={draftPoint.screenX}
+          screenY={draftPoint.screenY}
+          anchorKind={pendingAnchor.kind}
+          canSubmit={!!commentsLayer}
+          onSubmit={(text) => {
+            commentsLayer.addComment({
+              text,
+              anchor: pendingAnchor,
+              authorId,
+              authorName: "You",
+            });
+            // Re-arm rather than clear: comment mode stays on, so the next
+            // click starts the next thread. `setAnchorMode` bumps
+            // PickerState.arm even though the mode is "any" both sides of
+            // this call, which is what re-registers the one-shot listeners.
+            setAnchorMode("any");
+          }}
+          onCancel={() => setAnchorMode("any")}
+        />
+      )}
     </div>
   );
 }

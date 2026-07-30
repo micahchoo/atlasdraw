@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import React from "react";
+import React, { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import {
@@ -21,6 +21,7 @@ import type { NonDeletedExcalidrawElement } from "@atlasdraw/element/types";
 
 import { actionToggleStats } from "../actions";
 import { trackEvent } from "../analytics";
+import { isCollarMode } from "../collar";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
 import { useAtom, useAtomValue } from "../editor-jotai";
@@ -96,6 +97,7 @@ interface LayerUIProps {
   renderToolbarExtras?: ExcalidrawProps["renderToolbarExtras"];
   collarToolbarTarget?: ExcalidrawProps["collarToolbarTarget"];
   collarMenuTarget?: ExcalidrawProps["collarMenuTarget"];
+  onSidebarLayoutChange?: ExcalidrawProps["onSidebarLayoutChange"];
   onScrollBackToContent?: ExcalidrawProps["onScrollBackToContent"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
@@ -159,6 +161,7 @@ const LayerUI = ({
   renderToolbarExtras,
   collarToolbarTarget,
   collarMenuTarget,
+  onSidebarLayoutChange,
   onScrollBackToContent,
   renderCustomStats,
   UIOptions,
@@ -200,8 +203,10 @@ const LayerUI = ({
   // toolbar target, desktop chrome renders flush into the app's frame (via
   // portals) instead of floating over the canvas. Stock island layout is
   // untouched when the prop is absent; the phone layout always ignores it.
-  const collarMode =
-    collarToolbarTarget != null && editorInterface.formFactor !== "phone";
+  const collarMode = isCollarMode(
+    collarToolbarTarget,
+    editorInterface.formFactor,
+  );
   const menuInCollar = collarMode && collarMenuTarget != null;
 
   const shouldRenderToolbar =
@@ -473,7 +478,7 @@ const LayerUI = ({
               editorInterface.formFactor === "phone",
               appState,
             )}
-            {/* collar mode: the sidebar opens via the app's sheet-edge tabs
+            {/* collar mode: the sidebar opens via the app's icon rail
               in the collar frame — no floating trigger button. */}
             {!collarMode &&
               !appState.viewModeEnabled &&
@@ -497,6 +502,48 @@ const LayerUI = ({
       </FixedSideContainer>
     );
   };
+
+  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
+
+  /**
+   * Whether `.layer-ui__wrapper` shrinks itself out from under the open
+   * sidebar. The wrapper is `position: absolute` and this narrows its right
+   * edge to the sidebar's left edge, so *everything inside it* — the legend
+   * included — is already inboard of the sidebar in this state and must not be
+   * offset a second time. Single source of truth for the wrapper's own `width`
+   * style and for {@link renderCollarLegend}'s offset; the two are the same
+   * question and drifting apart is what double-shifted the legend ~604px.
+   */
+  const isUIShrunkForSidebar =
+    !!appState.openSidebar && isSidebarDocked && editorInterface.canFitSidebar;
+
+  // Atlasdraw fork addition (ADR-0010, Collar shell): publish the sidebar's
+  // layout to the host so it can reflow its OWN surfaces — atlas-app narrows
+  // the MapLibre plate by the sidebar's width instead of letting the panel
+  // cover it, and anchors its resize handle at the panel's left edge.
+  //
+  // `collar` rides along because "the panel's left edge is at `width` from the
+  // right" is only true under the collar treatment (Sidebar.scss); off it — no
+  // toolbar target, or a phone — the box is 8px narrower than the property and
+  // host chrome pinned to `width` lands over the map.
+  //
+  // Sourced from `isUIShrunkForSidebar` on purpose: the host's reflow is the
+  // third consumer of one condition, and re-deriving it host-side is how the
+  // legend ended up double-offset (LayerUI.collarLegend.test.tsx). Effect, not
+  // render, so the host may setState from it.
+  const isDefaultSidebarOpen = !!appState.openSidebar;
+  useEffect(() => {
+    onSidebarLayoutChange?.({
+      open: isDefaultSidebarOpen,
+      shrunk: isUIShrunkForSidebar,
+      collar: collarMode,
+    });
+  }, [
+    isDefaultSidebarOpen,
+    isUIShrunkForSidebar,
+    collarMode,
+    onSidebarLayoutChange,
+  ]);
 
   // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
   // full-width strip portaled into the app's collar tool row. The wrapper
@@ -554,8 +601,28 @@ const LayerUI = ({
     if (!collarMode || !shouldRenderSelectedShapeActions) {
       return null;
     }
+    // The legend and the right sidebar both claim the plate's right edge, and
+    // the sidebar's stacking context (`--zIndex-ui-library: 120`) sits above
+    // the legend's (4) — so with an *undocked* (overlay) sidebar the legend
+    // used to be *buried* by it: select a shape with Layers open and its
+    // styling UI was invisible. Step the legend inboard of the sidebar instead
+    // of fighting over z-index, which would put the legend above the atlas
+    // tool overlay (5) and steal its pointer capture.
+    //
+    // Only in the undocked case. When docked, the wrapper this legend lives in
+    // has already been narrowed to the sidebar's left edge
+    // (`isUIShrunkForSidebar`), so `right: 8px` is *already* beside the
+    // sidebar; offsetting again shifted the legend a second ~302px inboard.
+    const besideSidebar =
+      appState.openSidebar?.name === DEFAULT_SIDEBAR.name &&
+      !isUIShrunkForSidebar;
     return (
-      <div className="App-collar-legend" data-testid="collar-legend">
+      <div
+        className={clsx("App-collar-legend", {
+          "App-collar-legend--beside-sidebar": besideSidebar,
+        })}
+        data-testid="collar-legend"
+      >
         <div className="App-collar-legend__header">LEGEND</div>
         {renderSelectedShapeActions()}
       </div>
@@ -594,8 +661,6 @@ const LayerUI = ({
       />
     );
   };
-
-  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
 
   const layerUIJSX = (
     <>
@@ -738,9 +803,7 @@ const LayerUI = ({
           <div
             className="layer-ui__wrapper"
             style={
-              appState.openSidebar &&
-              isSidebarDocked &&
-              editorInterface.canFitSidebar
+              isUIShrunkForSidebar
                 ? { width: `calc(100% - var(--right-sidebar-width))` }
                 : {}
             }

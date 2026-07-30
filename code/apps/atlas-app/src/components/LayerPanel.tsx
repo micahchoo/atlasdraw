@@ -15,21 +15,51 @@
 // with no public trigger button and required a separate MainMenu item to
 // open it. Removed in favor of the DefaultSidebar splice.
 //
+// Sheet-panel step 4 + 6 (2026-07-30) — a data layer is now a CARD that
+// expands in place. Three things follow from that, each with a reason:
+//
+//   * One card open at a time (accordion). A vertical column is zero-sum;
+//     letting every card stay open is the QGIS legend explosion, and the
+//     design doc names it as this design's weakest point (§4).
+//   * The filter field appears at >= FILTER_THRESHOLD data layers, not
+//     before. QGIS force-collapses at >= 10 nodes and ArcGIS Online reveals
+//     layer search at >= 10 — two products picked the same number
+//     independently, which is about as strong as UI precedent gets.
+//   * Symbology is StylePanel, inline (see StylePanel.tsx's header for what
+//     the move cost). It is no longer a floating dialog clipped by this
+//     panel's own overflow.
+//
+// Annotation entries are NOT data layers: no style, no FeatureCollection, no
+// attributes. They keep the plain row they always had rather than a card with
+// four empty sections.
+//
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T12
+// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2, §4
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useCallback, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
+import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
 import { useBasemapStore } from "../state/basemap";
+import { useMapInstanceStore } from "../state/mapInstance";
+import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { fitMapToLayer } from "../lib/fitMapToContent";
 
 import styles from "../styles/LayerPanel.module.css";
 
 import { useAnnounce } from "./AriaAnnouncer";
+import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
 
 import type {
@@ -38,6 +68,19 @@ import type {
   DataLayerEntry,
   LayerStyle,
 } from "../state/layerRegistry";
+import type { FeatureCollection } from "geojson";
+
+/**
+ * Data-layer count at which the filter field appears. QGIS force-collapses its
+ * legend at >= 10 nodes; ArcGIS Online only surfaces layer search at >= 10.
+ * Showing it earlier spends a row of a 294px panel on a control that would
+ * never beat scanning three labels.
+ */
+const FILTER_THRESHOLD = 10;
+
+/** Attribute-preview size: rows sampled, and columns that fit the panel width. */
+const ATTR_PREVIEW_ROWS = 3;
+const ATTR_PREVIEW_COLS = 4;
 
 // ---------------------------------------------------------------------------
 // Inline SVG icons — atlasdraw-ui-conventions §Icons:
@@ -117,6 +160,43 @@ function IconChevronDown() {
   );
 }
 
+/** Disclosure caret: points right when collapsed, down when expanded. */
+function IconCaret({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {open ? (
+        <polyline points="3,6 8,11 13,6" />
+      ) : (
+        <polyline points="6,3 11,8 6,13" />
+      )}
+    </svg>
+  );
+}
+
+function IconDots() {
+  return (
+    <svg
+      className={styles.icon}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="3.5" cy="8" r="1.3" />
+      <circle cx="8" cy="8" r="1.3" />
+      <circle cx="12.5" cy="8" r="1.3" />
+    </svg>
+  );
+}
+
 function IconGripVertical() {
   return (
     <svg
@@ -140,14 +220,68 @@ function joinClass(...names: Array<string | false | null | undefined>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Row components
+// Provenance + attribute helpers (pure — no store, no DOM)
+// ---------------------------------------------------------------------------
+
+/**
+ * GeoJSON geometry type of the layer, as the user would name it ("Polygon").
+ *
+ * Deliberately the raw GeoJSON name and not `inferGeometryType`'s MapLibre
+ * kind ("fill"): provenance answers "what did I import?", and nobody imports a
+ * fill. Reads the first feature that actually has geometry — a leading
+ * `geometry: null` feature is legal and would otherwise report "unknown" for a
+ * layer full of polygons.
+ */
+function geometryTypeOf(fc: FeatureCollection | undefined): string {
+  const withGeometry = fc?.features.find((f) => f.geometry);
+  return withGeometry?.geometry?.type ?? "unknown";
+}
+
+/**
+ * Property keys to show in the attribute preview, capped at ATTR_PREVIEW_COLS.
+ * Unions the keys across the sampled rows rather than trusting feature 0 —
+ * GeoJSON does not require a uniform property set, and a sparse first feature
+ * would otherwise render an empty table over a perfectly good layer.
+ */
+function previewColumns(features: FeatureCollection["features"]): string[] {
+  const keys: string[] = [];
+  for (const f of features) {
+    for (const k of Object.keys(f.properties ?? {})) {
+      if (!keys.includes(k)) {
+        keys.push(k);
+      }
+    }
+  }
+  return keys.slice(0, ATTR_PREVIEW_COLS);
+}
+
+/** Render a property value compactly; objects/arrays collapse to JSON. */
+function formatCell(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "—";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+// ---------------------------------------------------------------------------
+// Row / card infrastructure
 // ---------------------------------------------------------------------------
 
 type Mutators = {
   setVisibility: (id: string, visible: boolean) => void;
+  /** `newOrder` is the target index within the row's own section (= its kind). */
   reorder: (id: string, newOrder: number) => void;
   updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
-  openStyle: (id: string) => void;
+};
+
+/** The three actions the design doc calls out as missing (§2). */
+type LayerActions = {
+  rename: (id: string, label: string) => void;
+  remove: (id: string) => void;
+  zoomTo: (id: string) => void;
 };
 
 interface LayerRowProps {
@@ -169,12 +303,60 @@ function SortableRow({
   mutators,
   allIds,
   children,
-}: LayerRowProps & { children: React.ReactNode }) {
-  const { id, order } = entry;
+  body,
+  expanded = false,
+}: LayerRowProps & {
+  /** Header content — shares one flex line with the grip and reorder arrows. */
+  children: React.ReactNode;
+  /**
+   * Expanded card body. A sibling BELOW the header line, not a child of it, so
+   * it gets the row's full width instead of the ~150px left over between the
+   * grip and the reorder arrows.
+   */
+  body?: React.ReactNode;
+  /**
+   * This row is the open one. Two consequences, both of them "keep the card you
+   * just opened usable in a list that now scrolls":
+   *
+   *   - the header line sticks to the top of the scroll port while the card's
+   *     own body scrolls past it, so the layer's name is still on screen when
+   *     you reach Apply. The 25-layer prototype's specific complaint was the
+   *     name scrolling off the top.
+   *   - opening scrolls the header into view, because the ninth card of 25
+   *     opens below the fold and the useful part of it is further down still.
+   */
+  expanded?: boolean;
+}) {
+  const { id } = entry;
+  // Position inside this section's list. `allIds` is the one section's ids, and
+  // the store's reorder is kind-scoped, so this index is the only coordinate
+  // system in play — reading entry.order directly would be the same number
+  // today, but this keeps the row honest about what it can address.
+  //
+  // Note `allIds` stays the UNFILTERED section list even when the filter field
+  // is hiding rows: reorder addresses real stack positions, and handing it
+  // filtered indices is exactly the class of bug P3 fixed.
+  const index = allIds.indexOf(id);
   const rowRef = useRef<HTMLDivElement>(null);
   const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
     null,
   );
+
+  // Reveal on open, not on every render: `expanded` is the dependency, so
+  // re-renders from a style edit inside the open card do not yank the scroll
+  // position back. `block: "nearest"` because a card that is already fully in
+  // view must not move at all — the first three cards of three should feel
+  // like nothing happened.
+  //
+  // Guarded because jsdom does not implement scrollIntoView; the panel's tests
+  // render the real component and would throw on the first expand.
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!expanded || !el || typeof el.scrollIntoView !== "function") {
+      return;
+    }
+    el.scrollIntoView({ block: "nearest" });
+  }, [expanded]);
 
   const handleDragStart = useCallback(
     (e: React.DragEvent) => {
@@ -212,29 +394,26 @@ function SortableRow({
         return;
       }
 
-      const newPosition =
-        dragOverPos === "above" ? Math.max(0, targetIndex - 1) : targetIndex;
-      // If the dragged item was above the target, the splice in the store
-      // already accounts for removal — pass the target position directly.
-      // But we need to send the position *after* the dragged item is removed.
-      // Since we're using the *visible* allIds list, calculate the adjusted pos.
-      const adjustedPos =
-        draggedIndex < targetIndex && dragOverPos === "above"
-          ? targetIndex - 1
-          : draggedIndex < targetIndex
-          ? targetIndex
-          : newPosition;
+      // Insertion point in the list as it looks *now*: above the target means
+      // taking the target's slot, below means the slot after it. The store
+      // pulls the dragged row out first, which shifts everything past it down
+      // one — so an insertion point beyond the dragged row loses one.
+      const insertBefore =
+        dragOverPos === "above" ? targetIndex : targetIndex + 1;
+      const nextIndex =
+        insertBefore > draggedIndex ? insertBefore - 1 : insertBefore;
 
-      mutators.reorder(draggedId, adjustedPos);
+      mutators.reorder(draggedId, nextIndex);
     },
     [id, allIds, mutators, dragOverPos],
   );
 
-  // With our store's splice-based reorder, any entry can be moved anywhere.
-  // The old up/down buttons are kept for keyboard-only users and as a
+  // Bounds are the section's, not the registry's: a row can only move within
+  // its own kind, so the top data layer and the top annotation are both
+  // "first". The up/down buttons are kept for keyboard-only users and as a
   // discoverable alternative to drag.
-  const isFirst = order === 0;
-  const isLast = allIds.length <= 1 || order === allIds.length - 1;
+  const isFirst = index <= 0;
+  const isLast = allIds.length <= 1 || index === allIds.length - 1;
 
   const rowClass = joinClass(
     styles.row,
@@ -253,128 +432,263 @@ function SortableRow({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <span
-        className={styles.dragHandle}
-        aria-label={`Drag to reorder ${entry.label}`}
-        data-testid={`layer-drag-${id}`}
-        role="button"
-        tabIndex={0}
+      <div
+        className={joinClass(styles.rowTop, expanded && styles.rowTopSticky)}
+        data-sticky={expanded ? "" : undefined}
       >
-        <IconGripVertical />
-      </span>
-      {children}
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label="Move layer up"
-        data-testid={`layer-up-${id}`}
-        disabled={isFirst}
-        onClick={() => mutators.reorder(id, order - 1)}
-      >
-        <IconChevronUp />
-      </button>
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label="Move layer down"
-        data-testid={`layer-down-${id}`}
-        disabled={isLast}
-        onClick={() => mutators.reorder(id, order + 1)}
-      >
-        <IconChevronDown />
-      </button>
+        <span
+          className={styles.dragHandle}
+          aria-label={`Drag to reorder ${entry.label}`}
+          data-testid={`layer-drag-${id}`}
+          role="button"
+          tabIndex={0}
+        >
+          <IconGripVertical />
+        </span>
+        {children}
+        {/* Stacked as one 32px-tall control cluster rather than two 32px
+            squares. Adding the disclosure caret and the ⋯ trigger put nine
+            controls in a 302px row; side-by-side arrows left the label about
+            40px, which turns "parcels_2026.geojson" into "parc…". Same
+            buttons, same keyboard path, same bounds — half the width. */}
+        <div className={styles.reorderStack}>
+          <button
+            type="button"
+            className={styles.reorderBtn}
+            aria-label={`Move ${entry.label} up`}
+            data-testid={`layer-up-${id}`}
+            disabled={isFirst}
+            onClick={() => mutators.reorder(id, index - 1)}
+          >
+            <IconChevronUp />
+          </button>
+          <button
+            type="button"
+            className={styles.reorderBtn}
+            aria-label={`Move ${entry.label} down`}
+            data-testid={`layer-down-${id}`}
+            disabled={isLast}
+            onClick={() => mutators.reorder(id, index + 1)}
+          >
+            <IconChevronDown />
+          </button>
+        </div>
+      </div>
+      {body}
     </div>
   );
 }
 
-function DataLayerRow({
+// ---------------------------------------------------------------------------
+// The ⋯ overflow menu
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-layer overflow menu. Reachable whether or not the card is expanded, so
+ * "zoom to this layer" — the universal gesture after an import — never costs a
+ * disclosure click first.
+ *
+ * Delete is two-step inside the menu. The registry has no undo, an imported
+ * layer can represent a real parsing session, and a single mis-click sits 4px
+ * from Rename.
+ */
+function OverflowMenu({
   entry,
-  mutators,
-  allIds,
+  actions,
+  onStartRename,
 }: {
   entry: DataLayerEntry;
-  mutators: Mutators;
-  allIds: string[];
+  actions: LayerActions;
+  onStartRename: () => void;
 }) {
-  const { setVisibility, updateStyle, openStyle } = mutators;
-  const { id, label, visible, featureCount, style } = entry;
-  const [expanded, setExpanded] = React.useState(false);
+  const [open, setOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setConfirmingDelete(false);
+  }, []);
+
+  // Dismiss on outside pointer-down and on Escape. Escape also returns focus
+  // to the trigger — otherwise focus lands on <body> and a keyboard user has
+  // to tab back through every row above.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const onPointerDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        close();
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, close]);
 
   return (
-    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
-      <div
-        className={styles.rowHeader}
-        onClick={() => setExpanded((p) => !p)}
-        style={{ cursor: "pointer" }}
-        data-testid={`layer-row-header-${id}`}
+    <div className={styles.menuWrap} ref={wrapRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={styles.iconButton}
+        aria-label={`Actions for ${entry.label}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        data-testid={`layer-menu-${entry.id}`}
+        onClick={() => (open ? close() : setOpen(true))}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
+        <IconDots />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Actions for ${entry.label}`}
+          className={styles.menu}
+          data-testid={`layer-menu-list-${entry.id}`}
+        >
+          {confirmingDelete ? (
+            <>
+              <p className={styles.menuConfirmText}>
+                Delete “{entry.label}”? This cannot be undone.
+              </p>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                data-testid={`layer-delete-cancel-${entry.id}`}
+                onClick={() => setConfirmingDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={joinClass(styles.menuItem, styles.menuItemDanger)}
+                data-testid={`layer-delete-confirm-${entry.id}`}
+                onClick={() => {
+                  close();
+                  actions.remove(entry.id);
+                }}
+              >
+                Delete layer
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                data-testid={`layer-zoom-${entry.id}`}
+                onClick={() => {
+                  close();
+                  actions.zoomTo(entry.id);
+                }}
+              >
+                Zoom to layer
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                data-testid={`layer-rename-${entry.id}`}
+                onClick={() => {
+                  close();
+                  onStartRename();
+                }}
+              >
+                Rename…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={joinClass(styles.menuItem, styles.menuItemDanger)}
+                data-testid={`layer-delete-${entry.id}`}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete…
+              </button>
+            </>
           )}
-          aria-label={visible ? "Hide layer" : "Show layer"}
-          aria-pressed={visible}
-          data-testid={`layer-visibility-${id}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            setVisibility(id, !visible);
-          }}
-        >
-          {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
-        <span
-          aria-label="Data layer"
-          className={joinClass(styles.kindBadge, styles.kindBadgeData)}
-        >
-          D
-        </span>
-        <span className={styles.label}>{label}</span>
-        <span className={styles.featureCount}>{featureCount} feat</span>
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label="Open style editor"
-          data-testid={`layer-style-${id}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            openStyle(id);
-          }}
-          title="Style editor"
-        >
-          <svg
-            className={styles.icon}
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M8 1.5a6.5 6.5 0 1 0 4 11.6c.5-.4.3-1.1-.3-1.1H10a1.5 1.5 0 0 1 0-3h2.5A2 2 0 0 0 14.5 7C14.5 4 11.6 1.5 8 1.5z" />
-            <circle cx="5" cy="6" r="0.8" />
-            <circle cx="8" cy="4" r="0.8" />
-            <circle cx="11" cy="6" r="0.8" />
-          </svg>
-        </button>
-        <span
-          style={{
-            marginLeft: "auto",
-            fontSize: 10,
-            color: "var(--ad-ink-tertiary)",
-            transform: expanded ? "rotate(180deg)" : "none",
-          }}
-        >
-          {(IconChevronDown as unknown as string) ? "▾" : "▸"}
-        </span>
-      </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* Inline style controls (always visible, compact) */}
+// ---------------------------------------------------------------------------
+// Expanded-card sections
+// ---------------------------------------------------------------------------
+
+/**
+ * Provenance — always visible while the card is expanded.
+ *
+ * This is Dr. Ana's reproducibility need (PRD §3 persona C). Before this it
+ * lived only in a 4-second import toast, which didn't even carry the drop
+ * count, and `label` stops answering "which file?" the first time anyone
+ * renames a layer.
+ */
+function ProvenanceSection({
+  entry,
+  fc,
+}: {
+  entry: DataLayerEntry;
+  fc: FeatureCollection | undefined;
+}) {
+  const { provenance } = entry;
+  return (
+    <dl
+      className={styles.provenance}
+      data-testid={`layer-provenance-${entry.id}`}
+    >
+      <dt className={styles.metaLabel}>Geometry</dt>
+      <dd className={styles.metaValue}>{geometryTypeOf(fc)}</dd>
+      <dt className={styles.metaLabel}>Source</dt>
+      <dd className={styles.metaValue}>
+        {provenance?.sourceFile ?? "unknown"}
+      </dd>
+      {/* "N dropped", not "N of M": `droppedCount` mixes two kinds of loss —
+          CSV rows that never became features (outside featureCount) and
+          features with null geometry (inside it) — so no single M is honest.
+          The design doc's own line is "Polygon · parcels.geojson · 2 dropped". */}
+      <dt className={styles.metaLabel}>Dropped</dt>
+      <dd className={styles.metaValue}>
+        {provenance
+          ? provenance.droppedCount === 0
+            ? "none"
+            : `${provenance.droppedCount}`
+          : "unknown"}
+      </dd>
+    </dl>
+  );
+}
+
+/** Fill / stroke / width / opacity, applied live, plus StylePanel's ramps. */
+function SymbologySection({
+  entry,
+  updateStyle,
+}: {
+  entry: DataLayerEntry;
+  updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
+}) {
+  const { id, style } = entry;
+  return (
+    <div data-testid={`layer-symbology-${id}`}>
       <div className={styles.styleGrid}>
         <label htmlFor={`fill-${id}`} className={styles.styleGridLabel}>
-          fill
+          Fill
         </label>
         <input
           id={`fill-${id}`}
@@ -384,7 +698,7 @@ function DataLayerRow({
           onChange={(e) => updateStyle(id, { fillColor: e.target.value })}
         />
         <label htmlFor={`stroke-${id}`} className={styles.styleGridLabel}>
-          stroke
+          Stroke
         </label>
         <input
           id={`stroke-${id}`}
@@ -394,7 +708,7 @@ function DataLayerRow({
           onChange={(e) => updateStyle(id, { strokeColor: e.target.value })}
         />
         <label htmlFor={`stroke-width-${id}`} className={styles.styleGridLabel}>
-          width
+          Width
         </label>
         <input
           id={`stroke-width-${id}`}
@@ -408,7 +722,7 @@ function DataLayerRow({
           }
         />
         <label htmlFor={`opacity-${id}`} className={styles.styleGridLabel}>
-          opacity
+          Opacity
         </label>
         <input
           id={`opacity-${id}`}
@@ -421,52 +735,229 @@ function DataLayerRow({
           onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
+      {/* Was a floating dialog clipped by this panel's own overflow; now the
+          rest of this section. See StylePanel.tsx's header. */}
+      <StylePanel layerId={id} />
+    </div>
+  );
+}
 
-      {/* Detail accordion — expands on row click */}
-      {expanded && (
-        <div className={styles.detail} data-testid={`layer-detail-${id}`}>
-          <div className={styles.detailMeta}>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Features</span>
-              <span className={styles.metaValue}>{featureCount}</span>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Fill</span>
-              <span className={styles.metaValue}>{style.fillColor ?? "—"}</span>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Stroke</span>
-              <span className={styles.metaValue}>
-                {style.strokeColor ?? "—"}{" "}
-                {style.strokeWidth != null ? `${style.strokeWidth}px` : ""}
-              </span>
-            </div>
-            <div className={styles.metaItem}>
-              <span className={styles.metaLabel}>Opacity</span>
-              <span className={styles.metaValue}>
-                {style.opacity != null
-                  ? `${Math.round(style.opacity * 100)}%`
-                  : "100%"}
-              </span>
+/** First few features' properties — "is this the data I meant to import?" */
+function AttributePreview({
+  entry,
+  fc,
+}: {
+  entry: DataLayerEntry;
+  fc: FeatureCollection | undefined;
+}) {
+  const rows = useMemo(
+    () => (fc?.features ?? []).slice(0, ATTR_PREVIEW_ROWS),
+    [fc],
+  );
+  const columns = useMemo(() => previewColumns(rows), [rows]);
+
+  if (rows.length === 0) {
+    return (
+      <p className={styles.attrHint} data-testid={`layer-attrs-${entry.id}`}>
+        No features to preview.
+      </p>
+    );
+  }
+  if (columns.length === 0) {
+    return (
+      <p className={styles.attrHint} data-testid={`layer-attrs-${entry.id}`}>
+        {`Showing ${rows.length} of ${entry.featureCount} — these features carry no properties.`}
+      </p>
+    );
+  }
+
+  return (
+    <div className={styles.attrTable} data-testid={`layer-attrs-${entry.id}`}>
+      <table>
+        <caption className={styles.srOnly}>
+          {`Attribute preview for ${entry.label}`}
+        </caption>
+        <thead>
+          <tr>
+            {columns.map((c) => (
+              <th key={c} scope="col">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((f, i) => (
+            <tr key={i}>
+              {columns.map((c) => (
+                <td key={c} title={formatCell(f.properties?.[c])}>
+                  {formatCell(f.properties?.[c])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={styles.attrHint}>
+        {`Showing ${rows.length} of ${entry.featureCount}`}
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The data layer card
+// ---------------------------------------------------------------------------
+
+function DataLayerCard({
+  entry,
+  mutators,
+  actions,
+  allIds,
+  expanded,
+  onToggleExpanded,
+}: {
+  entry: DataLayerEntry;
+  mutators: Mutators;
+  actions: LayerActions;
+  allIds: string[];
+  expanded: boolean;
+  onToggleExpanded: () => void;
+}) {
+  const { setVisibility, updateStyle } = mutators;
+  const { id, label, visible, featureCount } = entry;
+  const fc = useDataLayerFCStore((s) => s.fcs[id]);
+  const [renaming, setRenaming] = useState(false);
+  const [draftLabel, setDraftLabel] = useState(label);
+  const bodyId = `layer-card-body-${id}`;
+
+  const commitRename = () => {
+    const next = draftLabel.trim();
+    if (next && next !== label) {
+      actions.rename(id, next);
+    }
+    setRenaming(false);
+  };
+
+  return (
+    <SortableRow
+      entry={entry}
+      mutators={mutators}
+      allIds={allIds}
+      expanded={expanded}
+      body={
+        expanded ? (
+          <div
+            className={styles.detail}
+            id={bodyId}
+            data-testid={`layer-detail-${id}`}
+          >
+            <ProvenanceSection entry={entry} fc={fc} />
+
+            <h4 className={styles.detailHeading}>Symbology</h4>
+            <SymbologySection entry={entry} updateStyle={updateStyle} />
+
+            <h4 className={styles.detailHeading}>Attributes</h4>
+            <AttributePreview entry={entry} fc={fc} />
+
+            <div className={styles.detailActions}>
+              <button
+                type="button"
+                className={styles.detailBtn}
+                data-testid={`layer-zoom-inline-${id}`}
+                onClick={() => actions.zoomTo(id)}
+              >
+                Zoom to layer
+              </button>
+              <button
+                type="button"
+                className={styles.detailBtn}
+                data-testid={`layer-rename-inline-${id}`}
+                onClick={() => {
+                  setDraftLabel(label);
+                  setRenaming(true);
+                }}
+              >
+                Rename
+              </button>
             </div>
           </div>
-          <div className={styles.detailActions}>
-            <button
-              type="button"
-              className={styles.detailBtn}
-              onClick={() => openStyle(id)}
-              data-testid={`layer-detail-style-${id}`}
-            >
-              Full style editor
-            </button>
-          </div>
-          <p className={styles.attrHint}>
-            Attribute table preview will appear here when the data source is
-            connected. FeatureCollection metadata is available at the MapLibre
-            source level.
-          </p>
-        </div>
-      )}
+        ) : null
+      }
+    >
+      <div className={styles.rowHeader} data-testid={`layer-row-header-${id}`}>
+        {/* The disclosure is the button, not the whole row: a row-wide click
+            target would swallow clicks meant for the eye toggle and the ⋯
+            trigger nested inside it, and a div-with-onClick is not reachable
+            by keyboard at all. */}
+        <button
+          type="button"
+          className={styles.disclosure}
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
+          data-testid={`layer-disclosure-${id}`}
+          onClick={onToggleExpanded}
+        >
+          <IconCaret open={expanded} />
+        </button>
+        <span
+          aria-label="Data layer"
+          className={joinClass(styles.kindBadge, styles.kindBadgeData)}
+        >
+          D
+        </span>
+        {renaming ? (
+          <input
+            className={styles.renameInput}
+            autoFocus
+            aria-label={`Rename ${label}`}
+            data-testid={`layer-rename-input-${id}`}
+            value={draftLabel}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                commitRename();
+              } else if (e.key === "Escape") {
+                setDraftLabel(label);
+                setRenaming(false);
+              }
+            }}
+          />
+        ) : (
+          <span className={styles.label} title={label}>
+            {label}
+          </span>
+        )}
+        <span
+          className={styles.featureCount}
+          title={`${featureCount} features`}
+        >
+          {featureCount}
+        </span>
+        <button
+          type="button"
+          className={joinClass(
+            styles.iconButton,
+            visible && styles.iconButtonPressed,
+          )}
+          aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+          aria-pressed={visible}
+          data-testid={`layer-visibility-${id}`}
+          onClick={() => setVisibility(id, !visible)}
+        >
+          {visible ? <IconEye /> : <IconEyeSlash />}
+        </button>
+        <OverflowMenu
+          entry={entry}
+          actions={actions}
+          onStartRename={() => {
+            setDraftLabel(label);
+            setRenaming(true);
+          }}
+        />
+      </div>
     </SortableRow>
   );
 }
@@ -483,7 +974,9 @@ function AnnotationLayerRow({
   const { setVisibility } = mutators;
   const { id, label, visible } = entry;
 
-  // TODO(T14-adjacent): registry-only visibility flip lands here today.
+  // An annotation has no style, no FeatureCollection and no attributes, so it
+  // gets a row rather than a card — four empty sections would be worse than
+  // none. TODO(T14-adjacent): registry-only visibility flip lands here today.
   // Mutating the actual Excalidraw element via excalidrawAPI.updateScene
   // is deferred until Wave 2c — see plan §844.
   return (
@@ -515,6 +1008,47 @@ function AnnotationLayerRow({
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Threads section — Step 5 (2026-07-30)
+//
+// The demoted CommentsPanel. It used to be its own sidebar tab; comments are a
+// mode now (rail toggle + `C`, threads anchored on the map). What the tab was
+// genuinely good at — "read every thread in order, resolve the stale ones" —
+// is Marcus's review pass in the PRD, and that survives here, one level down,
+// in the same Sheet scope as Basemap / Data Layers / Annotations.
+//
+// Collapsed by default, deliberately: it is the review surface, not the
+// default one, and an always-open chronological list is exactly the 90%-empty
+// column the tab was. The disclosure carries the open-thread count so the
+// section still tells you there is something to read while closed.
+// ---------------------------------------------------------------------------
+
+function ThreadsSection() {
+  const [open, setOpen] = useState(false);
+  const openThreads = useOpenThreadCount();
+
+  return (
+    <section aria-label="Threads" className={styles.section}>
+      <h3 className={styles.heading}>
+        <button
+          type="button"
+          className={styles.threadsDisclosure}
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+          data-testid="threads-disclosure"
+        >
+          <span aria-hidden="true">{open ? "▾" : "▸"}</span>
+          <span>Threads</span>
+          {openThreads > 0 && (
+            <span className={styles.threadsCount}>{openThreads} open</span>
+          )}
+        </button>
+      </h3>
+      {open && <CommentsPanelHost />}
+    </section>
+  );
+}
+
 // Basemap section — IA restructure (2026-07-18): the basemap IS a layer, the
 // bottom of the stack, so it's managed here — not from the MainMenu (which
 // previously held a "Basemap: …" item + standalone BasemapPickerDialog) and
@@ -605,14 +1139,21 @@ const byOrder = (a: LayerRegistryEntry, b: LayerRegistryEntry) =>
   a.order - b.order;
 
 export function LayerPanel() {
-  const { entries, setVisibility, reorder, updateStyle } = useLayerRegistry();
+  const {
+    entries,
+    setVisibility,
+    reorder,
+    updateStyle,
+    remove,
+    // Kind-agnostic despite the name — it looks an entry up by id. See the
+    // action's doc comment in state/layerRegistry.ts.
+    updateAnnotationLabel: updateLabel,
+  } = useLayerRegistry();
 
-  // Phase 6 A5: StylePanel is a floating dialog opened from a per-row button.
-  // We keep the open layer id local to LayerPanel so closing one row's editor
-  // doesn't affect any other row. `null` = closed.
-  const [stylePanelLayerId, setStylePanelLayerId] = React.useState<
-    string | null
-  >(null);
+  // Accordion: at most one card open. See the header note — multi-open is the
+  // unbounded-growth failure mode this design is most exposed to.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
 
   // Phase 6 A14b — aria-live announcements on layer-visibility toggles. We
   // wrap setVisibility (not the underlying store) so the registry stays
@@ -632,7 +1173,34 @@ export function LayerPanel() {
     setVisibility: announcingSetVisibility,
     reorder,
     updateStyle,
-    openStyle: setStylePanelLayerId,
+  };
+
+  const actions: LayerActions = {
+    rename: (id, label) => {
+      updateLabel(id, label);
+      announce(`Layer renamed to "${label}"`);
+    },
+    remove: (id) => {
+      const name = entries.find((e) => e.id === id)?.label ?? id;
+      // Collapse first: a card left "expanded" by id would re-open the next
+      // layer that happens to reuse the slot.
+      setExpandedId((cur) => (cur === id ? null : cur));
+      remove(id);
+      announce(`Layer "${name}" deleted`);
+    },
+    zoomTo: (id) => {
+      const name = entries.find((e) => e.id === id)?.label ?? id;
+      const map = useMapInstanceStore.getState().map;
+      const fc = useDataLayerFCStore.getState().fcs[id];
+      // Read both through getState() rather than subscribing: the panel does
+      // not render differently because a map exists, and subscribing to every
+      // FC would re-render all 25 cards on any import.
+      if (fitMapToLayer(map, fc)) {
+        announce(`Zoomed to "${name}"`);
+      } else {
+        announce(`"${name}" has no geometry to zoom to`);
+      }
+    },
   };
 
   const dataLayers = entries
@@ -644,26 +1212,61 @@ export function LayerPanel() {
     .slice()
     .sort(byOrder);
 
+  // Unfiltered — reorder indices address the real stack, not the visible
+  // subset (see SortableRow).
   const dataLayerIds = dataLayers.map((e) => e.id);
   const annotationIds = annotations.map((e) => e.id);
+
+  const showFilter = dataLayers.length >= FILTER_THRESHOLD;
+  const needle = filter.trim().toLowerCase();
+  const visibleDataLayers =
+    showFilter && needle
+      ? dataLayers.filter((e) => e.label.toLowerCase().includes(needle))
+      : dataLayers;
 
   return (
     <div data-testid="layer-panel-body" className={styles.body}>
       <section aria-label="Data Layers" className={styles.section}>
         <h3 className={styles.heading}>Data Layers</h3>
+        {showFilter && (
+          <div className={styles.filterRow}>
+            <label htmlFor="layer-filter" className={styles.srOnly}>
+              Filter layers by name
+            </label>
+            <input
+              id="layer-filter"
+              type="search"
+              className={styles.filterInput}
+              placeholder={`Filter ${dataLayers.length} layers…`}
+              data-testid="layer-filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
+        )}
         {dataLayers.length === 0 ? (
           <p className={styles.empty}>(none — drop a GeoJSON file)</p>
+        ) : visibleDataLayers.length === 0 ? (
+          <p className={styles.empty} data-testid="layer-filter-no-match">
+            {`No layer matches “${filter.trim()}”`}
+          </p>
         ) : (
-          dataLayers.map((entry) => (
-            <DataLayerRow
+          visibleDataLayers.map((entry) => (
+            <DataLayerCard
               key={entry.id}
               entry={entry}
               mutators={mutators}
+              actions={actions}
               allIds={dataLayerIds}
+              expanded={expandedId === entry.id}
+              onToggleExpanded={() =>
+                setExpandedId((cur) => (cur === entry.id ? null : entry.id))
+              }
             />
           ))
         )}
       </section>
+      <ThreadsSection />
       <section aria-label="Annotations" className={styles.section}>
         <h3 className={styles.heading}>Annotations</h3>
         {annotations.length === 0 ? (
@@ -680,12 +1283,6 @@ export function LayerPanel() {
         )}
       </section>
       <BasemapSection />
-      {stylePanelLayerId && (
-        <StylePanel
-          layerId={stylePanelLayerId}
-          onClose={() => setStylePanelLayerId(null)}
-        />
-      )}
     </div>
   );
 }

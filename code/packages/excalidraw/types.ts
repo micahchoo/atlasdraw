@@ -660,6 +660,88 @@ export interface ExcalidrawProps {
    */
   collarMenuTarget?: HTMLElement | null;
   /**
+   * Atlasdraw addition (ADR-0010, Collar shell): when `true`, `DefaultSidebar`
+   * renders **without** its own tab-trigger row. Opt-in, exactly like
+   * `collarToolbarTarget`/`collarMenuTarget` — default (`false`/unset) leaves
+   * the stock trigger row and every vendored test untouched.
+   *
+   * For hosts that drive the sidebar from their own persistent rail (see
+   * {@link ExcalidrawImperativeAPI.getSidebarTabs}). Two rails onto one
+   * surface is what produced the tab-header overlap glitch: the row is laid
+   * out `repeat(auto-fit, minmax(0, 1fr))` inside a fixed 302px sidebar, so
+   * every registered tab makes the labels clip harder.
+   *
+   * **Suppresses the whole row, deliberately** — including triggers the host
+   * tunnels in via `DefaultSidebar.TabTriggers`. The row is one `role="tablist"`
+   * and a host that opts in is declaring it owns the trigger surface entirely;
+   * keeping the tablist alive just to host injected children would leave an
+   * empty `role="tablist"` in the header in the (normal) case where nothing is
+   * injected. Setting this *and* rendering `DefaultSidebar.TabTriggers` is a
+   * contradiction, and the injected triggers will not render. Use
+   * {@link ExcalidrawImperativeAPI.registerSidebarTab} +
+   * {@link ExcalidrawImperativeAPI.getSidebarTabs} to put a tab on the host
+   * rail instead.
+   *
+   * The header's dock + close buttons are unaffected. Tab *panels* are
+   * unaffected too, except that they are given an explicit `aria-label` from
+   * the tab's label — `RadixTabs.Content`'s `aria-labelledby` would otherwise
+   * point at a trigger that no longer exists.
+   */
+  hideDefaultSidebarTabTriggers?: boolean;
+  /**
+   * Atlasdraw addition (ADR-0010, Collar shell): width of the right sidebar in
+   * px, clamped to
+   * `[RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH]` by
+   * {@link clampRightSidebarWidth}. Unset ⇒ upstream's 302px, so vendored
+   * tests and the reference app are unaffected.
+   *
+   * The editor only *publishes* the value, as the `--right-sidebar-width`
+   * custom property on the editor container. `Sidebar.scss`, the
+   * `.layer-ui__wrapper` narrowing in `LayerUI` and the collar legend's offset
+   * all already read it, so a host that owns a resize handle (and the
+   * persistence for it) can drive the whole cascade from here. The editor
+   * deliberately holds no width state of its own — one owner, no two-way sync.
+   */
+  rightSidebarWidth?: number;
+  /**
+   * Atlasdraw addition (ADR-0010, Collar shell): notifies the host when the
+   * right sidebar's *layout* changes, so the host can reflow its own surfaces
+   * (in atlasdraw: narrow the MapLibre plate instead of letting the panel
+   * cover it, and place the resize handle at the panel's left edge).
+   *
+   * - `open` — a sidebar is open (docked or floating). Same `appState`
+   *   expression the editor uses for its own narrowing, so it is "whatever
+   *   sidebar owns the right edge", not specifically `DEFAULT_SIDEBAR`.
+   * - `shrunk` — the editor has narrowed `.layer-ui__wrapper` out from under
+   *   the sidebar, i.e. the sidebar occupies a reserved column rather than
+   *   floating over the canvas. True only when open **and** docked **and**
+   *   `editorInterface.canFitSidebar`.
+   * - `collar` — the collar-mode sidebar treatment is in force, i.e. the box is
+   *   exactly `--right-sidebar-width` wide (Sidebar.scss) rather than upstream's
+   *   `width - space-factor * 2`. Hosts that place chrome AT the panel's edge
+   *   need this: off collar mode (no toolbar target, or a phone) the edge is 8px
+   *   further right than the width says, so atlasdraw's resize handle would
+   *   float over the map instead of straddling the panel.
+   *
+   * `collar` is the phone gate as well as the treatment gate. It comes from
+   * `isCollarMode()` in `collar.ts` — the same call that publishes
+   * `.excalidraw--collar` from App.tsx, so the class and this field cannot
+   * disagree, and a host never has to re-derive either.
+   *
+   * `shrunk` is read from the same expression that drives the wrapper's own
+   * width and the collar legend's offset — deliberately, because computing
+   * that condition twice is exactly what once double-offset the legend by
+   * ~604px (see `LayerUI.collarLegend.test.tsx`). A host reflow derived from
+   * an independent guess would be the third copy.
+   *
+   * Fired from an effect, so it is safe to `setState` in.
+   */
+  onSidebarLayoutChange?: (layout: {
+    open: boolean;
+    shrunk: boolean;
+    collar: boolean;
+  }) => void;
+  /**
    * Atlasdraw addition (ADR-0010): override the "scroll back to content"
    * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the
    * MapLibre map is the real camera), so the default `calculateScrollCenter` is
@@ -1050,6 +1132,33 @@ export type ProjectSidebarTab = {
   icon?: React.ReactNode;
 };
 
+/**
+ * Atlasdraw fork addition — a read-only description of one tab of
+ * `DefaultSidebar`, as surfaced to the host app by
+ * {@link ExcalidrawImperativeAPI.getSidebarTabs}.
+ *
+ * Covers Excalidraw's own tabs (`search`, `library`) as well as tabs the
+ * host registered via `registerSidebarTab`, in the same order
+ * `DefaultSidebar` renders its triggers. This exists so a host-app trigger
+ * rail rendered *outside* the editor's React tree (where the
+ * `ProjectSidebarTabsContext` is unreachable) can mirror the real tab list
+ * instead of hardcoding one that silently drifts.
+ */
+export type SidebarTabDescriptor = {
+  /** `tab` value for `toggleSidebar({ name: DEFAULT_SIDEBAR.name, tab })`. */
+  name: string;
+  /** Human label. Doubles as the accessible name for an icon-only trigger. */
+  label: string;
+  /** Trigger icon, if the tab has one. Stock tabs always do. */
+  icon?: React.ReactNode;
+  /**
+   * `true` for Excalidraw's own hardcoded tabs, `false` for tabs the host
+   * registered. Hosts that want to present the two groups differently (or
+   * omit stock tabs) can filter on this rather than string-matching names.
+   */
+  stock: boolean;
+};
+
 export interface ExcalidrawImperativeAPI {
   /** Whether the editor has been unmounted and the API is no longer usable. */
   isDestroyed: boolean;
@@ -1098,8 +1207,35 @@ export interface ExcalidrawImperativeAPI {
    * Item shape: see {@link ProjectSidebarTab}. Registrations are
    * deduped by `name` (last-write wins) so a re-running effect
    * doesn't multiply tabs.
+   *
+   * Names reserved by `DefaultSidebar`'s own tabs (`search`, `library`) are
+   * rejected with a console warning and a no-op unregister — registering one
+   * would render a second trigger and a second panel for the same Radix tab
+   * value (duplicate React keys, ambiguous panel) rather than override it.
    */
   registerSidebarTab: (tab: ProjectSidebarTab) => () => void;
+  /**
+   * Atlasdraw fork extension — the full `DefaultSidebar` tab list (stock
+   * `search` + `library` first, then host registrations in registration
+   * order), in the same order the sidebar renders its triggers.
+   *
+   * The returned array reference is stable until the registration list
+   * mutates, so it is safe to use directly as a `useSyncExternalStore`
+   * snapshot together with {@link onSidebarTabsChange}.
+   *
+   * Motivation: `useProjectSidebarTabs` is React-context-backed and only
+   * reachable from inside the editor tree. A host app rendering its own
+   * trigger rail in its own shell (see `collarToolbarTarget`) needs the same
+   * list without that context — otherwise it has to hardcode one, which
+   * drifts the moment anyone calls `registerSidebarTab`.
+   */
+  getSidebarTabs: () => readonly SidebarTabDescriptor[];
+  /**
+   * Atlasdraw fork extension — subscribe to `DefaultSidebar` tab-list
+   * changes (register / unregister). Returns an unsubscribe function.
+   * Pairs with {@link getSidebarTabs}.
+   */
+  onSidebarTabsChange: (cb: () => void) => () => void;
   refresh: InstanceType<typeof App>["refresh"];
   setToast: InstanceType<typeof App>["setToast"];
   addFiles: (data: BinaryFileData[]) => void;

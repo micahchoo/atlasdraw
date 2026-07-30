@@ -16,9 +16,9 @@ afterEach(() => {
   cleanup();
 });
 
-function renderShell(sheetName: React.ReactNode) {
+function renderShell(sheetName: React.ReactNode, panelInset?: number) {
   return render(
-    <CollarShell map={null} sheetName={sheetName}>
+    <CollarShell map={null} sheetName={sheetName} panelInset={panelInset}>
       <div data-testid="plate-content" />
     </CollarShell>,
   );
@@ -46,5 +46,39 @@ describe("CollarShell sheet-name slot", () => {
     expect(screen.getByTestId("collar-sheet-name").textContent).toBe(
       "Ward survey",
     );
+  });
+});
+
+// The sheet panel reflows the plate rather than covering it, and the number that
+// makes that happen is one custom property on the shell. Two surfaces read it —
+// the MapLibre layer (MapEditor.module.css) and the lon graticule, whose ticks
+// are laid out across the *map's* width, not the plate's. Both are CSS, which
+// jsdom does not compute, so what is testable here is the property's value: get
+// it wrong and both readers are wrong together.
+describe("CollarShell sheet-panel inset", () => {
+  it("publishes 0px when no panel is reserving space", () => {
+    renderShell(<span>Ward survey</span>);
+
+    const shell = screen.getByTestId("collar-shell");
+    expect(shell.style.getPropertyValue("--ad-sheet-panel-inset")).toBe("0px");
+  });
+
+  it("publishes the reserved width when the panel is open and docked", () => {
+    renderShell(<span>Ward survey</span>, 302);
+
+    const shell = screen.getByTestId("collar-shell");
+    expect(shell.style.getPropertyValue("--ad-sheet-panel-inset")).toBe(
+      "302px",
+    );
+  });
+
+  it("tracks a resized panel", () => {
+    renderShell(<span>Ward survey</span>, 480);
+
+    expect(
+      screen
+        .getByTestId("collar-shell")
+        .style.getPropertyValue("--ad-sheet-panel-inset"),
+    ).toBe("480px");
   });
 });

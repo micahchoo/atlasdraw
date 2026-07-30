@@ -44,6 +44,54 @@ import type maplibregl from "maplibre-gl";
 const ZOOM_SCALE = 0.0035;
 const LINE_HEIGHT_PX = 25; // when deltaMode === DOM_DELTA_LINE
 
+/**
+ * Is the wheel pointing at a UI surface that scrolls itself?
+ *
+ * The listener below is capture-phase on the whole editor root, which is an
+ * ancestor of the sidebar, the ⌘K palette and every other bit of chrome. It
+ * preventDefaults unconditionally, so before this guard a wheel anywhere in
+ * the app zoomed the map and nothing in the app could ever scroll — the layer
+ * panel at 25 layers and the stock library tab's own `overflow-y: auto` were
+ * both unreachable by mouse.
+ *
+ * The rule is "a scroll port claims the wheel", not an allowlist of chrome:
+ * chrome gets added, allowlists rot, and a scroll port is exactly the thing
+ * whose whole purpose is consuming wheel. Deliberately NOT direction-aware —
+ * a port already at its limit still keeps the event, because scrolling to the
+ * bottom of the layer list and having the map lurch is worse than a wheel that
+ * does nothing.
+ *
+ * The walk stops AT `root`: the editor root is the map's own surface, so if it
+ * ever reports overflow that must not disable zoom.
+ *
+ * Known edge, pinned by a test rather than worked around: an element with only
+ * `overflow-x: auto` computes `overflow-y: auto` too (CSS Overflow 3 coerces
+ * `visible` to `auto` when the other axis is not `visible`). Such a box claims
+ * the wheel if a space-taking horizontal scrollbar has shrunk its `clientHeight`
+ * below `scrollHeight` — on overlay-scrollbar platforms, which is every one this
+ * ships to, it does not. `.attrTable` in LayerPanel.module.css is the shape in
+ * question, and it is inside the layer panel, which is itself a scroll port, so
+ * the answer there is the same either way.
+ *
+ * Reads `scrollHeight`/`clientHeight` before `getComputedStyle` on purpose. The
+ * hot path is a wheel over the map, which walks the full ancestor chain and
+ * returns false; the cheap integer compare short-circuits style resolution for
+ * every ancestor that is not overflowing, which is nearly all of them.
+ */
+function targetOwnsWheel(target: EventTarget | null, root: HTMLElement) {
+  let el = target instanceof Element ? target : null;
+  while (el && el !== root) {
+    if (el.scrollHeight > el.clientHeight) {
+      const overflowY = getComputedStyle(el).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") {
+        return true;
+      }
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 export function useMapWheelRouter(
   container: HTMLElement | null,
   map: maplibregl.Map | null,
@@ -56,6 +104,11 @@ export function useMapWheelRouter(
     const handleWheel = (e: WheelEvent) => {
       // Browser pinch-zoom (ctrl on Windows/Linux, meta on macOS) — let it through.
       if (e.ctrlKey || e.metaKey) {
+        return;
+      }
+
+      // Chrome that scrolls itself keeps its own wheel. See targetOwnsWheel.
+      if (targetOwnsWheel(e.target, container)) {
         return;
       }
 

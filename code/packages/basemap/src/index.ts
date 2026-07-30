@@ -8,7 +8,12 @@ export { MapCanvas } from "./MapCanvas";
 export type { MapCanvasProps, MapCanvasInitialView } from "./MapCanvas";
 
 export type { LayerStyle, StyleExpression } from "./style";
-export { compileLayer, defaultLayerStyle } from "./style-compiler";
+export {
+  compileLayer,
+  compilePaint,
+  defaultLayerStyle,
+} from "./style-compiler";
+export type { CompiledPaint, LayerGeometryType } from "./style-compiler";
 
 export {
   BASEMAPS,

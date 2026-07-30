@@ -9,10 +9,29 @@
 // `useLayerRegistry` hook and `useDataLayerFCStore`. Writes through
 // `layerRegistry.updateStyle(id, patch)` — never mutates `style` directly.
 //
+// Sheet-panel step 4 (2026-07-30) — this stopped being a floating dialog and
+// became the symbology section of LayerPanel's expanded layer card. It used to
+// be `position:absolute; right:20px; width:280px; z-index:100` rendered inside
+// a ~294px `overflow:hidden` sidebar body at z-120: a box wider than its
+// container, under a stacking context above itself, so it was clipped and
+// occluded at once. Nothing repositions it now — it is in normal flow inside
+// the card, which deletes the defect by deleting its cause.
+//
+// What that cost, deliberately: the dialog chrome went with the dialog. No
+// FocusTrap, no Escape-to-close, no × button, no `role="dialog"`, and no
+// "Layer not found" branch — the card only renders inside a row whose entry it
+// just read, so `layerId` cannot dangle. Everything that authors style
+// survived intact: all three tabs, the linear/quantile/equal-interval stop
+// computation, ColorRampPicker, fallback colors, per-tab Apply, and deriving
+// the initial tab from an existing `style.expression`.
+//
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A5
+// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+
+import type { StyleExpression } from "@atlasdraw/basemap";
 
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 
@@ -20,13 +39,9 @@ import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 
 import styles from "../styles/StylePanel.module.css";
 
-import { FocusTrap } from "./FocusTrap";
-
 import { ColorRampPicker } from "./ColorRampPicker";
 
 import type { DataLayerEntry } from "../state/layerRegistry";
-
-import type { StyleExpression } from "@atlasdraw/basemap";
 
 // ---- stop-computation helpers (kept inline per Phase 6 constraint) ----------
 
@@ -97,7 +112,6 @@ function computeStops(
 
 export type StylePanelProps = {
   layerId: string;
-  onClose: () => void;
 };
 
 type Tab = "single" | "categorical" | "graduated";
@@ -106,7 +120,7 @@ const DEFAULT_RAMP = ["#fef0d9", "#fdcc8a", "#fc8d59", "#e34a33", "#b30000"];
 
 // ---- component --------------------------------------------------------------
 
-export function StylePanel({ layerId, onClose }: StylePanelProps) {
+export function StylePanel({ layerId }: StylePanelProps) {
   const registry = useLayerRegistry();
   const entry = registry.entries.find(
     (e): e is DataLayerEntry => e.kind === "data" && e.id === layerId,
@@ -121,17 +135,6 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
     : "single";
   const [tab, setTab] = useState<Tab>(initialTab);
 
-  // Escape-to-close — wire once. Keyed on onClose so callers can swap handlers.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   // Introspect feature properties from the first feature. Empty list when the
   // FC is missing (e.g. a registry entry exists but no FC was registered — a
   // converted annotation, perhaps). Categorical accepts string|number; graduated
@@ -144,113 +147,78 @@ export function StylePanel({ layerId, onClose }: StylePanelProps) {
     return { allProps: all, numericProps: numeric };
   }, [fc]);
 
+  // A layer card only renders StylePanel for an entry it has in hand, so a
+  // missing entry means the store changed between the card's render and this
+  // one. Render nothing rather than a "not found" placeholder inside a card
+  // that is about to unmount anyway.
   if (!entry) {
-    return (
-      <FocusTrap>
-        <div
-          role="dialog"
-          aria-label="Style editor"
-          className={styles.panel}
-          data-testid="style-panel"
-        >
-          <div className={styles.header}>
-            <span className={styles.title}>Style editor</span>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              aria-label="Close"
-              data-testid="style-close"
-              onClick={onClose}
-            >
-              ×
-            </button>
-          </div>
-          <p className={styles.empty}>Layer not found.</p>
-        </div>
-      </FocusTrap>
-    );
+    return null;
   }
 
   return (
-    <FocusTrap>
+    <div className={styles.panel} data-testid="style-panel">
       <div
-        role="dialog"
-        aria-label="Style editor"
-        className={styles.panel}
-        data-testid="style-panel"
+        role="tablist"
+        aria-label="Symbology mode"
+        className={styles.tabStrip}
       >
-        <div className={styles.header}>
-          <span className={styles.title}>Style: {entry.label}</span>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            aria-label="Close"
-            data-testid="style-close"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-
-        <div role="tablist" className={styles.tabStrip}>
-          <TabButton
-            tab="single"
-            active={tab}
-            onClick={setTab}
-            label="Single color"
-          />
-          <TabButton
-            tab="categorical"
-            active={tab}
-            onClick={setTab}
-            label="Categorical"
-          />
-          <TabButton
-            tab="graduated"
-            active={tab}
-            onClick={setTab}
-            label="Graduated"
-          />
-        </div>
-
-        <div className={styles.body}>
-          {tab === "single" && (
-            <SingleColorTab
-              entry={entry}
-              onApply={(hex) =>
-                registry.updateStyle(layerId, {
-                  fillColor: hex,
-                  expression: undefined,
-                })
-              }
-            />
-          )}
-          {tab === "categorical" && (
-            <CategoricalTab
-              entry={entry}
-              allProps={allProps}
-              onApply={(expr) =>
-                registry.updateStyle(layerId, { expression: expr })
-              }
-            />
-          )}
-          {tab === "graduated" && (
-            <GraduatedTab
-              entry={entry}
-              numericProps={numericProps}
-              fcValues={(prop: string) =>
-                (fc?.features ?? [])
-                  .map((f) => f.properties?.[prop])
-                  .filter((v): v is number => typeof v === "number")
-              }
-              onApply={(expr) =>
-                registry.updateStyle(layerId, { expression: expr })
-              }
-            />
-          )}
-        </div>
+        <TabButton
+          tab="single"
+          active={tab}
+          onClick={setTab}
+          label="Single color"
+        />
+        <TabButton
+          tab="categorical"
+          active={tab}
+          onClick={setTab}
+          label="Categorical"
+        />
+        <TabButton
+          tab="graduated"
+          active={tab}
+          onClick={setTab}
+          label="Graduated"
+        />
       </div>
-    </FocusTrap>
+
+      <div className={styles.body}>
+        {tab === "single" && (
+          <SingleColorTab
+            entry={entry}
+            onApply={(hex) =>
+              registry.updateStyle(layerId, {
+                fillColor: hex,
+                expression: undefined,
+              })
+            }
+          />
+        )}
+        {tab === "categorical" && (
+          <CategoricalTab
+            entry={entry}
+            allProps={allProps}
+            onApply={(expr) =>
+              registry.updateStyle(layerId, { expression: expr })
+            }
+          />
+        )}
+        {tab === "graduated" && (
+          <GraduatedTab
+            entry={entry}
+            numericProps={numericProps}
+            fcValues={(prop: string) =>
+              (fc?.features ?? [])
+                .map((f) => f.properties?.[prop])
+                .filter((v): v is number => typeof v === "number")
+            }
+            onApply={(expr) =>
+              registry.updateStyle(layerId, { expression: expr })
+            }
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

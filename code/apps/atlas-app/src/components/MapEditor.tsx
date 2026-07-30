@@ -63,6 +63,9 @@ import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
+import { useCommentModeTool } from "../hooks/useCommentModeTool";
+import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
+import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
@@ -79,6 +82,8 @@ import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
+import { useSheetPanelStore } from "../state/sheetPanel";
+import { useMapInstanceStore } from "../state/mapInstance";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -94,7 +99,8 @@ import styles from "../styles/MapEditor.module.css";
 import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
-import { CollarSheetTabs } from "./CollarSheetTabs";
+import { SheetRail } from "./SheetRail";
+import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
@@ -110,7 +116,6 @@ import { PinToolButton } from "./PinToolButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
-import { CommentsPanelHost } from "./CommentsPanelHost";
 import { LayerPanel } from "./LayerPanel";
 import { useAnnounce } from "./AriaAnnouncer";
 import { OnboardingTips, useOnboarding } from "./OnboardingTips";
@@ -272,7 +277,16 @@ export async function openAtlasDocument(
 // reads initialData once on mount; passing a fresh literal each render is
 // harmless today but brittle if a future Excalidraw version memoizes on it.
 const EXCALIDRAW_INITIAL_DATA = {
-  appState: { viewBackgroundColor: "transparent" },
+  appState: {
+    viewBackgroundColor: "transparent",
+    // The sheet panel is the plate's right MARGIN, not a floating overlay —
+    // "nothing floats over the map at rest" (.interface-design/system.md).
+    // Docked is also the only state in which the editor reserves a column for
+    // it, which is what lets the map reflow instead of being covered. The dock
+    // toggle in the panel header still works; this is the default, not a lock,
+    // and it is a *preference* key so a user who undocks keeps that choice.
+    defaultSidebarDockedPreference: true,
+  },
 } as const;
 
 // One format, one door: disable Excalidraw's own persistence actions
@@ -312,6 +326,51 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
   const toast = useToast();
+
+  // Publish the map for components that render outside this tree — LayerPanel
+  // is handed to `registerSidebarTab` as an already-constructed element, so
+  // "zoom to layer" cannot reach the map by prop. See state/mapInstance.ts for
+  // why a store beats adding `map` to that effect's dependency list.
+  useEffect(() => {
+    useMapInstanceStore.getState().setMap(map);
+    return () => useMapInstanceStore.getState().setMap(null);
+  }, [map]);
+
+  // --- sheet panel: width, and whether the plate reflows for it -------------
+  //
+  // Width is the app's, persisted in state/sheetPanel.ts and published back
+  // into the editor as `rightSidebarWidth` (which becomes
+  // `--right-sidebar-width`). `sheetPanelLayout` comes the other way, from the
+  // editor's own `isUIShrunkForSidebar` — the one expression that also drives
+  // the UI-wrapper narrowing and the collar legend's offset, so the map's
+  // reflow can't drift out of step with them the way a re-derived copy would.
+  const sheetPanelWidth = useSheetPanelStore((s) => s.width);
+  const setSheetPanelWidth = useSheetPanelStore((s) => s.setWidth);
+  const resetSheetPanelWidth = useSheetPanelStore((s) => s.resetWidth);
+  const [sheetPanelLayout, setSheetPanelLayout] = useState({
+    open: false,
+    shrunk: false,
+    collar: false,
+  });
+  // Stable identity: `<Excalidraw>`'s memo comparator is a shallow prop compare,
+  // so a fresh closure here would defeat it on every MapEditor render.
+  const onSidebarLayoutChange = useCallback(
+    (layout: { open: boolean; shrunk: boolean; collar: boolean }) => {
+      setSheetPanelLayout((prev) =>
+        prev.open === layout.open &&
+        prev.shrunk === layout.shrunk &&
+        prev.collar === layout.collar
+          ? prev
+          : layout,
+      );
+    },
+    [],
+  );
+  // The plate only gives up pixels when the editor has actually reserved a
+  // column (docked + wide enough). An undocked panel floats, exactly as
+  // upstream Excalidraw does, and the map keeps its full width.
+  const platePanelInset = sheetPanelLayout.shrunk ? sheetPanelWidth : 0;
+
   // Stable outcome channel for save/open — see DocumentNotify above.
   const documentNotify = useMemo<DocumentNotify>(
     () => ({ success: toast.success, error: toast.error }),
@@ -555,6 +614,21 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
+  // Step 5 — comment MODE (replaces the comments sidebar tab). The boolean
+  // lives in state/commentMode.ts because the rail, the keyboard handler, the
+  // anchor overlay and this component all have to agree about it and none is
+  // an ancestor of the others.
+  const commentMode = useCommentMode();
+  useCommentModeTool({
+    excalidrawAPI,
+    atlasTool: activeAtlasTool,
+    setAtlasTool: setActiveAtlasTool,
+  });
+  // Badge count — derived from the live CommentsLayer, no parallel counter.
+  // Passed explicitly: MapEditor provides CollabContext, so the context-reading
+  // variant would construct a second, disconnected CollabState here.
+  const openThreadCount = useOpenThreadCountFor(collabValue.commentsLayer);
+
   // Keyboard shortcuts panel — toggled with `?`.
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Quick-actions palette — Cmd+K / Ctrl+K.
@@ -584,10 +658,38 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // deliberate "Import…" menu action below (native file picker), so both
   // trigger paths funnel through the same parse+dispatch pipeline.
   const registry = useLayerRegistry();
+  // Design doc §5 — the panel defaults closed (Priya's four-minute map never
+  // opens it) but a successful import is the one moment both personas want it:
+  // it is the "what did I just get?" beat, and where provenance lives. Once per
+  // session only, and only if the user hasn't already expressed a preference by
+  // opening or closing it — after that their choice wins, which is the whole
+  // point of the resolution.
+  const autoOpenedRef = useRef(false);
+  const userTouchedPanelRef = useRef(false);
+  useEffect(() => {
+    if (sheetPanelLayout.open) {
+      userTouchedPanelRef.current = true;
+    }
+  }, [sheetPanelLayout.open]);
+  const openSheetPanelForImport = useCallback(() => {
+    if (autoOpenedRef.current || userTouchedPanelRef.current) {
+      return;
+    }
+    autoOpenedRef.current = true;
+    excalidrawAPI?.toggleSidebar({
+      name: DEFAULT_SIDEBAR.name,
+      // Same literal the tab is registered under below and the MainMenu item
+      // opens; there is no shared constant for it yet and inventing one here
+      // would be a rename across three call sites, not this step's work.
+      tab: "layers",
+      force: true,
+    });
+  }, [excalidrawAPI]);
   const { importFile } = useDataFileImport(
     rootRef,
     map,
     registry.registerDataLayer,
+    openSheetPanelForImport,
   );
 
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
@@ -674,36 +776,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     });
   }, [excalidrawAPI]);
 
-  // Phase 6 A3 — anchored comments Sidebar tab. Same DefaultSidebar surface
-  // as Layers; opens via toggleSidebar({name: DEFAULT_SIDEBAR.name, tab:
-  // "comments"}). CommentsPanelHost wires useCollab().commentsLayer
-  // internally and renders body markup only.
-  useEffect(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-    return excalidrawAPI.registerSidebarTab({
-      name: "comments",
-      label: "Comments",
-      icon: (
-        <svg
-          width={16}
-          height={16}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M2 3h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9l-3 3v-3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-          <path d="M5 7h6M5 9h4" />
-        </svg>
-      ),
-      content: <CommentsPanelHost />,
-    });
-  }, [excalidrawAPI]);
+  // Step 5 — the "comments" sidebar tab is GONE. Comments are a mode now (rail
+  // toggle + `C`), and the chronological list survives one level down, as the
+  // Threads section of the Layers tab's Sheet scope (LayerPanel). Nothing
+  // calls registerSidebarTab({name: "comments"}) any more; the rail is driven
+  // off getSidebarTabs(), so the entry disappears from it automatically.
+  // Rationale + precedent: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §3.
 
   // W-B — Composite PNG export (extracted to useExportPNG hook).
   const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg, toast);
@@ -774,7 +852,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
-        tabs={<CollarSheetTabs excalidrawAPI={excalidrawAPI} />}
+        tabs={
+          <SheetRail
+            excalidrawAPI={excalidrawAPI}
+            commentMode={commentMode}
+            onToggleCommentMode={toggleCommentMode}
+            openThreadCount={openThreadCount}
+          />
+        }
+        panelInset={platePanelInset}
         foot={
           <StatusBar
             map={map}
@@ -785,9 +871,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       >
         <div
           ref={rootRef}
-          className={styles.root}
+          className={[styles.root, commentMode ? styles.commentMode : ""]
+            .filter(Boolean)
+            .join(" ")}
           style={{ backgroundColor: mapBg }}
           data-testid="map-editor-root"
+          data-comment-mode={commentMode ? "on" : undefined}
         >
           {/* Bottom layer: MapLibre GL map */}
           <div className={styles.mapLayer}>
@@ -825,6 +914,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               // slot so it sits with the drawing tools, per the prototype.
               collarToolbarTarget={toolStripHost}
               collarMenuTarget={menuHost}
+              // SheetRail (collar right column) is the sidebar's only trigger
+              // surface — suppress the sidebar's own tab-trigger row so there
+              // is exactly one rail. Two rails is what let the hardcoded one
+              // drift, and four labelled triggers in a 294px header clipped.
+              hideDefaultSidebarTabTriggers
+              // Sheet-panel width: ours to own (SheetPanelResizer edits it,
+              // state/sheetPanel.ts persists it), the editor's to publish as
+              // --right-sidebar-width and clamp. `onSidebarLayoutChange` is the
+              // return path that tells us when to reflow the plate.
+              rightSidebarWidth={sheetPanelWidth}
+              onSidebarLayoutChange={onSidebarLayoutChange}
               renderToolbarExtras={() => (
                 <PinToolButton
                   active={isPinActive}
@@ -935,6 +1035,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           pass through. */}
           <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
 
+          {/* Step 5 — comment mode's on-plate affordance. A mode with no
+          visible state is a trap: the crosshair cursor (.commentMode above)
+          says "this click does something different" and this hint says what,
+          and how to get out. role="status" so entering the mode is announced
+          rather than only drawn. */}
+          {commentMode && (
+            <div
+              className={styles.commentModeHint}
+              role="status"
+              data-testid="comment-mode-hint"
+            >
+              Click the map or an element to start a thread
+              <span className={styles.commentModeHintKey}>Esc</span>
+              to exit
+            </div>
+          )}
+
           {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
           (no-op for single-player deployments, Q1). Both components already
           no-op internally when there are no peers; the active gate just
@@ -963,6 +1080,27 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             activeId={activeWorkspaceId}
             onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
           />
+
+          {/* Sheet-panel resize handle, at the panel's left edge. Mounted only
+          while the panel is open — its whole position is "the panel's edge",
+          which does not exist otherwise. Rendered for the floating (undocked)
+          panel too: the edge is in the same place either way, only the plate's
+          reflow depends on docking.
+
+          Also gated on `collar`, because the handle's `right: width` is only
+          the panel's edge under the collar treatment. On a phone the editor
+          drops collar mode, the sidebar falls back to upstream's
+          `width - space-factor * 2` (286 of a 302px property), and the handle
+          becomes a 16px col-resize strip floating over the map — a hit target
+          for a drag that cannot mean anything. A phone has no pointer to hover
+          it with either. */}
+          {sheetPanelLayout.open && sheetPanelLayout.collar && (
+            <SheetPanelResizer
+              width={sheetPanelWidth}
+              onWidth={setSheetPanelWidth}
+              onReset={resetSheetPanelWidth}
+            />
+          )}
 
           {/* Atlas-tool interaction overlay — only mounted when an atlas-tool is
           active. Captures pointerdown above Excalidraw (zIndex 5) so map clicks
@@ -1126,15 +1264,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                     }),
                 },
                 {
+                  // Step 5 — was "Comments panel" → toggleSidebar({tab:
+                  // "comments"}), a tab that no longer exists. The palette
+                  // entry now enters the mode; the list view is reachable as
+                  // the Threads section of the Layers tab.
                   id: "comments",
-                  label: "Comments panel",
+                  label: commentMode ? "Exit comment mode" : "Comment mode",
                   category: "View",
-                  keywords: ["sidebar", "threads"],
-                  onSelect: () =>
-                    excalidrawAPI?.toggleSidebar({
-                      name: DEFAULT_SIDEBAR.name,
-                      tab: "comments",
-                    }),
+                  hint: "C",
+                  keywords: ["comment", "threads", "annotate", "review"],
+                  onSelect: toggleCommentMode,
                 },
                 {
                   id: "find",

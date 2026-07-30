@@ -49,6 +49,28 @@ export interface CsvReadOptions {
    * skipped entirely and the reader makes NO network calls.
    */
   geocoder?: PhotonGeocoder;
+  /**
+   * Called once, just before the FeatureCollection is returned, with the row
+   * accounting for this import.
+   *
+   * CSV is the only format here that drops silently — a row whose lat/lng
+   * won't parse and that can't be geocoded is skipped so one bad line can't
+   * fail a 10k-row file. That is the right resilience trade, but it means the
+   * FeatureCollection alone cannot say how much of the file made it. The
+   * caller records `dropped` as layer provenance so the panel can show it
+   * instead of the user discovering the gap by counting dots.
+   */
+  onStats?: (stats: CsvImportStats) => void;
+}
+
+/** Row accounting for one `parseCSV` call. `read = emitted + dropped`. */
+export interface CsvImportStats {
+  /** Data rows Papa produced (header excluded, blank lines skipped). */
+  read: number;
+  /** Features in the returned FeatureCollection. */
+  emitted: number;
+  /** Rows with no usable coordinates, geocoded or otherwise. */
+  dropped: number;
 }
 
 /**
@@ -220,6 +242,12 @@ export async function parseCSV(
       }
     }
   }
+
+  opts?.onStats?.({
+    read: rows.length,
+    emitted: features.length,
+    dropped: rows.length - features.length,
+  });
 
   return { type: "FeatureCollection", features };
 }

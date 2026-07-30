@@ -41,6 +41,7 @@ import {
   MAX_ALLOWED_FILE_BYTES,
   MIME_TYPES,
   MQ_RIGHT_SIDEBAR_MIN_WIDTH,
+  clampRightSidebarWidth,
   POINTER_BUTTON,
   ROUNDNESS,
   SCROLL_TIMEOUT,
@@ -343,6 +344,7 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
+import { isCollarMode } from "../collar";
 import {
   getDefaultAppState,
   isEraserActive,
@@ -448,6 +450,10 @@ import { ElementCanvasButton } from "./MagicButton";
 import { SVGLayer } from "./SVGLayer";
 import { searchItemInFocusAtom } from "./SearchMenu";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
+import {
+  DEFAULT_SIDEBAR_STOCK_TABS,
+  isStockSidebarTabName,
+} from "./Sidebar/defaultSidebarStockTabs";
 import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
@@ -497,6 +503,7 @@ import type {
   Offsets,
   ProjectContextMenuItem,
   ProjectSidebarTab,
+  SidebarTabDescriptor,
 } from "../types";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 import type { Action, ActionResult } from "../actions/types";
@@ -750,6 +757,52 @@ class App extends React.Component<AppProps, AppState> {
     getSnapshot: this.getProjectSidebarTabsSnapshot,
   };
 
+  /**
+   * Atlasdraw fork — memo cell for {@link App.getSidebarTabs}. Keyed on the
+   * `projectSidebarTabs` array *identity*, which
+   * {@link App.registerProjectSidebarTab} replaces on every mutation — so the
+   * descriptor array is likewise stable between mutations and safe to hand to
+   * a host-side `useSyncExternalStore`.
+   *
+   * Caveat: the stock tabs' labels come from `t()` at recompute time, so a
+   * mid-session language switch does not re-label them until the next
+   * register/unregister. Acceptable — the alternative is either an unstable
+   * snapshot (breaks `useSyncExternalStore`) or a second subscription to i18n.
+   */
+  private sidebarTabsSnapshotSource: readonly ProjectSidebarTab[] | null = null;
+
+  private sidebarTabsSnapshot: readonly SidebarTabDescriptor[] = [];
+
+  /**
+   * Atlasdraw fork — the whole `DefaultSidebar` tab list as the host sees it:
+   * the stock tabs (rendered first by `DefaultSidebar`, hence first here)
+   * followed by host registrations in registration order.
+   *
+   * Both the stock half of this list and `DefaultSidebar`'s stock trigger row
+   * map over {@link DEFAULT_SIDEBAR_STOCK_TABS} — see that constant for why
+   * they must not be two hardcoded lists.
+   */
+  private getSidebarTabs = (): readonly SidebarTabDescriptor[] => {
+    if (this.sidebarTabsSnapshotSource !== this.projectSidebarTabs) {
+      this.sidebarTabsSnapshotSource = this.projectSidebarTabs;
+      this.sidebarTabsSnapshot = [
+        ...DEFAULT_SIDEBAR_STOCK_TABS.map(({ name, getLabel, icon }) => ({
+          name,
+          label: getLabel(),
+          icon,
+          stock: true,
+        })),
+        ...this.projectSidebarTabs.map(({ name, label, icon }) => ({
+          name,
+          label,
+          icon,
+          stock: false,
+        })),
+      ];
+    }
+    return this.sidebarTabsSnapshot;
+  };
+
   private readonly editorLifecycleEvents = new AppEventBus<
     ExcalidrawImperativeAPIEventMap,
     typeof editorLifecycleEventBehavior
@@ -858,6 +911,10 @@ class App extends React.Component<AppProps, AppState> {
       registerSidebarTab: (tab: ProjectSidebarTab) => {
         return this.registerProjectSidebarTab(tab);
       },
+      getSidebarTabs: this.getSidebarTabs,
+      // Same listener set `DefaultSidebar` subscribes through, so the host
+      // rail and the sidebar can never disagree about the tab list.
+      onSidebarTabsChange: this.subscribeProjectSidebarTabs,
       refresh: this.refresh,
       setToast: this.setToast,
       id: this.id,
@@ -2188,9 +2245,21 @@ class App extends React.Component<AppProps, AppState> {
       renderToolbarExtras,
       collarToolbarTarget,
       collarMenuTarget,
+      rightSidebarWidth,
+      onSidebarLayoutChange,
       onScrollBackToContent,
       renderCustomStats,
     } = this.props;
+
+    // Atlasdraw fork addition (ADR-0010, Collar shell): "collar mode" is the
+    // same condition LayerUI derives — the host portaled the toolbar into its
+    // own frame and this is not a phone. Published as a container class so the
+    // *sheet margin* treatment of the sidebar can live in CSS (see
+    // Sidebar.scss) instead of being threaded through every subcomponent.
+    const collarMode = isCollarMode(
+      collarToolbarTarget,
+      this.editorInterface.formFactor,
+    );
 
     const sceneNonce = this.scene.getSceneNonce();
     const { elementsMap, visibleElements } =
@@ -2236,12 +2305,21 @@ class App extends React.Component<AppProps, AppState> {
             this.state.viewModeEnabled ||
             this.state.openDialog?.name === "elementLinkSelector",
           "excalidraw--mobile": this.editorInterface.formFactor === "phone",
+          // Atlasdraw fork addition (ADR-0010, Collar shell).
+          "excalidraw--collar": collarMode,
         })}
         style={{
           ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
             ? POINTER_EVENTS.disabled
             : POINTER_EVENTS.enabled,
-          ["--right-sidebar-width" as any]: "302px",
+          // Atlasdraw fork addition: was the inline literal `"302px"`. The
+          // value is the host's (it owns the resize handle and its
+          // persistence); the editor's job is to clamp it and publish it, so
+          // every downstream reader — Sidebar.scss, the `.layer-ui__wrapper`
+          // narrowing, the collar legend offset — keeps working unchanged.
+          ["--right-sidebar-width" as any]: `${clampRightSidebarWidth(
+            rightSidebarWidth,
+          )}px`,
         }}
         ref={this.excalidrawContainerRef}
         onDrop={this.handleAppOnDrop}
@@ -2288,6 +2366,7 @@ class App extends React.Component<AppProps, AppState> {
                               renderToolbarExtras={renderToolbarExtras}
                               collarToolbarTarget={collarToolbarTarget}
                               collarMenuTarget={collarMenuTarget}
+                              onSidebarLayoutChange={onSidebarLayoutChange}
                               onScrollBackToContent={onScrollBackToContent}
                               renderCustomStats={renderCustomStats}
                               showExitZenModeBtn={
@@ -12637,6 +12716,18 @@ class App extends React.Component<AppProps, AppState> {
   private registerProjectSidebarTab = (
     tab: ProjectSidebarTab,
   ): (() => void) => {
+    // Atlasdraw fork — a registration named after a stock tab (`search`,
+    // `library`) is not an override, it is a collision: `DefaultSidebar` would
+    // render a *second* trigger and a *second* panel for the same Radix tab
+    // value (duplicate React keys, two panels answering one `value`), and a
+    // host rail keyed by tab name would collapse the two into one ref slot.
+    // Reject it instead of corrupting the tab list.
+    if (isStockSidebarTabName(tab.name)) {
+      console.warn(
+        `registerSidebarTab: "${tab.name}" is a built-in DefaultSidebar tab name; registration ignored.`,
+      );
+      return () => {};
+    }
     const existingIdx = this.projectSidebarTabs.findIndex(
       (x) => x.name === tab.name,
     );

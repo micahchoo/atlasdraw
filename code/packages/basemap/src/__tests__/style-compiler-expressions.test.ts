@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { compileLayer } from "../style-compiler";
+import { compileLayer, compilePaint } from "../style-compiler";
 
 import type { LayerStyle } from "../style";
 
@@ -194,5 +194,36 @@ describe("compileLayer — expressions (A6)", () => {
 
     expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
     expect(a).toEqual(b);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// compilePaint — the paint block, split out so incremental style edits
+// (atlas-app's setPaintProperty diff) share ONE translation with addLayer.
+// ---------------------------------------------------------------------------
+
+describe("compilePaint — single source of paint truth", () => {
+  const STYLE: LayerStyle = {
+    fillColor: "#0aa",
+    strokeColor: "#077",
+    strokeWidth: 2,
+    opacity: 0.4,
+  };
+
+  it.each(["fill", "line", "circle"] as const)(
+    "matches the paint block compileLayer emits for %s",
+    (geometryType) => {
+      const spec = compileLayer("dl:x", STYLE, geometryType);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(compilePaint(STYLE, geometryType)).toEqual((spec as any).paint);
+    },
+  );
+
+  it("always emits every property so two paints are diffable", () => {
+    expect(Object.keys(compilePaint({}, "fill"))).toEqual([
+      "fill-color",
+      "fill-opacity",
+      "fill-outline-color",
+    ]);
   });
 });

@@ -31,7 +31,23 @@ import type { ExcalidrawAPI } from "@atlasdraw/geo";
 
 import type maplibregl from "maplibre-gl";
 
-/** Camera event types that trigger a re-projection of geo-anchored elements. */
+/**
+ * Camera event types that trigger a re-projection of geo-anchored elements.
+ *
+ * `move` also covers **container resizes**, and that is load-bearing. When the
+ * sheet panel opens or is dragged, the map container narrows and MapCanvas's
+ * ResizeObserver calls `map.resize()`; MapLibre's `resize()` fires
+ * `movestart` → `move` → `resize` → `moveend`, so the `move` handler here
+ * re-projects every anchor against the new viewport. Verified empirically: with
+ * the plate narrowed by 302px, a bbox-anchored rectangle's scene x moved exactly
+ * 151px left (half the lost width, i.e. the map's re-centre) with its `geo`
+ * anchor untouched — it tracked its feature instead of detaching from it.
+ *
+ * Do not narrow this list to "just the camera": dropping `move`, or filtering it
+ * to user-driven pans, silently breaks reflow. There is no separate `"resize"`
+ * entry precisely because `move` already fires for it, and registering both
+ * would double the work on every resize frame.
+ */
 const CAMERA_EVENTS = ["move", "zoom", "rotate", "pitch"] as const;
 
 /**
