@@ -95,6 +95,11 @@ export function selectDocument(
         id: entry.id,
         label: entry.label,
         visible: entry.visible,
+        // Rides along so a reopened document knows this label is the user's
+        // and keeps automatic naming off it — see AnnotationLayerEntry.
+        // Omitted rather than written as `false` so untouched annotations
+        // don't grow a field in every saved manifest.
+        ...(entry.renamedByUser ? { renamedByUser: true } : {}),
       };
     }
     return {

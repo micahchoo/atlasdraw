@@ -305,6 +305,7 @@ function SortableRow({
   children,
   body,
   expanded = false,
+  dragDisabled = false,
 }: LayerRowProps & {
   /** Header content — shares one flex line with the grip and reorder arrows. */
   children: React.ReactNode;
@@ -326,6 +327,14 @@ function SortableRow({
    *     opens below the fold and the useful part of it is further down still.
    */
   expanded?: boolean;
+  /**
+   * Drop `draggable` for as long as this is true. The whole row is the drag
+   * source, and a draggable ancestor is what the browser consults when you
+   * press and sweep across text — so inside an open rename box, selecting the
+   * word you meant to replace starts a layer reorder instead. Set while a row
+   * is being renamed.
+   */
+  dragDisabled?: boolean;
 }) {
   const { id } = entry;
   // Position inside this section's list. `allIds` is the one section's ids, and
@@ -426,7 +435,7 @@ function SortableRow({
       ref={rowRef}
       data-testid={`layer-row-${id}`}
       className={rowClass}
-      draggable
+      draggable={!dragDisabled}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -476,6 +485,117 @@ function SortableRow({
       </div>
       {body}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Layer name — click to edit
+// ---------------------------------------------------------------------------
+
+/**
+ * The input half of LayerNameField, split out so the draft seeds from `initial`
+ * in a useState initializer at mount. Editing is a mount, cancelling is an
+ * unmount, and the "current label changed underneath the open editor" case
+ * can't arise — which an effect that copied `label` into the draft would have
+ * to handle.
+ *
+ * Interaction contract is SheetNameField's, deliberately: the collar head bar
+ * and the layer list should not disagree about what renaming feels like.
+ */
+function LayerNameInput({
+  id,
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  id: string;
+  initial: string;
+  onCommit: (label: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState(initial);
+
+  const focusAndSelect = useCallback((el: HTMLInputElement | null) => {
+    el?.focus();
+    el?.select();
+  }, []);
+
+  const commit = () => {
+    const next = draft.trim();
+    // Blank is a cancel, not a reset: clearing the box is how you retype.
+    if (next !== "" && next !== initial) {
+      onCommit(next);
+    }
+    onCancel();
+  };
+
+  return (
+    <input
+      type="text"
+      ref={focusAndSelect}
+      className={styles.renameInput}
+      aria-label={`Rename ${initial}`}
+      data-testid={`layer-rename-input-${id}`}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          // The panel sits inside the Excalidraw sidebar; a bubbling Escape
+          // closes it, and losing the whole panel is not what cancelling a
+          // rename should cost.
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * A layer's name: a button that opens an inline editor, or the editor itself.
+ *
+ * `editing` is the parent's, not this component's, because a data layer can
+ * also enter the state from the ⋯ menu and from the expanded card's Rename
+ * button — three doors into one editor.
+ */
+function LayerNameField({
+  id,
+  label,
+  editing,
+  onEditingChange,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  editing: boolean;
+  onEditingChange: (editing: boolean) => void;
+  onCommit: (label: string) => void;
+}) {
+  if (editing) {
+    return (
+      <LayerNameInput
+        id={id}
+        initial={label}
+        onCommit={onCommit}
+        onCancel={() => onEditingChange(false)}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={joinClass(styles.label, styles.labelButton)}
+      data-testid={`layer-name-${id}`}
+      title={`${label} — click to rename`}
+      onClick={() => onEditingChange(true)}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -828,16 +948,7 @@ function DataLayerCard({
   const { id, label, visible, featureCount } = entry;
   const fc = useDataLayerFCStore((s) => s.fcs[id]);
   const [renaming, setRenaming] = useState(false);
-  const [draftLabel, setDraftLabel] = useState(label);
   const bodyId = `layer-card-body-${id}`;
-
-  const commitRename = () => {
-    const next = draftLabel.trim();
-    if (next && next !== label) {
-      actions.rename(id, next);
-    }
-    setRenaming(false);
-  };
 
   return (
     <SortableRow
@@ -845,6 +956,7 @@ function DataLayerCard({
       mutators={mutators}
       allIds={allIds}
       expanded={expanded}
+      dragDisabled={renaming}
       body={
         expanded ? (
           <div
@@ -873,10 +985,7 @@ function DataLayerCard({
                 type="button"
                 className={styles.detailBtn}
                 data-testid={`layer-rename-inline-${id}`}
-                onClick={() => {
-                  setDraftLabel(label);
-                  setRenaming(true);
-                }}
+                onClick={() => setRenaming(true)}
               >
                 Rename
               </button>
@@ -907,29 +1016,13 @@ function DataLayerCard({
         >
           D
         </span>
-        {renaming ? (
-          <input
-            className={styles.renameInput}
-            autoFocus
-            aria-label={`Rename ${label}`}
-            data-testid={`layer-rename-input-${id}`}
-            value={draftLabel}
-            onChange={(e) => setDraftLabel(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                commitRename();
-              } else if (e.key === "Escape") {
-                setDraftLabel(label);
-                setRenaming(false);
-              }
-            }}
-          />
-        ) : (
-          <span className={styles.label} title={label}>
-            {label}
-          </span>
-        )}
+        <LayerNameField
+          id={id}
+          label={label}
+          editing={renaming}
+          onEditingChange={setRenaming}
+          onCommit={(next) => actions.rename(id, next)}
+        />
         <span
           className={styles.featureCount}
           title={`${featureCount} features`}
@@ -952,10 +1045,7 @@ function DataLayerCard({
         <OverflowMenu
           entry={entry}
           actions={actions}
-          onStartRename={() => {
-            setDraftLabel(label);
-            setRenaming(true);
-          }}
+          onStartRename={() => setRenaming(true)}
         />
       </div>
     </SortableRow>
@@ -965,14 +1055,17 @@ function DataLayerCard({
 function AnnotationLayerRow({
   entry,
   mutators,
+  actions,
   allIds,
 }: {
   entry: AnnotationLayerEntry;
   mutators: Mutators;
+  actions: LayerActions;
   allIds: string[];
 }) {
   const { setVisibility } = mutators;
   const { id, label, visible } = entry;
+  const [renaming, setRenaming] = useState(false);
 
   // An annotation has no style, no FeatureCollection and no attributes, so it
   // gets a row rather than a card — four empty sections would be worse than
@@ -980,7 +1073,12 @@ function AnnotationLayerRow({
   // Mutating the actual Excalidraw element via excalidrawAPI.updateScene
   // is deferred until Wave 2c — see plan §844.
   return (
-    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
+    <SortableRow
+      entry={entry}
+      mutators={mutators}
+      allIds={allIds}
+      dragDisabled={renaming}
+    >
       <div className={joinClass(styles.rowAnnotation)}>
         <button
           type="button"
@@ -1001,7 +1099,13 @@ function AnnotationLayerRow({
         >
           A
         </span>
-        <span className={styles.label}>{label}</span>
+        <LayerNameField
+          id={id}
+          label={label}
+          editing={renaming}
+          onEditingChange={setRenaming}
+          onCommit={(next) => actions.rename(id, next)}
+        />
       </div>
     </SortableRow>
   );
@@ -1145,9 +1249,10 @@ export function LayerPanel() {
     reorder,
     updateStyle,
     remove,
-    // Kind-agnostic despite the name — it looks an entry up by id. See the
-    // action's doc comment in state/layerRegistry.ts.
-    updateAnnotationLabel: updateLabel,
+    // The user-typed-label path. Not updateAnnotationLabel, which is the
+    // generator's — going through that one would leave the rename open to
+    // being overwritten by the next scene change. See layerRegistry.ts.
+    renameLayer,
   } = useLayerRegistry();
 
   // Accordion: at most one card open. See the header note — multi-open is the
@@ -1177,7 +1282,7 @@ export function LayerPanel() {
 
   const actions: LayerActions = {
     rename: (id, label) => {
-      updateLabel(id, label);
+      renameLayer(id, label);
       announce(`Layer renamed to "${label}"`);
     },
     remove: (id) => {
@@ -1277,6 +1382,7 @@ export function LayerPanel() {
               key={entry.id}
               entry={entry}
               mutators={mutators}
+              actions={actions}
               allIds={annotationIds}
             />
           ))

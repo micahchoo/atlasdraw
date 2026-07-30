@@ -40,6 +40,13 @@ const AnnotationLayerEntrySchema = z.object({
   id: z.string().min(1),
   label: z.string(),
   visible: z.boolean(),
+  // A `label` the user typed, rather than one the app generated from the
+  // element's type and geo-anchor ("Rectangle near Bidar"). It has to persist:
+  // the generator re-runs on every scene change, so a reopened document whose
+  // flag was dropped would silently revert the name the first time the shape
+  // moved. Optional because documents written before this field existed have
+  // only generated labels by definition.
+  renamedByUser: z.boolean().optional(),
 });
 
 const DataLayerEntrySchema = z.object({

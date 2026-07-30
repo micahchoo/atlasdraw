@@ -195,6 +195,30 @@ describe("selectDocument", () => {
     });
   });
 
+  it("carries renamedByUser on an annotation the user renamed", () => {
+    const reg = makeRegistry([
+      {
+        kind: "annotation",
+        id: "el-abc",
+        label: "Ward 3",
+        visible: true,
+        order: 0,
+        renamedByUser: true,
+      },
+    ]);
+    const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
+
+    // Without this the flag would die at the file boundary, and the reopened
+    // document would let the label generator take the name back.
+    expect(doc.manifest.layers[0]).toEqual({
+      kind: "annotation",
+      id: "el-abc",
+      label: "Ward 3",
+      visible: true,
+      renamedByUser: true,
+    });
+  });
+
   it("layers Map is empty when no data layers exist (annotation-only registry)", () => {
     const reg = makeRegistry([
       { kind: "annotation", id: "el-1", label: "p", visible: true, order: 0 },
