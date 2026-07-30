@@ -437,6 +437,14 @@ export const DEFAULT_SIDEBAR = {
   defaultTab: LIBRARY_SIDEBAR_TAB,
 } as const;
 
+/**
+ * Atlasdraw fork addition — DOM `id` of the `DefaultSidebar` island. Host
+ * apps that drive the sidebar from a trigger rail outside the editor's React
+ * tree need a stable target for `aria-controls`; `DefaultSidebar` renders the
+ * island itself, so the host can't supply one.
+ */
+export const DEFAULT_SIDEBAR_DOM_ID = "excalidraw-default-sidebar";
+
 export const LIBRARY_DISABLED_TYPES = new Set([
   "iframe",
   "embeddable",

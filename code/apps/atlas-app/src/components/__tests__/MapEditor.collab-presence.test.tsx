@@ -139,6 +139,8 @@ vi.mock("@atlasdraw/basemap", () => ({
   },
 }));
 
+const EMPTY_SIDEBAR_TABS: never[] = [];
+
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
@@ -147,9 +149,16 @@ const mockFakeExcalidrawAPI = {
   toggleSidebar: vi.fn(),
   registerContextMenuItem: vi.fn(() => vi.fn()),
   registerSidebarTab: vi.fn(() => vi.fn()),
-  // Collar shell — CollarSheetTabs subscribes to appState commits via
-  // onChange to track the open sidebar tab. Stub returns an unsubscribe fn.
+  // Collar shell — SheetRail subscribes to appState commits via onChange to
+  // track the open sidebar tab. Stub returns an unsubscribe fn.
   onChange: vi.fn(() => vi.fn()),
+  // ...and reads the tab list off the imperative API (getSidebarTabs /
+  // onSidebarTabsChange, the fork's `useSyncExternalStore` pair). Empty list
+  // ⇒ SheetRail renders nothing, which is all these suites need. The snapshot
+  // reference MUST be stable — a fresh `[]` per call makes
+  // `useSyncExternalStore` re-render forever.
+  getSidebarTabs: () => EMPTY_SIDEBAR_TABS,
+  onSidebarTabsChange: vi.fn(() => vi.fn()),
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {

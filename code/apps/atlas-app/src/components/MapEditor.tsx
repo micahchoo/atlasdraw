@@ -94,7 +94,7 @@ import styles from "../styles/MapEditor.module.css";
 import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
-import { CollarSheetTabs } from "./CollarSheetTabs";
+import { SheetRail } from "./SheetRail";
 import { SheetNameField } from "./SheetNameField";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
@@ -774,7 +774,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
-        tabs={<CollarSheetTabs excalidrawAPI={excalidrawAPI} />}
+        tabs={<SheetRail excalidrawAPI={excalidrawAPI} />}
         foot={
           <StatusBar
             map={map}
@@ -825,6 +825,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               // slot so it sits with the drawing tools, per the prototype.
               collarToolbarTarget={toolStripHost}
               collarMenuTarget={menuHost}
+              // SheetRail (collar right column) is the sidebar's only trigger
+              // surface — suppress the sidebar's own tab-trigger row so there
+              // is exactly one rail. Two rails is what let the hardcoded one
+              // drift, and four labelled triggers in a 294px header clipped.
+              hideDefaultSidebarTabTriggers
               renderToolbarExtras={() => (
                 <PinToolButton
                   active={isPinActive}

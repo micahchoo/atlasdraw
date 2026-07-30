@@ -1,0 +1,117 @@
+/* SheetRail — persistent icon rail in the Collar frame's right column.
+ *
+ * Icons only (labels in aria-label + .tooltip), so the rail grows downward
+ * and can never clip the way the 294px horizontal text tab strip it replaces
+ * did. Sheet-edge treatment carried over from CollarSheetTabs: a raised paper
+ * edge peeking from under the plate, hairline elevation, no drop shadow —
+ * per .interface-design/system.md "Elevation Model".
+ *
+ * Z-index: the rail itself is unpositioned and needs no band. .tooltip does:
+ * it opens leftward, over the plate, so it has to out-rank everything the
+ * plate paints. See the .tooltip rule for why the band is 10.
+ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-space-1);
+  align-items: stretch;
+}
+
+.slot {
+  position: relative;
+  display: flex;
+}
+
+.trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 32px — the conventions skill's icon-button height
+   * (--default-button-size / 2rem). */
+  height: 32px;
+  padding: 0;
+  color: var(--ad-ink-secondary);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-right: 0;
+  border-radius: var(--ad-radius-sm) 0 0 var(--ad-radius-sm);
+  cursor: pointer;
+}
+
+.trigger:hover {
+  color: var(--ad-ink);
+  background: var(--ad-surface);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Active mark matches the collar's accent signature: an accent edge on the
+ * frame side, not a filled pill. */
+.triggerOpen {
+  color: var(--ad-accent);
+  background: var(--ad-surface);
+  border-left: 2px solid var(--ad-accent);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Icons arrive as vendored SVG nodes with their own width/height attributes;
+ * override in CSS so the rail owns the size (conventions skill, "Icons"). */
+.icon > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.iconFallback {
+  font-family: var(--ad-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* --- tooltip (hover AND focus) ------------------------------------------- */
+
+.tooltip {
+  position: absolute;
+  top: 50%;
+  /* Opens leftward, i.e. over the map plate — and over the right sidebar when
+   * it is open. Both the sidebar (--zIndex-ui-library: 120) and the collar
+   * legend (4) live inside .excalidrawLayer, which is `position: absolute;
+   * z-index: 1` and therefore a stacking context: their high z-indices are
+   * private to it and cap at 1 in the shared context this tooltip resolves
+   * against (nothing between .slot and <body> is a stacking context). So the
+   * band that matters is the ladder's toolbar/banner band, 10 — the same one
+   * .collabRoomError uses to sit over plate content. Verified topmost with the
+   * sidebar closed, docked, and undocked. */
+  right: calc(100% + var(--ad-space-1));
+  z-index: 10;
+  transform: translateY(-50%);
+  padding: var(--ad-space-1) var(--ad-space-compact);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  box-shadow: var(--ad-shadow-raised);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.slot:hover .tooltip,
+.trigger:focus-visible ~ .tooltip {
+  opacity: 1;
+  visibility: visible;
+}

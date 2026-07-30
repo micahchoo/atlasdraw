@@ -9,7 +9,11 @@
 // children instead of going through `excalidrawAPI.registerSidebarTab`, and
 // the atlas-app MapEditor tests stub the whole editor away.
 //
-// These tests pin CURRENT behaviour, including behaviour that looks wrong.
+// Sections 1-7 pin CURRENT behaviour, including behaviour that looks wrong.
+// Section 8 covers the Step-2 fork additions (`hideDefaultSidebarTabTriggers`,
+// `getSidebarTabs`/`onSidebarTabsChange`, the island's stable DOM id) that the
+// host-app rail is built on; its app-side counterpart is
+// `apps/atlas-app/src/components/__tests__/SheetRail.test.tsx`.
 // Anything questionable is flagged with a `// CHARACTERIZATION:` comment
 // stating what would be expected instead. Do not "fix" a test here without
 // deciding, deliberately, that the product behaviour is changing.
@@ -21,16 +25,26 @@
 
 import React, { useEffect, useState } from "react";
 
-import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
+import {
+  CANVAS_SEARCH_TAB,
+  DEFAULT_SIDEBAR,
+  DEFAULT_SIDEBAR_DOM_ID,
+  LIBRARY_SIDEBAR_TAB,
+} from "@atlasdraw/common";
 
 import { Excalidraw } from "../index";
 import {
   act,
   fireEvent,
   render,
+  screen,
   waitFor,
   withExcalidrawDimensions,
 } from "../tests/test-utils";
+
+import { DefaultSidebar } from "./DefaultSidebar";
+import { Sidebar } from "./Sidebar/Sidebar";
+import { DEFAULT_SIDEBAR_STOCK_TABS } from "./Sidebar/defaultSidebarStockTabs";
 
 import type { ExcalidrawImperativeAPI, ProjectSidebarTab } from "../types";
 
@@ -55,7 +69,10 @@ const toggleSidebar = (
  */
 const renderWithProjectTabs = async (
   tabs: readonly ProjectSidebarTab[],
-  opts: { openSidebar?: { name: string; tab?: string } | null } = {},
+  opts: {
+    openSidebar?: { name: string; tab?: string } | null;
+    hideDefaultSidebarTabTriggers?: boolean;
+  } = {},
 ) => {
   let apiRef: ExcalidrawImperativeAPI | null = null;
   let setRegistrarMounted: ((mounted: boolean) => void) | null = null;
@@ -88,6 +105,7 @@ const renderWithProjectTabs = async (
                   : opts.openSidebar,
             },
           }}
+          hideDefaultSidebarTabTriggers={opts.hideDefaultSidebarTabTriggers}
         />
         {api && mounted && <TabRegistrar api={api} />}
       </>
@@ -296,41 +314,137 @@ describe("DefaultSidebar × registerSidebarTab (characterization)", () => {
       );
     });
 
-    it("cannot hide or reorder the stock search/library tabs, and a same-named registration duplicates rather than replaces", async () => {
+    it("cannot hide or reorder the stock search/library tabs, and rejects a registration that collides with a stock name", async () => {
       // Registering a tab named "library" is the only lever a host app has to
-      // aim at a stock tab. It does not replace it.
-      const { container } = await renderWithProjectTabs([
-        {
-          name: "library",
-          label: "My Library",
-          content: <div data-testid="hijacked-library">hijacked</div>,
-        },
-      ]);
+      // aim at a stock tab. It does not replace it — and, since the fix for
+      // the Step-2 review, it no longer duplicates it either.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const { container } = await renderWithProjectTabs([
+          {
+            name: "library",
+            label: "My Library",
+            content: <div data-testid="hijacked-library">hijacked</div>,
+          },
+        ]);
+
+        await withExcalidrawDimensions(
+          { width: 1920, height: 1080 },
+          async () => {
+            // CHARACTERIZATION: search + library have no `hidden`/`order`
+            // prop, so there is still no supported way to hide or reorder
+            // them. What changed: registering "library" used to yield TWO
+            // triggers and TWO panels with the same Radix value (duplicate
+            // React keys, duplicate `aria-controls` targets, and a host rail
+            // keyed by name collapsing them into one ref slot). It is now
+            // rejected outright, with a warning.
+            expect(triggerTabValues(container)).toEqual([
+              CANVAS_SEARCH_TAB,
+              "library",
+            ]);
+            expect(
+              container.querySelectorAll(
+                '[role=tabpanel][data-testid="library"]',
+              ).length,
+            ).toBe(1);
+            expect(
+              container.querySelector('[data-testid="hijacked-library"]'),
+            ).toBe(null);
+            expect(warn).toHaveBeenCalledWith(
+              expect.stringContaining(
+                'registerSidebarTab: "library" is a built-in DefaultSidebar tab name',
+              ),
+            );
+          },
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("rejects a `search`-named registration too, and keeps getSidebarTabs() free of duplicates", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const { getApi } = await renderWithProjectTabs([
+          {
+            name: CANVAS_SEARCH_TAB,
+            label: "My Search",
+            content: <div data-testid="hijacked-search">hijacked</div>,
+          },
+          layersTab,
+        ]);
+
+        await withExcalidrawDimensions(
+          { width: 1920, height: 1080 },
+          async () => {
+            const names = getApi()
+              .getSidebarTabs()
+              .map((tab) => tab.name);
+            expect(names).toEqual([CANVAS_SEARCH_TAB, "library", "layers"]);
+            expect(new Set(names).size).toBe(names.length);
+          },
+        );
+      } finally {
+        warn.mockRestore();
+      }
+    });
+  });
+
+  // The whole point of driving the host rail off `getSidebarTabs()` is that the
+  // rail and the sidebar can never disagree about which tabs exist. That only
+  // holds while both sides read the SAME stock-tab list; when they were two
+  // hardcoded literals, adding a stock tab to `DefaultSidebar`'s JSX silently
+  // dropped it from the rail. These tests fail if the two sides diverge.
+  describe("2b. stock tab list has a single definition", () => {
+    it("renders exactly one trigger per DEFAULT_SIDEBAR_STOCK_TABS entry, in order", async () => {
+      const { container } = await renderWithProjectTabs([]);
 
       await withExcalidrawDimensions(
         { width: 1920, height: 1080 },
         async () => {
-          // CHARACTERIZATION: search + library are hardcoded first in
-          // `DefaultSidebar` with no `hidden`/`order` prop, so there is no
-          // supported way to hide or reorder them. Registering "library"
-          // yields TWO triggers and TWO panels with the same Radix value —
-          // invalid ARIA (duplicate `aria-controls` targets) and a coin-flip
-          // over which panel content the user sees.
-          // Expected: either dedupe against stock tab names (throw/warn), or
-          // let the host app declare the full tab order.
-          expect(triggerTabValues(container)).toEqual([
-            CANVAS_SEARCH_TAB,
-            "library",
-            "library",
-          ]);
-          // both the stock LibraryMenu panel and the project panel exist
+          expect(triggerTabValues(container)).toEqual(
+            DEFAULT_SIDEBAR_STOCK_TABS.map((tab) => tab.name),
+          );
+        },
+      );
+    });
+
+    it("reports exactly DEFAULT_SIDEBAR_STOCK_TABS as the stock half of getSidebarTabs()", async () => {
+      const { getApi } = await renderWithProjectTabs([layersTab]);
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          const tabs = getApi().getSidebarTabs();
           expect(
-            container.querySelectorAll('[role=tabpanel][data-testid="library"]')
-              .length,
-          ).toBe(2);
+            tabs.filter((tab) => tab.stock).map((tab) => tab.name),
+          ).toEqual(DEFAULT_SIDEBAR_STOCK_TABS.map((tab) => tab.name));
+          // labels come from the same thunks, not a second set of t() calls
           expect(
-            container.querySelector('[data-testid="hijacked-library"]'),
-          ).not.toBe(null);
+            tabs.filter((tab) => tab.stock).map((tab) => tab.label),
+          ).toEqual(DEFAULT_SIDEBAR_STOCK_TABS.map((tab) => tab.getLabel()));
+        },
+      );
+    });
+
+    it("renders a panel for every stock tab (a trigger with no panel body would be dead)", async () => {
+      const { container } = await renderWithProjectTabs([]);
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          for (const stock of DEFAULT_SIDEBAR_STOCK_TABS) {
+            await toggleSidebar({
+              name: DEFAULT_SIDEBAR.name,
+              tab: stock.name,
+              force: true,
+            });
+            expect(
+              container.querySelector(
+                `[role=tabpanel][data-testid="${stock.name}"]`,
+              ),
+            ).not.toBe(null);
+          }
         },
       );
     });
@@ -681,6 +795,255 @@ describe("DefaultSidebar × registerSidebarTab (characterization)", () => {
           });
         },
       );
+    });
+  });
+
+  describe("8. host-driven rail: suppressed trigger row + enumerable tab list", () => {
+    it("renders no trigger row at all when `hideDefaultSidebarTabTriggers` is set, but still routes panels", async () => {
+      const { container } = await renderWithProjectTabs([layersTab], {
+        openSidebar: { name: DEFAULT_SIDEBAR.name, tab: "layers" },
+        hideDefaultSidebarTabTriggers: true,
+      });
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          // the shell is there...
+          expect(container.querySelector(".default-sidebar")).not.toBe(null);
+          // ...with no tablist, no triggers, and no tunnel outlet content
+          expect(container.querySelector("[role=tablist]")).toBe(null);
+          expect(container.querySelectorAll("[role=tab]")).toHaveLength(0);
+          expect(
+            container.querySelector(
+              '[data-testid="sidebar-tab-trigger-layers"]',
+            ),
+          ).toBe(null);
+
+          // Radix `Tabs.Content` keys off the Root value, not off a trigger, so
+          // the registered body still mounts — this is what lets the host own
+          // the rail without losing tab routing.
+          expect(
+            container.querySelector('[data-testid="layers-body"]'),
+          ).not.toBe(null);
+          expect(
+            container.querySelector("[role=tabpanel]:not([hidden])"),
+          ).not.toBe(null);
+
+          // the close button (Sidebar.Header's own content) is untouched
+          expect(container.querySelector(".sidebar__close")).not.toBe(null);
+        },
+      );
+    });
+
+    // REGRESSION: `Sidebar.Tab` is `RadixTabs.Content`, which unconditionally
+    // emits `aria-labelledby` pointing at its trigger's generated id. With the
+    // trigger row suppressed that id resolves to nothing, so every panel had
+    // NO accessible name — worse than either rail this replaced. These queries
+    // go through the accessible-name computation, so they fail both if the
+    // name is missing and if it is only a dangling IDREF.
+    it("gives every panel a real accessible name when the trigger row is suppressed", async () => {
+      await renderWithProjectTabs([layersTab, commentsTab], {
+        openSidebar: { name: DEFAULT_SIDEBAR.name, tab: "layers" },
+        hideDefaultSidebarTabTriggers: true,
+      });
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          for (const [tab, name] of [
+            ["layers", "Layers"],
+            ["comments", "Comments"],
+            [LIBRARY_SIDEBAR_TAB, DEFAULT_SIDEBAR_STOCK_TABS[1].getLabel()],
+            [CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR_STOCK_TABS[0].getLabel()],
+          ] as const) {
+            await toggleSidebar({
+              name: DEFAULT_SIDEBAR.name,
+              tab,
+              force: true,
+            });
+
+            // `getByRole(name:)` runs dom-accessibility-api's accname
+            // computation — no match if the panel is unnamed.
+            const panel = screen.getByRole("tabpanel", { name });
+            expect(panel.getAttribute("data-testid")).toBe(tab);
+            // and the dangling reference is gone, not merely outranked
+            expect(panel.hasAttribute("aria-labelledby")).toBe(false);
+          }
+        },
+      );
+    });
+
+    it("keeps the trigger-derived panel name (and no aria-label) when the trigger row renders", async () => {
+      const { container } = await renderWithProjectTabs([layersTab], {
+        openSidebar: { name: DEFAULT_SIDEBAR.name, tab: "layers" },
+      });
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          const panel = container.querySelector<HTMLElement>(
+            '[role=tabpanel][data-testid="layers"]',
+          )!;
+          expect(panel.getAttribute("aria-label")).toBe(null);
+          const labelledBy = panel.getAttribute("aria-labelledby");
+          expect(labelledBy).not.toBe(null);
+          // ...and it resolves, unlike the suppressed case
+          expect(document.getElementById(labelledBy!)).not.toBe(null);
+        },
+      );
+    });
+
+    // DOCUMENTED INTERACTION (types.ts `hideDefaultSidebarTabTriggers`): the
+    // prop suppresses the whole row, the public `DefaultSidebar.TabTriggers`
+    // tunnel included. Pinned so the trade-off can't be reversed silently.
+    it("also suppresses host triggers tunnelled in via DefaultSidebar.TabTriggers", async () => {
+      const renderResult = await render(
+        <Excalidraw
+          hideDefaultSidebarTabTriggers
+          initialData={{
+            appState: {
+              openSidebar: {
+                name: DEFAULT_SIDEBAR.name,
+                tab: LIBRARY_SIDEBAR_TAB,
+              },
+            },
+          }}
+        >
+          <DefaultSidebar>
+            <DefaultSidebar.TabTriggers>
+              <Sidebar.TabTrigger tab="tunnelled">
+                <span data-testid="tunnelled-trigger">Tunnelled</span>
+              </Sidebar.TabTrigger>
+            </DefaultSidebar.TabTriggers>
+          </DefaultSidebar>
+        </Excalidraw>,
+      );
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          expect(renderResult.container.querySelector("[role=tablist]")).toBe(
+            null,
+          );
+          expect(
+            renderResult.container.querySelector(
+              '[data-testid="tunnelled-trigger"]',
+            ),
+          ).toBe(null);
+        },
+      );
+    });
+
+    it("leaves the trigger row alone by default (opt-in, non-collar behaviour unchanged)", async () => {
+      const { container } = await renderWithProjectTabs([layersTab]);
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          expect(triggerTabValues(container)).toEqual([
+            CANVAS_SEARCH_TAB,
+            "library",
+            "layers",
+          ]);
+        },
+      );
+    });
+
+    it("carries a stable DOM id so an out-of-tree rail can point `aria-controls` at it", async () => {
+      const { container } = await renderWithProjectTabs([layersTab]);
+
+      await withExcalidrawDimensions(
+        { width: 1920, height: 1080 },
+        async () => {
+          expect(container.querySelector(`#${DEFAULT_SIDEBAR_DOM_ID}`)).toBe(
+            container.querySelector(".default-sidebar"),
+          );
+        },
+      );
+    });
+
+    it("getSidebarTabs() lists stock tabs first, then registrations, with stable identity", async () => {
+      const { getApi } = await renderWithProjectTabs([layersTab, commentsTab]);
+
+      const api = getApi();
+      expect(api.getSidebarTabs().map((tab) => tab.name)).toEqual([
+        CANVAS_SEARCH_TAB,
+        LIBRARY_SIDEBAR_TAB,
+        "layers",
+        "comments",
+      ]);
+      // stock tabs are flagged and carry their own icons, so a host rail can
+      // render all four without hardcoding anything
+      expect(api.getSidebarTabs().map((tab) => tab.stock)).toEqual([
+        true,
+        true,
+        false,
+        false,
+      ]);
+      // stock tabs always carry an icon, so a host rail can render an
+      // icon-only trigger for them without inventing artwork
+      expect(
+        api
+          .getSidebarTabs()
+          .filter((tab) => tab.stock)
+          .every((tab) => tab.icon != null),
+      ).toBe(true);
+      // registration `icon`/`label` pass straight through — `commentsTab` has
+      // no icon, and that stays the host's problem rather than becoming a
+      // fork-side default
+      expect(
+        api.getSidebarTabs().find((tab) => tab.name === "layers")?.icon,
+      ).toBe(layersTab.icon);
+      expect(
+        api.getSidebarTabs().find((tab) => tab.name === "comments")?.icon,
+      ).toBe(undefined);
+      expect(
+        api.getSidebarTabs().find((tab) => tab.name === "layers")?.label,
+      ).toBe("Layers");
+
+      // identity is stable between mutations — required for the host to use
+      // this directly as a `useSyncExternalStore` snapshot
+      expect(api.getSidebarTabs()).toBe(api.getSidebarTabs());
+    });
+
+    it("notifies onSidebarTabsChange and swaps the snapshot on register/unregister", async () => {
+      const { getApi } = await renderWithProjectTabs([layersTab]);
+
+      const api = getApi();
+      const before = api.getSidebarTabs();
+      let calls = 0;
+      const unsubscribe = api.onSidebarTabsChange(() => {
+        calls++;
+      });
+
+      let unregister: () => void = () => {};
+      await act(async () => {
+        unregister = api.registerSidebarTab(commentsTab);
+      });
+      expect(calls).toBe(1);
+      expect(api.getSidebarTabs()).not.toBe(before);
+      expect(api.getSidebarTabs().map((tab) => tab.name)).toEqual([
+        CANVAS_SEARCH_TAB,
+        LIBRARY_SIDEBAR_TAB,
+        "layers",
+        "comments",
+      ]);
+
+      await act(async () => {
+        unregister();
+      });
+      expect(calls).toBe(2);
+      expect(api.getSidebarTabs().map((tab) => tab.name)).toEqual([
+        CANVAS_SEARCH_TAB,
+        LIBRARY_SIDEBAR_TAB,
+        "layers",
+      ]);
+
+      unsubscribe();
+      await act(async () => {
+        api.registerSidebarTab(commentsTab);
+      });
+      expect(calls).toBe(2);
     });
   });
 });

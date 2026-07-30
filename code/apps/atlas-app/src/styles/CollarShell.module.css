@@ -1,14 +1,14 @@
 /* CollarShell — printed map-sheet frame (variant A: full collar).
  * Grid matches the collar-shell prototype:
  *   rows: head 40 / tools 42 / lon ticks 18 / plate 1fr / marginalia 34
- *   cols: lat ticks 46 / plate 1fr / sheet-edge tabs 34
+ *   cols: lat ticks 46 / plate 1fr / sheet-panel icon rail 40
  * All chrome sits IN the frame; the plate is the only map surface. */
 
 .shell {
   height: 100%;
   display: grid;
   grid-template-rows: 40px 42px 18px 1fr 34px;
-  grid-template-columns: 46px 1fr 34px;
+  grid-template-columns: 46px 1fr 40px;
   grid-template-areas:
     "head head head"
     "tools tools tools"
@@ -172,13 +172,14 @@
   z-index: 6;
 }
 
-/* --- layer sheet-edge tabs (right frame column) ------------------------- */
+/* --- sheet-panel icon rail (right frame column) -------------------------- */
 
 .tabs {
   grid-area: tabs;
   display: flex;
   flex-direction: column;
-  gap: var(--ad-space-compact);
+  /* 40px column − 4px inboard gutter = a 36px icon rail. Widened from 34px
+   * when the vertical text tabs became SheetRail's icon buttons. */
   padding: 10px 0 10px 4px;
 }
 

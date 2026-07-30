@@ -2,8 +2,8 @@
 //
 // CollarShell — the printed map-sheet frame ("The Collar", variant A: full
 // collar). Chrome is a frame, not floating islands: head bar → flush tool
-// strip → lon graticule → [lat graticule | map plate | layer sheet-edge
-// tabs] → bottom marginalia. Nothing floats over the map at rest.
+// strip → lon graticule → [lat graticule | map plate | sheet-panel icon
+// rail] → bottom marginalia. Nothing floats over the map at rest.
 //
 // Visual spec: prototypes/collar-shell/index.html (?variant=a); direction
 // record: .interface-design/system.md § "Shell Direction — The Collar".
@@ -39,7 +39,10 @@ interface CollarShellProps {
   toolStripHostRef?: (el: HTMLDivElement | null) => void;
   /** Callback ref for the head-bar main-menu host (`collarMenuTarget`). */
   menuHostRef?: (el: HTMLDivElement | null) => void;
-  /** Right frame column — layer sheet-edge tabs (phase 3). */
+  /**
+   * Right frame column — the sheet-panel icon rail (`<SheetRail>`), the only
+   * trigger surface for the right sidebar in collar mode.
+   */
   tabs?: React.ReactNode;
   /** Bottom marginalia row (scale bar, coords, datum, attribution). */
   foot?: React.ReactNode;

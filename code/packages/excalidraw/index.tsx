@@ -75,6 +75,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     renderToolbarExtras,
     collarToolbarTarget,
     collarMenuTarget,
+    hideDefaultSidebarTabTriggers,
     onScrollBackToContent,
     langCode = defaultLang.code,
     viewModeEnabled,
@@ -190,6 +191,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderToolbarExtras={renderToolbarExtras}
           collarToolbarTarget={collarToolbarTarget}
           collarMenuTarget={collarMenuTarget}
+          hideDefaultSidebarTabTriggers={hideDefaultSidebarTabTriggers}
           onScrollBackToContent={onScrollBackToContent}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}

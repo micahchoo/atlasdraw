@@ -473,7 +473,7 @@ const LayerUI = ({
               editorInterface.formFactor === "phone",
               appState,
             )}
-            {/* collar mode: the sidebar opens via the app's sheet-edge tabs
+            {/* collar mode: the sidebar opens via the app's icon rail
               in the collar frame — no floating trigger button. */}
             {!collarMode &&
               !appState.viewModeEnabled &&
@@ -497,6 +497,20 @@ const LayerUI = ({
       </FixedSideContainer>
     );
   };
+
+  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
+
+  /**
+   * Whether `.layer-ui__wrapper` shrinks itself out from under the open
+   * sidebar. The wrapper is `position: absolute` and this narrows its right
+   * edge to the sidebar's left edge, so *everything inside it* — the legend
+   * included — is already inboard of the sidebar in this state and must not be
+   * offset a second time. Single source of truth for the wrapper's own `width`
+   * style and for {@link renderCollarLegend}'s offset; the two are the same
+   * question and drifting apart is what double-shifted the legend ~604px.
+   */
+  const isUIShrunkForSidebar =
+    !!appState.openSidebar && isSidebarDocked && editorInterface.canFitSidebar;
 
   // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
   // full-width strip portaled into the app's collar tool row. The wrapper
@@ -554,8 +568,28 @@ const LayerUI = ({
     if (!collarMode || !shouldRenderSelectedShapeActions) {
       return null;
     }
+    // The legend and the right sidebar both claim the plate's right edge, and
+    // the sidebar's stacking context (`--zIndex-ui-library: 120`) sits above
+    // the legend's (4) — so with an *undocked* (overlay) sidebar the legend
+    // used to be *buried* by it: select a shape with Layers open and its
+    // styling UI was invisible. Step the legend inboard of the sidebar instead
+    // of fighting over z-index, which would put the legend above the atlas
+    // tool overlay (5) and steal its pointer capture.
+    //
+    // Only in the undocked case. When docked, the wrapper this legend lives in
+    // has already been narrowed to the sidebar's left edge
+    // (`isUIShrunkForSidebar`), so `right: 8px` is *already* beside the
+    // sidebar; offsetting again shifted the legend a second ~302px inboard.
+    const besideSidebar =
+      appState.openSidebar?.name === DEFAULT_SIDEBAR.name &&
+      !isUIShrunkForSidebar;
     return (
-      <div className="App-collar-legend" data-testid="collar-legend">
+      <div
+        className={clsx("App-collar-legend", {
+          "App-collar-legend--beside-sidebar": besideSidebar,
+        })}
+        data-testid="collar-legend"
+      >
         <div className="App-collar-legend__header">LEGEND</div>
         {renderSelectedShapeActions()}
       </div>
@@ -594,8 +628,6 @@ const LayerUI = ({
       />
     );
   };
-
-  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
 
   const layerUIJSX = (
     <>
@@ -738,9 +770,7 @@ const LayerUI = ({
           <div
             className="layer-ui__wrapper"
             style={
-              appState.openSidebar &&
-              isSidebarDocked &&
-              editorInterface.canFitSidebar
+              isUIShrunkForSidebar
                 ? { width: `calc(100% - var(--right-sidebar-width))` }
                 : {}
             }
