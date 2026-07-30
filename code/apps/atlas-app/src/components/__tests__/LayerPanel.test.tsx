@@ -167,4 +167,224 @@ describe("LayerPanel", () => {
       expect(row.getAttribute("draggable")).toBe("true");
     });
   });
+
+  // -------------------------------------------------------------------------
+  // P3 — reorder with BOTH layer kinds present.
+  // -------------------------------------------------------------------------
+  describe("reorder with mixed layer kinds", () => {
+    /** 2 data layers + 3 annotations, registered data-first. */
+    function seedMixed() {
+      const store = useLayerRegistryStore.getState();
+      store.registerDataLayer({
+        id: "dl:d1",
+        fc: emptyFc(1),
+        label: "D1",
+        style: {},
+      });
+      store.registerDataLayer({
+        id: "dl:d2",
+        fc: emptyFc(1),
+        label: "D2",
+        style: {},
+      });
+      store.registerAnnotation("a1", "A1");
+      store.registerAnnotation("a2", "A2");
+      store.registerAnnotation("a3", "A3");
+    }
+
+    const ids = () => useLayerRegistryStore.getState().entries.map((e) => e.id);
+    const annotationIds = () =>
+      useLayerRegistryStore
+        .getState()
+        .entries.filter((e) => e.kind === "annotation")
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((e) => e.id);
+
+    /**
+     * jsdom implements no DragEvent, so RTL falls back to a bare Event and
+     * drops `clientY` — which the above/below midpoint test needs. Dispatch a
+     * MouseEvent under the drag event's name instead (React dispatches on the
+     * name) and hang a dataTransfer stub off it by hand.
+     */
+    function fireDragEvent(
+      el: HTMLElement,
+      type: string,
+      dataTransfer: Record<string, unknown>,
+      clientY = 0,
+    ) {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientY,
+      });
+      Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+      fireEvent(el, event);
+    }
+
+    /** HTML5 drag/drop of `draggedId` onto `targetId`, above or below its midpoint. */
+    function dragOnto(
+      draggedId: string,
+      targetId: string,
+      where: "above" | "below",
+    ) {
+      const row = screen.getByTestId(`layer-row-${targetId}`);
+      // jsdom reports a zero-size rect; give the row a real box so the
+      // midpoint comparison means something.
+      row.getBoundingClientRect = () =>
+        ({ top: 0, height: 20, bottom: 20 } as DOMRect);
+      fireDragEvent(screen.getByTestId(`layer-row-${draggedId}`), "dragstart", {
+        setData: () => {},
+        setDragImage: () => {},
+      });
+      fireDragEvent(row, "dragover", {}, where === "above" ? 2 : 18);
+      fireDragEvent(row, "drop", { getData: () => draggedId });
+    }
+
+    const dataIds = () =>
+      useLayerRegistryStore
+        .getState()
+        .entries.filter((e) => e.kind === "data")
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((e) => e.id);
+
+    it("clamps arrow buttons to each section's own bounds", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      // Top of the annotation section — even though it is not entry 0 of the
+      // registry, it cannot move above the section.
+      expect(
+        (screen.getByTestId("layer-up-a1") as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByTestId("layer-down-a1") as HTMLButtonElement).disabled,
+      ).toBe(false);
+      // Bottom of the annotation section.
+      expect(
+        (screen.getByTestId("layer-down-a3") as HTMLButtonElement).disabled,
+      ).toBe(true);
+      // Data section has its own first/last.
+      expect(
+        (screen.getByTestId("layer-up-dl:d1") as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByTestId("layer-down-dl:d2") as HTMLButtonElement).disabled,
+      ).toBe(true);
+    });
+
+    it("arrow 'down' moves an annotation past its neighbour and nothing else", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      fireEvent.click(screen.getByTestId("layer-down-a1"));
+
+      expect(annotationIds()).toEqual(["a2", "a1", "a3"]);
+      expect(dataIds()).toEqual(["dl:d1", "dl:d2"]);
+    });
+
+    it("dragging the first annotation below the last one moves it to the bottom", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      dragOnto("a1", "a3", "below");
+
+      expect(annotationIds()).toEqual(["a2", "a3", "a1"]);
+      expect(dataIds()).toEqual(["dl:d1", "dl:d2"]);
+    });
+
+    it("dragging the last annotation above the middle one lands it between", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      dragOnto("a3", "a2", "above");
+
+      expect(annotationIds()).toEqual(["a1", "a3", "a2"]);
+    });
+
+    it("dragging a data layer never touches the annotation stack", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      dragOnto("dl:d1", "dl:d2", "below");
+
+      expect(dataIds()).toEqual(["dl:d2", "dl:d1"]);
+      expect(annotationIds()).toEqual(["a1", "a2", "a3"]);
+    });
+
+    it("a drop from the other section is ignored", () => {
+      seedMixed();
+      render(<LayerPanel />);
+
+      // dl:d1 is not in the annotation section's id list.
+      dragOnto("dl:d1", "a2", "above");
+
+      expect(dataIds()).toEqual(["dl:d1", "dl:d2"]);
+      expect(annotationIds()).toEqual(["a1", "a2", "a3"]);
+    });
+
+    it("arrow 'down' and the equivalent drag agree", () => {
+      seedMixed();
+      render(<LayerPanel />);
+      dragOnto("a2", "a3", "below");
+      const viaDrag = annotationIds();
+
+      cleanup();
+      useLayerRegistryStore.setState({ entries: [] });
+      seedMixed();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId("layer-down-a2"));
+
+      expect(viaDrag).toEqual(annotationIds());
+      expect(viaDrag).toEqual(["a1", "a3", "a2"]);
+    });
+
+    it("works on a data-only registry", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerDataLayer({
+        id: "dl:only-1",
+        fc: emptyFc(1),
+        label: "One",
+        style: {},
+      });
+      store.registerDataLayer({
+        id: "dl:only-2",
+        fc: emptyFc(1),
+        label: "Two",
+        style: {},
+      });
+      render(<LayerPanel />);
+
+      dragOnto("dl:only-2", "dl:only-1", "above");
+      expect(dataIds()).toEqual(["dl:only-2", "dl:only-1"]);
+      expect(ids()).toEqual(["dl:only-2", "dl:only-1"]);
+    });
+
+    it("works on an annotation-only registry", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("s1", "S1");
+      store.registerAnnotation("s2", "S2");
+      store.registerAnnotation("s3", "S3");
+      render(<LayerPanel />);
+
+      dragOnto("s1", "s3", "below");
+      expect(annotationIds()).toEqual(["s2", "s3", "s1"]);
+
+      fireEvent.click(screen.getByTestId("layer-up-s1"));
+      expect(annotationIds()).toEqual(["s2", "s1", "s3"]);
+    });
+
+    it("a single-row section has both arrows disabled", () => {
+      useLayerRegistryStore.getState().registerAnnotation("solo", "Solo");
+      render(<LayerPanel />);
+
+      expect(
+        (screen.getByTestId("layer-up-solo") as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByTestId("layer-down-solo") as HTMLButtonElement).disabled,
+      ).toBe(true);
+    });
+  });
 });

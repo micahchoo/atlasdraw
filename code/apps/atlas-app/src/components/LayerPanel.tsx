@@ -145,6 +145,7 @@ function joinClass(...names: Array<string | false | null | undefined>): string {
 
 type Mutators = {
   setVisibility: (id: string, visible: boolean) => void;
+  /** `newOrder` is the target index within the row's own section (= its kind). */
   reorder: (id: string, newOrder: number) => void;
   updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
   openStyle: (id: string) => void;
@@ -170,7 +171,12 @@ function SortableRow({
   allIds,
   children,
 }: LayerRowProps & { children: React.ReactNode }) {
-  const { id, order } = entry;
+  const { id } = entry;
+  // Position inside this section's list. `allIds` is the one section's ids, and
+  // the store's reorder is kind-scoped, so this index is the only coordinate
+  // system in play — reading entry.order directly would be the same number
+  // today, but this keeps the row honest about what it can address.
+  const index = allIds.indexOf(id);
   const rowRef = useRef<HTMLDivElement>(null);
   const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
     null,
@@ -212,29 +218,26 @@ function SortableRow({
         return;
       }
 
-      const newPosition =
-        dragOverPos === "above" ? Math.max(0, targetIndex - 1) : targetIndex;
-      // If the dragged item was above the target, the splice in the store
-      // already accounts for removal — pass the target position directly.
-      // But we need to send the position *after* the dragged item is removed.
-      // Since we're using the *visible* allIds list, calculate the adjusted pos.
-      const adjustedPos =
-        draggedIndex < targetIndex && dragOverPos === "above"
-          ? targetIndex - 1
-          : draggedIndex < targetIndex
-          ? targetIndex
-          : newPosition;
+      // Insertion point in the list as it looks *now*: above the target means
+      // taking the target's slot, below means the slot after it. The store
+      // pulls the dragged row out first, which shifts everything past it down
+      // one — so an insertion point beyond the dragged row loses one.
+      const insertBefore =
+        dragOverPos === "above" ? targetIndex : targetIndex + 1;
+      const nextIndex =
+        insertBefore > draggedIndex ? insertBefore - 1 : insertBefore;
 
-      mutators.reorder(draggedId, adjustedPos);
+      mutators.reorder(draggedId, nextIndex);
     },
     [id, allIds, mutators, dragOverPos],
   );
 
-  // With our store's splice-based reorder, any entry can be moved anywhere.
-  // The old up/down buttons are kept for keyboard-only users and as a
+  // Bounds are the section's, not the registry's: a row can only move within
+  // its own kind, so the top data layer and the top annotation are both
+  // "first". The up/down buttons are kept for keyboard-only users and as a
   // discoverable alternative to drag.
-  const isFirst = order === 0;
-  const isLast = allIds.length <= 1 || order === allIds.length - 1;
+  const isFirst = index <= 0;
+  const isLast = allIds.length <= 1 || index === allIds.length - 1;
 
   const rowClass = joinClass(
     styles.row,
@@ -269,7 +272,7 @@ function SortableRow({
         aria-label="Move layer up"
         data-testid={`layer-up-${id}`}
         disabled={isFirst}
-        onClick={() => mutators.reorder(id, order - 1)}
+        onClick={() => mutators.reorder(id, index - 1)}
       >
         <IconChevronUp />
       </button>
@@ -279,7 +282,7 @@ function SortableRow({
         aria-label="Move layer down"
         data-testid={`layer-down-${id}`}
         disabled={isLast}
-        onClick={() => mutators.reorder(id, order + 1)}
+        onClick={() => mutators.reorder(id, index + 1)}
       >
         <IconChevronDown />
       </button>

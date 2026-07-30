@@ -24,21 +24,60 @@
 // entirely; we want hidden elements to come back when re-toggled. opacity:0
 // keeps the element addressable and round-trips cleanly.
 //
+// Two further registry→render gaps closed here (the registry was previously
+// state-only for both, so the LayerPanel's controls lied about the map):
+//
+//   3. Style edits → paint (P1): `updateStyle(id, patch)` only mutates
+//      `entry.style`. We diff the compiled paint block of the old and new
+//      style and push `setPaintProperty` for the properties that actually
+//      changed — see applyStyleToMap / diffStyles.
+//
+//   4. Data layers → map membership (P2): a MapLibre `setStyle()` drops every
+//      custom source and layer, and a document reload (state/hydrate.ts)
+//      repopulates the registry without ever touching the map. Registry
+//      entries outlive the style, so map membership is diffed against the
+//      registry's *set* of data-layer ids — added ids get reconciled onto the
+//      map, vanished ids get removed from it. Geometry is read from the
+//      DataLayerFCStore mirror, which exists precisely because MapLibre's
+//      source storage can't be read back as a plain FeatureCollection.
+//
+//   5. Reorder → map z-order (P3): `reorder` permutes the registry array and
+//      nothing else, so dragging a data layer used to change the panel and
+//      leave the map untouched. A changed data-layer id sequence now drives
+//      applyOrderToMap, which restacks the style with `moveLayer`.
+//
 // The core logic is exported as plain factory functions
-// (buildSceneDiffHandler / applyVisibilityToScene / applyVisibilityToMap) so
-// tests can drive them without a React renderer — same convention as
-// useGeoAnchor / useAtlasdrawTool (mx-8e3209).
+// (buildSceneDiffHandler / applyVisibilityToScene / applyStyleToMap /
+// diffVisibility / diffStyles / diffDataLayerIds) so tests can drive them
+// without a React renderer — same convention as useGeoAnchor /
+// useAtlasdrawTool (mx-8e3209). Everything that *writes* to the MapLibre style
+// lives in ../lib/dataLayerRender, shared with the import and basemap-swap
+// paths; this module owns the registry-snapshot diffs that decide when to call
+// it.
 
 import { useEffect, useRef } from "react";
 
 import { isGeoCustomData, type GeoCustomData } from "@atlasdraw/geo";
+import { compilePaint } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type { LayerGeometryType } from "@atlasdraw/basemap";
 
 import {
   useLayerRegistryStore,
   type LayerRegistryEntry,
+  type LayerStyle,
 } from "../state/layerRegistry";
+import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+
+import { inferGeometryType } from "../lib/geometryType";
+
+import {
+  applyOrderToMap,
+  applyVisibilityToMap,
+  reconcileDataLayers,
+  removeDataLayersFromMap,
+} from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
 
@@ -300,39 +339,168 @@ export function applyVisibilityToScene(
 }
 
 // ---------------------------------------------------------------------------
-// Bug B — data-layer visibility (MapLibre setLayoutProperty) factory.
+// P1 — data-layer style (MapLibre setPaintProperty) factory.
 // ---------------------------------------------------------------------------
 
 /**
- * Minimal MapLibre surface we touch — just `setLayoutProperty`. Lets tests
- * pass a stub without constructing a full Map.
+ * Minimal MapLibre surface for paint updates. Same stub-friendly narrowing as
+ * lib/dataLayerRender's surfaces.
  */
-export interface MapLayoutSurface {
-  setLayoutProperty(layerId: string, name: string, value: unknown): void;
+export interface MapPaintSurface {
+  setPaintProperty(layerId: string, name: string, value: unknown): void;
 }
 
 /**
- * Apply a registry data-layer entry's visibility to the MapLibre style.
- * Wrapped in try/catch because the registry id MAY be out of sync with the
- * style (user removed the layer via devtools, style swap dropped it, etc.).
- * Logging keeps the failure observable without crashing the app.
+ * True when two compiled paint values are the same as far as MapLibre cares.
+ * Scalars compare by value; expressions are plain JSON arrays, so a structural
+ * compare is both correct and cheap — a re-render that rebuilds an identical
+ * expression object must not push it again.
+ */
+function samePaintValue(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Apply a registry data-layer style change to the MapLibre style by pushing
+ * `setPaintProperty` for each paint property whose compiled value changed.
+ *
+ * Only the *differences* are pushed — mirroring how diffVisibility filters to
+ * real flips. A style patch that touches `fillColor` must not also re-push
+ * opacity and outline colour on every keystroke of a colour picker.
+ *
+ * `geometryType` is the caller's (the layer was added with that same kind, so
+ * the paint property names are fixed for its lifetime).
+ *
+ * Per-property try/catch, same reasoning as applyVisibilityToMap: the registry
+ * id may have drifted from the style, and one rejected value shouldn't drop
+ * the rest of the patch.
  *
  * Exported for unit testing.
  */
-export function applyVisibilityToMap(
-  map: MapLayoutSurface,
+export function applyStyleToMap(
+  map: MapPaintSurface,
   layerId: string,
-  visible: boolean,
+  prevStyle: LayerStyle,
+  nextStyle: LayerStyle,
+  geometryType: LayerGeometryType,
 ): void {
-  try {
-    map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[useLayerRegistrySync] setLayoutProperty failed for "${layerId}":`,
-      err,
-    );
+  const prevPaint = compilePaint(prevStyle, geometryType);
+  const nextPaint = compilePaint(nextStyle, geometryType);
+
+  for (const [name, value] of Object.entries(nextPaint)) {
+    if (samePaintValue(prevPaint[name], value)) {
+      continue;
+    }
+    try {
+      map.setPaintProperty(layerId, name, value);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[useLayerRegistrySync] setPaintProperty "${name}" failed for "${layerId}":`,
+        err,
+      );
+    }
   }
+}
+
+/**
+ * Compute per-entry style changes between two snapshots of the registry's
+ * entries array. Only data layers carry a style.
+ *
+ * The store runs on immer, so an entry whose style was not touched keeps the
+ * same `style` object identity across snapshots — a referential check is
+ * therefore an exact "did updateStyle run on this entry" test, and the
+ * property-level filtering happens in applyStyleToMap.
+ *
+ * New entries are skipped: their style is already baked into the addLayer spec.
+ *
+ * Exported for unit testing.
+ */
+export function diffStyles(
+  prev: readonly LayerRegistryEntry[],
+  next: readonly LayerRegistryEntry[],
+): Array<{ id: string; prevStyle: LayerStyle; nextStyle: LayerStyle }> {
+  const prevStyles = new Map<string, LayerStyle>();
+  for (const entry of prev) {
+    if (entry.kind === "data") {
+      prevStyles.set(entry.id, entry.style);
+    }
+  }
+  const out: Array<{
+    id: string;
+    prevStyle: LayerStyle;
+    nextStyle: LayerStyle;
+  }> = [];
+  for (const entry of next) {
+    if (entry.kind !== "data") {
+      continue;
+    }
+    const prevStyle = prevStyles.get(entry.id);
+    if (prevStyle === undefined || prevStyle === entry.style) {
+      continue;
+    }
+    out.push({ id: entry.id, prevStyle, nextStyle: entry.style });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// P2/P3 — data-layer membership + stacking diff.
+// ---------------------------------------------------------------------------
+
+/** The registry's data-layer ids, in array order (= intended z-order). */
+function dataLayerIds(entries: readonly LayerRegistryEntry[]): string[] {
+  const out: string[] = [];
+  for (const entry of entries) {
+    if (entry.kind === "data") {
+      out.push(entry.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * Compare two registry snapshots by their data-layer id *sequence* — which ids
+ * appeared, which vanished, and whether the survivors changed places.
+ *
+ * A length comparison is not enough, and that was a real bug on both sides:
+ *   - `convertAnnotationToDataLayer` removes one entry and pushes one in a
+ *     single draft, so the array length never changes and the new data layer
+ *     never reached the map;
+ *   - a `hydrate()` of a different document swaps one set of ids for another,
+ *     which needs removals, not just adds.
+ *
+ * `orderChanged` compares only the ids present in *both* snapshots, so a pure
+ * add or remove doesn't masquerade as a reorder.
+ *
+ * Exported for unit testing.
+ */
+export function diffDataLayerIds(
+  prev: readonly LayerRegistryEntry[],
+  next: readonly LayerRegistryEntry[],
+): { added: string[]; removed: string[]; orderChanged: boolean } {
+  const prevIds = dataLayerIds(prev);
+  const nextIds = dataLayerIds(next);
+  const prevSet = new Set(prevIds);
+  const nextSet = new Set(nextIds);
+  const keptBefore = prevIds.filter((id) => nextSet.has(id));
+  const keptAfter = nextIds.filter((id) => prevSet.has(id));
+  return {
+    added: nextIds.filter((id) => !prevSet.has(id)),
+    removed: prevIds.filter((id) => !nextSet.has(id)),
+    orderChanged: keptBefore.some((id, i) => id !== keptAfter[i]),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -412,13 +580,29 @@ export function useLayerRegistrySync(
     return unsub;
   }, [excalidrawAPI]);
 
+  // ---- P2: registry → map, on a fresh map instance -------------------------
+  // A document can be loaded before the map is ready — hydrate() populates the
+  // registry with data-layer entries without ever touching MapLibre. Reconcile
+  // once per map instance to close that gap (a no-op when the registry has no
+  // data layers, which is the common case).
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    reconcileDataLayers(
+      map,
+      useLayerRegistryStore.getState().entries,
+      useDataLayerFCStore.getState().getAll(),
+    );
+  }, [map]);
+
   // ---- Bug B: registry → render -------------------------------------------
   // Zustand subscribe with a manual diff against the previous entries snapshot.
   // We don't use a selector-form subscriber because we need both the kind and
   // the visibility — selecting just `entries` and diffing in a useEffect would
   // re-fire on any unrelated mutation (label/order/style), wasting work.
-  // Subscribe-style still re-fires on those, but we filter via diffVisibility
-  // which only reports actual visibility flips.
+  // Subscribe-style still re-fires on those, but we filter via diffVisibility /
+  // diffStyles, which only report actual changes.
   useEffect(() => {
     if (!map && !excalidrawAPI) {
       return;
@@ -427,9 +611,63 @@ export function useLayerRegistrySync(
     let prevEntries = useLayerRegistryStore.getState().entries;
     const unsub = useLayerRegistryStore.subscribe((state) => {
       const flips = diffVisibility(prevEntries, state.entries);
+      const styleChanges = map ? diffStyles(prevEntries, state.entries) : [];
+      const idChanges = map
+        ? diffDataLayerIds(prevEntries, state.entries)
+        : { added: [], removed: [], orderChanged: false };
       prevEntries = state.entries;
-      if (flips.length === 0) {
-        return;
+
+      // P1 — push style patches as setPaintProperty calls. Geometry kind comes
+      // from the FC mirror, the same source addDataLayerToMap infers from, so
+      // the paint property names always match the layer that's on the map.
+      if (map && styleChanges.length > 0) {
+        const fcs = useDataLayerFCStore.getState().getAll();
+        for (const change of styleChanges) {
+          const fc = fcs[change.id];
+          if (!fc) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              "[useLayerRegistrySync] no FeatureCollection for data layer, cannot restyle",
+              change.id,
+            );
+            continue;
+          }
+          applyStyleToMap(
+            map,
+            change.id,
+            change.prevStyle,
+            change.nextStyle,
+            inferGeometryType(fc),
+          );
+        }
+      }
+
+      // P2 — map membership follows the registry's set of data-layer ids.
+      // Removals first: a hydrate() that swaps documents both drops old ids and
+      // adds new ones, and MapLibre won't drop a source a layer still uses.
+      if (map && idChanges.removed.length > 0) {
+        removeDataLayersFromMap(map, idChanges.removed);
+      }
+      // Adds go through reconcile, which skips ids already on the map — the
+      // import and convert paths add to the map *before* registering.
+      if (map && idChanges.added.length > 0) {
+        reconcileDataLayers(
+          map,
+          state.entries,
+          useDataLayerFCStore.getState().getAll(),
+        );
+      }
+      // P3 — restack. Needed after a reorder, and also after add/remove:
+      // reconcile appends to the top of the style regardless of where the entry
+      // sits in the registry array. applyOrderToMap diffs against the live
+      // style, so a call that has nothing to fix issues no moveLayer.
+      if (
+        map &&
+        (idChanges.orderChanged ||
+          idChanges.added.length > 0 ||
+          idChanges.removed.length > 0)
+      ) {
+        applyOrderToMap(map, state.entries);
       }
 
       for (const entry of flips) {

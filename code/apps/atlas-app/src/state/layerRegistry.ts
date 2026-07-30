@@ -22,9 +22,10 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
+import type { LayerStyle } from "@atlasdraw/basemap";
+
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
-import type { LayerStyle } from "@atlasdraw/basemap";
 import type { FeatureCollection } from "geojson";
 
 // Re-exported so atlas-app consumers can keep importing LayerStyle from the
@@ -84,6 +85,13 @@ export interface ILayerRegistry {
   }): void;
   convertAnnotationToDataLayer(elementId: string, fc: FeatureCollection): void;
   setVisibility(id: string, visible: boolean): void;
+  /**
+   * Move `id` to `newOrder` **within its own kind**. Data layers and
+   * annotations are separate render stacks (MapLibre vs. the Excalidraw canvas
+   * above it), so a z-index that spans both has no meaning — `newOrder` lives
+   * in the same 0..n-1 space as the entry's `order`, and the entry can never
+   * leave its own group. Out-of-range values clamp to the group's bounds.
+   */
   reorder(id: string, newOrder: number): void;
   updateStyle(id: string, patch: Partial<LayerStyle>): void;
   remove(id: string): void;
@@ -100,6 +108,21 @@ const DEFAULT_CONVERTED_STYLE: LayerStyle = {
   strokeWidth: 1,
   opacity: 0.5,
 };
+
+/**
+ * Re-stamp `order` as the contiguous 0-based index of each entry *within its
+ * own kind* — the meaning both entry types document. Called after every
+ * structural mutation (register / remove / convert / reorder) so `order` is
+ * never sparse and never mixes the two stacks; LayerPanel renders one section
+ * per kind and relies on that to decide first/last.
+ */
+function reindexByKind(entries: LayerRegistryEntry[]): void {
+  let dataIndex = 0;
+  let annotationIndex = 0;
+  for (const entry of entries) {
+    entry.order = entry.kind === "data" ? dataIndex++ : annotationIndex++;
+  }
+}
 
 export type LayerRegistryState = {
   entries: LayerRegistryEntry[];
@@ -119,8 +142,13 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           id: elementId,
           label: label ?? elementId,
           visible: true,
-          order: s.entries.length,
+          // Pushed to the end of `entries`, which reindexByKind turns into the
+          // *highest* order within the annotation stack. This literal is only a
+          // placeholder — reindexByKind below owns the real value, so the
+          // per-kind rule has exactly one definition.
+          order: 0,
         });
+        reindexByKind(s.entries);
       }),
     updateAnnotationLabel: (elementId, label) =>
       set((s) => {
@@ -136,21 +164,28 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           `data layer id must start with dl: prefix (received "${id}")`,
         );
       }
+      // Phase 4 W0 (atlasdraw-ad27): mirror the FC into the FC registry so
+      // selectDocument can populate AtlasdrawDocument.layers without ever
+      // round-tripping through MapLibre's opaque source storage.
+      //
+      // Mirror BEFORE the store write, not after: useLayerRegistrySync's
+      // subscriber reconciles the new entry onto the map synchronously inside
+      // `set`, and it reads geometry from this mirror. Writing the mirror second
+      // meant the reconcile saw an entry with no FeatureCollection, warned, and
+      // skipped it — so a hydrate()-replayed layer never reached MapLibre.
+      useDataLayerFCStore.getState().set(id, fc);
       set((s) => {
         s.entries.push({
           kind: "data",
           id,
           label,
           visible: true,
-          order: s.entries.length,
+          order: 0, // see registerAnnotation — reindexByKind owns the value
           featureCount: fc.features.length,
           style,
         });
+        reindexByKind(s.entries);
       });
-      // Phase 4 W0 (atlasdraw-ad27): mirror the FC into the FC registry so
-      // selectDocument can populate AtlasdrawDocument.layers without ever
-      // round-tripping through MapLibre's opaque source storage.
-      useDataLayerFCStore.getState().set(id, fc);
     },
 
     convertAnnotationToDataLayer: (elementId, fc) => {
@@ -159,6 +194,13 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
       // inside immer would force us to capture the id from a draft, which
       // the freeze semantics make awkward.
       const newId = `dl:${crypto.randomUUID()}`;
+      // Mirror into the FC registry (Phase 4 W0) before the store write, for the
+      // same reason as registerDataLayer: the registry subscriber reconciles the
+      // new dl: entry onto the map inside `set` and needs the geometry to be
+      // there already. Nothing can observe the mirror early — newId was minted
+      // one line ago.
+      const fcStore = useDataLayerFCStore.getState();
+      fcStore.set(newId, fc);
       set((s) => {
         const idx = s.entries.findIndex(
           (e) => e.kind === "annotation" && e.id === elementId,
@@ -174,18 +216,17 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           id: newId,
           label,
           visible: true,
-          order: s.entries.length,
+          order: 0, // see registerAnnotation — reindexByKind owns the value
           featureCount: fc.features.length,
           style: { ...DEFAULT_CONVERTED_STYLE },
         });
+        // The annotation stack just lost a member; close the gap it left.
+        reindexByKind(s.entries);
       });
-      // Mirror into FC registry (Phase 4 W0). Deleting the old elementId is a
-      // no-op in the FC store (annotation ids never had an FC), but kept for
-      // symmetry with `remove` — the call site shouldn't have to know which
-      // ids carry FCs.
-      const fcStore = useDataLayerFCStore.getState();
+      // Deleting the old elementId is a no-op in the FC store (annotation ids
+      // never had an FC), but kept for symmetry with `remove` — the call site
+      // shouldn't have to know which ids carry FCs.
       fcStore.delete(elementId);
-      fcStore.set(newId, fc);
     },
 
     setVisibility: (id, visible) =>
@@ -196,18 +237,41 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         }
       }),
 
+    // Kind-scoped: `newOrder` indexes the entry's own stack (see
+    // ILayerRegistry.reorder). Previously this spliced against the whole
+    // `entries` array while LayerPanel passed section-local indices, so the
+    // two disagreed by however many entries of the other kind sat below —
+    // moves silently no-op'd and layers hopped between stacks. Permuting only
+    // the slots the kind already occupies makes that move unrepresentable.
     reorder: (id, newOrder) =>
       set((s) => {
-        const clamped = Math.max(0, Math.min(newOrder, s.entries.length - 1));
-        const from = s.entries.findIndex((x) => x.id === id);
-        if (from === -1) {
+        const globalIndex = s.entries.findIndex((x) => x.id === id);
+        if (globalIndex === -1) {
           return;
         }
-        const [entry] = s.entries.splice(from, 1);
-        s.entries.splice(clamped, 0, entry);
+        const { kind } = s.entries[globalIndex];
+        const slots: number[] = [];
         s.entries.forEach((e, i) => {
-          e.order = i;
+          if (e.kind === kind) {
+            slots.push(i);
+          }
         });
+
+        const from = slots.indexOf(globalIndex);
+        const to = Math.max(0, Math.min(newOrder, slots.length - 1));
+        if (from === to) {
+          return;
+        }
+
+        const group = slots.map((i) => s.entries[i]);
+        const [moved] = group.splice(from, 1);
+        group.splice(to, 0, moved);
+        const next = s.entries.slice();
+        slots.forEach((slot, i) => {
+          next[slot] = group[i];
+        });
+        s.entries = next;
+        reindexByKind(s.entries);
       }),
 
     updateStyle: (id, patch) =>
@@ -222,6 +286,9 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
     remove: (id) => {
       set((s) => {
         s.entries = s.entries.filter((e) => e.id !== id);
+        // Removing from the middle would otherwise leave a hole in the
+        // remaining stack's order (0,2,…), which breaks first/last detection.
+        reindexByKind(s.entries);
       });
       // Phase 4 W0: drop the FC if any. Unconditional delete — annotation ids
       // never had an FC, so the call is a cheap no-op for them and keeps

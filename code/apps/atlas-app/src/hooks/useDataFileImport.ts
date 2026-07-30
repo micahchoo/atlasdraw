@@ -38,7 +38,7 @@ import {
   ShapefileParseError,
   PhotonGeocoder,
 } from "@atlasdraw/data";
-import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
+import { defaultLayerStyle } from "@atlasdraw/basemap";
 
 import { requireHomogeneousGeometry } from "@atlasdraw/data";
 
@@ -46,22 +46,13 @@ import { getAppConfig } from "../config/app-config";
 
 import { useToast } from "../components/ToastProvider";
 
+import { addDataLayerToMap } from "../lib/dataLayerRender";
+
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type { LayerStyle } from "../state/layerRegistry";
 
 type DataFileExt = "geojson" | "csv" | "zip";
-
-function inferGeometryType(fc: FeatureCollection): "fill" | "line" | "circle" {
-  const t = fc.features[0]?.geometry?.type;
-  if (t === "Polygon" || t === "MultiPolygon") {
-    return "fill";
-  }
-  if (t === "LineString" || t === "MultiLineString") {
-    return "line";
-  }
-  return "circle";
-}
 
 /** Extension routing shared by both the drop handler and the file picker. */
 function detectExt(fileName: string): DataFileExt | null {
@@ -144,18 +135,12 @@ export function useDataFileImport(
         requireHomogeneousGeometry(fc);
         const id = `dl:${crypto.randomUUID()}`;
         const style = defaultLayerStyle(fc);
-        const geometryType = inferGeometryType(fc);
-        map.addSource(id, { type: "geojson", data: fc });
-        try {
-          map.addLayer(compileLayer(id, style, geometryType));
-        } catch (layerErr) {
-          try {
-            map.removeSource(id);
-          } catch {
-            /* swallow */
-          }
-          throw layerErr;
-        }
+        // Map mutations first, registry second: the registry subscriber
+        // (useLayerRegistrySync) reconciles registry→map on new entries, and
+        // adding here first means it finds this layer already present.
+        // addDataLayerToMap owns the addSource/addLayer + orphan-source
+        // rollback so an imported layer and a re-added one are byte-identical.
+        addDataLayerToMap(map, id, fc, style);
         registerDataLayer({ id, fc, label: file.name, style });
         const n = fc.features.length;
         toast.success(

@@ -153,15 +153,36 @@ vi.mock("@atlasdraw/excalidraw", () => ({
 }));
 
 // Synthetic map instance shared by useMapRef stub + assertions.
+const mapHandlers = new Map<string, Array<() => void>>();
+
+function fireMapEvent(event: string): void {
+  for (const handler of [...(mapHandlers.get(event) ?? [])]) {
+    handler();
+  }
+}
+
 const mockMap = {
   addSource: vi.fn(),
   addLayer: vi.fn(),
   setStyle: vi.fn(),
   // The real MapEditor renders other hooks (useCoordinateSync, useMapWheelRouter,
-  // useGeoAnchor) that may probe `map.on / off / project / etc`. Provide cheap
-  // no-ops so they don't blow up on read.
-  on: vi.fn(),
-  off: vi.fn(),
+  // useGeoAnchor) that may probe `map.on / off / project / etc`. `on`/`off`
+  // record into mapHandlers so a test can fire a map event — useBasemapStyle's
+  // post-swap reconcile hangs off `styledata`, and this file mocks
+  // useLayerRegistrySync (below), so firing it is what proves the reconcile
+  // does not live in the mocked module.
+  on: vi.fn((event: string, handler: () => void) => {
+    const list = mapHandlers.get(event) ?? [];
+    list.push(handler);
+    mapHandlers.set(event, list);
+  }),
+  off: vi.fn((event: string, handler: () => void) => {
+    const list = mapHandlers.get(event) ?? [];
+    const i = list.indexOf(handler);
+    if (i !== -1) {
+      list.splice(i, 1);
+    }
+  }),
   project: vi.fn(() => ({ x: 0, y: 0 })),
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
@@ -235,6 +256,7 @@ const validPolygonFc = {
 beforeEach(() => {
   // Reset spies + store between tests so assertions are isolated.
   vi.clearAllMocks();
+  mapHandlers.clear();
   useLayerRegistryStore.setState({ entries: [] });
 });
 
@@ -391,5 +413,30 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(toast.textContent).toMatch(/geocoder/);
     expect(registerSpy).not.toHaveBeenCalled();
     expect(mockMap.addLayer).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Module-boundary regression. This file — like MapEditor.import/maputnik/
+// contextmenu/collab-presence/layers-toggle — mocks ../../hooks/useLayerRegistrySync
+// down to its hook export. useBasemapStyle used to import reconcileDataLayers
+// from that module, so under this mock it was `undefined`; the only reason no
+// test noticed was that the map stub never fired the event that would have
+// called it. Both halves of that trap are asserted here.
+// ---------------------------------------------------------------------------
+
+describe("MapEditor — basemap swap under a mocked useLayerRegistrySync", () => {
+  it("applies the resolved style and survives the post-swap styledata event", async () => {
+    render(
+      <ToastProvider>
+        <MapEditor />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mockMap.setStyle).toHaveBeenCalledTimes(1);
+    });
+
+    expect(() => fireMapEvent("styledata")).not.toThrow();
   });
 });
