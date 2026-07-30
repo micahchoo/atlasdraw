@@ -8,6 +8,10 @@
 //
 // Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2, §4
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -506,6 +510,117 @@ describe("scale (step 6)", () => {
       .sort((a, b) => a.order - b.order)
       .map((e) => e.label);
     expect(order.slice(3, 7)).toEqual(["Road 3", "Road 5", "Road 4", "Road 6"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The list has to be reachable before anything else about scale matters.
+//
+// `.sidebar` is `overflow: hidden` and nothing between it and this panel used
+// to scroll, so at 25 data layers the last 11 rows were CLIPPED — not awkward,
+// unreachable. Measured in Chromium: `.body` scrollHeight 1309 in a 680px port
+// with `anyScrollableAncestor: false`, and the open card's Apply button sitting
+// 22px BELOW the sidebar's bottom edge.
+//
+// jsdom cannot answer this: no layout, and vitest injects no CSS modules, so
+// `getComputedStyle(body).overflowY` is `""` whether or not the rule exists.
+// The stylesheet is the only place the fix can regress, so the stylesheet is
+// what gets asserted — same shape as StylePanel's "not a dialog" test.
+// ---------------------------------------------------------------------------
+
+describe("the panel is its own scroll port (step 6)", () => {
+  const rule = (selector: string) => {
+    const css = readFileSync(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "..",
+        "styles",
+        "LayerPanel.module.css",
+      ),
+      "utf8",
+    );
+    const match = new RegExp(`^\\${selector}\\s*\\{([^}]*)\\}`, "m").exec(css);
+    if (!match) {
+      throw new Error(`${selector} rule not found in LayerPanel.module.css`);
+    }
+    return match[1];
+  };
+  const bodyRule = () => rule(".body");
+
+  it("declares overflow-y and the min-height that makes it mean anything", () => {
+    seedMany(25, "District");
+    render(<LayerPanel />);
+    // Ties the rule to the element actually rendered.
+    expect(screen.getByTestId("layer-panel-body").className).toContain("body");
+
+    const rule = bodyRule();
+    expect(rule).toMatch(/overflow-y\s*:\s*auto/);
+    // Without `min-height: 0` this flex child grows to its content and the
+    // overflow-y has nothing to scroll — the two are one fix, not two.
+    expect(rule).toMatch(/min-height\s*:\s*0/);
+  });
+
+  it("renders every layer rather than truncating the list", () => {
+    // The clipping was invisible to the DOM, which is why it survived step 4:
+    // all 25 rows were present and 11 of them were off the bottom.
+    seedMany(25, "District");
+    render(<LayerPanel />);
+    expect(screen.getAllByTestId(/^layer-row-header-/)).toHaveLength(25);
+  });
+
+  it("scrolls the card it just opened into view", () => {
+    // The ninth card of 25 opens below the fold. jsdom has no scrollIntoView,
+    // so the component guards on it — that guard is why this asserts on a
+    // stub rather than on a scroll position.
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      value: scrollIntoView,
+      configurable: true,
+      writable: true,
+    });
+    seedMany(25, "District");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-8"));
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("pins the open card's header, and only the open one", () => {
+    // In a 240px panel at a 600px viewport the open card measures 688px in a
+    // 380px port, so its own name scrolls off while you reach for Apply —
+    // verified pinned at the port's top edge in Chromium. The marker is what
+    // this can check; the CSS that consumes it is asserted below.
+    seedMany(3, "District");
+    render(<LayerPanel />);
+    expect(document.querySelectorAll("[data-sticky]")).toHaveLength(0);
+
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
+
+    const pinned = document.querySelectorAll("[data-sticky]");
+    expect(pinned).toHaveLength(1);
+    expect(
+      within(pinned[0] as HTMLElement).getByText("District 1"),
+    ).toBeTruthy();
+  });
+
+  it("the pinned header is actually sticky in the stylesheet", () => {
+    const sticky = rule(".rowTopSticky");
+    expect(sticky).toMatch(/position\s*:\s*sticky/);
+    expect(sticky).toMatch(/top\s*:\s*0/);
+    // Rows are transparent over the sidebar's background, so a pinned header
+    // without one shows the card body sliding under its text.
+    expect(sticky).toMatch(/background\s*:/);
+    expect(sticky).toMatch(/z-index\s*:/);
+  });
+
+  it("does not leave the pin behind when the card closes", () => {
+    seedMany(3, "District");
+    render(<LayerPanel />);
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
+    expect(document.querySelectorAll("[data-sticky]")).toHaveLength(0);
   });
 });
 

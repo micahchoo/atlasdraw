@@ -10,9 +10,19 @@
  * purple per the conventions color table.
  */
 
+/* The panel is the scroll port for its own content, like every other sidebar
+ * tab body (LibraryMenuItems.scss has the same rule). `.sidebar` is
+ * `overflow: hidden`, so a tab body that does not scroll itself is simply cut
+ * off at the sidebar's bottom edge — see the min-height note in Sidebar.scss
+ * for the other half of this fix. `min-height: 0` is what makes the
+ * `overflow-y` meaningful: without it this box grows to its content and there
+ * is nothing to scroll. */
 .body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .section {
@@ -121,6 +131,30 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+
+/* The open card's header line pins to the top of the scroll port while the
+ * card's own body scrolls past. Sticky is scoped by its containing block, which
+ * is `.row` — so it pins for exactly as long as its own card is on screen and
+ * leaves with it, no offset bookkeeping between cards.
+ *
+ * `top: 0` and not "below the filter field": the filter is not sticky, so there
+ * is no fixed offset to subtract, and inventing a literal for the filter's
+ * height would drift the moment its padding changes. Reaching the filter from
+ * the bottom of 25 layers costs one scroll up.
+ *
+ * Needs its own background — rows are transparent over the sidebar's — and its
+ * own z-index, or the card body it is pinned above paints over it. The ⋯ menu
+ * is a descendant, so it still paints above this. The negative-margin/padding
+ * pair makes the pinned strip span the row's full width instead of leaving a
+ * transparent gutter where `.row`'s padding is. */
+.rowTopSticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -6px -8px 0;
+  padding: 6px 8px;
+  background: var(--sidebar-bg-color, var(--ad-surface));
 }
 
 .rowAnnotation {

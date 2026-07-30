@@ -148,6 +148,104 @@ describe("useMapWheelRouter", () => {
     expect(map.easeTo).not.toHaveBeenCalled();
   });
 
+  // -------------------------------------------------------------------------
+  // Chrome that scrolls itself keeps its own wheel.
+  //
+  // The listener is capture-phase on the editor root, which is an ancestor of
+  // the sidebar. Before this guard it preventDefaulted every wheel in the app,
+  // so nothing in the app could scroll: at 25 data layers the layer panel
+  // clipped 11 rows and no gesture could reach them.
+  // -------------------------------------------------------------------------
+
+  /** jsdom reports 0 for both, so a scroll port has to be declared. */
+  function makeScrollPort(
+    parent: HTMLElement,
+    { overflowY = "auto", scrollHeight = 900, clientHeight = 400 } = {},
+  ) {
+    const port = document.createElement("div");
+    port.style.overflowY = overflowY;
+    Object.defineProperty(port, "scrollHeight", { value: scrollHeight });
+    Object.defineProperty(port, "clientHeight", { value: clientHeight });
+    const child = document.createElement("button");
+    port.appendChild(child);
+    parent.appendChild(port);
+    return { port, child };
+  }
+
+  it("leaves the wheel alone over a scrollable panel", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+    const { child } = makeScrollPort(container);
+
+    const event = fireWheel(child);
+
+    expect(map.easeTo).not.toHaveBeenCalled();
+    // Not preventDefaulted is the load-bearing half: that is what lets the
+    // browser do the scroll.
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("still zooms over a panel that declares overflow but has nothing to scroll", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+    const { child } = makeScrollPort(container, {
+      scrollHeight: 400,
+      clientHeight: 400,
+    });
+
+    fireWheel(child);
+
+    expect(map.easeTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("still zooms over a tall panel that does not scroll", () => {
+    // `overflow: hidden` with overflowing content is the sidebar itself. It is
+    // not a scroll port, so it must not swallow the wheel on the way past.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+    const { child } = makeScrollPort(container, { overflowY: "hidden" });
+
+    fireWheel(child);
+
+    expect(map.easeTo).toHaveBeenCalledTimes(1);
+  });
+
+  it("yields to a scroll port anywhere up the chain, not just the direct parent", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+    const { child } = makeScrollPort(container);
+    const deep = document.createElement("span");
+    child.appendChild(deep);
+
+    fireWheel(deep);
+
+    expect(map.easeTo).not.toHaveBeenCalled();
+  });
+
+  it("does not treat the container itself as a scroll port", () => {
+    // The walk stops AT the container: the editor root is the map's own
+    // surface, and if it ever reports overflow that must not disable zoom.
+    const container = document.createElement("div");
+    container.style.overflowY = "auto";
+    Object.defineProperty(container, "scrollHeight", { value: 900 });
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    document.body.appendChild(container);
+    const map = makeMockMap();
+    renderHook(() => useMapWheelRouter(container, map));
+
+    fireWheel(container);
+
+    expect(map.easeTo).toHaveBeenCalledTimes(1);
+  });
+
   it("re-attaches when the (container, map) pair changes", () => {
     const containerA = document.createElement("div");
     const containerB = document.createElement("div");

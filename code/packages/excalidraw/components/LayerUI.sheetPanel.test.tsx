@@ -16,6 +16,10 @@
 // true exactly when `.sidebar--docked` is, which is the observable proxy that
 // suite already established for the wrapper's narrowing.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import React from "react";
 
 import {
@@ -266,5 +270,76 @@ describe("onSidebarLayoutChange reports the sidebar's layout", () => {
         "excalidraw--collar",
       );
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A tab body taller than the sidebar has to be able to scroll.
+//
+// `.sidebar` is `overflow: hidden`, and `.sidebar-tabs-root` / `[role=tabpanel]`
+// are `flex: 1 1 auto` in a column — which permits shrinking but does NOT
+// achieve it, because a column flex item's `min-height: auto` resolves to its
+// content height. So an over-tall tab body pushed the chain past the sidebar's
+// height and the excess was clipped with no scroll port anywhere. Measured in
+// Chromium at 25 data layers: tabs-root 1393px inside a 764px sidebar, 11 rows
+// unreachable. Every level needs the override or the one that keeps `auto`
+// re-establishes the content floor.
+//
+// Asserted against the stylesheet source: jsdom does no layout and vitest does
+// not load the compiled SCSS, so `getComputedStyle` reports nothing either way.
+// The stylesheet is where this can regress.
+describe("sidebar tab bodies can shrink below their content", () => {
+  const scss = readFileSync(
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "Sidebar",
+      "Sidebar.scss",
+    ),
+    "utf8",
+  );
+
+  /** Body of a nested SCSS block, brace-matched — `[^}]*` stops at the first
+   *  nested rule's closing brace. */
+  const block = (selector: string) => {
+    // Anchored at a line start so `.sidebar` finds the nested rule and not
+    // `.excalidraw.excalidraw--collar .sidebar` — which sets only the width.
+    const opener = new RegExp(
+      `^\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{`,
+      "m",
+    ).exec(scss);
+    const start = opener?.index ?? -1;
+    if (start < 0) {
+      throw new Error(`${selector} not found in Sidebar.scss`);
+    }
+    let depth = 0;
+    for (let i = scss.indexOf("{", start); i < scss.length; i++) {
+      if (scss[i] === "{") {
+        depth++;
+      } else if (scss[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          return scss.slice(start, i);
+        }
+      }
+    }
+    throw new Error(`unbalanced braces after ${selector}`);
+  };
+
+  /** Declarations directly on the block, excluding its nested rules. */
+  const ownDeclarations = (selector: string) =>
+    block(selector).replace(/[\w[\]"=.:#&-]+\s*\{[^}]*\}/g, "");
+
+  it("the tabs root can shrink", () => {
+    expect(ownDeclarations(".sidebar-tabs-root")).toMatch(/min-height\s*:\s*0/);
+  });
+
+  it("the tab panel can shrink", () => {
+    expect(block('[role="tabpanel"]')).toMatch(/min-height\s*:\s*0/);
+  });
+
+  it("the sidebar still clips rather than scrolling as a whole", () => {
+    // The fix is "the tab body is the scroll port", not "the sidebar scrolls".
+    // A scrolling sidebar would take its own header with it.
+    expect(block(".sidebar")).toMatch(/overflow\s*:\s*hidden/);
   });
 });

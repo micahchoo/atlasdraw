@@ -304,6 +304,7 @@ function SortableRow({
   allIds,
   children,
   body,
+  expanded = false,
 }: LayerRowProps & {
   /** Header content — shares one flex line with the grip and reorder arrows. */
   children: React.ReactNode;
@@ -313,6 +314,18 @@ function SortableRow({
    * grip and the reorder arrows.
    */
   body?: React.ReactNode;
+  /**
+   * This row is the open one. Two consequences, both of them "keep the card you
+   * just opened usable in a list that now scrolls":
+   *
+   *   - the header line sticks to the top of the scroll port while the card's
+   *     own body scrolls past it, so the layer's name is still on screen when
+   *     you reach Apply. The 25-layer prototype's specific complaint was the
+   *     name scrolling off the top.
+   *   - opening scrolls the header into view, because the ninth card of 25
+   *     opens below the fold and the useful part of it is further down still.
+   */
+  expanded?: boolean;
 }) {
   const { id } = entry;
   // Position inside this section's list. `allIds` is the one section's ids, and
@@ -328,6 +341,22 @@ function SortableRow({
   const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
     null,
   );
+
+  // Reveal on open, not on every render: `expanded` is the dependency, so
+  // re-renders from a style edit inside the open card do not yank the scroll
+  // position back. `block: "nearest"` because a card that is already fully in
+  // view must not move at all — the first three cards of three should feel
+  // like nothing happened.
+  //
+  // Guarded because jsdom does not implement scrollIntoView; the panel's tests
+  // render the real component and would throw on the first expand.
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!expanded || !el || typeof el.scrollIntoView !== "function") {
+      return;
+    }
+    el.scrollIntoView({ block: "nearest" });
+  }, [expanded]);
 
   const handleDragStart = useCallback(
     (e: React.DragEvent) => {
@@ -403,7 +432,10 @@ function SortableRow({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className={styles.rowTop}>
+      <div
+        className={joinClass(styles.rowTop, expanded && styles.rowTopSticky)}
+        data-sticky={expanded ? "" : undefined}
+      >
         <span
           className={styles.dragHandle}
           aria-label={`Drag to reorder ${entry.label}`}
@@ -812,6 +844,7 @@ function DataLayerCard({
       entry={entry}
       mutators={mutators}
       allIds={allIds}
+      expanded={expanded}
       body={
         expanded ? (
           <div

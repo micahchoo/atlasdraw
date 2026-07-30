@@ -44,6 +44,38 @@ import type maplibregl from "maplibre-gl";
 const ZOOM_SCALE = 0.0035;
 const LINE_HEIGHT_PX = 25; // when deltaMode === DOM_DELTA_LINE
 
+/**
+ * Is the wheel pointing at a UI surface that scrolls itself?
+ *
+ * The listener below is capture-phase on the whole editor root, which is an
+ * ancestor of the sidebar, the ⌘K palette and every other bit of chrome. It
+ * preventDefaults unconditionally, so before this guard a wheel anywhere in
+ * the app zoomed the map and nothing in the app could ever scroll — the layer
+ * panel at 25 layers and the stock library tab's own `overflow-y: auto` were
+ * both unreachable by mouse.
+ *
+ * The rule is "a scroll port claims the wheel", not an allowlist of chrome:
+ * chrome gets added, allowlists rot, and a scroll port is exactly the thing
+ * whose whole purpose is consuming wheel. Deliberately NOT direction-aware —
+ * a port already at its limit still keeps the event, because scrolling to the
+ * bottom of the layer list and having the map lurch is worse than a wheel that
+ * does nothing.
+ */
+function targetOwnsWheel(target: EventTarget | null, root: HTMLElement) {
+  let el = target instanceof Element ? target : null;
+  while (el && el !== root) {
+    const overflowY = getComputedStyle(el).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight
+    ) {
+      return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
 export function useMapWheelRouter(
   container: HTMLElement | null,
   map: maplibregl.Map | null,
@@ -56,6 +88,11 @@ export function useMapWheelRouter(
     const handleWheel = (e: WheelEvent) => {
       // Browser pinch-zoom (ctrl on Windows/Linux, meta on macOS) — let it through.
       if (e.ctrlKey || e.metaKey) {
+        return;
+      }
+
+      // Chrome that scrolls itself keeps its own wheel. See targetOwnsWheel.
+      if (targetOwnsWheel(e.target, container)) {
         return;
       }
 
