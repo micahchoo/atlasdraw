@@ -15,6 +15,7 @@ import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
+import { useSelectedLayerStore } from "../../state/selectedLayer";
 
 import type { FeatureCollection } from "geojson";
 
@@ -464,20 +465,22 @@ describe("LayerPanel — Threads section (Step 5)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Renaming a layer by clicking its name
+// Renaming a layer via the ⋯ overflow menu
 // ---------------------------------------------------------------------------
 //
-// Data layers already had two doors into the rename editor (the ⋯ menu and the
-// expanded card's button) — those are covered in LayerPanel.card.test.tsx. What
-// is new here is that the name itself is the third door, and that annotations
-// have any door at all.
+// The layer name is a read-only label now — a row click is the select gesture,
+// so the name must not fight it. Rename is behind the ⋯ menu's "Rename…" item
+// for every layer kind; these cases pin the menu path for annotations and for
+// a data layer (the expanded card's Rename button is covered in
+// LayerPanel.card.test.tsx).
 
-describe("LayerPanel — rename by clicking the name", () => {
-  it("opens an editor on an annotation's name and commits on Enter", () => {
+describe("LayerPanel — rename via the ⋯ menu", () => {
+  it("opens the rename editor from an annotation's ⋯ menu and commits on Enter", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-el-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     const input = screen.getByTestId("layer-rename-input-el-1");
     fireEvent.change(input, { target: { value: "Ward 3" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -492,7 +495,8 @@ describe("LayerPanel — rename by clicking the name", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-el-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     const input = screen.getByTestId("layer-rename-input-el-1");
     fireEvent.change(input, { target: { value: "Ward 3" } });
     fireEvent.blur(input);
@@ -507,7 +511,8 @@ describe("LayerPanel — rename by clicking the name", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-el-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     const input = screen.getByTestId("layer-rename-input-el-1");
     fireEvent.change(input, { target: { value: "oops" } });
     fireEvent.keyDown(input, { key: "Escape" });
@@ -525,7 +530,8 @@ describe("LayerPanel — rename by clicking the name", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-el-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     const input = screen.getByTestId("layer-rename-input-el-1");
     fireEvent.change(input, { target: { value: "   " } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -536,7 +542,7 @@ describe("LayerPanel — rename by clicking the name", () => {
     ).toBe("Rectangle");
   });
 
-  it("opens the same editor from a data layer's name", () => {
+  it("opens the same editor from a data layer's ⋯ menu", () => {
     useLayerRegistryStore.getState().registerDataLayer({
       id: "dl:test-1",
       fc: emptyFc(1),
@@ -545,7 +551,8 @@ describe("LayerPanel — rename by clicking the name", () => {
     });
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId("layer-name-dl:test-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-dl:test-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-dl:test-1"));
     const input = screen.getByTestId("layer-rename-input-dl:test-1");
     fireEvent.change(input, { target: { value: "Parcels" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -566,7 +573,8 @@ describe("LayerPanel — rename by clicking the name", () => {
     // FU-4 moved `draggable` onto the grip there is no ancestor to drop, and
     // the suspension mechanism is gone. Walk the real chain rather than
     // asserting the absence of a prop that no longer exists.
-    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-el-1"));
+    fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     let node: HTMLElement | null = screen.getByTestId(
       "layer-rename-input-el-1",
     ) as HTMLElement;
@@ -626,11 +634,13 @@ describe("LayerPanel — raster layers", () => {
     ).toBe(false);
   });
 
-  it("removes a raster from the registry", () => {
+  it("removes a raster from the registry via the ⋯ menu", () => {
     const id = seedRaster();
     render(<LayerPanel />);
 
-    fireEvent.click(screen.getByTestId(`layer-remove-${id}`));
+    fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+    fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
+    fireEvent.click(screen.getByTestId(`layer-delete-confirm-${id}`));
 
     expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
   });
@@ -667,5 +677,90 @@ describe("LayerPanel — raster layers", () => {
     expect(
       (screen.getByTestId(`layer-up-${id}`) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bidirectional selection — the panel reads/writes useSelectedLayerStore
+// ---------------------------------------------------------------------------
+//
+// A row click is the single-select gesture: it replaces the selection set with
+// exactly that layer's id. The row's own controls (eye, disclosure, ⋯ trigger,
+// reorder arrows, drag handle) must NOT select — they are nested actions, and
+// the highlight must not move while you toggle a layer.
+
+describe("LayerPanel — row selection", () => {
+  beforeEach(() => {
+    useSelectedLayerStore.setState({ selectedLayerIds: {} });
+  });
+
+  function seedData(id: string, label: string) {
+    useLayerRegistryStore.getState().registerDataLayer({
+      id,
+      fc: emptyFc(1),
+      label,
+      style: { fillColor: "#ff0000", opacity: 1 },
+    });
+  }
+
+  it("selects the clicked row (single-select replace)", () => {
+    seedData("dl:sel-1", "parcels.geojson");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
+
+    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+      "dl:sel-1": true,
+    });
+  });
+
+  it("switches selection to the newly clicked row", () => {
+    seedData("dl:sel-1", "parcels.geojson");
+    seedData("dl:sel-2", "roads.geojson");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
+    fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-2"));
+
+    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+      "dl:sel-2": true,
+    });
+  });
+
+  it("row controls do not change the selection", () => {
+    seedData("dl:sel-1", "parcels.geojson");
+    render(<LayerPanel />);
+    fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
+
+    fireEvent.click(screen.getByTestId("layer-visibility-dl:sel-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1"));
+    fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1")); // close again
+
+    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+      "dl:sel-1": true,
+    });
+  });
+
+  it("marks the selected row's header with the rowSelected class", () => {
+    seedData("dl:sel-1", "parcels.geojson");
+    render(<LayerPanel />);
+
+    const header = screen.getByTestId("layer-row-header-dl:sel-1");
+    expect(header.className).not.toContain("rowSelected");
+    fireEvent.click(header);
+    expect(screen.getByTestId("layer-row-header-dl:sel-1").className).toContain(
+      "rowSelected",
+    );
+  });
+
+  it("selects an annotation row by clicking its name label", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId("layer-name-el-1"));
+
+    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+      "el-1": true,
+    });
   });
 });
