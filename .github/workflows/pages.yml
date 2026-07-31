@@ -20,8 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true
 
       # Must precede setup-node: its `cache: yarn` step shells out to yarn to
       # locate the cache folder, and classic yarn 1.22 errors on the
