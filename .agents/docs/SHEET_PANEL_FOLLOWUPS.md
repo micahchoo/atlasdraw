@@ -615,6 +615,18 @@ mutation, so breaking the code turned something else red and the matrix looked
 healthy. Reading is blind to everything in the bottom three rows, because those
 files all look correct on the page; that is the entire nature of Shape 2.
 
+**Why reading worked on the one it worked on**, since "read carefully" is not
+advice anybody can act on. The tautology's own comment stated the claim it was
+failing to make — *"RT-2 writes `angle = -bearing` on bbox anchors, derived
+independently from this. If the two ever disagree..."* — above an assertion that
+never touches RT-2 and re-derives nothing. The sibling two tests above it
+(`toHaveBeenCalledWith(-30)`) is what actually pinned the sign, which is also why
+the mutation matrix stayed clean. So the reading that caught it was not general
+vigilance: it was **comparing the stated intent against the assertion directly
+below it**, and those were adjacent on the page. Where a test says what it is
+for, that comparison is cheap and worth making every time; where it does not,
+reading has nothing to compare and only re-running reaches it.
+
 **The cheap habit that covers most of it: re-run it changed, and print the state
 the setup was supposed to reach.** Both are seconds of work, both found things
 here, and both were applied late — after a wave had shipped — rather than by
