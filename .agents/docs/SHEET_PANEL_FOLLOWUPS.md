@@ -25,22 +25,22 @@ ledger.
 
 | | state | where |
 |---|---|---|
-| FU-12 | **done** | `d29920d` on `fix/pdf-export-composite`, unmerged |
-| FU-13 | **done** | same commit |
+| FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
+| FU-13 | **done, shipped** | same commit |
 | FU-1 | open | — |
-| FU-2 | **blocked** — reopened, see FU-14 | do not delete `packages/tools` yet |
+| FU-2 | **decided — delete the seven; not yet executed** | consumer analysis re-verified 2026-07-31, see ticket |
 | FU-3 | open | — |
 | FU-4 | open | — |
 | FU-5 | open | — |
 | FU-6 | open | — |
 | FU-7 | open, scope only | — |
-| FU-8 | open, and sharper — see FU-12's commit body | — |
+| FU-8 | open, and sharper — now three faces, see ticket | — |
 | FU-9 | open | — |
 | FU-10 | open | — |
 | FU-11 | parked with a kill criterion, deliberately | — |
-| FU-14 | **needs a decision from MIXI**, not code | — |
+| FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-2 of 14 written; neither merged to `main` nor pushed.
+2 of 14 shipped. Two more are decided and waiting on hands rather than answers.
 
 ---
 
@@ -132,17 +132,41 @@ in seven unreferenced files.
 **Kill criterion:** if nobody can name a behaviour the native toolbar can't
 produce within one session of looking, delete them.
 
-**BLOCKED as of 2026-07-30 — do not delete yet.** The kill criterion looked met
-and then stopped being met, twice, in one evening. Chief Opus first established
-that tilt is impossible by construction (`maxPitch: 0`) and that under *rotation*
-what fails is the anchor format rather than the drawing path, so the geographic-
-bbox argument was dead. Then MIXI asked to enable tilt and rotate — and in a
-north-up world "drag a rectangle in geographic space" is a distinction without a
-difference, while in a rotated one it is a behaviour the native toolbar cannot
-produce. The criterion is now conditional on **FU-14 D6**. Settle that, then
-delete or wire.
+**RESOLVED 2026-07-31 — delete the seven.** The block was conditional on FU-14
+D6, and D6 is answered: drawing is disabled while `bearing !== 0`
+(`PLANS/ATLASDRAW_ROTATION_PLAN.md`, RT-9). That removes the premise the seven
+were kept on. If a tool can only be picked up when the camera is north-up, then
+at draw time screen-space and geographic bbox coincide exactly — "drag a
+rectangle in geographic space" is not a behaviour the native toolbar fails to
+produce, it is the *same* behaviour. Nobody named another in three sessions of
+looking. Kill criterion met, and this time on a premise that cannot quietly
+reverse: it is a decision about the app, not a claim about the code.
 
-**Size:** small either way. The work is the decision.
+Note what changed and what didn't. Tilt was dropped, not deferred — under
+rotation alone the geographic/screen distinction closes completely. Had tilt
+shipped, this ticket would still be open.
+
+**Consumer analysis re-verified 2026-07-31 at `0b0de34`**, per
+`.claude/rules/canonicalization-verify-first.md`, because the rule exists
+precisely because this ticket broke it once. Grepped each of the eight symbols
+across `apps/` + `packages/`, excluding its own source, `dist/`, and the
+vendored `packages/excalidraw/`:
+
+| | non-`packages/tools` hits | verdict |
+|---|---|---|
+| `PolygonTool` `PolylineTool` `FreehandTool` `TextLabelTool` `ArrowTool` `RectangleTool` `CircleTool` | `seedToElement.ts` only — **all nine hits are comments** (lines 62-68, 188, 216, 239, 263, 294, 322), naming which T-task each branch mirrors | **delete** |
+| `PinTool` | `MapEditor.tsx`, `useAtlasdrawTool.ts`, `seedToElement.ts`, an e2e spec, four test files | **keep** |
+
+The four survivors — `types.ts`, `classifyTool.ts`, `convert.ts`, `PinTool.ts` —
+import none of the seven. The cut is clean; the cross-references among the seven
+(`PolylineTool`→`PolygonTool`, `CircleTool`→`RectangleTool`) vanish with them.
+
+**Not yet executed.** The deletion also touches `index.ts` (seven exports and
+their registrations) and `registry.test.ts` (asserts all eight register), plus
+seven `.test.ts` files. Those comments in `seedToElement.ts` should stay —
+they explain the geometry, and they will outlive the classes they name.
+
+**Size:** small. The work was the decision, and the decision is made.
 
 ### FU-3 — `collab-data` still lives outside the registry
 `useCollabDataLayer.ts:22` defines `COLLAB_DATA_ID = "collab-data"` and adds it
@@ -417,9 +441,28 @@ alone rather than through the React tree:
 ## F. Camera
 
 ### FU-14 — Rotate and tilt, and what they do to annotations
+
+> **DECIDED 2026-07-31 — rotation ships, tilt is dropped, D6 = block.**
+> **Ready, not started.** Task breakdown lives in
+> `PLANS/ATLASDRAW_ROTATION_PLAN.md`: six tasks, **RT-0 first** (close the live
+> defect — rotation is reachable and unrecoverable today) and **RT-1 strictly
+> before RT-2** (`_lastSync` must carry `angle` before anything writes `angle`,
+> or the first camera rotation reads as a user rotation and corrupts the
+> anchor). RT-P, RT-5, RT-6, RT-7, RT-8 and RT-10 were dropped with tilt.
+>
+> Two problems evaporated rather than deferring. Scale is uniform under bearing,
+> so **D7's scale-bar half is moot** — `drawScaleBar` and StatusBar stay
+> correct; only the north arrow needs the bearing. And at pitch 0 there is no
+> behind-the-camera case, so **D5 does not apply** and no overlay needs a cull
+> rule. `maxPitch: 0` stays, and the OQ-2 rationale in the `MapCanvas.tsx`
+> header stays true.
+>
+> The analysis below is preserved as written, including the decisions that the
+> tilt drop retired. Read it as the reasoning, not the plan.
+
 Raised by MIXI 2026-07-30: enable tilt and rotate with appropriate gestures,
 without breaking annotations. Traced end to end by Chief Opus against source at
-`cc2ce53`; **no code touched, and this is a decision ticket, not an
+`cc2ce53`; **no code touched, and this was a decision ticket, not an
 implementation ticket.**
 
 **Where the app is today, and it is in neither coherent position.** Tilt is
@@ -483,8 +526,8 @@ The decisions, in the order they constrain each other:
   `CoordinateSync`, `CommentAnchorsOverlay`, `CursorOverlay` — and a decision on
   what a culled element does (vanish, or clip at the horizon). **Verify with a
   live probe before designing around this description.**
-- **D6 — drawing while the camera is not north-up-flat. NEEDS MIXI, and it
-  gates FU-2.** Unprojecting the pointer is fine at any camera; the shape is
+- **D6 — drawing while the camera is not north-up-flat. ANSWERED: block. This
+  is what unblocked FU-2.** Unprojecting the pointer is fine at any camera; the shape is
   not. Drag a rectangle at bearing 30 and unprojecting its corners gives a
   north-aligned bbox that is not the box you dragged. Snap-to-north when a
   drawing tool is picked, block drawing while tilted, or stamp a 4-vertex
@@ -507,12 +550,21 @@ The decisions, in the order they constrain each other:
 north, and bbox-anchored shapes visibly detach when you do. After: whatever D3
 decides is what a tilted sheet looks like.
 
-**Done when:** MIXI answers **D3** and **D6**. Everything else has a default
-that can be noted and overridden. Then this becomes an ADR plus a rotation half
-specced task-by-task — rotation (D1+D2+D7+D8+compass) is exact at every step and
-shippable on its own; tilt is its own decision and deserves the ADR.
+**Done when:** ~~MIXI answers D3 and D6~~ — answered 2026-07-31. **D3: none of
+the four — tilt is dropped**, so no bbox annotation ever has to survive a
+pitched camera. **D6: block** — drawing tools are disabled while
+`bearing !== 0`, and the blocked state offers one-click reset-north via the
+compass RT-3 builds anyway. Chief Opus flagged one reading in that answer:
+"block drawing while tilted" arrived in the same message that dropped tilt, so
+as literally written it could never fire; the rotation-only equivalent above is
+the faithful implementation. If option 1 (auto-snap to north when a tool is
+picked) was meant instead, the difference is one click — say so and RT-9 changes
+shape.
 
-**Size:** rotation, medium. Tilt, large, and the estimate depends entirely on D3.
+Now done when the six RT tasks land.
+
+**Size:** rotation, medium. Tilt is not being estimated, because it is not being
+built.
 
 ---
 
@@ -542,20 +594,27 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
 
 ## Order I'd take them in
 
-~~1. **FU-12**~~ ~~2. **FU-13**~~ — both done in `d29920d`, awaiting a merge
-decision.
+~~1. **FU-12**~~ ~~2. **FU-13**~~ — shipped: `d29920d`, merged `0b0de34`, pushed.
+~~3. **FU-14 D3 and D6**~~ — answered 2026-07-31.
 
-1. **FU-14 D3 and D6** — two answers from MIXI, no code. They are first because
-   D6 unblocks FU-2 and D3 decides how much of the annotation pipeline moves;
-   everything below is cheaper to sequence once they are settled.
+1. **FU-14 RT-0** — on its own, ahead of everything. Rotation is reachable and
+   unrecoverable *today*, and bearing persists through save and reload. This is
+   the only item on this list that is a live user-facing defect rather than
+   maintenance, and it is one line of map options.
 2. **FU-1** — the PRD job that isn't met, and the only real capability gap.
-3. **FU-10** — before the next feature, because it's what makes the next
+3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
+   bleeding. Not urgent; nothing is broken while bearing cannot move.
+4. **FU-10** — before the next feature, because it's what makes the next
    feature's tests mean anything.
-4. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
-5. **FU-8, FU-9** — build config, do them when something else is compiling.
-6. **FU-2** — a decision to record, not code to write, and it follows FU-14 D6.
-   **FU-7** — scope only. **FU-11** — observe only.
+5. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
+6. **FU-8, FU-9** — build config, do them when something else is compiling.
+7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
+   only. **FU-11** — observe only.
 
-FU-2 dropped from third to last when the claim behind it collapsed, then got
-blocked outright when MIXI asked for rotate and tilt. Nothing a user can do
-changes when it lands.
+FU-2 dropped from third to last when the claim behind it collapsed, got blocked
+outright when MIXI asked for rotate and tilt, and is now unblocked by the
+decision to drop tilt. It has moved three times without a user ever being able
+to tell.
+
+The split inside FU-14 is deliberate. RT-0 *removes* a behaviour and is worth
+doing tonight; RT-1 onward *adds* one and can wait behind the capability gap.
