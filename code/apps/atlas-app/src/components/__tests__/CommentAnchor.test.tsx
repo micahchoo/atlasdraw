@@ -90,4 +90,40 @@ describe("CommentAnchor", () => {
     fireEvent.click(screen.getByTestId(`comment-anchor-button-${c.id}`));
     expect(screen.queryByTestId(`comment-popover-resolve-${c.id}`)).toBeNull();
   });
+
+  // A canvas-search hit lands here: the viewport moves and this anchor has to
+  // reveal itself, because the search preview is only a few words wide.
+  describe("focusNonce", () => {
+    it("opens the popover when a nonce arrives, and stays closed without one", () => {
+      const c = makeComment({ id: "c6" });
+      const { rerender } = render(
+        <CommentAnchor comment={c} screenX={0} screenY={0} />,
+      );
+      expect(screen.queryByTestId(`comment-popover-${c.id}`)).toBeNull();
+
+      rerender(
+        <CommentAnchor comment={c} screenX={0} screenY={0} focusNonce={1} />,
+      );
+      expect(screen.getByTestId(`comment-popover-${c.id}`)).toBeTruthy();
+    });
+
+    it("re-opens on a bumped nonce after the user closed it", () => {
+      const c = makeComment({ id: "c7" });
+      const { rerender } = render(
+        <CommentAnchor comment={c} screenX={0} screenY={0} focusNonce={1} />,
+      );
+      expect(screen.getByTestId(`comment-popover-${c.id}`)).toBeTruthy();
+
+      // The toggle is still the user's — focus nudges `open`, it does not own it.
+      fireEvent.click(screen.getByTestId(`comment-anchor-button-${c.id}`));
+      expect(screen.queryByTestId(`comment-popover-${c.id}`)).toBeNull();
+
+      // Same comment picked again. An id-only signal would report "no change"
+      // here and leave the popover shut; the nonce is why it does not.
+      rerender(
+        <CommentAnchor comment={c} screenX={0} screenY={0} focusNonce={2} />,
+      );
+      expect(screen.getByTestId(`comment-popover-${c.id}`)).toBeTruthy();
+    });
+  });
 });

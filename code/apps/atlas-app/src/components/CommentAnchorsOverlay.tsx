@@ -28,6 +28,7 @@ import type { CommentAnchor as CommentAnchorData } from "@atlasdraw/protocol";
 
 import { useCollab } from "../hooks/useCollab";
 
+import { useCommentFocus } from "../state/commentFocus";
 import { useCommentMode } from "../state/commentMode";
 import {
   setAnchorMode,
@@ -81,6 +82,9 @@ export function CommentAnchorsOverlay(
     arm: pickerArm,
   } = usePendingAnchor();
   const commentMode = useCommentMode();
+  // A canvas-search hit asks for one comment by id; the anchor that owns it
+  // opens itself. Everyone else gets `undefined` and is untouched.
+  const commentFocus = useCommentFocus();
 
   // Snapshot of comments (re-renders on Yjs change).
   const [comments, setComments] = useState<ReadonlyArray<Comment>>(
@@ -287,6 +291,11 @@ export function CommentAnchorsOverlay(
           isOwn={p.comment.authorId === authorId}
           onResolve={(id) => commentsLayer.resolve(id)}
           onEdit={(id, newText) => commentsLayer.editComment(id, newText)}
+          focusNonce={
+            commentFocus?.commentId === p.comment.id
+              ? commentFocus.nonce
+              : undefined
+          }
         />
       ))}
       {draftPoint && pendingAnchor && (

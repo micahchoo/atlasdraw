@@ -73,6 +73,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     renderTopLeftUI,
     renderTopRightUI,
     renderToolbarExtras,
+    searchSources,
     collarToolbarTarget,
     collarMenuTarget,
     hideDefaultSidebarTabTriggers,
@@ -191,6 +192,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           renderToolbarExtras={renderToolbarExtras}
+          searchSources={searchSources}
           collarToolbarTarget={collarToolbarTarget}
           collarMenuTarget={collarMenuTarget}
           hideDefaultSidebarTabTriggers={hideDefaultSidebarTabTriggers}

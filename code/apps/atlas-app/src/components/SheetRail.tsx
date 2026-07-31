@@ -25,15 +25,16 @@
 // open state, `aria-controls` at the sidebar island, roving tabindex with
 // arrow-key navigation, tooltip on hover AND focus.
 //
-// Step 5: the rail hosts TWO kinds of item and does not pretend otherwise.
-//   * tabs  (`data-rail-item="tab"`)  — open a panel in the sidebar. State is
-//     `aria-expanded`, because that is what a disclosure of a panel is.
-//   * modes (`data-rail-item="mode"`) — change what a click on the plate does.
-//     Nothing is disclosed, so the state is `aria-pressed`, which is what a
-//     toolbar toggle button uses. Comment mode is the first of these.
-// A `role="toolbar"` of toggle buttons hosts a mode toggle far more naturally
-// than a tablist ever hosted the comments tab; roving tabindex spans both
-// kinds because keyboard users reach them from the same rail.
+// The rail hosts exactly one kind of item: tabs (`data-rail-item="tab"`) that
+// open a panel in the sidebar. State is `aria-expanded`, because that is what
+// a disclosure of a panel is.
+//
+// Step 5 briefly parked comment mode here too, as a `data-rail-item="mode"`
+// toggle. It has since moved to the drawing-tools toolbar
+// (`CommentModeButton`, the `renderToolbarExtras` slot): a mode changes what a
+// click on the plate does and discloses nothing, so it belongs with the tools
+// rather than with the panel triggers. If a second mode ever wants a home,
+// that is where it goes — do not re-introduce the two-kinds rail.
 
 import {
   useCallback,
@@ -55,46 +56,11 @@ import styles from "../styles/SheetRail.module.css";
 
 const NO_TABS: readonly SidebarTabDescriptor[] = [];
 
-/** Stable key for the comment-mode item — never a sidebar tab name. */
-export const COMMENT_MODE_ITEM = "comment-mode";
-
-const CommentModeIcon = () => (
-  <svg
-    width={16}
-    height={16}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M2 3h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9l-3 3v-3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-    <path d="M5 7h6M5 9h4" />
-  </svg>
-);
-
 interface SheetRailProps {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
-  /** Comment mode on/off — drives `aria-pressed` on the mode toggle. */
-  commentMode?: boolean;
-  /** Flips comment mode. When omitted the mode item is not rendered at all. */
-  onToggleCommentMode?: () => void;
-  /**
-   * Open (unresolved) thread count. Rendered as the badge, and spoken as part
-   * of the toggle's accessible name so it reaches a screen reader rather than
-   * only the eye. 0 renders no badge.
-   */
-  openThreadCount?: number;
 }
 
-export function SheetRail({
-  excalidrawAPI,
-  commentMode = false,
-  onToggleCommentMode,
-  openThreadCount = 0,
-}: SheetRailProps) {
+export function SheetRail({ excalidrawAPI }: SheetRailProps) {
   // The tab list is a `useSyncExternalStore` pair on the imperative API. The
   // fork keeps the snapshot reference stable between register/unregister, so
   // this does not tear or loop.
@@ -130,19 +96,11 @@ export function SheetRail({
 
   // Roving tabindex: exactly one button is in the page tab order, arrows move
   // within the rail. Anchored to the open tab so Tab lands somewhere
-  // meaningful. `keys` is the focus ring — tabs first, then the mode item, so
-  // arrow order matches DOM order.
+  // meaningful. `keys` is the focus ring, in DOM order.
   const [focusName, setFocusName] = useState<string | null>(null);
   const buttonsRef = useRef(new Map<string, HTMLButtonElement>());
 
-  const showCommentMode = !!onToggleCommentMode;
-  const keys = useMemo(
-    () => [
-      ...tabs.map((tab) => tab.name),
-      ...(showCommentMode ? [COMMENT_MODE_ITEM] : []),
-    ],
-    [tabs, showCommentMode],
-  );
+  const keys = useMemo(() => tabs.map((tab) => tab.name), [tabs]);
 
   // `null` means "no open tab" / "nothing focused yet" — an explicit -1 rather
   // than a sentinel string, which would be a key an item could theoretically own.
@@ -262,70 +220,6 @@ export function SheetRail({
           </div>
         );
       })}
-
-      {showCommentMode && (
-        // Not a tab: no panel is disclosed, so no `aria-expanded` and no
-        // `aria-controls`. A pressed toolbar toggle is the honest widget.
-        <div
-          className={[styles.slot, styles.slotMode].join(" ")}
-          key={COMMENT_MODE_ITEM}
-        >
-          <button
-            type="button"
-            ref={(el) => {
-              if (el) {
-                buttonsRef.current.set(COMMENT_MODE_ITEM, el);
-              } else {
-                buttonsRef.current.delete(COMMENT_MODE_ITEM);
-              }
-            }}
-            className={[styles.trigger, commentMode ? styles.triggerOn : ""]
-              .filter(Boolean)
-              .join(" ")}
-            data-rail-item="mode"
-            // The count rides the accessible NAME rather than a bare
-            // `aria-describedby` dot, so a screen-reader user hears
-            // "Comment mode, 3 open threads, toggle button, not pressed"
-            // in one go — the badge is information, not decoration.
-            aria-label={
-              openThreadCount > 0
-                ? `Comment mode, ${openThreadCount} open ${
-                    openThreadCount === 1 ? "thread" : "threads"
-                  }`
-                : "Comment mode"
-            }
-            aria-pressed={commentMode}
-            tabIndex={keys.length - 1 === focusIndex ? 0 : -1}
-            onFocus={() => setFocusName(COMMENT_MODE_ITEM)}
-            onKeyDown={(event) => onKeyDown(event, keys.length - 1)}
-            onClick={() => {
-              setFocusName(COMMENT_MODE_ITEM);
-              onToggleCommentMode();
-            }}
-            data-testid="sheet-rail-mode-comment"
-          >
-            <span className={styles.icon} aria-hidden="true">
-              <CommentModeIcon />
-            </span>
-            {openThreadCount > 0 && (
-              // aria-hidden: the same number is already in the button's
-              // accessible name above. Announcing it twice is noise.
-              <span
-                className={styles.badge}
-                aria-hidden="true"
-                data-testid="sheet-rail-comment-badge"
-              >
-                {openThreadCount > 99 ? "99+" : openThreadCount}
-              </span>
-            )}
-          </button>
-          <span className={styles.tooltip} aria-hidden="true">
-            {openThreadCount > 0
-              ? `Comment mode (${openThreadCount} open)`
-              : "Comment mode"}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

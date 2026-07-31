@@ -65,6 +65,7 @@ import { useToolState } from "../hooks/useToolState";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
+import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useLayerRegistry } from "../hooks/useLayerRegistry";
@@ -113,6 +114,7 @@ import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
 import { GeoSearchControl } from "./GeoSearchControl";
 import { PinToolButton } from "./PinToolButton";
+import { CommentModeButton } from "./CommentModeButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { QuickActions } from "./QuickActions";
@@ -629,6 +631,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // variant would construct a second, disconnected CollabState here.
   const openThreadCount = useOpenThreadCountFor(collabValue.commentsLayer);
 
+  // Canvas search reaches comment text through this prop — the search menu
+  // lives in the vendored editor and cannot see the comments Y.Doc otherwise.
+  // Memoized inside the hook: <Excalidraw> is React.memo'd on a shallow
+  // compare, so an unstable array would re-render the editor constantly.
+  const commentSearchSources = useCommentSearchSources({
+    commentsLayer: collabValue.commentsLayer,
+    map,
+    excalidrawAPI,
+  });
+
   // Keyboard shortcuts panel — toggled with `?`.
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Quick-actions palette — Cmd+K / Ctrl+K.
@@ -852,14 +864,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         headExtras={<GeoSearchControl map={map} variant="collar" />}
         toolStripHostRef={setToolStripHost}
         menuHostRef={setMenuHost}
-        tabs={
-          <SheetRail
-            excalidrawAPI={excalidrawAPI}
-            commentMode={commentMode}
-            onToggleCommentMode={toggleCommentMode}
-            openThreadCount={openThreadCount}
-          />
-        }
+        tabs={<SheetRail excalidrawAPI={excalidrawAPI} />}
         panelInset={platePanelInset}
         foot={
           <StatusBar
@@ -910,10 +915,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               UIOptions={EXCALIDRAW_UI_OPTIONS}
               // Collar mode: toolbar + main menu render flush in the collar
               // frame (portal hosts provided by CollarShell above). Geo-search
-              // lives in the head bar; the Pin tool rides the toolbar-extras
-              // slot so it sits with the drawing tools, per the prototype.
+              // lives in the head bar; the Pin tool and the comment-mode
+              // toggle ride the toolbar-extras slot so they sit with the
+              // drawing tools, per the prototype.
               collarToolbarTarget={toolStripHost}
               collarMenuTarget={menuHost}
+              searchSources={commentSearchSources}
               // SheetRail (collar right column) is the sidebar's only trigger
               // surface — suppress the sidebar's own tab-trigger row so there
               // is exactly one rail. Two rails is what let the hardcoded one
@@ -926,12 +933,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               rightSidebarWidth={sheetPanelWidth}
               onSidebarLayoutChange={onSidebarLayoutChange}
               renderToolbarExtras={() => (
-                <PinToolButton
-                  active={isPinActive}
-                  onToggle={() =>
-                    setActiveAtlasTool(isPinActive ? null : PinTool)
-                  }
-                />
+                <>
+                  <PinToolButton
+                    active={isPinActive}
+                    onToggle={() =>
+                      setActiveAtlasTool(isPinActive ? null : PinTool)
+                    }
+                  />
+                  <CommentModeButton
+                    active={commentMode}
+                    onToggle={toggleCommentMode}
+                    openThreadCount={openThreadCount}
+                  />
+                </>
               )}
               onScrollBackToContent={handleScrollBackToContent}
             >
@@ -1018,6 +1032,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 document ops above the first separator, canvas reset, then
                 app-level entries. Ejected to their objects' homes:
                   "Pin to map"        → toolbar (PinToolButton, renderToolbarExtras)
+                  "Comment mode"      → toolbar (CommentModeButton, same slot)
                   "● Unsaved"         → StatusBar dirty indicator
                   "Layers panel"      → sidebar trigger + ⌘K palette
                   "Find on canvas"    → ⌘F + sidebar Search tab + ⌘K palette

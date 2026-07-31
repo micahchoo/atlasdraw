@@ -17,7 +17,7 @@
 // Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import styles from "../styles/CommentAnchor.module.css";
 
@@ -32,13 +32,28 @@ export interface CommentAnchorProps {
   onResolve?: (commentId: string) => void;
   isOwn?: boolean;
   onEdit?: (commentId: string, newText: string) => void;
+  /**
+   * Bumped by the parent when something off-canvas — a canvas-search hit —
+   * asked for THIS comment. A nonce rather than a boolean so that asking
+   * twice re-opens a popover the user closed in between (state/commentFocus.ts
+   * explains why the signal is an event). `open` stays local state: this only
+   * nudges it, so the close button still works.
+   */
+  focusNonce?: number;
 }
 
 export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
-  const { comment, screenX, screenY, onResolve, isOwn, onEdit } = props;
+  const { comment, screenX, screenY, onResolve, isOwn, onEdit, focusNonce } =
+    props;
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
+
+  useEffect(() => {
+    if (focusNonce !== undefined) {
+      setOpen(true);
+    }
+  }, [focusNonce]);
 
   const startEditing = (): void => {
     setEditText(comment.text);
