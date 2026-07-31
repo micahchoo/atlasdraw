@@ -4,48 +4,44 @@
 // documented as "built up in apps/atlas-app from @atlasdraw/tools exports"
 // but nothing anywhere ever actually constructed one — only PinTool was
 // ever imported by name.
+//
+// FU-2 deleted the seven tools this file used to enumerate. What it tested
+// about them — that a built-in self-registers and is reachable by id — is a
+// property of the registry, not of the count, so the cases below assert it
+// against the one built-in that ships and against a tool registered from
+// outside. The registry's real users are the latter.
 
 import { describe, expect, it } from "vitest";
 
-import {
-  ArrowTool,
-  CircleTool,
-  FreehandTool,
-  PinTool,
-  PolygonTool,
-  PolylineTool,
-  RectangleTool,
-  TextLabelTool,
-  getTool,
-  listTools,
-  registerTool,
-} from "./index.js";
+import { PinTool, getTool, listTools, registerTool } from "./index.js";
 
-describe("tools registry — self-registration of the 8 built-in tools", () => {
-  it("listTools() includes all 8 built-in tools", () => {
-    const ids = listTools().map((t) => t.id);
-    for (const tool of [
-      PinTool,
-      PolygonTool,
-      PolylineTool,
-      FreehandTool,
-      TextLabelTool,
-      ArrowTool,
-      RectangleTool,
-      CircleTool,
-    ]) {
-      expect(ids).toContain(tool.id);
-    }
+describe("tools registry — self-registration of the built-in tools", () => {
+  it("listTools() includes every built-in tool", () => {
+    expect(listTools().map((t) => t.id)).toContain(PinTool.id);
   });
 
-  it("getTool(id) returns the same object as the named export for each built-in tool", () => {
+  it("getTool(id) returns the same object as the named export", () => {
     expect(getTool(PinTool.id)).toBe(PinTool);
-    expect(getTool(PolygonTool.id)).toBe(PolygonTool);
-    expect(getTool(CircleTool.id)).toBe(CircleTool);
   });
 
   it("getTool returns undefined for an unregistered id", () => {
     expect(getTool("does-not-exist")).toBeUndefined();
+  });
+
+  // The seven are gone, not renamed or moved. A stale id resolving would mean
+  // something re-registered them somewhere this file cannot see.
+  it("does not resolve the seven ids deleted in FU-2", () => {
+    for (const id of [
+      "polygon",
+      "polyline",
+      "freehand",
+      "text-label",
+      "arrow",
+      "rectangle",
+      "circle",
+    ]) {
+      expect(getTool(id)).toBeUndefined();
+    }
   });
 });
 

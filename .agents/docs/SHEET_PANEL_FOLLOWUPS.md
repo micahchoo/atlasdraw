@@ -28,8 +28,8 @@ ledger.
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
 | FU-1 | open | — |
-| FU-2 | **decided — delete the seven; not yet executed** | consumer analysis re-verified 2026-07-31, see ticket |
-| FU-3 | open | — |
+| FU-2 | **done — the seven are deleted** | this branch; consumer analysis re-verified again at deletion |
+| FU-3 | **done** | this branch — the collab layer survives a style swap |
 | FU-4 | **done** | this branch — grip is the only drag source |
 | FU-5 | **resolved — not a defect**, see ticket | disproved in a browser; probe kept |
 | FU-6 | **done** | this branch — roving tabindex on the ⋯ menu |
@@ -40,8 +40,7 @@ ledger.
 | FU-11 | parked with a kill criterion, deliberately | — |
 | FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-4 of 14 shipped, 1 closed as not-a-defect. Two more are decided and waiting on
-hands rather than answers.
+6 of 14 shipped, 1 closed as not-a-defect.
 
 ---
 
@@ -162,12 +161,29 @@ The four survivors — `types.ts`, `classifyTool.ts`, `convert.ts`, `PinTool.ts`
 import none of the seven. The cut is clean; the cross-references among the seven
 (`PolylineTool`→`PolygonTool`, `CircleTool`→`RectangleTool`) vanish with them.
 
-**Not yet executed.** The deletion also touches `index.ts` (seven exports and
-their registrations) and `registry.test.ts` (asserts all eight register), plus
-seven `.test.ts` files. Those comments in `seedToElement.ts` should stay —
-they explain the geometry, and they will outlive the classes they name.
+**EXECUTED 2026-07-31.** Fourteen files deleted (seven tools, seven tests),
+`index.ts` down to one import and one registration, `registry.test.ts` rewritten
+to assert the registry's actual property rather than a count — plus a case that
+the seven ids no longer resolve, since "deleted" and "renamed" look identical
+from the outside. The consumer grep was re-run at deletion time, not trusted
+from the paragraph above; same result.
 
-**Size:** small. The work was the decision, and the decision is made.
+**One thing done differently from the plan above.** It said the
+`seedToElement.ts` comments should stay because they explain the geometry.
+Half right: they explain the geometry *by naming a class that no longer
+exists*, which is a dangling reference the next reader has to go looking for.
+The geometry survives, the names are gone — "T09 CircleTool — center point +
+default diameter" became "Center point + default screen-pixel diameter".
+
+**What was NOT deleted, and why.** `seedToElement`'s branches for freedraw,
+line, arrow, rectangle, ellipse and text now have no *built-in* producer, only
+PinTool. They stay: `AtlasdrawElementSeed` is a public type and `registerTool`
+a public entry point, so the bridge's contract is to accept any seed the union
+permits. Narrowing it to what ships today would be a different decision than
+the one this ticket made. Same reasoning keeps the registry with one tool in
+it — its users are the tools registered from outside.
+
+**Size:** small. The work was the decision, and the decision was made.
 
 ### FU-3 — `collab-data` still lives outside the registry
 `useCollabDataLayer.ts:22` defines `COLLAB_DATA_ID = "collab-data"` and adds it
@@ -181,10 +197,25 @@ shapes vanish from the map. They are still in the document — a reload brings
 them back — but nothing on screen says so. It reads as live data loss, in front
 of the other people in the session.
 
-**Done when:** collab's layer goes through `registerDataLayer` and survives a
-basemap switch. Add the case to `dataLayerRender.test.ts`, which already has a
-`collab-data` ordering assertion at `:557`.
-**Size:** small.
+**DONE — but not the way this ticket proposed.** The layer now re-adds itself
+on `styledata`, the same signal `useBasemapStyle` reconciles the registry on.
+Six cases in `useCollabDataLayer.test.ts`; four of them fail with the listener
+removed, checked.
+
+**Why not `registerDataLayer`.** The registry is what the LayerPanel renders,
+so an entry there arrives with rename, delete, restyle and reorder — four
+controls that would all lie about a Yjs-owned layer, and a delete that undoes
+itself on the next sync. It would also need the FeatureCollection mirrored into
+`useDataLayerFCStore`, duplicating the Yjs doc as app state. And
+`dataLayerRender.test.ts:557` already encodes the opposite decision: it asserts
+`collab-data` is a *non-registry* layer that `applyOrderToMap` must leave
+alone. Machine-owned layers keep their own lifecycle; they just have to *have*
+one across a style swap.
+
+**Left unspecified on purpose:** where the collab layer sits in the stack after
+a swap. Nothing ever specified it, the re-add order now depends on listener
+registration order, and inventing a rule here would be inventing a requirement.
+Worth deciding if anyone ever notices.
 
 ---
 
