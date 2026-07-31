@@ -547,6 +547,57 @@ lets through.
 
 **Size:** medium. This is the highest-leverage item in section C.
 
+---
+
+**Addendum 2026-07-31 — the rotation wave produced four more, and they are two
+shapes the scanner cannot see.** Recorded here rather than as a new ticket
+because FU-10's fixes still stand; what follows is the part its own closing line
+predicted — *"what it cannot catch is an assertion that runs and is merely
+weak. That is the rule, not the script."*
+
+**Shape 1 — the assertion runs and measures the wrong thing.**
+
+| | |
+|---|---|
+| `cameraRotation.test.ts:183` | `setCameraRotation(map, 137)` then `expect(-bearing).toBe(137)` — asserting `-(-137) === 137`. True for every possible sign convention, including a wrong one. Replaced by `cameraRotationRoundTrip.test.ts`, which goes out through the convention and back through the measurement against real Mercator. |
+| the first draft of `mapRotationDriftLoop.repro.test.ts` | asserted *"at most one corrective sync"* — a property of the re-entrancy guard, not of the reference fix. It stayed **green with the correctness defect reinstated**, because the cheaper of the two defects masked the other. Now asserts zero, which is what the header claims. |
+
+**Shape 2 — the setup silently does nothing, so the assertion measures an
+untouched system.** This is the new one, and it is the more dangerous of the
+two because it leaves no trace anywhere:
+
+| | |
+|---|---|
+| the first draft of `map-rotation-touch.spec.ts` | twisted two fingers without first picking up the hand tool. The plate captures pointer events under every tool but `hand` (`classifyTool.ts:20`), so nothing reached the camera and the spec would have reported two-finger twist as **dead** — a feature that works. |
+| a manual gate probe during review | pressed `h` to select the hand tool; the keypress did not land, so the control row and the test row both ran under `selection` and both reported "no pan". A positive control that never exercised the thing it controlled for. |
+
+**The scanner catches neither, and should not be expected to.**
+`find-unfalsifiable-tests.mjs` is a syntax walk over assertion presence and
+guard nesting. Shape 1 needs arithmetic relating actual to expected — a solver.
+Shape 2 needs to know what state the test intended to reach, which is nowhere in
+the file. Do not read a clean `yarn test:falsifiable` as coverage of either.
+
+**Two rules, both cheap, both would have caught these on the first run:**
+
+1. **A setup step that can fail should assert it succeeded, in the same test,
+   before the thing it sets up for.** The worked example already ships:
+   `pickUpHandTool` (`apps/atlas-app/e2e/map-rotation-touch.spec.ts:105`) does
+   not just click the tool, it then asserts the Excalidraw layer has gone
+   `pointer-events: none` — so the helper fails at the point of failure rather
+   than handing a silently-unchanged system to the assertion below it. One line,
+   and Shape 2 stops being invisible.
+2. **A claim handed to a teammate should carry what would falsify it.** *"Neither
+   bypass has coverage"* travelled two messages and into a filed ticket before
+   anyone opened the test files — there were 18 cases across the two.
+   It survived review because it arrived as a conclusion with its evidence
+   stripped off, so there was nothing to disagree with. *"I grepped
+   `apps/atlas-app/src/hooks` for `*.test.ts` and found none"* would have been
+   wrong out loud and dead in one command.
+
+Rule 2 is not a testing rule and is kept here anyway: the same failure — a check
+that cannot come back false — moved from the suite into the conversation, and
+cost a commit rather than a round.
+
 ### FU-15 — Clearing `dist` without `tsconfig.tsbuildinfo` fakes a source error
 
 **Narrowed 2026-07-31 by FU-8's real fix.** This was filed when `rm -rf
