@@ -1,9 +1,6 @@
 # Phase 3 Research Notes — Open Questions Resolution
 
-**Date:** 2026-05-03
-**Resolver:** open-questions-resolver agent
-**Companion plan:** `docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md`
-**Purpose:** Primary-source citations and reasoning for each resolved open question.
+**Date:** 2026-05-03 **Resolver:** open-questions-resolver agent **Companion plan:** `docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md` **Purpose:** Primary-source citations and reasoning for each resolved open question.
 
 ---
 
@@ -12,12 +9,15 @@
 **Primary source:** MDN `FileSystemHandle.queryPermission()` — https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission
 
 **Key quote (MDN, queryPermission return value):**
+
 > "Usually handles returned by the local file system handle factories will initially resolve with 'granted' for their read permission state. However, other than through the user revoking permission, **a handle retrieved from IndexedDB is also likely to resolve with 'prompt'**."
 
 **Key quote (MDN, requestPermission security):**
+
 > "Transient user activation is required. The user has to interact with the page or a UI element in order for this feature to work."
 
 **What this means concretely:**
+
 - Storing a `FileSystemFileHandle` in IndexedDB works across sessions (the handle serializes fine).
 - On page reload, `queryPermission({ mode: 'readwrite' })` on a stored handle will return `'prompt'` — not `'granted'`. Chrome does NOT persist `readwrite` permission across sessions (even if the user granted it before). This is intentional browser security policy.
 - `requestPermission()` requires a user gesture (button click) — it cannot be called on page load silently.
@@ -34,6 +34,7 @@
 **Primary source:** MapLibre Style Spec root — https://maplibre.org/maplibre-style-spec/root/
 
 **Relevant facts from spec:**
+
 - A MapLibre style is a self-contained JSON document: `version`, `sources`, `layers`, `sprite`, `glyphs` — all resolvable without an external registry.
 - `sources` entries contain tile URL templates; `sprite` and `glyphs` contain URL templates. A "snapshot" style must either inline these or point to stable public URLs. A full snapshot of a Protomaps or OpenFreeMap style includes remote tile/sprite/glyph URLs — it is portable for reading but requires those URLs to resolve for rendering.
 - There is no MapLibre concept of a "style registry ID" — that is a Atlasdraw-internal concept (`basemap.type: 'registry'`).
@@ -75,6 +76,7 @@
 ## Library Health Check (outside Q1–Q7, within mandate: "edit tasks if approach changes")
 
 ### `shpjs` (plan uses `^4.0`)
+
 - npm page: https://www.npmjs.com/package/shpjs
 - Current version: **6.2.0**, published **7 months ago** (as of 2026-05-03)
 - 114 dependents, 48 versions, actively maintained
@@ -82,6 +84,7 @@
 - **Status: healthy, active.** Plan's task using `shpjs` stands. Note: plan specifies `^4.0` but current is `6.2.0` — update version pin to `^6.2` in Task 7.
 
 ### `togeojson` (plan uses `^0.16`)
+
 - npm page: https://www.npmjs.com/package/togeojson
 - **DEPRECATED** — npm deprecation notice: "This module has moved: please install `@mapbox/togeojson` instead"
 - `togeojson` v0.16.0 published 10 years ago; no active maintenance
@@ -93,7 +96,7 @@
 ## Summary of Task Edits Required
 
 | Task | Change |
-|---|---|
+| --- | --- |
 | Task 7 (shapefile.ts) | Update `shpjs` version pin from `^4.0` to `^6.2` in package.json mention |
 | Task 13 (kml.ts, gpx.ts) | Replace `togeojson` with `@mapbox/togeojson` throughout |
 | Tech Stack Additions table | Update `togeojson` row to `@mapbox/togeojson ^0.16.2` |

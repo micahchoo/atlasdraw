@@ -74,6 +74,7 @@
 **Decision for OQ-P2-5:** Plan default (inline validation in T10) is confirmed for Phase 2. The `@placemarkio/check-geojson` "not yet stable" API warning makes it unsuitable for a locked phase plan. Inline validation covers our actual use cases (type check, geometry non-null, features array). Amend the plan note to correctly identify `@placemarkio/check-geojson` as the relevant library (not `geojsonhint`, which is archived) and to note the "not yet stable" caveat as the blocking reason for deferral to Phase 3.
 
 **Sources:**
+
 - github.com/mapbox/geojsonhint — archived May 29, 2024, banner: "IMPORTANT: This repo will be archived."
 - github.com/placemark/check-geojson — README: "A spiritual successor to geojsonhint, which is no longer maintained"; "the API is not yet stable."
 
@@ -96,7 +97,7 @@
 ## Summary Table
 
 | OQ | Question | Resolution | Tasks affected |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | OQ-P2-1 | ID prefix vs kind field | CONFIRMED: `"dl:"` prefix | T01, T11 unchanged |
 | OQ-P2-2 | PNG DPR × 2 vs fixed 2× | AMENDED: use `clientWidth/clientHeight` | T15 Step 2 amended |
 | OQ-P2-3 | moveLayer re-tile cost | CONFIRMED: no re-tile; `moveLayer` exists | T12 clarified |

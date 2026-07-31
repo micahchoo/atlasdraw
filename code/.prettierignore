@@ -1,0 +1,25 @@
+# Prettier's own ignore list. The `prettier` script used to point
+# `--ignore-path` at .eslintignore, which meant prettier's exclusions could only
+# be expressed as eslint's — and eslint has no reason to know about map style
+# documents. Everything above the blank line is what .eslintignore carried;
+# everything below it is prettier's own.
+node_modules/
+build/
+package-lock.json
+.vscode/
+firebase/
+dist/
+public/workbox
+packages/excalidraw/types
+dev-dist
+coverage
+
+# MapLibre style documents. Third-party data, not our source: they change by
+# being replaced wholesale from upstream, and prettier collapses them by ~10,000
+# lines each — which buries any real change in them and gains nothing.
+# FU-8: without this, `yarn test:other` can never pass.
+packages/basemap/src/styles/*.json
+
+# `yarn test:app` rewrites these with a fresh `runAt` on every run, so they are
+# perpetually dirty and never worth formatting.
+bench/results/*.json

@@ -143,17 +143,27 @@ describe("StylePanel", () => {
 
     fireEvent.click(screen.getByTestId("cat-apply"));
 
+    // FU-10. Every assertion here used to sit inside `if (entry?.kind ===
+    // "data")` and a second nested `if`. Those reads as type narrowing, and
+    // they are — but they also SKIP. If Apply silently wrote nothing, or wrote
+    // a graduated expression, both guards go false, zero assertions run, and
+    // the test passes green. Narrow by asserting the narrowing condition and
+    // then projecting: a wrong shape lands as `undefined` in an expect that
+    // always executes.
     const entry = useLayerRegistryStore
       .getState()
       .entries.find((e) => e.id === "dl:t1");
-    if (entry?.kind === "data") {
-      expect(entry.style.expression?.kind).toBe("categorical");
-      if (entry.style.expression?.kind === "categorical") {
-        expect(entry.style.expression.property).toBe("kind");
-        expect(entry.style.expression.stops).toHaveLength(2);
-        expect(entry.style.expression.stops[0].value).toBe("park");
-      }
-    }
+    expect(entry?.kind).toBe("data");
+
+    const expression =
+      entry?.kind === "data" ? entry.style.expression : undefined;
+    expect(expression?.kind).toBe("categorical");
+
+    const categorical =
+      expression?.kind === "categorical" ? expression : undefined;
+    expect(categorical?.property).toBe("kind");
+    expect(categorical?.stops).toHaveLength(2);
+    expect(categorical?.stops[0].value).toBe("park");
   });
 
   it("graduated tab: compute-stops with linear method produces evenly-spaced stops", () => {

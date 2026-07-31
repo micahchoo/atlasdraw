@@ -7,13 +7,13 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import {
   createPersistenceStore,
   startAutoSave,
   type PersistenceStore,
 } from "../state/persistence";
-
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 // ---------------------------------------------------------------------------
 // Fixture

@@ -593,6 +593,34 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
     expect(parseMock).not.toHaveBeenCalled();
     expect(registerDataLayer).not.toHaveBeenCalled();
   });
+
+  // FU-1. Raster import is PRD §4 job 1 and is not built. Until it is, a
+  // dropped GeoTIFF is a gap in this app, not a mistake by the person holding
+  // it — and telling them "unsupported file type" sends them off to convert a
+  // file that was already correct. The import itself is unchanged; only the
+  // sentence is.
+  it.each([
+    ["survey-sheet.tif", "GeoTIFF"],
+    ["survey-sheet.TIFF", "GeoTIFF"],
+    ["plates.geotiff", "GeoTIFF"],
+    ["wards.gpkg", "GeoPackage"],
+    ["route.kml", "KML"],
+    ["track.gpx", "GPX"],
+  ])(
+    "names the format and says 'not yet' for %s, rather than blaming the file",
+    async (fileName, label) => {
+      const map = makeMockMap();
+      const { registerDataLayer, findByTestId } = renderHarness(map);
+
+      lastImportFile!(makeFile(fileName));
+
+      const toast = await findByTestId("toast-error");
+      expect(toast.textContent).toContain(label);
+      expect(toast.textContent).toMatch(/isn't supported yet/i);
+      expect(toast.textContent).not.toMatch(/unsupported file type/i);
+      expect(registerDataLayer).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // The sheet panel defaults closed (design doc §5) and a successful import is the

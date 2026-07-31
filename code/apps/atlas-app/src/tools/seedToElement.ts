@@ -2,9 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 2 Wave 1a Task T-W1a-BRIDGE — AtlasdrawElementSeed → ExcalidrawElement bridge.
 //
-// Originally added in Phase 1 Wave 3b Task 14 for PinTool only. Phase 2 extends
-// it to the full Wave 1b tool family (T03–T09): polygon, polyline, freehand,
-// text, arrow, rectangle, circle.
+// Originally added in Phase 1 Wave 3b Task 14 for PinTool only. Phase 2 widened
+// it to the whole seed union — point, bbox and polyline geo across freedraw,
+// line, arrow, rectangle, ellipse and text elements.
+//
+// FU-2 (2026-07-31) deleted the seven Wave 1b tools (T03–T09) that used to be
+// this bridge's other callers; they had no runtime consumers and the native
+// Excalidraw toolbar had been the drawing path since Wave 4 T18. The branches
+// stay: `AtlasdrawElementSeed` is a public type and `registerTool` is a public
+// entry point, so the bridge's job is to accept any seed the union permits, not
+// only the ones a tool that ships today happens to emit. PinTool is the only
+// built-in producer now.
 //
 // 2026-07-31 (FU-2): those seven tool objects were deleted — they never
 // acquired a caller. The T03–T09 references below are history, not live
@@ -67,16 +75,15 @@ const PIN_DIAMETER_PX = 16;
 const PIN_STROKE_COLOR = "#1971c2";
 const PIN_FILL_COLOR = "#74c0fc";
 
-// CircleTool emits a center point with no explicit radius. Until that contract
-// expands (CircleTool drag preview will updateElement with a real size), seed
-// the ellipse at a marker-friendly default. CircleTool overwrites this on
+// A point seed for an ellipse carries no radius, so seed a marker-friendly
+// default. A tool that draws by dragging is expected to overwrite it on
 // pointermove via ctx.excalidraw.updateElement.
 const CIRCLE_DEFAULT_DIAMETER_PX = 40;
 
-// TextLabelTool emits text at a point with no explicit width/height. Excalidraw
-// will recompute via measureText once the element renders; we just need a
-// non-zero placeholder so layout doesn't blow up. Real width/height comes from
-// the text element factory's internal sizing (see newTextElement).
+// A text seed carries no width/height. Excalidraw recomputes via measureText
+// once the element renders; we just need a non-zero placeholder so layout
+// doesn't blow up. Real width/height comes from the text element factory's
+// internal sizing (see newTextElement).
 const TEXT_DEFAULT_FONT_SIZE = 20;
 
 // ---------------------------------------------------------------------------
@@ -193,10 +200,10 @@ export function seedToElement(
   }
 
   // --------------------------------------------------------------- freedraw
-  // T03 PolygonTool (closed-ring polyline) + T05 FreehandTool both produce
-  // freedraw with geo.kind="polyline". Polygon's coordinates have first==last;
-  // freehand's are open. The element type is identical either way; downstream
-  // CoordinateSync re-projects every vertex so the closure invariant holds.
+  // Both a closed ring and an open stroke arrive as freedraw with
+  // geo.kind="polyline" — a ring's coordinates have first==last, a stroke's are
+  // open. The element type is identical either way; downstream CoordinateSync
+  // re-projects every vertex, so the closure invariant holds without a branch.
   if (seed.type === "freedraw") {
     if (seed.geo.kind !== "polyline") {
       throw new Error(
@@ -221,7 +228,7 @@ export function seedToElement(
   }
 
   // ------------------------------------------------------------------ line
-  // T04 PolylineTool — open multi-vertex line.
+  // Open multi-vertex line.
   if (seed.type === "line") {
     if (seed.geo.kind !== "polyline") {
       throw new Error(
@@ -244,7 +251,7 @@ export function seedToElement(
   }
 
   // ----------------------------------------------------------------- arrow
-  // T07 ArrowTool — 2-vertex (or more for elbow arrows) directed line.
+  // Directed line: 2 vertices, or more for an elbow arrow.
   if (seed.type === "arrow") {
     if (seed.geo.kind !== "polyline") {
       throw new Error(
@@ -268,7 +275,7 @@ export function seedToElement(
   }
 
   // ------------------------------------------------------------- rectangle
-  // T08 RectangleTool — bbox geo, axis-aligned in mercator.
+  // bbox geo, axis-aligned in mercator.
   if (seed.type === "rectangle") {
     if (seed.geo.kind !== "bbox") {
       throw new Error(
@@ -299,9 +306,9 @@ export function seedToElement(
   }
 
   // --------------------------------------------------------------- ellipse
-  // T09 CircleTool — center point + default screen-pixel diameter (CircleTool
-  // updateElement on pointermove will overwrite width/height with the real
-  // drag-radius). Width === height enforced (radius is rotation-invariant).
+  // Center point + default screen-pixel diameter; a dragging tool overwrites
+  // width/height with the real radius on pointermove. Width === height is
+  // enforced, because a radius is rotation-invariant and a bbox is not.
   if (seed.type === "ellipse") {
     if (seed.geo.kind !== "point") {
       throw new Error(
@@ -327,8 +334,8 @@ export function seedToElement(
   }
 
   // ------------------------------------------------------------------ text
-  // T06 TextLabelTool — text at a single geo point. newTextElement handles
-  // the width/height computation via measureText internally.
+  // Text at a single geo point. newTextElement handles the width/height
+  // computation via measureText internally.
   if (seed.type === "text") {
     if (seed.geo.kind !== "point") {
       throw new Error(

@@ -37,8 +37,9 @@
 
 import circle from "@turf/circle";
 
-import type { FeatureCollection, Polygon, LineString, Position } from "geojson";
 import type { GeoCustomData } from "@atlasdraw/geo";
+
+import type { FeatureCollection, Polygon, LineString, Position } from "geojson";
 
 /**
  * Minimal element shape this module needs. We avoid taking a wide structural

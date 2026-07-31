@@ -319,7 +319,18 @@ describe("useCommentModeTool — a tool pick is an exit", () => {
     expect(setAtlasTool).toHaveBeenLastCalledWith(null);
   });
 
-  it("stays in the mode when the tool is set to `hand` — that IS the mode", () => {
+  // This is about a PROGRAMMATIC set to `hand` — a re-render, a restore, an
+  // action that re-asserts the tool. It is NOT a model of pressing `h`, and
+  // reading it as one is how FU-5 ("`h` can't exit comment mode") got filed
+  // against behaviour that does not exist. `h` is `actionToggleHandTool`, a
+  // toggle: with `hand` already active it moves the tool AWAY from `hand`, so
+  // the watcher above sees a real change and the mode exits.
+  //
+  // Only a browser runs that action, so the claim lives in
+  // `e2e/comment-mode-keys.spec.ts` and not here. Do not add a `userPicksTool`
+  // case for a keystroke — this fake sets the tool directly, which is exactly
+  // the thing the keyboard does not do.
+  it("stays in the mode when the tool is re-asserted as `hand` — that IS the mode", () => {
     const { api, userPicksTool } = makeFakeAPI("selection");
     mount(api);
 
