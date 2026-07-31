@@ -34,7 +34,8 @@ ledger.
 | FU-5 | open | — |
 | FU-6 | open | — |
 | FU-7 | open, scope only | — |
-| FU-8 | open, and sharper — now three faces, see ticket | — |
+| FU-8 | open, with a concrete reproduction as of 2026-07-31 | reproduction + `rm:build` glob bug in ticket |
+| FU-15 | open | stale `tsbuildinfo` fakes a source error — sibling of FU-8 |
 | FU-9 | open | — |
 | FU-10 | open | — |
 | FU-11 | parked with a kill criterion, deliberately | — |
@@ -254,12 +255,25 @@ The sibling trap — `playwright.config.ts` hardcoding its dev server to one
 absolute checkout, so an e2e run from a worktree tested the wrong tree — **is
 fixed** in `aee15c0`. This one isn't.
 
+**Concrete reproduction, from the FU-14 rotation sequence 2026-07-31.** Run
+`test:typecheck` *before* `test:app` and the suite goes from 1 failure to 11.
+`build:types` emits `packages/{common,math,element,excalidraw}/dist`; the app
+suite then loads two copies of the jotai store, `useTunnels()` returns null, and
+every Sidebar docking test dies with "not initialized yet". `rm -rf
+packages/*/dist` restores the baseline.
+
+**And the obvious escape hatch does not work.** `yarn rm:build` aborts on the
+first non-matching glob (`apps/*/dist`) before it ever reaches the package
+dists — so the command that looks like it cleans this up silently does not.
+That part is a one-line fix in `code/package.json`.
+
 **Impact — contributors, not users.** A new contributor's most obvious first
 command fails on a clean checkout, and nothing distinguishes "the repo is
 broken" from "I broke it."
 
 **Done when:** `yarn test:all` passes from a clean worktree in one invocation.
 **Size:** medium, and it's build config, which is where cheap fixes go to rot.
+**See also:** FU-15, the same class of stale-artifact trap one layer down.
 
 ### FU-9 — The permanent red
 `MermaidToExcalidraw` snapshot fails on pristine `main` and has failed through
@@ -301,6 +315,26 @@ re-clipping the layer list. The user never sees this ticket; they see the bug it
 lets through.
 
 **Size:** medium. This is the highest-leverage item in section C.
+
+### FU-15 — Clearing `dist` without `tsconfig.tsbuildinfo` fakes a source error
+The fix for FU-8 is `rm -rf packages/*/dist`. Do exactly that and leave
+`packages/*/tsconfig.tsbuildinfo` behind, and `tsc -b` believes
+`@atlasdraw/geo` is still up to date, skips its declaration emit, and fails
+every dependent package with **"has no exported member `GeoCustomData`"**.
+
+The failure names a symbol and a package, so it reads as a real source error.
+It is not — the source was fine both times this was hit during FU-14. The cost
+is the debugging trip, not the build: you go hunting for a broken export that
+was never broken.
+
+**Why it belongs next to FU-8, not inside it.** FU-8 is "the composite gate
+sabotages itself." This is "the documented workaround for FU-8 has its own
+trap." Fixing FU-8 without fixing this just moves where people lose the hour.
+
+**Done when:** whatever cleans `dist` also clears the matching
+`tsconfig.tsbuildinfo` — and `yarn rm:build` is the natural place, once its
+glob-abort bug (see FU-8) is fixed.
+**Size:** small. Both halves are one line each.
 
 ---
 
@@ -607,7 +641,9 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
 4. **FU-10** — before the next feature, because it's what makes the next
    feature's tests mean anything.
 5. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
-6. **FU-8, FU-9** — build config, do them when something else is compiling.
+6. **FU-8 + FU-15, FU-9** — build config, do them when something else is
+   compiling. Take FU-8 and FU-15 together; fixing either alone just relocates
+   the lost hour.
 7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
    only. **FU-11** — observe only.
 
