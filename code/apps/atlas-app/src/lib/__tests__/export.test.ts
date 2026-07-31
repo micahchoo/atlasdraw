@@ -27,6 +27,8 @@ type FakeOffscreen = {
 
 let lastOffscreen: FakeOffscreen | null = null;
 let nextContextOverride: FakeCtx | null | undefined;
+/** Bytes the next `convertToBlob` resolves with. Empty when undefined. */
+let nextBlobPayload: Uint8Array<ArrayBuffer> | undefined;
 
 class StubOffscreenCanvas {
   width: number;
@@ -44,8 +46,10 @@ class StubOffscreenCanvas {
     };
     this.ctx = nextContextOverride === undefined ? ctx : nextContextOverride;
     this.getContext = vi.fn(() => this.ctx);
-    this.convertToBlob = vi.fn(
-      async ({ type }: { type: string }) => new Blob([], { type }),
+    this.convertToBlob = vi.fn(async ({ type }: { type: string }) =>
+      nextBlobPayload === undefined
+        ? new Blob([], { type })
+        : new Blob([nextBlobPayload], { type }),
     );
     lastOffscreen = this as unknown as FakeOffscreen;
   }
@@ -279,5 +283,86 @@ describe("exportPNG", () => {
     const { api } = makeExcalidrawAPI();
 
     await expect(exportPNG(map, api)).rejects.toThrow(/context unavailable/i);
+  });
+});
+
+// FU-12 — the PDF export drew `map.getCanvas()` directly, so every Excalidraw
+// shape was missing from the document while the export still reported success.
+// These pin the composite that fix depends on: the encoded image the PDF path
+// consumes must contain BOTH layers. Delete the `drawImage(excalidrawCanvas)`
+// line in export.ts and the first assertion here goes red.
+describe("exportCompositeDataURL", () => {
+  beforeEach(() => {
+    lastOffscreen = null;
+    nextContextOverride = undefined;
+    nextBlobPayload = undefined;
+    exportToCanvasMock.mockReset();
+    vi.stubGlobal("OffscreenCanvas", StubOffscreenCanvas);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("composites the Excalidraw scene over the map, like exportPNG", async () => {
+    const { exportCompositeDataURL } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api, fakeExcalidrawCanvas } = makeExcalidrawAPI();
+
+    await exportCompositeDataURL(map, api);
+
+    const ctx = lastOffscreen!.ctx!;
+    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
+    expect(ctx.drawImage.mock.calls[0][0]).toBe(map.canvas);
+    expect(ctx.drawImage.mock.calls[1][0]).toBe(fakeExcalidrawCanvas);
+  });
+
+  it("encodes JPEG at 0.85 by default", async () => {
+    const { exportCompositeDataURL } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api } = makeExcalidrawAPI();
+
+    const dataUrl = await exportCompositeDataURL(map, api);
+
+    expect(lastOffscreen!.convertToBlob).toHaveBeenCalledWith({
+      type: "image/jpeg",
+      quality: 0.85,
+    });
+    expect(dataUrl.startsWith("data:image/jpeg;base64,")).toBe(true);
+  });
+
+  it("encodes a full-size payload without truncating or mis-padding", async () => {
+    const { exportCompositeDataURL } = await import("../export");
+    const map = makeMap({
+      width: 800,
+      height: 600,
+      clientWidth: 800,
+      clientHeight: 600,
+    });
+    const { api } = makeExcalidrawAPI();
+    // ~40KB, the order of a real export's JPEG. Guards the encode path
+    // against truncation regardless of how it is implemented. Size is a
+    // multiple of 3 so correct base64 carries no padding at all — any "="
+    // in the output means bytes went missing.
+    nextBlobPayload = new Uint8Array(39_999).fill(0x41);
+
+    const dataUrl = await exportCompositeDataURL(map, api);
+
+    const b64 = dataUrl.slice("data:image/jpeg;base64,".length);
+    // 39999 bytes / 3 * 4 = 53332 base64 chars, no padding.
+    expect(b64).toHaveLength(53332);
+    // "AAA" (0x41 x3) encodes to "QUFB".
+    expect(b64.startsWith("QUFBQUFB")).toBe(true);
+    expect(b64.includes("=")).toBe(false);
   });
 });

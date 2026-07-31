@@ -87,13 +87,20 @@ interface ExportDialogProps {
   onExportGeoJSON: () => void;
   onExportAtlasdraw: () => void;
   /**
-   * Returns the live MapLibre canvas, or null if the map isn't ready yet.
+   * Returns the composited view (map + Excalidraw annotations) encoded as a
+   * `data:image/jpeg;base64,...` URL, or null if the map isn't ready yet.
    * Called at export time so the PDF snapshot reflects the current viewport,
-   * not the moment the dialog opened.
+   * not the moment the dialog opened. Async because the composite encodes
+   * through `OffscreenCanvas.convertToBlob`.
    */
-  getMapCanvas: () => HTMLCanvasElement | null;
-  /** Snapshot of registry entries projected to legend shape (caller-mapped). */
-  layers: LayerLegendEntry[];
+  getMapImageDataUrl: () => Promise<string | null>;
+  /**
+   * Registry entries projected to legend shape, evaluated at export time so
+   * the legend and the image answer the same viewport (FU-13). A snapshot
+   * taken when the dialog opened could disagree with the image if the camera
+   * was still animating.
+   */
+  getLegendEntries: () => LayerLegendEntry[];
   /** Preselected format card (e.g. quick-actions "Export PDF"). */
   initialFormat?: ExportFormat;
   /**
@@ -110,8 +117,8 @@ export function ExportDialog({
   onExportPNG,
   onExportGeoJSON,
   onExportAtlasdraw,
-  getMapCanvas,
-  layers,
+  getMapImageDataUrl,
+  getLegendEntries,
   initialFormat = "png",
   exportPDFImpl = exportPDF,
 }: ExportDialogProps) {
@@ -146,20 +153,22 @@ export function ExportDialog({
     if (exporting) {
       return;
     }
-    const canvas = getMapCanvas();
-    if (!canvas) {
-      setError("Map is not ready yet — try again in a moment.");
-      return;
-    }
     setExporting(true);
     setError(null);
     try {
+      // Compositing is async and can fail (no 2D context, renderer error), so
+      // it runs inside the try with the export itself rather than ahead of it.
+      const mapImageDataUrl = await getMapImageDataUrl();
+      if (!mapImageDataUrl) {
+        setError("Map is not ready yet — try again in a moment.");
+        return;
+      }
       const blob = await exportPDFImpl({
         pageSize,
         orientation,
         title: title.trim() || documentTitle,
-        mapCanvas: canvas,
-        layers,
+        mapImageDataUrl,
+        layers: getLegendEntries(),
       });
       const safeName = `${safeFileName(title.trim() || documentTitle)}.pdf`;
       const url = URL.createObjectURL(blob);
