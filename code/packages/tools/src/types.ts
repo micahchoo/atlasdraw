@@ -3,8 +3,9 @@
 // AtlasdrawTool interface — Phase 1 Wave 0 Task 2.
 // See docs/architecture/subsystems/tools/contracts.md for the full contract.
 
-import type { ReactNode } from "react";
 import type { GeoAnchor, ScaleMode } from "@atlasdraw/geo";
+
+import type { ReactNode } from "react";
 
 /**
  * The shape MapLibre passes back from `unproject`.

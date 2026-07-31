@@ -468,6 +468,55 @@ bands without updating this table and adding a comment in `MapEditor.module.css`
 
 ---
 
+## Testing a UI claim
+
+**A claim about layout gets a Playwright probe. A source-text assertion is a
+documentation aid, not a gate.**
+
+vitest injects no CSS modules, so in jsdom `getComputedStyle(el).position`
+returns `""` whether the rule exists or not. Every CSS assertion written against
+the DOM therefore passes whatever the truth is. The workaround — reading the
+`.module.css` file and asserting on its text — catches a deleted literal line
+and nothing else. It does not catch a `flex-shrink: 0` added above the panel, a
+cascade reorder from an upstream merge, or a new wheel handler that eats the
+gesture. Those are what actually broke the layer panel, and the probes that
+caught them were the browser ones in `apps/atlas-app/e2e/`.
+
+The same holds for anything the browser, not React, decides: keyboard routing,
+focus order, pointer capture, scroll ports, drag sources. `commentMode.test.tsx`
+modelled the `h` key with a direct `setActiveTool("hand")` call, which is a fair
+model of a programmatic re-assert and a wrong model of a keystroke — the real
+`h` is a toggle that moves the tool *away* from `hand`. That gap did not merely
+miss a bug; it caused a ticket (FU-5) to be filed against behaviour the app
+never had, and it would have had someone rewrite a working mode.
+
+So:
+
+| Claim | Where it belongs |
+|---|---|
+| "this state produces this markup" | vitest, `expect` on the DOM |
+| "this store update reaches that component" | vitest |
+| "this element is visible / scrollable / positioned" | Playwright, `apps/atlas-app/e2e/` |
+| "this key does that" | Playwright — the real action manager, not a fake API |
+| "focus lands here" | either, but assert `document.activeElement`, never `tabIndex` alone |
+| "this CSS rule exists" | nothing. Assert the behaviour the rule is for |
+
+Two rules for the vitest half, both enforced by
+`yarn test:falsifiable` (`scripts/find-unfalsifiable-tests.mjs`, part of
+`test:all`):
+
+- **Every test case asserts.** A case whose body is only actions can fail only
+  by throwing, so it passes for every behaviour that does not crash.
+- **No test's assertions all sit inside an `if`.** Narrowing a union with `if`
+  also skips: when the narrowing goes false — which is what a regression looks
+  like — zero assertions run and the case reports green. Assert the narrowing
+  condition, then project: `expect(entry?.kind).toBe("data")` before you use
+  `entry.style`.
+
+Neither check can see a weak assertion that does run. That one is on you.
+
+---
+
 ## Pre-Ship Checklist
 
 - [ ] **Surface decision:** checked the decision tree; documented why a new surface was needed if one was created
@@ -482,3 +531,7 @@ bands without updating this table and adding a comment in `MapEditor.module.css`
 - [ ] **`data-testid`** on every interactive element
 - [ ] **Context menu:** `role="menu"`, `onMouseLeave` dismiss, `position:fixed`
 - [ ] **Conditional class:** uses `.filter(Boolean).join(" ")` pattern
+- [ ] **Layout / keyboard / focus claims:** proved by a Playwright probe in
+      `apps/atlas-app/e2e/`, not by a jsdom CSS read
+- [ ] **`yarn test:falsifiable`** passes — every new test case asserts, and no
+      case hides all its assertions inside an `if`

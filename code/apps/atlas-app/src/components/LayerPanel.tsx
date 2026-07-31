@@ -292,9 +292,16 @@ interface LayerRowProps {
 
 /**
  * Wraps a layer row with HTML5 drag-and-drop reorder support.
- * The drag handle (grip icon) initiates the drag. Drop target is the row
- * itself — dropping above the midpoint sends the dragged item before the
- * target; below the midpoint sends it after.
+ *
+ * `draggable` sits on the grip and nowhere else. The browser looks *up* the
+ * tree for a draggable ancestor when a press starts, so a draggable row makes
+ * every control inside the card a drag source too: since Step 4 the row expands
+ * into a card, and reaching for the colour input or sweeping across the rename
+ * box began a layer reorder with the whole expanded card as the drag image.
+ * One drag source, and it is the thing that looks like one.
+ *
+ * Drop target stays the row — you aim at a row, not at its grip. Dropping above
+ * the midpoint sends the dragged item before the target; below sends it after.
  *
  * Keyboard reorder via up/down arrow buttons is preserved as a fallback.
  */
@@ -305,7 +312,6 @@ function SortableRow({
   children,
   body,
   expanded = false,
-  dragDisabled = false,
 }: LayerRowProps & {
   /** Header content — shares one flex line with the grip and reorder arrows. */
   children: React.ReactNode;
@@ -327,14 +333,6 @@ function SortableRow({
    *     opens below the fold and the useful part of it is further down still.
    */
   expanded?: boolean;
-  /**
-   * Drop `draggable` for as long as this is true. The whole row is the drag
-   * source, and a draggable ancestor is what the browser consults when you
-   * press and sweep across text — so inside an open rename box, selecting the
-   * word you meant to replace starts a layer reorder instead. Set while a row
-   * is being renamed.
-   */
-  dragDisabled?: boolean;
 }) {
   const { id } = entry;
   // Position inside this section's list. `allIds` is the one section's ids, and
@@ -347,6 +345,7 @@ function SortableRow({
   // filtered indices is exactly the class of bug P3 fixed.
   const index = allIds.indexOf(id);
   const rowRef = useRef<HTMLDivElement>(null);
+  const rowTopRef = useRef<HTMLDivElement>(null);
   const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
     null,
   );
@@ -371,7 +370,15 @@ function SortableRow({
     (e: React.DragEvent) => {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", id);
-      e.dataTransfer.setDragImage(e.currentTarget as HTMLElement, 0, 0);
+      // The header line, not `e.currentTarget` and not the row. The grip alone
+      // is a 12px smudge you cannot aim with, and the row is the whole expanded
+      // card. The header is what carries the layer's name, which is the thing
+      // you are moving. Guarded because jsdom implements neither setDragImage
+      // nor a laid-out ref, and the panel's tests fire real drag events.
+      const image = rowTopRef.current;
+      if (image && typeof e.dataTransfer.setDragImage === "function") {
+        e.dataTransfer.setDragImage(image, 0, 0);
+      }
     },
     [id],
   );
@@ -435,13 +442,12 @@ function SortableRow({
       ref={rowRef}
       data-testid={`layer-row-${id}`}
       className={rowClass}
-      draggable={!dragDisabled}
-      onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div
+        ref={rowTopRef}
         className={joinClass(styles.rowTop, expanded && styles.rowTopSticky)}
         data-sticky={expanded ? "" : undefined}
       >
@@ -451,6 +457,8 @@ function SortableRow({
           data-testid={`layer-drag-${id}`}
           role="button"
           tabIndex={0}
+          draggable
+          onDragStart={handleDragStart}
         >
           <IconGripVertical />
         </span>
@@ -625,11 +633,118 @@ function OverflowMenu({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemsRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const [focusIndex, setFocusIndex] = useState(0);
 
   const close = useCallback(() => {
     setOpen(false);
     setConfirmingDelete(false);
   }, []);
+
+  /**
+   * The menu's items, as data. Rendering them from a list rather than as three
+   * hand-written buttons is what makes the roving tabindex below one loop
+   * instead of one `tabIndex` expression per button — and the two views have
+   * different lengths, which is precisely the thing hand-written indices get
+   * wrong.
+   */
+  const items = confirmingDelete
+    ? [
+        {
+          key: "cancel",
+          testid: `layer-delete-cancel-${entry.id}`,
+          label: "Cancel",
+          danger: false,
+          onSelect: () => setConfirmingDelete(false),
+        },
+        {
+          key: "confirm",
+          testid: `layer-delete-confirm-${entry.id}`,
+          label: "Delete layer",
+          danger: true,
+          onSelect: () => {
+            close();
+            actions.remove(entry.id);
+          },
+        },
+      ]
+    : [
+        {
+          key: "zoom",
+          testid: `layer-zoom-${entry.id}`,
+          label: "Zoom to layer",
+          danger: false,
+          onSelect: () => {
+            close();
+            actions.zoomTo(entry.id);
+          },
+        },
+        {
+          key: "rename",
+          testid: `layer-rename-${entry.id}`,
+          label: "Rename…",
+          danger: false,
+          onSelect: () => {
+            close();
+            onStartRename();
+          },
+        },
+        {
+          key: "delete",
+          testid: `layer-delete-${entry.id}`,
+          label: "Delete…",
+          danger: true,
+          onSelect: () => setConfirmingDelete(true),
+        },
+      ];
+
+  // Focus the first item on open, and again when the confirm step swaps the
+  // list out from under it. Without the second half, stepping into "Delete…"
+  // leaves focus on a button that no longer exists and the confirm step is
+  // keyboard-unreachable — which would make the two-step guard a keyboard trap
+  // rather than a safety net.
+  //
+  // `items.length` rather than `items` as the dependency: the array is rebuilt
+  // every render, so the identity changes on every keystroke and would re-steal
+  // focus mid-navigation. Its LENGTH changes exactly when the view swaps.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setFocusIndex(0);
+    itemsRef.current[0]?.focus();
+  }, [open, items.length]);
+
+  const moveFocus = useCallback((index: number) => {
+    setFocusIndex(index);
+    itemsRef.current[index]?.focus();
+  }, []);
+
+  // Same arrow/Home/End contract the rail got in Step 2 — one component over,
+  // and the gap that FU-6 is about.
+  const onItemKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const last = items.length - 1;
+    switch (event.key) {
+      case "ArrowDown":
+        moveFocus(index === last ? 0 : index + 1);
+        break;
+      case "ArrowUp":
+        moveFocus(index === 0 ? last : index - 1);
+        break;
+      case "Home":
+        moveFocus(0);
+        break;
+      case "End":
+        moveFocus(last);
+        break;
+      default:
+        // Escape, Tab, Enter and Space stay with the browser and with the
+        // dismiss handler below.
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
   // Dismiss on outside pointer-down and on Escape. Escape also returns focus
   // to the trigger — otherwise focus lands on <body> and a keyboard user has
@@ -678,70 +793,31 @@ function OverflowMenu({
           className={styles.menu}
           data-testid={`layer-menu-list-${entry.id}`}
         >
-          {confirmingDelete ? (
-            <>
-              <p className={styles.menuConfirmText}>
-                Delete “{entry.label}”? This cannot be undone.
-              </p>
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuItem}
-                data-testid={`layer-delete-cancel-${entry.id}`}
-                onClick={() => setConfirmingDelete(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={joinClass(styles.menuItem, styles.menuItemDanger)}
-                data-testid={`layer-delete-confirm-${entry.id}`}
-                onClick={() => {
-                  close();
-                  actions.remove(entry.id);
-                }}
-              >
-                Delete layer
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuItem}
-                data-testid={`layer-zoom-${entry.id}`}
-                onClick={() => {
-                  close();
-                  actions.zoomTo(entry.id);
-                }}
-              >
-                Zoom to layer
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={styles.menuItem}
-                data-testid={`layer-rename-${entry.id}`}
-                onClick={() => {
-                  close();
-                  onStartRename();
-                }}
-              >
-                Rename…
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className={joinClass(styles.menuItem, styles.menuItemDanger)}
-                data-testid={`layer-delete-${entry.id}`}
-                onClick={() => setConfirmingDelete(true)}
-              >
-                Delete…
-              </button>
-            </>
+          {confirmingDelete && (
+            <p className={styles.menuConfirmText}>
+              Delete “{entry.label}”? This cannot be undone.
+            </p>
           )}
+          {items.map((item, index) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              ref={(el) => {
+                itemsRef.current[index] = el;
+              }}
+              className={joinClass(
+                styles.menuItem,
+                item.danger && styles.menuItemDanger,
+              )}
+              data-testid={item.testid}
+              tabIndex={index === focusIndex ? 0 : -1}
+              onKeyDown={(e) => onItemKeyDown(e, index)}
+              onClick={item.onSelect}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -956,7 +1032,6 @@ function DataLayerCard({
       mutators={mutators}
       allIds={allIds}
       expanded={expanded}
-      dragDisabled={renaming}
       body={
         expanded ? (
           <div
@@ -1073,12 +1148,7 @@ function AnnotationLayerRow({
   // Mutating the actual Excalidraw element via excalidrawAPI.updateScene
   // is deferred until Wave 2c — see plan §844.
   return (
-    <SortableRow
-      entry={entry}
-      mutators={mutators}
-      allIds={allIds}
-      dragDisabled={renaming}
-    >
+    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
       <div className={joinClass(styles.rowAnnotation)}>
         <button
           type="button"

@@ -12,6 +12,7 @@
 ### 1.1 Phase 0 → Phase 1
 
 **Phase 0 produces (relevant to Phase 1):**
+
 - Monorepo workspace skeleton with `packages/geo`, `packages/basemap`, `packages/tools`, `apps/atlas-app`
 - `decisions/upstream-patches.md` (empty initial state + CI check)
 - `decisions/0004-upstream-merge-policy.md`
@@ -19,6 +20,7 @@
 - License files (`LICENSE-AGPL`, `LICENSE-MIT`, `LICENSE-MPL`, `LICENSING.md`)
 
 **Phase 1 consumes (stated):**
+
 - Monorepo workspace skeleton — matches Phase 0 output. OK.
 
 **Finding:** No mismatch. Phase 1 consumes the workspace skeleton and nothing else from Phase 0.
@@ -30,6 +32,7 @@
 ### 1.2 Phase 1 → Phase 2
 
 **Phase 1 produces:**
+
 - `packages/geo` public exports: `CoordinateSync`, `GeoAnchor`, `GeoCustomData`, `projectElement`, `geoToExcalidraw`, `excalidrawToGeo`, `bounds`
 - `GeoAnchor` type defined as discriminated union: `{ kind: "point"|"bbox"|"polyline"; ... ; zRef: number }`
 - `packages/basemap` (`<MapCanvas>`, `BasemapRegistry`)
@@ -38,6 +41,7 @@
 - `bench/results/phase-1-baseline.json`
 
 **Phase 2 consumes (stated):**
+
 - `GeoAnchor` types from `packages/geo/types.ts`: `point | bbox | polyline` discriminated union — **matches Phase 1 definition**. OK.
 - `CoordinateSync`, `<MapEditor>`, `BasemapRegistry`, `PinTool` — all match. OK.
 
@@ -48,6 +52,7 @@
 ### 1.3 Phase 2 → Phase 3
 
 **Phase 2 produces:**
+
 - `LayerRegistry` Zustand slice at `apps/atlas-app/state/store.ts` (exported as `useLayerRegistry`)
 - `packages/geo/geo-anchor.ts` — exports `GeoAnchor` (discriminated union per Phase 1/2 shape)
 - `packages/data/geojson.ts`
@@ -56,12 +61,13 @@
 **Phase 3 consumes (stated):**
 
 | ISSUE | Severity |
-|-------|----------|
+| --- | --- |
 | **MISMATCH-1 (HIGH):** Phase 3 "Consumes from Phase 2" table lists `GeoAnchor` shape as `{ lng: number, lat: number, zoom: number, projection: 'EPSG:4326' }` — a flat object. Phase 1 defines `GeoAnchor` as a discriminated union `{ kind: "point"\|"bbox"\|"polyline", ..., zRef: number }`. The flat shape matches neither the spec nor the Phase 1 type definition. | HIGH |
 | **MISMATCH-2 (MED):** Phase 3 lists `LayerRegistry` source as `packages/geo`. Phase 2 produces it at `apps/atlas-app/state/store.ts` (a Zustand slice, not a `packages/geo` export). The `LayerRegistry` type is in `packages/data/layer-registry.ts`; the state slice is in the app package. | MED |
 | **MISMATCH-3 (MED):** Phase 3 lists `element.customData.geoAnchor: { lng, lat, zoom }` as the field shape. Phase 1 defines it as `element.customData.geo: GeoAnchor` (field name `geo`, not `geoAnchor`; structure is discriminated union). | MED |
 
 **Citations:**
+
 - Phase 3 plan, "Consumes from Phase 2" table
 - Phase 1 plan, `packages/geo/types.ts` artifact manifest entry; tech spec §3.1
 
@@ -70,6 +76,7 @@
 ### 1.4 Phase 3 → Phase 4
 
 **Phase 3 produces:**
+
 - `AtlasdrawDocument` type with `{ manifest, scene, layers, styleRef, files }`
 - `read(blob): Promise<AtlasdrawDocument>` (pure, throws `AtlasdrawFormatError`)
 - `write(doc): Promise<Blob>`
@@ -77,6 +84,7 @@
 - `parseCSV(blob): Promise<GeoJSON.FeatureCollection>`
 
 **Phase 4 consumes (stated):**
+
 - `AtlasdrawDocument` type — cited at "Phase 4 share-via-URL". Phase 4 plan uses `read(blob)` before URL encoding. Match. OK.
 
 **Finding:** Phase 3 → Phase 4 contracts match. No mismatches.
@@ -86,6 +94,7 @@
 ### 1.5 Phase 4 → Phase 5
 
 **Phase 4 produces:**
+
 - `StorageClient` interface: `createMap`, `getMap`, `updateMap`, `createShareToken`
 - `docker-compose.yml` (5 services) with `profiles: ["realtime"]` guard on realtime container
 - `docker-compose.minimal.yml` (3 services: web, storage, minio)
@@ -94,12 +103,14 @@
 - `BasemapRegistry` with 3 styles (for Phase 6 style editor)
 
 **Phase 5 consumes (stated):**
+
 - `Storage API (/api/maps/:id GET/PUT)` from Phase 4, `apps/storage` — matches `StorageClient.getMap`/`updateMap`. OK.
 - `docker-compose.yml (5-svc)` from Phase 4, `infra/` — **PARTIAL MISMATCH-4 (LOW):** Phase 5 states "Existing services: web, storage, minio, postgres, caddy" but Phase 4 produces a profiles-guarded file where `realtime` is in profile. The 5-svc description in Phase 5 is accurate (those 5 exist), but it does not mention the profiles guard. This is a documentation precision issue, not a structural conflict.
 - `docker-compose.minimal.yml (3-svc)` from Phase 4, `infra/` — "web, storage, minio — no realtime" matches Q10. OK.
 - `GeoAnchor type` listed as source `packages/geo/geo-anchor.ts`, shape `{lng, lat, zoom, bearing}` — **MISMATCH-5 (HIGH):** Phase 5 gives `GeoAnchor` shape as `{lng, lat, zoom, bearing}` (flat, adds `bearing`), contradicting Phase 1's discriminated union `{kind, ..., zRef}`. `bearing` does not appear in Phase 1 or Phase 2 type definitions. This is the same category of drift as MISMATCH-1.
 
 **Citations:**
+
 - Phase 5 plan, "Consumes from Phases 1–4" table
 - Phase 1 plan, tech spec §3.1
 
@@ -108,6 +119,7 @@
 ### 1.6 Phase 5 → Phase 6
 
 **Phase 5 produces (for Phase 6) — shape-incorporated additions:**
+
 - `yjs-crypto.ts` stub (API + tests, not wired): `encryptUpdate`/`decryptUpdate`
 - `setPersistence` wiring contract: Phase 6 must wire `bindState`/`writeState` to storage API
 - Threat-model ADR `0007-yjs-e2ee-threat-model.md`
@@ -115,6 +127,7 @@
 - In-memory TTL eviction (ROOM_TTL_MS = 300_000ms default)
 
 **Phase 6 consumes (stated):**
+
 - `Yjs WebSocket room` — `apps/realtime` runs `y-websocket` on the same port. OK.
 - Phase 6 adds second `Y.Doc` per room for comments. This is additive, no conflict.
 - `Docker Compose stack` — `docker-compose.yml` with web + storage + minio. Phase 6 adds `stripe-cli` container. OK.
@@ -128,6 +141,7 @@
 ### 1.7 Phase 6 → Phase 7
 
 **Phase 6 produces (for Phase 7):**
+
 - `AtlasdrawAPI` interface (postMessage-safe, ADR 0005 frozen)
 - `packages/sdk` embed widget
 - `WorkspaceId` workspace abstraction
@@ -135,6 +149,7 @@
 - Comment Yjs doc protocol (second `Y.Doc` per room, versioned schema)
 
 **Phase 7 consumes:**
+
 - `AtlasdrawAPI` postMessage-safe interface — cited as foundation for plugin postMessage bridge. Match. OK.
 - `packages/sdk` — plugin sandbox uses `AtlasdrawAPI` via sdk. Match. OK.
 - `WorkspaceId` — plugin manifest carries `workspaceId`. Match. OK.
@@ -166,7 +181,7 @@ All phases reference `maplibregl` without version pinning in the plan text. Phas
 ## 3. Decision Propagation Audit (Q1–Q13)
 
 | Decision | Affected Phases | Verified Applied |
-|----------|----------------|-----------------|
+| --- | --- | --- |
 | Q1 — Single-player first-class | 4, 5 | Phase 4: `docker-compose.minimal.yml` (3-svc). Phase 5: realtime opt-in via profiles guard. OK. |
 | Q2 — Yjs not Automerge | 5 | Phase 5: y-websocket, separate /yjs/ WebSocket. OK. |
 | Q3 — Hybrid basemap default | 4 | Phase 4: PMTiles bundled, `BasemapRegistry` defaults to local-pmtiles. OK. |
@@ -188,7 +203,7 @@ All phases reference `maplibregl` without version pinning in the plan text. Phas
 ## 4. Wave-Week Timing Verification
 
 | Phase | Spec weeks | Q7-shifted weeks | Plan states |
-|-------|-----------|-----------------|-------------|
+| --- | --- | --- | --- |
 | 0 | Week 1 | Week 1 | Week 1 |
 | 1 | Weeks 2–4 | Weeks 2–5 (+1 extended per Q7) | Weeks 2–5 |
 | 2 | Weeks 5–7 | Weeks 6–8 | Weeks 6–8 |
@@ -221,7 +236,7 @@ No two phase plans claim to create the same file with incompatible responsibilit
 **Security-touching tasks that should carry `adversarial-api-testing`:**
 
 | Phase | Task | Has annotation? | Assessment |
-|-------|------|----------------|------------|
+| --- | --- | --- | --- |
 | 4 | Task 4 — Share Endpoint (`POST /maps/:id/share`) | YES — `adversarial-api-testing` explicitly annotated | OK |
 | 5 | Task 8 — yjs-crypto.ts (AES-GCM key management) | Listed as `[BLOCKED/stub]`; no skill annotation for the stub implementation | LOW — stub only; wiring in Phase 6 should annotate adversarial |
 | 6 | Task 19 — Stripe webhooks | Need to verify | OPEN — billing endpoints must carry `adversarial-api-testing` |
@@ -249,12 +264,14 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 ## 8. STILL-OPEN Questions Blocking Downstream Phases
 
 ### Phase 5 Open Question — E-01 (Yjs E2EE)
+
 - **Blocks:** Phase 5 Task 8 (wiring, not stub); Phase 6 relay persistence; Phase 7 DiffEngine (if Option B selected)
 - **Flagged in Phase 5:** YES (Task 8 marked BLOCKED; E-01 in escalations.md)
 - **Flagged in Phase 6:** YES (E-01 "What Phase 6 Must Own" section in escalations.md; Phase 6 inherits wiring obligation)
 - **Flagged in Phase 7:** YES (E-02 in escalations.md gates Task 10 DiffEngine)
 
 ### Phase 6 Open Question — Felt API Rate Limits
+
 - **Plan section:** Phase 6 plan OQ item 9 — "STILL OPEN — escalated at project level. Block Task 15 Step 2 (production hardening)."
 - **Flags:** Flagged in Phase 6 only. Phase 7 does not reference this; it does not consume Felt-imported data.
 - **Assessment:** Correctly scoped to Phase 6. No downstream blocker beyond Phase 6.
@@ -268,7 +285,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 ### Tech Spec Cross-sections
 
 | Spec section | Coverage |
-|---|---|
+| --- | --- |
 | §3 Coordinate sync | Phase 1 (CoordinateSync, GeoAnchor, projection), Phase 2 (data layers extend it). Covered. |
 | §4 Modules (packages layout) | Phase 0 (workspace skeleton), Phase 1–2 (packages/geo, basemap, tools, data). Covered. |
 | §5 Collab (Yjs + Socket.IO dual-protocol) | Phase 5. Covered including Q9 dual-socket design. |
@@ -283,6 +300,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 ### PRD Coverage
 
 **§7.1 MVP features (inferred from context — PRD §7.1 "MVP" scope):**
+
 - Geo-anchored drawing tools: Phase 1 (PinTool), Phase 2 (7 tools). Covered.
 - GeoJSON import/export: Phase 2 (drag-and-drop import), Phase 3 (read/write). Covered.
 - PMTiles basemap: Phase 1 (BasemapRegistry), Phase 4 (bundled PMTiles). Covered.
@@ -291,6 +309,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 - Share link: Phase 4. Covered.
 
 **§7.2 v1.0 features:**
+
 - Real-time collaboration: Phase 5. Covered.
 - Embed SDK: Phase 6. Covered.
 - Comments: Phase 6. Covered.
@@ -299,6 +318,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 - Hosted mode + billing: Phase 6. Covered.
 
 **§7.3 v1.5 features:**
+
 - Plugin API: Phase 7. Covered.
 - Mobile field collection: Phase 7. Covered.
 - Versioning/history: Phase 7. Covered.
@@ -309,7 +329,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 ### Cross-cutting Concerns
 
 | Concern | Coverage | Gap? |
-|---------|----------|------|
+| --- | --- | --- |
 | Telemetry / observability | Phase 0 strips upstream telemetry; Phase 6 writes ADR 0006; Phase 6 Task 27 adds CI guard. ADR policy covers OSS/hosted/embed. Covered — but no Sentry or OpenTelemetry for error tracking on hosted instance. | GAP-6 |
 | Accessibility (a11y) | Phase 6 Wave 3 Tasks 21–23 cover a11y. Earlier phases have no a11y tasks. | GAP-7 |
 | i18n / l10n | Not present in any phase plan. Excalidraw ships with an i18n system (`useI18n`); new Atlasdraw UI strings (layer panel, share dialog, plugin manager) add to that surface. No plan addresses whether geo-specific strings are added to the i18n catalog. | GAP-8 |
@@ -324,7 +344,7 @@ Phase 6 has a more narrative file structure (feature-by-feature sections). No ma
 ## 10. Identified Gaps — Summary
 
 | ID | Severity | Description | Blocking |
-|----|----------|-------------|---------|
+| --- | --- | --- | --- |
 | GAP-1 | MED | Phase 6 Stripe webhook tasks lack `adversarial-api-testing` annotation | No — rework risk |
 | GAP-2 | LOW | Phase 7 PluginRegistry install path lacks `adversarial-api-testing` gate | No — polish |
 | GAP-3 | LOW | Phase 6 has no machine-readable artifact manifest block | No — tooling gap |
@@ -346,7 +366,7 @@ See `escalations.md` — E-03 appended.
 ## 12. Cross-Phase Mismatches — Consolidated
 
 | ID | Severity | Phase N | Phase M | Finding |
-|----|----------|---------|---------|---------|
+| --- | --- | --- | --- | --- |
 | MISMATCH-1 | HIGH | 1 (produces) | 3 (consumes) | `GeoAnchor` shape: Phase 1 defines discriminated union `{kind, ..., zRef}`; Phase 3 consumes as flat `{lng, lat, zoom, projection: 'EPSG:4326'}`. These are incompatible types. |
 | MISMATCH-2 | MED | 2 (produces) | 3 (consumes) | `LayerRegistry` source: Phase 2 produces it at `apps/atlas-app/state/store.ts` (Zustand slice); Phase 3 lists source as `packages/geo`. Wrong package attribution. |
 | MISMATCH-3 | MED | 1 (produces) | 3 (consumes) | Field name: Phase 1 uses `element.customData.geo` (field `geo`); Phase 3 consumes `element.customData.geoAnchor` (field `geoAnchor`). One of these is wrong. |

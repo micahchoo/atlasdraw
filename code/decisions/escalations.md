@@ -33,7 +33,7 @@ This is a **structural conflict between Tasks 6 and 8**, not a bug in either tas
 ### Three Options
 
 | Option | Description | Task 6 impact | Task 8 Phase 5 scope | Phase 6 implication |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **(A) Server trusted, no layer E2EE** | Yjs updates flow plaintext to relay. Scene/comment remain E2EE via Socket.IO (Task 10). Awareness is always plaintext per spec §5.3. | No change — `setupWSConnection` as designed | `yjs-crypto.ts` removed from Phase 5; encryption handled by `scene-crypto.ts` (Task 10) only | Explicit threat-model documentation required |
 | **(B) Custom log-replay relay** | Replace `setupWSConnection` with a custom upgrade handler that stores opaque update blobs (no server `Y.Doc`). Late joiners receive stored blobs; client applies updates to local `Y.Doc` without server touching plaintext. | Task 6 Step 1 fully rewritten — no `setupWSConnection`, custom catch-up protocol | `yjs-crypto.ts` implemented and wired as specified | Preserves data-layer E2EE; adds ~1 week implementation; requires own SyncStep1/2 substitute |
 | **(C) Defer layer E2EE to Phase 6** | Phase 5 ships Option A. `yjs-crypto.ts` is created as a stub (API + tests, not wired into y-websocket path). ADR documents threat model. Phase 6 evaluates Option B as a tracked backlog item. | No change | Stub only — `encryptUpdate`/`decryptUpdate` API exists and is tested; not imported by `yjs-server.ts` or `CollabState` | Phase 6 work item: evaluate Option B; if selected, wire `yjs-crypto.ts` and replace `setupWSConnection` |
@@ -45,6 +45,7 @@ This is a **structural conflict between Tasks 6 and 8**, not a bug in either tas
 **Option (C) — Phase 5 ships server-trusted; threat model documented; Phase 6 evaluates Option B.**
 
 Rationale:
+
 - Option (A) is architecturally sound for Phase 5 scope (matches Hocuspocus, y-sweet, and Liveblocks production practice — relay operators are trusted infrastructure).
 - Option (B) is the correct long-term answer for self-hosted deployments where the maintainer does not want to trust the relay, but it adds a week of risky custom protocol work to Phase 5 that is already a large phase.
 - Option (C) captures the stub API (so Phase 6 can wire it without a new file) and requires an honest ADR so no one is surprised that the relay can read layer ops in Phase 5.
@@ -76,7 +77,7 @@ Appended to Phase 5 → Phase 6 contract:
 
 ---
 
-*This escalation is complete when the maintainer gate conditions above are resolved and the gate is closed in this file with a decision date and signature.*
+_This escalation is complete when the maintainer gate conditions above are resolved and the gate is closed in this file with a decision date and signature._
 
 ---
 
@@ -104,7 +105,7 @@ This is not a blocker if E-01 resolves as Option A or Option C (server-trusted r
 
 **Tasks 9 and 10 may proceed assuming Option A/C until E-01 is formally closed.** If E-01 resolves as Option B, re-open this gate before Task 10 execution.
 
-*This escalation is informational until E-01 is closed.*
+_This escalation is informational until E-01 is closed._
 
 ---
 
@@ -125,7 +126,14 @@ Phase 1 defines `GeoAnchor` as a discriminated union in `packages/geo/types.ts`:
 ```ts
 type GeoAnchor =
   | { kind: "point"; lng: number; lat: number; zRef: number }
-  | { kind: "bbox"; west: number; south: number; east: number; north: number; zRef: number }
+  | {
+      kind: "bbox";
+      west: number;
+      south: number;
+      east: number;
+      north: number;
+      zRef: number;
+    }
   | { kind: "polyline"; coordinates: Array<[number, number]>; zRef: number };
 ```
 
@@ -145,7 +153,7 @@ Additionally, Phase 3 attributes `LayerRegistry` to source `packages/geo` when P
 ### Two Options
 
 | Option | Description | Impact |
-|---|---|---|
+| --- | --- | --- |
 | **(A) Consumer plans are documentation drift** | The authoritative type is Phase 1's discriminated union. Phase 3 and Phase 5 consumer tables contain stale/draft text that was never reconciled. Execution agents must read `packages/geo/types.ts` as source of truth, not the consumer table shape. | Blocks task execution only if a worker reads the consumer table literally. Low implementation risk if workers cross-reference the producing phase. |
 | **(B) Phase 1 type was changed post-plan** | The Phase 1 type was revised and the Phase 1 plan was not updated, but Phase 3/5 capture the revised shape. | Unlikely — Phase 1 manifest explicitly exports the discriminated union; tech spec §3.1 matches Phase 1. |
 
@@ -169,4 +177,4 @@ Before any Phase 3 task that serializes `GeoAnchor` to the `.atlasdraw` file for
 
 **Phase 3 and Phase 5 tasks that do NOT touch GeoAnchor serialization may proceed without this gate.**
 
-*This escalation requires a one-sentence maintainer confirmation before the affected serialization tasks execute.*
+_This escalation requires a one-sentence maintainer confirmation before the affected serialization tasks execute._

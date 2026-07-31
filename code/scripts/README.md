@@ -7,6 +7,7 @@ CI and developer scripts for Atlasdraw. All scripts run from the repo root.
 Validates that every workspace `package.json` declares the correct `"license"` field per ADR 0002 (license split). Run on every PR and push to `main`.
 
 Expected values:
+
 - Root + `apps/*`: `AGPL-3.0-only`
 - `packages/sdk`, `packages/cli`, `packages/geo`, `packages/data`, vendored packages: `MIT`
 - `packages/basemap`, `packages/tools`: `MPL-2.0`

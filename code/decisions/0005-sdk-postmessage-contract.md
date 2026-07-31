@@ -14,6 +14,7 @@ If the v1 API is not postMessage-safe (i.e., contains non-serializable types), r
 **Proposed contract (finalized Phase 6):**
 
 All public AtlasdrawAPI methods must be:
+
 1. Async or fire-and-forget (no synchronous blocking)
 2. Argument and return values must be JSON/structured-clone-compatible
 3. No DOM nodes, class instances, or function objects in signatures
@@ -24,16 +25,19 @@ All public AtlasdrawAPI methods must be:
 ## Consequences
 
 ### Positive
+
 - Enables plugin sandbox without breaking existing plugins
 - API is inherently portable to Web Workers and iframe sandboxes
 - Catches serialization bugs early in v1
 
 ### Negative / Risks
+
 - **Delayed finalization** — Contract written in Phase 6, not now
 - **Breaking changes possible** — Phase 6 may discover incompatibilities requiring v1 API revision
 - **Type complexity** — Structured-clone requirements may constrain API design
 
 **Mitigation:**
+
 - Phase 1–5 is implementation; Phase 6 finalizes contract
 - Provisional stub of postMessage wrapper in Phase 1 (disabled until Phase 6)
 - Early type audit in Phase 5 Task 15 to flag incompatibilities

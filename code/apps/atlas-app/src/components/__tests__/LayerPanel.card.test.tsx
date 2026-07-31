@@ -409,6 +409,90 @@ describe("data layer card — the three missing actions", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  // FU-6 — the rail got roving tabindex + arrow/Home/End in Step 2 and this
+  // menu, one component over, did not. Assert focus itself rather than the
+  // tabIndex attribute: a roving tabindex whose focus call is missing still
+  // renders the right attributes and still strands the keyboard user.
+  describe("⋯ menu keyboard navigation", () => {
+    const items = (id: string) => [
+      `layer-zoom-${id}`,
+      `layer-rename-${id}`,
+      `layer-delete-${id}`,
+    ];
+
+    it("focuses the first item on open", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+
+      expect(document.activeElement).toBe(screen.getByTestId(items(id)[0]));
+    });
+
+    it("ArrowDown walks the menu and wraps at the end", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+
+      for (const testid of [items(id)[1], items(id)[2], items(id)[0]]) {
+        fireEvent.keyDown(document.activeElement as Element, {
+          key: "ArrowDown",
+        });
+        expect(document.activeElement).toBe(screen.getByTestId(testid));
+      }
+    });
+
+    it("ArrowUp from the first item wraps to the last", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+
+      fireEvent.keyDown(document.activeElement as Element, { key: "ArrowUp" });
+      expect(document.activeElement).toBe(screen.getByTestId(items(id)[2]));
+    });
+
+    it("Home and End jump to the ends", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+
+      fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+      expect(document.activeElement).toBe(screen.getByTestId(items(id)[2]));
+      fireEvent.keyDown(document.activeElement as Element, { key: "Home" });
+      expect(document.activeElement).toBe(screen.getByTestId(items(id)[0]));
+    });
+
+    it("only the focused item is tabbable", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+
+      const tabIndices = items(id).map((t) =>
+        screen.getByTestId(t).getAttribute("tabindex"),
+      );
+      expect(tabIndices).toEqual(["0", "-1", "-1"]);
+    });
+
+    // The confirm step replaces the item list. Focus has to follow it or the
+    // two-step delete guard becomes a keyboard trap rather than a safety net.
+    it("moves focus into the confirm step when the list swaps", () => {
+      const id = seedParcels();
+      render(<LayerPanel />);
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+      fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+      fireEvent.click(document.activeElement as Element);
+
+      expect(document.activeElement).toBe(
+        screen.getByTestId(`layer-delete-cancel-${id}`),
+      );
+      fireEvent.keyDown(document.activeElement as Element, {
+        key: "ArrowDown",
+      });
+      expect(document.activeElement).toBe(
+        screen.getByTestId(`layer-delete-confirm-${id}`),
+      );
+    });
+  });
+
   it("deleting the expanded layer does not leave a neighbour expanded", () => {
     seedMany(2, "d");
     render(<LayerPanel />);

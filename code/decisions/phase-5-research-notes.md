@@ -10,7 +10,7 @@
 ## Research sources indexed
 
 | Source | URL | Notes |
-|---|---|---|
+| --- | --- | --- |
 | y-protocols PROTOCOL.md | `raw.githubusercontent.com/yjs/y-protocols/master/PROTOCOL.md` | Wire format spec — messageType bytes, awareness encoding |
 | y-protocols awareness.js (src/) | `raw.githubusercontent.com/yjs/y-protocols/master/src/awareness.js` | `Awareness` class, `encodeAwarenessUpdate`, `applyAwarenessUpdate` |
 | y-websocket client src (y-websocket.js) | `raw.githubusercontent.com/yjs/y-websocket/master/src/y-websocket.js` | `messageSync=0`, `messageAwareness=1`, `messageHandlers` array, server interaction |
@@ -47,7 +47,7 @@ The server-side `setupWSConnection` does not just relay bytes — it actively ap
 ### Three options (surfaced for project-level decision)
 
 | Option | Description | Task 6 impact | Task 8 impact | Phase 5 scope |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **(A) Server trusted, no layer E2EE** | Yjs updates flow plaintext to relay; only scene/comment encrypted via Socket.IO. Awareness is always plaintext (by protocol design — it routes cursor/presence only). | No change | Task 8 scope reduces to scene-crypto only (already Task 10) | Simplest; matches Hocuspocus/y-sweet production practice |
 | **(B) Custom log-replay relay** | Replace `setupWSConnection` with a custom handler that stores opaque update blobs (no server Y.Doc); replays stored blobs to late joiners without decrypting. Client applies updates to local Y.Doc. | Task 6 Step 1 rewritten — no `setupWSConnection`, custom upgrade handler | Task 8 implemented as specified | Preserves E2EE on data layer; adds ~1 week implementation risk; no SyncStep1/SyncStep2 — must implement own catch-up |
 | **(C) Defer layer E2EE to Phase 6** | Phase 5 ships server-trusted Yjs (Option A). ADR documents threat model explicitly: relay sees plaintext layer ops. Phase 6 evaluates Option B or encrypted-at-rest persistence. | No change | Task 8 deferred; yjs-crypto.ts still created but not wired into y-websocket path | Practical for Phase 5 schedule; honest about threat model |
@@ -69,12 +69,16 @@ Option (C) for Phase 5 + schedule Option (B) evaluation in Phase 6 backlog. Docu
 `y-websocket-server` is explicitly documented as a **development server / starting point** (not production). The persistence API is:
 
 ```js
-import { setPersistence } from '@y/websocket-server/utils'
+import { setPersistence } from "@y/websocket-server/utils";
 
 setPersistence({
-  bindState: async (docName, ydoc) => { /* load from store on first access */ },
-  writeState: async (docName, ydoc) => { /* flush on last-client-disconnect */ }
-})
+  bindState: async (docName, ydoc) => {
+    /* load from store on first access */
+  },
+  writeState: async (docName, ydoc) => {
+    /* flush on last-client-disconnect */
+  },
+});
 ```
 
 `writeState` fires "when the last connected client disconnects from this document." This is the correct hook for flush-on-last-leave behavior (plan Option (a)).
@@ -84,6 +88,7 @@ The default (no `setPersistence`) keeps Y.Doc in-memory indefinitely — confirm
 ### For Phase 5 (in-memory relay, no persistence)
 
 A lightweight TTL wrapper is implementable without replacing `setupWSConnection`:
+
 - Listen for last-disconnect event (or poll `getDoc(docName).connsCount === 0`).
 - Schedule `setTimeout` for TTL (default 5 min).
 - On TTL expiry: call `Y.Doc.destroy()` and remove from docs map.
@@ -98,16 +103,19 @@ For Phase 6 / production: wire `setPersistence` to storage API (Phase 4 `/api/ma
 ### Verified from `packages/excalidraw/data/reconcile.ts` (2026-05-03)
 
 `shouldDiscardRemoteElement` algorithm:
+
 ```ts
 if (
   local &&
-  (local.id === localAppState.editingTextElement?.id ||   // currently editing
-   local.id === localAppState.resizingElement?.id ||
-   local.id === localAppState.newElement?.id ||
-   local.version > remote.version ||                       // local is newer
-   (local.version === remote.version &&
-    local.versionNonce <= remote.versionNonce))            // tiebreak: lower nonce wins
-) { return true /* discard remote */ }
+  (local.id === localAppState.editingTextElement?.id || // currently editing
+    local.id === localAppState.resizingElement?.id ||
+    local.id === localAppState.newElement?.id ||
+    local.version > remote.version || // local is newer
+    (local.version === remote.version &&
+      local.versionNonce <= remote.versionNonce)) // tiebreak: lower nonce wins
+) {
+  return true; /* discard remote */
+}
 ```
 
 ### Concurrent-create same-id behavior
@@ -149,6 +157,7 @@ No collision is possible if both prefixes are explicitly configured. The plan's 
 ### Analysis
 
 Two models:
+
 - **Relay LWW (current plan):** relay broadcasts camera to all room members including sender; clients apply camera state from any peer. All 4 users see each other's camera jumps. 4 users panning simultaneously produces chaotic camera thrashing.
 - **Per-client (remote indicator):** client does NOT apply remote camera to its own viewport. Remote cameras are displayed as mini-map indicators (ghost viewports). Each user controls only their own camera. This matches how Google Docs, Figma, and Miro handle multi-user camera — you follow another user explicitly, not implicitly.
 
@@ -158,7 +167,7 @@ Per-client camera (UX decision). Relay still broadcasts `MAP_CAMERA_UPDATE` to o
 
 ### Task 5 impact
 
-Task 5 Step 2 (`MAP_CAMERA_UPDATE`: LWW by timestamp; relay to room) — relay behavior unchanged. The LWW "last writer wins" applies only to what the relay *stores and deduplicates* before forwarding. The client-side application is the change: receive = display peer viewport overlay, do not apply to own camera.
+Task 5 Step 2 (`MAP_CAMERA_UPDATE`: LWW by timestamp; relay to room) — relay behavior unchanged. The LWW "last writer wins" applies only to what the relay _stores and deduplicates_ before forwarding. The client-side application is the change: receive = display peer viewport overlay, do not apply to own camera.
 
 ---
 
@@ -167,6 +176,7 @@ Task 5 Step 2 (`MAP_CAMERA_UPDATE`: LWW by timestamp; relay to room) — relay b
 Hocuspocus (from Tiptap team) is a production-grade y-websocket-compatible server with built-in persistence, webhooks, Redis scaling, auth, TypeScript-native. `y-websocket-server` README itself recommends Hocuspocus for production.
 
 **Why the plan should stay with y-websocket-server for Phase 5:**
+
 - Phase 5 is in-memory relay; persistence is Phase 6 scope.
 - Hocuspocus adds a dependency on Tiptap's infrastructure and a more complex plugin model.
 - Switching to Hocuspocus is a Phase 6 decision once persistence requirements are concrete.

@@ -164,12 +164,47 @@ describe("LayerPanel", () => {
       expect(entries[1].order).toBe(1);
     });
 
-    it("sets draggable attribute on row containers", () => {
+    // FU-4. The grip is the only drag source. `draggable` on the row made every
+    // control inside an expanded card a drag source too, because the browser
+    // looks UP the tree for a draggable ancestor: reaching for the colour input
+    // reordered the layer instead. Assert both halves — the grip has it, the
+    // row does not — or a future revert only fails one of them.
+    it("puts draggable on the grip and not on the row", () => {
       seedTwo();
       render(<LayerPanel />);
 
-      const row = screen.getByTestId("layer-row-el-1");
-      expect(row.getAttribute("draggable")).toBe("true");
+      expect(
+        screen.getByTestId("layer-drag-el-1").getAttribute("draggable"),
+      ).toBe("true");
+      expect(
+        screen.getByTestId("layer-row-el-1").hasAttribute("draggable"),
+      ).toBe(false);
+    });
+
+    // The drop target stays the row: you aim a drop at a row, not at its grip.
+    it("still reorders when a drop lands on the row body", () => {
+      seedTwo();
+      render(<LayerPanel />);
+
+      const target = screen.getByTestId("layer-row-el-2");
+      const data = new Map<string, string>();
+      const dataTransfer = {
+        effectAllowed: "",
+        dropEffect: "",
+        setData: (k: string, v: string) => data.set(k, v),
+        getData: (k: string) => data.get(k) ?? "",
+        setDragImage: () => {},
+      };
+
+      fireEvent.dragStart(screen.getByTestId("layer-drag-el-1"), {
+        dataTransfer,
+      });
+      fireEvent.dragOver(target, { dataTransfer, clientY: 1000 });
+      fireEvent.drop(target, { dataTransfer });
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries[0].id).toBe("el-2");
+      expect(entries[1].id).toBe("el-1");
     });
   });
 
@@ -521,18 +556,23 @@ describe("LayerPanel — rename by clicking the name", () => {
     ).toBe("Parcels");
   });
 
-  it("suspends drag-to-reorder on the row being renamed", () => {
+  it("leaves the open rename box with no draggable ancestor", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
     render(<LayerPanel />);
 
-    // A draggable ancestor turns a press-and-sweep over the input's text into
-    // a row drag, so the name you meant to replace can't be selected.
-    expect(screen.getByTestId("layer-row-el-1").getAttribute("draggable")).toBe(
-      "true",
-    );
+    // A draggable ancestor turns a press-and-sweep over the input's text into a
+    // row drag, so the name you meant to replace can't be selected. This used
+    // to be handled by dropping `draggable` off the row while renaming; since
+    // FU-4 moved `draggable` onto the grip there is no ancestor to drop, and
+    // the suspension mechanism is gone. Walk the real chain rather than
+    // asserting the absence of a prop that no longer exists.
     fireEvent.click(screen.getByTestId("layer-name-el-1"));
-    expect(screen.getByTestId("layer-row-el-1").getAttribute("draggable")).toBe(
-      "false",
-    );
+    let node: HTMLElement | null = screen.getByTestId(
+      "layer-rename-input-el-1",
+    ) as HTMLElement;
+    while (node) {
+      expect(node.getAttribute("draggable")).not.toBe("true");
+      node = node.parentElement;
+    }
   });
 });

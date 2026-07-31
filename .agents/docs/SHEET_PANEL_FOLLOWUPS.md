@@ -27,20 +27,21 @@ ledger.
 |---|---|---|
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
-| FU-1 | open | — |
-| FU-2 | **decided — delete the seven; not yet executed** | consumer analysis re-verified 2026-07-31, see ticket |
-| FU-3 | open | — |
-| FU-4 | open | — |
-| FU-5 | open | — |
-| FU-6 | open | — |
+| FU-1 | **open — and it is a feature, not a follow-up.** Scope verified and rewritten; error message fixed meanwhile | needs one decision from MIXI |
+| FU-2 | **done — the seven are deleted** | this branch; consumer analysis re-verified again at deletion |
+| FU-3 | **done** | this branch — the collab layer survives a style swap |
+| FU-4 | **done** | this branch — grip is the only drag source |
+| FU-5 | **resolved — not a defect**, see ticket | disproved in a browser; probe kept |
+| FU-6 | **done** | this branch — roving tabindex on the ⋯ menu |
 | FU-7 | open, scope only | — |
-| FU-8 | open, and sharper — now three faces, see ticket | — |
-| FU-9 | open | — |
-| FU-10 | open | — |
+| FU-8 | **done — `yarn test:all` passes in one invocation** | this branch; it had five faces, not three |
+| FU-9 | **done** | this branch — the snapshot was stale, not broken |
+| FU-10 | **done** | this branch — 3 fixed, and `yarn test:falsifiable` keeps them fixed |
 | FU-11 | parked with a kill criterion, deliberately | — |
 | FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-2 of 14 shipped. Two more are decided and waiting on hands rather than answers.
+9 of 14 shipped, 1 closed as not-a-defect. Only FU-1 is left that is work;
+FU-7 is scope-only, FU-11 observe-only, FU-14 is Fizz's.
 
 ---
 
@@ -67,16 +68,52 @@ rather than users say so.
 
 ### FU-1 — `.tif` drops are a silent no-op
 `useDataFileImport.ts:55` — `type DataFileExt = "geojson" | "csv" | "zip"`.
-Anything else falls to the `:231` error path: *"unsupported file type — expected
-.geojson, .csv, or .zip"*. PRD §4 job 1 is raster import; it is not met.
-`packages/data/src/thumbnail.ts` is complete and tested and still has no caller
-in app code (the only `thumbnail` hits are `atlasdraw.ts`'s write-side
-container format).
+Anything else falls to the error path. PRD §4 job 1 is raster import; it is not
+met.
 
-**User impact:** You drag a GeoTIFF onto the map and get an error toast telling
-you the file type is unsupported. Every raster workflow is closed — scanned
-survey sheets, satellite imagery, elevation, historical map plates. For a tool
-pointed at archives, that is the format most likely to arrive first.
+**User impact:** You drag a GeoTIFF onto the map and get an error toast. Every
+raster workflow is closed — scanned survey sheets, satellite imagery,
+elevation, historical map plates. For a tool pointed at archives, that is the
+format most likely to arrive first.
+
+**Scope re-verified 2026-07-31, and this ticket was under-sized.** It sits in a
+list of panel follow-ups next to "move `draggable` to the grip". It is not that
+kind of item, and calling it "the only real capability gap" made it sound like
+one missing branch in `detectExt`. What is actually missing:
+
+| | verified how |
+|---|---|
+| **No GeoTIFF decoder, and no dependency for one.** | `geotiff`/`georaster` appear in no `package.json` in the repo |
+| **No raster path anywhere.** | `grep -rn raster` over `apps/atlas-app/src`, `packages/data/src`, `packages/basemap/src` → 3 hits, all prose in unrelated comments |
+| **The registry cannot hold a raster.** | `LayerRegistryEntry = AnnotationLayerEntry \| DataLayerEntry`, and `DataLayerEntry` is vector-shaped: `featureCount`, `style: LayerStyle` (fill colour, opacity, expression). A raster has no features and none of that style |
+| **Reprojection is unsolved.** | GeoTIFFs routinely arrive in a projected CRS; nothing in `packages/geo` reprojects raster grids |
+
+A third `kind` in the registry is not a local change: `reconcileDataLayers`,
+`applyOrderToMap`, `hydrate`, the panel card, and the PDF legend all switch on
+`kind` today.
+
+**One claim in the original ticket was wrong.** It cited
+`packages/data/src/thumbnail.ts` as complete-but-uncalled, implying a raster
+path already half-built. `thumbnail.ts` renders an `HTMLCanvasElement` to a
+1024×768 PNG for the `.atlasdraw` container's `meta/thumbnail.png`. It has
+nothing to do with importing rasters. It is genuinely uncalled — that part is
+true — but it is not evidence for this ticket.
+
+**The decision that gates it, and it is MIXI's:** does a raster become a third
+registry `kind`, or does it live outside the registry with its own lifecycle,
+the way `collab-data` does (FU-3)? Everything else follows from that answer, and
+answering it wrong costs a migration of every `switch (kind)` in the app.
+
+**Shipped meanwhile, and it is not the feature.** The error message. Dropping a
+`.tif` said *"unsupported file type"*, which tells the user their file is wrong
+when the file was correct and the app is not. It now names the format and says
+*"GeoTIFF import isn't supported yet"* — same for GeoPackage, KML and GPX,
+which are the other formats an archive will hand you. `KNOWN_UNBUILT` in
+`useDataFileImport.ts` picks the wording only; nothing routes on it, and an
+entry gets deleted the day its importer lands.
+
+**Size:** the honest answer is "a feature", and it should be a plan, not a row
+in this table.
 
 **Done when:** a dropped `.tif` registers a data layer that renders, and the
 layer card shows it with provenance like every other source.
@@ -161,12 +198,29 @@ The four survivors — `types.ts`, `classifyTool.ts`, `convert.ts`, `PinTool.ts`
 import none of the seven. The cut is clean; the cross-references among the seven
 (`PolylineTool`→`PolygonTool`, `CircleTool`→`RectangleTool`) vanish with them.
 
-**Not yet executed.** The deletion also touches `index.ts` (seven exports and
-their registrations) and `registry.test.ts` (asserts all eight register), plus
-seven `.test.ts` files. Those comments in `seedToElement.ts` should stay —
-they explain the geometry, and they will outlive the classes they name.
+**EXECUTED 2026-07-31.** Fourteen files deleted (seven tools, seven tests),
+`index.ts` down to one import and one registration, `registry.test.ts` rewritten
+to assert the registry's actual property rather than a count — plus a case that
+the seven ids no longer resolve, since "deleted" and "renamed" look identical
+from the outside. The consumer grep was re-run at deletion time, not trusted
+from the paragraph above; same result.
 
-**Size:** small. The work was the decision, and the decision is made.
+**One thing done differently from the plan above.** It said the
+`seedToElement.ts` comments should stay because they explain the geometry.
+Half right: they explain the geometry *by naming a class that no longer
+exists*, which is a dangling reference the next reader has to go looking for.
+The geometry survives, the names are gone — "T09 CircleTool — center point +
+default diameter" became "Center point + default screen-pixel diameter".
+
+**What was NOT deleted, and why.** `seedToElement`'s branches for freedraw,
+line, arrow, rectangle, ellipse and text now have no *built-in* producer, only
+PinTool. They stay: `AtlasdrawElementSeed` is a public type and `registerTool`
+a public entry point, so the bridge's contract is to accept any seed the union
+permits. Narrowing it to what ships today would be a different decision than
+the one this ticket made. Same reasoning keeps the registry with one tool in
+it — its users are the tools registered from outside.
+
+**Size:** small. The work was the decision, and the decision was made.
 
 ### FU-3 — `collab-data` still lives outside the registry
 `useCollabDataLayer.ts:22` defines `COLLAB_DATA_ID = "collab-data"` and adds it
@@ -180,21 +234,48 @@ shapes vanish from the map. They are still in the document — a reload brings
 them back — but nothing on screen says so. It reads as live data loss, in front
 of the other people in the session.
 
-**Done when:** collab's layer goes through `registerDataLayer` and survives a
-basemap switch. Add the case to `dataLayerRender.test.ts`, which already has a
-`collab-data` ordering assertion at `:557`.
-**Size:** small.
+**DONE — but not the way this ticket proposed.** The layer now re-adds itself
+on `styledata`, the same signal `useBasemapStyle` reconciles the registry on.
+Six cases in `useCollabDataLayer.test.ts`; four of them fail with the listener
+removed, checked.
+
+**Why not `registerDataLayer`.** The registry is what the LayerPanel renders,
+so an entry there arrives with rename, delete, restyle and reorder — four
+controls that would all lie about a Yjs-owned layer, and a delete that undoes
+itself on the next sync. It would also need the FeatureCollection mirrored into
+`useDataLayerFCStore`, duplicating the Yjs doc as app state. And
+`dataLayerRender.test.ts:557` already encodes the opposite decision: it asserts
+`collab-data` is a *non-registry* layer that `applyOrderToMap` must leave
+alone. Machine-owned layers keep their own lifecycle; they just have to *have*
+one across a style swap.
+
+**Left unspecified on purpose:** where the collab layer sits in the stack after
+a swap. Nothing ever specified it, the re-add order now depends on listener
+registration order, and inventing a rule here would be inventing a requirement.
+Worth deciding if anyone ever notices.
 
 ---
 
 ## B. Panel polish — visible, cheap
 
-### FU-4 — The drag source is the whole row, not the grip
-`LayerPanel.tsx:429` puts `draggable` on the row container;
-`LayerPanel.test.tsx:167` asserts exactly that. Since Step 4 the row expands
-into a card, so dragging a colour input or the attribute table starts a layer
+### FU-4 — The drag source is the whole row, not the grip — **DONE**
+`LayerPanel.tsx:429` put `draggable` on the row container;
+`LayerPanel.test.tsx:167` asserted exactly that. Since Step 4 the row expands
+into a card, so dragging a colour input or the attribute table started a layer
 drag with the full expanded card as the drag image. The pinned grip from Step 6
-makes the mismatch more obvious, not less.
+made the mismatch more obvious, not less.
+
+**Shipped on this branch.** `draggable` and `onDragStart` moved to the grip; the
+drop handlers stayed on the row, because you aim a drop at a row and not at its
+grip. The drag image is now the header line — the grip alone is a 12px smudge
+you cannot aim with, and the row is the whole card again.
+
+**It subsumed a second mechanism.** `dragDisabled`, which dropped `draggable`
+off the row while renaming so a press-and-sweep over the input would not start a
+reorder, existed only because the row was draggable. With `draggable` on the
+grip the input has no draggable ancestor at all, so the prop and both call sites
+are deleted rather than kept as a no-op. Its test now walks the real ancestor
+chain instead of asserting a prop that no longer exists.
 
 **User impact:** Open a layer card, reach for the colour picker or the attribute
 table, and you start dragging the layer instead — the whole expanded card
@@ -203,28 +284,53 @@ trying to change a colour.
 
 **Size:** small. Move `draggable` to the grip, update the test to match.
 
-### FU-5 — `h` can't exit comment mode
-`useCommentModeTool.ts` makes picking a tool the exit for both toolbars
-(`exitBecauseToolPicked`, `:104`), but the hand tool is indistinguishable from
-the tool the mode itself borrows, so `h` is swallowed.
+### FU-5 — `h` can't exit comment mode — **RESOLVED: it can**
 
-**User impact:** In comment mode every other tool key drops you out. `h` — the
-one you press to pan — silently does nothing, and you stay in comment mode with
-no feedback. One key that lies about a mode costs more trust than the shortcut
-was worth.
+**This ticket describes behaviour the app does not have.** Disproved in a real
+browser on 2026-07-31, chromium and firefox:
+`apps/atlas-app/e2e/comment-mode-keys.spec.ts`. Pressing `h` in comment mode
+leaves the mode and lands on the previous tool, exactly like `r` does.
 
-**Size:** small, but needs a real decision about what the mode borrows —
-don't paper it over with a key-specific special case.
+The reasoning was two true facts and a false join. The mode does borrow `hand`
+(`useCommentModeTool.ts`), and the exit watcher does ignore `hand`. But `h` is
+not "pick the hand tool" — it is `actionToggleHandTool`
+(`packages/excalidraw/actions/actionCanvas.tsx:567`), a **toggle**. With `hand`
+already active it moves the tool *away* from `hand`, to
+`activeTool.lastActiveTool` or `selection`. The watcher sees a real change and
+exits. There was never a key to special-case.
 
-### FU-6 — The ⋯ overflow menu has no roving focus
+**Why the suite agreed with the ticket.** `commentMode.test.tsx` had a case
+named *"stays in the mode when the tool is set to `hand`"* whose fake API sets
+the tool directly. That is a fair model of a programmatic re-assert and a wrong
+model of a keystroke, and reading it as the latter is where the ticket came
+from. The case is renamed and now says which one it is.
+
+**What is kept:** the e2e probe, covering Escape, `r` and `h` — the whole
+keyboard surface of the mode. Note webkit could not be run here (the host is
+missing `libicu74`, `libxml2`, `libmanette-0.2-0`; `playwright install-deps`
+needs root), so the claim is chromium + firefox, not all three projects.
+
+**The real lesson is FU-10's.** A test that models a keystroke with a
+direct state write cannot fail when the keystroke does something else, and this
+one invented a whole ticket. Behavioural claims about keys get a browser.
+
+### FU-6 — The ⋯ overflow menu has no roving focus — **DONE**
 The rail got roving tabindex + arrow/Home/End in Step 2. The card's overflow
 menu didn't. Same pattern, one component over.
 
-**User impact:** Keyboard and screen-reader users can open the layer overflow
-menu but can't arrow through it. Everything else the rail touches got arrow keys
-in Step 2; this is the gap in that promise.
+**Shipped on this branch.** The menu's three buttons became a list rendered
+from data, which is what makes the roving tabindex one loop rather than one
+`tabIndex` expression per button — and the two views (actions, delete-confirm)
+have *different lengths*, which is exactly what hand-written indices get wrong.
+Opening focuses the first item; ArrowUp/Down wrap; Home/End jump.
 
-**Size:** small.
+**One thing found while fixing it, beyond the ticket.** The confirm step swaps
+the whole item list out. Without moving focus on that swap, a keyboard user who
+steps into "Delete…" is left focused on a button that no longer exists — the
+two-step delete guard becomes a keyboard trap instead of a safety net. Focus
+follows the swap, and a test pins it.
+
+**Size:** small. It was.
 
 ### FU-7 — Map-anchor and element-anchor comment clicks are mutually exclusive
 At any instant one of the two can receive a click, never both. That is pointer
@@ -258,8 +364,56 @@ fixed** in `aee15c0`. This one isn't.
 command fails on a clean checkout, and nothing distinguishes "the repo is
 broken" from "I broke it."
 
-**Done when:** `yarn test:all` passes from a clean worktree in one invocation.
-**Size:** medium, and it's build config, which is where cheap fixes go to rot.
+**DONE 2026-07-31 — `yarn test:all` exits 0 in one invocation.** It had five
+faces, not three. Each was hiding behind the one before it, which is why the
+count kept going up every time someone looked.
+
+**Face 1, the dist poisoning — fixed at the root, and the root is three
+characters.** Three files imported `from "../.."`. That resolves the package
+*directory*, so Vite reads `packages/excalidraw/package.json` and follows
+`main` to `./dist/prod/index.js`. With no `dist/` it silently falls back to
+`index.tsx` and everything passes; once `test:typecheck` has built `dist/`, the
+same import loads the **bundle** and dies on a null `useTunnels`. They now say
+`../../index`, which does not depend on build state. Verified the hard way:
+built `dist/` on purpose, then ran all three suites green with it present.
+
+    packages/excalidraw/components/Sidebar/siderbar.test.helpers.tsx
+    packages/excalidraw/components/FontPicker/FontPicker.test.tsx
+    packages/excalidraw/components/Stats/stats.test.tsx
+
+**Face 2 — "a full run cannot produce a true number" — dissolves with face 1.**
+Nothing about the ordering was ever wrong; one import was.
+
+**Face 3, the TS6305 trap, is defused rather than fixed.** Deleting `dist/`
+leaves the five `tsconfig.tsbuildinfo` files, so `tsc -b` believes it is up to
+date, skips the rebuild, and typecheck fails with 6× TS6305. That is inherent
+to deleting outputs without their build info — but nobody has to delete `dist/`
+any more, so the trap is off the path. If you ever do clear it, clear the
+tsbuildinfo files in the same breath.
+
+**Face 4 — `test:code` could never pass.** `eslint --max-warnings=0` against 17
+pre-existing `import/order` warnings in 10 files. All auto-fixable, all fixed.
+A gate whose threshold is zero and whose baseline is seventeen is not a gate.
+
+**Face 5 — `test:other` could never pass either.** `prettier --list-different`
+reported 37 files: 31 markdown, 5 JSON, 1 HTML, **zero source**. 34 of them
+were formatted. The other three were not, and that is the interesting part:
+they are the MapLibre style documents in `packages/basemap/src/styles/`, and
+prettier collapses them by **~10,000 lines each**. Reformatting 26,000 lines of
+third-party runtime data to satisfy a formatter is not a fix — it buries every
+future real change in those files. They are ignored instead.
+
+Which surfaced a sixth thing, small but load-bearing: the `prettier` script
+pointed `--ignore-path` at **`.eslintignore`**, so prettier's exclusions could
+only be expressed as eslint's, and `.prettierignore` existed but was empty and
+had no effect. It points at `.prettierignore` now, which carries what
+`.eslintignore` carried plus the two prettier-only entries.
+
+**Proof:** `yarn test:all` → **exit 0**, 243 test files, 2780 passed, 0 failed.
+First time the composite gate has passed.
+
+**Size:** medium. Face 1 was three characters; the rest was bookkeeping nobody
+had done because the gate that would have caught it was the broken thing.
 
 ### FU-9 — The permanent red
 `MermaidToExcalidraw` snapshot fails on pristine `main` and has failed through
@@ -270,8 +424,21 @@ past failures.
 **Impact — contributors, not users.** The next real regression arrives as "2
 failed" and reads as normal.
 
-**Done when:** fixed, or quarantined with a linked reason, so green means green.
-**Size:** small to triage, unknown to fix.
+**DONE 2026-07-31 — the snapshot was stale, and it was never a bug.** Diffed
+the stored snapshot against the received one character by character: the single
+difference is an inserted `<button class="Dialog__close">`. That button is
+commit `694a95c`, *"fix(excalidraw): always render the Dialog close button"* —
+a deliberate a11y fix, because on desktop the vendored Dialog rendered no close
+button, so an error dialog had no visible dismissal and, with zero focusable
+elements, Modal's focus-scoped Escape handler never fired either. The fix was
+right; the snapshot was simply never updated with it.
+
+So the permanent red was a correct change and a stale expectation, sitting
+there long enough that nine messages in one thread wrote "1 failed (the
+pre-existing one)" and moved on. That is the cost the ticket named, and it is
+now the only ticket on this list whose fix was a one-line `-u`.
+
+**Size:** small to triage, one command to fix. The triage was the work.
 
 ### FU-10 — Checks that look like checks
 Three separate review rounds each found an assertion that could not fail:
@@ -288,11 +455,39 @@ source text — catches a deleted literal line and nothing else. Not a
 merge, not a new wheel handler. The probes that actually caught the Step 6
 clipping were the browser ones, now `e2e/layer-panel-scroll.spec.ts`.
 
-**Done when:** two things. (1) Sweep the app suite for assertions that pass
-under mutation — start with every `getComputedStyle` and every test that reads a
-`.scss` file. (2) Write the rule down in the UI conventions skill: **a claim
-about layout gets a Playwright probe; source-text assertions are a
-documentation aid, not a gate.**
+**DONE 2026-07-31, both halves.**
+
+**(1) The sweep.** The first pass used a regex and produced 20 hits, most of
+them false — which is the joke writing itself, so it was redone against the
+TypeScript AST. Three genuine cases in atlasdraw-owned code, each an instance of
+a pattern that had already shipped a defect:
+
+| | |
+|---|---|
+| `useMapWheelRouter.test.ts:70` | **no assertion at all.** A comment said the event "should pass through untouched"; nothing checked it. Could fail only by throwing. Now asserts that neither `preventDefault` nor `stopPropagation` was called — which is what "untouched" means for a router whose entire job is those two calls. |
+| `StylePanel.test.tsx:126` | **every assertion inside two nested `if`s.** If Apply wrote nothing, or wrote a graduated expression, both guards go false and zero assertions run. Narrows by asserting the narrowing condition, then projecting. |
+| `apps/storage/src/config.test.ts:52` | same shape, and worse: *"honors an explicit DATA_DIR"* had its **only** assertion inside `if (cfg.STORAGE_MODE === "sqlite-fs")`. A `loadConfig` returning the wrong mode entirely passed. `toMatchObject`, no narrowing. |
+
+The `getComputedStyle` / stylesheet-reading tests the ticket named as the
+starting point were already hardened by the Step 6 review rounds — one
+`getComputedStyle` in app code and it is production, in `useMapWheelRouter`.
+
+**The fixes are the smaller half.** `scripts/find-unfalsifiable-tests.mjs` makes
+the sweep repeatable, and `yarn test:falsifiable` runs it inside `test:all`. It
+catches both patterns and is deliberately conservative about what counts as an
+assertion — same-file helpers like `expectClean`, and throwing queries like
+`findByText`, count — because a checker that cries wolf gets ignored exactly
+like the suite it is checking. Verified against a canary file carrying one of
+each defect plus one healthy case: both caught, the healthy one untouched.
+
+What it cannot catch is an assertion that runs and is merely weak. That is the
+rule, not the script.
+
+**(2) The rule is written down** in `.claude/skills/atlasdraw-ui-conventions/`
+under *Testing a UI claim*, with a table of which claim belongs in vitest and
+which needs a browser, and two checklist lines. It covers keyboard and focus as
+well as layout, because FU-5 was a keyboard claim modelled with a fake API and
+it cost a whole fictional ticket.
 **User impact — indirect, and the largest on this list.** Two of the three worst
 defects in the whole sequence shipped past tests that were structurally
 incapable of failing. The layer panel's guarantees are weaker than its test
@@ -601,13 +796,18 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
    unrecoverable *today*, and bearing persists through save and reload. This is
    the only item on this list that is a live user-facing defect rather than
    maintenance, and it is one line of map options.
-2. **FU-1** — the PRD job that isn't met, and the only real capability gap.
+2. **FU-1** — the PRD job that isn't met. Blocked on one decision from MIXI
+   (third registry `kind`, or its own lifecycle outside the registry) and it
+   wants a plan of its own rather than a row here.
 3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
    bleeding. Not urgent; nothing is broken while bearing cannot move.
-4. **FU-10** — before the next feature, because it's what makes the next
-   feature's tests mean anything.
-5. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
-6. **FU-8, FU-9** — build config, do them when something else is compiling.
+4. ~~**FU-10**~~ — done 2026-07-31.
+5. ~~**FU-4, FU-5, FU-6**~~ — done 2026-07-31; FU-5 closed as not-a-defect.
+   **FU-3** still open and worth pulling up: the fix is small but the symptom is
+   other people's shapes vanishing mid-session, which is the worst-looking bug
+   on this list.
+6. ~~**FU-8, FU-9**~~ — done 2026-07-31. `yarn test:all` passes in one
+   invocation and green now means green.
 7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
    only. **FU-11** — observe only.
 
