@@ -603,7 +603,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
-  const { syncNow } = useCoordinateSync(map, excalidrawAPI);
+  const { syncNow, expectedOrigin } = useCoordinateSync(map, excalidrawAPI);
 
   // Route wheel events to the map regardless of whether Excalidraw's drawing
   // layer is on top. Without this, scroll-to-zoom is silently captured by
@@ -868,6 +868,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     excalidrawAPI,
     map,
     syncNow: syncNow ?? undefined,
+    expectedOrigin: expectedOrigin ?? undefined,
     announceMapEditor,
     setMapBg,
     spaceHeldRef,

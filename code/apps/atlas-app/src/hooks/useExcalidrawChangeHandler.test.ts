@@ -70,6 +70,12 @@ function makeParams(
     excalidrawAPI,
     map,
     syncNow: vi.fn(),
+    // Sub-concern 3 is gated on this being present, so leaving it out makes
+    // every "does not call syncNow" assertion in that block pass for the wrong
+    // reason. Default it to a stand-in origin and let each test say what it
+    // means. See mapRotationDriftLoop.repro.test.ts for why the handler stopped
+    // deriving this itself.
+    expectedOrigin: vi.fn(() => ({ x: 0, y: 0 })),
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
     spaceHeldRef: { current: false },
@@ -198,23 +204,23 @@ describe("useExcalidrawChangeHandler — 2. scroll lock + space-pan bridge", () 
 });
 
 describe("useExcalidrawChangeHandler — 3. post-load geo sync", () => {
-  it("calls syncNow when a geo element's position diverges from its projected anchor", () => {
+  it("calls syncNow when a geo element's position diverges from where the sync would put it", () => {
     const params = makeParams();
-    (params.map!.project as ReturnType<typeof vi.fn>).mockReturnValue({
+    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue({
       x: 100,
       y: 100,
     });
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
 
-    const el = makeGeoElement("el1", 50, 50); // 50px off from projected (100,100)
+    const el = makeGeoElement("el1", 50, 50); // 50px off from expected (100,100)
     result.current(fakeElements([el]), makeAppState(), NO_FILES);
 
     expect(params.syncNow).toHaveBeenCalled();
   });
 
-  it("does not call syncNow when the element is already at its projected position", () => {
+  it("does not call syncNow when the element is already where the sync would put it", () => {
     const params = makeParams();
-    (params.map!.project as ReturnType<typeof vi.fn>).mockReturnValue({
+    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue({
       x: 50,
       y: 50,
     });
@@ -223,6 +229,24 @@ describe("useExcalidrawChangeHandler — 3. post-load geo sync", () => {
     const el = makeGeoElement("el1", 50, 50);
     result.current(fakeElements([el]), makeAppState(), NO_FILES);
 
+    expect(params.expectedOrigin).toHaveBeenCalled(); // not vacuous
+    expect(params.syncNow).not.toHaveBeenCalled();
+  });
+
+  it("does not call syncNow when the sync disowns the element", () => {
+    // `expectedOrigin` returns null for anything CoordinateSync would not
+    // write. Treating that as "drifted to (0,0)" would sync on every change.
+    const params = makeParams();
+    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([makeGeoElement("el1", 500, 500)]),
+      makeAppState(),
+      NO_FILES,
+    );
+
+    expect(params.expectedOrigin).toHaveBeenCalled();
     expect(params.syncNow).not.toHaveBeenCalled();
   });
 
@@ -236,6 +260,7 @@ describe("useExcalidrawChangeHandler — 3. post-load geo sync", () => {
       NO_FILES,
     );
 
+    expect(params.expectedOrigin).not.toHaveBeenCalled();
     expect(params.syncNow).not.toHaveBeenCalled();
   });
 });

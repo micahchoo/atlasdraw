@@ -27,7 +27,7 @@ import { CoordinateSync } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import type { ExcalidrawAPI } from "@atlasdraw/geo";
+import type { ExcalidrawAPI, ExcalidrawElementLike } from "@atlasdraw/geo";
 
 import type maplibregl from "maplibre-gl";
 
@@ -56,13 +56,24 @@ const CAMERA_EVENTS = ["move", "zoom", "rotate", "pitch"] as const;
  * Returns `syncNow` — a stable reference to `sync.syncMapToScene()` — so callers
  * can trigger an immediate sync outside of camera events (e.g. after file load).
  *
+ * Also returns `expectedOrigin`, so a caller deciding whether the scene is stale
+ * asks the projector where an element belongs instead of re-deriving it. See
+ * `CoordinateSync.expectedOrigin` for what re-deriving it cost.
+ *
  * @param map            - MapLibre Map instance (null until map layer mounts)
  * @param excalidrawAPI  - Excalidraw imperative API (null until Excalidraw mounts)
  */
 export function useCoordinateSync(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
-): { syncNow: (() => void) | null } {
+): {
+  syncNow: (() => void) | null;
+  expectedOrigin:
+    | ((
+        el: ExcalidrawElementLike,
+      ) => { readonly x: number; readonly y: number } | null)
+    | null;
+} {
   // Memoize CoordinateSync instance. Re-creates only when (map, api) tuple changes.
   // ExcalidrawImperativeAPI is structurally compatible with geo's ExcalidrawAPI
   // interface (getSceneElements + updateScene with captureUpdate).
@@ -106,5 +117,8 @@ export function useCoordinateSync(
     };
   }, [map, sync]);
 
-  return { syncNow: sync ? () => sync.syncMapToScene() : null };
+  return {
+    syncNow: sync ? () => sync.syncMapToScene() : null,
+    expectedOrigin: sync ? (el) => sync.expectedOrigin(el) : null,
+  };
 }

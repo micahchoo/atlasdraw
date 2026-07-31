@@ -111,6 +111,34 @@ export class CoordinateSync {
     });
   }
 
+  /**
+   * Where `syncMapToScene` would put this element under the current camera.
+   *
+   * Exists so drift detectors can ask the projector instead of re-deriving a
+   * position from the anchor. Those two formulas diverged once and it cost the
+   * user their drawing: the post-load check in `useExcalidrawChangeHandler`
+   * projected a bbox's NW corner, which was exactly `x`/`y` until RT-2 made a
+   * turned bbox the *centred* rotated rect (`cx - width/2`). Both are right;
+   * they are not the same point. The 14px gap that opened at bearing 15° made
+   * the check's corrective `syncNow()` unable to ever satisfy itself, and the
+   * resulting cascade hit React's nested-update ceiling.
+   *
+   * Returns null for elements this sync does not own, so callers do not have
+   * to repeat the `isGeoCustomData` test.
+   *
+   * Runs the writer rather than a copy of it — the answer cannot drift from
+   * what `syncMapToScene` writes, because it *is* what `syncMapToScene` writes.
+   */
+  expectedOrigin(
+    el: ExcalidrawElementLike,
+  ): { readonly x: number; readonly y: number } | null {
+    if (!isGeoCustomData(el.customData)) {
+      return null;
+    }
+    const { x, y } = this._projectElement(el, cameraRotation(this._map));
+    return { x, y };
+  }
+
   private _projectElement(
     el: ExcalidrawElementLike,
     cameraAngle: number,

@@ -14,9 +14,12 @@
 //   2. Post-load sync — loading a .excalidraw file emits no camera events, so
 //      geo-anchored elements stay at their canonical zoom-0 coordinates until
 //      the user pans. We detect this by comparing the first geo element's scene
-//      position against map.project(anchor) and calling syncNow() if delta>10px.
-//      The self-terminating property: after sync, el.x == map.project(anchor)
-//      so delta==0 on the follow-up onChange.
+//      position against CoordinateSync.expectedOrigin() and calling syncNow()
+//      if delta>10px. Termination rests on the check and the sync agreeing on
+//      where an element belongs, which is why the reference comes from the
+//      projector itself and not from a second projection here — that pair
+//      diverged under a rotated camera and the "corrective" sync recursed
+//      until React tore the scene down. driftSyncQueuedRef bounds it anyway.
 //
 // Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 5 — the
 // hardest, done last: this callback fuses five previously-inline concerns
@@ -30,6 +33,8 @@
 import { useCallback, useRef } from "react";
 
 import { isGeoCustomData } from "@atlasdraw/geo";
+
+import type { ExcalidrawElementLike } from "@atlasdraw/geo";
 
 import type {
   Excalidraw,
@@ -46,6 +51,11 @@ export interface ExcalidrawChangeHandlerParams {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   map: maplibregl.Map | null;
   syncNow: (() => void) | undefined;
+  expectedOrigin:
+    | ((
+        el: ExcalidrawElementLike,
+      ) => { readonly x: number; readonly y: number } | null)
+    | undefined;
   announceMapEditor: (msg: string) => void;
   setMapBg: Dispatch<SetStateAction<string>>;
   spaceHeldRef: RefObject<boolean>;
@@ -55,6 +65,7 @@ export function useExcalidrawChangeHandler({
   excalidrawAPI,
   map,
   syncNow,
+  expectedOrigin,
   announceMapEditor,
   setMapBg,
   spaceHeldRef,
@@ -78,6 +89,9 @@ export function useExcalidrawChangeHandler({
   // BEFORE initialData lands — without this guard, setMapBg(default-white)
   // ran on every load, painting an opaque rectangle over the map.
   const transparentAppliedRef = useRef(false);
+  // Same shape as bgResetQueuedRef, guarding the other self-retriggering
+  // updateScene in this file — see sub-concern 3.
+  const driftSyncQueuedRef = useRef(false);
   const prevSelectionIdsRef = useRef<string>("");
   const lastSelectionAnnounceAtRef = useRef<number>(0);
 
@@ -150,23 +164,29 @@ export function useExcalidrawChangeHandler({
       }
 
       // --- 3. Post-load geo sync (scroll is identity here) ---
-      if (map && syncNow) {
+      if (map && syncNow && expectedOrigin) {
         for (const el of elements) {
-          const cd = (el as { customData?: unknown }).customData;
-          if (!isGeoCustomData(cd)) {
+          if (!isGeoCustomData((el as { customData?: unknown }).customData)) {
             continue;
           }
-          const anchor = cd.geo;
-          const ref =
-            anchor.kind === "point"
-              ? map.project([anchor.lng, anchor.lat] as [number, number])
-              : anchor.kind === "bbox"
-              ? map.project([anchor.west, anchor.north] as [number, number])
-              : map.project(anchor.coordinates[0] as [number, number]);
-          if (
-            Math.abs((el as { x: number }).x - ref.x) > 10 ||
-            Math.abs((el as { y: number }).y - ref.y) > 10
-          ) {
+          // Ask the projector, do not re-derive. A second formula for "where
+          // this element belongs" is what broke this check: it projected a
+          // bbox's NW corner, and RT-2 made a turned bbox the centred rotated
+          // rect instead. See CoordinateSync.expectedOrigin.
+          const ref = expectedOrigin(el as ExcalidrawElementLike);
+          const drifted =
+            ref !== null &&
+            (Math.abs((el as { x: number }).x - ref.x) > 10 ||
+              Math.abs((el as { y: number }).y - ref.y) > 10);
+          // Containment, not correctness — the sister of bgResetQueuedRef
+          // above, and here for the same reason. syncNow() fires the onChange
+          // that runs this check again, so a reference the sync cannot satisfy
+          // recurses without bound and takes out the scene. One corrective
+          // sync per drift episode; re-armed once the drift clears.
+          if (!drifted) {
+            driftSyncQueuedRef.current = false;
+          } else if (!driftSyncQueuedRef.current) {
+            driftSyncQueuedRef.current = true;
             syncNow();
           }
           break; // O(1): only inspect the first geo element
@@ -214,6 +234,14 @@ export function useExcalidrawChangeHandler({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [excalidrawAPI, map, syncNow, announceMapEditor, setMapBg, spaceHeldRef],
+    [
+      excalidrawAPI,
+      map,
+      syncNow,
+      expectedOrigin,
+      announceMapEditor,
+      setMapBg,
+      spaceHeldRef,
+    ],
   );
 }
