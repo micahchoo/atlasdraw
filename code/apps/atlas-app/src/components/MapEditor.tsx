@@ -41,7 +41,11 @@ import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import { PinTool } from "@atlasdraw/tools";
 
-import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
+import {
+  cameraRotation,
+  isGeoCustomData,
+  normalizeElementsForExport,
+} from "@atlasdraw/geo";
 
 import type {
   ExcalidrawElement,
@@ -861,6 +865,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     });
   }, [map, excalidrawAPI, mapBg]);
 
+  // RT-4. How far the camera is turned, for the PDF's north arrow. Measured
+  // off the live projection by the same `cameraRotation` RT-2 uses, not read
+  // from `map.getBearing()` — so the arrow and the annotations agree by
+  // construction, and neither depends on MapLibre's bearing sign convention.
+  // Read at export time, like the image and the legend, so all three answer
+  // the same viewport.
+  const getCameraRotationDeg = useCallback((): number => {
+    if (!map) {
+      return 0;
+    }
+    return (cameraRotation(map) * 180) / Math.PI;
+  }, [map]);
+
   // The legend describes the exported page, not the document (FU-13): hidden
   // layers and layers with nothing painted in this view are left out. Read at
   // export time, like the image, so both answer the same viewport.
@@ -1253,6 +1270,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onExportGeoJSON={handleExportGeoJSON}
               onExportAtlasdraw={handleExportAtlasdraw}
               getMapImageDataUrl={getMapImageDataUrl}
+              getCameraRotationDeg={getCameraRotationDeg}
               getLegendEntries={getLegendEntries}
             />
           )}

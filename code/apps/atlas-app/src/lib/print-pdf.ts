@@ -25,7 +25,6 @@ import {
   PDFString,
   StandardFonts,
   rgb,
-  degrees,
   type PDFFont,
   type PDFPage,
 } from "pdf-lib";
@@ -61,6 +60,22 @@ export interface PrintOptions {
    */
   mapImageDataUrl: string;
   layers: LayerLegendEntry[];
+  /**
+   * Screen rotation of the exported view: the direction geographic east ran
+   * on screen, in degrees, y-down — i.e. `cameraRotation(map)` converted from
+   * radians. Read at export time so it describes the same viewport the image
+   * does.
+   *
+   * It is deliberately NOT `map.getBearing()`. RT-2 measures the rotation off
+   * the live projection rather than trusting MapLibre's bearing sign
+   * convention, because nobody has run this app; taking a bearing here would
+   * put that convention back on the trust surface for the one graphic whose
+   * entire job is to be right about direction.
+   *
+   * Omitted or 0 prints the arrow pointing up — correct for a north-up export,
+   * and what every export produced before RT-4.
+   */
+  cameraRotationDeg?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -151,49 +166,107 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   return out;
 }
 
+/** A point in PDF user space (y-up, origin bottom-left). */
+export interface PagePoint {
+  x: number;
+  y: number;
+}
+
+/** Where the parts of the north arrow land once the camera rotation is applied. */
+export interface NorthArrowGeometry {
+  /** Base of the shaft — the end opposite the arrowhead. */
+  tail: PagePoint;
+  /** Point of the arrowhead; the direction north runs on the page. */
+  tip: PagePoint;
+  /** The two arrowhead diagonals, each running back from the tip. */
+  barbs: [PagePoint, PagePoint];
+  /** Anchor for the "N" glyph, just past the tip. */
+  label: PagePoint;
+}
+
+/** Overall height of the arrow in points, tail to tip. */
+const NORTH_ARROW_SIZE = 18;
+
+/**
+ * Where a north arrow's points land for a given camera rotation.
+ *
+ * Split out from the drawing so the geometry — the part that can be silently,
+ * plausibly wrong by a sign — is testable without a `PDFPage`.
+ *
+ * RT-4. The arrow turns with the camera, because the exported raster already
+ * shows a turned map: north on the page is wherever the camera left it, not up.
+ * Before this the arrow always pointed up, which made every rotated export
+ * wrong about the one thing a north arrow is for.
+ *
+ * **The sign, derived rather than guessed.** Let `r` be the screen rotation of
+ * geographic east, y-down — what `cameraRotation` returns and what
+ * `cameraRotationDeg` carries. East on screen is `(cos r, sin r)`, so north,
+ * east turned a quarter-turn in that same y-down frame, is `(sin r, -cos r)`;
+ * at `r = 0` that is `(0, -1)`, straight up the screen, as it should be. The
+ * raster lands on the page unflipped, so converting y-down to PDF's y-up makes
+ * north on the page `(sin r, cos r)`. The rotation below is y-up
+ * counter-clockwise by `theta`, which sends page-up `(0, 1)` to
+ * `(-sin θ, cos θ)`. Matching the two gives `θ = -r`, hence the negation — and
+ * nothing here has to be right about which way MapLibre counts a bearing.
+ *
+ * @param cx - Arrow centre, page x.
+ * @param cy - Arrow centre, page y.
+ * @param cameraRotationDeg - Screen rotation of geographic east, degrees, y-down.
+ */
+export function northArrowGeometry(
+  cx: number,
+  cy: number,
+  cameraRotationDeg = 0,
+): NorthArrowGeometry {
+  const half = NORTH_ARROW_SIZE / 2;
+  const theta = (-cameraRotationDeg * Math.PI) / 180;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  /** Offset from the arrow's centre, turned into page coordinates. */
+  const at = (dx: number, dy: number): PagePoint => ({
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos,
+  });
+  return {
+    tail: at(0, -half),
+    tip: at(0, half),
+    barbs: [at(-4, half - 5), at(4, half - 5)],
+    label: at(0, half + 4),
+  };
+}
+
 /**
  * Compose a north arrow as a tiny three-line path. pdf-lib's `drawSvgPath`
  * applies a single-stroke render so we keep this minimal: a vertical arrow
  * with crossbar and an "N" label drawn separately.
+ *
+ * The "N" rides to the rotated tip but stays upright: a turned glyph is harder
+ * to read and the arrow already carries the direction.
  */
 function drawNorthArrow(
   page: PDFPage,
   font: PDFFont,
   cx: number,
   cy: number,
+  cameraRotationDeg = 0,
 ): void {
-  const size = 18;
-  const top = cy + size / 2;
-  const bottom = cy - size / 2;
-  // Vertical line + arrowhead via two diagonals.
-  page.drawLine({
-    start: { x: cx, y: bottom },
-    end: { x: cx, y: top },
-    thickness: 1.2,
-    color: rgb(0.13, 0.13, 0.13),
-  });
-  page.drawLine({
-    start: { x: cx, y: top },
-    end: { x: cx - 4, y: top - 5 },
-    thickness: 1.2,
-    color: rgb(0.13, 0.13, 0.13),
-  });
-  page.drawLine({
-    start: { x: cx, y: top },
-    end: { x: cx + 4, y: top - 5 },
-    thickness: 1.2,
-    color: rgb(0.13, 0.13, 0.13),
-  });
-  // "N" label above the arrow.
+  const { tail, tip, barbs, label } = northArrowGeometry(
+    cx,
+    cy,
+    cameraRotationDeg,
+  );
+  const stroke = { thickness: 1.2, color: rgb(0.13, 0.13, 0.13) };
+  // Shaft + arrowhead via two diagonals.
+  page.drawLine({ start: tail, end: tip, ...stroke });
+  page.drawLine({ start: tip, end: barbs[0], ...stroke });
+  page.drawLine({ start: tip, end: barbs[1], ...stroke });
   page.drawText("N", {
-    x: cx - 3,
-    y: top + 4,
+    x: label.x - 3,
+    y: label.y,
     size: 9,
     font,
     color: rgb(0.13, 0.13, 0.13),
   });
-  // Subtle reference to rotation; not used today but signals "north" is real.
-  void degrees(0);
 }
 
 /**
@@ -372,7 +445,13 @@ export async function exportPDF(opts: PrintOptions): Promise<Blob> {
   }
 
   // ----- North arrow (top-right of map area) -----------------------------
-  drawNorthArrow(page, font, width - MARGIN - 12, mapAreaTop - 18);
+  drawNorthArrow(
+    page,
+    font,
+    width - MARGIN - 12,
+    mapAreaTop - 18,
+    opts.cameraRotationDeg ?? 0,
+  );
 
   // ----- Legend (bottom-left) --------------------------------------------
   const legendX = MARGIN;
