@@ -47,6 +47,8 @@ import {
   normalizeElementsForExport,
 } from "@atlasdraw/geo";
 
+import { LngLatBounds } from "maplibre-gl";
+
 import type {
   ExcalidrawElement,
   ExcalidrawImperativeAPI,
@@ -91,10 +93,12 @@ import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useLayerRegistryStore } from "../state/layerRegistry";
+import { useSelectedLayerStore } from "../state/selectedLayer";
+import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
 import { getAppConfig } from "../config/app-config";
-import { fitMapToContent } from "../lib/fitMapToContent";
+import { fitMapToContent, fitMapToLayer } from "../lib/fitMapToContent";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -139,9 +143,36 @@ import { SettingsDialog } from "./SettingsDialog";
 import { ExportDialog, type ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
+import type { RasterCorners } from "../state/layerRegistry";
 
 import type maplibregl from "maplibre-gl";
+
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+
+// Ray-casting point-in-polygon test on projected (screen) coordinates. Used by
+// the map-click handler to hit-test raster layers, whose corners are
+// projected to screen space with MapLibre's `map.project` before testing.
+function pointInPolygon(
+  point: { x: number; y: number },
+  polygon: { x: number; y: number }[],
+): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const yiAbove = yi > point.y;
+    const yjAbove = yj > point.y;
+    if (
+      yiAbove !== yjAbove &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 
 // ---------------------------------------------------------------------------
 // GeoJSON export helpers
@@ -564,6 +595,120 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
+
+  // Bidirectional selection: store → Excalidraw (annotations)
+  // Subscribes to the shared selection store and pushes annotation selection
+  // into the Excalidraw scene, zooming the map when a data/raster layer is
+  // selected from the panel. The key-set comparison against the live
+  // Excalidraw selection makes this a no-op for changes that originated on
+  // the canvas (their ids already match), which is what breaks the feedback
+  // loop with the onChange mirror in useExcalidrawChangeHandler.
+  useEffect(() => {
+    const unsub = useSelectedLayerStore.subscribe((state) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      // Filter to only annotation IDs (these are Excalidraw element ids)
+      const registryEntries = useLayerRegistryStore.getState().entries;
+      const annotationIds: Record<string, true> = {};
+      for (const id of Object.keys(state.selectedLayerIds)) {
+        const entry = registryEntries.find((e) => e.id === id);
+        if (entry?.kind === "annotation") {
+          annotationIds[id] = true;
+        }
+      }
+      // Guard: compare against current Excalidraw selection
+      const currentIds = excalidrawAPI.getAppState()?.selectedElementIds ?? {};
+      const currentKeys = Object.keys(currentIds).sort().join(",");
+      const nextKeys = Object.keys(annotationIds).sort().join(",");
+      if (currentKeys !== nextKeys) {
+        excalidrawAPI.updateScene({
+          appState: { selectedElementIds: annotationIds },
+        });
+      }
+
+      // For data layer selection → zoom to layer
+      for (const id of Object.keys(state.selectedLayerIds)) {
+        const entry = registryEntries.find((e) => e.id === id);
+        if (entry?.kind === "data") {
+          const fc = useDataLayerFCStore.getState().fcs[id];
+          const m = useMapInstanceStore.getState().map;
+          if (m) {
+            // fitMapToLayer returns false (camera untouched) when the FC is
+            // missing or has no framable geometry.
+            fitMapToLayer(m, fc);
+          }
+        }
+        // For raster → zoom to bounds from corners
+        if (entry?.kind === "raster") {
+          const m = useMapInstanceStore.getState().map;
+          if (m && entry.corners) {
+            const bounds = new LngLatBounds();
+            for (const corner of entry.corners) {
+              bounds.extend(corner);
+            }
+            if (!bounds.isEmpty()) {
+              m.fitBounds(bounds, { padding: 40, animate: true });
+            }
+          }
+        }
+      }
+    });
+    return unsub;
+  }, [excalidrawAPI]);
+
+  // Map-click → panel selection for data/raster layers
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      // Only handle when not in a drawing tool
+      const activeTool = excalidrawAPI?.getAppState()?.activeTool?.type;
+      if (activeTool && activeTool !== "selection" && activeTool !== "hand") {
+        return;
+      }
+
+      const registryEntries = useLayerRegistryStore.getState().entries;
+      const dataLayerIds = registryEntries
+        .filter((e) => e.kind === "data")
+        .map((e) => e.id);
+
+      // Check data layer hits via queryRenderedFeatures
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: dataLayerIds,
+      });
+      if (features.length > 0) {
+        const hitId = features[0].layer.id;
+        useSelectedLayerStore.getState().selectLayer(hitId);
+        return;
+      }
+
+      // Check raster hits via point-in-polygon on projected corners
+      const rasters = registryEntries.filter((e) => e.kind === "raster");
+      for (const r of rasters) {
+        if (!("corners" in r) || !r.corners) {
+          continue;
+        }
+        const corners = r.corners as RasterCorners;
+        const screenCorners = corners.map((c) =>
+          map.project(c as [number, number]),
+        );
+        if (pointInPolygon(e.point, screenCorners)) {
+          useSelectedLayerStore.getState().selectLayer(r.id);
+          return;
+        }
+      }
+
+      // Click on empty area → clear selection
+      useSelectedLayerStore.getState().clearSelection();
+    };
+
+    map.on("click", handler);
+    return () => {
+      map.off("click", handler);
+    };
+  }, [map, excalidrawAPI]);
 
   // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
   useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);

@@ -43,6 +43,8 @@ import type {
 import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
+import { useLayerRegistryStore } from "../state/layerRegistry";
+import { useSelectedLayerStore } from "../state/selectedLayer";
 
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type maplibregl from "maplibre-gl";
@@ -231,6 +233,44 @@ export function useExcalidrawChangeHandler({
             announceMapEditor(`Selected: ${ids.length} elements`);
           }
         }
+      }
+
+      // --- 6. Mirror annotation selection to layer store ---
+      // Keep the panel's selectedLayerIds in step with what is selected on the
+      // canvas. Only annotation ids (Excalidraw element ids) flow this way;
+      // data/raster selections made from the panel are preserved. The
+      // key-set comparison before writing breaks the feedback loop with
+      // MapEditor's store→scene subscriber (a no-op write still notifies).
+      const annotationIds: Record<string, true> = {};
+      for (const id of Object.keys(appState.selectedElementIds ?? {})) {
+        // Check if this id belongs to a registered annotation
+        const entry = useLayerRegistryStore
+          .getState()
+          .entries.find((e) => e.id === id && e.kind === "annotation");
+        if (entry) {
+          annotationIds[id] = true;
+        }
+      }
+      // Merge with existing non-annotation selections from the store
+      const storeState = useSelectedLayerStore.getState();
+      const existing = { ...storeState.selectedLayerIds };
+      // Remove stale annotation keys, add current ones
+      for (const key of Object.keys(existing)) {
+        const isAnnotation = useLayerRegistryStore
+          .getState()
+          .entries.some((e) => e.id === key && e.kind === "annotation");
+        if (isAnnotation && !annotationIds[key]) {
+          delete existing[key];
+        }
+      }
+      const merged = { ...existing, ...annotationIds };
+      // Guard: only write if changed
+      const currentKeys = Object.keys(storeState.selectedLayerIds)
+        .sort()
+        .join(",");
+      const mergedKeys = Object.keys(merged).sort().join(",");
+      if (currentKeys !== mergedKeys) {
+        storeState.setSelectedLayerIds(merged);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

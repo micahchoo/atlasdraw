@@ -730,12 +730,14 @@ describe("the panel is its own scroll port (step 6)", () => {
 });
 
 describe("annotations are not data layers", () => {
-  it("renders a plain row — no disclosure, no menu, no symbology", () => {
+  it("renders a row — no disclosure, no card body, no symbology", () => {
     useLayerRegistryStore.getState().registerAnnotation("el-1", "MyShape");
     render(<LayerPanel />);
 
     expect(screen.queryByTestId("layer-disclosure-el-1")).toBeNull();
-    expect(screen.queryByTestId("layer-menu-el-1")).toBeNull();
+    // The ⋯ menu is per-row for every layer kind now — rename / delete / zoom
+    // apply to annotations too; only the card body doesn't exist.
+    expect(screen.getByTestId("layer-menu-el-1")).toBeTruthy();
     expect(screen.queryByTestId("style-panel")).toBeNull();
     expect(screen.getByText("MyShape")).toBeTruthy();
   });
