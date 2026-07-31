@@ -101,7 +101,59 @@ export type DataLayerEntry = {
   provenance?: LayerProvenance;
 };
 
-export type LayerRegistryEntry = AnnotationLayerEntry | DataLayerEntry;
+/**
+ * The four corners of a raster, in lng/lat, in the order MapLibre's `image`
+ * source wants them: top-left, top-right, bottom-right, bottom-left.
+ *
+ * Corners rather than a bbox because that is the shape the source takes, and
+ * because a bbox cannot express a raster that is not axis-aligned. Nothing
+ * produces a rotated one today — the GeoTIFF importer only accepts north-up
+ * files — but storing the shape that can hold one costs nothing now and a
+ * migration later.
+ */
+export type RasterCorners = [
+  [number, number],
+  [number, number],
+  [number, number],
+  [number, number],
+];
+
+/**
+ * Raster layer — a georeferenced picture, not a set of shapes. A scanned survey
+ * sheet, a satellite tile, a historical map plate.
+ *
+ * FU-1. Deliberately shares almost nothing with `DataLayerEntry`: it has no
+ * `featureCount` because it has no features, and no `LayerStyle` because fill
+ * colour and stroke width mean nothing to pixels. `opacity` is its whole style,
+ * and it is the one that matters — the reason you drop a scanned sheet is to
+ * fade it and trace on top.
+ *
+ * `imageKey` addresses the decoded PNG in the document's `files/` bag, not the
+ * original file. The original is not kept: MapLibre's `image` source wants an
+ * image, we decode at import anyway, and a 200 MB GeoTIFF in every autosave is
+ * its own outage. `provenance.sourceFile` is what remembers where it came from.
+ *
+ * id is namespaced `rl:<uuid>` — same reasoning as `dl:`, and it keeps
+ * "which stack is this in?" answerable from the id alone.
+ */
+export type RasterLayerEntry = {
+  kind: "raster";
+  id: string;
+  label: string;
+  visible: boolean;
+  order: number;
+  corners: RasterCorners;
+  /** 0..1. Separate from LayerStyle.opacity, which is a vector paint property. */
+  opacity: number;
+  /** Key into the document's binary asset bag. */
+  imageKey: string;
+  provenance?: LayerProvenance;
+};
+
+export type LayerRegistryEntry =
+  | AnnotationLayerEntry
+  | DataLayerEntry
+  | RasterLayerEntry;
 
 /**
  * ILayerRegistry — the central authority over all layer state. Implementations
@@ -143,6 +195,20 @@ export interface ILayerRegistry {
     style: LayerStyle;
     provenance?: LayerProvenance;
   }): void;
+  /**
+   * FU-1. Takes already-decoded geography — the importer owns reading the
+   * GeoTIFF and rejecting a CRS it cannot place, so by the time an entry
+   * reaches the registry its corners are lng/lat and its pixels are in the
+   * document's asset bag. The registry never touches image bytes.
+   */
+  registerRasterLayer(opts: {
+    id: string;
+    label: string;
+    corners: RasterCorners;
+    imageKey: string;
+    opacity?: number;
+    provenance?: LayerProvenance;
+  }): void;
   convertAnnotationToDataLayer(elementId: string, fc: FeatureCollection): void;
   setVisibility(id: string, visible: boolean): void;
   /**
@@ -162,6 +228,14 @@ export interface ILayerRegistry {
  * Distinct from any user-chosen import style so converted layers are visually
  * recognizable until the user customizes them via LayerPanel.
  */
+/**
+ * Rasters land fully opaque. The alternative — arriving pre-faded so you can
+ * "see it's a backdrop" — means the first thing a user does after every import
+ * is drag a slider back to where they dropped it. Fading is a decision they
+ * make while tracing, not a greeting.
+ */
+const DEFAULT_RASTER_OPACITY = 1;
+
 const DEFAULT_CONVERTED_STYLE: LayerStyle = {
   fillColor: "#0aa",
   strokeColor: "#077",
@@ -171,16 +245,26 @@ const DEFAULT_CONVERTED_STYLE: LayerStyle = {
 
 /**
  * Re-stamp `order` as the contiguous 0-based index of each entry *within its
- * own kind* — the meaning both entry types document. Called after every
+ * own kind* — the meaning every entry type documents. Called after every
  * structural mutation (register / remove / convert / reorder) so `order` is
- * never sparse and never mixes the two stacks; LayerPanel renders one section
- * per kind and relies on that to decide first/last.
+ * never sparse and never mixes the stacks; LayerPanel renders one section per
+ * kind and relies on that to decide first/last.
+ *
+ * One counter per kind, keyed off `kind` itself. This used to be a ternary —
+ * `kind === "data" ? dataIndex++ : annotationIndex++` — which silently gave any
+ * future third kind the annotation counter, so a raster and an annotation would
+ * both claim order 0 and the panel would disagree with itself about which was
+ * first. A record cannot go quietly wrong that way: a new kind with no counter
+ * is a type error here rather than a wrong number downstream.
  */
 function reindexByKind(entries: LayerRegistryEntry[]): void {
-  let dataIndex = 0;
-  let annotationIndex = 0;
+  const next: Record<LayerRegistryEntry["kind"], number> = {
+    annotation: 0,
+    data: 0,
+    raster: 0,
+  };
   for (const entry of entries) {
-    entry.order = entry.kind === "data" ? dataIndex++ : annotationIndex++;
+    entry.order = next[entry.kind]++;
   }
 }
 
@@ -260,6 +344,38 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           order: 0, // see registerAnnotation — reindexByKind owns the value
           featureCount: fc.features.length,
           style,
+          ...(provenance ? { provenance } : {}),
+        });
+        reindexByKind(s.entries);
+      });
+    },
+
+    registerRasterLayer: ({
+      id,
+      label,
+      corners,
+      imageKey,
+      opacity,
+      provenance,
+    }) => {
+      if (!id.startsWith("rl:")) {
+        throw new Error(
+          `raster layer id must start with rl: prefix (received "${id}")`,
+        );
+      }
+      set((s) => {
+        if (s.entries.some((e) => e.id === id)) {
+          return;
+        }
+        s.entries.push({
+          kind: "raster",
+          id,
+          label,
+          visible: true,
+          order: 0, // see registerAnnotation — reindexByKind owns the value
+          corners,
+          imageKey,
+          opacity: opacity ?? DEFAULT_RASTER_OPACITY,
           ...(provenance ? { provenance } : {}),
         });
         reindexByKind(s.entries);

@@ -102,6 +102,22 @@ export function selectDocument(
         ...(entry.renamedByUser ? { renamedByUser: true } : {}),
       };
     }
+    if (entry.kind === "raster") {
+      // FU-1. A raster carries geography and an asset key, not features and a
+      // paint style. The image bytes themselves are already in the document's
+      // file bag — `imageKey` is how the manifest points at them, the same way
+      // `source` points at a GeoJSON path for a data layer.
+      return {
+        kind: "raster" as const,
+        id: entry.id,
+        label: entry.label,
+        visible: entry.visible,
+        corners: entry.corners,
+        opacity: entry.opacity,
+        imageKey: entry.imageKey,
+        ...(entry.provenance ? { provenance: entry.provenance } : {}),
+      };
+    }
     return {
       kind: "data" as const,
       id: entry.id,

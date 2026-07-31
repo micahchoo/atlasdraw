@@ -175,6 +175,123 @@ describe("layerRegistry", () => {
     });
   });
 
+  // FU-1 — the third kind.
+  describe("registerRasterLayer", () => {
+    const CORNERS = [
+      [0, 1],
+      [1, 1],
+      [1, 0],
+      [0, 0],
+    ] as const;
+
+    it("appends a RasterLayerEntry, opaque by default", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerRasterLayer({
+        id: "rl:abc-123",
+        label: "survey-sheet.tif",
+        corners: [...CORNERS] as never,
+        imageKey: "raster-abc-123.png",
+        provenance: { sourceFile: "survey-sheet.tif", droppedCount: 0 },
+      });
+
+      const { entries } = useLayerRegistryStore.getState();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        kind: "raster",
+        id: "rl:abc-123",
+        label: "survey-sheet.tif",
+        visible: true,
+        order: 0,
+        imageKey: "raster-abc-123.png",
+        // Arrives at full strength. A raster that showed up pre-faded would
+        // make dragging the slider back the first act of every import.
+        opacity: 1,
+      });
+    });
+
+    it("throws on a non-prefixed id", () => {
+      const store = useLayerRegistryStore.getState();
+      expect(() =>
+        store.registerRasterLayer({
+          id: "no-prefix",
+          label: "Bad",
+          corners: [...CORNERS] as never,
+          imageKey: "x.png",
+        }),
+      ).toThrow(/rl:/);
+
+      expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+    });
+
+    // The bug this guards is the one `reindexByKind`'s old ternary would have
+    // shipped: any kind that was not "data" shared the annotation counter, so
+    // a raster and an annotation both claimed order 0 and the panel could not
+    // say which was first in its own section. Three kinds at once is the only
+    // arrangement that catches it.
+    it("counts order per kind, with all three kinds present", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerAnnotation("el-1");
+      store.registerRasterLayer({
+        id: "rl:r-1",
+        label: "plate 1",
+        corners: [...CORNERS] as never,
+        imageKey: "a.png",
+      });
+      store.registerAnnotation("el-2");
+      store.registerDataLayer({
+        id: "dl:d-1",
+        fc: emptyFc(1),
+        label: "parcels",
+        style: {},
+      });
+      store.registerRasterLayer({
+        id: "rl:r-2",
+        label: "plate 2",
+        corners: [...CORNERS] as never,
+        imageKey: "b.png",
+      });
+
+      const byId = Object.fromEntries(
+        useLayerRegistryStore.getState().entries.map((e) => [e.id, e.order]),
+      );
+      expect(byId).toEqual({
+        "el-1": 0,
+        "el-2": 1,
+        "dl:d-1": 0,
+        "rl:r-1": 0,
+        "rl:r-2": 1,
+      });
+    });
+
+    it("ignores a duplicate id rather than stacking two entries on it", () => {
+      const store = useLayerRegistryStore.getState();
+      const args = {
+        id: "rl:dup",
+        label: "first",
+        corners: [...CORNERS] as never,
+        imageKey: "a.png",
+      };
+      store.registerRasterLayer(args);
+      store.registerRasterLayer({ ...args, label: "second" });
+
+      const { entries } = useLayerRegistryStore.getState();
+      expect(entries).toHaveLength(1);
+      expect(entries[0].label).toBe("first");
+    });
+
+    it("removes like any other entry", () => {
+      const store = useLayerRegistryStore.getState();
+      store.registerRasterLayer({
+        id: "rl:gone",
+        label: "plate",
+        corners: [...CORNERS] as never,
+        imageKey: "a.png",
+      });
+      useLayerRegistryStore.getState().remove("rl:gone");
+      expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+    });
+  });
+
   describe("setVisibility", () => {
     it("toggles visible on an entry by id", () => {
       const store = useLayerRegistryStore.getState();

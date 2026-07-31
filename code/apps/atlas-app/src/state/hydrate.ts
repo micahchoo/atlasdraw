@@ -82,6 +82,35 @@ export async function hydrate(
         // signature with a positional boolean.
         registry.renameLayer(entry.id, entry.label);
       }
+    } else if (entry.kind === "raster") {
+      // FU-1. This branch exists before anything can write a raster into a
+      // manifest, on purpose. What used to be here was a bare `else` that
+      // treated EVERY non-annotation entry as a data layer — so the day the
+      // schema grew a third kind, opening a document containing one would have
+      // called registerDataLayer with no FeatureCollection, warned about a
+      // missing FC blob, and skipped the layer. A silent wrong answer on the
+      // load path, discovered by a user whose scanned sheet had vanished.
+      //
+      // The image itself rides in `loaded.files` alongside pasted canvas
+      // images, keyed by the entry's imageKey. A manifest entry whose image is
+      // missing is skipped for the same reason a data layer with no FC is: a
+      // row in the panel that can never render is worse than an absent one.
+      if (!loaded.files.has(entry.imageKey)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[atlasdraw] hydrate: raster layer missing image, skipping",
+          entry.id,
+        );
+        continue;
+      }
+      registry.registerRasterLayer({
+        id: entry.id,
+        label: entry.label,
+        corners: entry.corners,
+        imageKey: entry.imageKey,
+        opacity: entry.opacity,
+        provenance: entry.provenance,
+      });
     } else {
       const fc = loaded.layers.get(entry.id);
       if (!fc) {

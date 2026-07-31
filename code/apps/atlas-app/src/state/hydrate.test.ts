@@ -227,6 +227,73 @@ describe("hydrate", () => {
     expect(useDataLayerFCStore.getState().get("dl:cities")).toEqual(sampleFC);
   });
 
+  // FU-1. Before the raster branch existed, this file's layer replay ended in a
+  // bare `else` that treated every non-annotation entry as a data layer. The
+  // day the schema grew a third kind, opening a document containing one would
+  // have called registerDataLayer, found no FeatureCollection, warned, and
+  // dropped the layer — a scanned sheet silently missing after a reopen. These
+  // two cases are the branch, and the second is the skip that replaces it.
+  describe("raster layers", () => {
+    const rasterEntry = {
+      kind: "raster" as const,
+      id: "rl:plate-1",
+      label: "survey-sheet.tif",
+      visible: true,
+      corners: [
+        [0, 1],
+        [1, 1],
+        [1, 0],
+        [0, 0],
+      ] as [
+        [number, number],
+        [number, number],
+        [number, number],
+        [number, number],
+      ],
+      opacity: 1,
+      imageKey: "raster-plate-1.png",
+    };
+
+    it("registers a raster whose image is in the document", async () => {
+      const { api } = makeAPI();
+      const loaded: AtlasdrawDocument = {
+        manifest: baseManifest({ layers: [rasterEntry] }),
+        scene: [],
+        layers: new Map(),
+        styleRef: {},
+        files: new Map([
+          ["raster-plate-1.png", new Blob([new Uint8Array([1])])],
+        ]),
+      };
+
+      await hydrate(loaded, api);
+
+      const entries = useLayerRegistryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        kind: "raster",
+        id: "rl:plate-1",
+        label: "survey-sheet.tif",
+        imageKey: "raster-plate-1.png",
+      });
+    });
+
+    it("skips a raster whose image is missing rather than registering a blank row", async () => {
+      const { api } = makeAPI();
+      const loaded: AtlasdrawDocument = {
+        manifest: baseManifest({ layers: [rasterEntry] }),
+        scene: [],
+        layers: new Map(),
+        styleRef: {},
+        files: new Map(),
+      };
+
+      await hydrate(loaded, api);
+
+      expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+    });
+  });
+
   it("preserves visible=false from the manifest after register stamps true", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
