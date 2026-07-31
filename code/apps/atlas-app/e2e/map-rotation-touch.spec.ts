@@ -14,10 +14,23 @@
  * (`touchZoomRotate.enableRotation()`), but the gesture still has to *reach*
  * MapLibre through the Excalidraw plate. The plate is `pointer-events: none`
  * only when `classifyTool` says the active tool is map-interactive, and
- * `classifyTool` is `toolType !== "hand"` — so under the **default selection
- * tool the plate is opaque and no touch, and no mouse drag either, reaches the
- * camera at all**. The first test below pins that; the rest pick up the hand
- * tool first, because that is the state the gesture exists in.
+ * `classifyTool` is `toolType !== "hand"` — so under the default selection
+ * tool the plate is opaque and **no pointer gesture on the canvas reaches the
+ * camera**: not the twist, not a pinch, not a plain mouse drag. The first test
+ * below pins that; the rest pick up the hand tool first, because that is the
+ * state the gesture exists in.
+ *
+ * Scope that claim to *pointer gestures on the canvas*, because the map is not
+ * otherwise unreachable. Two paths deliberately bypass the plate and still work
+ * under the selection tool — wheel zoom, via `useMapWheelRouter`
+ * (`MapEditor.tsx:741`, which routes wheel events to the map whatever layer
+ * they land on), and space+drag, via the bridge at
+ * `useExcalidrawChangeHandler.ts:134` that forwards Excalidraw's own scroll pan
+ * onto the camera. Measured under the selection tool: wheel `z 4 -> 5.4` with
+ * the centre tracking the cursor, space+drag moves the centre, left-drag and
+ * middle-drag do not. So the hand tool is required for *drag*-panning and for
+ * the twist, not for map interaction in general. Those two bypasses have no
+ * coverage of their own and deserve their own spec.
  *
  * Deliberately not asserted: the exact degrees. MapLibre's
  * `TwoFingersTouchRotateHandler` applies a threshold before it engages and does
@@ -217,9 +230,12 @@ test.describe("map rotation — two-finger twist", () => {
 
     await twist(page, 90);
 
-    // Not a bug report — the shipped gate. Recorded because it is the whole
-    // reason the tests below pick up a tool first, and because if the gate
-    // ever moves off `classifyTool`, this is the line that says so.
+    // Not a bug report — the shipped gate (`classifyTool.ts:20`, an
+    // atlasdraw-dd91 resolution). Recorded because it is the whole reason the
+    // tests below pick up a tool first, and because if the gate ever moves off
+    // `classifyTool`, this is the line that says so. It claims nothing about
+    // wheel or space+drag, which bypass the plate and still reach the map here
+    // — see the header.
     expect(
       (await measure(page)).eastDeg,
       "twist reached the camera without the hand tool",
