@@ -18,10 +18,13 @@
  * Phase 1 constraints enforced at construction:
  *   maxPitch: 0          — pitch=0 assumption keeps CoordinateSync projection-agnostic (OQ-2)
  *   pitchWithRotate: false
+ *   dragRotate: false    — FU-14 / RT-0; see cameraRotation.ts for the other two gestures
  */
 
 import React, { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+
+import { disableCameraRotation } from "./cameraRotation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -127,6 +130,11 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // can use simple Mercator math without perspective correction (OQ-2).
       maxPitch: 0,
       pitchWithRotate: false,
+      // FU-14 / RT-0: rotation is reachable by default and there is no way
+      // back to north yet. The other two rotation gestures are turned off
+      // just below — they have no construction option that spares pinch-zoom
+      // and arrow-key panning.
+      dragRotate: false,
       // T15: required so map canvas can be sampled via drawImage in PNG
       // export. Without this WebGL clears the drawing buffer between frames
       // and the export reads a blank layer.
@@ -141,6 +149,8 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
     });
 
     mapRef.current = map;
+
+    disableCameraRotation(map);
 
     if (onMapReady) {
       map.once("load", () => {
