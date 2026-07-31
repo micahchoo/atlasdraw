@@ -64,6 +64,16 @@ export { parseShapefile, ShapefileParseError } from "./shapefile";
 // Phase 3 Wave 1 Task 5 — Browser-only thumbnail generator (returns null in Node).
 export { generateThumbnail } from "./thumbnail";
 
+// FU-1 RA-2 — GeoTIFF decode. Bytes in, pixels plus four lng/lat corners out.
+export {
+  decodeGeoTiff,
+  fitWithin,
+  RASTER_MAX_DIM,
+  RasterDecodeError,
+  UnsupportedRasterCrsError,
+} from "./geotiff";
+export type { DecodedRaster, RasterCorners } from "./geotiff";
+
 // Phase 5 Task 4 — Yjs CRDT type model for real-time data layers.
 export {
   YjsLayer,
