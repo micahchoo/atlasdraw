@@ -27,6 +27,6 @@
     "@types/geojson": "*",
     "@types/papaparse": "^5.3.0",
     "typescript": "5.9.3",
-    "vitest": "*"
+    "vitest": "3.2.7"
   }
 }

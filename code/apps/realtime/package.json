@@ -28,6 +28,6 @@
     "socket.io-client": "^4.7.0",
     "tsx": "^4.7.0",
     "typescript": "5.9.3",
-    "vitest": "*"
+    "vitest": "3.2.7"
   }
 }

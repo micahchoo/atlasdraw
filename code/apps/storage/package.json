@@ -28,6 +28,6 @@
     "@types/tmp": "*",
     "tmp": "^0.2",
     "typescript": "5.9.3",
-    "vitest": "*"
+    "vitest": "3.2.7"
   }
 }
