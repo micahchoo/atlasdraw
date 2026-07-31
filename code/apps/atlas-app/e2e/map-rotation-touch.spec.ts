@@ -22,15 +22,17 @@
  *
  * Scope that claim to *pointer gestures on the canvas*, because the map is not
  * otherwise unreachable. Two paths deliberately bypass the plate and still work
- * under the selection tool — wheel zoom, via `useMapWheelRouter`
- * (`MapEditor.tsx:741`, which routes wheel events to the map whatever layer
- * they land on), and space+drag, via the bridge at
- * `useExcalidrawChangeHandler.ts:134` that forwards Excalidraw's own scroll pan
- * onto the camera. Measured under the selection tool: wheel `z 4 -> 5.4` with
- * the centre tracking the cursor, space+drag moves the centre, left-drag and
- * middle-drag do not. So the hand tool is required for *drag*-panning and for
- * the twist, not for map interaction in general. Those two bypasses have no
- * coverage of their own and deserve their own spec.
+ * under the selection tool, both built for this exact gate and both already
+ * unit-tested — wheel zoom, via `useMapWheelRouter` (`useMapWheelRouter.ts:1`,
+ * whose header names the same `atlasdraw-5afc` resolution and installs a
+ * capture-phase listener above the plate; `useMapWheelRouter.test.ts`, 15
+ * cases), and space+drag, via the bridge at `useExcalidrawChangeHandler.ts:132`
+ * that forwards Excalidraw's own scroll pan onto the camera
+ * (`useExcalidrawChangeHandler.test.ts:164-202`, 3 cases). Measured here under
+ * the selection tool: wheel `z 4 -> 5.4` with the centre tracking the cursor,
+ * space+drag moves the centre, left-drag and middle-drag do not. So the hand
+ * tool is required for *drag*-panning and for the twist, not for map
+ * interaction in general.
  *
  * Deliberately not asserted: the exact degrees. MapLibre's
  * `TwoFingersTouchRotateHandler` applies a threshold before it engages and does
