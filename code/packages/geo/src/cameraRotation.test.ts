@@ -17,10 +17,17 @@ import type { Map as MapLibreMap } from "maplibre-gl";
  * the result by `screenDeg` about the container centre" — the shape of a real
  * MapLibre transform at pitch 0, with everything but the rotation stripped.
  */
-function makeRotatedMap(bearing: number, screenDeg: number, worldPx = 1000) {
+function makeRotatedMap(
+  bearing: number,
+  screenDeg: number,
+  worldPx = 1000,
+  centerLng = 0,
+) {
   const a = (screenDeg * Math.PI) / 180;
   const cos = Math.cos(a);
   const sin = Math.sin(a);
+  // Like MapLibre's own `project`, this treats the longitude literally: it does
+  // not wrap. That is the mechanism the antimeridian test below depends on.
   const project = vi.fn((coord: [number, number]) => {
     const dx = coord[0] * worldPx;
     const dy = -coord[1] * worldPx; // north is up before rotation
@@ -30,7 +37,7 @@ function makeRotatedMap(bearing: number, screenDeg: number, worldPx = 1000) {
     map: {
       project,
       getBearing: () => bearing,
-      getCenter: () => ({ lng: 0, lat: 0 }),
+      getCenter: () => ({ lng: centerLng, lat: 0 }),
     } as unknown as MapLibreMap,
     project,
   };
@@ -48,6 +55,36 @@ describe("cameraRotation", () => {
       const { map } = makeRotatedMap(1, deg);
       expect(cameraRotation(map)).toBeCloseTo((deg * Math.PI) / 180, 9);
     }
+  });
+
+  it("gives the same answer wherever the camera sits, antimeridian included", () => {
+    // The east probe adds 1e-3° to the centre longitude. Normalizing that sum
+    // wraps a centre at 179.9995° round to ≈ -180°, which projects a full
+    // world-width west and reports ≈ 180° of rotation instead of 42°. So these
+    // centres are not decoration: 179.9995 and 180 are the failing band, and
+    // the out-of-range 200 covers a camera that has panned past one world copy
+    // (MapLibre does not wrap `getCenter().lng` back for you).
+    const expected = (42 * Math.PI) / 180;
+    for (const centerLng of [0, -73.9, 179, 179.9995, 180, 200]) {
+      const { map } = makeRotatedMap(1, 42, 1000, centerLng);
+      expect(cameraRotation(map), `centre lng ${centerLng}`).toBeCloseTo(
+        expected,
+        9,
+      );
+    }
+  });
+
+  it("probes two adjacent longitudes, never a wrapped pair", () => {
+    // The angle assertions above cannot catch a wrap of the *origin* probe: a
+    // whole-world shift is positive and along the parallel, so the difference
+    // vector still points east and `atan2` is unchanged. It is inert today and
+    // a landmine tomorrow — it makes the "derivative" span a world width. This
+    // is the contract that rules it out: the two probes stay a hair apart.
+    const { map, project } = makeRotatedMap(1, 42, 1000, 200);
+    cameraRotation(map);
+    expect(project).toHaveBeenCalledTimes(2);
+    const [[origin], [east]] = project.mock.calls;
+    expect(east[0] - origin[0]).toBeCloseTo(1e-3, 12);
   });
 
   it("is scale-invariant — zoom does not change the answer", () => {

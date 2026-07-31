@@ -105,8 +105,17 @@ export function cameraRotation(map: MapLibreMap): number {
     return 0;
   }
   const { lng, lat } = map.getCenter();
-  const origin = map.project([normalizeLng(lng), lat]);
-  const east = map.project([normalizeLng(lng + EAST_PROBE_DEG), lat]);
+  // Both probe points are projected LITERALLY — no `normalizeLng`. That call is
+  // right at the storage and projection seams, where an out-of-range lng would
+  // misplace an element; it is wrong here. This is a derivative, and it needs
+  // the two points to stay adjacent. Normalizing wraps `lng + EAST_PROBE_DEG`
+  // to ≈ -180 when the centre sits just west of the antimeridian, putting the
+  // east probe a full world-width away and reporting a hard 180° rotation.
+  // Literal treatment is exactly the continuous behaviour a derivative wants:
+  // the Mercator transform is affine in world x, so a whole-world offset shifts
+  // both points equally and cancels out of `atan2`.
+  const origin = map.project([lng, lat]);
+  const east = map.project([lng + EAST_PROBE_DEG, lat]);
   const dx = east.x - origin.x;
   const dy = east.y - origin.y;
   if (dx === 0 && dy === 0) {
