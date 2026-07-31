@@ -161,6 +161,23 @@ describe("applyRotationPolicy", () => {
 
 // RT-3. The single site in the app that converts between "screen rotation of
 // geographic east" (what everything else measures) and MapLibre's bearing.
+//
+// **What these two cases can and cannot establish.** Against a `setBearing`
+// spy they pin *that* the conversion negates, which is enough to catch the
+// negation being dropped or drifting. They cannot tell you whether negating is
+// the RIGHT thing to do — if MapLibre's bearing ran the same sign as the
+// east-angle, a spy assertion stays green and the map turns backwards under
+// the drag. That question needs a map you can set a bearing on and then
+// measure, and it is asked in
+// `apps/atlas-app/src/hooks/cameraRotationRoundTrip.test.ts`, which drives
+// `setCameraRotation` and `cameraRotation` against `FakeMercatorMap`.
+//
+// A third case here previously claimed to assert the conversion against RT-2's
+// `angle = -bearing`. It asserted `-(-137) === 137` — true for every possible
+// convention including a wrong one — and its premise was wrong as well: RT-2
+// measures the rotation off the live projection and never converts a bearing
+// at all. Found by Chief Opus reviewing `40dc175`. Deleted rather than
+// repaired; the round-trip is the test it was pretending to be.
 describe("setCameraRotation", () => {
   it("negates: bearing is the compass direction that is up, east-angle is not", () => {
     const map = makeMap();
@@ -178,19 +195,5 @@ describe("setCameraRotation", () => {
     // `-0`, and MapLibre reads it as 0. Compared numerically rather than with
     // Object.is, because the sign of zero is not the claim being made.
     expect(map.setBearing.mock.calls[0]?.[0]).toBeCloseTo(0, 10);
-  });
-
-  it("agrees with the RT-2 anchor angle, which is the whole point", () => {
-    // RT-2 writes `angle = -bearing` on bbox anchors, derived independently
-    // from this. If the two ever disagree, the compass needle points one way
-    // and the annotations turn the other. Asserting the identity here is
-    // cheaper than discovering it on screen.
-    const map = makeMap();
-    const eastAngleDeg = 137;
-
-    setCameraRotation(map as unknown as MapLibreMap, eastAngleDeg);
-
-    const bearing = map.setBearing.mock.calls[0]?.[0] as number;
-    expect(-bearing).toBe(eastAngleDeg);
   });
 });
