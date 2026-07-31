@@ -576,3 +576,96 @@ describe("LayerPanel — rename by clicking the name", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// FU-1 — the Images section.
+// ---------------------------------------------------------------------------
+
+describe("LayerPanel — raster layers", () => {
+  const CORNERS = [
+    [0, 1],
+    [1, 1],
+    [1, 0],
+    [0, 0],
+  ] as never;
+
+  function seedRaster(id = "rl:plate-1", label = "survey-sheet.tif") {
+    useLayerRegistryStore.getState().registerRasterLayer({
+      id,
+      label,
+      corners: CORNERS,
+      imageKey: `${id}.png`,
+    });
+    return id;
+  }
+
+  it("hides the section entirely when there is no imagery", () => {
+    useLayerRegistryStore.getState().registerAnnotation("el-1");
+    render(<LayerPanel />);
+
+    // Most documents have no raster. An empty section in a 294px column is a
+    // row of nothing, and the panel already carries three headings.
+    expect(screen.queryByRole("region", { name: "Images" })).toBeNull();
+  });
+
+  it("lists a raster with a visibility toggle and a name", () => {
+    const id = seedRaster();
+    render(<LayerPanel />);
+
+    expect(screen.getByRole("region", { name: "Images" })).toBeTruthy();
+    expect(screen.getByTestId(`layer-name-${id}`).textContent).toBe(
+      "survey-sheet.tif",
+    );
+    const eye = screen.getByTestId(`layer-visibility-${id}`);
+    expect(eye.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(eye);
+    expect(
+      useLayerRegistryStore.getState().entries.find((e) => e.id === id)
+        ?.visible,
+    ).toBe(false);
+  });
+
+  it("removes a raster from the registry", () => {
+    const id = seedRaster();
+    render(<LayerPanel />);
+
+    fireEvent.click(screen.getByTestId(`layer-remove-${id}`));
+
+    expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+  });
+
+  it("renders the Images section below Data Layers, matching the map", () => {
+    // The panel's top-to-bottom order has to agree with the map's stacking or
+    // it becomes something you have to think about: rasters draw under the
+    // vector band, so they are listed under it.
+    seedRaster();
+    useLayerRegistryStore.getState().registerDataLayer({
+      id: "dl:parcels",
+      fc: { type: "FeatureCollection", features: [] },
+      label: "parcels",
+      style: {},
+    });
+    render(<LayerPanel />);
+
+    const headings = screen
+      .getAllByRole("heading", { level: 3 })
+      .map((h) => h.textContent);
+    expect(headings.indexOf("Images")).toBeGreaterThan(
+      headings.indexOf("Data Layers"),
+    );
+  });
+
+  it("gives each raster its own reorder bounds, not the annotations'", () => {
+    // reindexByKind numbers per kind, so the first raster is "first" even with
+    // annotations above it. If the two shared a counter this up button would
+    // be enabled and moving it would address the wrong stack.
+    useLayerRegistryStore.getState().registerAnnotation("el-1");
+    const id = seedRaster();
+    render(<LayerPanel />);
+
+    expect(
+      (screen.getByTestId(`layer-up-${id}`) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});

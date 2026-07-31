@@ -171,6 +171,27 @@ const EmbedCanvas: React.FC<{
         if (entry.kind === "annotation") {
           continue;
         }
+        if (entry.kind === "raster") {
+          // Registered here so a shared/embedded document shows the same
+          // backdrop the author saw. `doc.files` carries the decoded image
+          // alongside pasted canvas images; without it there is nothing to
+          // draw, and a panel-less embed has no way to explain an empty layer,
+          // so skip rather than register something unrenderable.
+          if (!doc.files?.has(entry.imageKey)) {
+            continue;
+          }
+          registry.registerRasterLayer({
+            id: entry.id,
+            label: entry.label,
+            corners: entry.corners,
+            imageKey: entry.imageKey,
+            opacity: entry.opacity,
+          });
+          if (entry.visible === false) {
+            registry.setVisibility(entry.id, false);
+          }
+          continue;
+        }
         const fc = layers.get(entry.id);
         if (!fc) {
           continue;

@@ -739,12 +739,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     map,
     registry.registerDataLayer,
     openSheetPanelForImport,
+    registry.registerRasterLayer,
   );
 
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
   // <input type="file"> pattern in state/persistence.ts's fallbackOpen:
   // create it off-DOM, click it programmatically, clean up once settled.
-  // .accept covers all three formats useDataFileImport understands so one
+  // .accept covers every format useDataFileImport understands so one
   // picker serves GeoJSON/CSV/Shapefile alike — drag-drop already handles
   // GeoJSON/CSV; this is the discoverable, menu-driven equivalent, and the
   // only reachable path for Shapefile today.
@@ -754,7 +755,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     }
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".geojson,.csv,.zip";
+    // FU-1: .tif/.tiff/.geotiff added with the raster importer. A format
+    // missing here is invisible in the picker even though a drop would work.
+    input.accept = ".geojson,.csv,.zip,.tif,.tiff,.geotiff";
     input.style.display = "none";
     let settled = false;
     const settle = () => {

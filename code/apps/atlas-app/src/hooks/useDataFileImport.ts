@@ -37,6 +37,10 @@ import {
   CSVParseError,
   ShapefileParseError,
   PhotonGeocoder,
+  decodeGeoTiff,
+  encodeRasterPng,
+  RasterDecodeError,
+  UnsupportedRasterCrsError,
 } from "@atlasdraw/data";
 import { defaultLayerStyle } from "@atlasdraw/basemap";
 
@@ -46,13 +50,18 @@ import { getAppConfig } from "../config/app-config";
 
 import { useToast } from "../components/ToastProvider";
 
-import { addDataLayerToMap } from "../lib/dataLayerRender";
+import { addDataLayerToMap, addRasterLayerToMap } from "../lib/dataLayerRender";
+import { useRasterImageStore } from "../state/useRasterImageStore";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import type { LayerProvenance, LayerStyle } from "../state/layerRegistry";
+import type {
+  LayerProvenance,
+  LayerStyle,
+  RasterCorners,
+} from "../state/layerRegistry";
 
-type DataFileExt = "geojson" | "csv" | "zip";
+type DataFileExt = "geojson" | "csv" | "zip" | "geotiff";
 
 /**
  * Formats the app cannot read *yet*, as opposed to formats that are simply not
@@ -65,7 +74,9 @@ type DataFileExt = "geojson" | "csv" | "zip";
  * day its importer lands, and `detectExt` will claim the extension first.
  */
 const KNOWN_UNBUILT: ReadonlyArray<{ exts: string[]; label: string }> = [
-  { exts: [".tif", ".tiff", ".geotiff"], label: "GeoTIFF" },
+  // GeoTIFF's entry was deleted when RA-4 landed its importer, which is the
+  // mechanism this list exists for: `detectExt` claims the extension first, so
+  // a stale entry here would be unreachable rather than wrong.
   { exts: [".gpkg"], label: "GeoPackage" },
   { exts: [".kml", ".kmz"], label: "KML" },
   { exts: [".gpx"], label: "GPX" },
@@ -93,6 +104,16 @@ function detectExt(fileName: string): DataFileExt | null {
   if (name.endsWith(".zip")) {
     return "zip";
   }
+  // FU-1. `.tif`/`.tiff` are ambiguous by extension — plenty are plain images
+  // with no georeferencing — so this only claims the routing. The decoder is
+  // what decides whether the file can be placed, and says so by name.
+  if (
+    name.endsWith(".tif") ||
+    name.endsWith(".tiff") ||
+    name.endsWith(".geotiff")
+  ) {
+    return "geotiff";
+  }
   return null;
 }
 
@@ -108,7 +129,7 @@ function detectExt(fileName: string): DataFileExt | null {
  */
 async function parseDroppedFile(
   file: File,
-  ext: DataFileExt,
+  ext: Exclude<DataFileExt, "geotiff">,
 ): Promise<{ fc: FeatureCollection; dropped: number }> {
   if (ext === "csv") {
     const geocoderConfig = getAppConfig().geocoder;
@@ -181,11 +202,91 @@ export function useDataFileImport(
    * MapEditor import tests construct the hook without it.
    */
   onImported?: () => void,
+  /**
+   * FU-1. Appended rather than slotted next to `registerDataLayer` where it
+   * belongs, because moving `onImported` would break every existing call site
+   * for a cosmetic gain. Optional for the same reason — the MapEditor tests
+   * that construct this hook with four arguments predate rasters and have none
+   * to import.
+   */
+  registerRasterLayer?: (opts: {
+    id: string;
+    label: string;
+    corners: RasterCorners;
+    imageKey: string;
+    provenance?: LayerProvenance;
+  }) => void,
 ): UseDataFileImportResult {
   const toast = useToast();
 
+  /**
+   * The raster path. Separate from `processDataDrop` rather than a branch
+   * inside it, because the two share nothing after the file object: no
+   * FeatureCollection, no geometry homogeneity check, no layer style, a
+   * different registry call and a different map write. Folding them together
+   * would mean four `if (ext === "geotiff")` escapes inside one function.
+   */
+  const processRasterDrop = useCallback(
+    async (file: File) => {
+      if (!map) {
+        return;
+      }
+      try {
+        const decoded = await decodeGeoTiff(await file.arrayBuffer());
+        const png = await encodeRasterPng(decoded);
+        if (!png) {
+          // No OffscreenCanvas: nothing to hand MapLibre and nothing to save.
+          toast.error(
+            `${file.name}: this browser cannot encode the image for import`,
+          );
+          return;
+        }
+
+        const id = `rl:${crypto.randomUUID()}`;
+        const imageKey = `raster-${id.slice(3)}.png`;
+        // Image store before the map, and the map before the registry: the
+        // registry subscriber reconciles new entries onto the map and reads
+        // the URL from the store, so writing it last would have it find a
+        // raster with no image and skip it. Same ordering rule as the data
+        // path, one store deeper.
+        useRasterImageStore.getState().set(id, png);
+        const url = useRasterImageStore.getState().get(id)!.url;
+        addRasterLayerToMap(map, id, url, decoded.corners, 1);
+        registerRasterLayer?.({
+          id,
+          label: file.name,
+          corners: decoded.corners,
+          imageKey,
+          provenance: { sourceFile: file.name, droppedCount: 0 },
+        });
+
+        toast.success(`${file.name}: imported as a ${decoded.crs} image`);
+        onImported?.();
+      } catch (err) {
+        if (err instanceof UnsupportedRasterCrsError) {
+          // The whole point of the separate error type. "Reproject this" is
+          // actionable; "import failed" would send someone to check a file
+          // that was never the problem.
+          console.error("[MapEditor] raster CRS unsupported:", err.message);
+          toast.error(
+            `${file.name}: this image is in ${err.crs}. Reproject it to EPSG:4326 and try again.`,
+          );
+          return;
+        }
+        if (err instanceof RasterDecodeError) {
+          console.error("[MapEditor] raster decode failed:", err.message);
+          toast.error(`${file.name}: ${err.message}`);
+          return;
+        }
+        console.error("[MapEditor] raster import failed unexpectedly:", err);
+        toast.error(`${file.name}: import failed unexpectedly`);
+      }
+    },
+    [map, registerRasterLayer, toast, onImported],
+  );
+
   const processDataDrop = useCallback(
-    async (file: File, ext: DataFileExt) => {
+    async (file: File, ext: Exclude<DataFileExt, "geotiff">) => {
       if (!map) {
         return;
       }
@@ -262,9 +363,13 @@ export function useDataFileImport(
         );
         return;
       }
+      if (ext === "geotiff") {
+        void processRasterDrop(file);
+        return;
+      }
       void processDataDrop(file, ext);
     },
-    [processDataDrop, toast],
+    [processDataDrop, processRasterDrop, toast],
   );
 
   useEffect(() => {
@@ -284,6 +389,10 @@ export function useDataFileImport(
       }
       e.preventDefault();
       e.stopPropagation();
+      if (ext === "geotiff") {
+        void processRasterDrop(file);
+        return;
+      }
       void processDataDrop(file, ext);
     };
     const onDragOverCapture = (e: DragEvent) => {
@@ -297,7 +406,7 @@ export function useDataFileImport(
         capture: true,
       });
     };
-  }, [processDataDrop, rootRef]);
+  }, [processDataDrop, processRasterDrop, rootRef]);
 
   return { importFile };
 }

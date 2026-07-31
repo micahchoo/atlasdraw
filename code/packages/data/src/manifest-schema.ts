@@ -75,9 +75,52 @@ const DataLayerEntrySchema = z.object({
     .optional(),
 });
 
+/** lng/lat, in the order MapLibre's `image` source wants: TL, TR, BR, BL. */
+const RasterCornersSchema = z.tuple([
+  z.tuple([z.number(), z.number()]),
+  z.tuple([z.number(), z.number()]),
+  z.tuple([z.number(), z.number()]),
+  z.tuple([z.number(), z.number()]),
+]);
+
+/**
+ * FU-1 — a georeferenced picture. Shares almost nothing with a data layer: no
+ * `featureCount` (no features), no `style` (fill colour means nothing to
+ * pixels), and `source` is replaced by `imageKey`, which addresses the decoded
+ * PNG in the zip's `files/` bag rather than a GeoJSON path in `data/`.
+ *
+ * The original GeoTIFF is deliberately NOT persisted — see `RasterLayerEntry`
+ * in the app's layerRegistry for why. `provenance.sourceFile` is the only
+ * record of the file that produced this.
+ *
+ * NOTE on compatibility: `Manifest.version` stays 1. A document containing a
+ * raster fails validation on a build predating this schema; documents without
+ * one are unaffected in both directions. Bumping to 2 would break the reverse
+ * case for every document that already exists, which is the worse trade.
+ */
+const RasterLayerEntrySchema = z.object({
+  kind: z.literal("raster"),
+  // `rl:` for the same reason `dl:` exists — the stack an id belongs to should
+  // be answerable from the id alone.
+  id: z.string().regex(/^rl:/, "raster layer id must start with 'rl:'"),
+  label: z.string(),
+  visible: z.boolean(),
+  corners: RasterCornersSchema,
+  opacity: z.number().min(0).max(1),
+  /** Name within the zip's `files/` bag. */
+  imageKey: z.string().min(1),
+  provenance: z
+    .object({
+      sourceFile: z.string().min(1),
+      droppedCount: z.number().int().nonnegative(),
+    })
+    .optional(),
+});
+
 export const LayerEntrySchema = z.discriminatedUnion("kind", [
   AnnotationLayerEntrySchema,
   DataLayerEntrySchema,
+  RasterLayerEntrySchema,
 ]);
 export type LayerEntry = z.infer<typeof LayerEntrySchema>;
 

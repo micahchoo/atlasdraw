@@ -26,6 +26,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { useRasterImageStore } from "./useRasterImageStore";
 import { useDocumentTitleStore } from "./documentTitle";
 import { usePersistenceStore } from "./usePersistenceStore";
 
@@ -65,6 +66,10 @@ export async function hydrate(
   }
   // Belt-and-braces: nuke any orphan FCs the registry didn't know about.
   useDataLayerFCStore.getState().clear();
+  // FU-1: and the previous document's raster images. `clear` revokes every
+  // object URL, which is the part that matters — opening five documents in a
+  // session would otherwise hold every image any of them contained.
+  useRasterImageStore.getState().clear();
 
   // Step 1b — adopt the loaded document's name. Without this the collar head
   // bar would keep showing the previous document's title and the next
@@ -82,6 +87,43 @@ export async function hydrate(
         // signature with a positional boolean.
         registry.renameLayer(entry.id, entry.label);
       }
+    } else if (entry.kind === "raster") {
+      // FU-1. This branch exists before anything can write a raster into a
+      // manifest, on purpose. What used to be here was a bare `else` that
+      // treated EVERY non-annotation entry as a data layer — so the day the
+      // schema grew a third kind, opening a document containing one would have
+      // called registerDataLayer with no FeatureCollection, warned about a
+      // missing FC blob, and skipped the layer. A silent wrong answer on the
+      // load path, discovered by a user whose scanned sheet had vanished.
+      //
+      // The image itself rides in `loaded.files` alongside pasted canvas
+      // images, keyed by the entry's imageKey. A manifest entry whose image is
+      // missing is skipped for the same reason a data layer with no FC is: a
+      // row in the panel that can never render is worse than an absent one.
+      if (!loaded.files.has(entry.imageKey)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[atlasdraw] hydrate: raster layer missing image, skipping",
+          entry.id,
+        );
+        continue;
+      }
+      // Image into its store BEFORE the registry write, for the same reason
+      // registerDataLayer mirrors its FC first: the registry subscriber
+      // reconciles the new entry onto the map inside `set`, and it reads the
+      // URL from this store. Written second, the reconcile finds a raster with
+      // no image and skips it — a row in the panel and nothing on the map.
+      useRasterImageStore
+        .getState()
+        .set(entry.id, loaded.files.get(entry.imageKey)!);
+      registry.registerRasterLayer({
+        id: entry.id,
+        label: entry.label,
+        corners: entry.corners,
+        imageKey: entry.imageKey,
+        opacity: entry.opacity,
+        provenance: entry.provenance,
+      });
     } else {
       const fc = loaded.layers.get(entry.id);
       if (!fc) {
