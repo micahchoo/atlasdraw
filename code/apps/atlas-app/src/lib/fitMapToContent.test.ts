@@ -7,6 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 
 import {
   computeFeatureCollectionBounds,
+  fitMapToBox,
   fitMapToContent,
   fitMapToLayer,
 } from "./fitMapToContent";
@@ -242,6 +243,30 @@ describe("fitMapToLayer", () => {
     ]);
     // Shared constants: a zoom-to-layer and a zoom-to-content must land the
     // content at the same size, or the two read as different products.
+    expect(opts).toEqual({ padding: 64, maxZoom: 16, duration: 600 });
+  });
+});
+
+describe("fitMapToBox", () => {
+  it("returns false without touching the camera when the map is not ready", () => {
+    expect(fitMapToBox(null, { west: 0, south: 0, east: 0, north: 0 })).toBe(
+      false,
+    );
+  });
+
+  it("frames the camera on the supplied geographic bounds", () => {
+    const map = makeMap();
+    const box = { west: -73.99, south: 40.74, east: -73.98, north: 40.75 };
+    expect(fitMapToBox(map, box)).toBe(true);
+
+    const [bounds, opts] = (
+      map.fitBounds as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(bounds).toEqual([
+      [-73.99, 40.74],
+      [-73.98, 40.75],
+    ]);
+    // Must share the same constants as fitMapToContent and fitMapToLayer.
     expect(opts).toEqual({ padding: 64, maxZoom: 16, duration: 600 });
   });
 });

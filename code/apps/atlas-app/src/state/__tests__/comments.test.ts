@@ -64,7 +64,7 @@ describe("CommentsLayer", () => {
     expect(c.authorId).toBe("alice");
     expect(c.anchor).toEqual({ kind: "map", lng: 1, lat: 2 });
     expect(c.resolved).toBe(false);
-    expect(c.schemaVersion).toBe(1);
+    expect(c.schemaVersion).toBe(2);
   });
 
   it("resolve flips the resolved flag; no-op on unknown id", () => {
@@ -147,7 +147,9 @@ describe("CommentsLayer", () => {
     expect(layerB.comments).toHaveLength(0);
   });
 
-  it("element-anchor round-trips through Y.Map serialization", () => {
+  it("legacy v1 element-anchor is normalized to v2 annotation on read", () => {
+    // v1 clients wrote `{ kind: "element", elementId }`; the read path must
+    // canonicalize it to `{ kind: "annotation", source: "element" }`.
     layerA.addComment({
       text: "on element",
       anchor: { kind: "element", elementId: "ex-42" },
@@ -155,8 +157,23 @@ describe("CommentsLayer", () => {
       authorName: "Alice",
     });
     expect(layerB.comments[0]?.anchor).toEqual({
-      kind: "element",
+      kind: "annotation",
+      source: "element",
       elementId: "ex-42",
+    });
+  });
+
+  it("canonical v2 element-anchor round-trips unchanged through Y.Map serialization", () => {
+    layerA.addComment({
+      text: "on element",
+      anchor: { kind: "annotation", source: "element", elementId: "ex-43" },
+      authorId: "alice",
+      authorName: "Alice",
+    });
+    expect(layerB.comments[0]?.anchor).toEqual({
+      kind: "annotation",
+      source: "element",
+      elementId: "ex-43",
     });
   });
 });

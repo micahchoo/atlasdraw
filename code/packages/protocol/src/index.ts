@@ -30,4 +30,5 @@ export {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
   buildCommentsDocPath,
+  normalizeAnchor,
 } from "./comment-schema";

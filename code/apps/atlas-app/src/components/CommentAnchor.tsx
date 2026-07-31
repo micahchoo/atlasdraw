@@ -2,11 +2,13 @@
 // Phase 6 A3 — CommentAnchor.
 //
 // Renders a comment-bubble badge at the anchor's screen-projected position.
-// Two anchor kinds:
-//   - "map":     MapLibre map.project([lng, lat]) → screen-space pixel point.
-//   - "element": Excalidraw scene-coords → viewport-coords via
-//                @atlasdraw/common's sceneCoordsToViewportCoords helper
-//                (verified at code/packages/common/src/utils.ts:439).
+// Two canonical anchor kinds (data-anchor-kind is always the normalized kind):
+//   - "map":        MapLibre map.project([lng, lat]) → screen-space pixel point.
+//   - "annotation": Excalidraw scene-coords → viewport-coords via
+//                   @atlasdraw/common's sceneCoordsToViewportCoords helper
+//                   (verified at code/packages/common/src/utils.ts:439); or
+//                   map.project of the raster's centroid. v1 "element"
+//                   anchors are normalized to this shape on read.
 //
 // Re-projection is computed every map move / app-state update. CommentAnchor
 // is a thin presentational component; the parent (MapEditor overlay) owns
@@ -18,6 +20,8 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";
+
+import { normalizeAnchor } from "@atlasdraw/protocol";
 
 import styles from "../styles/CommentAnchor.module.css";
 
@@ -77,7 +81,7 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
       className={styles.anchor}
       style={{ left: `${screenX}px`, top: `${screenY}px` }}
       data-testid={`comment-anchor-${comment.id}`}
-      data-anchor-kind={comment.anchor.kind}
+      data-anchor-kind={normalizeAnchor(comment.anchor).kind}
     >
       <button
         type="button"

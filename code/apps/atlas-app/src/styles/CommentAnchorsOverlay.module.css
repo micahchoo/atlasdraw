@@ -12,3 +12,14 @@
   pointer-events: none;
   z-index: 10;
 }
+
+/* Comment-mode pick surface: captures every click while the user is choosing
+ * an anchor, then runs the hit-test cascade. z-index 1 keeps it below the
+ * placed anchors (.anchor is 10) so existing threads stay clickable, and
+ * below the draft bubble (.draft is 11), which only renders after a pick. */
+.clickInterceptor {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+}

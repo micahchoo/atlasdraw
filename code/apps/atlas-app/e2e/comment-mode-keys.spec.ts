@@ -1,16 +1,15 @@
 /**
  * What the keyboard actually does to comment mode, in a real browser.
  *
- * FU-5 was filed as "`h` can't exit comment mode": the mode borrows `hand`, the
- * exit watcher ignores `hand`, so `h` was reasoned to be swallowed. That
- * reasoning composed two true facts into a false conclusion, and the unit
- * suite agreed with it because its fake API sets the tool directly — the real
- * `h` is `actionToggleHandTool`, a TOGGLE that leaves `hand` rather than
- * selecting it.
+ * Comment mode used to borrow the `hand` tool and exit when the user picked a
+ * tool — that exit was the subject of FU-5 ("`h` can't exit comment mode").
+ * Both are gone: the overlay intercepts clicks itself, so the Excalidraw tool
+ * is never touched. Entering the mode changes nothing about the editor, and no
+ * tool pick can end it — Escape and the rail toggle are the only exits.
  *
- * Only a browser runs the real action, so the claim gets a browser probe. The
- * three keys below are the whole keyboard surface of the mode: one that must
- * exit and restore, one that must exit and keep the tool it picked, and `h`.
+ * Only a browser runs the real actions, so the claims get browser probes: the
+ * mode must leave the tool alone, Escape must exit, and a tool shortcut must
+ * change the tool without ending the mode.
  *
  * Read through `aria-pressed` on the rail toggle rather than any internal — it
  * is what a user (and a screen reader) is told, so it is what has to be true.
@@ -74,11 +73,11 @@ async function enterCommentMode(page: import("@playwright/test").Page) {
 
 /**
  * Excalidraw's tool shortcuts only fire for events whose target is inside its
- * own container, so `r` and `h` need the container focused — while comment
- * mode's own `c` and Escape ride atlas-app's window listener and work from
- * anywhere. Focus is set on the element rather than clicked onto it for the
- * reasons in `enterCommentMode`: every clickable point in reach either opens
- * the menu or drops an anchor.
+ * own container, so `r` needs the container focused — while comment mode's own
+ * `c` and Escape ride atlas-app's window listener and work from anywhere.
+ * Focus is set on the element rather than clicked onto it for the reasons in
+ * `enterCommentMode`: every clickable point in reach either opens the menu or
+ * drops an anchor.
  */
 async function focusEditor(page: import("@playwright/test").Page) {
   await page.evaluate(() => {
@@ -94,15 +93,16 @@ async function focusEditor(page: import("@playwright/test").Page) {
     .toBe(true);
 }
 
-test.describe("comment mode — keyboard exits", () => {
-  test("Escape leaves the mode and puts the borrowed tool back", async ({
+test.describe("comment mode — the tool is not borrowed", () => {
+  test("Escape leaves the mode and the editor tool is untouched by it", async ({
     page,
   }) => {
     await waitForApp(page);
     const before = await activeTool(page);
 
     await enterCommentMode(page);
-    expect(await activeTool(page)).toBe("hand");
+    // Entering the mode borrows nothing — the tool is whatever it was.
+    expect(await activeTool(page)).toBe(before);
 
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("comment-mode-button")).toHaveAttribute(
@@ -112,7 +112,7 @@ test.describe("comment mode — keyboard exits", () => {
     expect(await activeTool(page)).toBe(before);
   });
 
-  test("`r` leaves the mode and keeps the rectangle you asked for", async ({
+  test("`r` changes the tool without ending the mode; Escape then exits", async ({
     page,
   }) => {
     await waitForApp(page);
@@ -120,29 +120,19 @@ test.describe("comment mode — keyboard exits", () => {
     await enterCommentMode(page);
 
     await page.keyboard.press("r");
+    // A tool pick is no longer an exit — the mode survives the rectangle.
+    await expect(page.getByTestId("comment-mode-button")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await activeTool(page)).toBe("rectangle");
+
+    // Escape still exits, and the tool the user picked stays put.
+    await page.keyboard.press("Escape");
     await expect(page.getByTestId("comment-mode-button")).toHaveAttribute(
       "aria-pressed",
       "false",
     );
     expect(await activeTool(page)).toBe("rectangle");
-  });
-
-  test("`h` leaves the mode — it toggles the hand tool off, it does not re-pick it", async ({
-    page,
-  }) => {
-    await waitForApp(page);
-    await focusEditor(page);
-    await enterCommentMode(page);
-    expect(await activeTool(page)).toBe("hand");
-
-    await page.keyboard.press("h");
-
-    // The claim under test. If `h` were swallowed this stays "true" and the
-    // tool stays "hand" — the exact state FU-5 described.
-    await expect(page.getByTestId("comment-mode-button")).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(await activeTool(page)).not.toBe("hand");
   });
 });

@@ -37,6 +37,41 @@
   margin-bottom: var(--ad-space-1);
 }
 
+.anchorMode {
+  display: flex;
+  gap: var(--ad-space-1);
+  margin-bottom: var(--ad-space-1);
+}
+
+.anchorModeButton {
+  flex: 1;
+  height: 24px;
+  padding: 0 var(--ad-space-1);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  color: var(--ad-ink);
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  cursor: pointer;
+}
+
+.anchorModeButton[aria-pressed="true"] {
+  color: var(--ad-ink-inverse);
+  background: var(--ad-accent);
+  border-color: var(--ad-accent);
+}
+
+.anchorModeButton:disabled {
+  color: var(--ad-ink-tertiary);
+  cursor: default;
+}
+
+.anchorModeButton:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 1px;
+}
+
 .textarea {
   width: 100%;
   box-sizing: border-box;

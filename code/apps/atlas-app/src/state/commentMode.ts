@@ -8,8 +8,9 @@
 //
 //   SheetRail            — renders the toggle and its pressed state
 //   useMapEditorKeyboard — the keyboard toggle + Escape exit
-//   useCommentModeTool   — arms the anchor picker, swaps the Excalidraw tool,
-//                          and exits the mode when the user picks a real tool
+//   useCommentModeTool   — arms the anchor picker and manages the atlas tool
+//                          (drop on enter, restore on exit); the Excalidraw
+//                          tool is untouched — the overlay intercepts clicks
 //   CommentAnchorsOverlay— shows the draft composer at the picked anchor
 //   MapEditor            — the crosshair cursor + the on-plate hint
 //
@@ -18,9 +19,9 @@
 // neighbour `comments-anchor-picker.ts`) rather than a context. Single
 // instance per app — module lifetime matches MapEditor's.
 //
-// It deliberately holds ONLY the boolean. The "which tool were we on before"
-// memory lives in useCommentModeTool, because restoring it is an effect with
-// a cleanup, not a piece of shared state anyone else reads.
+// It deliberately holds ONLY the boolean. The "which atlas tool were we on
+// before" memory lives in useCommentModeTool, because restoring it is an
+// effect with a cleanup, not a piece of shared state anyone else reads.
 
 import { useSyncExternalStore } from "react";
 

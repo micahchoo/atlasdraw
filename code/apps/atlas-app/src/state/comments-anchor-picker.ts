@@ -19,37 +19,24 @@ import { useSyncExternalStore } from "react";
 
 import type { CommentAnchor } from "@atlasdraw/protocol";
 
-// "any" (Step 5) is comment MODE's arming value: the user has entered the mode
-// but has not told us which kind of anchor they want, so BOTH pickers listen
-// and whichever fires first wins. The panel's explicit Map/Element toggle still
-// narrows to a single kind — that path is unchanged.
+// "any" (Step 5) is comment MODE's armed state: the user has entered the mode
+// but has not told us which kind of anchor they want, so the overlay's
+// hit-test accepts every kind (element → raster → map). The panel's explicit
+// Map/Element toggle still narrows to a single kind — that path is unchanged.
 export type AnchorMode = "map" | "element" | "any" | null;
-
-/** True when `mode` should arm the map-click picker. */
-export function wantsMapAnchor(mode: AnchorMode): boolean {
-  return mode === "map" || mode === "any";
-}
-
-/** True when `mode` should arm the element-selection picker. */
-export function wantsElementAnchor(mode: AnchorMode): boolean {
-  return mode === "element" || mode === "any";
-}
 
 interface PickerState {
   mode: AnchorMode;
   anchor: CommentAnchor | null;
   /**
-   * Step 5 — arm generation. The pickers in CommentAnchorsOverlay are one-shot
-   * (`map.once("click")`, and a `done` latch on the element observer), so
-   * "arm again for the next thread" has to be observable. `mode` alone cannot
+   * Step 5 — arm generation. The overlay's click-intercept re-appears when
+   * the pending anchor is nulled, so `setAnchorMode` clearing the anchor is
+   * the re-arm; this monotonically-increasing counter is what makes that
+   * re-arm observable to any subscription-based consumer (`mode` alone cannot
    * express it: after posting in comment mode the mode is "any" both before
-   * and after, and a `null`-then-`"any"` round-trip is invisible because React
-   * batches and `useSyncExternalStore` only ever sees the final snapshot.
-   *
-   * So `setAnchorMode` bumps this on EVERY call and the picker effects depend
-   * on it. `setPendingAnchor` deliberately does not — otherwise resolving an
-   * anchor would immediately re-arm the map listener and the next stray click
-   * would drag a thread the user is still typing into.
+   * and after, and a `null`-then-`"any"` round-trip is invisible because
+   * React batches and `useSyncExternalStore` only ever sees the final
+   * snapshot).
    */
   arm: number;
 }

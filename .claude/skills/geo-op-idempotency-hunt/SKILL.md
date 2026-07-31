@@ -90,7 +90,7 @@ is from 2026-07-05):
 | Channel | Direction | Writes |
 |---|---|---|
 | Native draw (pointerUp, `newElement==null` gate) | screen→geo | stamps `geo` |
-| Native move/resize → `reanchorIfMoved` | screen→geo | rewrites `geo`, clears `_lastSync` |
+| Native move/resize → `reanchorIfMoved` | screen→geo | rewrites `geo`, writes coherent `_lastSync` via `buildReanchorSnapshot` |
 | Camera move/zoom/rotate/pitch → `_projectElement` | geo→screen | x/y/w/h/points/fontSize/strokeWidth + `_lastSync` |
 | Atlas tool create/drag (`seedToElement`, `patchElement`) | geo→screen | full element + `GeoCustomData` |
 | Scale-mode toggle | — | `scaleMode` only |
@@ -124,9 +124,7 @@ invariants and write it as a vitest property/characterization test:
 3. **Camera-op commutes with identity**: zoom in then out (or pan away and
    back) returns every anchored element to its starting geometry within
    epsilon — for **all three scale modes and all three anchor kinds**.
-   Screen mode is the suspect: `_projectElement` writes only `{x,y}` to
-   `_lastSync` there, forcing `reanchorIfMoved` onto its drift-prone
-   geo-space fallback.
+   (Fixed 2026-07-05: screen mode now writes full `_lastSync` snapshots in all three arms, so this fallback path is no longer taken.)
 4. **User-op × camera-op ordering**: (move, then zoom) and (zoom, then move)
    end with the same final `geo` anchor. Likewise (edit, zoom, undo) must
    not re-anchor — today undo restores x/y + `_lastSync` from a different
@@ -136,11 +134,9 @@ invariants and write it as a vitest property/characterization test:
    test harness; ping-pong (A rewrites, B rewrites back) is a failure even
    if coordinates look right at the instant you sampled.
 6. **Baseline stability**: `w0/h0` in `_lastSync` must always descend from
-   creation-time size. A re-anchor clears `_lastSync`; verify the next sync
-   does not adopt an already-scaled `el.width` as the new baseline
-   (compounding scale error across re-anchor boundaries).
-
-Follow the established test style: mocked map as in
+   creation-time size. Re-anchors now write coherent `buildReanchorSnapshot`
+   with re-based baselines instead of clearing `_lastSync` — verify no
+   compounding scale error across re-anchor boundaries.
 `packages/basemap/src/CoordinateSync.test.ts`, factory-level tests as in
 `useGeoAnchor.test.ts` (test `buildGeoAnchorHandler` directly — do not try
 to mount the React tree). Run with `yarn workspace <pkg> test` (yarn 4
@@ -158,7 +154,7 @@ the depth-4 sequence you didn't. It exists and is wired in:
   passes, greedy shrinking to minimal repros. Its header documents the
   model's approximations — read them before trusting a finding that only
   reproduces in the harness.
-- `apps/atlas-app/src/hooks/geoOpSequence.fuzz.test.ts` — runs 150 seeded
+- `apps/atlas-app/src/hooks/geoOpSequence.fuzz.test.ts` — runs 500 seeded
   sequences; every failure is shrunk and classified by signature
   (invariant|op|kind|scaleMode). Signatures in `KNOWN_FAILURES` are open,
   triaged bugs; any signature outside the list FAILS the suite — that is
@@ -229,7 +225,7 @@ stated: what now makes this *kind* of sequence safe, not just this repro.
 
 ## Known hazard checklist (verify each still holds before hunting new ones)
 
-Status 2026-07-05 (post-fix): hazards **1, 2, 3, 6, 8, 9, 10 are FIXED** by
+Status 2026-07-30 (re-audit): hazards **1, 2, 3, 6, 8, 9, 10 are FIXED** by
 the `_lastSync` protocol overhaul (fuzzer classes A–F; regression repros in
 `geoOpKnownHazards.repro.test.ts`). The overhaul: re-anchors write coherent
 snapshots with re-based baselines instead of clearing `_lastSync`; polyline
@@ -248,15 +244,16 @@ testable claim:
 2. Undo/redo restores x/y + `_lastSync` from a different camera era → if
    zoom changed in between, restored coords mismatch restored `_lastSync`
    → spurious re-anchor.
-3. Screen scale mode writes only `{x,y}` to `_lastSync` → bbox/polyline
-   re-anchor always falls back to drift-prone geo-space comparison.
+3. ~~Screen scale mode writes only `{x,y}` to `_lastSync`~~ **FIXED** — all three arms now write full snapshots (x/y/w/h/mode for point/bbox; x/y/pts/mode for polyline).
 4. `Math.max(1, span)` clamps in `_projectElement` → reverse-projecting a
-   clamped span at extreme zoom-out yields wrong lng; bbox path mitigates,
-   fallback + polyline paths exposed.
+   clamped span at extreme zoom-out yields wrong lng; bbox `reanchorIfMoved`
+   uses screen-space comparison with the same clamping (immune). Polyline
+   and point primary paths use `_lastSync` values (also immune). Remains
+   unconfirmed at extreme zoom ranges outside tested fuzzer deltas.
 5. `2^(z − zRef)` unbounded in geographic mode → precision degrades with
-   zoom delta from creation; never re-based.
-6. Re-anchor clears `_lastSync` → next sync can adopt already-scaled
-   `el.width` as `w0` baseline → compounding scale error.
+   zoom delta from creation; `w0/h0` baselines prevent compounding, and
+   `hybrid` mode exists for extreme deltas. Accepted by design.
+6. ~~Re-anchor clears `_lastSync`~~ **FIXED** — `buildReanchorSnapshot` writes coherent snapshots with re-based `w0/h0/strokeWidth0/fontSize0/zRef`.
 7. Native draw stamps `geo` only after `newElement==null` → element exists
    un-anchored mid-gesture; any camera move in that window operates on an
    element the sync layer can't see.

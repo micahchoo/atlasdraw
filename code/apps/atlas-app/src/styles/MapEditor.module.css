@@ -119,11 +119,11 @@
 
 /* --- comment mode (Step 5) -------------------------------------------------
  *
- * Comment mode borrows the `hand` tool so map clicks reach MapLibre (see
- * useCommentModeTool). `hand` paints a grab cursor, which would say "drag the
- * map" when the mode means "place a thread here" — so override it on the
- * plate. `!important` is unavoidable: MapLibre writes `cursor` as an INLINE
- * style on its own canvas, which no amount of selector weight outranks.
+ * Comment mode means "place a thread here" — the overlay intercepts the
+ * click (CommentAnchorsOverlay), so the plate shows a crosshair no matter
+ * what tool is selected. `!important` is unavoidable: MapLibre writes
+ * `cursor` as an INLINE style on its own canvas, which no amount of selector
+ * weight outranks.
  */
 .commentMode :global(.maplibregl-canvas-container),
 .commentMode :global(.maplibregl-canvas),
@@ -169,9 +169,7 @@
  *
  * Shares .commentModeHint's slot (bottom-centre) and its shape, because it is
  * the same kind of statement: the plate is behaving differently and here is
- * why. The two cannot collide — comment mode forces the `hand` tool
- * (useCommentModeTool), and this hint only shows while a drawing tool is
- * selected.
+ * why. This one only shows while a drawing tool is selected.
  *
  * pointer-events: auto, unlike .commentModeHint, because this one carries the
  * way out. A hint that names a fix the user cannot click is a taunt. */

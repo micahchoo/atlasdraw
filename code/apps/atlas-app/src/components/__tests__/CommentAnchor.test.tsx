@@ -44,11 +44,24 @@ describe("CommentAnchor", () => {
     expect(node.getAttribute("data-anchor-kind")).toBe("map");
   });
 
-  it("renders with element-anchor data attribute", () => {
-    const c = makeComment({ id: "c2" }, { kind: "element", elementId: "el-1" });
+  it("renders with element-anchor data attribute (annotation kind)", () => {
+    const c = makeComment(
+      { id: "c2" },
+      { kind: "annotation", source: "element", elementId: "el-1" },
+    );
     render(<CommentAnchor comment={c} screenX={10} screenY={20} />);
     const node = screen.getByTestId(`comment-anchor-${c.id}`) as HTMLElement;
-    expect(node.getAttribute("data-anchor-kind")).toBe("element");
+    expect(node.getAttribute("data-anchor-kind")).toBe("annotation");
+  });
+
+  it("renders with raster-anchor data attribute (annotation kind)", () => {
+    const c = makeComment(
+      { id: "c2b" },
+      { kind: "annotation", source: "raster", rasterId: "rl-1" },
+    );
+    render(<CommentAnchor comment={c} screenX={10} screenY={20} />);
+    const node = screen.getByTestId(`comment-anchor-${c.id}`) as HTMLElement;
+    expect(node.getAttribute("data-anchor-kind")).toBe("annotation");
   });
 
   it("click opens a popover with the comment text", () => {

@@ -645,11 +645,12 @@ describe("LayerPanel — raster layers", () => {
     expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
   });
 
-  it("renders the Images section below Data Layers, matching the map", () => {
-    // The panel's top-to-bottom order has to agree with the map's stacking or
-    // it becomes something you have to think about: rasters draw under the
-    // vector band, so they are listed under it.
+  it("renders layers in map stacking order: Annotations above Data Layers above Images", () => {
+    // The panel mirrors the map's Z-order top-to-bottom:
+    // Annotations (topmost) → Data Layers (vectors) → Images (rasters)
+    // → Basemap (foundation). Threads is a review surface, not a layer.
     seedRaster();
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Note");
     useLayerRegistryStore.getState().registerDataLayer({
       id: "dl:parcels",
       fc: { type: "FeatureCollection", features: [] },
@@ -661,6 +662,9 @@ describe("LayerPanel — raster layers", () => {
     const headings = screen
       .getAllByRole("heading", { level: 3 })
       .map((h) => h.textContent);
+    expect(headings.indexOf("Annotations")).toBeLessThan(
+      headings.indexOf("Data Layers"),
+    );
     expect(headings.indexOf("Images")).toBeGreaterThan(
       headings.indexOf("Data Layers"),
     );

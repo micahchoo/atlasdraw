@@ -178,8 +178,8 @@ export function useMapEditorKeyboard({
           setShowShortcuts(false);
           return;
         }
-        // Leaving comment mode restores the tool it borrowed — see
-        // useCommentModeTool's cleanup.
+        // Leaving comment mode restores the atlas tool it dropped — see
+        // useCommentModeTool's cleanup. The Excalidraw tool is never touched.
         if (isCommentModeActive()) {
           setCommentMode(false);
         }

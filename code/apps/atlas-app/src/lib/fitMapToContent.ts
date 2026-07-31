@@ -167,3 +167,26 @@ export function fitMapToLayer(
   );
   return true;
 }
+
+/**
+ * Frame the camera on a geographic bounding box. Returns false when the map is
+ * absent, so callers can gate their feedback. Uses the same padding, maxZoom,
+ * and duration as fitMapToContent and fitMapToLayer — one set of constants,
+ * one visual result.
+ */
+export function fitMapToBox(
+  map: FitBoundsSurface | null,
+  box: LngLatBox,
+): boolean {
+  if (!map) {
+    return false;
+  }
+  map.fitBounds(
+    [
+      [box.west, box.south],
+      [box.east, box.north],
+    ],
+    { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: FIT_DURATION_MS },
+  );
+  return true;
+}

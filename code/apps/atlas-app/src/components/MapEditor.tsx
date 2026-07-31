@@ -43,18 +43,17 @@ import { PinTool } from "@atlasdraw/tools";
 
 import {
   cameraRotation,
+  computeSceneBounds,
   isGeoCustomData,
   normalizeElementsForExport,
 } from "@atlasdraw/geo";
-
-import { LngLatBounds } from "maplibre-gl";
 
 import type {
   ExcalidrawElement,
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import type { GeoAnchor } from "@atlasdraw/geo";
+import type { ExcalidrawElementLike, GeoAnchor } from "@atlasdraw/geo";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
@@ -87,6 +86,7 @@ import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { CollabState } from "../state/collab";
 
 import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
+import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
@@ -98,7 +98,11 @@ import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
 import { getAppConfig } from "../config/app-config";
-import { fitMapToContent, fitMapToLayer } from "../lib/fitMapToContent";
+import {
+  fitMapToContent,
+  fitMapToBox,
+  fitMapToLayer,
+} from "../lib/fitMapToContent";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -643,12 +647,28 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         if (entry?.kind === "raster") {
           const m = useMapInstanceStore.getState().map;
           if (m && entry.corners) {
-            const bounds = new LngLatBounds();
-            for (const corner of entry.corners) {
-              bounds.extend(corner);
-            }
-            if (!bounds.isEmpty()) {
-              m.fitBounds(bounds, { padding: 40, animate: true });
+            const box = {
+              west: entry.corners[0][0],
+              south: entry.corners[2][1],
+              east: entry.corners[1][0],
+              north: entry.corners[0][1],
+            };
+            fitMapToBox(m, box);
+          }
+        }
+        // For annotation → zoom to its geo-anchor bounds
+        if (entry?.kind === "annotation") {
+          const m = useMapInstanceStore.getState().map;
+          if (m) {
+            const elements = excalidrawAPI.getSceneElements();
+            const element = elements.find((e) => e.id === id);
+            if (element && isGeoCustomData(element.customData)) {
+              const box = computeSceneBounds([
+                element as ExcalidrawElementLike,
+              ]);
+              if (box) {
+                fitMapToBox(m, box);
+              }
             }
           }
         }
@@ -804,7 +824,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // an ancestor of the others.
   const commentMode = useCommentMode();
   useCommentModeTool({
-    excalidrawAPI,
     atlasTool: activeAtlasTool,
     setAtlasTool: setActiveAtlasTool,
   });
@@ -950,25 +969,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return excalidrawAPI.registerSidebarTab({
       name: "layers",
       label: "Layers",
-      icon: (
-        <svg
-          width={16}
-          height={16}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="1" y="3" width="14" height="3" rx="0.5" />
-          <rect x="3" y="8" width="12" height="3" rx="0.5" />
-          <rect x="5" y="13" width="10" height="3" rx="0.5" />
-          <path d="M2 4.5v6" />
-          <path d="M4 9.5v4" />
-        </svg>
-      ),
+      icon: <LayersIcon />,
       content: <LayerPanel />,
     });
   }, [excalidrawAPI]);

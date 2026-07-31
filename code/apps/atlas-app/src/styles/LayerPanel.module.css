@@ -41,6 +41,14 @@
   color: var(--text-primary-color, var(--ad-ink));
 }
 
+/* Threads is a review surface, not a layer — subtle background tint and a
+ * stronger bottom border to separate it from the layer stack beneath. */
+.reviewsSection {
+  composes: section;
+  background: var(--ad-surface-inset, #f8f9fa);
+  border-bottom-width: 2px;
+}
+
 /* Threads section (Step 5) — the demoted comments list. The heading IS the
  * disclosure, so it resets the button chrome and inherits the h3's type
  * instead of introducing a second heading style. */

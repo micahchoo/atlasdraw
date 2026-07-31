@@ -10,6 +10,11 @@
 // Rendered by CommentAnchorsOverlay, which already owns the projection math
 // for both anchor kinds and re-runs it on map move / scene change.
 //
+// The pick click may have hit an element or raster (hitTarget non-null) or
+// bare map (hitTarget null). A Follow/Pin toggle above the textarea lets the
+// author choose: Follow keeps the annotation attached to the element/raster;
+// Pin drops a geographic point instead. Only hits offer Follow.
+//
 // Keyboard: Escape closes the draft (and, upstream, leaves the mode);
 // Cmd/Ctrl+Enter posts. Every key is stopPropagation'd at the container —
 // text-editing-mode-isolation, the same guard CommentsPanel's composer uses,
@@ -24,10 +29,13 @@ export interface CommentDraftBubbleProps {
   screenX: number;
   /** Projected screen-y of the pending anchor, in overlay coordinates. */
   screenY: number;
-  /** "map" | "element" — shown as a one-word provenance line. */
-  anchorKind: "map" | "element";
-  /** Commit. The parent writes to the CommentsLayer and re-arms the picker. */
-  onSubmit: (text: string) => void;
+  /**
+   * What the pick click landed on. null means the click hit bare map, so
+   * only "Pin to map" is available.
+   */
+  hitTarget: { kind: "element" | "raster" } | null;
+  /** Commit. Carries the Follow/Pin choice; the parent shapes the anchor. */
+  onSubmit: (text: string, followMode: boolean) => void;
   /** Abandon the draft. */
   onCancel: () => void;
   /** False when there is no collab session, i.e. nowhere to write. */
@@ -37,8 +45,10 @@ export interface CommentDraftBubbleProps {
 export function CommentDraftBubble(
   props: CommentDraftBubbleProps,
 ): React.JSX.Element {
-  const { screenX, screenY, anchorKind, onSubmit, onCancel, canSubmit } = props;
+  const { screenX, screenY, hitTarget, onSubmit, onCancel, canSubmit } = props;
   const [text, setText] = useState("");
+  // Default to following whatever the click hit; bare-map drafts start pinned.
+  const [followMode, setFollowMode] = useState(hitTarget !== null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus on placement — the click that set the anchor is the same gesture
@@ -52,9 +62,16 @@ export function CommentDraftBubble(
     if (!trimmed || !canSubmit) {
       return;
     }
-    onSubmit(trimmed);
+    onSubmit(trimmed, followMode);
     setText("");
   };
+
+  const provenance =
+    hitTarget?.kind === "raster"
+      ? "Anchored to raster"
+      : hitTarget?.kind === "element"
+      ? "Anchored to element"
+      : "Anchored to map point";
 
   return (
     <div
@@ -80,7 +97,28 @@ export function CommentDraftBubble(
         className={styles.provenance}
         data-testid="comment-draft-anchor-kind"
       >
-        {anchorKind === "map" ? "Anchored to map point" : "Anchored to element"}
+        {provenance}
+      </div>
+      <div role="group" aria-label="Anchor mode" className={styles.anchorMode}>
+        <button
+          type="button"
+          aria-pressed={followMode}
+          disabled={!hitTarget}
+          onClick={() => setFollowMode(true)}
+          className={styles.anchorModeButton}
+          data-testid="comment-draft-follow"
+        >
+          Follow {hitTarget?.kind === "raster" ? "raster" : "element"}
+        </button>
+        <button
+          type="button"
+          aria-pressed={!followMode}
+          onClick={() => setFollowMode(false)}
+          className={styles.anchorModeButton}
+          data-testid="comment-draft-pin"
+        >
+          Pin to map
+        </button>
       </div>
       <textarea
         ref={textareaRef}

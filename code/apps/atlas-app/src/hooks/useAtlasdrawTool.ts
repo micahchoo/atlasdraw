@@ -69,7 +69,9 @@ export function buildToolContext(
         return { x: p.x, y: p.y };
       },
       unproject: (point) => {
-        const ll = map.unproject(point);
+        const container = map.getContainer();
+        const rect = container.getBoundingClientRect();
+        const ll = map.unproject([point[0] - rect.left, point[1] - rect.top]);
         return { lng: ll.lng, lat: ll.lat };
       },
       getZoom: () => map.getZoom(),

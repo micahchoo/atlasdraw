@@ -26,9 +26,10 @@
 //                 createdAt      → number (ms since epoch, client clock; LWW)
 //                 anchor         → Y.Map encoding one of:
 //                                     { kind: "map", lng, lat }
-//                                     { kind: "element", elementId }
+//                                     { kind: "annotation", source: "element", elementId }
+//                                     { kind: "annotation", source: "raster", rasterId }
 //                 resolved       → boolean (LWW)
-//                 schemaVersion  → number (1; bump on incompatible shape change)
+//                 schemaVersion  → number (2; bump on incompatible shape change)
 //
 // ─── TRUST POSTURE ─────────────────────────────────────────────────────────
 //
@@ -54,12 +55,46 @@
 export const COMMENTS_ARRAY_KEY = "comments" as const;
 
 /** Schema version literal; bump on incompatible shape changes. */
-export const COMMENT_SCHEMA_VERSION = 1 as const;
+export const COMMENT_SCHEMA_VERSION = 2 as const;
 
-/** Anchor kinds supported in v1. Extending requires a schemaVersion bump. */
+/**
+ * Anchor kinds.
+ *
+ *   "map"        – pinned to geographic coordinates; rendered via
+ *                  map.project([lng, lat]) → screen-space pixels.
+ *   "annotation" – follows an element or raster; re-projects when the
+ *                  target moves, pans, or zooms. source disambiguates
+ *                  between Excalidraw elements and georeferenced rasters.
+ *
+ * kind "element" is a v1→v2 migration shim. {@link normalizeAnchor} rewrites
+ * it to the canonical `{ kind: "annotation", source: "element" }` shape.
+ * Consumers MUST call normalizeAnchor on every read path; writers MUST
+ * write only canonical (non-"element") forms.
+ */
 export type CommentAnchor =
   | { kind: "map"; lng: number; lat: number }
-  | { kind: "element"; elementId: string };
+  | { kind: "element"; elementId: string }
+  | { kind: "annotation"; source: "element"; elementId: string }
+  | { kind: "annotation"; source: "raster"; rasterId: string };
+
+/**
+ * Canonicalize an anchor read from Yjs (which may carry v1 "element" entries
+ * or v2 "annotation" entries) into the v2 canonical form.
+ *
+ * Writers MUST NOT produce "element"-kind anchors; this exists only for read
+ * backward-compatibility with documents written by clients running
+ * schema version 1.
+ */
+export function normalizeAnchor(anchor: CommentAnchor): CommentAnchor {
+  if (anchor.kind === "element") {
+    return {
+      kind: "annotation",
+      source: "element",
+      elementId: anchor.elementId,
+    };
+  }
+  return anchor;
+}
 
 /**
  * Plain-object projection of one comment row, as consumed by the React UI.

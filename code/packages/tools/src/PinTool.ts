@@ -41,9 +41,10 @@ export const PinTool: AtlasdrawTool = {
   defaultScaleMode: "geographic",
 
   onPointerDown(e, ctx) {
-    // Container-relative pixel → geographic. ctx.map.unproject is the only map
-    // method we touch here; the structural ctx interface is intentionally narrow
-    // so PinTool stays postMessage-safe (Q11 / Phase 7 plugin worker boundary).
+    // Viewport-relative pixel → geographic. buildToolContext's unproject
+    // wrapper subtracts the map container's bounding-rect offset before
+    // calling MapLibre's unproject, so e.clientX/clientY (viewport coords)
+    // are the correct input here.
     const { lng, lat } = ctx.map.unproject([e.clientX, e.clientY]);
     const zRef = ctx.map.getZoom();
 

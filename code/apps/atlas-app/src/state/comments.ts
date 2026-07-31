@@ -23,6 +23,7 @@ import {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
   buildCommentsDocPath,
+  normalizeAnchor,
   type CommentAnchor,
   type CommentSchemaV1,
 } from "@atlasdraw/protocol";
@@ -312,9 +313,11 @@ export class CommentsLayer {
     for (let i = 0; i < arr.length; i++) {
       const m = arr.get(i);
       const a = m.get("anchor") as Y.Map<unknown> | undefined;
+      // v1 clients wrote `{ kind: "element" }` anchors; normalize to the v2
+      // canonical `{ kind: "annotation", source: "element" }` on every read.
       const anchor: CommentAnchor =
         a !== undefined
-          ? (Object.fromEntries(a.entries()) as CommentAnchor)
+          ? normalizeAnchor(Object.fromEntries(a.entries()) as CommentAnchor)
           : ({ kind: "map", lng: 0, lat: 0 } as CommentAnchor);
       out.push({
         id: (m.get("id") as string) ?? "",

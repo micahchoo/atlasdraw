@@ -139,7 +139,7 @@ describe("useCommentSearchSources", () => {
   it("scrolls the editor to an element anchor and opens that comment", () => {
     layer.addComment({
       text: "here",
-      anchor: { kind: "element", elementId: "el-7" },
+      anchor: { kind: "annotation", source: "element", elementId: "el-7" },
       ...author,
     });
     const commentId = layer.comments[0].id;

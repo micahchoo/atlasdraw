@@ -15,23 +15,8 @@
 // re-establishes it), so it uses Excalidraw CSS vars with fallbacks to match
 // the native tool buttons — same pattern as GeoSearchControl's toolbar button.
 
+import { PinIcon } from "../lib/icons";
 import styles from "../styles/PinToolButton.module.css";
-
-const PinIcon = () => (
-  <svg
-    className={styles.icon}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M8 1.5c-2.5 0-4.5 2-4.5 4.5 0 3.4 4.5 8.5 4.5 8.5s4.5-5.1 4.5-8.5c0-2.5-2-4.5-4.5-4.5z" />
-    <circle cx="8" cy="6" r="1.8" />
-  </svg>
-);
 
 interface PinToolButtonProps {
   active: boolean;
@@ -51,7 +36,7 @@ export function PinToolButton({ active, onToggle }: PinToolButtonProps) {
       title="Pin to map"
       data-testid="pin-tool-button"
     >
-      <PinIcon />
+      <PinIcon className={styles.icon} />
     </button>
   );
 }

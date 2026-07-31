@@ -107,17 +107,28 @@ function revealAnchor(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
 ): void {
-  if (comment.anchor.kind === "map") {
-    map?.flyTo({ center: [comment.anchor.lng, comment.anchor.lat] });
+  const anchor = comment.anchor;
+  if (anchor.kind === "map") {
+    map?.flyTo({ center: [anchor.lng, anchor.lat] });
     return;
   }
 
-  // `scrollToContent` takes an element id and returns silently on an unknown
-  // one (App.tsx:4557 — empty `getElementsFromId`, and a non-link id skips the
-  // toast), so no existence check is needed. `duration` is deliberately absent:
-  // the string branch recurses with fitToContent + animate only and drops it.
-  excalidrawAPI?.scrollToContent(comment.anchor.elementId, {
-    fitToContent: true,
-    animate: true,
-  });
+  // Legacy v1 — equivalent to annotation/source:element below.
+  if (anchor.kind === "element") {
+    excalidrawAPI?.scrollToContent(anchor.elementId, {
+      fitToContent: true,
+      animate: true,
+    });
+    return;
+  }
+
+  // v2 annotation — source determines the target surface.
+  if (anchor.kind === "annotation" && anchor.source === "element") {
+    excalidrawAPI?.scrollToContent(anchor.elementId, {
+      fitToContent: true,
+      animate: true,
+    });
+  }
+  // raster: no viewport move — the badge projects from the raster centroid
+  // and is visible whenever the raster is.
 }

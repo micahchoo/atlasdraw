@@ -11,7 +11,7 @@ import {
 
 describe("comment-schema", () => {
   it("exports a stable schema version literal", () => {
-    expect(COMMENT_SCHEMA_VERSION).toBe(1);
+    expect(COMMENT_SCHEMA_VERSION).toBe(2);
   });
 
   it("exports the canonical Y.Array key", () => {

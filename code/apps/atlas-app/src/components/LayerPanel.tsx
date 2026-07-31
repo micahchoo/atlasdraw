@@ -55,7 +55,7 @@ import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { useSelectedLayerStore } from "../state/selectedLayer";
-import { fitMapToLayer } from "../lib/fitMapToContent";
+import { fitMapToBox, fitMapToLayer } from "../lib/fitMapToContent";
 
 import styles from "../styles/LayerPanel.module.css";
 
@@ -1343,7 +1343,10 @@ function ThreadsSection() {
   const openThreads = useOpenThreadCount();
 
   return (
-    <section aria-label="Threads" className={styles.section}>
+    <section
+      aria-label="Threads"
+      className={joinClass(styles.section, styles.reviewsSection)}
+    >
       <h3 className={styles.heading}>
         <button
           type="button"
@@ -1509,15 +1512,49 @@ export function LayerPanel() {
     },
     zoomTo: (id) => {
       const name = entries.find((e) => e.id === id)?.label ?? id;
+      const entry = entries.find((e) => e.id === id);
       const map = useMapInstanceStore.getState().map;
-      const fc = useDataLayerFCStore.getState().fcs[id];
-      // Read both through getState() rather than subscribing: the panel does
-      // not render differently because a map exists, and subscribing to every
-      // FC would re-render all 25 cards on any import.
-      if (fitMapToLayer(map, fc)) {
-        announce(`Zoomed to "${name}"`);
+
+      if (entry?.kind === "data") {
+        const fc = useDataLayerFCStore.getState().fcs[id];
+        // Read both through getState() rather than subscribing: the panel does
+        // not render differently because a map exists, and subscribing to every
+        // FC would re-render all 25 cards on any import.
+        if (fitMapToLayer(map, fc)) {
+          announce(`Zoomed to "${name}"`);
+        } else {
+          announce(`"${name}" has no geometry to zoom to`);
+        }
+      } else if (entry?.kind === "raster") {
+        if (map && entry.corners) {
+          // Corners may not be axis-aligned in the future; compute real extents.
+          let west = Infinity;
+          let east = -Infinity;
+          let south = Infinity;
+          let north = -Infinity;
+          for (const [lng, lat] of entry.corners) {
+            if (lng < west) {
+              west = lng;
+            }
+            if (lng > east) {
+              east = lng;
+            }
+            if (lat < south) {
+              south = lat;
+            }
+            if (lat > north) {
+              north = lat;
+            }
+          }
+          fitMapToBox(map, { west, south, east, north });
+          announce(`Zoomed to "${name}"`);
+        } else {
+          announce(`"${name}" has no geometry to zoom to`);
+        }
       } else {
-        announce(`"${name}" has no geometry to zoom to`);
+        // Annotation: route through selection → MapEditor effect handles zoom.
+        useSelectedLayerStore.getState().selectLayer(id);
+        announce(`Zooming to "${name}"`);
       }
     },
   };
@@ -1550,6 +1587,25 @@ export function LayerPanel() {
 
   return (
     <div data-testid="layer-panel-body" className={styles.body}>
+      <ThreadsSection />
+      <section aria-label="Annotations" className={styles.section}>
+        <h3 className={styles.heading}>Annotations</h3>
+        {annotations.length === 0 ? (
+          <p className={styles.empty}>(none — draw with Excalidraw tools)</p>
+        ) : (
+          annotations.map((entry) => (
+            <AnnotationLayerRow
+              key={entry.id}
+              entry={entry}
+              mutators={mutators}
+              actions={actions}
+              allIds={annotationIds}
+              selected={!!selectedLayerIds[entry.id]}
+              onSelect={() => selectLayer(entry.id)}
+            />
+          ))
+        )}
+      </section>
       <section aria-label="Data Layers" className={styles.section}>
         <h3 className={styles.heading}>Data Layers</h3>
         {showFilter && (
@@ -1592,11 +1648,6 @@ export function LayerPanel() {
           ))
         )}
       </section>
-      {/* Below Data Layers because that is where rasters render — under the
-          vector band. A panel whose top-to-bottom order disagrees with the
-          map's is a panel you have to think about. Hidden entirely when empty:
-          most documents have no imagery, and an empty section in a 294px column
-          is a row of nothing. */}
       {rasters.length > 0 && (
         <section aria-label="Images" className={styles.section}>
           <h3 className={styles.heading}>Images</h3>
@@ -1613,25 +1664,6 @@ export function LayerPanel() {
           ))}
         </section>
       )}
-      <ThreadsSection />
-      <section aria-label="Annotations" className={styles.section}>
-        <h3 className={styles.heading}>Annotations</h3>
-        {annotations.length === 0 ? (
-          <p className={styles.empty}>(none — draw with Excalidraw tools)</p>
-        ) : (
-          annotations.map((entry) => (
-            <AnnotationLayerRow
-              key={entry.id}
-              entry={entry}
-              mutators={mutators}
-              actions={actions}
-              allIds={annotationIds}
-              selected={!!selectedLayerIds[entry.id]}
-              onSelect={() => selectLayer(entry.id)}
-            />
-          ))
-        )}
-      </section>
       <BasemapSection />
     </div>
   );

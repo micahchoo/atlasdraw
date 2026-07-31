@@ -18,23 +18,8 @@
 // re-establishes it), so it uses Excalidraw CSS vars with fallbacks to match
 // the native tool buttons — same pattern as PinToolButton.
 
+import { CommentModeIcon } from "../lib/icons";
 import styles from "../styles/CommentModeButton.module.css";
-
-const CommentModeIcon = () => (
-  <svg
-    className={styles.icon}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M2 3h12a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H9l-3 3v-3H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-    <path d="M5 7h6M5 9h4" />
-  </svg>
-);
 
 interface CommentModeButtonProps {
   active: boolean;
@@ -75,7 +60,7 @@ export function CommentModeButton({
       }
       data-testid="comment-mode-button"
     >
-      <CommentModeIcon />
+      <CommentModeIcon className={styles.icon} />
       {openThreadCount > 0 && (
         // aria-hidden: the same number is already in the accessible name
         // above. Announcing it twice is noise.
