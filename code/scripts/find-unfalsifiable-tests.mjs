@@ -26,6 +26,22 @@
 // rule in the UI conventions skill, not a script: a claim about layout gets a
 // Playwright probe.
 //
+// The sharpest example of that limit, kept here because it was found by review
+// after this script had already reported the tree clean. RT-3 shipped a case
+// asserting that `setCameraRotation(map, 137)` negates:
+//
+//     setCameraRotation(map, 137);
+//     const bearing = map.setBearing.mock.calls[0]?.[0];
+//     expect(-bearing).toBe(137);              // asserts -(-137) === 137
+//
+// An assertion runs, it is unguarded, and it is a tautology — green under every
+// possible convention, including a wrong one. Catching it needs the arithmetic
+// relating actual to expected, which is a solver, not a syntax walk. The guard
+// for this class is a round trip through the real transform (here,
+// `apps/atlas-app/src/hooks/cameraRotationRoundTrip.test.ts`) plus a mutation
+// check: change the implementation, and if the test stays green it was never
+// testing it.
+//
 // Usage:  node scripts/find-unfalsifiable-tests.mjs [--all]
 //   default   atlasdraw-owned code only
 //   --all     include the vendored fork (packages/excalidraw and friends),

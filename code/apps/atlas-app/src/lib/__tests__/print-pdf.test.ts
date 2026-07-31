@@ -14,6 +14,7 @@ import { PDFDocument } from "pdf-lib";
 
 import {
   exportPDF,
+  northArrowGeometry,
   pageDimensions,
   ODBL_ATTRIBUTION,
   type LayerLegendEntry,
@@ -188,5 +189,88 @@ describe("exportPDF", () => {
     expect(blob.size).toBeGreaterThan(0);
     const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
     expect(parsed.getSubject()).toBe(ODBL_ATTRIBUTION);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RT-4 — the north arrow turns with the camera.
+//
+// `cameraRotationDeg` is the screen rotation of geographic EAST, y-down, which
+// is what `cameraRotation(map)` measures. The arrow draws NORTH, on a y-up
+// page. Two frame flips sit between the input and the output and each one is a
+// chance to be off by a sign, so these tests check the direction the arrow
+// actually points rather than the rotation it was handed.
+// ---------------------------------------------------------------------------
+
+/** Direction from the arrow's centre to its tip, as a unit vector. */
+function tipDirection(cameraRotationDeg: number): { x: number; y: number } {
+  const { tip } = northArrowGeometry(100, 200, cameraRotationDeg);
+  const dx = tip.x - 100;
+  const dy = tip.y - 200;
+  const len = Math.hypot(dx, dy);
+  return { x: dx / len, y: dy / len };
+}
+
+describe("northArrowGeometry", () => {
+  it("points straight up the page on a north-up export", () => {
+    const dir = tipDirection(0);
+    expect(dir.x).toBeCloseTo(0, 12);
+    expect(dir.y).toBeCloseTo(1, 12);
+  });
+
+  it("omitting the rotation is the same as passing 0", () => {
+    expect(northArrowGeometry(100, 200)).toEqual(
+      northArrowGeometry(100, 200, 0),
+    );
+  });
+
+  it("points where north actually went, for the rotation the camera measured", () => {
+    // With east measured at `r` on screen (y-down), north on screen is
+    // `(sin r, -cos r)`, which on a y-up page is `(sin r, cos r)`. Deriving the
+    // expectation from `r` independently of the implementation is the point: a
+    // flipped sign inside cannot flip the expectation with it.
+    for (const deg of [-150, -90, -37, 25, 90, 175]) {
+      const r = (deg * Math.PI) / 180;
+      const dir = tipDirection(deg);
+      expect(dir.x, `east at ${deg} deg`).toBeCloseTo(Math.sin(r), 12);
+      expect(dir.y, `east at ${deg} deg`).toBeCloseTo(Math.cos(r), 12);
+    }
+  });
+
+  it("turns the arrow rigidly — the shaft stays straight and keeps its length", () => {
+    const { tail, tip, label } = northArrowGeometry(100, 200, 63);
+    // Tail and tip stay on opposite sides of the centre, 18pt apart.
+    expect(Math.hypot(tip.x - tail.x, tip.y - tail.y)).toBeCloseTo(18, 12);
+    expect((tip.x + tail.x) / 2).toBeCloseTo(100, 12);
+    expect((tip.y + tail.y) / 2).toBeCloseTo(200, 12);
+    // The "N" rides past the tip along the same line, not back to page-up.
+    const shaft = { x: tip.x - tail.x, y: tip.y - tail.y };
+    const toLabel = { x: label.x - tip.x, y: label.y - tip.y };
+    const cross = shaft.x * toLabel.y - shaft.y * toLabel.x;
+    expect(cross).toBeCloseTo(0, 10);
+    expect(shaft.x * toLabel.x + shaft.y * toLabel.y).toBeGreaterThan(0);
+  });
+
+  it("a full turn comes back to where it started", () => {
+    const a = northArrowGeometry(100, 200, 17);
+    const b = northArrowGeometry(100, 200, 17 + 360);
+    expect(b.tip.x).toBeCloseTo(a.tip.x, 10);
+    expect(b.tip.y).toBeCloseTo(a.tip.y, 10);
+  });
+});
+
+describe("exportPDF — camera rotation", () => {
+  it("accepts a rotation and still produces a valid PDF", async () => {
+    const blob = await exportPDF({
+      pageSize: "letter",
+      orientation: "landscape",
+      title: "Turned",
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
+      layers: LAYERS,
+      cameraRotationDeg: 47,
+    });
+    expect(blob.type).toBe("application/pdf");
+    const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
+    expect(parsed.getPageCount()).toBe(1);
   });
 });

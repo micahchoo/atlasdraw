@@ -49,13 +49,38 @@ function applyAnchor(
     const y = mercY(anchor.north);
     const w = mercX(anchor.east) - x;
     const h = mercY(anchor.south) - y;
+    // RT-2. Canonical space is north-up, so the camera contributes no
+    // rotation here and the canonical angle is the user's own — `a0`. Without
+    // this, a document saved while the map was turned would reopen with the
+    // camera's rotation baked into every bbox element.
+    //
+    // When `a0` is absent, `angle` is deliberately left untouched rather than
+    // zeroed. Every element written since RT-2 records `a0`, so an element
+    // without one predates it and its `angle` is already the user's own. The
+    // one case this exports crooked is an element rotated during the window
+    // when the map could turn and nothing recorded a baseline — which RT-0
+    // closed. Zeroing would silently discard a real user rotation from every
+    // pre-RT-2 document to fix that; leaving it is the smaller lie.
+    const a0 = (cd._lastSync as Record<string, unknown> | undefined)?.a0 as
+      | number
+      | undefined;
     return {
       ...el,
       x,
       y,
       width: w,
       height: h,
-      customData: { ...cd, _lastSync: { x, y, w, h } },
+      ...(a0 !== undefined ? { angle: a0 } : {}),
+      customData: {
+        ...cd,
+        _lastSync: {
+          x,
+          y,
+          w,
+          h,
+          ...(a0 !== undefined ? { a0, a: a0 } : {}),
+        },
+      },
     };
   }
   // polyline: first coord is origin; rest are relative offsets

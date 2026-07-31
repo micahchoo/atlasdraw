@@ -15,8 +15,8 @@ import { describe, expect, it } from "vitest";
 
 import { PinTool, getTool, listTools, registerTool } from "./index.js";
 
-describe("tools registry — self-registration of the built-in tools", () => {
-  it("listTools() includes every built-in tool", () => {
+describe("tools registry — self-registration at module load", () => {
+  it("listTools() includes the built-in PinTool", () => {
     expect(listTools().map((t) => t.id)).toContain(PinTool.id);
   });
 

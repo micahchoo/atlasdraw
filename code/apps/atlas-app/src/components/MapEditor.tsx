@@ -41,7 +41,11 @@ import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import { PinTool } from "@atlasdraw/tools";
 
-import { isGeoCustomData, normalizeElementsForExport } from "@atlasdraw/geo";
+import {
+  cameraRotation,
+  isGeoCustomData,
+  normalizeElementsForExport,
+} from "@atlasdraw/geo";
 
 import type {
   ExcalidrawElement,
@@ -62,6 +66,7 @@ import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
+import { useCameraRotation } from "../hooks/useCameraRotation";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
@@ -121,6 +126,7 @@ import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
 import { GeoSearchControl } from "./GeoSearchControl";
+import { MapCompass } from "./MapCompass";
 import { PinToolButton } from "./PinToolButton";
 import { CommentModeButton } from "./CommentModeButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
@@ -614,7 +620,30 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
-  const { isDrawingMode } = useToolState(excalidrawAPI);
+  const { isDrawingMode: toolWantsToDraw } = useToolState(excalidrawAPI);
+
+  // RT-3/RT-9 — how far the camera is turned, as state. The compass draws from
+  // it and the drawing gate below decides from it.
+  const cameraRot = useCameraRotation(map);
+
+  // RT-9 — drawing is blocked while the camera is turned (D6).
+  //
+  // Unprojecting the pointer is correct at any rotation, but the *shape* is
+  // not: drag a rectangle at 30° and unprojecting its corners yields a
+  // north-aligned bbox that is not the box you dragged. Rather than stamp a
+  // shape the user did not draw, the plate refuses the drag and the hint below
+  // offers the compass's one-click way back.
+  //
+  // Implemented as the pointer-events gate rather than by disabling toolbar
+  // buttons: the toolbar is vendored Excalidraw and the gate is the one place
+  // that already decides whether a drag reaches the canvas at all. Blocked, the
+  // drag reaches MapLibre instead — so a rotated plate still pans and zooms.
+  //
+  // Not blocked: the atlas tools (PinTool). A pin is a *point* anchor, which
+  // is exact at every rotation — RT-9 is about bbox shape, and blocking a
+  // correct tool would be superstition.
+  const drawingBlocked = cameraRot.isRotated;
+  const isDrawingMode = toolWantsToDraw && !drawingBlocked;
 
   // Atlas-side tool dispatcher (PinTool & friends). When `activeAtlasTool` is
   // non-null, the interaction overlay below mounts above Excalidraw and
@@ -864,6 +893,19 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     });
   }, [map, excalidrawAPI, mapBg]);
 
+  // RT-4. How far the camera is turned, for the PDF's north arrow. Measured
+  // off the live projection by the same `cameraRotation` RT-2 uses, not read
+  // from `map.getBearing()` — so the arrow and the annotations agree by
+  // construction, and neither depends on MapLibre's bearing sign convention.
+  // Read at export time, like the image and the legend, so all three answer
+  // the same viewport.
+  const getCameraRotationDeg = useCallback((): number => {
+    if (!map) {
+      return 0;
+    }
+    return (cameraRotation(map) * 180) / Math.PI;
+  }, [map]);
+
   // The legend describes the exported page, not the document (FU-13): hidden
   // layers and layers with nothing painted in this view are left out. Read at
   // export time, like the image, so both answer the same viewport.
@@ -929,6 +971,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           style={{ backgroundColor: mapBg }}
           data-testid="map-editor-root"
           data-comment-mode={commentMode ? "on" : undefined}
+          // RT-9's gate, in observable form. The gate itself is a
+          // pointer-events class on a nested div; this attribute is the state
+          // that produced it, which is what a test or an e2e can assert
+          // without depending on CSS-module class naming.
+          data-drawing-blocked={drawingBlocked ? "true" : undefined}
         >
           {/* Bottom layer: MapLibre GL map */}
           <div className={styles.mapLayer}>
@@ -939,6 +986,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               // Attribution is printed in the Collar marginalia (StatusBar)
               // — no floating control over the plate.
               hideAttribution
+              // RT-3 — the editor is the one view that ships a compass, so it
+              // is the one view allowed to rotate. Two-finger twist and
+              // shift+arrows; right-drag stays with Excalidraw's context menu.
+              allowRotation
             />
           </div>
 
@@ -1096,6 +1147,33 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           band); the container is pointer-events: none so non-anchor clicks
           pass through. */}
           <CommentAnchorsOverlay map={map} excalidrawAPI={excalidrawAPI} />
+
+          {/* RT-3 — the compass. Always mounted, not just while rotated: it is
+          the only mouse gesture that rotates, so hiding it at north-up would
+          leave rotation reachable by trackpad and keyboard alone. */}
+          <MapCompass map={map} rotation={cameraRot} />
+
+          {/* RT-9 — say why the tool went dead. A drawing tool that silently
+          does nothing is the worst version of this block; the hint names the
+          cause and points at the control that fixes it. Shown only when a
+          drawing tool is actually selected — a rotated map is not itself an
+          error state. */}
+          {drawingBlocked && toolWantsToDraw && (
+            <div
+              className={styles.drawBlockedHint}
+              role="status"
+              data-testid="draw-blocked-hint"
+            >
+              Drawing is off while the map is turned
+              <button
+                type="button"
+                className={styles.drawBlockedReset}
+                onClick={() => map?.resetNorth()}
+              >
+                Reset north
+              </button>
+            </div>
+          )}
 
           {/* Step 5 — comment mode's on-plate affordance. A mode with no
           visible state is a trap: the crosshair cursor (.commentMode above)
@@ -1256,6 +1334,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onExportGeoJSON={handleExportGeoJSON}
               onExportAtlasdraw={handleExportAtlasdraw}
               getMapImageDataUrl={getMapImageDataUrl}
+              getCameraRotationDeg={getCameraRotationDeg}
               getLegendEntries={getLegendEntries}
             />
           )}

@@ -18,10 +18,15 @@
  * Phase 1 constraints enforced at construction:
  *   maxPitch: 0          — pitch=0 assumption keeps CoordinateSync projection-agnostic (OQ-2)
  *   pitchWithRotate: false
+ *   dragRotate: false    — FU-14; right-drag belongs to Excalidraw's context
+ *                          menu, and stays off even when `allowRotation` is
+ *                          set. See cameraRotation.ts for the other two.
  */
 
 import React, { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
+
+import { applyRotationPolicy } from "./cameraRotation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +64,15 @@ export interface MapCanvasProps {
    * marginalia) — attribution must stay visible somewhere.
    */
   hideAttribution?: boolean;
+
+  /**
+   * Let the user rotate the camera (two-finger twist, shift+arrows). Off by
+   * default, and the default is the safe one: FU-14 / RT-0 is the defect of
+   * being turned with no way back to north, so a view earns rotation by
+   * shipping a compass. The editor does; the embed and every other MapCanvas
+   * caller does not. Mount-time only, like `initialView`.
+   */
+  allowRotation?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +114,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
   onMapReady,
   className,
   hideAttribution,
+  allowRotation = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   // Hold the map instance for the unmount cleanup; not exposed via state to
@@ -127,6 +142,11 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // can use simple Mercator math without perspective correction (OQ-2).
       maxPitch: 0,
       pitchWithRotate: false,
+      // FU-14 / RT-0: rotation is reachable by default and there is no way
+      // back to north yet. The other two rotation gestures are turned off
+      // just below — they have no construction option that spares pinch-zoom
+      // and arrow-key panning.
+      dragRotate: false,
       // T15: required so map canvas can be sampled via drawImage in PNG
       // export. Without this WebGL clears the drawing buffer between frames
       // and the export reads a blank layer.
@@ -141,6 +161,8 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
     });
 
     mapRef.current = map;
+
+    applyRotationPolicy(map, allowRotation);
 
     if (onMapReady) {
       map.once("load", () => {
@@ -163,8 +185,9 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       map.remove();
       mapRef.current = null;
     };
-    // Intentionally excluding `initialView` and `onMapReady` — initialView is
-    // consumed once at construction; onMapReady is a stable callback contract.
+    // Intentionally excluding `initialView`, `onMapReady` and `allowRotation`
+    // — initialView and allowRotation are consumed once at construction;
+    // onMapReady is a stable callback contract.
     // styleUrl changes are NOT reacted to in Phase 1 (deferred to Wave 2+).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

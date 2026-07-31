@@ -1,6 +1,6 @@
 # @atlasdraw/tools
 
-Geo-aware drawing tools for Atlasdraw: pin, polygon, polyline, freehand, text label, arrow, rectangle, and circle — each producing geo-anchored Excalidraw elements.
+Geo-aware drawing tools for Atlasdraw. `PinTool` is the only one — the seven Phase 2 Wave 1b tools (polygon, polyline, freehand, text label, arrow, rectangle, circle) were deleted 2026-07-31 after three sessions of looking turned up no caller and no behaviour the native Excalidraw toolbar does not already produce (FU-2).
 
 Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 
@@ -8,10 +8,10 @@ Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 
 ## Capabilities
 
-- **8 tools** — `PinTool`, `PolygonTool`, `PolylineTool`, `FreehandTool`, `TextLabelTool`, `ArrowTool`, `RectangleTool`, `CircleTool`, each with its own test file.
+- **`PinTool`** — the one built-in tool, dispatched by `apps/atlas-app/src/hooks/useAtlasdrawTool.ts`.
 - **`classifyTool`** — maps an element back to the tool that produced it.
-- **`convert.ts`** — element ↔ geo conversion helpers shared by the tools.
-- Exported individually from `src/index.ts` — there is no registry array or runtime registration seam today (plugin registration is a Phase 7 roadmap item).
+- **`convert.ts`** — element ↔ geo conversion helpers.
+- **`registerTool` / `getTool` / `listTools`** — lookup-by-id, so a tool can arrive without a compile-time import. `PinTool` self-registers at module load; this is the seam plugin registration would use.
 
 ## Usage
 

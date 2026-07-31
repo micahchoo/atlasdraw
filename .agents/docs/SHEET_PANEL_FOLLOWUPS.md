@@ -28,20 +28,32 @@ ledger.
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
 | FU-1 | **open — and it is a feature, not a follow-up.** Scope verified and rewritten; error message fixed meanwhile | needs one decision from MIXI |
-| FU-2 | **done — the seven are deleted** | this branch; consumer analysis re-verified again at deletion |
-| FU-3 | **done** | this branch — the collab layer survives a style swap |
-| FU-4 | **done** | this branch — grip is the only drag source |
+| FU-2 | **done — the seven are deleted** | twice over: `6497dd8` on `main`, `8cb12be` on `feat/map-rotation`; see the merge note below |
+| FU-3 | **done** | `main` — the collab layer survives a style swap |
+| FU-4 | **done** | `main` — grip is the only drag source |
 | FU-5 | **resolved — not a defect**, see ticket | disproved in a browser; probe kept |
-| FU-6 | **done** | this branch — roving tabindex on the ⋯ menu |
+| FU-6 | **done** | `main` — roving tabindex on the ⋯ menu |
 | FU-7 | open, scope only | — |
-| FU-8 | **done — `yarn test:all` passes in one invocation** | this branch; it had five faces, not three |
-| FU-9 | **done** | this branch — the snapshot was stale, not broken |
-| FU-10 | **done** | this branch — 3 fixed, and `yarn test:falsifiable` keeps them fixed |
+| FU-8 | **done — `yarn test:all` passes in one invocation** | `main`; it had five faces, not three |
+| FU-15 | open, and narrower than it was | FU-8 took `dist/` deletion off the path, so the stale-`tsbuildinfo` trap is now only sprung by clearing outputs by hand |
+| FU-9 | **done** | `main` — the snapshot was stale, not broken |
+| FU-10 | **done** | `main` — 3 fixed, and `yarn test:falsifiable` keeps them fixed |
 | FU-11 | parked with a kill criterion, deliberately | — |
-| FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
+| FU-14 | **done, on a branch** | RT-0 `8749fc0`, RT-1+RT-2 `0d3e567`, probe fix `4505042`, RT-4 `67c33ce`, RT-3+RT-9 `a15fbcf` — all on `feat/map-rotation`, unmerged |
 
-9 of 14 shipped, 1 closed as not-a-defect. Only FU-1 is left that is work;
-FU-7 is scope-only, FU-11 observe-only, FU-14 is Fizz's.
+11 of 15 done, 1 closed as not-a-defect. FU-14's five commits are on
+`feat/map-rotation` and are the only done work not yet on `main` — and the only
+work in this file nobody has run in a browser. What is left is FU-1 (a feature,
+blocked on one decision from MIXI), FU-15 (narrow), FU-7 (scope only) and FU-11
+(observe only).
+
+**FU-2 was deleted twice.** Honey deleted the seven on `main` (`6497dd8`) while
+Fizz deleted them on `feat/map-rotation` (`8cb12be`), the same afternoon, from
+the same ticket. Git merged it without drama — the files agree about being gone
+— but four prose conflicts had to be resolved by hand. The ledger is what was
+supposed to prevent this and it did not, because both agents read it before the
+other's commit existed. Worth a rule: claim a ticket in the table before you
+start it, not when you finish.
 
 ---
 
@@ -360,6 +372,18 @@ The sibling trap — `playwright.config.ts` hardcoding its dev server to one
 absolute checkout, so an e2e run from a worktree tested the wrong tree — **is
 fixed** in `aee15c0`. This one isn't.
 
+**Concrete reproduction, from the FU-14 rotation sequence 2026-07-31.** Run
+`test:typecheck` *before* `test:app` and the suite goes from 1 failure to 11.
+`build:types` emits `packages/{common,math,element,excalidraw}/dist`; the app
+suite then loads two copies of the jotai store, `useTunnels()` returns null, and
+every Sidebar docking test dies with "not initialized yet". `rm -rf
+packages/*/dist` restores the baseline.
+
+**And the obvious escape hatch does not work.** `yarn rm:build` aborts on the
+first non-matching glob (`apps/*/dist`) before it ever reaches the package
+dists — so the command that looks like it cleans this up silently does not.
+That part is a one-line fix in `code/package.json`.
+
 **Impact — contributors, not users.** A new contributor's most obvious first
 command fails on a clean checkout, and nothing distinguishes "the repo is
 broken" from "I broke it."
@@ -496,6 +520,40 @@ re-clipping the layer list. The user never sees this ticket; they see the bug it
 lets through.
 
 **Size:** medium. This is the highest-leverage item in section C.
+
+### FU-15 — Clearing `dist` without `tsconfig.tsbuildinfo` fakes a source error
+
+**Narrowed 2026-07-31 by FU-8's real fix.** This was filed when `rm -rf
+packages/*/dist` was the standing workaround for the dist-poisoning bug. FU-8
+turned out to be three characters in three import paths, so nobody has to
+delete `dist/` any more and the trap is off the normal path. It is still live
+for anyone who clears build outputs by hand — which is what FU-8's own ticket
+now tells you to do "in the same breath" as the tsbuildinfo files, an
+instruction that only works if you remember it.
+
+Clear `dist` and leave
+`packages/*/tsconfig.tsbuildinfo` behind, and `tsc -b` believes
+`@atlasdraw/geo` is still up to date, skips its declaration emit, and fails
+every dependent package with **"has no exported member `GeoCustomData`"**.
+
+The failure names a symbol and a package, so it reads as a real source error.
+It is not — the source was fine both times this was hit during FU-14. The cost
+is the debugging trip, not the build: you go hunting for a broken export that
+was never broken.
+
+**Why it was filed beside FU-8 rather than inside it.** FU-8 was "the composite
+gate sabotages itself"; this is "the documented workaround for FU-8 has its own
+trap". Fixing FU-8 the way it was originally scoped would only have moved where
+the hour was lost. It got fixed a better way instead, which is what shrank this
+ticket rather than closing it.
+
+**Done when:** whatever cleans `dist` also clears the matching
+`tsconfig.tsbuildinfo` — and `yarn rm:build` is the natural place. Still
+`rimraf --glob apps/*/dist packages/*/dist packages/*/build` at
+`code/package.json:92`, so the glob-abort FU-8 describes is also still there:
+it gives up on `apps/*/dist` before reaching the package dists, which makes it
+a no-op for exactly the directories that matter.
+**Size:** small. Both halves are one line each.
 
 ---
 
@@ -637,8 +695,40 @@ alone rather than through the React tree:
 
 ### FU-14 — Rotate and tilt, and what they do to annotations
 
-> **DECIDED 2026-07-31 — rotation ships, tilt is dropped, D6 = block.**
-> **Ready, not started.** Task breakdown lives in
+> **SHIPPED 2026-07-31 on `feat/map-rotation`, not merged, not run in a
+> browser.** Five commits: RT-0 `8749fc0` (rotation off, no way back to north
+> yet), RT-1+RT-2 `0d3e567` (`_lastSync` carries `angle`; bbox anchors turn
+> instead of skewing), `4505042` (the east probe wrapped at the antimeridian
+> and flipped the answer 180°), RT-4 `67c33ce` (the printed north arrow turns
+> with the camera), RT-3+RT-9 `a15fbcf` (compass, reset-north, the gestures
+> back on for the editor only, and drawing held shut while turned).
+>
+> **Two departures from the plan below, both deliberate.**
+>
+> *The rotation is measured, never read.* `cameraRotation()` projects two
+> points a hair apart along the centre parallel and reads the angle that comes
+> back, so nothing in the geometry path depends on MapLibre's bearing sign
+> convention — which matters because nobody has run this app. D2's
+> `angle = -bearing` is still what the code computes; it is just no longer
+> what the code *assumes*. The single exception is `setCameraRotation`, which
+> a control needs because `setBearing` is the only setter there is.
+>
+> *The bearing round-trip was not built, and documents always open north-up.*
+> The plan assumed capture/restore already existed; it did not. Because the
+> rotation is measured off the live projection rather than a stored field,
+> geometry is correct either way, so this became product taste rather than
+> correctness. A document that reopens crooked, with drawing disabled and no
+> explanation, is a worse first five seconds than losing a camera angle. Two
+> lines to reverse if that reads wrong in use.
+>
+> **RT-9's shape, since D6 named an option that could not fire.** MIXI chose
+> "block drawing while tilted" in the message that dropped tilt. The
+> rotation-only reading shipped: the pointer-events gate stays shut while
+> `bearing !== 0`, so the drag reaches MapLibre and a turned plate still pans
+> and zooms, and a hint carries a one-click Reset north. The atlas tools are
+> not blocked — a pin is a point anchor and is exact at every rotation.
+>
+> Task breakdown lives in
 > `PLANS/ATLASDRAW_ROTATION_PLAN.md`: six tasks, **RT-0 first** (close the live
 > defect — rotation is reachable and unrecoverable today) and **RT-1 strictly
 > before RT-2** (`_lastSync` must carry `angle` before anything writes `angle`,
@@ -791,30 +881,27 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
 
 ~~1. **FU-12**~~ ~~2. **FU-13**~~ — shipped: `d29920d`, merged `0b0de34`, pushed.
 ~~3. **FU-14 D3 and D6**~~ — answered 2026-07-31.
+~~4. **FU-14 RT-0..RT-9**~~ ~~5. **FU-2**~~ — shipped 2026-07-31 on
+`feat/map-rotation`, five commits, unmerged.
 
-1. **FU-14 RT-0** — on its own, ahead of everything. Rotation is reachable and
-   unrecoverable *today*, and bearing persists through save and reload. This is
-   the only item on this list that is a live user-facing defect rather than
-   maintenance, and it is one line of map options.
+1. **Merge `feat/map-rotation`, and run the app before you do.** It is the
+   only done work not on `main`, and everything on it was verified by reading
+   source and by tests — nobody has opened the editor. The claims most worth a
+   live check are the ones a test cannot make: that the compass is clickable
+   where it sits (bottom-left, z-index 10, above `.atlasToolOverlay`), that
+   two-finger twist reaches the map through the Excalidraw plate, and that a
+   turned map draws its annotations turned.
 2. **FU-1** — the PRD job that isn't met. Blocked on one decision from MIXI
    (third registry `kind`, or its own lifecycle outside the registry) and it
    wants a plan of its own rather than a row here.
-3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
-   bleeding. Not urgent; nothing is broken while bearing cannot move.
-4. ~~**FU-10**~~ — done 2026-07-31.
-5. ~~**FU-4, FU-5, FU-6**~~ — done 2026-07-31; FU-5 closed as not-a-defect.
-   **FU-3** still open and worth pulling up: the fix is small but the symptom is
-   other people's shapes vanishing mid-session, which is the worst-looking bug
-   on this list.
-6. ~~**FU-8, FU-9**~~ — done 2026-07-31. `yarn test:all` passes in one
-   invocation and green now means green.
-7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
-   only. **FU-11** — observe only.
+3. **FU-15** — build config, do it when something else is compiling.
+4. **FU-7** — scope only. **FU-11** — observe only.
 
 FU-2 dropped from third to last when the claim behind it collapsed, got blocked
-outright when MIXI asked for rotate and tilt, and is now unblocked by the
-decision to drop tilt. It has moved three times without a user ever being able
+outright when MIXI asked for rotate and tilt, was unblocked by the decision to
+drop tilt, and is now done. It moved three times without a user ever being able
 to tell.
 
-The split inside FU-14 is deliberate. RT-0 *removes* a behaviour and is worth
-doing tonight; RT-1 onward *adds* one and can wait behind the capability gap.
+The split inside FU-14 held up in the doing. RT-0 *removed* a behaviour and
+went first on its own; everything after it *added* one, and every commit in
+between was safe to stop at.

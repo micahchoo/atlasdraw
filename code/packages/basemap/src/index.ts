@@ -7,6 +7,14 @@
 export { MapCanvas } from "./MapCanvas";
 export type { MapCanvasProps, MapCanvasInitialView } from "./MapCanvas";
 
+// FU-14 — rotation gestures are off unless a view ships a way back to north.
+export {
+  applyRotationPolicy,
+  disableCameraRotation,
+  enableCameraRotation,
+  setCameraRotation,
+} from "./cameraRotation";
+
 export type { LayerStyle, StyleExpression } from "./style";
 export {
   compileLayer,

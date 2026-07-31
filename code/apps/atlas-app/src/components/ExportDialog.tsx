@@ -101,6 +101,13 @@ interface ExportDialogProps {
    * was still animating.
    */
   getLegendEntries: () => LayerLegendEntry[];
+  /**
+   * Screen rotation of geographic east, degrees, y-down — see
+   * `PrintOptions.cameraRotationDeg`. A callback for the same reason the two
+   * above are: it is read at export time, so a camera still settling cannot
+   * leave the north arrow describing a viewport the image does not show.
+   */
+  getCameraRotationDeg?: () => number;
   /** Preselected format card (e.g. quick-actions "Export PDF"). */
   initialFormat?: ExportFormat;
   /**
@@ -119,6 +126,7 @@ export function ExportDialog({
   onExportAtlasdraw,
   getMapImageDataUrl,
   getLegendEntries,
+  getCameraRotationDeg,
   initialFormat = "png",
   exportPDFImpl = exportPDF,
 }: ExportDialogProps) {
@@ -169,6 +177,7 @@ export function ExportDialog({
         title: title.trim() || documentTitle,
         mapImageDataUrl,
         layers: getLegendEntries(),
+        cameraRotationDeg: getCameraRotationDeg?.() ?? 0,
       });
       const safeName = `${safeFileName(title.trim() || documentTitle)}.pdf`;
       const url = URL.createObjectURL(blob);

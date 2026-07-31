@@ -190,6 +190,9 @@ const mockMap = {
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
+  // RT-3 — useCameraRotation reads the live camera on mount, via
+  // cameraRotation()'s north-up fast path. A map without it is not a map.
+  getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
     getSouth: () => 0,

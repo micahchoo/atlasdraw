@@ -42,6 +42,7 @@ interface AppStateLike {
  */
 function makeMockMap(opts?: {
   zoom?: number;
+  bearing?: number;
   unprojectImpl?: ([x, y]: [number, number]) => { lng: number; lat: number };
   projectImpl?: ([lng, lat]: [number, number]) => { x: number; y: number };
 }): maplibregl.Map {
@@ -59,6 +60,12 @@ function makeMockMap(opts?: {
     unproject,
     project,
     getZoom: vi.fn(() => opts?.zoom ?? 12),
+    // Default north-up: `cameraRotation` short-circuits on bearing 0 and never
+    // reaches `getCenter`, keeping the identity project/unproject above honest.
+    // A rotated camera cannot be modelled with an identity projection — see
+    // useGeoAnchor.rotation.test.ts, which uses the real-Mercator fake.
+    getBearing: vi.fn(() => opts?.bearing ?? 0),
+    getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   } as unknown as maplibregl.Map;
 }
 

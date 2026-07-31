@@ -9,7 +9,14 @@
 
 /**
  * Minimal element shape. `customData.geo` is read but never mutated;
- * `x/y/width/height/points` are the only fields written by projection.
+ * `x/y/width/height/points/angle` are the fields written by projection.
+ *
+ * `angle` joined that list in RT-2 (2026-07-31). Under a rotated camera a
+ * geographic bbox lands on screen as a rotated rectangle — Mercator is
+ * conformal — and `angle` is how Excalidraw represents one. Projection only
+ * ever writes the *camera* part of the rotation; a user's own rotation is
+ * kept as the `_lastSync.a0` baseline and added back on top, the same way
+ * `w0`/`h0` work for size.
  */
 export interface ExcalidrawElementLike {
   id: string;
@@ -17,6 +24,8 @@ export interface ExcalidrawElementLike {
   y: number;
   width?: number;
   height?: number;
+  /** Rotation in radians, y-down, about the element's centre. */
+  angle?: number;
   fontSize?: number;
   strokeWidth?: number;
   points?: ReadonlyArray<readonly [number, number]>;

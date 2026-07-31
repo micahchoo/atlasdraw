@@ -165,6 +165,57 @@
   border-radius: var(--ad-radius-sm);
 }
 
+/* RT-9 — "drawing is off while the map is turned".
+ *
+ * Shares .commentModeHint's slot (bottom-centre) and its shape, because it is
+ * the same kind of statement: the plate is behaving differently and here is
+ * why. The two cannot collide — comment mode forces the `hand` tool
+ * (useCommentModeTool), and this hint only shows while a drawing tool is
+ * selected.
+ *
+ * pointer-events: auto, unlike .commentModeHint, because this one carries the
+ * way out. A hint that names a fix the user cannot click is a taunt. */
+.drawBlockedHint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-1) var(--ad-space-2) var(--ad-space-1)
+    var(--ad-space-3);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  color: var(--ad-ink);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-md);
+  box-shadow: var(--ad-shadow-tracing);
+}
+
+.drawBlockedReset {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px var(--ad-space-2);
+  color: var(--ad-ink-inverse);
+  background: var(--ad-accent);
+  border: 1px solid var(--ad-accent);
+  border-radius: var(--ad-radius-sm);
+  cursor: pointer;
+}
+
+.drawBlockedReset:hover {
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
+}
+
+.drawBlockedReset:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}
+
 /* Collab-room parse-error banner — centered pill at the top of the plate,
  * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
  * from the --ad-danger token with a consistent #d64045 fallback; the tinted

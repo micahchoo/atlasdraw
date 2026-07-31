@@ -46,12 +46,33 @@ const MAX_ZOOM = 22;
 export class FakeMercatorMap {
   zoom: number;
   center: { lng: number; lat: number };
+  /**
+   * Compass direction the camera faces, degrees clockwise from north — the
+   * same convention as MapLibre's `getBearing()`. At bearing θ the map content
+   * appears rotated by −θ on screen, so facing east puts east at the top.
+   */
+  bearing = 0;
   readonly containerW = 1024;
   readonly containerH = 768;
 
   constructor(zoom: number, center: { lng: number; lat: number }) {
     this.zoom = zoom;
     this.center = center;
+  }
+
+  /** Rotate a screen-space delta by `deg` degrees, y-down. */
+  private rotate(
+    dx: number,
+    dy: number,
+    deg: number,
+  ): { x: number; y: number } {
+    if (deg === 0) {
+      return { x: dx, y: dy };
+    }
+    const a = (deg * Math.PI) / 180;
+    const cos = Math.cos(a);
+    const sin = Math.sin(a);
+    return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
   }
 
   private worldSize(): number {
@@ -70,17 +91,23 @@ export class FakeMercatorMap {
   project(lngLat: [number, number]): { x: number; y: number } {
     const c = this.toWorld(this.center.lng, this.center.lat);
     const p = this.toWorld(lngLat[0], lngLat[1]);
+    const r = this.rotate(p.x - c.x, p.y - c.y, -this.bearing);
     return {
-      x: p.x - c.x + this.containerW / 2,
-      y: p.y - c.y + this.containerH / 2,
+      x: r.x + this.containerW / 2,
+      y: r.y + this.containerH / 2,
     };
   }
 
   unproject(pt: [number, number]): { lng: number; lat: number } {
     const s = this.worldSize();
     const c = this.toWorld(this.center.lng, this.center.lat);
-    const wx = pt[0] - this.containerW / 2 + c.x;
-    const wy = pt[1] - this.containerH / 2 + c.y;
+    const r = this.rotate(
+      pt[0] - this.containerW / 2,
+      pt[1] - this.containerH / 2,
+      this.bearing,
+    );
+    const wx = r.x + c.x;
+    const wy = r.y + c.y;
     const lng = (wx / s) * 360 - 180;
     const lat =
       ((2 * Math.atan(Math.exp((0.5 - wy / s) * 2 * Math.PI)) - Math.PI / 2) *
@@ -91,6 +118,18 @@ export class FakeMercatorMap {
 
   getZoom(): number {
     return this.zoom;
+  }
+
+  getCenter(): { lng: number; lat: number } {
+    return this.center;
+  }
+
+  getBearing(): number {
+    return this.bearing;
+  }
+
+  setBearing(deg: number): void {
+    this.bearing = deg;
   }
 
   setZoom(z: number): void {
@@ -120,6 +159,7 @@ export interface FuzzEl {
   y: number;
   width: number;
   height: number;
+  angle?: number;
   points?: Array<[number, number]>;
   fontSize?: number;
   strokeWidth?: number;

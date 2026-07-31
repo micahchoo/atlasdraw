@@ -22,7 +22,11 @@
 // is off (the whole SPA doesn't boot). Tracked in BUILD-embed.md.
 
 import React, { useEffect, useMemo, useState } from "react";
-import { MapCanvas, type MapCanvasInitialView } from "@atlasdraw/basemap";
+import {
+  MapCanvas,
+  disableCameraRotation,
+  type MapCanvasInitialView,
+} from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
 import type {
@@ -243,6 +247,9 @@ const EmbedCanvas: React.FC<{
       for (const h of handlers) {
         h?.enable?.();
       }
+      // The blanket re-enable above would resurrect the rotation gestures
+      // MapCanvas turned off at mount (FU-14 / RT-0), so re-apply the lock.
+      disableCameraRotation(map);
     };
   }, [map, options.lock]);
 
