@@ -30,9 +30,9 @@ ledger.
 | FU-1 | open | — |
 | FU-2 | **decided — delete the seven; not yet executed** | consumer analysis re-verified 2026-07-31, see ticket |
 | FU-3 | open | — |
-| FU-4 | open | — |
-| FU-5 | open | — |
-| FU-6 | open | — |
+| FU-4 | **done** | this branch — grip is the only drag source |
+| FU-5 | **resolved — not a defect**, see ticket | disproved in a browser; probe kept |
+| FU-6 | **done** | this branch — roving tabindex on the ⋯ menu |
 | FU-7 | open, scope only | — |
 | FU-8 | open, and sharper — now three faces, see ticket | — |
 | FU-9 | open | — |
@@ -40,7 +40,8 @@ ledger.
 | FU-11 | parked with a kill criterion, deliberately | — |
 | FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-2 of 14 shipped. Two more are decided and waiting on hands rather than answers.
+4 of 14 shipped, 1 closed as not-a-defect. Two more are decided and waiting on
+hands rather than answers.
 
 ---
 
@@ -189,12 +190,24 @@ basemap switch. Add the case to `dataLayerRender.test.ts`, which already has a
 
 ## B. Panel polish — visible, cheap
 
-### FU-4 — The drag source is the whole row, not the grip
-`LayerPanel.tsx:429` puts `draggable` on the row container;
-`LayerPanel.test.tsx:167` asserts exactly that. Since Step 4 the row expands
-into a card, so dragging a colour input or the attribute table starts a layer
+### FU-4 — The drag source is the whole row, not the grip — **DONE**
+`LayerPanel.tsx:429` put `draggable` on the row container;
+`LayerPanel.test.tsx:167` asserted exactly that. Since Step 4 the row expands
+into a card, so dragging a colour input or the attribute table started a layer
 drag with the full expanded card as the drag image. The pinned grip from Step 6
-makes the mismatch more obvious, not less.
+made the mismatch more obvious, not less.
+
+**Shipped on this branch.** `draggable` and `onDragStart` moved to the grip; the
+drop handlers stayed on the row, because you aim a drop at a row and not at its
+grip. The drag image is now the header line — the grip alone is a 12px smudge
+you cannot aim with, and the row is the whole card again.
+
+**It subsumed a second mechanism.** `dragDisabled`, which dropped `draggable`
+off the row while renaming so a press-and-sweep over the input would not start a
+reorder, existed only because the row was draggable. With `draggable` on the
+grip the input has no draggable ancestor at all, so the prop and both call sites
+are deleted rather than kept as a no-op. Its test now walks the real ancestor
+chain instead of asserting a prop that no longer exists.
 
 **User impact:** Open a layer card, reach for the colour picker or the attribute
 table, and you start dragging the layer instead — the whole expanded card
@@ -203,28 +216,53 @@ trying to change a colour.
 
 **Size:** small. Move `draggable` to the grip, update the test to match.
 
-### FU-5 — `h` can't exit comment mode
-`useCommentModeTool.ts` makes picking a tool the exit for both toolbars
-(`exitBecauseToolPicked`, `:104`), but the hand tool is indistinguishable from
-the tool the mode itself borrows, so `h` is swallowed.
+### FU-5 — `h` can't exit comment mode — **RESOLVED: it can**
 
-**User impact:** In comment mode every other tool key drops you out. `h` — the
-one you press to pan — silently does nothing, and you stay in comment mode with
-no feedback. One key that lies about a mode costs more trust than the shortcut
-was worth.
+**This ticket describes behaviour the app does not have.** Disproved in a real
+browser on 2026-07-31, chromium and firefox:
+`apps/atlas-app/e2e/comment-mode-keys.spec.ts`. Pressing `h` in comment mode
+leaves the mode and lands on the previous tool, exactly like `r` does.
 
-**Size:** small, but needs a real decision about what the mode borrows —
-don't paper it over with a key-specific special case.
+The reasoning was two true facts and a false join. The mode does borrow `hand`
+(`useCommentModeTool.ts`), and the exit watcher does ignore `hand`. But `h` is
+not "pick the hand tool" — it is `actionToggleHandTool`
+(`packages/excalidraw/actions/actionCanvas.tsx:567`), a **toggle**. With `hand`
+already active it moves the tool *away* from `hand`, to
+`activeTool.lastActiveTool` or `selection`. The watcher sees a real change and
+exits. There was never a key to special-case.
 
-### FU-6 — The ⋯ overflow menu has no roving focus
+**Why the suite agreed with the ticket.** `commentMode.test.tsx` had a case
+named *"stays in the mode when the tool is set to `hand`"* whose fake API sets
+the tool directly. That is a fair model of a programmatic re-assert and a wrong
+model of a keystroke, and reading it as the latter is where the ticket came
+from. The case is renamed and now says which one it is.
+
+**What is kept:** the e2e probe, covering Escape, `r` and `h` — the whole
+keyboard surface of the mode. Note webkit could not be run here (the host is
+missing `libicu74`, `libxml2`, `libmanette-0.2-0`; `playwright install-deps`
+needs root), so the claim is chromium + firefox, not all three projects.
+
+**The real lesson is FU-10's.** A test that models a keystroke with a
+direct state write cannot fail when the keystroke does something else, and this
+one invented a whole ticket. Behavioural claims about keys get a browser.
+
+### FU-6 — The ⋯ overflow menu has no roving focus — **DONE**
 The rail got roving tabindex + arrow/Home/End in Step 2. The card's overflow
 menu didn't. Same pattern, one component over.
 
-**User impact:** Keyboard and screen-reader users can open the layer overflow
-menu but can't arrow through it. Everything else the rail touches got arrow keys
-in Step 2; this is the gap in that promise.
+**Shipped on this branch.** The menu's three buttons became a list rendered
+from data, which is what makes the roving tabindex one loop rather than one
+`tabIndex` expression per button — and the two views (actions, delete-confirm)
+have *different lengths*, which is exactly what hand-written indices get wrong.
+Opening focuses the first item; ArrowUp/Down wrap; Home/End jump.
 
-**Size:** small.
+**One thing found while fixing it, beyond the ticket.** The confirm step swaps
+the whole item list out. Without moving focus on that swap, a keyboard user who
+steps into "Delete…" is left focused on a button that no longer exists — the
+two-step delete guard becomes a keyboard trap instead of a safety net. Focus
+follows the swap, and a test pins it.
+
+**Size:** small. It was.
 
 ### FU-7 — Map-anchor and element-anchor comment clicks are mutually exclusive
 At any instant one of the two can receive a click, never both. That is pointer
@@ -606,7 +644,10 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
    bleeding. Not urgent; nothing is broken while bearing cannot move.
 4. **FU-10** — before the next feature, because it's what makes the next
    feature's tests mean anything.
-5. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
+5. ~~**FU-4, FU-5, FU-6**~~ — done 2026-07-31; FU-5 closed as not-a-defect.
+   **FU-3** still open and worth pulling up: the fix is small but the symptom is
+   other people's shapes vanishing mid-session, which is the worst-looking bug
+   on this list.
 6. **FU-8, FU-9** — build config, do them when something else is compiling.
 7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
    only. **FU-11** — observe only.
