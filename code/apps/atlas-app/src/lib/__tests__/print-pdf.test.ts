@@ -20,16 +20,11 @@ import {
 } from "../print-pdf";
 
 // 1×1 white JPEG (smallest legal baseline JPEG, hex-encoded). pdf-lib's
-// embedJpg parses this happily; jsdom's HTMLCanvasElement.toDataURL doesn't
-// produce real JPEG bytes, so tests stub toDataURL to return this data URL.
+// embedJpg parses this happily. This stands in for what
+// `exportCompositeDataURL` hands the PDF at runtime — jsdom has no real
+// canvas encoder, so the bytes are supplied directly.
 const TINY_JPEG_DATA_URL =
   "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AAB//2Q==";
-
-function makeMapCanvas(): { toDataURL: (type?: string, q?: number) => string } {
-  return {
-    toDataURL: () => TINY_JPEG_DATA_URL,
-  };
-}
 
 /**
  * jsdom 22 Blob lacks `arrayBuffer()`. FileReader-based shim works in both
@@ -80,7 +75,7 @@ describe("exportPDF", () => {
       pageSize: "a4",
       orientation: "portrait",
       title: "Test map",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: LAYERS,
     });
     expect(blob).toBeInstanceOf(Blob);
@@ -93,7 +88,7 @@ describe("exportPDF", () => {
       pageSize: "a4",
       orientation: "portrait",
       title: "Test map",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: [],
     });
     const ab = await blobToArrayBuffer(blob);
@@ -113,7 +108,7 @@ describe("exportPDF", () => {
       pageSize: "letter",
       orientation: "portrait",
       title: "Attribution check",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: LAYERS,
     });
     const ab = await blobToArrayBuffer(blob);
@@ -137,7 +132,7 @@ describe("exportPDF", () => {
       pageSize: "a4",
       orientation: "portrait",
       title: "",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: [],
     });
     const ab = await blobToArrayBuffer(blob);
@@ -156,7 +151,7 @@ describe("exportPDF", () => {
       pageSize: "a4",
       orientation: "landscape",
       title: "Legend check",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: LAYERS,
     });
     const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
@@ -172,7 +167,7 @@ describe("exportPDF", () => {
       pageSize: "a4",
       orientation: "portrait",
       title: "Foo Bar Map",
-      mapCanvas: makeMapCanvas(),
+      mapImageDataUrl: TINY_JPEG_DATA_URL,
       layers: [],
     });
     const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
@@ -185,7 +180,7 @@ describe("exportPDF", () => {
       pageSize: "letter",
       orientation: "portrait",
       title: "Stub canvas",
-      mapCanvas: { toDataURL: () => "data:," },
+      mapImageDataUrl: "data:,",
       layers: LAYERS,
     });
     // Still returns a valid PDF — just without the embedded JPEG.

@@ -3,10 +3,10 @@
 //
 // Composes the current map view (JPEG snapshot of MapLibre's canvas) into a
 // printable PDF with cartographic chrome: title block, ODbL attribution,
-// legend, scale bar, and north arrow. Pure function — takes a captured
-// `mapCanvas` plus a flat `LayerLegendEntry[]`; never reaches into MapLibre,
-// the layer registry, or React state itself. All upstream coupling is the
-// caller's job (see the PDF pane in `ExportDialog.tsx`).
+// legend, scale bar, and north arrow. Pure function — takes an encoded
+// `mapImageDataUrl` plus a flat `LayerLegendEntry[]`; never reaches into
+// MapLibre, the layer registry, or React state itself. All upstream coupling
+// is the caller's job (see the PDF pane in `ExportDialog.tsx`).
 //
 // Source plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A10
 // Origin spec: docs/superpowers/plans/2026-05-03-atlasdraw-phase-6-v1-embeds-comments.md §Task 13
@@ -49,10 +49,17 @@ export interface PrintOptions {
   orientation: Orientation;
   title: string;
   /**
-   * The MapLibre canvas (or a shape compatible with `.toDataURL`). Captured
-   * by the caller at user-action time so the PDF reflects the current view.
+   * The composited view as a `data:image/jpeg;base64,...` URL — basemap, data
+   * layers AND Excalidraw annotations. Produced by `exportCompositeDataURL`
+   * in `lib/export.ts`, which is the single definition of what an export
+   * contains.
+   *
+   * This used to be `mapCanvas: Pick<HTMLCanvasElement, "toDataURL">` and the
+   * caller passed `map.getCanvas()` — MapLibre's canvas alone. Excalidraw
+   * renders on a separate canvas, so every shape the user drew was absent from
+   * the PDF while the export still reported success (FU-12).
    */
-  mapCanvas: Pick<HTMLCanvasElement, "toDataURL">;
+  mapImageDataUrl: string;
   layers: LayerLegendEntry[];
 }
 
@@ -125,7 +132,7 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   const idx = dataUrl.indexOf("base64,");
   if (idx === -1) {
     throw new Error(
-      `print-pdf: mapCanvas.toDataURL did not return a base64 JPEG (got: ${dataUrl.slice(
+      `print-pdf: mapImageDataUrl is not a base64 JPEG (got: ${dataUrl.slice(
         0,
         32,
       )}…)`,
@@ -322,11 +329,11 @@ export async function exportPDF(opts: PrintOptions): Promise<Blob> {
   });
 
   // ----- Map image (centred, ~65% of page area) --------------------------
-  // Caller is responsible for capturing the canvas. In tests we accept any
-  // object with toDataURL — see PrintOptions.mapCanvas.
-  const mapDataUrl = opts.mapCanvas.toDataURL("image/jpeg", 0.85);
-  // Skip the image when the canvas stub returned an empty data URL (jsdom).
-  // Real browsers always produce valid JPEG bytes here.
+  // Caller is responsible for compositing and encoding — see
+  // PrintOptions.mapImageDataUrl.
+  const mapDataUrl = opts.mapImageDataUrl;
+  // Skip the image when the caller had nothing to encode (jsdom's canvas
+  // yields "data:,"). Real browsers always produce valid JPEG bytes here.
   let mapImage: Awaited<ReturnType<typeof pdfDoc.embedJpg>> | null = null;
   if (mapDataUrl && mapDataUrl !== "data:," && mapDataUrl.includes("base64,")) {
     try {

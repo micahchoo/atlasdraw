@@ -97,6 +97,14 @@ import {
 
 import styles from "../styles/MapEditor.module.css";
 
+import { exportCompositeDataURL } from "../lib/export";
+
+import {
+  buildLegendEntries,
+  renderedDataLayerIds,
+  visibleAnnotationIds,
+} from "../lib/legend";
+
 import { useToast } from "./ToastProvider";
 
 import { CollarShell } from "./CollarShell";
@@ -840,6 +848,42 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [map],
   );
 
+  // The PDF export's image source: the SAME composite the PNG export uses, so
+  // the two formats cannot disagree about what an export contains. Passing
+  // `map.getCanvas()` here is what dropped every drawn shape from the PDF
+  // (FU-12) — MapLibre's canvas has no Excalidraw content on it.
+  const getMapImageDataUrl = useCallback(async (): Promise<string | null> => {
+    if (!map || !excalidrawAPI) {
+      return null;
+    }
+    return exportCompositeDataURL(map, excalidrawAPI, {
+      backgroundColor: mapBg,
+    });
+  }, [map, excalidrawAPI, mapBg]);
+
+  // The legend describes the exported page, not the document (FU-13): hidden
+  // layers and layers with nothing painted in this view are left out. Read at
+  // export time, like the image, so both answer the same viewport.
+  const getLegendEntries = useCallback((): LayerLegendEntry[] => {
+    const entries = useLayerRegistryStore.getState().entries;
+    if (!map || !excalidrawAPI) {
+      return [];
+    }
+    const canvas = map.getCanvas();
+    return buildLegendEntries(entries, {
+      renderedDataLayerIds: renderedDataLayerIds(
+        map,
+        entries.filter((e) => e.kind === "data").map((e) => e.id),
+      ),
+      visibleAnnotationIds: visibleAnnotationIds(
+        excalidrawAPI.getSceneElements(),
+        excalidrawAPI.getAppState(),
+        canvas.clientWidth,
+        canvas.clientHeight,
+      ),
+    });
+  }, [map, excalidrawAPI]);
+
   // "Scroll back to content" reframes the MAP on the geographic bounds of the
   // drawn content — Excalidraw's canvas is scroll-locked (the map is the
   // camera), so its default calculateScrollCenter is a no-op here. Returns true
@@ -1208,17 +1252,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onExportPNG={handleExportPNG}
               onExportGeoJSON={handleExportGeoJSON}
               onExportAtlasdraw={handleExportAtlasdraw}
-              getMapCanvas={() => map?.getCanvas() ?? null}
-              layers={useLayerRegistryStore
-                .getState()
-                .entries.map<LayerLegendEntry>((e) => ({
-                  id: e.id,
-                  name: e.label,
-                  color:
-                    e.kind === "data"
-                      ? e.style.fillColor ?? "#868e96"
-                      : "#868e96",
-                }))}
+              getMapImageDataUrl={getMapImageDataUrl}
+              getLegendEntries={getLegendEntries}
             />
           )}
 

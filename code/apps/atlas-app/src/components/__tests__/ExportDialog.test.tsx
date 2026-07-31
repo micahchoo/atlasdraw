@@ -7,7 +7,13 @@
 // we can assert which PrintOptions the dialog forwards.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { ExportDialog } from "../ExportDialog";
 import {
@@ -61,11 +67,7 @@ const LAYERS: LayerLegendEntry[] = [
   { id: "dl:a", name: "Trails", color: "#0aa" },
 ];
 
-function makeCanvas(): HTMLCanvasElement {
-  return {
-    toDataURL: () => "data:image/jpeg;base64,/9j/4AAQ",
-  } as unknown as HTMLCanvasElement;
-}
+const COMPOSITE_DATA_URL = "data:image/jpeg;base64,/9j/4AAQ";
 
 type Overrides = Partial<React.ComponentProps<typeof ExportDialog>>;
 
@@ -75,8 +77,8 @@ function renderDialog(overrides: Overrides = {}) {
     onExportPNG: vi.fn(),
     onExportGeoJSON: vi.fn(),
     onExportAtlasdraw: vi.fn(),
-    getMapCanvas: () => makeCanvas(),
-    layers: LAYERS,
+    getMapImageDataUrl: async () => COMPOSITE_DATA_URL,
+    getLegendEntries: () => LAYERS,
     ...overrides,
   };
   render(<ExportDialog {...props} />);
@@ -141,10 +143,9 @@ describe("ExportDialog", () => {
       .mockResolvedValue(
         new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
       );
-    const canvas = makeCanvas();
     const props = renderDialog({
       initialFormat: "pdf",
-      getMapCanvas: () => canvas,
+      getMapImageDataUrl: async () => COMPOSITE_DATA_URL,
       exportPDFImpl: exportMock,
     });
 
@@ -161,16 +162,15 @@ describe("ExportDialog", () => {
 
     // Submit.
     fireEvent.click(screen.getByTestId("export-dialog-export"));
-    // Wait one microtask flush for the promise to settle.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(exportMock).toHaveBeenCalledTimes(1);
+    // waitFor, not a fixed number of microtask flushes: the export awaits the
+    // composite AND the PDF, so a flush count is a guess that happens to hold
+    // in isolation and fails under a full suite run.
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
     const opts = exportMock.mock.calls[0][0];
     expect(opts.pageSize).toBe("a4");
     expect(opts.orientation).toBe("portrait");
     expect(opts.title).toBe("Trail map");
-    expect(opts.mapCanvas).toBe(canvas);
+    expect(opts.mapImageDataUrl).toBe(COMPOSITE_DATA_URL);
     expect(opts.layers).toEqual(LAYERS);
 
     // Download path side-effects ran.
@@ -184,19 +184,22 @@ describe("ExportDialog", () => {
     handles.click.mockRestore();
   });
 
-  it("surfaces an error when the map canvas isn't ready", async () => {
+  it("surfaces an error when the composited image isn't ready", async () => {
     const exportMock = vi.fn<(opts: PrintOptions) => Promise<Blob>>();
     const props = renderDialog({
       initialFormat: "pdf",
-      getMapCanvas: () => null,
+      getMapImageDataUrl: async () => null,
       exportPDFImpl: exportMock,
     });
     fireEvent.click(screen.getByTestId("export-dialog-export"));
-    await Promise.resolve();
-    expect(exportMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
-      /not ready/i,
+    // The composite is awaited before exportPDF is called, so the error
+    // lands a tick later than it did when the canvas was read synchronously.
+    await waitFor(() =>
+      expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
+        /not ready/i,
+      ),
     );
+    expect(exportMock).not.toHaveBeenCalled();
     // Errors keep the dialog open so the user can retry.
     expect(props.onCloseRequest).not.toHaveBeenCalled();
   });
@@ -209,15 +212,14 @@ describe("ExportDialog", () => {
       .mockResolvedValue(new Blob([], { type: "application/pdf" }));
     renderDialog({
       initialFormat: "pdf",
-      layers: [],
+      getLegendEntries: () => [],
       exportPDFImpl: exportMock,
     });
     fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
       target: { value: "   " },
     });
     fireEvent.click(screen.getByTestId("export-dialog-export"));
-    await Promise.resolve();
-    await Promise.resolve();
+    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
 
     expect(exportMock.mock.calls[0][0].title).toBe("Bidar ward survey");
 
