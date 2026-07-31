@@ -359,11 +359,24 @@ pre-existing `import/order` warnings in 10 files. All auto-fixable, all fixed.
 A gate whose threshold is zero and whose baseline is seventeen is not a gate.
 
 **Face 5 — `test:other` could never pass either.** `prettier --list-different`
-reported 37 files: 31 markdown, 5 JSON, 1 HTML, **zero source**. Formatted in
-their own commit so this one stays readable and the reformat can be reverted on
-its own.
+reported 37 files: 31 markdown, 5 JSON, 1 HTML, **zero source**. 34 of them
+were formatted. The other three were not, and that is the interesting part:
+they are the MapLibre style documents in `packages/basemap/src/styles/`, and
+prettier collapses them by **~10,000 lines each**. Reformatting 26,000 lines of
+third-party runtime data to satisfy a formatter is not a fix — it buries every
+future real change in those files. They are ignored instead.
 
-**Size:** medium. Face 1 was three characters and the other four were bookkeeping.
+Which surfaced a sixth thing, small but load-bearing: the `prettier` script
+pointed `--ignore-path` at **`.eslintignore`**, so prettier's exclusions could
+only be expressed as eslint's, and `.prettierignore` existed but was empty and
+had no effect. It points at `.prettierignore` now, which carries what
+`.eslintignore` carried plus the two prettier-only entries.
+
+**Proof:** `yarn test:all` → **exit 0**, 243 test files, 2780 passed, 0 failed.
+First time the composite gate has passed.
+
+**Size:** medium. Face 1 was three characters; the rest was bookkeeping nobody
+had done because the gate that would have caught it was the broken thing.
 
 ### FU-9 — The permanent red
 `MermaidToExcalidraw` snapshot fails on pristine `main` and has failed through

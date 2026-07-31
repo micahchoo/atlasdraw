@@ -31,6 +31,7 @@ Every Excalidraw element carries a `customData.geo` field (a `GeoAnchor` discrim
 ```
 
 **Synchronization process:**
+
 1. On every `map.move` event, recompute each element's screen coordinates via `map.project()`
 2. Update Excalidraw's internal position: `(x, y, width, height, points)` derived from geo anchor
 3. Trigger Excalidraw render
@@ -40,16 +41,19 @@ Pitch is locked at 0° in v1 (parameter: `maxPitch: 0` at MapCanvas construction
 ## Consequences
 
 ### Positive
+
 - Single source of truth eliminates sync drift
 - Map view changes cascade correctly to all elements
 - Geographic data is persistent and portable
 
 ### Negative / Risks
+
 - **Performance budget** — Must recompute 5k+ elements per camera tick in <8ms
 - **Pitch limitation** — No tilted map views in v1
 - **Projection coupling** — Changes to projection require batch element recalculation
 
 **Mitigation:**
+
 - Phase 1 includes benchmark gate: must achieve <8ms per camera tick at 5k elements
 - Spatial indexing in Phase 1 for efficient culling
 - Future ADR can lift pitch constraint in v1.5 if perf allows

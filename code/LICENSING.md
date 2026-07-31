@@ -5,7 +5,7 @@ This project ships under three open-source licenses. The split balances protecti
 ## Per-package licenses
 
 | Package | License | Reason |
-|---|---|---|
+| --- | --- | --- |
 | `apps/atlas-app` | AGPL-3.0 | Running editor — copyleft prevents closed-source SaaS resale |
 | `apps/realtime` | AGPL-3.0 | Server component — same reason |
 | `apps/storage` | AGPL-3.0 | Server component — same reason |
@@ -23,18 +23,23 @@ This project ships under three open-source licenses. The split balances protecti
 ## Worked examples
 
 ### Embedding the iframe in your closed-source SaaS dashboard
+
 **Permitted.** The embed SDK is MIT. You can `npm install @atlasdraw/sdk`, drop `<AtlasdrawEmbed src="..." />` into your React app, and ship without disclosing source.
 
 ### Modifying `apps/atlas-app` and hosting your fork as a public SaaS
+
 **You must open-source your modifications.** AGPL-3.0 §13 obligates network-served modified versions to make their source available to users. This is the deliberate moat against hyperscaler resale.
 
 ### Reading and writing `.atlasdraw` files from your closed-source GIS pipeline
+
 **Permitted.** `packages/cli` and `packages/data` are MIT. The file format is open. You can build a closed-source converter that produces `.atlasdraw` for ingestion into Atlasdraw, with no obligation to share source.
 
 ### Forking `packages/basemap` and shipping a closed-source modified MapLibre wrapper
+
 **Mixed.** MPL-2.0 is file-level copyleft: any file you modify must remain MPL-2.0 (its source disclosed). New files you add can be any license, including proprietary. Combined work can be distributed under your terms as long as the modified MPL files remain accessible.
 
 ### Building a desktop Electron wrapper around `apps/atlas-app`
+
 **Triggers AGPL.** Even though Electron is local-only execution, AGPL §13 reaches "remote network interaction" — and any auto-updater pinging your server counts. Safer to build the wrapper around the embed SDK (MIT) instead.
 
 ## Contributing

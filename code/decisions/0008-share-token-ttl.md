@@ -35,17 +35,20 @@ On every share-token request, hash token and look up in table. Check `revoked` a
 ## Consequences
 
 ### Positive
+
 - Simple UX: share a link, revoke instantly
 - No key rotation overhead
 - Per-token granularity (can revoke one link, keep others active)
 - Database-backed, suitable for self-hosted deployments
 
 ### Negative / Risks
+
 - **Database lookup latency** — Every share access queries Postgres (< 5ms typical)
 - **Hardcoded TTL** — Future per-workspace policy requires schema migration
 - **Storage overhead** — One row per share (negligible at scale)
 
 **Mitigation:**
+
 - Add index on `(token_hash, expires_at)` for fast lookup
 - Cache `share_tokens` in Redis (optional, Phase 4 Task 12)
 - Document TTL in user UI: "This link expires in 30 days"

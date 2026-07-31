@@ -25,15 +25,18 @@ Each `package.json` declares `"license"` field. CI fails if omitted. Plain-Engli
 ## Consequences
 
 ### Positive
+
 - SDK users can embed in closed-source products without licensing friction
 - Server operators must publish improvements (AGPL copyleft)
 - Clear policy reduces legal ambiguity
 
 ### Negative / Risks
+
 - **Confusion risk** — Developers may misunderstand which license applies to their use case
 - **Dual-license enforcement** — CI requires vigilance to prevent accidental relicensing
 
 **Mitigation:**
+
 - `LICENSING.md` includes worked examples for common scenarios
 - License field validation in PR checks
 - Developer guide clarifies: embedding read-only SDK in closed-source = permitted; modifying server and exposing as SaaS = must open-source modifications

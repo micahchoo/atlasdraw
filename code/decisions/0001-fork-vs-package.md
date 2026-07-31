@@ -15,7 +15,7 @@ The choice determines the integration depth, maintenance burden, and long-term f
 
 ## Decision
 
-Adopt a **full fork** of Excalidraw. 
+Adopt a **full fork** of Excalidraw.
 
 Rationale: Atlasdraw requires modifications that exceed Excalidraw's prop surface:
 
@@ -29,16 +29,19 @@ These changes are incompatible with the public @excalidraw/excalidraw API and ca
 ## Consequences
 
 ### Positive
+
 - Full control over scene format and rendering pipeline
 - Seamless integration with geographic data model
 - No abstraction friction between Excalidraw internals and map layer
 
 ### Negative / Risks
+
 - **Merge tax** — Must reconcile ~50–100 commits monthly from upstream/master
 - **Divergence risk** — Custom patches may conflict with upstream improvements
 - **Update burden** — Critical security fixes in Excalidraw require proactive patching
 
 **Mitigation:**
+
 - ADR 0004 establishes a formal monthly merge policy with clear exit conditions
 - `decisions/upstream-patches.md` documents all custom patches for review during merges
 - CI guard prevents merges of Excalidraw files without corresponding patch documentation

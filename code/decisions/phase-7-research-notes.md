@@ -1,15 +1,13 @@
 # Phase 7 — Open Questions Research Notes
 
-**Date:** 2026-05-03
-**Researcher:** automated resolver (claude-sonnet-4-6)
-**Plan:** `docs/superpowers/plans/2026-05-03-atlasdraw-phase-7-v1.5-field-plugins.md`
+**Date:** 2026-05-03 **Researcher:** automated resolver (claude-sonnet-4-6) **Plan:** `docs/superpowers/plans/2026-05-03-atlasdraw-phase-7-v1.5-field-plugins.md`
 
 ---
 
 ## Summary
 
 | # | Question | Status | Confidence |
-|---|---------|--------|-----------|
+| --- | --- | --- | --- |
 | W0-1 | postMessage @ 30 Hz / SharedArrayBuffer / COOP+COEP | RESOLVED | High |
 | W0-1b | Worker sandbox escape vectors | RESOLVED | High |
 | W0-2 | Vite worker bundling for user-provided plugin entries | RESOLVED | High |
@@ -31,8 +29,7 @@
 | W3-1 | Measure plugin unit switching | RESOLVED (code-gate) | — |
 | W4-1 | Docker availability for PostGIS E2E | RESOLVED (code-gate) | — |
 
-**Resolved: 18 / Still open: 1 (organizational — QGIS maintainer account)**
-**Tasks edited: 4** (Task 6 Note + Step 3; Task 13 renamed + endpoint; Task 14 Step 5; Task 17 config schema)
+**Resolved: 18 / Still open: 1 (organizational — QGIS maintainer account)** **Tasks edited: 4** (Task 6 Note + Step 3; Task 13 renamed + endpoint; Task 14 Step 5; Task 17 config schema)
 
 ---
 
@@ -45,12 +42,14 @@
 **Question:** Does postMessage roundtrip at 30 Hz exceed the 16ms budget? Should SharedArrayBuffer + COOP/COEP be used?
 
 **Queries run:**
+
 - MDN: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers
 - MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer
 - MDN: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Opener-Policy
 - MDN: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Embedder-Policy
 
 **Findings:**
+
 1. postMessage uses structured-clone. For small JSON payloads (< 1KB style object), structured-clone is sub-millisecond on all modern browsers. 30 Hz = one message every ~33ms, well within budget. No measured benchmarks in MDN, but this is a well-established property of the API.
 
 2. `SharedArrayBuffer` requires `crossOriginIsolated === true` (MDN SharedArrayBuffer §Security Requirements). This demands both `Cross-Origin-Opener-Policy: same-origin` AND `Cross-Origin-Embedder-Policy: require-corp`.
@@ -62,6 +61,7 @@
 **Answer:** postMessage-only is sufficient. SharedArrayBuffer must not be used — COEP would break basemap tile loading. Decision is final for v1.5.
 
 **Sources:**
+
 - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements
 - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Embedder-Policy
 - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Opener-Policy
@@ -73,9 +73,11 @@
 **Question:** What is the realistic threat model for a Web Worker + postMessage plugin host?
 
 **Queries run:**
+
 - MDN: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers (importScripts, fetch access in workers)
 
 **Findings:**
+
 1. Web Workers are thread-isolated, not origin-isolated. A Worker running on the same origin as the app retains full access to: `self.fetch`, `self.XMLHttpRequest`, `self.WebSocket`, `self.importScripts`, and dynamic `import()`.
 
 2. `importScripts()` can load scripts from any origin — including cross-origin URLs (MDN: "You can import scripts from other origins"). This is a direct escape vector for arbitrary code loading.
@@ -85,8 +87,9 @@
 4. True origin isolation requires a cross-origin Worker (different subdomain) or a cross-origin iframe. Web Workers alone do not provide origin isolation.
 
 **Implication for Task 2:** The `PluginPermissions.ts` Worker prelude must explicitly override/delete:
+
 - `self.fetch` → permission-checked wrapper
-- `self.XMLHttpRequest` → `undefined`  
+- `self.XMLHttpRequest` → `undefined`
 - `self.WebSocket` → `undefined`
 - `self.importScripts` → no-op or throw
 - Dynamic `import()` cannot be blocked in JS alone; rely on CSP `script-src 'self' blob:` to prevent loading non-approved scripts.
@@ -94,6 +97,7 @@
 Cross-origin iframe isolation (`plugins.atlasdraw.app`) is the only complete sandbox; flag as v2 hardening milestone.
 
 **Sources:**
+
 - https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#importing_scripts_and_libraries
 - https://developer.mozilla.org/en-US/docs/Web/API/WorkerGlobalScope/fetch
 
@@ -103,8 +107,7 @@ Cross-origin iframe isolation (`plugins.atlasdraw.app`) is the only complete san
 
 **Question:** Does Vite handle `new Worker(new URL('./plugin-entry.js', import.meta.url))` for user-provided paths?
 
-**Findings:**
-Vite's worker bundling requires statically-analysable URLs at build time. User-provided paths are not statically analysable. The plan's existing two-path model is correct: pre-built plugins use static `/plugins/<id>/index.js`; user-installed plugins use Blob URLs from IndexedDB bytes. No change needed.
+**Findings:** Vite's worker bundling requires statically-analysable URLs at build time. User-provided paths are not statically analysable. The plan's existing two-path model is correct: pre-built plugins use static `/plugins/<id>/index.js`; user-installed plugins use Blob URLs from IndexedDB bytes. No change needed.
 
 **Sources:** Vite documentation (existing knowledge); plan's own Task 2 contracts section.
 
@@ -163,24 +166,29 @@ Note: service worker NOT required. `window.online`/`window.offline` events + Ind
 **Question:** What size does `Y.encodeStateAsUpdate` produce for a 100k-edit document?
 
 **Queries run:**
+
 - https://github.com/dmonad/crdt-benchmarks (B1 and B4 benchmarks)
 - https://docs.yjs.dev/api/document-updates
 
 **Key data from crdt-benchmarks:**
 
 B1.4 (N=60,000 random-position insertions):
+
 - `docSize`: 374,543 bytes (~365 KB)
 - `avgUpdateSize`: ~31 bytes/update
 
 B1.1 (N=60,000 sequential appends):
+
 - `docSize`: 60,034 bytes (~59 KB — very compact for sequential edits)
 
 B4 (259,778 real-world text edits, 104,852 final chars):
+
 - Referenced in benchmarks but exact `docSize` not extracted from indexed fragments. From the update stream data: ~31 bytes × 100k updates ≈ 3MB update stream, but `Y.encodeStateAsUpdate` encodes only current state, not the full update stream.
 
 **Important distinction:** `Y.encodeStateAsUpdate` encodes **current document state**, not history. The encoded size is proportional to the amount of data in the document, not the number of edits that created it. For a typical map with O(100) layers and O(1000) features, this is much smaller than a 100k-character text document.
 
 **Estimate for geo map documents:**
+
 - Typical well-designed map (< 1000 features): < 500KB
 - Large map (10,000 features with complex geometry): 1–3MB
 - Upper bound for practical snapshot: ~5MB
@@ -188,6 +196,7 @@ B4 (259,778 real-world text edits, 104,852 final chars):
 **Decision:** Hard cap of 10MB per snapshot in `SnapshotStore.save()` (throw `SnapshotTooLargeError`). GC policy in Task 18 is correct as designed.
 
 **Sources:**
+
 - https://github.com/dmonad/crdt-benchmarks
 - https://docs.yjs.dev/api/document-updates
 
@@ -228,12 +237,13 @@ For hosted multi-tenant: PgBouncer in front of PostGIS is the standard solution;
 **Question:** Which API shape to implement against?
 
 **Queries run:**
+
 - https://ollama.com/blog/openai-compatibility (fetched and indexed)
 
-**Findings:**
-Ollama has exposed a native OpenAI-compatible endpoint at `http://localhost:11434/v1/chat/completions` since February 8, 2024. This uses the same request format as the OpenAI Chat Completions API: `{ model, messages: [{role, content}] }`.
+**Findings:** Ollama has exposed a native OpenAI-compatible endpoint at `http://localhost:11434/v1/chat/completions` since February 8, 2024. This uses the same request format as the OpenAI Chat Completions API: `{ model, messages: [{role, content}] }`.
 
 Building against the OpenAI shape gives compatibility with:
+
 - Ollama (local, no auth)
 - OpenAI (BYOK, `api_key` in config)
 - Anthropic-compatible proxies
@@ -244,6 +254,7 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 **Decision:** Implement `AIStyleClient` against `POST /v1/chat/completions`. Rename `OllamaClient.ts` → `AIStyleClient.ts`. Config endpoint default: `http://localhost:11434/v1`. Add optional `api_key` field.
 
 **Sources:**
+
 - https://ollama.com/blog/openai-compatibility
 - https://platform.openai.com/docs/api-reference/chat/create
 
@@ -256,13 +267,14 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 **Question:** Which model is the minimum? How to enforce JSON output?
 
 **Findings:**
+
 1. `llama3.2` (3B) and `mistral` (7B) both support `response_format: { type: "json_object" }` via Ollama's OpenAI-compat endpoint. This is a request-level enforcement in addition to prompt-level.
 
 2. Models below 3B parameters often fail to produce valid JSON even with strong system prompts. `llama3.2` 3B is the practical minimum for tool-calling/structured output tasks.
 
 3. `response_format: json_object` is not universally supported — smaller/older models may reject it. The client must handle the case gracefully and fall back to prompt-only with `StyleSanitizer` catching parse failures.
 
-**Decision:** Minimum `llama3.2` or `mistral`. Use `response_format: json_object`. Document in `docs/ai-styling.md`. 
+**Decision:** Minimum `llama3.2` or `mistral`. Use `response_format: json_object`. Document in `docs/ai-styling.md`.
 
 **Confidence:** High.
 
@@ -275,10 +287,12 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 **Question:** Who is the signing key holder? What does submission require?
 
 **Queries run:**
+
 - https://plugins.qgis.org/publish/ (fetched and indexed)
 - https://docs.qgis.org/latest/en/docs/pyqgis_developer_cookbook/plugins/plugins.html (fetched and indexed)
 
 **Key findings:**
+
 1. **No GPG signing.** The plan's premise ("the plugin must be signed by a registered QGIS plugin author") is incorrect. QGIS Plugin Repository does not use cryptographic signing.
 
 2. Submission requires an **OSGEO ID** (https://www.osgeo.org/osgeo_userid) and plugin upload at https://plugins.qgis.org/plugins/add/.
@@ -290,6 +304,7 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 **STILL OPEN (organizational):** A project maintainer must create an OSGEO ID before Wave 4 E2E. This is an organizational action, not technical.
 
 **Sources:**
+
 - https://plugins.qgis.org/publish/
 - https://docs.qgis.org/latest/en/docs/pyqgis_developer_cookbook/plugins/plugins.html#metadata-txt
 
@@ -298,10 +313,12 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 ### Q: W1F-1b — PyQGIS API stability across QGIS versions
 
 **Queries run:**
+
 - https://docs.qgis.org/latest/en/docs/pyqgis_developer_cookbook/intro.html (fetched and indexed)
 - https://api.qgis.org/api/3.44/ (referenced in cookbook)
 
 **Findings:**
+
 1. PyQGIS uses SIP bindings to the QGIS C++ API. The Pythonic API (pyqgis) is "nearly identical to the C++ API" (cookbook §1).
 2. The QGIS project does not publish a formal API stability guarantee between minor versions. However, vector layer I/O APIs (`QgsVectorLayer`, `QgsFeature`, `QgsGeometry`, `QgsVectorFileWriter`) have been stable across QGIS 3.x series (3.0–3.44).
 3. `qgisMinimumVersion=3.22` (the LTS targeted in the plan) is a reasonable baseline. QGIS 3.22 LTS is widely deployed.
@@ -310,6 +327,7 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 **Confidence:** High.
 
 **Sources:**
+
 - https://docs.qgis.org/latest/en/docs/pyqgis_developer_cookbook/intro.html
 - https://api.qgis.org/api/3.44/
 
@@ -336,7 +354,7 @@ Building against Ollama's native `/api/generate` would require an adapter for ev
 ## Plan Edits Made
 
 | Location | Change |
-|---|---|
+| --- | --- |
 | Wave 0 Q1 | Added RESOLVED block: postMessage-only; SAB/COOP/COEP rejected (COEP breaks basemap CDNs) |
 | Wave 0 Q1b (new) | Added RESOLVED block: Worker sandbox — must override fetch/XHR/WS/importScripts in prelude |
 | Wave 0 Q2 | Added RESOLVED block: Vite two-path model is correct |

@@ -1,9 +1,6 @@
 # Atlasdraw — Open Questions Resolution
 
-**Companion to:** PRD v0.1 §14 (Open Questions) + Tech Spec v0.1
-**Status:** Draft v0.1 — proposed answers for founding contributors
-**Audience:** Day-1 maintainers
-**Purpose:** Lock the contested decisions before phase plans begin so each phase plan can treat them as constraints, not open variables.
+**Companion to:** PRD v0.1 §14 (Open Questions) + Tech Spec v0.1 **Status:** Draft v0.1 — proposed answers for founding contributors **Audience:** Day-1 maintainers **Purpose:** Lock the contested decisions before phase plans begin so each phase plan can treat them as constraints, not open variables.
 
 This document closes the live debates so that downstream plans don't re-derive them. Each item lists: the question, the recommendation, the load-bearing reason, and the constraint it imposes on phase planning.
 
@@ -18,6 +15,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** The laptop-airplane-mode story is differentiating (Personas A/C/D explicitly value it) and the docs hand-off promises "as portable as a Markdown file." A required relay breaks both. Operationally, a single-binary mode also makes the demo trivial — `docker run atlasdraw/atlas-app` should produce a working editor with no postgres, no minio, no realtime.
 
 **Constraint on plans:**
+
 - **Phase 4** ships single-player Docker only. The realtime container is added in Phase 5.
 - `apps/atlas-app` MUST function with no `VITE_WS_URL` set; the collab UI degrades gracefully.
 - File persistence (IndexedDB + File System Access in Phase 3) is the canonical store; relay-backed storage is the v1.0 enhancement, not the substrate.
@@ -33,8 +31,9 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Yjs is faster on the workloads we expect (frequent small mutations on 100–10k feature collections), has a deeper plugin ecosystem (`y-websocket`, `y-indexeddb` for offline-first sync, `y-protocols` for awareness), and is what most production collaborative editors converge on (TipTap, BlockNote, Hocuspocus). Automerge has cleaner semantics and better history APIs but its bundle size (~200KB) and per-op cost don't earn their keep at our scale.
 
 **Constraint on plans:**
+
 - **Phase 5** wires `y-websocket` in `apps/realtime` alongside Socket.IO (separate connection, not multiplexed — see Q9).
-- `packages/data` exposes `YjsLayer` as the canonical mutable layer type. GeoJSON FeatureCollection becomes a *snapshot* projection of the Yjs doc, not the source of truth.
+- `packages/data` exposes `YjsLayer` as the canonical mutable layer type. GeoJSON FeatureCollection becomes a _snapshot_ projection of the Yjs doc, not the source of truth.
 - We do NOT design AtlasdrawAPI with Automerge-compatible semantics; commit to Yjs's ops model.
 
 ---
@@ -48,6 +47,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** PRD principle §5 explicitly states "no telemetry that calls home, no required basemap key." A docker-compose default that depends on `tiles.openfreemap.org` violates the principle. But shipping a 120 GB tile bundle violates the "single Docker command" principle. The hybrid resolves both: the public demo sits on shared infra (the trade-off is documented), and the self-hoster's first run uses local tiles by default.
 
 **Constraint on plans:**
+
 - **Phase 4** docker-compose ships with a minimal pre-built PMTiles file (`/data/world-low-zoom.pmtiles`, zoom 0–6, ~200 MB) so first-run shows a world map without network.
 - `BasemapRegistry` in `packages/basemap` defaults to `local-pmtiles` when `realtime.enabled = false` and self-host config is detected; defaults to `openfreemap-bright` only when `[basemap.allow_remote] = true` is explicit.
 - The PRD/spec text describing OpenFreeMap as "default basemap from OpenFreeMap public tiles" (spec §10) MUST be updated to reflect this hybrid.
@@ -63,6 +63,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Three reasons converge: (1) it funds maintainer time, (2) it acts as the canonical "show me" demo for Show HN comments, (3) it provides the empirical performance baseline that justifies our budgets. Without a hosted instance running real workloads we'll never know if our 60fps-with-50k-features claim survives contact with users.
 
 **Constraint on plans:**
+
 - **Phase 6 (v1.0)** explicitly includes a "Hosted multi-tenant mode" task: workspace abstraction, billing hooks (Stripe), per-workspace quotas. Off-by-default in self-host configs.
 - Telemetry/metrics for the hosted flagship MUST be opt-out toggleable for self-hosters AND wholly omitted from the embed SDK — the principle violation cost would be severe.
 - We do NOT build any feature exclusive to the hosted instance. If we ship workspace billing, the OSS docker-compose can also enable workspace billing.
@@ -78,6 +79,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** The libraries that need ecosystem velocity (embed SDK, file format CLI, pure-function math) carry no copyleft so any closed-source tool can read/write `.atlasdraw` files or embed the widget. The running application carries AGPL so a hyperscaler cannot fork our editor, host it as a SaaS, and contribute nothing back. Per-file MPL on the wrapper packages (`basemap`, `tools`) protects our core changes while permitting closed-source extensions.
 
 **Constraint on plans:**
+
 - **Phase 0** writes three license files: `LICENSE-AGPL`, `LICENSE-MIT`, `LICENSE-MPL`, plus `LICENSING.md` explaining the split with a worked example ("Embedding the iframe: fine. Modifying server, exposing as SaaS: open-source your changes.").
 - Each `package.json` declares its own `"license"` field. CI fails if a package is missing it.
 - Plugin manifest schema (Phase 7) MUST require an SPDX license identifier from contributors.
@@ -95,6 +97,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** The spec's mitigation ("minimize patches") is hopeful, not structural. Excalidraw is actively developed and `packages/element`/rendering code churns. Without a stated exit, the team will spend years half-merging.
 
 **Constraint on plans:**
+
 - **Phase 0** creates `decisions/upstream-patches.md` with empty initial state and a CI check that fails if a PR modifies a vendored Excalidraw file without adding an entry.
 - **Phase 0** adds `decisions/0004-upstream-merge-policy.md` documenting the threshold above.
 - Every phase plan that touches `packages/excalidraw` must call out the patch in the task and update `upstream-patches.md`.
@@ -110,9 +113,10 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Excalidraw's pointer system is one of its most-rewritten subsystems. Inserting a foreign canvas underneath it with `pointerEvents` toggling, hit-testing, touch + pen + mouse + wheel coordination, and getting consistent behavior across Chrome/Firefox/Safari/Mobile Safari is not a one-week task. Better to plan for the reality than ship a buggy Phase 1 demo.
 
 **Constraint on plans:**
+
 - **Phase 1 plan** explicitly carves week 5 as "event-routing hardening" with an E2E test gate per browser.
 - **Phase 1** acceptance criteria include a manual test matrix: pan + zoom + draw on Chrome/Firefox/Safari + iOS Safari + Android Chrome.
-- The "first two weeks in commits" table in spec §12 is honest about the demo target (week 2 = pin tool dropping pins) but the *hardening* of that demo is week 5, not week 4.
+- The "first two weeks in commits" table in spec §12 is honest about the demo target (week 2 = pin tool dropping pins) but the _hardening_ of that demo is week 5, not week 4.
 
 ---
 
@@ -125,6 +129,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** `syncMapToScene` is an O(n) hot path running at up to 60Hz. Without a measured baseline from a Phase 1 spike, the budgets are wishes. If actual performance is 4x worse than budget, Phase 2 architecture (which assumes the budget) is wrong.
 
 **Constraint on plans:**
+
 - **Phase 1 plan** includes a "Coord-sync benchmark spike" task: synthetic scene of 5k elements, measure frame time during pan/zoom, record p50/p95/p99 in `bench/results/phase-1-baseline.json`.
 - If baseline misses budget by >2x: add a "switch to incremental projection" task in Phase 1 before declaring it done.
 - **Phase 2** acceptance gate re-runs the benchmark with real data layers added; regression budget is +20%.
@@ -140,6 +145,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Yjs sync messages can be tens of KB to MB during initial catch-up or large undo. Mixing those into the same Socket.IO connection that's delivering 60Hz cursor events creates head-of-line blocking — the cursor freezes until Yjs catches up. Two TCP connections is a small price for protocol separation.
 
 **Constraint on plans:**
+
 - **Phase 5 plan** wires two endpoints in `apps/realtime`: `/socket.io` (existing) and `/yjs/:roomId` (new, using `y-websocket` server).
 - `packages/data/yjs-layer.ts` connects independently of the Socket.IO client.
 - E2E test: open a room with a 5MB Yjs initial state; assert cursor frame rate stays >30fps during catch-up.
@@ -155,6 +161,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Five containers is honest for a production-shaped self-host (web + realtime + storage + postgres + minio). Three is what a curious user wants to skim before clicking. The PRD prose currently overpromises by saying "three services."
 
 **Constraint on plans:**
+
 - **Phase 4 plan** ships both `docker-compose.yml` (5 services, recommended) and `docker-compose.minimal.yml` (3 services: web + storage + a single sqlite volume mount; no realtime, no minio, blob-as-filesystem).
 - README first-run instructions point to `minimal.yml`. "Production self-host" docs point to the full file.
 - PRD §9 wording is updated in `docs/PRD-v0.2.md` (out of scope for this phase plan but flagged here so the spec/PRD don't drift).
@@ -170,6 +177,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Retrofitting a synchronous API to be postMessage-safe in v1.5 means breaking every plugin author's contract. Cheaper to constrain v1 today than to publish a stable contract that contradicts the v1.5 sandbox.
 
 **Constraint on plans:**
+
 - **Phase 6 plan** (v1.0 SDK) writes AtlasdrawAPI with these rules in the type definitions: all methods are `async` or fire-and-forget, all return values are JSON-serializable (no DOM nodes, no class instances, no functions).
 - **Phase 6 plan** includes a structural test: every public method on `AtlasdrawAPI` passes a structured-clone round-trip on its arguments and return value.
 - ADR `0005-sdk-postmessage-contract.md` written in Phase 6.
@@ -185,6 +193,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** Schema changes after v1 require migrations. A reserved field is free now and saves a migration later.
 
 **Constraint on plans:**
+
 - **Phase 1 plan** includes the `projection` field in `GeoCustomData`. The CoordinateSync class asserts `geo.projection === "mercator"` and throws otherwise (forward-compat sentinel).
 - Schema version bumped to `schemaVersion: 1` from day one (already there in spec).
 
@@ -199,6 +208,7 @@ This document closes the live debates so that downstream plans don't re-derive t
 **Reason:** "We can read your Felt files" is the single biggest unlock for the migration narrative on Show HN. Without it, the file-portability claim is theoretical.
 
 **Constraint on plans:**
+
 - **Phase 6 plan** adds an explicit "Felt importer" task in `packages/data/felt.ts`.
 - The importer is permissive: log warnings on unknown feature types, never throw.
 - A test fixture: 3 sample `.felt` files (donated by friendly Felt users or scraped from public Felt embeds) with expected `.atlasdraw` outputs.
@@ -221,7 +231,7 @@ This is a constraint, not a phase task — every plan must respect it.
 ## Summary table — what each plan must treat as decided
 
 | # | Decision | Affects phases |
-|---|---|---|
+| --- | --- | --- |
 | Q1 | Single-player is first-class; realtime opt-in | 4, 5 |
 | Q2 | Yjs (not Automerge) | 5 |
 | Q3 | Hybrid basemap default (PMTiles bundled, OpenFreeMap demo only) | 4 |
