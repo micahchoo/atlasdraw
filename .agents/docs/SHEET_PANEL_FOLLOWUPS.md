@@ -598,6 +598,28 @@ Rule 2 is not a testing rule and is kept here anyway: the same failure — a che
 that cannot come back false — moved from the suite into the conversation, and
 cost a commit rather than a round.
 
+**How each of the four was actually caught, because the split is the useful
+part.** Three surfaced by re-running something changed, one by reading — and it
+is the one reading caught that argues hardest against relying on either alone:
+
+| | caught by |
+|---|---|
+| `-(-137) === 137` | **reading.** And a mutation check had already passed it — dropping the negation was caught by a *different* assertion in the same file, so the mutation matrix came back clean while the tautology sat there untouched by it. |
+| "at most one corrective sync" | **re-running, changed.** Reinstating the correctness defect left it green. Nothing in the file looked wrong. |
+| the twist spec's missing setup | **re-running, and disbelieving the result.** It reported a working feature dead, which was implausible enough to chase. |
+| the `h` keypress that did not land | **re-running with the setup's own state printed.** The run reported `tool=selection` on the row that was supposed to say `hand`. |
+
+Neither technique dominates. Mutation is blind to an assertion that is
+*redundant* rather than wrong — the tautology's sibling covered the same
+mutation, so breaking the code turned something else red and the matrix looked
+healthy. Reading is blind to everything in the bottom three rows, because those
+files all look correct on the page; that is the entire nature of Shape 2.
+
+**The cheap habit that covers most of it: re-run it changed, and print the state
+the setup was supposed to reach.** Both are seconds of work, both found things
+here, and both were applied late — after a wave had shipped — rather than by
+default. Applied by default they would have cost nothing and saved four rounds.
+
 ### FU-15 — Clearing `dist` without `tsconfig.tsbuildinfo` fakes a source error
 
 **Narrowed 2026-07-31 by FU-8's real fix.** This was filed when `rm -rf
