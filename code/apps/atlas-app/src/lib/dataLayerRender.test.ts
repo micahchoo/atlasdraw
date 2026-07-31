@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
   addDataLayerToMap,
+  addRasterLayerToMap,
   applyOrderToMap,
   applyVisibilityToMap,
   reconcileDataLayers,
@@ -21,7 +22,11 @@ import {
   type MapOrderSurface,
 } from "./dataLayerRender";
 
-import type { LayerRegistryEntry, LayerStyle } from "../state/layerRegistry";
+import type {
+  LayerRegistryEntry,
+  LayerStyle,
+  RasterCorners,
+} from "../state/layerRegistry";
 import type { FeatureCollection } from "geojson";
 
 const POLY_FC: FeatureCollection = {
@@ -624,5 +629,167 @@ describe("applyOrderToMap — registry order → MapLibre z-order (P3)", () => {
     expect(raw.moveLayer).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FU-1 — rasters.
+//
+// Three claims, and the second is the one that would go wrong quietly:
+// a raster renders at all; a raster survives a basemap switch; and a raster
+// never sits above a vector layer no matter what order the registry is in.
+// ---------------------------------------------------------------------------
+
+const CORNERS: RasterCorners = [
+  [0, 1],
+  [1, 1],
+  [1, 0],
+  [0, 0],
+];
+
+function rasterEntry(
+  id: string,
+  visible = true,
+  opacity = 1,
+  order = 0,
+): LayerRegistryEntry {
+  return {
+    kind: "raster",
+    id,
+    label: id,
+    visible,
+    order,
+    corners: CORNERS,
+    opacity,
+    imageKey: `${id}.png`,
+  };
+}
+
+describe("addRasterLayerToMap", () => {
+  it("adds an image source with the four corners and a raster layer", () => {
+    const { map, sources, layers } = makeStubMap();
+    addRasterLayerToMap(map, "rl:a", "blob:x", CORNERS, 0.6);
+
+    expect(sources.get("rl:a")).toEqual({
+      type: "image",
+      url: "blob:x",
+      coordinates: CORNERS,
+    });
+    expect(layers.get("rl:a")).toMatchObject({
+      id: "rl:a",
+      type: "raster",
+      source: "rl:a",
+      // Carried at add time, not applied afterwards: a raster that flashes in
+      // at full strength and then fades is worse than one that arrives right.
+      paint: { "raster-opacity": 0.6 },
+    });
+  });
+
+  it("rolls the source back when addLayer rejects", () => {
+    const { map, raw, sources } = makeStubMap();
+    raw.addLayer.mockImplementationOnce(() => {
+      throw new Error("layer rejected");
+    });
+
+    expect(() =>
+      addRasterLayerToMap(map, "rl:a", "blob:x", CORNERS, 1),
+    ).toThrow(/layer rejected/);
+    // Without the rollback the orphan source makes the NEXT attempt fail with
+    // "there is already a source with ID", so one bad add poisons every retry.
+    expect(sources.has("rl:a")).toBe(false);
+  });
+});
+
+describe("reconcileDataLayers — rasters (FU-1)", () => {
+  it("puts a raster back after a style swap dropped it", () => {
+    const { map, layers } = makeStubMap();
+    reconcileDataLayers(map, [rasterEntry("rl:a")], {}, { "rl:a": "blob:x" });
+
+    // The FU-3 failure by another door: without this a basemap switch leaves
+    // the row in the panel and the sheet off the map.
+    expect(layers.get("rl:a")).toMatchObject({ type: "raster" });
+  });
+
+  it("skips a raster with no decoded image rather than adding a blank layer", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { map, layers } = makeStubMap();
+
+    reconcileDataLayers(map, [rasterEntry("rl:a")], {}, {});
+
+    expect(layers.has("rl:a")).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("re-hides a raster that was hidden before the swap", () => {
+    const { map, raw } = makeStubMap();
+    reconcileDataLayers(
+      map,
+      [rasterEntry("rl:a", false)],
+      {},
+      { "rl:a": "blob:x" },
+    );
+
+    expect(raw.setLayoutProperty).toHaveBeenCalledWith(
+      "rl:a",
+      "visibility",
+      "none",
+    );
+  });
+
+  it("rebuilds rasters below data layers, whatever order the registry is in", () => {
+    const { map, raw } = makeStubMap();
+    // Registry lists the data layer FIRST — if reconcile just walked the array
+    // the raster would land on top of it and hide it.
+    reconcileDataLayers(
+      map,
+      [dataEntry("dl:a"), rasterEntry("rl:a")],
+      { "dl:a": POLY_FC },
+      { "rl:a": "blob:x" },
+    );
+
+    const added = raw.addLayer.mock.calls.map((c) => c[0].id);
+    expect(added).toEqual(["rl:a", "dl:a"]);
+  });
+
+  it("leaves the existing callers' three-argument form working", () => {
+    // rasterUrls is optional so the callers with no rasters in scope are not
+    // made to pass `{}` to say they have none.
+    const { map, layers } = makeStubMap();
+    expect(() =>
+      reconcileDataLayers(map, [dataEntry("dl:a")], { "dl:a": POLY_FC }),
+    ).not.toThrow();
+    expect(layers.has("dl:a")).toBe(true);
+  });
+});
+
+describe("applyOrderToMap — rasters stay under the vector band (FU-1)", () => {
+  it("pushes a raster below the data layers even when the style has it on top", () => {
+    const { map, order } = makeOrderStubMap(["basemap-fill", "dl:a", "rl:a"]);
+
+    applyOrderToMap(map, [rasterEntry("rl:a"), dataEntry("dl:a")]);
+
+    expect(order()).toEqual(["basemap-fill", "rl:a", "dl:a"]);
+  });
+
+  it("keeps rasters below even when the registry lists them last", () => {
+    // The rule is not "whatever order the array is in". A raster that can be
+    // dragged above an annotation or a data layer is a way to lose work
+    // without deleting anything.
+    const { map, order } = makeOrderStubMap(["rl:a", "dl:a", "rl:b"]);
+
+    applyOrderToMap(map, [
+      dataEntry("dl:a"),
+      rasterEntry("rl:a"),
+      rasterEntry("rl:b"),
+    ]);
+
+    expect(order()).toEqual(["rl:a", "rl:b", "dl:a"]);
+  });
+
+  it("still orders two rasters relative to each other", () => {
+    const { map, order } = makeOrderStubMap(["rl:a", "rl:b"]);
+    applyOrderToMap(map, [rasterEntry("rl:b"), rasterEntry("rl:a")]);
+    expect(order()).toEqual(["rl:b", "rl:a"]);
   });
 });

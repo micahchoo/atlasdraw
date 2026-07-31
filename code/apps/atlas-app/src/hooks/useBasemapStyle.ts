@@ -16,6 +16,7 @@ import {
 
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { useRasterImageStore } from "../state/useRasterImageStore";
 import { reconcileDataLayers } from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
@@ -52,6 +53,14 @@ export function useBasemapStyle(
         map,
         useLayerRegistryStore.getState().entries,
         useDataLayerFCStore.getState().getAll(),
+        // FU-1: without these the basemap switch puts every vector layer back
+        // and leaves the scanned sheets off the map, with their rows still in
+        // the panel. Same shape of failure FU-3 fixed for the collab layer.
+        Object.fromEntries(
+          Object.entries(useRasterImageStore.getState().getAll()).map(
+            ([id, image]) => [id, image.url],
+          ),
+        ),
       );
     };
 

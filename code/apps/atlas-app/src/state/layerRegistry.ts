@@ -25,6 +25,7 @@ import { immer } from "zustand/middleware/immer";
 import type { LayerStyle } from "@atlasdraw/basemap";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { useRasterImageStore } from "./useRasterImageStore";
 
 import type { FeatureCollection } from "geojson";
 
@@ -488,6 +489,11 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
       // never had an FC, so the call is a cheap no-op for them and keeps
       // `remove` kind-agnostic at the call site (mx-91343d).
       useDataLayerFCStore.getState().delete(id);
+      // FU-1: and the decoded image, on the same terms. This one is not merely
+      // tidy — the store holds an object URL, which keeps its Blob alive until
+      // revoked, so a raster removed without this leaks a full-size PNG for the
+      // rest of the session.
+      useRasterImageStore.getState().delete(id);
     },
   })),
 );

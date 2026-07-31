@@ -69,6 +69,7 @@ import {
   type LayerStyle,
 } from "../state/layerRegistry";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { useRasterImageStore } from "../state/useRasterImageStore";
 
 import { inferGeometryType } from "../lib/geometryType";
 
@@ -80,6 +81,21 @@ import {
 } from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
+
+/**
+ * FU-1: raster id → object URL, in the shape reconcileDataLayers wants.
+ *
+ * The store holds `{ blob, url }` because the blob is what gets written into a
+ * saved document; the map only ever needs the url. Projecting here keeps
+ * dataLayerRender ignorant of the store, which is the whole reason it takes a
+ * plain record rather than reading one.
+ */
+function rasterUrlSnapshot(): Record<string, string> {
+  const images = useRasterImageStore.getState().getAll();
+  return Object.fromEntries(
+    Object.entries(images).map(([id, image]) => [id, image.url]),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Loose scene-element shape — only the fields we read.
@@ -593,6 +609,7 @@ export function useLayerRegistrySync(
       map,
       useLayerRegistryStore.getState().entries,
       useDataLayerFCStore.getState().getAll(),
+      rasterUrlSnapshot(),
     );
   }, [map]);
 
@@ -655,6 +672,7 @@ export function useLayerRegistrySync(
           map,
           state.entries,
           useDataLayerFCStore.getState().getAll(),
+          rasterUrlSnapshot(),
         );
       }
       // P3 — restack. Needed after a reorder, and also after add/remove:

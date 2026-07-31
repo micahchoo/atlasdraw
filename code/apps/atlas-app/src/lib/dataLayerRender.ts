@@ -29,17 +29,32 @@ import { inferGeometryType } from "./geometryType";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
-import type { LayerRegistryEntry, LayerStyle } from "../state/layerRegistry";
+import type {
+  LayerRegistryEntry,
+  LayerStyle,
+  RasterCorners,
+} from "../state/layerRegistry";
 
 /**
- * Minimal MapLibre surface for putting a data layer on the map. Narrowed so
- * tests can pass a stub instead of constructing a full Map.
+ * Every source spec this module hands to MapLibre.
+ *
+ * A union on one method rather than a method per kind. The first attempt gave
+ * rasters their own surface with their own `addSource`, which reads tidier
+ * right up until a caller needs both: `DataLayerMapSurface &
+ * RasterLayerMapSurface` intersects into an `addSource` that accepts geojson
+ * AND image specs at once, and no single-signature stub — or real map — can
+ * satisfy it. MapLibre itself takes a union here, and so does this.
+ */
+export type LayerSourceSpec =
+  | { type: "geojson"; data: FeatureCollection }
+  | { type: "image"; url: string; coordinates: RasterCorners };
+
+/**
+ * Minimal MapLibre surface for putting a layer on the map. Narrowed so tests
+ * can pass a stub instead of constructing a full Map.
  */
 export interface DataLayerMapSurface {
-  addSource(
-    id: string,
-    spec: { type: "geojson"; data: FeatureCollection },
-  ): void;
+  addSource(id: string, spec: LayerSourceSpec): void;
   addLayer(spec: maplibregl.LayerSpecification): void;
   removeSource(id: string): void;
   getLayer(id: string): unknown;
@@ -62,6 +77,54 @@ export function addDataLayerToMap(
   map.addSource(id, { type: "geojson", data: fc });
   try {
     map.addLayer(compileLayer(id, style, inferGeometryType(fc)));
+  } catch (layerErr) {
+    try {
+      map.removeSource(id);
+    } catch {
+      /* swallow secondary failure — rollback is best-effort */
+    }
+    throw layerErr;
+  }
+}
+
+/**
+ * What `addRasterLayerToMap` needs. A structural subset of
+ * `DataLayerMapSurface` — no `setLayoutProperty`, since visibility is
+ * `applyVisibilityToMap`'s job — so a stub for either satisfies this.
+ */
+export type RasterLayerMapSurface = Omit<
+  DataLayerMapSurface,
+  "setLayoutProperty"
+>;
+
+/**
+ * Add one raster's image source and layer.
+ *
+ * Deliberately not routed through `compileLayer`: that function compiles a
+ * `LayerStyle` — fill colour, stroke width, data-driven expressions — into a
+ * vector paint, and a raster has none of those. Widening it to sometimes return
+ * a raster spec would put a branch in the middle of the vector styling path for
+ * a layer kind that shares nothing with it.
+ *
+ * Same rollback as `addDataLayerToMap`, for the same reason: a rejected
+ * `addLayer` leaves an orphan source under the id, and the next attempt then
+ * fails with "there is already a source with ID".
+ */
+export function addRasterLayerToMap(
+  map: RasterLayerMapSurface,
+  id: string,
+  url: string,
+  corners: RasterCorners,
+  opacity: number,
+): void {
+  map.addSource(id, { type: "image", url, coordinates: corners });
+  try {
+    map.addLayer({
+      id,
+      type: "raster",
+      source: id,
+      paint: { "raster-opacity": opacity },
+    });
   } catch (layerErr) {
     try {
       map.removeSource(id);
@@ -191,7 +254,18 @@ export function applyOrderToMap(
   map: MapOrderSurface,
   entries: readonly LayerRegistryEntry[],
 ): void {
-  const wanted = entries.filter((e) => e.kind === "data").map((e) => e.id);
+  // Rasters first, then data layers. Both are MapLibre layers in one style, so
+  // one sequence covers the whole stack — and putting every raster below every
+  // vector is the rule, not a coincidence of insertion order: a scanned sheet
+  // is a backdrop you trace on top of, and a raster that can cover your own
+  // annotations is a way to lose them without deleting anything.
+  //
+  // Within each band, registry array order still decides, so dragging one
+  // raster above another works and dragging one above a data layer does not.
+  const wanted = [
+    ...entries.filter((e) => e.kind === "raster").map((e) => e.id),
+    ...entries.filter((e) => e.kind === "data").map((e) => e.id),
+  ];
   if (wanted.length < 2) {
     return; // a single layer (or none) can't be out of order
   }
@@ -245,6 +319,11 @@ export function applyOrderToMap(
  *     never touches the map);
  *   - a registry gaining a data-layer id from anywhere else (convert).
  *
+ * FU-1: rasters go back too, and they go back FIRST so a rebuilt style has them
+ * under the vector band. Without this a basemap switch would drop every scanned
+ * sheet off the map while leaving its row in the panel — which is precisely the
+ * failure FU-3 fixed for the collaboration layer, arriving by a different door.
+ *
  * Idempotent by design — entries already present in the style are skipped via
  * `getLayer`, which is also what keeps this off the import path's toes
  * (useDataFileImport adds to the map *before* registering, so by the time the
@@ -259,11 +338,52 @@ export function reconcileDataLayers(
   map: DataLayerMapSurface,
   entries: readonly LayerRegistryEntry[],
   fcs: Record<string, FeatureCollection>,
+  /**
+   * FU-1: raster id → object URL. Optional so the three existing callers that
+   * have no rasters in scope keep compiling, and so a caller that genuinely
+   * has none is not made to pass `{}` to say so.
+   */
+  rasterUrls: Record<string, string> = {},
 ): void {
-  // Iterating in array order stacks a from-scratch rebuild bottom-up, matching
-  // the z-order applyOrderToMap enforces. It does NOT by itself fix an existing
-  // style's order — a layer already present is skipped, so the two functions
-  // are complementary rather than redundant.
+  // Rasters first, so a from-scratch rebuild lands them under the vector band
+  // without needing applyOrderToMap to fix it afterwards. Within each pass,
+  // array order stacks bottom-up, matching the z-order applyOrderToMap
+  // enforces. Neither pass fixes an EXISTING style's order — a layer already
+  // present is skipped — so the two functions stay complementary.
+  for (const entry of entries) {
+    if (entry.kind !== "raster") {
+      continue;
+    }
+    if (map.getLayer(entry.id)) {
+      continue;
+    }
+    const url = rasterUrls[entry.id];
+    if (!url) {
+      // Same shape as the missing-FC case below: an entry with no image cannot
+      // render, and a raster in the panel that draws nothing is worse than one
+      // that is honestly absent. hydrate() already skips these at load.
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[dataLayerRender] no decoded image for raster layer, skipping",
+        entry.id,
+      );
+      continue;
+    }
+    try {
+      addRasterLayerToMap(map, entry.id, url, entry.corners, entry.opacity);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[dataLayerRender] re-adding raster layer "${entry.id}" failed:`,
+        err,
+      );
+      continue;
+    }
+    if (!entry.visible) {
+      applyVisibilityToMap(map, entry.id, false);
+    }
+  }
+
   for (const entry of entries) {
     if (entry.kind !== "data") {
       continue;
