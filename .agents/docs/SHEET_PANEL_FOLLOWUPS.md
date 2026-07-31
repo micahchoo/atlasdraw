@@ -34,13 +34,13 @@ ledger.
 | FU-5 | **resolved — not a defect**, see ticket | disproved in a browser; probe kept |
 | FU-6 | **done** | this branch — roving tabindex on the ⋯ menu |
 | FU-7 | open, scope only | — |
-| FU-8 | open, and sharper — now three faces, see ticket | — |
-| FU-9 | open | — |
+| FU-8 | **done — `yarn test:all` passes in one invocation** | this branch; it had five faces, not three |
+| FU-9 | **done** | this branch — the snapshot was stale, not broken |
 | FU-10 | open | — |
 | FU-11 | parked with a kill criterion, deliberately | — |
 | FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-6 of 14 shipped, 1 closed as not-a-defect.
+8 of 14 shipped, 1 closed as not-a-defect.
 
 ---
 
@@ -327,8 +327,43 @@ fixed** in `aee15c0`. This one isn't.
 command fails on a clean checkout, and nothing distinguishes "the repo is
 broken" from "I broke it."
 
-**Done when:** `yarn test:all` passes from a clean worktree in one invocation.
-**Size:** medium, and it's build config, which is where cheap fixes go to rot.
+**DONE 2026-07-31 — `yarn test:all` exits 0 in one invocation.** It had five
+faces, not three. Each was hiding behind the one before it, which is why the
+count kept going up every time someone looked.
+
+**Face 1, the dist poisoning — fixed at the root, and the root is three
+characters.** Three files imported `from "../.."`. That resolves the package
+*directory*, so Vite reads `packages/excalidraw/package.json` and follows
+`main` to `./dist/prod/index.js`. With no `dist/` it silently falls back to
+`index.tsx` and everything passes; once `test:typecheck` has built `dist/`, the
+same import loads the **bundle** and dies on a null `useTunnels`. They now say
+`../../index`, which does not depend on build state. Verified the hard way:
+built `dist/` on purpose, then ran all three suites green with it present.
+
+    packages/excalidraw/components/Sidebar/siderbar.test.helpers.tsx
+    packages/excalidraw/components/FontPicker/FontPicker.test.tsx
+    packages/excalidraw/components/Stats/stats.test.tsx
+
+**Face 2 — "a full run cannot produce a true number" — dissolves with face 1.**
+Nothing about the ordering was ever wrong; one import was.
+
+**Face 3, the TS6305 trap, is defused rather than fixed.** Deleting `dist/`
+leaves the five `tsconfig.tsbuildinfo` files, so `tsc -b` believes it is up to
+date, skips the rebuild, and typecheck fails with 6× TS6305. That is inherent
+to deleting outputs without their build info — but nobody has to delete `dist/`
+any more, so the trap is off the path. If you ever do clear it, clear the
+tsbuildinfo files in the same breath.
+
+**Face 4 — `test:code` could never pass.** `eslint --max-warnings=0` against 17
+pre-existing `import/order` warnings in 10 files. All auto-fixable, all fixed.
+A gate whose threshold is zero and whose baseline is seventeen is not a gate.
+
+**Face 5 — `test:other` could never pass either.** `prettier --list-different`
+reported 37 files: 31 markdown, 5 JSON, 1 HTML, **zero source**. Formatted in
+their own commit so this one stays readable and the reformat can be reverted on
+its own.
+
+**Size:** medium. Face 1 was three characters and the other four were bookkeeping.
 
 ### FU-9 — The permanent red
 `MermaidToExcalidraw` snapshot fails on pristine `main` and has failed through
@@ -339,8 +374,21 @@ past failures.
 **Impact — contributors, not users.** The next real regression arrives as "2
 failed" and reads as normal.
 
-**Done when:** fixed, or quarantined with a linked reason, so green means green.
-**Size:** small to triage, unknown to fix.
+**DONE 2026-07-31 — the snapshot was stale, and it was never a bug.** Diffed
+the stored snapshot against the received one character by character: the single
+difference is an inserted `<button class="Dialog__close">`. That button is
+commit `694a95c`, *"fix(excalidraw): always render the Dialog close button"* —
+a deliberate a11y fix, because on desktop the vendored Dialog rendered no close
+button, so an error dialog had no visible dismissal and, with zero focusable
+elements, Modal's focus-scoped Escape handler never fired either. The fix was
+right; the snapshot was simply never updated with it.
+
+So the permanent red was a correct change and a stale expectation, sitting
+there long enough that nine messages in one thread wrote "1 failed (the
+pre-existing one)" and moved on. That is the cost the ticket named, and it is
+now the only ticket on this list whose fix was a one-line `-u`.
+
+**Size:** small to triage, one command to fix. The triage was the work.
 
 ### FU-10 — Checks that look like checks
 Three separate review rounds each found an assertion that could not fail:
@@ -679,7 +727,8 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
    **FU-3** still open and worth pulling up: the fix is small but the symptom is
    other people's shapes vanishing mid-session, which is the worst-looking bug
    on this list.
-6. **FU-8, FU-9** — build config, do them when something else is compiling.
+6. ~~**FU-8, FU-9**~~ — done 2026-07-31. `yarn test:all` passes in one
+   invocation and green now means green.
 7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
    only. **FU-11** — observe only.
 

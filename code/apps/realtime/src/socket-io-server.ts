@@ -19,9 +19,6 @@
 // Per ADR-0010 the relay never inspects encrypted payloads — SCENE_UPDATE
 // and COMMENT data are forwarded as opaque { iv, ciphertext } blobs.
 
-import { checkRateLimit } from "./rate-limit";
-
-import type { Server as SocketIOServer, Socket } from "socket.io";
 import type {
   SceneUpdateEvent,
   MapCameraUpdateEvent,
@@ -30,6 +27,10 @@ import type {
   RequestSnapshotEvent,
   SceneSnapshotEvent,
 } from "@atlasdraw/protocol";
+
+import { checkRateLimit } from "./rate-limit";
+
+import type { Server as SocketIOServer, Socket } from "socket.io";
 import type { RateLimitedEvent } from "./rate-limit";
 
 // ---------------------------------------------------------------------------

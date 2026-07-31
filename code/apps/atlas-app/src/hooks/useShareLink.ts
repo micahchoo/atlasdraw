@@ -22,9 +22,10 @@ import LZString from "lz-string";
 
 import { write } from "@atlasdraw/data";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 
 export type ShareMode = "hash" | "upload";

@@ -14,10 +14,10 @@ import {
 } from "@testing-library/react";
 import * as Y from "yjs";
 
+import type { CommentAnchor } from "@atlasdraw/protocol";
+
 import { CommentsPanel } from "../CommentsPanel";
 import { CommentsLayer } from "../../state/comments";
-
-import type { CommentAnchor } from "@atlasdraw/protocol";
 
 function makeLayer(doc?: Y.Doc): CommentsLayer {
   return new CommentsLayer({

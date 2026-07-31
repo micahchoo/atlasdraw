@@ -18,13 +18,13 @@
 
 import { describe, it, expect } from "vitest";
 
+import type { GeoCustomData } from "@atlasdraw/geo";
+
 import {
   annotationToFeatureCollection,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "./convert.js";
-
-import type { GeoCustomData } from "@atlasdraw/geo";
 
 // ---------------------------------------------------------------------------
 // Helpers

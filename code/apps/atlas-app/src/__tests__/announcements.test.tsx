@@ -20,13 +20,14 @@ import {
 
 import * as Y from "yjs";
 
+import type { CommentAnchor } from "@atlasdraw/protocol";
+
 import { AriaAnnouncer, useAnnouncerStore } from "../components/AriaAnnouncer";
 import { LayerPanel } from "../components/LayerPanel";
 import { CommentsLayer } from "../state/comments";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 
 import type { FeatureCollection } from "geojson";
-import type { CommentAnchor } from "@atlasdraw/protocol";
 
 const emptyFc = (count: number): FeatureCollection => ({
   type: "FeatureCollection",

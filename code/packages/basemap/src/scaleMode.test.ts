@@ -10,13 +10,14 @@ import {
   HYBRID_FACTOR_MAX,
 } from "@atlasdraw/geo";
 
+import type { GeoCustomData } from "@atlasdraw/geo";
+
 import {
   CoordinateSync,
   type ExcalidrawAPI,
   type ExcalidrawElementLike,
 } from "./CoordinateSync";
 
-import type { GeoCustomData } from "@atlasdraw/geo";
 
 // ---------------------------------------------------------------------------
 // Unit: computeScaleFactor
