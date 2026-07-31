@@ -27,7 +27,7 @@ ledger.
 |---|---|---|
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
-| FU-1 | **open — and it is a feature, not a follow-up.** Scope verified and rewritten; error message fixed meanwhile | needs one decision from MIXI |
+| FU-1 | **step one shipped** — drop a GeoTIFF, it places itself. RA-7/8/9 open | `73236d7`; plan in `PLANS/ATLASDRAW_RASTER_PLAN.md` |
 | FU-2 | **done — the seven are deleted** | twice over: `6497dd8` on `main`, `8cb12be` on `feat/map-rotation`; see the merge note below |
 | FU-3 | **done** | `main` — the collab layer survives a style swap |
 | FU-4 | **done** | `main` — grip is the only drag source |
@@ -126,6 +126,29 @@ entry gets deleted the day its importer lands.
 
 **Size:** the honest answer is "a feature", and it should be a plan, not a row
 in this table.
+
+**STEP ONE SHIPPED 2026-07-31** — `73236d7`, merged on top of rotation.
+RA-1 the third registry kind, RA-2 the decoder, RA-3 the map write, RA-4 the
+drop path, RA-5 the panel row, RA-6 persistence, plus a Playwright probe.
+MIXI chose Option A. Open: RA-7 opacity, RA-8 legend entry, RA-9
+full-resolution — all held deliberately until someone has a scan on screen to
+judge them against.
+
+**One correction this ticket earned.** Its scope note said there was "no raster
+path anywhere", citing a grep over `apps/atlas-app/src`. That was true of that
+directory and false of the app: Excalidraw's native image tool is enabled, and
+`useGeoAnchor` stamps `image` elements as a geographic bbox
+(`useGeoAnchor.ts:12-18`), so a dropped PNG already moved with the map. MIXI
+caught it. The same mistake FU-5 was — searching one place and treating the
+absence as a fact about the whole system.
+
+The existing path still does not do the three things this one exists for: TIFF
+is absent from `IMAGE_MIME_TYPES` (`packages/common/src/constants.ts:237`);
+nothing reads georeferencing, so a PNG lands where you dropped it; and
+`.excalidrawLayer` is z-index 1 over `.mapLayer` at 0, so a full-opacity image
+covers the data layers. A raster layer reads the file's own coordinates and
+sits underneath. Both routes were put to MIXI with the trade written out, and
+this one was kept.
 
 **Done when:** a dropped `.tif` registers a data layer that renders, and the
 layer card shows it with provenance like every other source.
