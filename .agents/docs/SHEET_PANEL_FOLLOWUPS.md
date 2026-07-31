@@ -28,7 +28,7 @@ ledger.
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
 | FU-1 | open | — |
-| FU-2 | **decided — delete the seven; not yet executed** | consumer analysis re-verified 2026-07-31, see ticket |
+| FU-2 | **done** | the seven deleted `8cb12be`, on `feat/map-rotation` |
 | FU-3 | open | — |
 | FU-4 | open | — |
 | FU-5 | open | — |
@@ -39,9 +39,10 @@ ledger.
 | FU-9 | open | — |
 | FU-10 | open | — |
 | FU-11 | parked with a kill criterion, deliberately | — |
-| FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
+| FU-14 | **done, on a branch** | RT-0 `8749fc0`, RT-1+RT-2 `0d3e567`, probe fix `4505042`, RT-4 `67c33ce`, RT-3+RT-9 `a15fbcf` — all on `feat/map-rotation`, unmerged |
 
-2 of 14 shipped. Two more are decided and waiting on hands rather than answers.
+4 of 15 done, three of them sitting on `feat/map-rotation` and not yet merged
+or run in a browser. Nothing is now blocked on an answer.
 
 ---
 
@@ -476,8 +477,40 @@ alone rather than through the React tree:
 
 ### FU-14 — Rotate and tilt, and what they do to annotations
 
-> **DECIDED 2026-07-31 — rotation ships, tilt is dropped, D6 = block.**
-> **Ready, not started.** Task breakdown lives in
+> **SHIPPED 2026-07-31 on `feat/map-rotation`, not merged, not run in a
+> browser.** Five commits: RT-0 `8749fc0` (rotation off, no way back to north
+> yet), RT-1+RT-2 `0d3e567` (`_lastSync` carries `angle`; bbox anchors turn
+> instead of skewing), `4505042` (the east probe wrapped at the antimeridian
+> and flipped the answer 180°), RT-4 `67c33ce` (the printed north arrow turns
+> with the camera), RT-3+RT-9 `a15fbcf` (compass, reset-north, the gestures
+> back on for the editor only, and drawing held shut while turned).
+>
+> **Two departures from the plan below, both deliberate.**
+>
+> *The rotation is measured, never read.* `cameraRotation()` projects two
+> points a hair apart along the centre parallel and reads the angle that comes
+> back, so nothing in the geometry path depends on MapLibre's bearing sign
+> convention — which matters because nobody has run this app. D2's
+> `angle = -bearing` is still what the code computes; it is just no longer
+> what the code *assumes*. The single exception is `setCameraRotation`, which
+> a control needs because `setBearing` is the only setter there is.
+>
+> *The bearing round-trip was not built, and documents always open north-up.*
+> The plan assumed capture/restore already existed; it did not. Because the
+> rotation is measured off the live projection rather than a stored field,
+> geometry is correct either way, so this became product taste rather than
+> correctness. A document that reopens crooked, with drawing disabled and no
+> explanation, is a worse first five seconds than losing a camera angle. Two
+> lines to reverse if that reads wrong in use.
+>
+> **RT-9's shape, since D6 named an option that could not fire.** MIXI chose
+> "block drawing while tilted" in the message that dropped tilt. The
+> rotation-only reading shipped: the pointer-events gate stays shut while
+> `bearing !== 0`, so the drag reaches MapLibre and a turned plate still pans
+> and zooms, and a hint carries a one-click Reset north. The atlas tools are
+> not blocked — a pin is a point anchor and is exact at every rotation.
+>
+> Task breakdown lives in
 > `PLANS/ATLASDRAW_ROTATION_PLAN.md`: six tasks, **RT-0 first** (close the live
 > defect — rotation is reachable and unrecoverable today) and **RT-1 strictly
 > before RT-2** (`_lastSync` must carry `angle` before anything writes `angle`,
@@ -630,27 +663,29 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
 
 ~~1. **FU-12**~~ ~~2. **FU-13**~~ — shipped: `d29920d`, merged `0b0de34`, pushed.
 ~~3. **FU-14 D3 and D6**~~ — answered 2026-07-31.
+~~4. **FU-14 RT-0..RT-9**~~ ~~5. **FU-2**~~ — shipped 2026-07-31 on
+`feat/map-rotation`, five commits, unmerged.
 
-1. **FU-14 RT-0** — on its own, ahead of everything. Rotation is reachable and
-   unrecoverable *today*, and bearing persists through save and reload. This is
-   the only item on this list that is a live user-facing defect rather than
-   maintenance, and it is one line of map options.
+1. **Merge `feat/map-rotation`, and run the app before you do.** Everything on
+   that branch was verified by reading source and by tests; nobody has opened
+   the editor. The claims most worth a live check are the ones a test cannot
+   make: that the compass is clickable where it sits (bottom-left, z-index 10,
+   above `.atlasToolOverlay`), that two-finger twist reaches the map through
+   the Excalidraw plate, and that a turned map draws its annotations turned.
 2. **FU-1** — the PRD job that isn't met, and the only real capability gap.
-3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
-   bleeding. Not urgent; nothing is broken while bearing cannot move.
-4. **FU-10** — before the next feature, because it's what makes the next
+3. **FU-10** — before the next feature, because it's what makes the next
    feature's tests mean anything.
-5. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
-6. **FU-8 + FU-15, FU-9** — build config, do them when something else is
+4. **FU-3, FU-4, FU-5, FU-6** — one small batch, one review round.
+5. **FU-8 + FU-15, FU-9** — build config, do them when something else is
    compiling. Take FU-8 and FU-15 together; fixing either alone just relocates
    the lost hour.
-7. **FU-2** — now mechanical: delete the seven, fix two files. **FU-7** — scope
-   only. **FU-11** — observe only.
+6. **FU-7** — scope only. **FU-11** — observe only.
 
 FU-2 dropped from third to last when the claim behind it collapsed, got blocked
-outright when MIXI asked for rotate and tilt, and is now unblocked by the
-decision to drop tilt. It has moved three times without a user ever being able
+outright when MIXI asked for rotate and tilt, was unblocked by the decision to
+drop tilt, and is now done. It moved three times without a user ever being able
 to tell.
 
-The split inside FU-14 is deliberate. RT-0 *removes* a behaviour and is worth
-doing tonight; RT-1 onward *adds* one and can wait behind the capability gap.
+The split inside FU-14 held up in the doing. RT-0 *removed* a behaviour and
+went first on its own; everything after it *added* one, and every commit in
+between was safe to stop at.
