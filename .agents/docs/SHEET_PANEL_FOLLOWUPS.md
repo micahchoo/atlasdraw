@@ -39,10 +39,13 @@ ledger.
 | FU-9 | **done** | `main` — the snapshot was stale, not broken |
 | FU-10 | **done** | `main` — 3 fixed, and `yarn test:falsifiable` keeps them fixed |
 | FU-11 | parked with a kill criterion, deliberately | — |
-| FU-14 | **done, on a branch** | RT-0 `8749fc0`, RT-1+RT-2 `0d3e567`, probe fix `4505042`, RT-4 `67c33ce`, RT-3+RT-9 `a15fbcf` — all on `feat/map-rotation`, unmerged |
+| FU-14 | **done, on `main`** | merged `949a4ed`; shipped a crash fixed at `c9960fa`, twist coverage `d0062c4` |
+| FU-16 | open — filed 2026-07-31 | a local `playwright test` attaches to a stranger's dev server |
+| FU-17 | open — filed 2026-07-31 | the app honours two of the three pan gestures its inherited hint advertises |
 
-11 of 15 done, 1 closed as not-a-defect. FU-14's five commits are on
-`feat/map-rotation` and are the only done work not yet on `main` — and the only
+12 of 17 done, 1 closed as not-a-defect. FU-16 and FU-17 both came out of the
+first time anyone ran this app in a browser; see section C. The note below is
+kept for the record of how FU-14 landed — and the only
 work in this file nobody has run in a browser. What is left is FU-1 (a feature,
 blocked on one decision from MIXI), FU-15 (narrow), FU-7 (scope only) and FU-11
 (observe only).
@@ -577,6 +580,88 @@ ticket rather than closing it.
 it gives up on `apps/*/dist` before reaching the package dists, which makes it
 a no-op for exactly the directories that matter.
 **Size:** small. Both halves are one line each.
+
+---
+
+### FU-16 — A local e2e run attaches to whatever is already on :5174
+
+`apps/atlas-app/playwright.config.ts` sets `reuseExistingServer: !process.env.CI`.
+Locally that means Playwright does **not** start a server: it uses whatever is
+already listening, whoever started it, at whatever commit that process was
+launched from. The tests then report on a tree nobody chose.
+
+This is the fourth artifact-staleness trap on this ledger, after FU-8, FU-15 and
+the stale Vite transform that opened the rotation crash thread. Same family
+every time: **an artifact outliving the source that produced it.**
+
+Two ways it has already cost something:
+
+- A dev server started before a merge kept serving the pre-merge module for
+  hours. The reported symptom was a missing export that existed on disk —
+  `setCameraRotation`, `2026-07-31`. Restarting the server was the whole fix,
+  and it took a sourcemap dump to establish that.
+- **It silently weakens mutation checks.** Mutate a source file, run the e2e
+  suite, and if the attached server is holding the unmutated module the test
+  stays green — which reads as "the mutation was not caught" when the mutation
+  never reached the browser. A mutation check that cannot see its own mutation
+  is the FU-10 class wearing different clothes.
+
+`playwright.clean.config.ts` (`d0062c4`) is the current answer: it boots its own
+server on a dedicated port. It works, and it is opt-in — the default config is
+still the one anyone types `yarn e2e` into.
+
+**Done when:** the default local run cannot attach to a foreign server. Either
+`reuseExistingServer: false` outright, or a fixed dedicated port plus a startup
+assertion that the server it reached is serving this working tree. The second is
+better: it catches the class rather than the instance.
+**Size:** small. One config line, or one line plus a health check.
+
+---
+
+### FU-17 — Middle-drag is advertised by the UI and wired to nothing
+
+Under the default selection tool the Excalidraw plate captures pointer events —
+`classifyTool` is `toolType !== "hand"` (`packages/tools/src/classifyTool.ts:20`),
+a deliberate `atlasdraw-dd91` resolution — so a plain left-drag does not pan the
+map. Two escape hatches exist because of that gate, and both were built on
+purpose: **wheel**, via `useMapWheelRouter` (`apps/atlas-app/src/hooks/useMapWheelRouter.ts:2`,
+whose header says it routes wheel events to the map regardless of which layer is
+on top), and **space+drag**, via the bridge at
+`useExcalidrawChangeHandler.ts:134` that forwards Excalidraw's own scroll-pan
+delta onto `map.panBy`.
+
+Measured under the selection tool, twice independently: left-drag leaves the
+centre unmoved, wheel zooms 4 → 5.4 with the centre tracking the cursor,
+space+drag moves 78.5000E 30.1297N → 76.0022E 31.2751N, and hand + left-drag
+moves as the positive control.
+
+**The gap is one gesture, not the pair.** Excalidraw's hint reads *"To move
+canvas, hold Scroll wheel or Space while dragging, or use the hand tool"* — a
+vendored locale string (`packages/excalidraw/locales/en.json:359`, with `:736`
+supplying "Scroll wheel"), not a promise this app authored. Middle-button drag
+does not pan the map and cannot: the bridge is gated on `spaceHeldRef.current`
+and the scroll reset below it runs unconditionally, so a middle-drag pans
+Excalidraw's canvas and then has it zeroed with nothing carrying it to the
+camera. Grepping `apps/` and `packages/{basemap,tools}` for middle-button
+handling returns one type comment (`packages/tools/src/types.ts:28`) and nothing
+else.
+
+So the app honours two of the three gestures its inherited hint advertises, and
+a user who follows the hint's first suggestion gets silence.
+
+**What this ticket is not.** It was first drafted as "both bypasses are
+untested". That was wrong and worth recording as wrong: `useMapWheelRouter.test.ts`
+carries 15 cases including the routing itself, modifier pass-through and
+scroll-port yielding, and `useExcalidrawChangeHandler.test.ts:164-202` covers the
+bridge three ways — bridges when space is held, refuses a `scrollToContent`-sized
+jump, refuses when space is not held. Both escape hatches are among the
+better-covered code in the app. The claim came from reading a call site instead
+of the hook, and survived one repetition before anyone opened the test files.
+
+**Done when:** middle-drag either pans the map or the hint stops offering it —
+Excalidraw's `canvasPanning` string is overridable in the locale layer if
+declining is the answer.
+**Size:** small either way; it is a product call before it is a change.
 
 ---
 
