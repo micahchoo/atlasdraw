@@ -26,6 +26,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { useRasterImageStore } from "./useRasterImageStore";
 import { useDocumentTitleStore } from "./documentTitle";
 import { usePersistenceStore } from "./usePersistenceStore";
 
@@ -65,6 +66,10 @@ export async function hydrate(
   }
   // Belt-and-braces: nuke any orphan FCs the registry didn't know about.
   useDataLayerFCStore.getState().clear();
+  // FU-1: and the previous document's raster images. `clear` revokes every
+  // object URL, which is the part that matters — opening five documents in a
+  // session would otherwise hold every image any of them contained.
+  useRasterImageStore.getState().clear();
 
   // Step 1b — adopt the loaded document's name. Without this the collar head
   // bar would keep showing the previous document's title and the next
@@ -103,6 +108,14 @@ export async function hydrate(
         );
         continue;
       }
+      // Image into its store BEFORE the registry write, for the same reason
+      // registerDataLayer mirrors its FC first: the registry subscriber
+      // reconciles the new entry onto the map inside `set`, and it reads the
+      // URL from this store. Written second, the reconcile finds a raster with
+      // no image and skips it — a row in the panel and nothing on the map.
+      useRasterImageStore
+        .getState()
+        .set(entry.id, loaded.files.get(entry.imageKey)!);
       registry.registerRasterLayer({
         id: entry.id,
         label: entry.label,

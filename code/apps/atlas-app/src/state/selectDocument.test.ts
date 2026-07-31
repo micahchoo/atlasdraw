@@ -405,3 +405,114 @@ describe("documentFromExcalidrawJson (import-only .excalidraw compatibility)", (
     expect(() => documentFromExcalidrawJson("not json")).toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// FU-1 — rasters in a saved document.
+//
+// The claim that matters is the round trip: what selectDocument writes,
+// hydrate has to be able to read. A manifest entry pointing at an imageKey
+// that is not in `files` produces exactly the symptom this feature exists to
+// avoid — a scanned sheet that vanishes when you reopen the document.
+// ---------------------------------------------------------------------------
+
+describe("selectDocument — raster layers (FU-1)", () => {
+  const CORNERS = [
+    [0, 1],
+    [1, 1],
+    [1, 0],
+    [0, 0],
+  ] as [[number, number], [number, number], [number, number], [number, number]];
+
+  const rasterEntry = {
+    kind: "raster" as const,
+    id: "rl:plate-1",
+    label: "survey-sheet.tif",
+    visible: true,
+    order: 0,
+    corners: CORNERS,
+    opacity: 1,
+    imageKey: "raster-plate-1.png",
+    provenance: { sourceFile: "survey-sheet.tif", droppedCount: 0 },
+  };
+
+  const images = {
+    "rl:plate-1": {
+      blob: new Blob([new Uint8Array([1, 2, 3])]),
+      url: "blob:test/0",
+    },
+  };
+
+  it("writes a raster manifest entry with its geography", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry([rasterEntry]), {
+      now: () => NOW,
+      rasterImages: images,
+    });
+
+    expect(doc.manifest.layers[0]).toEqual({
+      kind: "raster",
+      id: "rl:plate-1",
+      label: "survey-sheet.tif",
+      visible: true,
+      corners: CORNERS,
+      opacity: 1,
+      imageKey: "raster-plate-1.png",
+      provenance: { sourceFile: "survey-sheet.tif", droppedCount: 0 },
+    });
+    // Not a data layer: no featureCount, no style, no `source` path.
+    expect(doc.manifest.layers[0]).not.toHaveProperty("featureCount");
+    expect(doc.manifest.layers[0]).not.toHaveProperty("style");
+  });
+
+  it("puts the image in the file bag under the key the manifest names", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry([rasterEntry]), {
+      now: () => NOW,
+      rasterImages: images,
+    });
+
+    // The round trip in one assertion: whatever key the manifest points at has
+    // to be resolvable in `files`, or hydrate skips the layer and the sheet is
+    // gone on reopen.
+    const key = (doc.manifest.layers[0] as { imageKey: string }).imageKey;
+    expect(doc.files.get(key)).toBe(images["rl:plate-1"].blob);
+  });
+
+  it("keeps a raster out of the GeoJSON layer map", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry([rasterEntry]), {
+      now: () => NOW,
+      rasterImages: images,
+    });
+
+    expect(doc.layers.size).toBe(0);
+  });
+
+  it("omits the image rather than writing a dangling key when it is missing", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry([rasterEntry]), {
+      now: () => NOW,
+      rasterImages: {},
+    });
+
+    // Same policy as a data layer whose FC is mid-flight: the manifest still
+    // records the layer, and hydrate's own missing-image branch skips it
+    // rather than rendering a blank row.
+    expect(doc.files.has("raster-plate-1.png")).toBe(false);
+    expect(doc.manifest.layers).toHaveLength(1);
+  });
+
+  it("does not let a raster displace an Excalidraw pasted image", () => {
+    const api = makeAPI({
+      files: {
+        "excal-1": {
+          dataURL: "data:image/png;base64,AAAA",
+          mimeType: "image/png",
+        },
+      },
+    });
+    const doc = selectDocument(api, makeRegistry([rasterEntry]), {
+      now: () => NOW,
+      rasterImages: images,
+    });
+
+    expect(doc.files.has("raster-plate-1.png")).toBe(true);
+    expect(doc.files.has("excal-1")).toBe(true);
+  });
+});

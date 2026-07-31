@@ -23,6 +23,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
+import { useRasterImageStore } from "./useRasterImageStore";
 import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
 
 import type { FeatureCollection } from "geojson";
@@ -44,6 +45,11 @@ export type SelectDocumentOptions = {
    * bleed across the suite). Production callers leave this unset.
    */
   fcMap?: Record<string, FeatureCollection>;
+  /**
+   * Override the raster image source. Same reasoning as `fcMap` — tests inject
+   * so they do not depend on a module singleton, production leaves it unset.
+   */
+  rasterImages?: Record<string, { blob: Blob; url: string }>;
   /**
    * Override the document title. Defaults to the live
    * `useDocumentTitleStore` value — the name the user typed in the collar
@@ -179,6 +185,26 @@ export function selectDocument(
   // is loosely typed at this boundary (Phase 0 schema deferred coupling), so
   // we narrow with a runtime shape check before reading.
   const files: Map<string, Blob> = new Map();
+
+  // FU-1: raster images ride in the same bag as pasted canvas images, keyed by
+  // the entry's `imageKey`. Written before Excalidraw's files rather than
+  // after, so a hypothetical key collision loses the raster rather than
+  // silently swapping a survey sheet for a pasted screenshot — the raster is
+  // re-importable, and a wrong image under the right name is the harder bug to
+  // see. Keys are `raster-<uuid>.png`, so a collision means something is very
+  // wrong upstream.
+  const rasterImages =
+    options.rasterImages ?? useRasterImageStore.getState().getAll();
+  for (const entry of layerRegistryState.entries) {
+    if (entry.kind !== "raster") {
+      continue;
+    }
+    const image = rasterImages[entry.id];
+    if (image) {
+      files.set(entry.imageKey, image.blob);
+    }
+  }
+
   const binaryFiles = excalidrawAPI.getFiles?.() as
     | Record<string, { dataURL?: string; mimeType?: string }>
     | undefined;

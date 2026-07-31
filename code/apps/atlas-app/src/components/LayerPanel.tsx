@@ -66,6 +66,7 @@ import type {
   LayerRegistryEntry,
   AnnotationLayerEntry,
   DataLayerEntry,
+  RasterLayerEntry,
   LayerStyle,
 } from "../state/layerRegistry";
 import type { FeatureCollection } from "geojson";
@@ -1181,6 +1182,79 @@ function AnnotationLayerRow({
   );
 }
 
+/**
+ * A raster row — FU-1.
+ *
+ * A row, not a card, for the same reason an annotation gets one: a card's four
+ * sections are provenance, symbology, attributes and actions, and a raster has
+ * exactly one of those. Symbology for a picture is an opacity slider, and that
+ * is RA-7, after MIXI has seen a sheet on screen and can say what fading should
+ * feel like.
+ *
+ * Delete is one click here where a data layer's is two. The asymmetry is
+ * deliberate: deleting an imported GeoJSON destroys a parsing session that may
+ * have involved geocoding, while re-importing a scanned sheet is dragging the
+ * same file in again. Guarding both equally would train people through the
+ * guard that matters.
+ */
+function RasterLayerRow({
+  entry,
+  mutators,
+  actions,
+  allIds,
+}: {
+  entry: RasterLayerEntry;
+  mutators: Mutators;
+  actions: LayerActions;
+  allIds: string[];
+}) {
+  const { setVisibility } = mutators;
+  const { id, label, visible } = entry;
+  const [renaming, setRenaming] = useState(false);
+
+  return (
+    <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
+      <div className={joinClass(styles.rowAnnotation)}>
+        <button
+          type="button"
+          className={joinClass(
+            styles.iconButton,
+            visible && styles.iconButtonPressed,
+          )}
+          aria-label={visible ? "Hide image" : "Show image"}
+          aria-pressed={visible}
+          data-testid={`layer-visibility-${id}`}
+          onClick={() => setVisibility(id, !visible)}
+        >
+          {visible ? <IconEye /> : <IconEyeSlash />}
+        </button>
+        <span
+          aria-label="Image"
+          className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
+        >
+          I
+        </span>
+        <LayerNameField
+          id={id}
+          label={label}
+          editing={renaming}
+          onEditingChange={setRenaming}
+          onCommit={(next) => actions.rename(id, next)}
+        />
+        <button
+          type="button"
+          className={styles.iconButton}
+          aria-label={`Remove ${label}`}
+          data-testid={`layer-remove-${id}`}
+          onClick={() => actions.remove(id)}
+        >
+          ×
+        </button>
+      </div>
+    </SortableRow>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Threads section — Step 5 (2026-07-30)
@@ -1386,11 +1460,16 @@ export function LayerPanel() {
     .filter((e): e is AnnotationLayerEntry => e.kind === "annotation")
     .slice()
     .sort(byOrder);
+  const rasters = entries
+    .filter((e): e is RasterLayerEntry => e.kind === "raster")
+    .slice()
+    .sort(byOrder);
 
   // Unfiltered — reorder indices address the real stack, not the visible
   // subset (see SortableRow).
   const dataLayerIds = dataLayers.map((e) => e.id);
   const annotationIds = annotations.map((e) => e.id);
+  const rasterIds = rasters.map((e) => e.id);
 
   const showFilter = dataLayers.length >= FILTER_THRESHOLD;
   const needle = filter.trim().toLowerCase();
@@ -1441,6 +1520,25 @@ export function LayerPanel() {
           ))
         )}
       </section>
+      {/* Below Data Layers because that is where rasters render — under the
+          vector band. A panel whose top-to-bottom order disagrees with the
+          map's is a panel you have to think about. Hidden entirely when empty:
+          most documents have no imagery, and an empty section in a 294px column
+          is a row of nothing. */}
+      {rasters.length > 0 && (
+        <section aria-label="Images" className={styles.section}>
+          <h3 className={styles.heading}>Images</h3>
+          {rasters.map((entry) => (
+            <RasterLayerRow
+              key={entry.id}
+              entry={entry}
+              mutators={mutators}
+              actions={actions}
+              allIds={rasterIds}
+            />
+          ))}
+        </section>
+      )}
       <ThreadsSection />
       <section aria-label="Annotations" className={styles.section}>
         <h3 className={styles.heading}>Annotations</h3>
