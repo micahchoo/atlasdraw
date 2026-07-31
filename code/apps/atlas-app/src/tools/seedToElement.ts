@@ -6,6 +6,14 @@
 // it to the full Wave 1b tool family (T03–T09): polygon, polyline, freehand,
 // text, arrow, rectangle, circle.
 //
+// 2026-07-31 (FU-2): those seven tool objects were deleted — they never
+// acquired a caller. The T03–T09 references below are history, not live
+// symbols; the branches they name are still here and still tested. Whether
+// any branch is now unreachable is a separate question (this file's only
+// caller is useAtlasdrawTool.ts:88, and PinTool is the only tool that can be
+// active), deliberately left to its own ticket rather than folded into the
+// deletion.
+//
 // Tools emit minimal seeds (geo + scaleMode + optional data + optional style).
 // This bridge:
 //   1. Projects geographic coords → scene/pixel coords using the live MapLibre map.

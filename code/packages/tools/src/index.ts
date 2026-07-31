@@ -4,11 +4,10 @@
 // ISSUES.md Direction 4 (headroom audit, verdict: pursue) — registerTool()/
 // getTool()/listTools(). `ToolRegistry` (types.ts) was documented as "built
 // up in apps/atlas-app from @atlasdraw/tools exports" but nothing anywhere
-// ever actually constructed one — only PinTool was ever directly imported
-// by name; the 7 other tools had no lookup-by-id path at all. The 8 tools
-// above are unchanged (still directly importable by name); they're now
-// ALSO self-registered here as a module-load side effect, so a caller that
-// wants "the tool named X" without a compile-time import can get one.
+// ever actually constructed one. PinTool is the only tool that has ever been
+// imported by name; the seven Phase 2 Wave 1b tools (T03-T09) never acquired
+// a caller and were deleted 2026-07-31 (FU-2). The registry outlives them:
+// it is the lookup-by-id path a plugin-registered tool would arrive through.
 //
 // The generic registry factory is duplicated (not shared via
 // @atlasdraw/common) for the same reason packages/basemap's
@@ -16,26 +15,11 @@
 // project graph explicitly excludes @atlasdraw/common from the atlas-owned
 // package graph both basemap and tools belong to.
 import { PinTool } from "./PinTool.js";
-import { PolygonTool } from "./PolygonTool.js";
-import { PolylineTool } from "./PolylineTool.js";
-import { FreehandTool } from "./FreehandTool.js";
-import { TextLabelTool } from "./TextLabelTool.js";
-import { ArrowTool } from "./ArrowTool.js";
-import { RectangleTool } from "./RectangleTool.js";
-import { CircleTool } from "./CircleTool.js";
 
 import type { AtlasdrawTool } from "./types.js";
 export * from "./types.js";
 export { classifyTool } from "./classifyTool.js";
 export { PinTool } from "./PinTool.js"; // Phase 1 Wave 3b Task 14
-// Phase 2 Wave 1b additions:
-export { PolygonTool } from "./PolygonTool.js"; // T03
-export { PolylineTool } from "./PolylineTool.js"; // T04
-export { FreehandTool } from "./FreehandTool.js"; // T05
-export { TextLabelTool } from "./TextLabelTool.js"; // T06
-export { ArrowTool } from "./ArrowTool.js"; // T07
-export { RectangleTool } from "./RectangleTool.js"; // T08
-export { CircleTool } from "./CircleTool.js"; // T09
 // Phase 2 Wave 2b additions:
 export {
   annotationToFeatureCollection,
@@ -79,15 +63,6 @@ export function listTools(): readonly AtlasdrawTool[] {
   return toolRegistry.list();
 }
 
-for (const tool of [
-  PinTool,
-  PolygonTool,
-  PolylineTool,
-  FreehandTool,
-  TextLabelTool,
-  ArrowTool,
-  RectangleTool,
-  CircleTool,
-] as const) {
+for (const tool of [PinTool] as const) {
   registerTool(tool);
 }
