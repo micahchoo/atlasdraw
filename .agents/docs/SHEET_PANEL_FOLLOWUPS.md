@@ -36,11 +36,12 @@ ledger.
 | FU-7 | open, scope only | — |
 | FU-8 | **done — `yarn test:all` passes in one invocation** | this branch; it had five faces, not three |
 | FU-9 | **done** | this branch — the snapshot was stale, not broken |
-| FU-10 | open | — |
+| FU-10 | **done** | this branch — 3 fixed, and `yarn test:falsifiable` keeps them fixed |
 | FU-11 | parked with a kill criterion, deliberately | — |
 | FU-14 | **decided, ready, not started** | `PLANS/ATLASDRAW_ROTATION_PLAN.md` — six tasks, RT-0 first |
 
-8 of 14 shipped, 1 closed as not-a-defect.
+9 of 14 shipped, 1 closed as not-a-defect. Only FU-1 is left that is work;
+FU-7 is scope-only, FU-11 observe-only, FU-14 is Fizz's.
 
 ---
 
@@ -418,11 +419,39 @@ source text — catches a deleted literal line and nothing else. Not a
 merge, not a new wheel handler. The probes that actually caught the Step 6
 clipping were the browser ones, now `e2e/layer-panel-scroll.spec.ts`.
 
-**Done when:** two things. (1) Sweep the app suite for assertions that pass
-under mutation — start with every `getComputedStyle` and every test that reads a
-`.scss` file. (2) Write the rule down in the UI conventions skill: **a claim
-about layout gets a Playwright probe; source-text assertions are a
-documentation aid, not a gate.**
+**DONE 2026-07-31, both halves.**
+
+**(1) The sweep.** The first pass used a regex and produced 20 hits, most of
+them false — which is the joke writing itself, so it was redone against the
+TypeScript AST. Three genuine cases in atlasdraw-owned code, each an instance of
+a pattern that had already shipped a defect:
+
+| | |
+|---|---|
+| `useMapWheelRouter.test.ts:70` | **no assertion at all.** A comment said the event "should pass through untouched"; nothing checked it. Could fail only by throwing. Now asserts that neither `preventDefault` nor `stopPropagation` was called — which is what "untouched" means for a router whose entire job is those two calls. |
+| `StylePanel.test.tsx:126` | **every assertion inside two nested `if`s.** If Apply wrote nothing, or wrote a graduated expression, both guards go false and zero assertions run. Narrows by asserting the narrowing condition, then projecting. |
+| `apps/storage/src/config.test.ts:52` | same shape, and worse: *"honors an explicit DATA_DIR"* had its **only** assertion inside `if (cfg.STORAGE_MODE === "sqlite-fs")`. A `loadConfig` returning the wrong mode entirely passed. `toMatchObject`, no narrowing. |
+
+The `getComputedStyle` / stylesheet-reading tests the ticket named as the
+starting point were already hardened by the Step 6 review rounds — one
+`getComputedStyle` in app code and it is production, in `useMapWheelRouter`.
+
+**The fixes are the smaller half.** `scripts/find-unfalsifiable-tests.mjs` makes
+the sweep repeatable, and `yarn test:falsifiable` runs it inside `test:all`. It
+catches both patterns and is deliberately conservative about what counts as an
+assertion — same-file helpers like `expectClean`, and throwing queries like
+`findByText`, count — because a checker that cries wolf gets ignored exactly
+like the suite it is checking. Verified against a canary file carrying one of
+each defect plus one healthy case: both caught, the healthy one untouched.
+
+What it cannot catch is an assertion that runs and is merely weak. That is the
+rule, not the script.
+
+**(2) The rule is written down** in `.claude/skills/atlasdraw-ui-conventions/`
+under *Testing a UI claim*, with a table of which claim belongs in vitest and
+which needs a browser, and two checklist lines. It covers keyboard and focus as
+well as layout, because FU-5 was a keyboard claim modelled with a fake API and
+it cost a whole fictional ticket.
 **User impact — indirect, and the largest on this list.** Two of the three worst
 defects in the whole sequence shipped past tests that were structurally
 incapable of failing. The layer panel's guarantees are weaker than its test
@@ -734,8 +763,7 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
 2. **FU-1** — the PRD job that isn't met, and the only real capability gap.
 3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
    bleeding. Not urgent; nothing is broken while bearing cannot move.
-4. **FU-10** — before the next feature, because it's what makes the next
-   feature's tests mean anything.
+4. ~~**FU-10**~~ — done 2026-07-31.
 5. ~~**FU-4, FU-5, FU-6**~~ — done 2026-07-31; FU-5 closed as not-a-defect.
    **FU-3** still open and worth pulling up: the fix is small but the symptom is
    other people's shapes vanishing mid-session, which is the worst-looking bug

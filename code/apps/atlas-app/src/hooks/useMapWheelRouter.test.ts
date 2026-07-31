@@ -67,12 +67,27 @@ describe("useMapWheelRouter", () => {
     expect(map.easeTo).not.toHaveBeenCalled();
   });
 
+  // FU-10. This case had NO assertion at all — only a comment saying the event
+  // "should pass through untouched", which is the claim and not a check. It
+  // could fail only by throwing. "Passes through untouched" is observable:
+  // the router's whole job is preventDefault + stopPropagation, so with no map
+  // it must do neither.
   it("does nothing when map is null", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     renderHook(() => useMapWheelRouter(container, null));
-    fireWheel(container);
-    // No map to call easeTo on; event should pass through untouched.
+
+    const event = fireWheel(container);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(
+      (event as unknown as { __preventDefault: ReturnType<typeof vi.fn> })
+        .__preventDefault,
+    ).not.toHaveBeenCalled();
+    expect(
+      (event as unknown as { __stopPropagation: ReturnType<typeof vi.fn> })
+        .__stopPropagation,
+    ).not.toHaveBeenCalled();
   });
 
   it("routes a plain wheel event to map.easeTo with the canonical zoom delta", () => {
