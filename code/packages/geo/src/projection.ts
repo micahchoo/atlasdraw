@@ -73,3 +73,67 @@ export function unprojectPoint(
   const lngLat = map.unproject([x, y]);
   return { lng: normalizeLng(lngLat.lng), lat: lngLat.lat };
 }
+
+/**
+ * Longitude delta used to probe the screen direction of geographic east.
+ * Any value works — `atan2` is scale-invariant — but it must be large enough
+ * that the two projected points differ by more than float noise at zoom 0.
+ */
+const EAST_PROBE_DEG = 1e-3;
+
+/**
+ * Screen-space rotation of the geographic east axis, in radians, in the
+ * y-down coordinate system Excalidraw's `angle` field uses.
+ *
+ * This is the camera bearing expressed the way an element's `angle` wants it.
+ * It is *measured*, not derived from `map.getBearing()`: we project two points
+ * a hair apart along the centre parallel and read the angle of the resulting
+ * screen vector. That means no code here has to be right about MapLibre's
+ * bearing sign convention, and the answer stays correct if the projection
+ * stops being plain Mercator. `getBearing() === 0` is used only as an exact
+ * fast path — a north-up camera is north-up under any convention.
+ *
+ * Valid only at pitch 0, which is the only pitch Atlasdraw allows
+ * (`MapCanvas.tsx` constructs the map with `maxPitch: 0`). Under pitch the
+ * rotation varies across the viewport and one number cannot describe it.
+ *
+ * @param map - Attached MapLibre `Map` instance.
+ * @returns Rotation in radians; exactly 0 when the camera is north-up.
+ */
+export function cameraRotation(map: MapLibreMap): number {
+  if (map.getBearing() === 0) {
+    return 0;
+  }
+  const { lng, lat } = map.getCenter();
+  const origin = map.project([normalizeLng(lng), lat]);
+  const east = map.project([normalizeLng(lng + EAST_PROBE_DEG), lat]);
+  const dx = east.x - origin.x;
+  const dy = east.y - origin.y;
+  if (dx === 0 && dy === 0) {
+    return 0;
+  }
+  return Math.atan2(dy, dx);
+}
+
+/**
+ * Rotate `(x, y)` about `(cx, cy)` by `angle` radians, y-down.
+ *
+ * Matches Excalidraw's own element rotation, which is about the element's
+ * centre — so this is the inverse operation to what `angle` renders.
+ */
+export function rotateAbout(
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  angle: number,
+): { x: number; y: number } {
+  if (angle === 0) {
+    return { x, y };
+  }
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const dx = x - cx;
+  const dy = y - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}

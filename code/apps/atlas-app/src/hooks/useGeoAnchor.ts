@@ -44,6 +44,8 @@ import {
   isGeoCustomData,
   computeScaleFactor,
   clampHybridFactor,
+  cameraRotation,
+  rotateAbout,
 } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
@@ -100,6 +102,19 @@ interface LastSync {
   /** scaleMode at the last sync — mode-toggle detector. */
   mode?: string;
   pts?: ReadonlyArray<readonly [number, number]>;
+  /**
+   * RT-1. The user's own rotation, with the camera's rotation removed — the
+   * `w0`/`h0` of angle. Preserved across camera turns and restored when the
+   * camera returns to north.
+   */
+  a0?: number;
+  /**
+   * Projected `angle` as written by the last sync (`a0 + cameraRotation`).
+   * Without it a camera turn is indistinguishable from a user rotation, and
+   * `reanchorIfMoved` would adopt the camera's rotation as the user's — which
+   * is why this field must exist *before* anything writes `angle`.
+   */
+  a?: number;
 }
 
 /** `customData` of an anchored element, including the sync-protocol state. */
@@ -123,6 +138,8 @@ interface ElementGeoFields {
   y: number;
   width: number;
   height: number;
+  /** Rotation in radians, y-down, about the element's centre. */
+  angle?: number;
   fontSize?: number;
   strokeWidth?: number;
   /** Present on linear / freedraw elements (LocalPoint = [dx, dy] relative to x,y). */
@@ -269,7 +286,43 @@ function buildReanchorSnapshot(
   if (el.points) {
     snap.pts = el.points.map(([dx, dy]) => [dx, dy] as [number, number]);
   }
+  // Only the bbox arm of _projectElement writes `angle`; point and polyline
+  // anchors project vertex-wise and carry no camera rotation.
+  if (customData.geo.kind === "bbox" && el.angle !== undefined) {
+    snap.a = el.angle;
+    snap.a0 = el.angle - cameraRotation(map);
+  }
   return snap;
+}
+
+/** User rotated the element since the last sync wrote its angle. */
+function angleChanged(el: ElementGeoFields, lastSync: LastSync): boolean {
+  return (
+    lastSync.a !== undefined &&
+    el.angle !== undefined &&
+    Math.abs(el.angle - lastSync.a) > STYLE_TOL
+  );
+}
+
+/**
+ * Rotation-only change: the geographic footprint is untouched, so keep the
+ * anchor and re-base `a0` to the part of the new angle that is not the camera.
+ * The sister of `rebaseStyle`.
+ */
+function rebaseAngle(
+  el: AnchoredElement,
+  customData: AnchoredCustomData,
+  lastSync: LastSync,
+  map: maplibregl.Map,
+): AnchoredElement {
+  const angle = el.angle ?? 0;
+  return {
+    ...el,
+    customData: {
+      ...customData,
+      _lastSync: { ...lastSync, a: angle, a0: angle - cameraRotation(map) },
+    },
+  };
 }
 
 /** User edited strokeWidth/fontSize since the last sync wrote them. */
@@ -431,6 +484,12 @@ function reanchorIfMoved(
           Math.abs(el.y - lastSync.y) > SCREEN_TOL ||
           Math.abs(el.width - lastSync.w) > SCREEN_TOL ||
           Math.abs(el.height - lastSync.h) > SCREEN_TOL;
+        // A user rotation moves nothing: Excalidraw turns the element about
+        // its centre and leaves x/y/width/height alone. Without this branch
+        // the next sync would write `a0 + cameraRotation` back over it.
+        if (!moved && angleChanged(el, lastSync)) {
+          return rebaseAngle(el, customData, lastSync, map);
+        }
         if (!moved && styleChanged(el, lastSync)) {
           return rebaseStyle(el, customData, lastSync, map);
         }
@@ -455,12 +514,20 @@ function reanchorIfMoved(
       // Hybrid mode: displayed spans carry the clamp adjustment; divide it
       // out or the clamp gets baked into the anchor.
       const adj = hybridAdj(scaleMode, map.getZoom(), existingGeo.zRef);
-      const nw = unprojectPoint(map, el.x, el.y);
-      const se = unprojectPoint(
-        map,
-        el.x + el.width / adj,
-        el.y + el.height / adj,
-      );
+      const w = el.width / adj;
+      const h = el.height / adj;
+      // Under a rotated camera the element's true screen corners are its
+      // axis-aligned corners turned about its centre. Turn them forward by the
+      // camera's rotation — and only the camera's, since `a0` is the user's
+      // and belongs to the element, not the geography — before unprojecting.
+      // At north-up `rotateAbout` is the identity and this is the old code.
+      const camera = scaleMode === "geographic" ? cameraRotation(map) : 0;
+      const cx = el.x + w / 2;
+      const cy = el.y + h / 2;
+      const nwScreen = rotateAbout(el.x, el.y, cx, cy, camera);
+      const seScreen = rotateAbout(el.x + w, el.y + h, cx, cy, camera);
+      const nw = unprojectPoint(map, nwScreen.x, nwScreen.y);
+      const se = unprojectPoint(map, seScreen.x, seScreen.y);
       const west = Math.min(nw.lng, se.lng);
       const east = Math.max(nw.lng, se.lng);
       const north = Math.max(nw.lat, se.lat);

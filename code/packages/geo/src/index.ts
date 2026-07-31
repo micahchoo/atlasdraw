@@ -5,7 +5,13 @@ export type {
   ExcalidrawElementLike,
   ExcalidrawAPI,
 } from "./excalidrawTypes.js";
-export { projectPoint, unprojectPoint, normalizeLng } from "./projection.js";
+export {
+  projectPoint,
+  unprojectPoint,
+  normalizeLng,
+  cameraRotation,
+  rotateAbout,
+} from "./projection.js";
 export { computeSceneBounds } from "./bounds.js";
 export type { LngLatBox } from "./bounds.js";
 // Wave 2a hardening: deep parser + migration shim for untrusted GeoCustomData input.

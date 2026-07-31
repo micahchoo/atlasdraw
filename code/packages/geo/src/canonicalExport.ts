@@ -49,13 +49,30 @@ function applyAnchor(
     const y = mercY(anchor.north);
     const w = mercX(anchor.east) - x;
     const h = mercY(anchor.south) - y;
+    // RT-2. Canonical space is north-up, so the camera contributes no
+    // rotation here and the canonical angle is the user's own — `a0`. Without
+    // this, a document saved while the map was turned would reopen with the
+    // camera's rotation baked into every bbox element.
+    const a0 = (cd._lastSync as Record<string, unknown> | undefined)?.a0 as
+      | number
+      | undefined;
     return {
       ...el,
       x,
       y,
       width: w,
       height: h,
-      customData: { ...cd, _lastSync: { x, y, w, h } },
+      ...(a0 !== undefined ? { angle: a0 } : {}),
+      customData: {
+        ...cd,
+        _lastSync: {
+          x,
+          y,
+          w,
+          h,
+          ...(a0 !== undefined ? { a0, a: a0 } : {}),
+        },
+      },
     };
   }
   // polyline: first coord is origin; rest are relative offsets

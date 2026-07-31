@@ -16,6 +16,7 @@ import {
   projectPoint,
   computeScaleFactor,
   clampHybridFactor,
+  cameraRotation,
 } from "@atlasdraw/geo";
 
 import type {
@@ -36,6 +37,40 @@ export type { ExcalidrawElementLike, ExcalidrawAPI };
 export interface CoordinateSyncOptions {
   map: MapLibreMap;
   excalidrawAPI: ExcalidrawAPI;
+}
+
+/** Axis-aligned screen rectangle, before any `angle` is applied. */
+interface ScreenRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The unrotated screen rectangle of a geographic bbox under a rotated camera.
+ *
+ * Mercator is conformal, so at pitch 0 the four corners of a geographic box
+ * project to the four corners of a genuine rectangle, merely turned. Its side
+ * lengths are the north and west edges; its centre is the midpoint of either
+ * diagonal. Excalidraw renders that exactly, given `angle`.
+ *
+ * Costs two extra `project` calls per element, which is why callers take the
+ * `nw`/`se`-only path whenever the camera is north-up.
+ */
+function rotatedBboxRect(
+  map: MapLibreMap,
+  anchor: { west: number; east: number; north: number; south: number },
+  nw: { x: number; y: number },
+  se: { x: number; y: number },
+): ScreenRect {
+  const ne = projectPoint(map, anchor.east, anchor.north);
+  const sw = projectPoint(map, anchor.west, anchor.south);
+  const width = Math.max(1, Math.hypot(ne.x - nw.x, ne.y - nw.y));
+  const height = Math.max(1, Math.hypot(sw.x - nw.x, sw.y - nw.y));
+  const cx = (nw.x + se.x) / 2;
+  const cy = (nw.y + se.y) / 2;
+  return { x: cx - width / 2, y: cy - height / 2, width, height };
 }
 
 export class CoordinateSync {
@@ -62,8 +97,13 @@ export class CoordinateSync {
 
   syncMapToScene(): void {
     const elements = this._excalidrawAPI.getSceneElements();
+    // One camera probe for the whole pass — the rotation is a property of the
+    // camera, not of any element (true at pitch 0, the only pitch we allow).
+    const cameraAngle = cameraRotation(this._map);
     const projected = elements.map((el) =>
-      isGeoCustomData(el.customData) ? this._projectElement(el) : el,
+      isGeoCustomData(el.customData)
+        ? this._projectElement(el, cameraAngle)
+        : el,
     );
     this._excalidrawAPI.updateScene({
       elements: projected,
@@ -71,7 +111,10 @@ export class CoordinateSync {
     });
   }
 
-  private _projectElement(el: ExcalidrawElementLike): ExcalidrawElementLike {
+  private _projectElement(
+    el: ExcalidrawElementLike,
+    cameraAngle: number,
+  ): ExcalidrawElementLike {
     const customData = el.customData as GeoCustomData;
     const anchor = customData.geo;
     const scaleMode = customData.scaleMode;
@@ -169,6 +212,12 @@ export class CoordinateSync {
         const se = projectPoint(this._map, anchor.east, anchor.south);
         const projectedWidth = Math.max(1, se.x - nw.x);
         const projectedHeight = Math.max(1, se.y - nw.y);
+        // RT-2 covers the geographic arm only. "screen" and "hybrid" stay
+        // axis-aligned — i.e. billboarded — under a rotated camera. Neither is
+        // reachable from any creation path (geographic has been the only
+        // creation mode since 2026-07-19); they exist to render documents
+        // saved before that, and hybrid's clamp is applied about the NW corner
+        // rather than the centre, which a rotation has nowhere to put.
         if (scaleMode === "hybrid") {
           const f = clampHybridFactor(factor);
           const adj = f / factor;
@@ -208,23 +257,46 @@ export class CoordinateSync {
           (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
         const strokeWidth =
           strokeWidth0 !== undefined ? strokeWidth0 * factor : undefined;
+        // RT-2. The user's own rotation is the baseline; the camera's rotation
+        // is added on top, exactly as w0/h0 baselines relate to w/h. So a
+        // camera turn never eats a rotation the user applied, and returning to
+        // north restores it.
+        const angle0 = (prevSync?.a0 as number | undefined) ?? el.angle;
+        const angle =
+          angle0 !== undefined || cameraAngle !== 0
+            ? (angle0 ?? 0) + cameraAngle
+            : undefined;
+        const rect: ScreenRect =
+          cameraAngle === 0
+            ? {
+                x: nw.x,
+                y: nw.y,
+                width: projectedWidth,
+                height: projectedHeight,
+              }
+            : rotatedBboxRect(this._map, anchor, nw, se);
         const nextSync: Record<string, unknown> = {
-          x: nw.x,
-          y: nw.y,
-          w: projectedWidth,
-          h: projectedHeight,
+          x: rect.x,
+          y: rect.y,
+          w: rect.width,
+          h: rect.height,
           mode: scaleMode,
         };
         if (strokeWidth0 !== undefined) {
           nextSync.strokeWidth0 = strokeWidth0;
           nextSync.sw = strokeWidth;
         }
+        if (angle !== undefined) {
+          nextSync.a0 = angle0 ?? 0;
+          nextSync.a = angle;
+        }
         return {
           ...el,
-          x: nw.x,
-          y: nw.y,
-          width: projectedWidth,
-          height: projectedHeight,
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          ...(angle !== undefined ? { angle } : {}),
           ...(strokeWidth !== undefined ? { strokeWidth } : {}),
           customData: {
             ...(el.customData as Record<string, unknown>),

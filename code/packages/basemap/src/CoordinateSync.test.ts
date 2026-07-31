@@ -253,8 +253,18 @@ describe("CoordinateSync.syncMapToScene — bbox anchor (Task 6)", () => {
     });
   });
 
-  it("clamps width/height to >= 1 when projection inverts (rotated/pitched camera)", () => {
+  it("clamps width/height to >= 1 when the projected span inverts", () => {
     // NW projects to a higher-x/higher-y than SE — would yield negative span.
+    //
+    // Renamed in RT-2. This test used to be called "(rotated/pitched camera)"
+    // and that is no longer the reason it exists: pitch is impossible
+    // (`maxPitch: 0`), and a rotated camera now takes the four-corner path in
+    // `rotatedBboxRect`, where side lengths come from `Math.hypot` and cannot
+    // be negative. The clamp still guards the north-up path — an inverted or
+    // degenerate anchor, or a sub-pixel span at extreme zoom-out — which is
+    // what the mock below actually sets up. `getBearing()` is 0 here, so this
+    // is the north-up path; see useGeoAnchor.rotation.test.ts for the rotated
+    // one.
     const project = makeProjectByLngLat([
       [[-1, 1], { x: 200, y: 200 }],
       [[1, -1], { x: 50, y: 50 }],
