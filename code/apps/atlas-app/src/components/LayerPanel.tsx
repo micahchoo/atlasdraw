@@ -54,6 +54,7 @@ import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
 import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { useSelectedLayerStore } from "../state/selectedLayer";
 import { fitMapToLayer } from "../lib/fitMapToContent";
 
 import styles from "../styles/LayerPanel.module.css";
@@ -369,6 +370,7 @@ function SortableRow({
 
   const handleDragStart = useCallback(
     (e: React.DragEvent) => {
+      e.stopPropagation();
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", id);
       // The header line, not `e.currentTarget` and not the row. The grip alone
@@ -476,7 +478,10 @@ function SortableRow({
             aria-label={`Move ${entry.label} up`}
             data-testid={`layer-up-${id}`}
             disabled={isFirst}
-            onClick={() => mutators.reorder(id, index - 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              mutators.reorder(id, index - 1);
+            }}
           >
             <IconChevronUp />
           </button>
@@ -486,7 +491,10 @@ function SortableRow({
             aria-label={`Move ${entry.label} down`}
             data-testid={`layer-down-${id}`}
             disabled={isLast}
-            onClick={() => mutators.reorder(id, index + 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              mutators.reorder(id, index + 1);
+            }}
           >
             <IconChevronDown />
           </button>
@@ -497,8 +505,7 @@ function SortableRow({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Layer name — click to edit
+// Layer name — read-only label; the ⋯ menu is the rename door
 // ---------------------------------------------------------------------------
 
 /**
@@ -565,11 +572,16 @@ function LayerNameInput({
 }
 
 /**
- * A layer's name: a button that opens an inline editor, or the editor itself.
+ * A layer's name: a read-only label in the panel, or the inline editor itself.
+ *
+ * The label is deliberately inert — a row click is the select gesture, so the
+ * name must not fight it (it used to be a button that opened the editor on
+ * click). Renaming now happens only through the ⋯ menu's "Rename…" item, or
+ * the expanded card's Rename button for data layers.
  *
  * `editing` is the parent's, not this component's, because a data layer can
- * also enter the state from the ⋯ menu and from the expanded card's Rename
- * button — three doors into one editor.
+ * enter the state from the ⋯ menu and from the expanded card's Rename button —
+ * two doors into one editor.
  */
 function LayerNameField({
   id,
@@ -596,15 +608,9 @@ function LayerNameField({
   }
 
   return (
-    <button
-      type="button"
-      className={joinClass(styles.label, styles.labelButton)}
-      data-testid={`layer-name-${id}`}
-      title={`${label} — click to rename`}
-      onClick={() => onEditingChange(true)}
-    >
+    <span className={styles.label} data-testid={`layer-name-${id}`}>
       {label}
-    </button>
+    </span>
   );
 }
 
@@ -626,7 +632,7 @@ function OverflowMenu({
   actions,
   onStartRename,
 }: {
-  entry: DataLayerEntry;
+  entry: LayerRegistryEntry;
   actions: LayerActions;
   onStartRename: () => void;
 }) {
@@ -641,6 +647,18 @@ function OverflowMenu({
     setOpen(false);
     setConfirmingDelete(false);
   }, []);
+
+  /**
+   * "Zoom to layer" is a universal gesture across kinds today: data layers and
+   * rasters hand fitMapToLayer real geometry, and a geo-anchored annotation
+   * reaches its anchor the same way — zoomTo announces "no geometry" instead
+   * of crashing for a layer with neither. The kind check stays explicit so a
+   * future kind without bounds doesn't inherit the item by accident.
+   */
+  const canZoom =
+    entry.kind === "data" ||
+    entry.kind === "raster" ||
+    entry.kind === "annotation";
 
   /**
    * The menu's items, as data. Rendering them from a list rather than as three
@@ -670,16 +688,20 @@ function OverflowMenu({
         },
       ]
     : [
-        {
-          key: "zoom",
-          testid: `layer-zoom-${entry.id}`,
-          label: "Zoom to layer",
-          danger: false,
-          onSelect: () => {
-            close();
-            actions.zoomTo(entry.id);
-          },
-        },
+        ...(canZoom
+          ? [
+              {
+                key: "zoom",
+                testid: `layer-zoom-${entry.id}`,
+                label: "Zoom to layer",
+                danger: false,
+                onSelect: () => {
+                  close();
+                  actions.zoomTo(entry.id);
+                },
+              },
+            ]
+          : []),
         {
           key: "rename",
           testid: `layer-rename-${entry.id}`,
@@ -783,7 +805,10 @@ function OverflowMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         data-testid={`layer-menu-${entry.id}`}
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={(e) => {
+          e.stopPropagation();
+          open ? close() : setOpen(true);
+        }}
       >
         <IconDots />
       </button>
@@ -814,7 +839,10 @@ function OverflowMenu({
               data-testid={item.testid}
               tabIndex={index === focusIndex ? 0 : -1}
               onKeyDown={(e) => onItemKeyDown(e, index)}
-              onClick={item.onSelect}
+              onClick={(e) => {
+                e.stopPropagation();
+                item.onSelect();
+              }}
             >
               {item.label}
             </button>
@@ -1013,6 +1041,8 @@ function DataLayerCard({
   allIds,
   expanded,
   onToggleExpanded,
+  selected = false,
+  onSelect,
 }: {
   entry: DataLayerEntry;
   mutators: Mutators;
@@ -1020,6 +1050,8 @@ function DataLayerCard({
   allIds: string[];
   expanded: boolean;
   onToggleExpanded: () => void;
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const { setVisibility, updateStyle } = mutators;
   const { id, label, visible, featureCount } = entry;
@@ -1070,11 +1102,15 @@ function DataLayerCard({
         ) : null
       }
     >
-      <div className={styles.rowHeader} data-testid={`layer-row-header-${id}`}>
-        {/* The disclosure is the button, not the whole row: a row-wide click
-            target would swallow clicks meant for the eye toggle and the ⋯
-            trigger nested inside it, and a div-with-onClick is not reachable
-            by keyboard at all. */}
+      <div
+        className={joinClass(styles.rowHeader, selected && styles.rowSelected)}
+        onClick={onSelect}
+        data-testid={`layer-row-header-${id}`}
+      >
+        {/* The disclosure is the button, not the whole row: the header's click
+            selects the layer, so the eye / ⋯ / disclosure controls inside it
+            stop propagation — a toggle must not move the selection highlight,
+            and a div-with-onClick is not reachable by keyboard at all. */}
         <button
           type="button"
           className={styles.disclosure}
@@ -1082,7 +1118,10 @@ function DataLayerCard({
           aria-controls={bodyId}
           aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           data-testid={`layer-disclosure-${id}`}
-          onClick={onToggleExpanded}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpanded();
+          }}
         >
           <IconCaret open={expanded} />
         </button>
@@ -1114,7 +1153,10 @@ function DataLayerCard({
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
           aria-pressed={visible}
           data-testid={`layer-visibility-${id}`}
-          onClick={() => setVisibility(id, !visible)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisibility(id, !visible);
+          }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
         </button>
@@ -1133,11 +1175,15 @@ function AnnotationLayerRow({
   mutators,
   actions,
   allIds,
+  selected = false,
+  onSelect,
 }: {
   entry: AnnotationLayerEntry;
   mutators: Mutators;
   actions: LayerActions;
   allIds: string[];
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const { setVisibility } = mutators;
   const { id, label, visible } = entry;
@@ -1150,7 +1196,13 @@ function AnnotationLayerRow({
   // is deferred until Wave 2c — see plan §844.
   return (
     <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
-      <div className={joinClass(styles.rowAnnotation)}>
+      <div
+        className={joinClass(
+          styles.rowAnnotation,
+          selected && styles.rowSelected,
+        )}
+        onClick={onSelect}
+      >
         <button
           type="button"
           className={joinClass(
@@ -1160,7 +1212,10 @@ function AnnotationLayerRow({
           aria-label={visible ? "Hide annotation" : "Show annotation"}
           aria-pressed={visible}
           data-testid={`layer-visibility-${id}`}
-          onClick={() => setVisibility(id, !visible)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisibility(id, !visible);
+          }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
         </button>
@@ -1177,6 +1232,11 @@ function AnnotationLayerRow({
           onEditingChange={setRenaming}
           onCommit={(next) => actions.rename(id, next)}
         />
+        <OverflowMenu
+          entry={entry}
+          actions={actions}
+          onStartRename={() => setRenaming(true)}
+        />
       </div>
     </SortableRow>
   );
@@ -1191,22 +1251,24 @@ function AnnotationLayerRow({
  * is RA-7, after MIXI has seen a sheet on screen and can say what fading should
  * feel like.
  *
- * Delete is one click here where a data layer's is two. The asymmetry is
- * deliberate: deleting an imported GeoJSON destroys a parsing session that may
- * have involved geocoding, while re-importing a scanned sheet is dragging the
- * same file in again. Guarding both equally would train people through the
- * guard that matters.
+ * Delete lives in the ⋯ overflow menu with the same two-step confirm every
+ * layer gets — a scanned sheet may be the only digital copy of the drawing,
+ * and a mis-click 4px from "Rename…" shouldn't cost the import.
  */
 function RasterLayerRow({
   entry,
   mutators,
   actions,
   allIds,
+  selected = false,
+  onSelect,
 }: {
   entry: RasterLayerEntry;
   mutators: Mutators;
   actions: LayerActions;
   allIds: string[];
+  selected?: boolean;
+  onSelect?: () => void;
 }) {
   const { setVisibility } = mutators;
   const { id, label, visible } = entry;
@@ -1214,7 +1276,13 @@ function RasterLayerRow({
 
   return (
     <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
-      <div className={joinClass(styles.rowAnnotation)}>
+      <div
+        className={joinClass(
+          styles.rowAnnotation,
+          selected && styles.rowSelected,
+        )}
+        onClick={onSelect}
+      >
         <button
           type="button"
           className={joinClass(
@@ -1224,7 +1292,10 @@ function RasterLayerRow({
           aria-label={visible ? "Hide image" : "Show image"}
           aria-pressed={visible}
           data-testid={`layer-visibility-${id}`}
-          onClick={() => setVisibility(id, !visible)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisibility(id, !visible);
+          }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
         </button>
@@ -1241,15 +1312,11 @@ function RasterLayerRow({
           onEditingChange={setRenaming}
           onCommit={(next) => actions.rename(id, next)}
         />
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label={`Remove ${label}`}
-          data-testid={`layer-remove-${id}`}
-          onClick={() => actions.remove(id)}
-        >
-          ×
-        </button>
+        <OverflowMenu
+          entry={entry}
+          actions={actions}
+          onStartRename={() => setRenaming(true)}
+        />
       </div>
     </SortableRow>
   );
@@ -1399,6 +1466,9 @@ export function LayerPanel() {
     renameLayer,
   } = useLayerRegistry();
 
+  const selectedLayerIds = useSelectedLayerStore((s) => s.selectedLayerIds);
+  const selectLayer = useSelectedLayerStore((s) => s.selectLayer);
+
   // Accordion: at most one card open. See the header note — multi-open is the
   // unbounded-growth failure mode this design is most exposed to.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1516,6 +1586,8 @@ export function LayerPanel() {
               onToggleExpanded={() =>
                 setExpandedId((cur) => (cur === entry.id ? null : entry.id))
               }
+              selected={!!selectedLayerIds[entry.id]}
+              onSelect={() => selectLayer(entry.id)}
             />
           ))
         )}
@@ -1535,6 +1607,8 @@ export function LayerPanel() {
               mutators={mutators}
               actions={actions}
               allIds={rasterIds}
+              selected={!!selectedLayerIds[entry.id]}
+              onSelect={() => selectLayer(entry.id)}
             />
           ))}
         </section>
@@ -1552,6 +1626,8 @@ export function LayerPanel() {
               mutators={mutators}
               actions={actions}
               allIds={annotationIds}
+              selected={!!selectedLayerIds[entry.id]}
+              onSelect={() => selectLayer(entry.id)}
             />
           ))
         )}

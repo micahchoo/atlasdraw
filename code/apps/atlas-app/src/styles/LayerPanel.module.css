@@ -102,6 +102,11 @@
   transition: box-shadow 0.15s ease;
 }
 
+.rowSelected {
+  background: var(--ad-accent-subtle, rgba(25, 113, 194, 0.08));
+  box-shadow: inset 3px 0 0 var(--ad-accent, #1971c2);
+}
+
 .row:last-child {
   border-bottom: none;
 }
@@ -200,26 +205,6 @@
   font-size: 12px;
   font-weight: 400;
   color: var(--text-primary-color, var(--ad-ink));
-}
-
-/* The name is a button so it can be clicked and tabbed to, but it must still
- * read as the row's label and not as a fifth control — so no border, no
- * background, and the row's own type. The hover underline is the only hint
- * that it does anything, which is the same bargain the collar head bar's
- * sheet name makes. */
-.labelButton {
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  text-align: left;
-  cursor: text;
-}
-
-.labelButton:hover {
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 2px;
 }
 
 /* Disclosure caret — a bare 20px hit target, not a full icon button: it sits
