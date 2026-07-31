@@ -1,0 +1,95 @@
+/* MapCompass — RT-3. Bottom-left of the plate.
+ *
+ * Placement: the plate's other furniture is bottom-centre (.commentModeHint),
+ * top-centre (.collabRoomError) and top-right (WorkspaceSwitcher /
+ * PresenceList). Bottom-left is the one corner nothing else claims, and it is
+ * where a printed sheet puts its compass rose anyway.
+ *
+ * z-index 10 — the "toolbar / banners" band in the MapEditor.module.css
+ * ladder. It has to sit above .atlasToolOverlay (z-index 5), which covers the
+ * whole plate whenever an atlas tool is active; below that the compass would
+ * be visible and unclickable. */
+
+.compass {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 10;
+
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: 50%;
+  box-shadow: var(--ad-shadow-tracing);
+  color: var(--ad-ink-secondary);
+
+  /* `grab`, not `pointer`: the primary gesture is a drag. The click-to-reset
+     is the secondary one, and the label says so. */
+  cursor: grab;
+  touch-action: none; /* or the browser pans the page instead of rotating */
+  user-select: none;
+}
+
+.compass:hover:not(:disabled) {
+  background: var(--ad-surface);
+  color: var(--ad-ink);
+}
+
+.compass:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.compass:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}
+
+.compass:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Turned away from north — the state RT-9 blocks drawing in. Tinted so the
+   compass reads as the explanation for the blocked toolbar, not as decoration
+   that happens to be nearby. */
+.compass[data-rotated="true"] {
+  color: var(--ad-accent);
+  border-color: var(--ad-accent);
+}
+
+.dial {
+  width: 100%;
+  height: 100%;
+}
+
+.ring {
+  fill: none;
+  stroke: var(--ad-hairline);
+  stroke-width: 1;
+}
+
+.north {
+  fill: currentColor;
+}
+
+.south {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+/* The dial turns; honour a user who has asked for less motion by making the
+   turn instant rather than animated. There is no transition to remove here —
+   this is a note that the rotation is data, not decoration, so it must NOT
+   grow one. */
+@media (prefers-reduced-motion: reduce) {
+  .dial {
+    transition: none;
+  }
+}

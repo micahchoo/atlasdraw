@@ -7,8 +7,13 @@
 export { MapCanvas } from "./MapCanvas";
 export type { MapCanvasProps, MapCanvasInitialView } from "./MapCanvas";
 
-// FU-14 / RT-0 — rotation gestures are off until RT-3 lands a compass.
-export { disableCameraRotation } from "./cameraRotation";
+// FU-14 — rotation gestures are off unless a view ships a way back to north.
+export {
+  applyRotationPolicy,
+  disableCameraRotation,
+  enableCameraRotation,
+  setCameraRotation,
+} from "./cameraRotation";
 
 export type { LayerStyle, StyleExpression } from "./style";
 export {

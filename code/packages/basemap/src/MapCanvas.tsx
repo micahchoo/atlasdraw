@@ -18,13 +18,15 @@
  * Phase 1 constraints enforced at construction:
  *   maxPitch: 0          — pitch=0 assumption keeps CoordinateSync projection-agnostic (OQ-2)
  *   pitchWithRotate: false
- *   dragRotate: false    — FU-14 / RT-0; see cameraRotation.ts for the other two gestures
+ *   dragRotate: false    — FU-14; right-drag belongs to Excalidraw's context
+ *                          menu, and stays off even when `allowRotation` is
+ *                          set. See cameraRotation.ts for the other two.
  */
 
 import React, { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 
-import { disableCameraRotation } from "./cameraRotation";
+import { applyRotationPolicy } from "./cameraRotation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,6 +64,15 @@ export interface MapCanvasProps {
    * marginalia) — attribution must stay visible somewhere.
    */
   hideAttribution?: boolean;
+
+  /**
+   * Let the user rotate the camera (two-finger twist, shift+arrows). Off by
+   * default, and the default is the safe one: FU-14 / RT-0 is the defect of
+   * being turned with no way back to north, so a view earns rotation by
+   * shipping a compass. The editor does; the embed and every other MapCanvas
+   * caller does not. Mount-time only, like `initialView`.
+   */
+  allowRotation?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +114,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
   onMapReady,
   className,
   hideAttribution,
+  allowRotation = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   // Hold the map instance for the unmount cleanup; not exposed via state to
@@ -150,7 +162,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
 
     mapRef.current = map;
 
-    disableCameraRotation(map);
+    applyRotationPolicy(map, allowRotation);
 
     if (onMapReady) {
       map.once("load", () => {
@@ -173,8 +185,9 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       map.remove();
       mapRef.current = null;
     };
-    // Intentionally excluding `initialView` and `onMapReady` — initialView is
-    // consumed once at construction; onMapReady is a stable callback contract.
+    // Intentionally excluding `initialView`, `onMapReady` and `allowRotation`
+    // — initialView and allowRotation are consumed once at construction;
+    // onMapReady is a stable callback contract.
     // styleUrl changes are NOT reacted to in Phase 1 (deferred to Wave 2+).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
