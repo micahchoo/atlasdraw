@@ -54,6 +54,33 @@ import type { LayerProvenance, LayerStyle } from "../state/layerRegistry";
 
 type DataFileExt = "geojson" | "csv" | "zip";
 
+/**
+ * Formats the app cannot read *yet*, as opposed to formats that are simply not
+ * data files. FU-1: raster import is PRD §4 job 1 and is not built, so a
+ * dropped GeoTIFF is a gap in this app and not a mistake by the user — and the
+ * error has to say which. "unsupported file type" sends someone off to convert
+ * a file that was already correct.
+ *
+ * Nothing routes on this map; it only picks the wording. Delete an entry the
+ * day its importer lands, and `detectExt` will claim the extension first.
+ */
+const KNOWN_UNBUILT: ReadonlyArray<{ exts: string[]; label: string }> = [
+  { exts: [".tif", ".tiff", ".geotiff"], label: "GeoTIFF" },
+  { exts: [".gpkg"], label: "GeoPackage" },
+  { exts: [".kml", ".kmz"], label: "KML" },
+  { exts: [".gpx"], label: "GPX" },
+];
+
+function unbuiltFormatLabel(fileName: string): string | null {
+  const name = fileName.toLowerCase();
+  for (const { exts, label } of KNOWN_UNBUILT) {
+    if (exts.some((e) => name.endsWith(e))) {
+      return label;
+    }
+  }
+  return null;
+}
+
 /** Extension routing shared by both the drop handler and the file picker. */
 function detectExt(fileName: string): DataFileExt | null {
   const name = fileName.toLowerCase();
@@ -227,8 +254,11 @@ export function useDataFileImport(
     (file: File) => {
       const ext = detectExt(file.name);
       if (!ext) {
+        const unbuilt = unbuiltFormatLabel(file.name);
         toast.error(
-          `${file.name}: unsupported file type — expected .geojson, .csv, or .zip`,
+          unbuilt
+            ? `${file.name}: ${unbuilt} import isn't supported yet — atlasdraw reads .geojson, .csv and zipped shapefiles`
+            : `${file.name}: unsupported file type — expected .geojson, .csv, or .zip`,
         );
         return;
       }

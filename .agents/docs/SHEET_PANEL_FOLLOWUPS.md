@@ -27,7 +27,7 @@ ledger.
 |---|---|---|
 | FU-12 | **done, shipped** | `d29920d`, merged `0b0de34`, pushed |
 | FU-13 | **done, shipped** | same commit |
-| FU-1 | open | — |
+| FU-1 | **open — and it is a feature, not a follow-up.** Scope verified and rewritten; error message fixed meanwhile | needs one decision from MIXI |
 | FU-2 | **done — the seven are deleted** | this branch; consumer analysis re-verified again at deletion |
 | FU-3 | **done** | this branch — the collab layer survives a style swap |
 | FU-4 | **done** | this branch — grip is the only drag source |
@@ -68,16 +68,52 @@ rather than users say so.
 
 ### FU-1 — `.tif` drops are a silent no-op
 `useDataFileImport.ts:55` — `type DataFileExt = "geojson" | "csv" | "zip"`.
-Anything else falls to the `:231` error path: *"unsupported file type — expected
-.geojson, .csv, or .zip"*. PRD §4 job 1 is raster import; it is not met.
-`packages/data/src/thumbnail.ts` is complete and tested and still has no caller
-in app code (the only `thumbnail` hits are `atlasdraw.ts`'s write-side
-container format).
+Anything else falls to the error path. PRD §4 job 1 is raster import; it is not
+met.
 
-**User impact:** You drag a GeoTIFF onto the map and get an error toast telling
-you the file type is unsupported. Every raster workflow is closed — scanned
-survey sheets, satellite imagery, elevation, historical map plates. For a tool
-pointed at archives, that is the format most likely to arrive first.
+**User impact:** You drag a GeoTIFF onto the map and get an error toast. Every
+raster workflow is closed — scanned survey sheets, satellite imagery,
+elevation, historical map plates. For a tool pointed at archives, that is the
+format most likely to arrive first.
+
+**Scope re-verified 2026-07-31, and this ticket was under-sized.** It sits in a
+list of panel follow-ups next to "move `draggable` to the grip". It is not that
+kind of item, and calling it "the only real capability gap" made it sound like
+one missing branch in `detectExt`. What is actually missing:
+
+| | verified how |
+|---|---|
+| **No GeoTIFF decoder, and no dependency for one.** | `geotiff`/`georaster` appear in no `package.json` in the repo |
+| **No raster path anywhere.** | `grep -rn raster` over `apps/atlas-app/src`, `packages/data/src`, `packages/basemap/src` → 3 hits, all prose in unrelated comments |
+| **The registry cannot hold a raster.** | `LayerRegistryEntry = AnnotationLayerEntry \| DataLayerEntry`, and `DataLayerEntry` is vector-shaped: `featureCount`, `style: LayerStyle` (fill colour, opacity, expression). A raster has no features and none of that style |
+| **Reprojection is unsolved.** | GeoTIFFs routinely arrive in a projected CRS; nothing in `packages/geo` reprojects raster grids |
+
+A third `kind` in the registry is not a local change: `reconcileDataLayers`,
+`applyOrderToMap`, `hydrate`, the panel card, and the PDF legend all switch on
+`kind` today.
+
+**One claim in the original ticket was wrong.** It cited
+`packages/data/src/thumbnail.ts` as complete-but-uncalled, implying a raster
+path already half-built. `thumbnail.ts` renders an `HTMLCanvasElement` to a
+1024×768 PNG for the `.atlasdraw` container's `meta/thumbnail.png`. It has
+nothing to do with importing rasters. It is genuinely uncalled — that part is
+true — but it is not evidence for this ticket.
+
+**The decision that gates it, and it is MIXI's:** does a raster become a third
+registry `kind`, or does it live outside the registry with its own lifecycle,
+the way `collab-data` does (FU-3)? Everything else follows from that answer, and
+answering it wrong costs a migration of every `switch (kind)` in the app.
+
+**Shipped meanwhile, and it is not the feature.** The error message. Dropping a
+`.tif` said *"unsupported file type"*, which tells the user their file is wrong
+when the file was correct and the app is not. It now names the format and says
+*"GeoTIFF import isn't supported yet"* — same for GeoPackage, KML and GPX,
+which are the other formats an archive will hand you. `KNOWN_UNBUILT` in
+`useDataFileImport.ts` picks the wording only; nothing routes on it, and an
+entry gets deleted the day its importer lands.
+
+**Size:** the honest answer is "a feature", and it should be a plan, not a row
+in this table.
 
 **Done when:** a dropped `.tif` registers a data layer that renders, and the
 layer card shows it with provenance like every other source.
@@ -760,7 +796,9 @@ already got is the doc-drift pattern `ISSUES.md` Issue 2 is about.
    unrecoverable *today*, and bearing persists through save and reload. This is
    the only item on this list that is a live user-facing defect rather than
    maintenance, and it is one line of map options.
-2. **FU-1** — the PRD job that isn't met, and the only real capability gap.
+2. **FU-1** — the PRD job that isn't met. Blocked on one decision from MIXI
+   (third registry `kind`, or its own lifecycle outside the registry) and it
+   wants a plan of its own rather than a row here.
 3. **FU-14 RT-1..RT-9** — the rest of rotation, once RT-0 has stopped the
    bleeding. Not urgent; nothing is broken while bearing cannot move.
 4. ~~**FU-10**~~ — done 2026-07-31.
