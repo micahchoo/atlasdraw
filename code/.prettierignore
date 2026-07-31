@@ -23,3 +23,8 @@ packages/basemap/src/styles/*.json
 # `yarn test:app` rewrites these with a fresh `runAt` on every run, so they are
 # perpetually dirty and never worth formatting.
 bench/results/*.json
+
+# Playwright run output. Regenerated on every failed spec; formatting it is
+# meaningless and its presence alone fails `test:other`.
+apps/*/test-results/
+apps/*/playwright-report/

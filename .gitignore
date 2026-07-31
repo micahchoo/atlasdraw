@@ -45,6 +45,11 @@ firebase/
 # playwright-cli session artifacts
 .playwright-cli/
 .playwright/
+# Playwright run output — videos, traces and .last-run.json from a failed spec.
+# Untracked AND unformattable: prettier's --list-different picks up
+# .last-run.json otherwise, which is enough to fail `yarn test:other`.
+test-results/
+playwright-report/
 
 # Yarn install temp unpack dirs (created by `yarn install` at repo root,
 # abandoned across runs — never tracked)
