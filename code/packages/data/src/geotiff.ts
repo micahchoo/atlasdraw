@@ -66,8 +66,15 @@ export type RasterCorners = [
 ];
 
 export interface DecodedRaster {
-  /** Interleaved RGBA, `width * height * 4` long. */
-  rgba: Uint8ClampedArray;
+  /**
+   * Interleaved RGBA, `width * height * 4` long.
+   *
+   * Pinned to a plain `ArrayBuffer` rather than the default `ArrayBufferLike`:
+   * `ImageData` will not accept a view that might be over a SharedArrayBuffer,
+   * and the alternative — copying into a fresh array at encode time — is up to
+   * 16 MB of pointless allocation for a capped raster.
+   */
+  rgba: Uint8ClampedArray<ArrayBuffer>;
   width: number;
   height: number;
   corners: RasterCorners;
@@ -267,4 +274,35 @@ export async function decodeGeoTiff(
     ],
     crs: label,
   };
+}
+
+/**
+ * Encode decoded raster pixels as a PNG Blob.
+ *
+ * PNG rather than JPEG on purpose: a scanned survey sheet is line work and
+ * text, which is exactly what JPEG's chroma subsampling smears. It is also the
+ * format that keeps the alpha channel, and a GeoTIFF with a nodata mask has
+ * transparent edges that must not become black ones.
+ *
+ * Browser-only, returning `null` off it — same contract as `generateThumbnail`
+ * in this package, so a caller can wire it in without branching on runtime.
+ * Nothing in Node needs to render a raster.
+ */
+export async function encodeRasterPng(
+  raster: Pick<DecodedRaster, "rgba" | "width" | "height">,
+): Promise<Blob | null> {
+  if (typeof OffscreenCanvas === "undefined") {
+    return null;
+  }
+  const canvas = new OffscreenCanvas(raster.width, raster.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.putImageData(
+    new ImageData(raster.rgba, raster.width, raster.height),
+    0,
+    0,
+  );
+  return await canvas.convertToBlob({ type: "image/png" });
 }

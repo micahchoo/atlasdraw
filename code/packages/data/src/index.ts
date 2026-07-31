@@ -67,6 +67,7 @@ export { generateThumbnail } from "./thumbnail";
 // FU-1 RA-2 — GeoTIFF decode. Bytes in, pixels plus four lng/lat corners out.
 export {
   decodeGeoTiff,
+  encodeRasterPng,
   fitWithin,
   RASTER_MAX_DIM,
   RasterDecodeError,

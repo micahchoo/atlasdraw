@@ -44,6 +44,10 @@ const {
   compileLayerMock,
   defaultLayerStyleMock,
   getAppConfigMock,
+  decodeGeoTiffMock,
+  encodeRasterPngMock,
+  FakeRasterDecodeError,
+  FakeUnsupportedRasterCrsError,
 } = vi.hoisted(() => {
   class FakeGeoJSONParseError extends Error {
     constructor(message: string) {
@@ -86,6 +90,16 @@ const {
     ),
     defaultLayerStyleMock: vi.fn(() => ({} as LayerStyle)),
     getAppConfigMock: vi.fn(() => ({ geocoder: undefined } as unknown)),
+    decodeGeoTiffMock: vi.fn(),
+    encodeRasterPngMock: vi.fn(),
+    FakeRasterDecodeError: class extends Error {},
+    FakeUnsupportedRasterCrsError: class extends Error {
+      crs: string;
+      constructor(crs: string) {
+        super(`raster is in ${crs}`);
+        this.crs = crs;
+      }
+    },
   };
 });
 
@@ -102,6 +116,10 @@ vi.mock("@atlasdraw/data", () => ({
     }
   },
   requireHomogeneousGeometry: requireHomogeneousGeometryMock,
+  decodeGeoTiff: decodeGeoTiffMock,
+  encodeRasterPng: encodeRasterPngMock,
+  RasterDecodeError: FakeRasterDecodeError,
+  UnsupportedRasterCrsError: FakeUnsupportedRasterCrsError,
 }));
 
 vi.mock("@atlasdraw/basemap", () => ({
@@ -140,7 +158,13 @@ const POLY_FC: FeatureCollection = {
 };
 
 function makeFile(name: string, text = ""): File {
-  return { name, text: () => Promise.resolve(text) } as unknown as File;
+  return {
+    name,
+    text: () => Promise.resolve(text),
+    // The raster path reads bytes, not text. Present on every fixture so a
+    // `.tif` case does not need its own factory.
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+  } as unknown as File;
 }
 
 function makeMockMap(): maplibregl.Map & {
@@ -165,6 +189,7 @@ function Harness({
   map,
   registerDataLayer,
   onImported,
+  registerRasterLayer,
 }: {
   map: maplibregl.Map | null;
   registerDataLayer: (opts: {
@@ -174,6 +199,12 @@ function Harness({
     style: LayerStyle;
   }) => void;
   onImported?: () => void;
+  registerRasterLayer?: (opts: {
+    id: string;
+    label: string;
+    corners: unknown;
+    imageKey: string;
+  }) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { importFile } = useDataFileImport(
@@ -181,6 +212,7 @@ function Harness({
     map,
     registerDataLayer,
     onImported,
+    registerRasterLayer as never,
   );
   lastImportFile = importFile;
   return React.createElement("div", { ref: rootRef, "data-testid": "root" });
@@ -190,17 +222,24 @@ function renderHarness(
   map: maplibregl.Map | null,
   registerDataLayer = vi.fn(),
   onImported = vi.fn(),
+  registerRasterLayer = vi.fn(),
 ) {
   const { getByTestId, findByTestId, unmount } = render(
     React.createElement(
       ToastProvider,
       null,
-      React.createElement(Harness, { map, registerDataLayer, onImported }),
+      React.createElement(Harness, {
+        map,
+        registerDataLayer,
+        onImported,
+        registerRasterLayer,
+      }),
     ),
   );
   return {
     root: getByTestId("root"),
     registerDataLayer,
+    registerRasterLayer,
     onImported,
     findByTestId,
     unmount,
@@ -599,10 +638,10 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
   // it — and telling them "unsupported file type" sends them off to convert a
   // file that was already correct. The import itself is unchanged; only the
   // sentence is.
+  // GeoTIFF is gone from this list — RA-4 built the importer, and `detectExt`
+  // now claims those extensions before the message is ever reached. The list is
+  // for formats that genuinely have no path yet.
   it.each([
-    ["survey-sheet.tif", "GeoTIFF"],
-    ["survey-sheet.TIFF", "GeoTIFF"],
-    ["plates.geotiff", "GeoTIFF"],
     ["wards.gpkg", "GeoPackage"],
     ["route.kml", "KML"],
     ["track.gpx", "GPX"],
@@ -664,5 +703,142 @@ describe("useDataFileImport — onImported (success-only signal)", () => {
 
     await Promise.resolve();
     expect(onImported).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FU-1 RA-4 — the raster path.
+//
+// The decoder has its own tests against real GeoTIFF bytes; these are about the
+// wiring around it. What can go wrong here is not decoding — it is ordering
+// (the image must reach its store before the map reads a URL from it), routing
+// (a .tif must not reach the FeatureCollection parser), and error translation
+// (an unplaceable CRS has to arrive as advice, not as "import failed").
+// ---------------------------------------------------------------------------
+
+const DECODED = {
+  rgba: new Uint8ClampedArray(4),
+  width: 1,
+  height: 1,
+  corners: [
+    [0, 1],
+    [1, 1],
+    [1, 0],
+    [0, 0],
+  ],
+  crs: "EPSG:4326",
+};
+
+describe("useDataFileImport — GeoTIFF", () => {
+  beforeEach(() => {
+    decodeGeoTiffMock.mockResolvedValue(DECODED);
+    encodeRasterPngMock.mockResolvedValue(new Blob([new Uint8Array([1])]));
+  });
+
+  it("adds an image source and registers a raster layer", async () => {
+    const map = makeMockMap();
+    const { registerRasterLayer, registerDataLayer, onImported } =
+      renderHarness(map);
+
+    lastImportFile!(makeFile("survey-sheet.tif"));
+
+    await waitFor(() => expect(registerRasterLayer).toHaveBeenCalledTimes(1));
+    const [args] = registerRasterLayer.mock.calls[0];
+    expect(args).toMatchObject({
+      label: "survey-sheet.tif",
+      corners: DECODED.corners,
+      provenance: { sourceFile: "survey-sheet.tif", droppedCount: 0 },
+    });
+    expect(args.id).toMatch(/^rl:/);
+
+    expect(map.addSource).toHaveBeenCalledWith(
+      args.id,
+      expect.objectContaining({ type: "image", coordinates: DECODED.corners }),
+    );
+    // Never the vector path: a .tif that reached parseDroppedFile would be
+    // read as JSON and fail with a message about GeoJSON.
+    expect(registerDataLayer).not.toHaveBeenCalled();
+    expect(parseMock).not.toHaveBeenCalled();
+    expect(onImported).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the map a real URL, not an empty one", async () => {
+    // The ordering rule this path lives by: the image goes into its store
+    // BEFORE the map write, because the URL handed to addSource is read back
+    // out of that store. Reversed, MapLibre gets `undefined` and draws nothing
+    // while every other signal says the import worked.
+    const map = makeMockMap();
+    renderHarness(map);
+
+    lastImportFile!(makeFile("plate.tiff"));
+
+    await waitFor(() => expect(map.addSource).toHaveBeenCalledTimes(1));
+    const [, spec] = map.addSource.mock.calls[0];
+    expect(typeof spec.url).toBe("string");
+    expect(spec.url.length).toBeGreaterThan(0);
+  });
+
+  it.each([".tif", ".tiff", ".geotiff"])(
+    "routes %s to the raster path",
+    async (ext) => {
+      const map = makeMockMap();
+      const { registerRasterLayer } = renderHarness(map);
+
+      lastImportFile!(makeFile(`sheet${ext}`));
+
+      await waitFor(() => expect(registerRasterLayer).toHaveBeenCalledTimes(1));
+    },
+  );
+
+  it("tells the user to reproject, rather than that the import failed", async () => {
+    decodeGeoTiffMock.mockRejectedValue(
+      new FakeUnsupportedRasterCrsError("EPSG:32643"),
+    );
+    const map = makeMockMap();
+    const { registerRasterLayer, findByTestId } = renderHarness(map);
+
+    lastImportFile!(makeFile("utm-survey.tif"));
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toContain("EPSG:32643");
+    expect(toast.textContent).toMatch(/reproject/i);
+    // The distinction the separate error type exists for. "Import failed"
+    // sends someone to check a file that was never the problem.
+    expect(toast.textContent).not.toMatch(/failed unexpectedly/i);
+    expect(registerRasterLayer).not.toHaveBeenCalled();
+  });
+
+  it("passes a decode failure's own sentence through", async () => {
+    decodeGeoTiffMock.mockRejectedValue(
+      new FakeRasterDecodeError("this TIFF states no position"),
+    );
+    const map = makeMockMap();
+    const { findByTestId } = renderHarness(map);
+
+    lastImportFile!(makeFile("plain.tif"));
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toContain("states no position");
+  });
+
+  it("says so when the browser cannot encode the image", async () => {
+    encodeRasterPngMock.mockResolvedValue(null);
+    const map = makeMockMap();
+    const { registerRasterLayer, findByTestId } = renderHarness(map);
+
+    lastImportFile!(makeFile("sheet.tif"));
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toMatch(/cannot encode/i);
+    // Nothing half-registered: no row in the panel for a layer with no image.
+    expect(registerRasterLayer).not.toHaveBeenCalled();
+    expect(map.addSource).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op with no map yet", async () => {
+    const { registerRasterLayer } = renderHarness(null);
+    lastImportFile!(makeFile("sheet.tif"));
+    await Promise.resolve();
+    expect(registerRasterLayer).not.toHaveBeenCalled();
   });
 });
