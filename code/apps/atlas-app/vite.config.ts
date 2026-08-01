@@ -76,28 +76,54 @@ const pmtilesNotFoundPlugin = {
 const BUILD_TARGET = process.env.VITE_BUILD_TARGET;
 const BASE = BUILD_TARGET === "pages" ? "/atlasdraw/" : "/";
 
-// Vite copies the whole `public/` tree into `dist/`. Local-only archives
-// (e.g. india.pmtiles ~4.9 GB) live in `public/data/` for dev convenience
-// but must NOT ship in production builds. After the bundle is written,
-// prune everything in `dist/data/` except the allowlisted archives.
-const ALLOWED_DATA_FILES = new Set<string>(["world-low-zoom.pmtiles"]);
-const cleanupPublicDataPlugin = {
-  name: "atlasdraw-cleanup-public-data",
+// Local-only archives (e.g. india.pmtiles ~4.9 GB) live in `public/data/`
+// for dev convenience but must NOT ship in production builds. Vite's own
+// `copyPublicDir` is all-or-nothing — it used to copy the 4.9 GB archive
+// into `dist/` only for a prune pass to delete it again (~9 s per local
+// build). So the blanket copy is disabled (`build.copyPublicDir: false`
+// below) and this plugin places `public/` into `dist/` itself, skipping
+// `data/` entries that are not allowlisted.
+//
+// Everything in this allowlist is a runtime-fetched production asset; a
+// `data/` file missing from it never reaches the deployed site. (That is
+// how offline geo-search shipped broken: places-index.json was generated,
+// fetched by useGeocoderSearch, and silently pruned here.)
+const ALLOWED_DATA_FILES = new Set<string>([
+  "world-low-zoom.pmtiles",
+  "places-index.json",
+]);
+const copyPublicAssetsPlugin = {
+  name: "atlasdraw-copy-public-assets",
   apply: "build" as const,
   closeBundle() {
-    const distData = path.resolve(__dirname, "dist", "data");
-    if (!fs.existsSync(distData)) {
+    const publicDir = path.resolve(__dirname, "public");
+    const distDir = path.resolve(__dirname, "dist");
+    if (!fs.existsSync(publicDir)) {
       return;
     }
-    for (const entry of fs.readdirSync(distData)) {
-      if (ALLOWED_DATA_FILES.has(entry)) {
-        continue;
+    const copyTree = (src: string, dest: string, isDataDir: boolean): void => {
+      for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+        const from = path.join(src, entry.name);
+        const to = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+          // Only the top-level `public/data/` is the filtered archive dir.
+          copyTree(
+            from,
+            to,
+            isDataDir || (src === publicDir && entry.name === "data"),
+          );
+          continue;
+        }
+        if (isDataDir && !ALLOWED_DATA_FILES.has(entry.name)) {
+          // eslint-disable-next-line no-console
+          console.log(`[atlasdraw] skipped data/${entry.name} (local-only)`);
+          continue;
+        }
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.copyFileSync(from, to);
       }
-      const full = path.join(distData, entry);
-      fs.rmSync(full, { recursive: true, force: true });
-      // eslint-disable-next-line no-console
-      console.log(`[atlasdraw] pruned dist/data/${entry} (build hygiene)`);
-    }
+    };
+    copyTree(publicDir, distDir, false);
   },
 };
 
@@ -108,7 +134,12 @@ export default defineConfig({
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(GIT_HASH),
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  plugins: [react(), pmtilesNotFoundPlugin, cleanupPublicDataPlugin] as any,
+  plugins: [react(), pmtilesNotFoundPlugin, copyPublicAssetsPlugin] as any,
+  build: {
+    // See copyPublicAssetsPlugin — selective replacement for the blanket
+    // public/ copy that dragged a 4.9 GB local archive through dist/.
+    copyPublicDir: false,
+  },
   server: {
     port: 5174,
     fs: {
