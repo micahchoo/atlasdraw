@@ -97,12 +97,14 @@ export class CoordinateSync {
 
   syncMapToScene(): void {
     const elements = this._excalidrawAPI.getSceneElements();
-    // One camera probe for the whole pass — the rotation is a property of the
-    // camera, not of any element (true at pitch 0, the only pitch we allow).
+    // One camera probe for the whole pass — rotation and zoom are properties
+    // of the camera, not of any element (true at pitch 0, the only pitch we
+    // allow).
     const cameraAngle = cameraRotation(this._map);
+    const zoom = this._map.getZoom();
     const projected = elements.map((el) =>
       isGeoCustomData(el.customData)
-        ? this._projectElement(el, cameraAngle)
+        ? this._projectElement(el, cameraAngle, zoom)
         : el,
     );
     this._excalidrawAPI.updateScene({
@@ -135,18 +137,22 @@ export class CoordinateSync {
     if (!isGeoCustomData(el.customData)) {
       return null;
     }
-    const { x, y } = this._projectElement(el, cameraRotation(this._map));
+    const { x, y } = this._projectElement(
+      el,
+      cameraRotation(this._map),
+      this._map.getZoom(),
+    );
     return { x, y };
   }
 
   private _projectElement(
     el: ExcalidrawElementLike,
     cameraAngle: number,
+    zoom: number,
   ): ExcalidrawElementLike {
     const customData = el.customData as GeoCustomData;
     const anchor = customData.geo;
     const scaleMode = customData.scaleMode;
-    const factor = computeScaleFactor(this._map.getZoom(), anchor.zRef);
     switch (anchor.kind) {
       case "point": {
         const { x, y } = projectPoint(this._map, anchor.lng, anchor.lat);
@@ -170,6 +176,8 @@ export class CoordinateSync {
             },
           };
         }
+        // Deferred below the screen arm: screen mode never reads the factor.
+        const factor = computeScaleFactor(zoom, anchor.zRef);
         const f = scaleMode === "hybrid" ? clampHybridFactor(factor) : factor;
         const prevSync = (el.customData as Record<string, unknown>)
           ._lastSync as Record<string, unknown> | undefined;
@@ -240,6 +248,8 @@ export class CoordinateSync {
         const se = projectPoint(this._map, anchor.east, anchor.south);
         const projectedWidth = Math.max(1, se.x - nw.x);
         const projectedHeight = Math.max(1, se.y - nw.y);
+        // Deferred below the screen arm: screen mode never reads the factor.
+        const factor = computeScaleFactor(zoom, anchor.zRef);
         // RT-2 covers the geographic arm only. "screen" and "hybrid" stay
         // axis-aligned — i.e. billboarded — under a rotated camera. Neither is
         // reachable from any creation path (geographic has been the only
@@ -353,14 +363,25 @@ export class CoordinateSync {
               },
             };
           }
-          const sxs = screenPoints.map((p) => p[0]);
-          const sys = screenPoints.map((p) => p[1]);
+          // Single pass, Math.min/max accumulators (they propagate NaN the
+          // same way the previous `Math.max(...spread)` did, and a spread
+          // throws past the engine argument limit on huge polylines).
+          let sMinX = Infinity;
+          let sMaxX = -Infinity;
+          let sMinY = Infinity;
+          let sMaxY = -Infinity;
+          for (const p of screenPoints) {
+            sMinX = Math.min(sMinX, p[0]);
+            sMaxX = Math.max(sMaxX, p[0]);
+            sMinY = Math.min(sMinY, p[1]);
+            sMaxY = Math.max(sMaxY, p[1]);
+          }
           return {
             ...el,
             x: origin.x,
             y: origin.y,
-            width: Math.max(1, Math.max(...sxs) - Math.min(...sxs)),
-            height: Math.max(1, Math.max(...sys) - Math.min(...sys)),
+            width: Math.max(1, sMaxX - sMinX),
+            height: Math.max(1, sMaxY - sMinY),
             customData: {
               ...(el.customData as Record<string, unknown>),
               // Full snapshot (pts/mode included) — see the point/screen arm.
@@ -373,13 +394,12 @@ export class CoordinateSync {
             },
           };
         }
-        const projected = anchor.coordinates.map(([lng, lat]) =>
-          projectPoint(this._map, lng, lat),
-        );
-        const origin = projected[0];
-        if (!origin) {
+        const coords = anchor.coordinates;
+        if (coords.length === 0) {
           return { ...el };
         }
+        // Deferred below the screen arm: screen mode never reads the factor.
+        const factor = computeScaleFactor(zoom, anchor.zRef);
         const f =
           scaleMode === "hybrid" ? clampHybridFactor(factor) / factor : 1;
         const strokeFactor =
@@ -390,12 +410,28 @@ export class CoordinateSync {
           (prevSync?.strokeWidth0 as number | undefined) ?? el.strokeWidth;
         const strokeWidth =
           strokeWidth0 !== undefined ? strokeWidth0 * strokeFactor : undefined;
-        const points = projected.map(
-          (p) =>
-            [(p.x - origin.x) * f, (p.y - origin.y) * f] as [number, number],
-        );
-        const xs = points.map((p) => p[0]);
-        const ys = points.map((p) => p[1]);
+        // One pass: project, offset-scale, and min/max together (previously
+        // four intermediate arrays + two spreads per element). Math.min/max
+        // accumulators keep the spreads' NaN propagation.
+        const origin = projectPoint(this._map, coords[0][0], coords[0][1]);
+        const points: [number, number][] = new Array(coords.length);
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (let i = 0; i < coords.length; i++) {
+          const p =
+            i === 0
+              ? origin
+              : projectPoint(this._map, coords[i][0], coords[i][1]);
+          const px = (p.x - origin.x) * f;
+          const py = (p.y - origin.y) * f;
+          points[i] = [px, py];
+          minX = Math.min(minX, px);
+          maxX = Math.max(maxX, px);
+          minY = Math.min(minY, py);
+          maxY = Math.max(maxY, py);
+        }
         const nextSync: Record<string, unknown> = {
           x: origin.x,
           y: origin.y,
@@ -411,8 +447,8 @@ export class CoordinateSync {
           x: origin.x,
           y: origin.y,
           points,
-          width: Math.max(1, Math.max(...xs) - Math.min(...xs)),
-          height: Math.max(1, Math.max(...ys) - Math.min(...ys)),
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY),
           ...(strokeWidth !== undefined ? { strokeWidth } : {}),
           customData: {
             ...(el.customData as Record<string, unknown>),

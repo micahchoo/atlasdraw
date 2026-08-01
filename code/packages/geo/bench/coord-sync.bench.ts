@@ -25,14 +25,14 @@ import { fileURLToPath } from "node:url";
 
 import { describe, test, expect } from "vitest";
 
-import { CoordinateSync } from "../src/CoordinateSync.js";
+import { CoordinateSync } from "../../basemap/src/CoordinateSync.js";
 
 import { generateScene } from "./synthetic-scene-gen.js";
 
 import type {
   ExcalidrawElementLike,
   ExcalidrawAPI,
-} from "../src/CoordinateSync.js";
+} from "../../basemap/src/CoordinateSync.js";
 
 // ---------------------------------------------------------------------------
 // Mock map: pure Web-Mercator over a virtual 800x600 viewport.
@@ -42,6 +42,7 @@ import type {
 
 interface MockMap {
   getZoom: () => number;
+  getBearing: () => number;
   getBounds: () => {
     getNorth: () => number;
     getSouth: () => number;
@@ -59,6 +60,9 @@ function makeMockMap(
 ): MockMap {
   return {
     getZoom: () => zoom,
+    // Bench scenes are unrotated; bearing 0 also keeps `cameraRotation` on
+    // its exact fast path, matching the common interactive case.
+    getBearing: () => 0,
     getBounds: () => ({
       getNorth: () => 85,
       getSouth: () => -85,

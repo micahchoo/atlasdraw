@@ -13,7 +13,7 @@
 import type {
   ExcalidrawElementLike,
   // ExcalidrawElementLike is the structural type CoordinateSync expects.
-} from "../src/CoordinateSync.js";
+} from "../../basemap/src/CoordinateSync.js";
 import type { GeoAnchor, GeoCustomData, ScaleMode } from "../src/types.js";
 
 // ---------------------------------------------------------------------------
