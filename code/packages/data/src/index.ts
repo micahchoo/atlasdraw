@@ -34,7 +34,12 @@ export type {
 } from "./manifest-schema";
 
 // Phase 3 Wave 1 Task 2/3 — .atlasdraw zip read/write.
-export { write, read, AtlasdrawFormatError } from "./atlasdraw";
+export {
+  write,
+  read,
+  AtlasdrawFormatError,
+  AtlasdrawWriteCache,
+} from "./atlasdraw";
 
 // Phase 3 Wave 1 Task 4 — pure-JSON variant (.atlasdraw.json).
 export { writeJSON, readJSON, AtlasdrawJSONError } from "./atlasdraw-json";

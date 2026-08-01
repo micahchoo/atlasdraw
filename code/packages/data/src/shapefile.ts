@@ -75,7 +75,11 @@ export async function parseShapefile(blob: Blob): Promise<FeatureCollection> {
     for (let i = 1; i < result.length; i++) {
       const sib = result[i];
       if (isFeatureCollection(sib)) {
-        merged.push(...sib.features);
+        // Not push(...spread): spread passes every feature as a call argument
+        // and throws RangeError past the engine argument limit (~125k on V8).
+        for (const feature of sib.features) {
+          merged.push(feature);
+        }
       }
     }
     return { type: "FeatureCollection", features: merged };

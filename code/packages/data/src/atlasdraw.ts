@@ -54,6 +54,40 @@ export class AtlasdrawFormatError extends Error {
 
 export interface WriteOptions {
   thumbnail?: Blob;
+  /**
+   * Pin the zip mod-time of every entry written by this call. When omitted,
+   * JSZip stamps each entry with `new Date()` (DOS time, 2 s granularity), so
+   * two writes of the same document straddling a tick differ in bytes.
+   * Passing a fixed date makes the archive fully deterministic.
+   */
+  date?: Date;
+  /**
+   * Opt-in incremental compression. Create ONE cache per open document and
+   * pass it to every `write` call for that document. Text entries whose
+   * serialized JSON is string-equal to the previous write are carried over
+   * from the previous archive without re-DEFLATE — for layer-heavy documents
+   * that is the difference between ~100 ms and ~3 ms per autosave.
+   *
+   * Unchanged detection compares serialized text, never object identity, so
+   * in-place mutation of scene elements (Excalidraw does this) cannot cause
+   * a stale entry. A cache carried across a document switch is safe for the
+   * same reason: every non-matching entry is rewritten and every entry not
+   * in the new document is removed, so output converges regardless of what
+   * the cache held. The cache retains the previous archive bytes and text
+   * (~2× document size) for the document's lifetime.
+   */
+  cache?: AtlasdrawWriteCache;
+}
+
+/**
+ * Holds the previous archive + its serialized text entries for incremental
+ * `write`. Opaque to callers; `write` reads and replaces the contents.
+ */
+export class AtlasdrawWriteCache {
+  /** @internal raw bytes of the archive produced by the previous write */
+  archive: Uint8Array | null = null;
+  /** @internal path → serialized text of the previous write's text entries */
+  texts: ReadonlyMap<string, string> = new Map();
 }
 
 /**
@@ -68,51 +102,140 @@ export async function write(
   doc: AtlasdrawDocument,
   options: WriteOptions = {},
 ): Promise<Blob> {
-  const zip = new JSZip();
-
-  zip.file(MANIFEST_PATH, JSON.stringify(doc.manifest, null, 2), {
-    compression: "DEFLATE",
-  });
-
-  const sceneJson = {
-    type: "excalidraw",
-    version: 2,
-    source: "https://atlasdraw.com",
-    elements: doc.scene,
-    appState: {},
-  };
-  zip.file(SCENE_PATH, JSON.stringify(sceneJson), {
-    compression: "DEFLATE",
-  });
-
+  // Serialize every text entry up front — both the fresh and the incremental
+  // path need the strings, and the incremental path's unchanged-detection is
+  // string equality against the previous write.
+  const texts = new Map<string, string>();
+  texts.set(MANIFEST_PATH, JSON.stringify(doc.manifest, null, 2));
+  texts.set(
+    SCENE_PATH,
+    JSON.stringify({
+      type: "excalidraw",
+      version: 2,
+      source: "https://atlasdraw.com",
+      elements: doc.scene,
+      appState: {},
+    }),
+  );
   for (const [id, fc] of doc.layers) {
-    zip.file(`data/layer-${id}.geojson`, JSON.stringify(fc), {
+    texts.set(`data/layer-${id}.geojson`, JSON.stringify(fc));
+  }
+  texts.set(STYLE_PATH, JSON.stringify(doc.styleRef ?? {}));
+
+  // Incremental path: reopen the previous archive so JSZip can pass the
+  // compressed bytes of untouched entries straight through to the output.
+  // A load failure (corrupt cache) falls back to a fresh archive — the
+  // result is identical either way, only the DEFLATE work differs.
+  let zip = new JSZip();
+  let prevTexts: ReadonlyMap<string, string> = new Map();
+  if (options.cache?.archive) {
+    try {
+      zip = await JSZip.loadAsync(options.cache.archive);
+      prevTexts = options.cache.texts;
+    } catch {
+      zip = new JSZip();
+    }
+  }
+
+  // Pre-encode to UTF-8 ourselves: handing JSZip a string routes through its
+  // slower hand-rolled utf8 encoder (~19% of a full write); the bytes are
+  // identical (asserted in atlasdraw.test.ts, non-ASCII included).
+  const encoder = new TextEncoder();
+  for (const [path, text] of texts) {
+    if (prevTexts.get(path) === text && zip.file(path) !== null) {
+      continue; // untouched loaded entry — compressed bytes reused as-is
+    }
+    // Zero-copy re-wrap in this realm's Uint8Array: jsdom test environments
+    // supply Node's TextEncoder, whose output fails JSZip's cross-realm
+    // `instanceof Uint8Array` check.
+    const encoded = encoder.encode(text);
+    const bytes = new Uint8Array(
+      encoded.buffer,
+      encoded.byteOffset,
+      encoded.byteLength,
+    );
+    zip.file(path, bytes, {
       compression: "DEFLATE",
+      ...(options.date ? { date: options.date } : {}),
     });
   }
 
-  zip.file(STYLE_PATH, JSON.stringify(doc.styleRef ?? {}), {
-    compression: "DEFLATE",
-  });
-
   // JSZip in non-browser runtimes can't introspect a Blob synchronously, so
   // we materialize bytes to ArrayBuffer before adding. STORE'd entries skip
-  // re-compression of already-compressed assets.
+  // re-compression of already-compressed assets; re-adding them each write
+  // costs a copy + CRC, no DEFLATE, so they are not worth cache-tracking.
+  const binaryPaths = new Set<string>();
   for (const [name, blob] of doc.files) {
     const buf = await blob.arrayBuffer();
-    zip.file(`${FILES_PREFIX}${name}`, buf, { compression: "STORE" });
+    const path = `${FILES_PREFIX}${name}`;
+    binaryPaths.add(path);
+    zip.file(path, buf, {
+      compression: "STORE",
+      ...(options.date ? { date: options.date } : {}),
+    });
   }
 
   if (options.thumbnail) {
     const thumbBuf = await options.thumbnail.arrayBuffer();
-    zip.file(THUMBNAIL_PATH, thumbBuf, { compression: "STORE" });
+    binaryPaths.add(THUMBNAIL_PATH);
+    zip.file(THUMBNAIL_PATH, thumbBuf, {
+      compression: "STORE",
+      ...(options.date ? { date: options.date } : {}),
+    });
+  }
+
+  // Incremental only: drop loaded entries the document no longer contains
+  // (deleted layers/files, a thumbnail no longer supplied). Folder entries
+  // are kept — read() skips them, and JSZip recreates them implicitly for a
+  // fresh archive anyway.
+  for (const [path, entry] of Object.entries(zip.files)) {
+    if (!entry.dir && !texts.has(path) && !binaryPaths.has(path)) {
+      zip.remove(path);
+    }
+  }
+  // ...including folder entries left childless by those removals, so an
+  // incremental archive stays structurally identical to a fresh write of the
+  // same document (a fresh write never creates an empty folder).
+  const filePaths = Object.entries(zip.files)
+    .filter(([, e]) => !e.dir)
+    .map(([p]) => p);
+  for (const [path, entry] of Object.entries(zip.files)) {
+    if (entry.dir && !filePaths.some((p) => p.startsWith(path))) {
+      zip.remove(path);
+    }
+  }
+
+  // JSZip stamps implicitly-created folder entries with `new Date()` and
+  // ignores the per-file `date` option for them; pin those too or the
+  // "deterministic archive" promise of `options.date` breaks at the DOS-time
+  // 2-second granularity.
+  if (options.date) {
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir) {
+        entry.date = options.date;
+      }
+    }
   }
 
   // Generate to a Uint8Array and wrap as a Blob ourselves. JSZip's native
   // "blob" output relies on the global Blob constructor; Node 20+ provides it,
   // but going via uint8array is portable across all test environments and
   // gives us explicit control over the MIME type.
-  const bytes = await zip.generateAsync({ type: "uint8array" });
+  //
+  // The DEFLATE default is what lets loaded-but-untouched entries pass
+  // through without re-compression (JSZip re-encodes an entry whenever its
+  // stored method differs from the requested output method). Explicitly
+  // STORE'd entries above are unaffected by the default.
+  const bytes = await zip.generateAsync({
+    type: "uint8array",
+    compression: "DEFLATE",
+  });
+
+  if (options.cache) {
+    options.cache.archive = bytes;
+    options.cache.texts = texts;
+  }
+
   // Cast: TS lib sees `Uint8Array<ArrayBufferLike>`, but BlobPart requires
   // `ArrayBufferView<ArrayBuffer>`. The bytes are concrete and safe to wrap.
   return new Blob([bytes as unknown as BlobPart], { type: ATLASDRAW_MIME });

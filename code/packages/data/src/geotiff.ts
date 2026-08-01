@@ -253,12 +253,19 @@ export async function decodeGeoTiff(
     );
   }
 
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  for (let i = 0, s = 0; i < width * height; i++, s += perPixel) {
-    rgba[i * 4] = samples[s];
-    rgba[i * 4 + 1] = samples[s + 1];
-    rgba[i * 4 + 2] = samples[s + 2];
-    rgba[i * 4 + 3] = perPixel === 4 ? samples[s + 3] : 255;
+  const pixelCount = width * height;
+  const rgba = new Uint8ClampedArray(pixelCount * 4);
+  if (perPixel === 4) {
+    // Bulk copy — Uint8ClampedArray.set applies the same ToUint8Clamp
+    // conversion as per-element assignment.
+    rgba.set(samples);
+  } else {
+    for (let i = 0, d = 0, s = 0; i < pixelCount; i++, d += 4, s += 3) {
+      rgba[d] = samples[s];
+      rgba[d + 1] = samples[s + 1];
+      rgba[d + 2] = samples[s + 2];
+      rgba[d + 3] = 255;
+    }
   }
 
   return {

@@ -12,7 +12,12 @@
 // the Phase 3 Open Question Q3 (5s trailing-edge debounce + 30s ceiling).
 
 import { openDB, type IDBPDatabase } from "idb";
-import { read, write, type AtlasdrawDocument } from "@atlasdraw/data";
+import {
+  AtlasdrawWriteCache,
+  read,
+  write,
+  type AtlasdrawDocument,
+} from "@atlasdraw/data";
 
 import { safeFileName } from "../lib/safeFileName";
 
@@ -207,6 +212,15 @@ export function createPersistenceStore(
   // save raced and dirty stays set.
   let dirtySeq = 0;
 
+  // Incremental-write cache: text entries whose serialized JSON is unchanged
+  // since the previous write are carried over from that archive without
+  // re-DEFLATE (~5× faster autosave on layer-heavy documents; measured in
+  // @atlasdraw/data). Unchanged detection is string comparison, so a stale
+  // or cross-document cache can only cost time, never correctness. Shared by
+  // save() and saveToDisk(), which is safe because enqueueWrite serializes
+  // every write.
+  const writeCache = new AtlasdrawWriteCache();
+
   // Single-flight write chain: disk save MUST wait for the in-flight auto-save
   // (no parallel writes to IDB+disk competing for the same doc).
   let writeChain: Promise<unknown> = Promise.resolve();
@@ -237,7 +251,7 @@ export function createPersistenceStore(
     // capture and we'd never observe the race.
     const seqAtStart = dirtySeq;
     return enqueueWrite(async () => {
-      const blob = await write(doc);
+      const blob = await write(doc, { cache: writeCache });
       const stored = await blobToStored(blob);
       const database = await db();
       await database.put(STORE, stored, KEY_CURRENT);
@@ -354,7 +368,7 @@ export function createPersistenceStore(
 
   const saveToDisk = async (doc: AtlasdrawDocument): Promise<void> => {
     return enqueueWrite(async () => {
-      const blob = await write(doc);
+      const blob = await write(doc, { cache: writeCache });
       // The document names its own file. This module stays framework-free
       // (see usePersistenceStore's header), so the title arrives on the doc
       // rather than by reaching into the title store.
