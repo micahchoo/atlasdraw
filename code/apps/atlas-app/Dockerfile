@@ -30,13 +30,7 @@ RUN yarn workspace @atlasdraw/atlas-app build
 # --- runtime stage ---
 FROM nginx:alpine AS runtime
 COPY --from=build /repo/code/apps/atlas-app/dist /usr/share/nginx/html
-# SPA fallback: serve index.html for any path that isn't a real file.
-RUN printf '%s\n' \
-    'server {' \
-    '  listen 3000;' \
-    '  root /usr/share/nginx/html;' \
-    '  index index.html;' \
-    '  location / { try_files $uri $uri/ /index.html; }' \
-    '  location /data/ { add_header Cache-Control "public, max-age=2592000"; }' \
-    '}' > /etc/nginx/conf.d/default.conf
+# Serving policy (SPA fallback + cache classes) lives in a real conf file, not
+# a printf: the Cache-Control values are reviewable and greppable there.
+COPY code/apps/atlas-app/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 3000

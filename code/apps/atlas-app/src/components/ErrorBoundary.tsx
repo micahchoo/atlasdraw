@@ -10,6 +10,7 @@
 
 import React, { Component } from "react";
 
+import { dismissBootShell } from "../bootShell";
 import styles from "../styles/ErrorBoundary.module.css";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,11 @@ export class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("ErrorBoundary caught:", error, info.componentStack);
+    // A route chunk that fails to load never mounts, so the normal dismissal
+    // in App.tsx never fires and the boot shell would sit on top of this
+    // crash screen — a frozen silhouette, the white-screen-of-death repainted
+    // in vellum. Clear it here so the error is actually visible.
+    dismissBootShell();
   }
 
   handleReload = () => {

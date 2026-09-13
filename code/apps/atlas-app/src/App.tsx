@@ -18,16 +18,36 @@
 //   /billing             → BillingPage (managed-mode upgrade page; A13a)
 //   anything else        → MapEditor (the editor)
 
+import { Suspense, lazy, useEffect } from "react";
+
+import { dismissBootShell } from "./bootShell";
 import { AriaAnnouncer } from "./components/AriaAnnouncer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ToastProvider";
-import { BillingPage } from "./components/BillingPage";
-import { MapEditor } from "./components/MapEditor";
-import { ShareView } from "./components/ShareView";
-import { EmbedView } from "./components/EmbedView";
 import { getAppConfig } from "./config/app-config";
 import { createHttpStorageClient } from "./services/createHttpStorageClient";
 import { resolveWorkspaceFromEnv } from "./state/workspace";
+
+// The four route roots load on demand. Before this split every visitor
+// downloaded all four in one 4.3 MB entry chunk: an /embed iframe pulled the
+// whole editor, and an editor visitor pulled BillingPage and both read-only
+// views. Exactly one of these ever mounts per page load.
+//
+// `.then(m => ({ default: ... }))` because each module exports a NAMED
+// component and React.lazy resolves `default` only. Keep the named exports —
+// the test suite mocks these modules by name.
+const BillingPage = lazy(() =>
+  import("./components/BillingPage").then((m) => ({ default: m.BillingPage })),
+);
+const MapEditor = lazy(() =>
+  import("./components/MapEditor").then((m) => ({ default: m.MapEditor })),
+);
+const ShareView = lazy(() =>
+  import("./components/ShareView").then((m) => ({ default: m.ShareView })),
+);
+const EmbedView = lazy(() =>
+  import("./components/EmbedView").then((m) => ({ default: m.EmbedView })),
+);
 
 // India default viewport — matches both the maintainer's interest area and
 // the world-low-zoom.pmtiles archive (zoom 0-6 global coverage). Per-user
@@ -101,12 +121,28 @@ function pickView() {
   return <MapEditor initialView={INITIAL_VIEW} />;
 }
 
+function BootShellDismiss(): null {
+  useEffect(() => {
+    dismissBootShell();
+  }, []);
+  return null;
+}
+
 export function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
         <div style={{ position: "relative", width: "100%", height: "100%" }}>
-          {pickView()}
+          {/* fallback={null} deliberately: the boot shell painted by
+              index.html is still on screen underneath and stays there until
+              the route mounts (see bootShell.ts). A fallback here would
+              replace that shell with a second, different blank.
+              BootShellDismiss is a SIBLING of the route inside the boundary,
+              so it mounts only once the route chunk has resolved. */}
+          <Suspense fallback={null}>
+            {pickView()}
+            <BootShellDismiss />
+          </Suspense>
           {/* Phase 6 A14b — single hidden aria-live region for screen-reader
               announcements. See components/AriaAnnouncer.tsx. */}
           <AriaAnnouncer />

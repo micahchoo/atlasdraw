@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import path from "path";
 import fs from "fs";
+import zlib from "zlib";
 
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
@@ -127,6 +128,75 @@ const copyPublicAssetsPlugin = {
   },
 };
 
+// Rank 1 of docs/performance/boot-payload-audit.md. The nginx runtime stage
+// serves these siblings with `gzip_static on` — a client that reaches nginx
+// without Caddy in front used to download the 4.3 MB entry chunk RAW.
+//
+// gzip only, deliberately. Brotli-11 would save a further ~270 KB on the
+// entry chunk, but nothing in this repo can serve a `.br`: nginx:alpine has
+// no ngx_brotli, Caddy reverse-proxies rather than serving files, and Vercel
+// and GitHub Pages compress on their own and ignore siblings. Emitting `.br`
+// today would be building for no consumer. Revisit if static serving moves
+// to Caddy's file_server.
+//
+// Runs in closeBundle AFTER copyPublicAssetsPlugin, so it also catches
+// places-index.json. Binary archives never match EXTENSIONS, which is what
+// keeps `.pmtiles` uncompressed and therefore still range-requestable.
+const PRECOMPRESS_EXTENSIONS = new Set([
+  ".js",
+  ".css",
+  ".html",
+  ".svg",
+  ".json",
+]);
+const PRECOMPRESS_MIN_BYTES = 1024;
+const precompressPlugin = {
+  name: "atlasdraw-precompress",
+  apply: "build" as const,
+  closeBundle() {
+    const distDir = path.resolve(__dirname, "dist");
+    if (!fs.existsSync(distDir)) {
+      return;
+    }
+    let files = 0;
+    let raw = 0;
+    let gz = 0;
+    const walk = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!PRECOMPRESS_EXTENSIONS.has(path.extname(entry.name))) {
+          continue;
+        }
+        const source = fs.readFileSync(full);
+        if (source.byteLength < PRECOMPRESS_MIN_BYTES) {
+          continue;
+        }
+        const compressed = zlib.gzipSync(source, { level: 9 });
+        // A sibling bigger than the original would make gzip_static a
+        // pessimization for that file. Already-compressed payloads hit this.
+        if (compressed.byteLength >= source.byteLength) {
+          continue;
+        }
+        fs.writeFileSync(`${full}.gz`, compressed);
+        files += 1;
+        raw += source.byteLength;
+        gz += compressed.byteLength;
+      }
+    };
+    walk(distDir);
+    const mb = (n: number): string => (n / 1048576).toFixed(1);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[atlasdraw] precompressed ${String(files)} files: ` +
+        `${mb(raw)} MB -> ${mb(gz)} MB gzip`,
+    );
+  },
+};
+
 export default defineConfig({
   base: BASE,
   define: {
@@ -134,7 +204,12 @@ export default defineConfig({
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(GIT_HASH),
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  plugins: [react(), pmtilesNotFoundPlugin, copyPublicAssetsPlugin] as any,
+  plugins: [
+    react(),
+    pmtilesNotFoundPlugin,
+    copyPublicAssetsPlugin,
+    precompressPlugin,
+  ] as any,
   build: {
     // See copyPublicAssetsPlugin — selective replacement for the blanket
     // public/ copy that dragged a 4.9 GB local archive through dist/.

@@ -19,6 +19,8 @@
  */
 
 import React, {
+  Suspense,
+  lazy,
   useState,
   useEffect,
   useMemo,
@@ -126,9 +128,7 @@ import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
-import { AboutDialog } from "./AboutDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
-import { MaputnikDialog } from "./MaputnikDialog";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
@@ -143,8 +143,8 @@ import { QuickActions } from "./QuickActions";
 import { LayerPanel } from "./LayerPanel";
 import { useAnnounce } from "./AriaAnnouncer";
 import { OnboardingTips, useOnboarding } from "./OnboardingTips";
-import { SettingsDialog } from "./SettingsDialog";
-import { ExportDialog, type ExportFormat } from "./ExportDialog";
+
+import type { ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
 import type { RasterCorners } from "../state/layerRegistry";
@@ -152,6 +152,26 @@ import type { RasterCorners } from "../state/layerRegistry";
 import type maplibregl from "maplibre-gl";
 
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+
+// Four modal dialogs, every one behind a click and already conditionally
+// rendered. Loading them eagerly put their whole dependency tree — pdf-lib
+// most of all, reached through ExportDialog -> lib/print-pdf — into the boot
+// chunk of a user who may never open Export. Each render site below carries
+// its own <Suspense fallback={null}>: a modal that appears a frame later is
+// invisible to the user, and a spinner over a dialog that has not opened yet
+// would be worse than nothing.
+const AboutDialog = lazy(() =>
+  import("./AboutDialog").then((m) => ({ default: m.AboutDialog })),
+);
+const MaputnikDialog = lazy(() =>
+  import("./MaputnikDialog").then((m) => ({ default: m.MaputnikDialog })),
+);
+const SettingsDialog = lazy(() =>
+  import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })),
+);
+const ExportDialog = lazy(() =>
+  import("./ExportDialog").then((m) => ({ default: m.ExportDialog })),
+);
 
 // Ray-casting point-in-polygon test on projected (screen) coordinates. Used by
 // the map-click handler to hit-test raster layers, whose corners are
@@ -1444,28 +1464,34 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 typeof window !== "undefined" ? window.location.origin : "";
               const activeStyleUrl = `${origin}/styles/${styleFile}`;
               return (
-                <MaputnikDialog
-                  activeStyleUrl={activeStyleUrl}
-                  maputnikUrl={getAppConfig().maputnikUrl}
-                  onCloseRequest={() => setMaputnikOpen(false)}
-                />
+                <Suspense fallback={null}>
+                  <MaputnikDialog
+                    activeStyleUrl={activeStyleUrl}
+                    maputnikUrl={getAppConfig().maputnikUrl}
+                    onCloseRequest={() => setMaputnikOpen(false)}
+                  />
+                </Suspense>
               );
             })()}
 
           {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
           picker so MainMenu auto-close doesn't unmount it. */}
           {showAboutDialog && (
-            <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
+            <Suspense fallback={null}>
+              <AboutDialog onCloseRequest={() => setShowAboutDialog(false)} />
+            </Suspense>
           )}
 
           {/* Settings — tabbed modal replacing standalone BasemapPickerDialog. */}
           {showSettings && (
-            <SettingsDialog
-              activeBasemapId={activeBasemapId}
-              onBasemapChange={setActiveBasemapId}
-              onCloseRequest={() => setShowSettings(false)}
-              workspaceId={activeWorkspaceId ?? undefined}
-            />
+            <Suspense fallback={null}>
+              <SettingsDialog
+                activeBasemapId={activeBasemapId}
+                onBasemapChange={setActiveBasemapId}
+                onCloseRequest={() => setShowSettings(false)}
+                workspaceId={activeWorkspaceId ?? undefined}
+              />
+            </Suspense>
           )}
 
           {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw).
@@ -1474,16 +1500,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           to legend shape: annotation entries have no color of their own → use
           a neutral grey; data layers carry style.fillColor. */}
           {exportDialogFormat && (
-            <ExportDialog
-              initialFormat={exportDialogFormat}
-              onCloseRequest={() => setExportDialogFormat(null)}
-              onExportPNG={handleExportPNG}
-              onExportGeoJSON={handleExportGeoJSON}
-              onExportAtlasdraw={handleExportAtlasdraw}
-              getMapImageDataUrl={getMapImageDataUrl}
-              getCameraRotationDeg={getCameraRotationDeg}
-              getLegendEntries={getLegendEntries}
-            />
+            <Suspense fallback={null}>
+              <ExportDialog
+                initialFormat={exportDialogFormat}
+                onCloseRequest={() => setExportDialogFormat(null)}
+                onExportPNG={handleExportPNG}
+                onExportGeoJSON={handleExportGeoJSON}
+                onExportAtlasdraw={handleExportAtlasdraw}
+                getMapImageDataUrl={getMapImageDataUrl}
+                getCameraRotationDeg={getCameraRotationDeg}
+                getLegendEntries={getLegendEntries}
+              />
+            </Suspense>
           )}
 
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready

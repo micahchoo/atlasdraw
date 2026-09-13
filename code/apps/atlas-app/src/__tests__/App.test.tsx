@@ -5,6 +5,13 @@
 // MapEditor (default) and ShareView (`/m...` paths). We mock both children
 // down to sentinels so we don't need the full Excalidraw + MapLibre stack
 // in jsdom; the test is purely about routing.
+//
+// Every assertion is async because App.tsx loads the route roots through
+// React.lazy (see the code-splitting comment there). `findByTestId` waits for
+// Suspense to resolve; a synchronous `queryByTestId` would see the null
+// fallback and pass or fail for the wrong reason. Check the POSITIVE route
+// first, then the negative — before the chunk resolves every sentinel is
+// absent, so a bare negative assertion proves nothing.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -48,43 +55,43 @@ describe("App path routing", () => {
     cleanup();
   });
 
-  it("renders MapEditor on the root path", () => {
+  it("renders MapEditor on the root path", async () => {
     setLocation("/", "");
     render(<App />);
-    expect(screen.queryByTestId("route-map-editor")).not.toBeNull();
+    expect(await screen.findByTestId("route-map-editor")).not.toBeNull();
     expect(screen.queryByTestId("route-share-view")).toBeNull();
   });
 
-  it("renders ShareView for /m#v1:<encoded> (hash share)", () => {
+  it("renders ShareView for /m#v1:<encoded> (hash share)", async () => {
     setLocation("/m", "#v1:abc123");
     render(<App />);
-    expect(screen.queryByTestId("route-share-view")).not.toBeNull();
+    expect(await screen.findByTestId("route-share-view")).not.toBeNull();
     expect(screen.queryByTestId("route-map-editor")).toBeNull();
   });
 
-  it("renders ShareView for /m/<token> (upload share)", () => {
+  it("renders ShareView for /m/<token> (upload share)", async () => {
     setLocation("/m/abcdefghij1234567890K", "");
     render(<App />);
-    expect(screen.queryByTestId("route-share-view")).not.toBeNull();
+    expect(await screen.findByTestId("route-share-view")).not.toBeNull();
   });
 
-  it("renders MapEditor for /m without the v1: hash prefix", () => {
+  it("renders MapEditor for /m without the v1: hash prefix", async () => {
     setLocation("/m", "#something-else");
     render(<App />);
-    expect(screen.queryByTestId("route-map-editor")).not.toBeNull();
+    expect(await screen.findByTestId("route-map-editor")).not.toBeNull();
   });
 
-  it("renders BillingPage on /billing", () => {
+  it("renders BillingPage on /billing", async () => {
     setLocation("/billing", "");
     render(<App />);
-    expect(screen.queryByTestId("route-billing-page")).not.toBeNull();
+    expect(await screen.findByTestId("route-billing-page")).not.toBeNull();
     expect(screen.queryByTestId("route-map-editor")).toBeNull();
   });
 
-  it("threads ?workspaceId= into BillingPage so the upgrade survives the hop", () => {
+  it("threads ?workspaceId= into BillingPage so the upgrade survives the hop", async () => {
     setLocation("/billing", "", "?workspaceId=ws-alpha");
     render(<App />);
-    const node = screen.getByTestId("route-billing-page");
+    const node = await screen.findByTestId("route-billing-page");
     expect(node.getAttribute("data-workspace-id")).toBe("ws-alpha");
   });
 });

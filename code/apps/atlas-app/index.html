@@ -19,9 +19,46 @@
         height: 100%;
         overflow: hidden;
       }
+
+      /* Boot shell — painted before any JS runs. See src/bootShell.ts for the
+         lifecycle and why it sits outside #root. Colours are literals, not
+         var(--ad-*): tokens.css arrives in the 315 KB CSS bundle, and a shell
+         that waits for that bundle is not a shell. Source of truth for these
+         three values is src/styles/tokens.css (--ad-surface, --ad-surface-
+         raised, --ad-surface-inset) — change them together. */
+      #boot-shell {
+        position: absolute;
+        inset: 0;
+        background: #f2e8d5;
+      }
+      #boot-shell .rail {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 48px;
+        background: #e8ddc8;
+      }
+      #boot-shell .toolbar {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(420px, 60vw);
+        height: 44px;
+        border-radius: 10px;
+        background: #faf6ee;
+      }
     </style>
   </head>
   <body>
+    <!-- Removed by dismissBootShell() once the route mounts, or when
+         ErrorBoundary catches. aria-hidden: it is decoration, and a screen
+         reader announcing an empty silhouette would be noise. -->
+    <div id="boot-shell" aria-hidden="true">
+      <div class="rail"></div>
+      <div class="toolbar"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
