@@ -32,7 +32,7 @@ import type {
 } from "@atlasdraw/basemap";
 
 import { dispatch, useDocument } from "../state/document";
-import { validateLayerStyle } from "../lib/mapOverlays";
+import { validateLayerStyle } from "../lib/layerStyle";
 import { useOverlayReport } from "../hooks/useMapOverlays";
 
 import styles from "../styles/StylePanel.module.css";

@@ -23,6 +23,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useMapOverlays } from "../useMapOverlays";
 import { loadDocument } from "../../state/documentIO";
+import { PNG_BYTES, admittedOf } from "../../state/__tests__/fixtures/admitted";
 import { useSceneBinding, useSceneStore } from "../../state/scene";
 import { annotationRows } from "../../state/annotations";
 import {
@@ -204,10 +205,11 @@ describe("raster layers follow the registry onto the map", () => {
       scene: [],
       layers: new Map(),
       styleRef: {},
-      files: new Map([["img-b", new Blob(["png-b"])]]),
+      files: new Map([["img-b", new Blob([PNG_BYTES])]]),
     };
+    const admittedB = await admittedOf(docB);
     await act(async () => {
-      await loadDocument(docB, api);
+      await loadDocument(admittedB, api);
     });
 
     expect({

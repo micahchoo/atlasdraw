@@ -329,6 +329,7 @@ const REFUSALS: ReadonlySet<RoomStatus> = new Set<RoomStatus>([
   "limited",
   "no-space",
   "unavailable",
+  "damaged",
 ]);
 
 /** Why the editor cannot be in the room, in the user's words; null when it can. */
@@ -364,6 +365,8 @@ function refusalText(
       return "The server has no space for shared maps. Tell the person who runs it.";
     case "unavailable":
       return room.reason ?? "Shared maps are not available on this page.";
+    case "damaged":
+      return room.reason ?? "This shared map is damaged and cannot open.";
     default:
       return null;
   }

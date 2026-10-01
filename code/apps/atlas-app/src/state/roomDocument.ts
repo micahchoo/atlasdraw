@@ -79,9 +79,14 @@ function maps(doc: Y.Doc) {
   };
 }
 
-/** True once a room has been made: its world frame is written. */
+/**
+ * True once a room has been made: its id or its frame is written. A room
+ * that has an id and lost its frame is made and damaged; a joiner must not
+ * make it again with a new frame.
+ */
 export function roomIsMade(doc: Y.Doc): boolean {
-  return maps(doc).meta.get("world") !== undefined;
+  const { meta } = maps(doc);
+  return meta.has("world") || meta.has("id");
 }
 
 /** A Blob per image record, the same Blob for as long as the record stays. */
@@ -438,12 +443,11 @@ export function bindRoomDocument(
    */
   let skipped = read.skipped;
   const camera: Camera = checkCamera(m.meta.get("camera")) ?? DEFAULT_CAMERA;
-  let world = checkWorld(m.meta.get("world")) as WorldFrame | null;
+  const world = checkWorld(m.meta.get("world")) as WorldFrame | null;
   if (!world) {
-    // Every element is measured in the frame. Without a valid one the
-    // drawing cannot be placed; the default keeps the editor working.
-    rejectFrom(doc, writerOfKey(m.meta, "world"), "world frame");
-    world = documentFrame(DEFAULT_CAMERA.center[0], DEFAULT_CAMERA.center[1]);
+    // Every element is measured in the frame. joinRoom refuses a room
+    // without a valid one (documentGate.ts#worldProblem) before it binds.
+    throw new Error("bindRoomDocument: the room has no valid world frame");
   }
   const document = createDocument(
     {

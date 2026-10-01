@@ -21,9 +21,13 @@ import * as persistenceModule from "../state/persistence";
 import * as documentIO from "../state/documentIO";
 import * as roomModule from "../state/room";
 import * as shareModule from "../state/loadShareDocument";
+import { savedDocument } from "../state/__tests__/fixtures/documentWorld";
+
 import * as appConfigModule from "../config/app-config";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
+
+import type { Admitted } from "../state/documentGate";
 
 import type { PersistenceStore } from "../state/persistence";
 
@@ -50,14 +54,15 @@ const BASE_CONFIG: AppConfig = {
   gitHash: "unknown",
 };
 
-const FAKE_DOC = {
-  manifest: {
-    id: "doc-1",
-    title: "Test",
-    layers: [{ id: "l1" }],
-  },
-  scene: [{ id: "el1" }],
-} as unknown as AtlasdrawDocument;
+const FAKE_DOC: AtlasdrawDocument = savedDocument();
+
+/** loadDocument's first argument: FAKE_DOC, as the gate admitted it. */
+const ADMITTED_FAKE_DOC = expect.objectContaining({
+  ok: true,
+  doc: expect.objectContaining({
+    manifest: expect.objectContaining({ id: FAKE_DOC.manifest.id }),
+  }),
+});
 
 function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
   const dirtyListeners = new Set<() => void>();
@@ -250,7 +255,7 @@ describe("usePersistenceWiring", () => {
 
     await waitFor(() => {
       expect(hydrateSpy).toHaveBeenCalledWith(
-        FAKE_DOC,
+        ADMITTED_FAKE_DOC,
         fakeExcalidrawAPI,
         expect.anything(),
       );
@@ -275,7 +280,15 @@ describe("usePersistenceWiring", () => {
       } as AtlasdrawDocument;
       const loadShared = vi
         .spyOn(shareModule, "loadShareDocument")
-        .mockResolvedValue({ kind: "ready", doc: shared });
+        .mockResolvedValue({
+          kind: "ready",
+          admitted: {
+            ok: true,
+            doc: shared,
+            dropped: { elements: 0, layers: 0, files: 0 },
+            repaired: { styles: 0 },
+          } as unknown as Admitted,
+        });
       const open = vi
         .spyOn(documentIO, "loadDocument")
         .mockResolvedValue({} as never);
@@ -290,7 +303,7 @@ describe("usePersistenceWiring", () => {
       await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
       expect(loadShared).toHaveBeenCalledWith({ hash: "v2:AAAA" });
       expect(store.load).not.toHaveBeenCalled();
-      const opened = open.mock.calls[0][0];
+      const opened = open.mock.calls[0][0].doc;
       expect(opened.manifest.title).toBe("Wells");
       expect(opened.manifest.id).not.toBe("shared-1");
       expect(session.persistence.getState().isDirty).toBe(true);
@@ -320,7 +333,7 @@ describe("usePersistenceWiring", () => {
 
       await waitFor(() =>
         expect(open).toHaveBeenCalledWith(
-          FAKE_DOC,
+          ADMITTED_FAKE_DOC,
           fakeExcalidrawAPI,
           expect.anything(),
         ),

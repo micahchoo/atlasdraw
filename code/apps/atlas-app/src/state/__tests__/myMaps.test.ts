@@ -64,6 +64,9 @@ const savedFile = (
       y: 0,
       width: 10,
       height: 10,
+      version: 1,
+      versionNonce: 1,
+      isDeleted: false,
     },
   ] as unknown as AtlasdrawDocument["scene"],
   layers: new Map(),
@@ -384,7 +387,7 @@ describe("restoreServerBackup", () => {
 
     expect(currentDocument().snapshot().title).toBe("Local");
     expect(notify.error).toHaveBeenCalledWith(
-      "The server backup is damaged. Your map did not change.",
+      expect.stringMatching(/^The server backup cannot open: .*did not change/),
     );
   });
 });

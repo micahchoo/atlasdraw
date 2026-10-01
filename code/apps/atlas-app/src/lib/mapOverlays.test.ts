@@ -12,11 +12,11 @@ import { labelLayerId, outlineLayerId } from "@atlasdraw/basemap";
 import { createDocument } from "../state/document";
 
 import { FakeMapLibre } from "./__tests__/fixtures/fakeMapLibre";
+import { validateLayerStyle } from "./layerStyle";
 import {
   createMapOverlays,
   labelFontOf,
   overlaySpec,
-  validateLayerStyle,
   type OverlaySpec,
   type StyleTarget,
 } from "./mapOverlays";

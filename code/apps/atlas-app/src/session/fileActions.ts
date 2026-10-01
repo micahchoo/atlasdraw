@@ -14,9 +14,9 @@ import {
   liveCamera,
   loadDocument,
   markSavedToFile,
-  refusedMessage,
   toFile,
 } from "../state/documentIO";
+import { admit } from "../state/documentGate";
 import { restoreServerBackup } from "../state/myMaps";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
@@ -153,10 +153,16 @@ async function openInPlace(
     if (hasUnsavedWork(s.store.getState().doc) && !(await confirmReplace())) {
       return;
     }
-    const loaded = await produce(liveCamera(map));
-    if (!loaded) {
+    const produced = await produce(liveCamera(map));
+    if (!produced) {
       return;
     }
+    const admitted = await admit(produced, "file");
+    if (!admitted.ok) {
+      notify?.error(`Couldn't open the file: ${admitted.reason}`);
+      return;
+    }
+    const loaded = admitted.doc;
     // The open map's last edits may still wait for the autosave delay. Keep
     // them in its own slot before the new map takes the editor; a failure
     // throws, and nothing opens.
@@ -164,9 +170,9 @@ async function openInPlace(
     if (persistence.persistenceStore?.isDirty()) {
       await persistence.forceSave();
     }
-    const opened = await loadDocument(loaded, api, {
+    const opened = await loadDocument(admitted, api, {
       map,
-      onRefused: (n) => notify?.error(refusedMessage(n)),
+      onDropped: (message) => notify?.error(message),
     });
     if (!opened) {
       return;

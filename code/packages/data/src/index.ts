@@ -33,6 +33,7 @@ export {
   CameraSchema,
   LayerEntrySchema,
   PermissionsSchema,
+  SavedCommentSchema,
   ULIDSchema,
   WorldFrameSchema,
 } from "./manifest-schema";
@@ -59,9 +60,11 @@ export {
 export type { MigrationStep, StoredDocument } from "./migrations";
 
 // .atlasdraw zip read/write.
+export type { ReadOptions } from "./atlasdraw";
 export {
   write,
   read,
+  parseManifest,
   AtlasdrawFormatError,
   AtlasdrawWriteCache,
 } from "./atlasdraw";

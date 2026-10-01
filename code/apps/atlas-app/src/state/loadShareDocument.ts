@@ -8,16 +8,11 @@
 //                          migrations.
 //   - a 21-char token   — the `.atlasdraw` bytes over HTTP.
 //
-// Every shape goes through the format migrations and the manifest schema
-// before a viewer sees it.
+// Every shape goes through the document gate (documentGate.ts#admit), so a
+// viewer meets the same checks as a file the user opens.
 
 import LZString from "lz-string";
-import {
-  ManifestSchema,
-  base64UrlToUint8Array,
-  migrate,
-  type AtlasdrawDocument,
-} from "@atlasdraw/data";
+import { base64UrlToUint8Array } from "@atlasdraw/data";
 
 import {
   createHttpStorageClient,
@@ -26,61 +21,42 @@ import {
 } from "../services/createHttpStorageClient";
 import { getAppConfig } from "../config/app-config";
 
-import { decode } from "./documentIO";
+import { admit, type Admitted } from "./documentGate";
 
 import type { SharedMap } from "../routes";
 
 export type ShareLoadResult =
-  | { kind: "ready"; doc: AtlasdrawDocument }
+  | { kind: "ready"; admitted: Admitted }
   | { kind: "not-found" }
   | { kind: "expired" }
   | { kind: "error"; message: string };
 
-/** Decode a hash fragment into a document. Rejects bad input. */
-export async function decodeHashDoc(hash: string): Promise<AtlasdrawDocument> {
+const CORRUPTED = "Corrupted share-link payload.";
+
+/** Decode a hash fragment into an admitted document. Rejects bad input. */
+export async function decodeHashDoc(hash: string): Promise<Admitted> {
   const stripped = hash.startsWith("#") ? hash.slice(1) : hash;
+  let input: unknown;
   if (stripped.startsWith("v2:")) {
-    const bytes = base64UrlToUint8Array(stripped.slice("v2:".length));
-    const result = await decode(new Blob([bytes as unknown as BlobPart]));
-    if (!result.ok) {
-      throw new Error("Corrupted share-link payload.");
+    input = base64UrlToUint8Array(stripped.slice("v2:".length));
+  } else if (stripped.startsWith("v1:")) {
+    const json = LZString.decompressFromBase64(stripped.slice("v1:".length));
+    if (!json) {
+      throw new Error(CORRUPTED);
     }
-    return result.file;
-  }
-  if (!stripped.startsWith("v1:")) {
+    try {
+      input = JSON.parse(json);
+    } catch {
+      throw new Error(CORRUPTED);
+    }
+  } else {
     throw new Error("Unsupported share-link version.");
   }
-  const json = LZString.decompressFromBase64(stripped.slice("v1:".length));
-  if (!json) {
-    throw new Error("Corrupted share-link payload.");
+  const result = await admit(input, "share");
+  if (!result.ok) {
+    throw new Error(`${CORRUPTED} ${result.reason}`);
   }
-  const parsed = JSON.parse(json) as { manifest?: unknown; scene?: unknown };
-  const manifest = parsed.manifest;
-  const scene = Array.isArray(parsed.scene) ? parsed.scene : [];
-  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
-    throw new Error("Corrupted share-link payload.");
-  }
-  let migrated: ReturnType<typeof migrate>;
-  try {
-    migrated = migrate({
-      manifest: manifest as Record<string, unknown>,
-      scene,
-    });
-  } catch {
-    // No version, or one this build cannot read: not a document it can show.
-    throw new Error("Corrupted share-link payload.");
-  }
-  const valid = ManifestSchema.safeParse(migrated.manifest);
-  if (!valid.success) {
-    throw new Error("Corrupted share-link payload.");
-  }
-  return {
-    manifest: valid.data,
-    scene: migrated.scene as AtlasdrawDocument["scene"],
-    layers: new Map(),
-    styleRef: {},
-    files: new Map(),
-  };
+  return result;
 }
 
 /** Resolve a shared map. A null map is a damaged link. */
@@ -90,7 +66,7 @@ export async function loadShareDocument(
 ): Promise<ShareLoadResult> {
   if (map && "hash" in map) {
     try {
-      return { kind: "ready", doc: await decodeHashDoc(map.hash) };
+      return { kind: "ready", admitted: await decodeHashDoc(map.hash) };
     } catch (err) {
       return {
         kind: "error",
@@ -111,11 +87,11 @@ export async function loadShareDocument(
     if (!buf) {
       return { kind: "not-found" };
     }
-    const result = await decode(new Blob([buf]));
+    const result = await admit(new Blob([buf]), "share");
     if (!result.ok) {
-      return { kind: "error", message: result.error.message };
+      return { kind: "error", message: result.reason };
     }
-    return { kind: "ready", doc: result.file };
+    return { kind: "ready", admitted: result };
   } catch (err) {
     if (err instanceof ShareExpiredError) {
       return { kind: "expired" };

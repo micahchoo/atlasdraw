@@ -16,6 +16,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import { currentDocument, followDocument } from "../state/document";
 import { liveCamera, loadDocument, toFile } from "../state/documentIO";
 import { copyOfSharedMap } from "../state/myMaps";
+import { admit } from "../state/documentGate";
 import { isRoomDocument } from "../state/room";
 
 import type { Conflict, Lease } from "../state/documentStore";
@@ -69,7 +70,12 @@ export async function answerConflict(
   if (!api) {
     return;
   }
-  const opened = await loadDocument(copyOfSharedMap(file), api, { map });
+  const copy = await admit(copyOfSharedMap(file), "file");
+  if (!copy.ok) {
+    s.notify.error(`The map could not be kept as a copy: ${copy.reason}`);
+    return;
+  }
+  const opened = await loadDocument(copy, api, { map });
   if (!opened) {
     return;
   }
