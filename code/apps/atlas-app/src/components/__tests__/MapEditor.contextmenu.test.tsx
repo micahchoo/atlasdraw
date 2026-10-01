@@ -287,8 +287,8 @@ vi.mock("../../hooks/useCameraBridge", () => ({
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
-vi.mock("../../hooks/useLayerRegistrySync", () => ({
-  useLayerRegistrySync: vi.fn(),
+vi.mock("../../hooks/useMapOverlays", () => ({
+  useMapOverlays: vi.fn(),
 }));
 vi.mock("../../hooks/useToolState", () => ({
   useToolState: () => ({ isDrawingMode: false }),
@@ -436,12 +436,12 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
     expect(arg.fc.type).toBe("FeatureCollection");
     expect(arg.fc.features[0].geometry.type).toBe("Polygon");
 
-    expect(mockMap.addSource).toHaveBeenCalledTimes(1);
-    expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
-
+    // The element is deleted as an undoable step: a tombstone, not a filter.
     expect(updateSceneSpy).toHaveBeenCalledTimes(1);
     const sceneArg = updateSceneSpy.mock.calls[0][0];
-    expect(sceneArg.elements).toEqual([]);
+    expect(sceneArg.elements).toEqual([
+      expect.objectContaining({ id: "anno-1", isDeleted: true }),
+    ]);
   });
 
   it("unmount invokes the unregister fn returned by registerContextMenuItem", async () => {

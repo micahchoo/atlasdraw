@@ -4,11 +4,17 @@
 // Mirrors AboutDialog: inline styles, root-level mount, no @excalidraw/Dialog
 // dependency, fully testable in jsdom outside the Excalidraw provider tree.
 //
-// Phase 5 amendment: the dialog now opens to a mode picker — "Share read-only"
-// vs "Collaborate" — instead of auto-firing useShareLink.generate(). Read-only
-// preserves the existing hash/upload heuristic inside useShareLink (the user
-// only picks the user-facing capability; hash vs upload remains an internal
-// size-based decision). Collaborate goes through generateRoomKey() + CollabState.
+// The dialog opens to a mode picker — "Share read-only" vs "Collaborate".
+// Read-only keeps the hash/upload choice inside useShareLink (the user picks
+// the capability; hash vs upload is a size-based decision). An upload link
+// reads the document's server map, so a save updates the link and every
+// embed; it lasts until the owner stops it, unless the owner chose an
+// expiry. Collaborate goes through generateRoomKey() + CollabState.
+//
+// The dialog closes on a press on its backdrop, tested at mousedown on the
+// backdrop element itself. A document-level click test is wrong here: the
+// picker button unmounts while React handles its click, and a detached
+// target is "outside" every panel.
 //
 // Q-P5-2: a `#room:` URL grants write capability — anyone with the link can
 // edit. Existing share URLs (`/m#v2:`, `/m#v1:`, `/m/<token>`) remain read-only via the
@@ -21,6 +27,7 @@ import { generateRoomKey } from "@atlasdraw/protocol";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
+import { getAppConfig } from "../config/app-config";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 
 import { FocusTrap } from "./FocusTrap";
@@ -43,16 +50,40 @@ export interface ShareDialogProps {
 type DialogView =
   | { kind: "picker" }
   | { kind: "readonly-loading" }
-  | { kind: "readonly-success"; url: string; mode: ShareMode }
+  | {
+      kind: "readonly-success";
+      url: string;
+      mode: ShareMode;
+      token: string | null;
+      expiresAt: string | null;
+    }
+  | { kind: "revoked" }
   | { kind: "collab-loading" }
   | { kind: "collab-success"; url: string }
-  | { kind: "error"; message: string };
+  /** `message` null: the share hook's own error says what went wrong. */
+  | { kind: "error"; message: string | null };
 
-const READONLY_MODE_HINT: Record<ShareMode, string> = {
-  hash: "Tiny map — link is fully self-contained (no server lookup).",
-  upload:
-    "Uploaded to server; link expires in 7 days. Edits after sharing won't update this link.",
-};
+/** The read-only link's lifetime, as the picker offers it. "" is none. */
+const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "", label: "Until you stop it" },
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+];
+
+const HASH_HINT =
+  "This link holds a copy of the map. Later edits do not change it.";
+
+/** What an upload link does when the map changes, and how long it works. */
+function uploadHint(expiresAt: string | null): string {
+  const updates = getAppConfig().enableBackendPersistence
+    ? "Each save updates this link and every embed made from it."
+    : "Share again to update this link and every embed made from it.";
+  const lasts =
+    expiresAt === null
+      ? "It works until you stop it."
+      : `It stops working on ${new Date(expiresAt).toLocaleDateString()}.`;
+  return `Anyone with this link can view the map. ${updates} ${lasts}`;
+}
 
 // Q-P5-2: this hint text surfaces the write-capability semantics of the
 // collab link to the user. Anyone holding the URL can edit; there is no
@@ -69,7 +100,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<DialogView>({ kind: "picker" });
   const [copied, setCopied] = useState(false);
-  const { generate } = useShareLink({ getDoc, client });
+  const [expiry, setExpiry] = useState("");
+  const {
+    generate,
+    revoke,
+    error: shareError,
+  } = useShareLink({
+    getDoc,
+    client,
+  });
 
   // Escape to close.
   useEffect(() => {
@@ -87,37 +126,22 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onCloseRequest]);
 
-  // Click outside to close.
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onCloseRequest();
-      }
-    };
-    const id = setTimeout(() => {
-      document.addEventListener("click", handleClick);
-    }, 0);
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener("click", handleClick);
-    };
-  }, [onCloseRequest]);
-
   const startReadonly = async () => {
     setView({ kind: "readonly-loading" });
-    const result = await generate();
-    if (result === null) {
-      setView({
-        kind: "error",
-        message: "Failed to generate share link.",
-      });
+    const link = await generate(expiry === "" ? null : Number(expiry));
+    if (link === null) {
+      setView({ kind: "error", message: null });
       return;
     }
-    // useShareLink's internal `mode` state is set synchronously inside
-    // generate() before it returns the URL, but the React state is stale
-    // for our purposes — re-derive from the URL shape.
-    const mode: ShareMode = result.includes("/m#") ? "hash" : "upload";
-    setView({ kind: "readonly-success", url: result, mode });
+    setView({ kind: "readonly-success", ...link });
+  };
+
+  const stopSharing = async (token: string) => {
+    if (await revoke(token)) {
+      setView({ kind: "revoked" });
+    } else {
+      setView({ kind: "error", message: null });
+    }
   };
 
   const startCollab = async () => {
@@ -168,6 +192,11 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         zIndex: 999,
       }}
       data-testid="share-dialog-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          onCloseRequest();
+        }
+      }}
     >
       <FocusTrap>
         <div
@@ -233,9 +262,32 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     marginTop: "2px",
                   }}
                 >
-                  Recipients view a snapshot — no live editing.
+                  Recipients can view the map, not edit it.
                 </div>
               </button>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.75rem",
+                  color: "var(--ad-ink-secondary, #495057)",
+                }}
+              >
+                Read-only link works
+                <select
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value)}
+                  data-testid="share-dialog-expiry"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  {EXPIRY_CHOICES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={startCollab}
@@ -279,6 +331,16 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             </div>
           )}
 
+          {view.kind === "revoked" && (
+            <p
+              data-testid="share-dialog-revoked"
+              role="status"
+              style={{ margin: "0 0 0.75rem 0" }}
+            >
+              This link no longer works. Embeds made from it are blank.
+            </p>
+          )}
+
           {view.kind === "error" && (
             <div
               data-testid="share-dialog-error"
@@ -293,7 +355,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 fontSize: "0.8125rem",
               }}
             >
-              {view.message}
+              {view.message ?? shareError ?? "Failed to generate share link."}
             </div>
           )}
 
@@ -354,8 +416,30 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                     color: "var(--ad-ink-secondary, #495057)",
                   }}
                 >
-                  {READONLY_MODE_HINT[view.mode]}
+                  {view.mode === "hash"
+                    ? HASH_HINT
+                    : uploadHint(view.expiresAt)}
                 </p>
+              )}
+              {view.kind === "readonly-success" && view.token !== null && (
+                <button
+                  type="button"
+                  onClick={() => void stopSharing(view.token!)}
+                  data-testid="share-dialog-revoke"
+                  style={{
+                    margin: "0 0 0.75rem 0",
+                    padding: "5px 12px",
+                    border: "1px solid #c92a2a",
+                    borderRadius: "4px",
+                    background: "transparent",
+                    color: "#c92a2a",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Stop sharing this link
+                </button>
               )}
               {view.kind === "readonly-success" && (
                 <EmbedSnippet shareUrl={currentUrl} />

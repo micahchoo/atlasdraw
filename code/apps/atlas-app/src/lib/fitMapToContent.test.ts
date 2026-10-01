@@ -5,9 +5,12 @@
 
 import { describe, it, expect, vi } from "vitest";
 
+import { documentFrame, toScene } from "@atlasdraw/geo";
+
 import {
   computeFeatureCollectionBounds,
   fitMapToBox,
+  fitMapToContent,
   fitMapToLayer,
 } from "./fitMapToContent";
 
@@ -15,6 +18,45 @@ import type maplibregl from "maplibre-gl";
 import type { FeatureCollection, Geometry } from "geojson";
 
 const makeMap = () => ({ fitBounds: vi.fn() } as unknown as maplibregl.Map);
+
+describe("fitMapToContent", () => {
+  const frame = documentFrame(2, 48);
+  const rect = (west: number, north: number, east: number, south: number) => {
+    const nw = toScene(frame, west, north);
+    const se = toScene(frame, east, south);
+    return {
+      type: "rectangle",
+      x: nw.x,
+      y: nw.y,
+      width: se.x - nw.x,
+      height: se.y - nw.y,
+    };
+  };
+
+  it("returns false and does nothing when the map is not ready", () => {
+    expect(fitMapToContent(null, [rect(2, 49, 3, 48)], frame)).toBe(false);
+  });
+
+  it("returns false with nothing to frame", () => {
+    const map = makeMap();
+    expect(fitMapToContent(map, [], frame)).toBe(false);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it("fits the union of the elements' lng/lat boxes", () => {
+    const map = makeMap();
+    expect(
+      fitMapToContent(map, [rect(2, 49, 3, 48), rect(-1, 47, 0, 46)], frame),
+    ).toBe(true);
+    const [[[west, south], [east, north]]] = (
+      map.fitBounds as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0];
+    expect(west).toBeCloseTo(-1, 9);
+    expect(south).toBeCloseTo(46, 9);
+    expect(east).toBeCloseTo(3, 9);
+    expect(north).toBeCloseTo(49, 9);
+  });
+});
 
 const fc = (
   features: Array<FeatureCollection["features"][number]>,

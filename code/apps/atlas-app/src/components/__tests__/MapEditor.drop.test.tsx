@@ -175,11 +175,8 @@ const mockMap = {
   addLayer: vi.fn(),
   setStyle: vi.fn(),
   // The real MapEditor renders other hooks (useCameraBridge, useMapWheelRouter)
-  // that may probe `map.on / off / project / etc`. `on`/`off`
-  // record into mapHandlers so a test can fire a map event — useBasemapStyle's
-  // post-swap reconcile hangs off `styledata`, and this file mocks
-  // useLayerRegistrySync (below), so firing it is what proves the reconcile
-  // does not live in the mocked module.
+  // that may probe `map.on / off / project / etc`. `on`/`off` record into
+  // mapHandlers so a test can fire a map event.
   on: vi.fn((event: string, handler: () => void) => {
     const list = mapHandlers.get(event) ?? [];
     list.push(handler);
@@ -222,8 +219,8 @@ vi.mock("../../hooks/useCameraBridge", () => ({
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
-vi.mock("../../hooks/useLayerRegistrySync", () => ({
-  useLayerRegistrySync: vi.fn(),
+vi.mock("../../hooks/useMapOverlays", () => ({
+  useMapOverlays: vi.fn(),
 }));
 vi.mock("../../hooks/useToolState", () => ({
   useToolState: () => ({ isDrawingMode: false }),
@@ -270,7 +267,7 @@ beforeEach(() => {
 });
 
 describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
-  it("parses dropped .geojson and registers a data layer + map source/layer", async () => {
+  it("parses dropped .geojson and registers a data layer", async () => {
     const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container } = render(
@@ -310,20 +307,6 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(callArg.label).toBe("test.geojson");
     expect(callArg.fc.type).toBe("FeatureCollection");
     expect(callArg.fc.features).toHaveLength(1);
-
-    expect(mockMap.addSource).toHaveBeenCalledTimes(1);
-    const [sourceId, sourceSpec] = (
-      mockMap.addSource as ReturnType<typeof vi.fn>
-    ).mock.calls[0];
-    expect(sourceId).toBe(callArg.id);
-    expect(sourceSpec).toMatchObject({ type: "geojson" });
-
-    expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
-    const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
-    expect(layerSpec.id).toBe(callArg.id);
-    // Polygon → "fill" (see inferGeometryType in MapEditor.tsx).
-    expect(layerSpec.type).toBe("fill");
   });
 
   it("ignores non-.geojson files (no parse, no registry mutation)", async () => {
@@ -348,8 +331,6 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(registerSpy).not.toHaveBeenCalled();
-    expect(mockMap.addSource).not.toHaveBeenCalled();
-    expect(mockMap.addLayer).not.toHaveBeenCalled();
   });
 
   it("parses a dropped .csv with lat/lng columns and registers a point layer", async () => {
@@ -380,11 +361,8 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(callArg.fc.features).toHaveLength(2);
     expect(callArg.fc.features[0].geometry.type).toBe("Point");
 
-    // Points → "circle" (see inferGeometryType in useDataFileImport.ts).
-    expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
-    const layerSpec = (mockMap.addLayer as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
-    expect(layerSpec.type).toBe("circle");
+    // The coordinate columns become the geometry, not properties.
+    expect(callArg.fc.features[0].properties).toEqual({ name: "City Hall" });
   });
 
   it("surfaces a toast (no layer) for an address-only .csv when no geocoder is configured", async () => {
@@ -409,20 +387,14 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(toast.textContent).toMatch(/CSV import failed/);
     expect(toast.textContent).toMatch(/geocoder/);
     expect(registerSpy).not.toHaveBeenCalled();
-    expect(mockMap.addLayer).not.toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Module-boundary regression. This file — like MapEditor.import/maputnik/
-// contextmenu/collab-presence/layers-toggle — mocks ../../hooks/useLayerRegistrySync
-// down to its hook export. useBasemapStyle used to import reconcileDataLayers
-// from that module, so under this mock it was `undefined`; the only reason no
-// test noticed was that the map stub never fired the event that would have
-// called it. Both halves of that trap are asserted here.
+// A basemap swap applies the style, and the styledata that follows is safe.
 // ---------------------------------------------------------------------------
 
-describe("MapEditor — basemap swap under a mocked useLayerRegistrySync", () => {
+describe("MapEditor — basemap swap", () => {
   it("applies the resolved style and survives the post-swap styledata event", async () => {
     render(
       <ToastProvider>

@@ -8,6 +8,7 @@ import {
   GeoJSONParseError,
   parse,
   requireHomogeneousGeometry,
+  geometryKindOf,
   write,
 } from "./geojson.js";
 
@@ -273,5 +274,65 @@ describe("requireHomogeneousGeometry (T24 / atlasdraw-4142)", () => {
       expect(e).toBeInstanceOf(GeoJSONParseError);
       expect((e as GeoJSONParseError).field).toBe("features[1].geometry.type");
     }
+  });
+});
+
+describe("geometryKindOf", () => {
+  const fc = (
+    geometries: Array<FeatureCollection["features"][number]["geometry"]>,
+  ) =>
+    ({
+      type: "FeatureCollection",
+      features: geometries.map((geometry) => ({
+        type: "Feature",
+        properties: {},
+        geometry,
+      })),
+    } as FeatureCollection);
+
+  it("skips a leading null geometry", () => {
+    expect(
+      geometryKindOf(
+        fc([
+          null as unknown as FeatureCollection["features"][number]["geometry"],
+          {
+            type: "Polygon",
+            coordinates: [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 0],
+              ],
+            ],
+          },
+        ]),
+      ),
+    ).toBe("fill");
+  });
+
+  it("names lines and points", () => {
+    expect(
+      geometryKindOf(
+        fc([
+          {
+            type: "MultiLineString",
+            coordinates: [
+              [
+                [0, 0],
+                [1, 1],
+              ],
+            ],
+          },
+        ]),
+      ),
+    ).toBe("line");
+    expect(geometryKindOf(fc([{ type: "Point", coordinates: [0, 0] }]))).toBe(
+      "circle",
+    );
+  });
+
+  it("gives circle for an empty collection", () => {
+    expect(geometryKindOf(fc([]))).toBe("circle");
   });
 });

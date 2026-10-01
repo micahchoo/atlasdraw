@@ -34,6 +34,7 @@ import React, { useMemo, useState } from "react";
 import type { StyleExpression } from "@atlasdraw/basemap";
 
 import { dispatch, useDocument } from "../state/document";
+import { validateLayerStyle } from "../lib/mapOverlays";
 
 import styles from "../styles/StylePanel.module.css";
 
@@ -77,7 +78,9 @@ function quantileStops(values: number[], count: number): number[] {
     );
     out.push(+sorted[idx].toFixed(6));
   }
-  return out;
+  // Skewed data repeats a value. An interpolation needs strictly ascending
+  // stops, so a repeat is dropped, and the ramp gets fewer stops.
+  return out.filter((v, i) => i === 0 || v !== out[i - 1]);
 }
 
 /**
@@ -124,8 +127,25 @@ export function StylePanel({ layerId }: StylePanelProps) {
     (e): e is DataLayerEntry => e.kind === "data" && e.id === layerId,
   );
   const fc = useDocument((s) => s.featureCollections[layerId]);
-  const restyle = (patch: Partial<LayerStyle>) =>
+  // MapLibre's objection to the last style the user tried to apply.
+  const [rejection, setRejection] = useState<string | null>(null);
+  // A style MapLibre rejects is not committed: the document keeps the style
+  // the map draws, and the user sees why.
+  const restyle = (patch: Partial<LayerStyle>) => {
+    if (!entry) {
+      return;
+    }
+    const errors = validateLayerStyle(
+      { ...entry.style, ...patch },
+      entry.geometryKind,
+    );
+    if (errors.length > 0) {
+      setRejection(errors[0]);
+      return;
+    }
+    setRejection(null);
     dispatch({ type: "restyle", id: layerId, patch });
+  };
 
   // Initial tab: derive from the existing style.expression (if any).
   const initialTab: Tab = entry?.style.expression
@@ -187,8 +207,11 @@ export function StylePanel({ layerId }: StylePanelProps) {
           <SingleColorTab
             entry={entry}
             onApply={(hex) =>
+              // A line has no fill: its colour is the stroke.
               restyle({
-                fillColor: hex,
+                ...(entry.geometryKind === "line"
+                  ? { strokeColor: hex }
+                  : { fillColor: hex }),
                 expression: undefined,
               })
             }
@@ -214,6 +237,11 @@ export function StylePanel({ layerId }: StylePanelProps) {
           />
         )}
       </div>
+      {rejection && (
+        <p role="alert" className={styles.error} data-testid="style-rejected">
+          {`Not applied: the map cannot draw this style. ${rejection}`}
+        </p>
+      )}
     </div>
   );
 }
@@ -257,7 +285,11 @@ function SingleColorTab({
   entry: DataLayerEntry;
   onApply: (hex: string) => void;
 }) {
-  const [hex, setHex] = useState<string>(entry.style.fillColor ?? "#0aa");
+  const [hex, setHex] = useState<string>(
+    (entry.geometryKind === "line"
+      ? entry.style.strokeColor
+      : entry.style.fillColor) ?? "#0aa",
+  );
   return (
     <div className={styles.tabBody}>
       <label className={styles.field}>

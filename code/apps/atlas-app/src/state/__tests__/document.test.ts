@@ -122,6 +122,7 @@ describe("layer commands", () => {
         visible: true,
         order: 0,
         featureCount: 2,
+        geometryKind: "circle",
         style: {},
       },
     ]);
@@ -276,6 +277,7 @@ describe("revision and subscribers", () => {
           visible: false,
           order: 0,
           featureCount: 2,
+          geometryKind: "circle",
           style: {},
         },
       ],

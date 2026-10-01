@@ -35,7 +35,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useCameraBridge } from "../hooks/useCameraBridge";
-import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
+import { useMapOverlays } from "../hooks/useMapOverlays";
 import { loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
@@ -149,7 +149,7 @@ const EmbedCanvas: React.FC<{
   const { bridge, onZoomAction } = useCameraBridge(map, api, layer);
 
   // Draw the open document's data and raster layers on the map.
-  useLayerRegistrySync(map);
+  useMapOverlays(map);
 
   // Open the document the way the editor opens a file (documentIO): its
   // layers, rasters and drawing. One loader, so the embed shows what the

@@ -68,6 +68,7 @@ vi.mock("@aws-sdk/client-s3", () => {
     GetObjectCommand: class GetObjectCommand extends Command {},
     CreateBucketCommand: class CreateBucketCommand extends Command {},
     ListBucketsCommand: class ListBucketsCommand extends Command {},
+    DeleteObjectCommand: class DeleteObjectCommand extends Command {},
   };
 });
 
@@ -128,6 +129,22 @@ describe("postgres-minio adapter", () => {
   });
 
   describe("getBlob", () => {
+    beforeEach(() => {
+      queryMock.mockResolvedValue({
+        rows: [
+          {
+            id: ID,
+            created_at: new Date(),
+            updated_at: new Date(),
+            blob_ref: `maps/${ID}.atlasdraw`,
+            byte_size: 1,
+            write_key_hash: null,
+          },
+        ],
+        rowCount: 1,
+      });
+    });
+
     it("returns null when S3 has no such key", async () => {
       const client = makeAdapter();
       s3SendMock.mockResolvedValueOnce({}); // CreateBucket

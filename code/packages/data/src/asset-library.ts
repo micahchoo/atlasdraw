@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 // SPDX-License-Identifier: MIT
 // Phase 6 A11 — `.excalidrawlib` reader + built-in library index.
 //
@@ -139,38 +140,24 @@ export function getBuiltInLibraries(): ExcalidrawLibrary[] {
 /**
  * Internal: load raw fixture JSON strings keyed by relative path.
  *
- * Two execution contexts:
- *  1. Vite-driven build/dev (atlas-app consuming this package). `import.meta.glob`
- *     is rewritten at transform time.
- *  2. Vitest node env (this package's tests). `import.meta.glob` is undefined;
- *     fall back to filesystem reads.
+ * Under Vite (the app build, the dev server and vitest) the literal
+ * `import.meta.glob` call below is replaced with the fixture contents at
+ * transform time. Vite rewrites only a literal call: read through a variable,
+ * the glob reaches the browser untouched and the library is empty. In plain
+ * Node there is no glob, the call throws, and the files are read from disk.
  */
 function loadFixtureSources(): Array<[string, string]> {
-  // Context 1: Vite with `import.meta.glob` available.
-  // We feature-detect rather than gate on `import.meta.env` because vitest
-  // also defines `import.meta.env` but does NOT rewrite globs in node env.
-  const maybeGlob = (
-    import.meta as unknown as {
-      glob?: (
-        pattern: string,
-        opts: { eager: true; query: string; import: string },
-      ) => Record<string, string>;
-    }
-  ).glob;
-  if (typeof maybeGlob === "function") {
-    try {
-      const modules = maybeGlob("../fixtures/libraries/*.excalidrawlib", {
-        eager: true,
-        query: "?raw",
-        import: "default",
-      });
-      return Object.entries(modules);
-    } catch {
-      // fall through to fs fallback
-    }
+  try {
+    const modules = import.meta.glob<string>(
+      "../fixtures/libraries/*.excalidrawlib",
+      { eager: true, query: "?raw", import: "default" },
+    );
+    return Object.entries(modules);
+  } catch {
+    // Plain Node: fall through to the file system.
   }
 
-  // Context 2: node/vitest. Resolve fixtures relative to this source file.
+  // Plain Node. Resolve fixtures relative to this source file.
   // We use a synchronous require-shaped fallback so this function stays
   // sync (callers don't await getBuiltInLibraries()).
   try {

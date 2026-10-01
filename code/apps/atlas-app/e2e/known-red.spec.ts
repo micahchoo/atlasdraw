@@ -9,7 +9,6 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import LZString from "lz-string";
 
 import {
   drawRectangle,
@@ -25,7 +24,7 @@ const RECT = { x0: 560, y0: 330, x1: 720, y1: 450 };
 
 /**
  * Draw a rectangle in the editor, then take the read-only share link through
- * the real Share dialog. A small map takes hash mode (`/m#v1:<lz>`), which
+ * the real Share dialog. A small map takes hash mode (`/m#v2:<base64url>`), which
  * needs no storage server.
  */
 async function shareLinkWithRectangle(page: Page): Promise<string> {
@@ -36,18 +35,9 @@ async function shareLinkWithRectangle(page: Page): Promise<string> {
 
   await page.getByTestId("main-menu-trigger").click();
   await page.getByTestId("main-menu-share").click();
-  // Work around the dialog-closes-itself defect (its own known-red test
-  // below): stop this one click at React's root container, after React has
-  // handled it, so ShareDialog's document-level click-outside listener never
-  // sees a target that React has already unmounted.
-  await page.evaluate(() => {
-    document
-      .getElementById("root")
-      ?.addEventListener("click", (e) => e.stopPropagation(), { once: true });
-  });
   await page.getByTestId("share-dialog-pick-readonly").click();
   const url = await page.getByTestId("share-dialog-url").inputValue();
-  expect(url, "small map takes hash mode").toContain("/m#v1:");
+  expect(url, "small map takes hash mode").toContain("/m#v2:");
   return url;
 }
 
@@ -73,29 +63,6 @@ async function paintedPixels(page: Page): Promise<number> {
 }
 
 test.describe("known-red", () => {
-  test("W7: choosing Read-only in the Share dialog shows the link", async ({
-    page,
-  }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W7 share dialog): choosing Read-only closes the Share dialog before the link shows — the click-outside listener sees the unmounted picker button as outside the panel. Remove when fixed.",
-    );
-    await openEditor(page);
-    await drawRectangle(page, RECT);
-    await setTool(page, "selection");
-    await page.getByTestId("main-menu-trigger").click();
-    await page.getByTestId("main-menu-share").click();
-    await expect(page.getByTestId("share-dialog-panel")).toBeVisible();
-
-    // The picker button unmounts when React handles the click; the dialog's
-    // document-level click-outside listener then sees a detached target,
-    // finds it outside the panel, and closes the dialog before the link shows.
-    await page.getByTestId("share-dialog-pick-readonly").click();
-    await expect(page.getByTestId("share-dialog-url")).toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
   test("W7: the read-only share page renders a map", async ({ page }) => {
     test.fail(
       true,
@@ -114,16 +81,10 @@ test.describe("known-red", () => {
     });
   });
 
-  test("W3/W7: an embed opens on the saved camera", async ({ page }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W3/W7 embed camera): selectDocument writes DEFAULT_CAMERA (0,0 z4) into every shared document, so the embed opens away from the drawn content. Remove when fixed.",
-    );
+  // Fixed in W3: the document saves the live camera.
+  test("an embed opens on the saved camera", async ({ page }) => {
     const url = await shareLinkWithRectangle(page);
     const hash = url.slice(url.indexOf("#"));
-    const doc = JSON.parse(
-      LZString.decompressFromBase64(hash.slice("#v1:".length)) ?? "null",
-    ) as { manifest?: { camera?: unknown } };
 
     const embed = await page.context().newPage();
     await embed.goto(`/embed${hash}`);
@@ -135,18 +96,13 @@ test.describe("known-red", () => {
     const painted = await paintedPixels(embed);
     expect(
       painted,
-      `the drawn rectangle must be on screen in the embed; the shared ` +
-        `document's camera is ${JSON.stringify(doc.manifest?.camera)}`,
+      "the drawn rectangle must be on screen in the embed",
     ).toBeGreaterThan(100);
   });
 
   test("W5/W7: clicking a shape with the selection tool leaves the camera alone", async ({
     page,
   }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W5/W7 select zooms): clicking a shape with the selection tool zooms the map (4 -> ~6.2). Remove when fixed.",
-    );
     await openEditor(page);
     await drawRectangle(page, RECT);
     await setTool(page, "selection");

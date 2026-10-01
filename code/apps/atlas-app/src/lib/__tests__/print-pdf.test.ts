@@ -269,7 +269,7 @@ describe("exportPDF — scale", () => {
 // RT-4 — the north arrow turns with the camera.
 //
 // `cameraRotationDeg` is the screen rotation of geographic EAST, y-down, which
-// is what `cameraRotation(map)` measures. The arrow draws NORTH, on a y-up
+// (`-map.getBearing()`). The arrow draws NORTH, on a y-up
 // page. Two frame flips sit between the input and the output and each one is a
 // chance to be off by a sign, so these tests check the direction the arrow
 // actually points rather than the rotation it was handed.

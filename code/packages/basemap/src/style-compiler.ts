@@ -55,16 +55,19 @@ function compileExpression(expr: StyleExpression): PaintValue {
   // For all three methods the compiler emits a linear interpolation — the
   // *method* only controls how the caller chose the stops. (Quantile +
   // equal-interval are data-binning strategies, not paint-time operators.)
-  const out: unknown[] = ["interpolate", ["linear"], ["get", expr.property]];
+  // A feature whose value is not a number gets the fallback colour; without
+  // the guard, MapLibre fails the evaluation and draws its own default.
+  const value = ["get", expr.property];
+  const ramp: unknown[] = ["interpolate", ["linear"], value];
   for (const { stop, color } of expr.stops) {
-    out.push(stop, color);
+    ramp.push(stop, color);
   }
-  return out;
+  return ["case", ["==", ["typeof", value], "number"], ramp, expr.fallback];
 }
 
 /**
  * Compile a LayerStyle into just the MapLibre *paint* block for a geometry kind:
- * - "fill"   → Polygon/MultiPolygon (uses fillColor + opacity + strokeColor as outline)
+ * - "fill"   → Polygon/MultiPolygon (uses fillColor + opacity; the outline is compileOutlinePaint)
  * - "line"   → LineString/MultiLineString (uses strokeColor + strokeWidth + opacity)
  * - "circle" → Point/MultiPoint (uses fillColor + strokeColor + strokeWidth + opacity)
  *
@@ -87,10 +90,11 @@ export function compilePaint(
     : undefined;
 
   if (geometryType === "fill") {
+    // The polygon's edge is its own line layer (compileOutlinePaint), so
+    // stroke colour and width apply to polygons too.
     return {
       "fill-color": exprPaint ?? style.fillColor ?? "#0aa",
       "fill-opacity": style.opacity ?? 0.5,
-      "fill-outline-color": style.strokeColor ?? "#077",
     };
   }
   if (geometryType === "line") {
@@ -108,6 +112,52 @@ export function compilePaint(
     "circle-opacity": style.opacity ?? 1,
     "circle-radius": 5,
   };
+}
+
+/**
+ * The paint of a polygon layer's outline: a line layer over the fill, drawn
+ * in the stroke colour at the stroke width. The outline stays opaque when the
+ * fill is faded, so the edge of a faded area can still be seen.
+ */
+export function compileOutlinePaint(style: LayerStyle): CompiledPaint {
+  return {
+    "line-color": style.strokeColor ?? "#077",
+    "line-width": style.strokeWidth ?? 1,
+    "line-opacity": 1,
+  };
+}
+
+/** The id of a polygon layer's outline layer. */
+export function outlineLayerId(id: string): string {
+  return `${id}::outline`;
+}
+
+/**
+ * Every MapLibre layer that draws one data layer, bottom first. A polygon
+ * layer is a fill and an outline (`outlineLayerId`); a line or point layer is
+ * one layer. Each layer reads the source named `id`.
+ */
+export function compileLayers(
+  id: string,
+  style: LayerStyle,
+  geometryType: LayerGeometryType,
+): maplibregl.LayerSpecification[] {
+  const main = compileLayer(id, style, geometryType);
+  if (geometryType !== "fill") {
+    return [main];
+  }
+  return [
+    main,
+    {
+      id: outlineLayerId(id),
+      type: "line",
+      source: id,
+      paint: compileOutlinePaint(style) as Extract<
+        maplibregl.LayerSpecification,
+        { type: "line" }
+      >["paint"],
+    },
+  ];
 }
 
 /**

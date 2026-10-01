@@ -1,8 +1,9 @@
-// @atlasdraw/storage — Phase 4 T3 entry point.
+// @atlasdraw/storage — entry point.
 //
 // Fastify HTTP server with two adapters (postgres-minio + sqlite-fs). The
 // adapter is picked from STORAGE_MODE env at startup; both implement the
-// StorageClient contract from ./types so routes are adapter-agnostic.
+// StorageClient contract from ./types. Routes call the map service
+// (./service/maps.ts), which owns write keys, expiry and the size cap.
 
 import * as Sentry from "@sentry/node";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -15,6 +16,7 @@ import { registerRateLimitMiddleware } from "./middleware/rate-limit";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
+import { createMapService } from "./service/maps";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -71,6 +73,10 @@ async function main(): Promise<void> {
           blobSecretKey: config.BLOB_SECRET_KEY,
         });
 
+  const service = createMapService(client, {
+    maxTotalBytes: config.MAX_TOTAL_BYTES,
+  });
+
   registerHealthRoute(app, config.STORAGE_MODE, client);
   // Per-IP rate limit for the internet-facing HTTP API (SECURITY.md row 7).
   // onRequest hook — runs before body parsing; /health is exempt internally.
@@ -78,8 +84,8 @@ async function main(): Promise<void> {
     max: config.RATE_LIMIT_MAX,
     windowMs: config.RATE_LIMIT_WINDOW_MS,
   });
-  registerMapRoutes(app, client);
-  registerShareRoutes(app, client, config.PUBLIC_URL);
+  registerMapRoutes(app, service);
+  registerShareRoutes(app, service, config.PUBLIC_URL);
 
   // Wire Sentry into Fastify error handling. Sentry is opt-in (no-op when
   // SENTRY_DSN is unset); captureException is a no-op if init was skipped.
@@ -96,10 +102,30 @@ async function main(): Promise<void> {
     `Storage started in ${config.STORAGE_MODE} mode on :${config.PORT}`,
   );
 
+  // Delete expired share tokens and the keyless maps no live token reads.
+  const sweep = () =>
+    service
+      .sweep()
+      .then((swept) => {
+        if (swept.tokens > 0 || swept.maps > 0) {
+          app.log.info({ swept }, "storage sweep");
+        }
+      })
+      .catch((err: unknown) => app.log.warn({ err }, "storage sweep failed"));
+  void sweep();
+  const sweepTimer =
+    config.SWEEP_INTERVAL_MS > 0
+      ? setInterval(() => void sweep(), config.SWEEP_INTERVAL_MS)
+      : null;
+  sweepTimer?.unref();
+
   // Graceful shutdown: close the adapter (DB pools, blob clients) then
   // close the HTTP server so in-flight requests drain before exit.
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal} — shutting down`);
+    if (sweepTimer) {
+      clearInterval(sweepTimer);
+    }
     await client.close();
     await app.close();
     process.exit(0);

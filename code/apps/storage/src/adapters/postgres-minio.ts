@@ -1,11 +1,12 @@
-// @atlasdraw/storage — Phase 4 T3: postgres-minio adapter.
+// @atlasdraw/storage — postgres-minio adapter.
 //
-// Full stack — Postgres for metadata, MinIO/S3-compatible blob store for the
-// scene blob. Mirrors sqlite-fs adapter semantics. Bucket auto-created on
-// first write if absent.
+// Full stack: Postgres for metadata, a MinIO/S3-compatible store for the
+// blobs. Same semantics as sqlite-fs. The bucket is made on first use. An S3
+// PUT replaces an object whole, so a write is atomic without a temp object.
 
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   ListBucketsCommand,
   PutObjectCommand,
@@ -14,11 +15,16 @@ import {
 import { nanoid } from "nanoid";
 import { Pool } from "pg";
 
-import { ID_RE, SHARE_TTL_MS } from "../constants";
+import { ID_RE } from "../constants";
 import { migratePostgres } from "../db/migrate";
 import { logger } from "../logger";
 
-import type { MapRecord, ShareToken, StorageClient } from "../types";
+import type {
+  MapRecord,
+  ShareToken,
+  StorageClient,
+  SweepResult,
+} from "../types";
 
 const BUCKET = "atlasdraw-maps";
 
@@ -28,13 +34,14 @@ interface MapRow {
   updated_at: Date | string;
   blob_ref: string;
   byte_size: number | string;
+  write_key_hash: string | null;
 }
 
 interface ShareRow {
   token: string;
   map_id: string;
   mode: string;
-  expires_at: Date | string;
+  expires_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -52,6 +59,7 @@ function rowToMap(row: MapRow): MapRecord {
       typeof row.byte_size === "string"
         ? parseInt(row.byte_size, 10)
         : row.byte_size,
+    write_key_hash: row.write_key_hash,
   };
 }
 
@@ -60,7 +68,7 @@ function rowToShare(row: ShareRow): ShareToken {
     token: row.token,
     map_id: row.map_id,
     mode: "read",
-    expires_at: isoize(row.expires_at),
+    expires_at: row.expires_at === null ? null : isoize(row.expires_at),
     created_at: isoize(row.created_at),
   };
 }
@@ -149,54 +157,66 @@ export function createPostgresMinioAdapter(opts: {
     );
   }
 
+  async function deleteBlob(key: string): Promise<void> {
+    await ensureBucket();
+    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  }
+
+  const MAP_COLUMNS =
+    "id, created_at, updated_at, blob_ref, byte_size, write_key_hash";
+
+  async function selectMap(id: string): Promise<MapRow | undefined> {
+    const res = await pool.query<MapRow>(
+      `SELECT ${MAP_COLUMNS} FROM maps WHERE id = $1`,
+      [id],
+    );
+    return res.rows[0];
+  }
+
   return {
-    async createMap(blob: Buffer): Promise<MapRecord> {
+    async createMap(blob, writeKeyHash) {
       await ensureSchema();
       const id = nanoid(21);
       const blobRef = `maps/${id}.atlasdraw`;
       await putBlob(blobRef, blob);
       const now = new Date();
-      await pool.query(
-        `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, now, now, blobRef, blob.byteLength],
-      );
+      try {
+        await pool.query(
+          `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [id, now, now, blobRef, blob.byteLength, writeKeyHash],
+        );
+      } catch (err) {
+        await deleteBlob(blobRef).catch(() => undefined);
+        throw err;
+      }
       return {
         id,
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
         blob_ref: blobRef,
         byte_size: blob.byteLength,
+        write_key_hash: writeKeyHash,
       };
     },
 
-    async getMap(id: string): Promise<MapRecord | null> {
+    async getMap(id) {
       if (!ID_RE.test(id)) {
         return null;
       }
       await ensureSchema();
-      const res = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size
-         FROM maps WHERE id = $1`,
-        [id],
-      );
-      return res.rows[0] ? rowToMap(res.rows[0]) : null;
+      const row = await selectMap(id);
+      return row ? rowToMap(row) : null;
     },
 
-    async updateMap(id: string, blob: Buffer): Promise<MapRecord> {
+    async updateMap(id, blob) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
       await ensureSchema();
-      const existing = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size
-         FROM maps WHERE id = $1`,
-        [id],
-      );
-      if (!existing.rows[0]) {
+      const row = await selectMap(id);
+      if (!row) {
         throw new Error(`not found: ${id}`);
       }
-      const row = existing.rows[0];
       await putBlob(row.blob_ref, blob);
       const now = new Date();
       await pool.query(
@@ -204,44 +224,37 @@ export function createPostgresMinioAdapter(opts: {
         [now, blob.byteLength, id],
       );
       return {
-        id,
-        created_at: isoize(row.created_at),
+        ...rowToMap(row),
         updated_at: now.toISOString(),
-        blob_ref: row.blob_ref,
         byte_size: blob.byteLength,
       };
     },
 
-    async createShareToken(mapId: string): Promise<ShareToken> {
+    async createShareToken(mapId, expiresAt) {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
       await ensureSchema();
-      const existing = await pool.query<{ id: string }>(
-        `SELECT id FROM maps WHERE id = $1`,
-        [mapId],
-      );
-      if (!existing.rows[0]) {
+      if (!(await selectMap(mapId))) {
         throw new Error(`not found: ${mapId}`);
       }
       const token = nanoid(21);
       const now = new Date();
-      const expires = new Date(now.getTime() + SHARE_TTL_MS);
       await pool.query(
         `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
          VALUES ($1, $2, $3, $4, $5)`,
-        [token, mapId, "read", expires, now],
+        [token, mapId, "read", expiresAt, now],
       );
       return {
         token,
         map_id: mapId,
         mode: "read",
-        expires_at: expires.toISOString(),
+        expires_at: expiresAt ? expiresAt.toISOString() : null,
         created_at: now.toISOString(),
       };
     },
 
-    async resolveToken(token: string): Promise<ShareToken | null> {
+    async resolveToken(token) {
       if (!ID_RE.test(token)) {
         return null;
       }
@@ -254,15 +267,57 @@ export function createPostgresMinioAdapter(opts: {
       return res.rows[0] ? rowToShare(res.rows[0]) : null;
     },
 
-    async getBlob(id: string): Promise<Buffer | null> {
-      // Phase 4 T8 amendment — consumed by GET /share/:token/blob. Mirrors
-      // sqlite-fs semantics: malformed id → null, missing object → null,
-      // unexpected SDK errors propagate.
+    async deleteShareToken(mapId, token) {
+      if (!ID_RE.test(mapId) || !ID_RE.test(token)) {
+        return false;
+      }
+      await ensureSchema();
+      const res = await pool.query(
+        `DELETE FROM share_tokens WHERE token = $1 AND map_id = $2`,
+        [token, mapId],
+      );
+      return (res.rowCount ?? 0) > 0;
+    },
+
+    async totalBytes() {
+      await ensureSchema();
+      const res = await pool.query<{ total: string | number }>(
+        `SELECT COALESCE(SUM(byte_size), 0) AS total FROM maps`,
+      );
+      return Number(res.rows[0]?.total ?? 0);
+    },
+
+    async sweep(now): Promise<SweepResult> {
+      await ensureSchema();
+      const tokens = await pool.query(
+        `DELETE FROM share_tokens
+         WHERE expires_at IS NOT NULL AND expires_at <= $1`,
+        [now],
+      );
+      const maps = await pool.query<{ blob_ref: string }>(
+        `DELETE FROM maps
+         WHERE write_key_hash IS NULL
+           AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)
+         RETURNING blob_ref`,
+      );
+      for (const row of maps.rows) {
+        await deleteBlob(row.blob_ref);
+      }
+      return { tokens: tokens.rowCount ?? 0, maps: maps.rows.length };
+    },
+
+    async getBlob(id) {
+      // Malformed id or missing object: null. Any other S3 error propagates.
       if (!ID_RE.test(id)) {
         return null;
       }
+      await ensureSchema();
+      const row = await selectMap(id);
+      if (!row) {
+        return null;
+      }
       await ensureBucket();
-      const key = `maps/${id}.atlasdraw`;
+      const key = row.blob_ref;
       try {
         const res = await s3.send(
           new GetObjectCommand({ Bucket: BUCKET, Key: key }),

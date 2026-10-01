@@ -28,9 +28,10 @@ function stubClient(
 ): HttpStorageClient {
   return {
     createMap: vi.fn(),
-    getMap: vi.fn(),
     updateMap: vi.fn(),
+    readMap: vi.fn(),
     createShareToken: vi.fn(),
+    revokeShareToken: vi.fn(),
     getShareBlob: vi.fn(async () => null),
     ...overrides,
   };

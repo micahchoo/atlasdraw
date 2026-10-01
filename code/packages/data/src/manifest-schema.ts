@@ -46,6 +46,9 @@ const DataLayerEntrySchema = z.object({
   label: z.string(),
   visible: z.boolean(),
   featureCount: z.number().int().nonnegative(),
+  // The geometry kind the layer draws, decided at import. Optional because
+  // older files do not have it; a reader then takes it from the GeoJSON.
+  geometryKind: z.enum(["fill", "line", "circle"]).optional(),
   style: LayerStyleSchema,
   // Path within the zip to the layer's GeoJSON. Atlasdraw.ts writer follows
   // the convention `data/layer-<id>.geojson`.

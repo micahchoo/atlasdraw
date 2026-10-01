@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Camera fits: frame the map on a lng/lat box (a drawing's bounds, from
-// @atlasdraw/geo's computeSceneBounds, or a raster's corners) or on a data
+// Camera fits: frame the map on drawn elements (their lng/lat bounds through
+// the world frame), on a lng/lat box (a raster's corners) or on a data
 // layer's FeatureCollection. One set of padding, zoom and duration
 // constants, so every "zoom to" lands its content at the same size; a second
 // copy of those constants is how the fits drift apart.
@@ -9,7 +9,9 @@
 // The bounds math for a FeatureCollection lives here rather than in
 // @atlasdraw/geo because that package carries no GeoJSON type dependency.
 
-import type { LngLatBox } from "@atlasdraw/geo";
+import { computeSceneBounds } from "@atlasdraw/geo";
+
+import type { LngLatBox, WorldFrame } from "@atlasdraw/geo";
 
 import type { FeatureCollection, Position } from "geojson";
 
@@ -17,6 +19,20 @@ import type { FeatureCollection, Position } from "geojson";
 const FIT_PADDING = 64;
 const FIT_MAX_ZOOM = 16;
 const FIT_DURATION_MS = 600;
+
+/**
+ * Frame the camera on drawn elements: the lng/lat box of their outlines in
+ * the document's world frame. Returns false, without touching the camera,
+ * when there is no map or nothing to frame.
+ */
+export function fitMapToContent(
+  map: FitBoundsSurface | null,
+  elements: Parameters<typeof computeSceneBounds>[0],
+  frame: WorldFrame,
+): boolean {
+  const box = computeSceneBounds(elements, frame);
+  return box ? fitMapToBox(map, box) : false;
+}
 
 /** The narrowest MapLibre surface a camera fit needs, so tests can stub it. */
 export interface FitBoundsSurface {

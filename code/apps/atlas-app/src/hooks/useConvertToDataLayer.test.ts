@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useConvertToDataLayer's error-handling paths (ISSUES.md Issue 7 —
-// silence audit). Registration/predicate/perform-pipeline happy paths are
-// already covered end-to-end by MapEditor.contextmenu.test.tsx; this file
-// covers only the two failure branches that used to be a bare window.alert
-// and an unguarded rethrow.
+// Tests for useConvertToDataLayer: a conversion adds a data layer and deletes
+// the element as one undoable scene step, and every failure reaches the user
+// as a toast, never as an uncaught exception.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
@@ -21,8 +19,6 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useConvertToDataLayer } from "./useConvertToDataLayer";
 
-import type maplibregl from "maplibre-gl";
-
 vi.mock("@atlasdraw/tools", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@atlasdraw/tools")>();
   return {
@@ -32,7 +28,6 @@ vi.mock("@atlasdraw/tools", async (importOriginal) => {
 });
 
 vi.mock("@atlasdraw/basemap", () => ({
-  compileLayer: vi.fn(),
   defaultLayerStyle: vi.fn(() => ({})),
 }));
 
@@ -44,15 +39,6 @@ const EL: ConvertibleElement = {
   width: 100,
   height: 50,
 };
-
-function makeMap(overrides: Partial<maplibregl.Map> = {}) {
-  return {
-    addSource: vi.fn(),
-    addLayer: vi.fn(),
-    removeSource: vi.fn(),
-    ...overrides,
-  } as unknown as maplibregl.Map;
-}
 
 const fakeApi = {
   registerContextMenuItem: vi.fn(() => vi.fn()),
@@ -75,12 +61,11 @@ describe("useConvertToDataLayer — error handling", () => {
     vi.mocked(annotationToFeatureCollection).mockImplementation(() => {
       throw thrown;
     });
-    const map = makeMap();
     const notify = { error: vi.fn() };
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 
     const { result } = renderHook(() =>
-      useConvertToDataLayer(map, fakeApi, addDataLayer, notify),
+      useConvertToDataLayer(fakeApi, addDataLayer, notify),
     );
     result.current.handleConvert(EL);
 
@@ -89,13 +74,9 @@ describe("useConvertToDataLayer — error handling", () => {
     alertSpy.mockRestore();
   });
 
-  it("rolls back the orphan source, logs, and toasts (does not rethrow uncaught) when addLayer fails", () => {
-    const removeSource = vi.fn();
-    const map = makeMap({
-      addLayer: vi.fn(() => {
-        throw new Error("invalid layer spec");
-      }),
-      removeSource,
+  it("logs and toasts an unexpected failure instead of throwing", () => {
+    vi.mocked(annotationToFeatureCollection).mockImplementation(() => {
+      throw new Error("no geometry");
     });
     const notify = { error: vi.fn() };
     const consoleErrorSpy = vi
@@ -103,15 +84,57 @@ describe("useConvertToDataLayer — error handling", () => {
       .mockImplementation(() => {});
 
     const { result } = renderHook(() =>
-      useConvertToDataLayer(map, fakeApi, addDataLayer, notify),
+      useConvertToDataLayer(fakeApi, addDataLayer, notify),
     );
 
     expect(() => result.current.handleConvert(EL)).not.toThrow();
-    expect(removeSource).toHaveBeenCalled();
     expect(consoleErrorSpy).toHaveBeenCalled();
     expect(notify.error).toHaveBeenCalledWith(
-      "Couldn't convert to a data layer — invalid layer spec",
+      "Couldn't convert to a data layer — no geometry",
     );
+    expect(addDataLayer).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("useConvertToDataLayer — conversion", () => {
+  it("adds a named data layer and deletes the element as an undoable step", () => {
+    let elements = [
+      {
+        id: "el-1",
+        type: "rectangle",
+        version: 1,
+        versionNonce: 1,
+        isDeleted: false,
+        customData: EL.customData,
+      },
+    ];
+    const updateScene = vi.fn((opts: { elements: typeof elements }) => {
+      elements = opts.elements;
+    });
+    const api = {
+      registerContextMenuItem: vi.fn(() => vi.fn()),
+      getSceneElements: () => elements.filter((e) => !e.isDeleted),
+      getSceneElementsIncludingDeleted: () => elements,
+      updateScene,
+    } as unknown as ExcalidrawImperativeAPI;
+
+    const { result } = renderHook(() =>
+      useConvertToDataLayer(api, addDataLayer, { error: vi.fn() }),
+    );
+    result.current.handleConvert(EL);
+
+    expect(addDataLayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^dl:/),
+        label: expect.stringMatching(/^Rectangle/),
+      }),
+    );
+    expect(elements).toEqual([
+      expect.objectContaining({ id: "el-1", isDeleted: true, version: 2 }),
+    ]);
+    expect(updateScene).toHaveBeenCalledWith(
+      expect.objectContaining({ captureUpdate: expect.anything() }),
+    );
   });
 });

@@ -24,6 +24,7 @@ function dataLayer(
     visible: true,
     order: 0,
     featureCount: 1,
+    geometryKind: "fill",
     style: { fillColor: "#0aa" },
     ...overrides,
   } as OverlayEntry;
@@ -198,6 +199,29 @@ describe("visibleRasterIds", () => {
 });
 
 describe("buildLegendEntries", () => {
+  it("draws a line layer's swatch in its stroke colour, the colour on the map", () => {
+    const entries = buildLegendEntries(
+      [
+        dataLayer("dl:roads", {
+          geometryKind: "line",
+          style: { fillColor: "#0aa", strokeColor: "#c00" },
+        }),
+        dataLayer("dl:parcels", {
+          style: { fillColor: "#0aa", strokeColor: "#c00" },
+        }),
+      ],
+      {
+        renderedDataLayerIds: new Set(["dl:roads", "dl:parcels"]),
+        visibleAnnotationIds: new Set(),
+        visibleRasterIds: new Set(),
+      },
+    );
+    expect(entries.map((e) => [e.id, e.color])).toEqual([
+      ["dl:roads", "#c00"],
+      ["dl:parcels", "#0aa"],
+    ]);
+  });
+
   const ctx = {
     renderedDataLayerIds: new Set(["dl:painted"]),
     visibleAnnotationIds: new Set(["ann-in"]),

@@ -230,8 +230,8 @@ vi.mock("../../hooks/useCameraBridge", () => ({
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
-vi.mock("../../hooks/useLayerRegistrySync", () => ({
-  useLayerRegistrySync: vi.fn(),
+vi.mock("../../hooks/useMapOverlays", () => ({
+  useMapOverlays: vi.fn(),
 }));
 vi.mock("../../hooks/useToolState", () => ({
   useToolState: () => ({ isDrawingMode: false }),
@@ -305,8 +305,6 @@ describe("MapEditor — 'Import…' menu action (ISSUES.md Direction 1)", () => 
     expect((registerSpy.mock.calls[0][0] as AddDataLayer).label).toBe(
       "picked.geojson",
     );
-    expect(mockMap.addSource).toHaveBeenCalledTimes(1);
-    expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
   });
 
   it("the hidden file input is removed from the DOM after a pick resolves", async () => {

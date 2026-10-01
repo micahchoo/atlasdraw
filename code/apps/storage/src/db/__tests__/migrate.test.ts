@@ -76,7 +76,14 @@ const LEGACY_POSTGRES_SCHEMA = `
 `;
 
 const TABLES = ["maps", "schema_migrations", "share_tokens"];
-const MAP_COLUMNS = ["id", "created_at", "updated_at", "blob_ref", "byte_size"];
+const MAP_COLUMNS = [
+  "id",
+  "created_at",
+  "updated_at",
+  "blob_ref",
+  "byte_size",
+  "write_key_hash",
+];
 const SHARE_COLUMNS = ["token", "map_id", "mode", "expires_at", "created_at"];
 const ALL_NAMES = MIGRATIONS.map((m) => m.name).sort();
 
@@ -155,6 +162,40 @@ describe("migrateSqlite", () => {
     expect(db.prepare("SELECT token, map_id FROM share_tokens").all()).toEqual([
       { token: "t1", map_id: "m1" },
     ]);
+  });
+
+  it("gives an old map no write key and keeps its link's expiry", () => {
+    db.exec(LEGACY_SQLITE_SCHEMA);
+    db.prepare(
+      "INSERT INTO maps VALUES ('m1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/m1.atlasdraw', 3, NULL)",
+    ).run();
+    db.prepare(
+      "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', '2026-01-08T00:00:00.000Z', '2026-01-01T00:00:00.000Z', NULL)",
+    ).run();
+
+    migrateSqlite(db);
+
+    expect(db.prepare("SELECT write_key_hash FROM maps").get()).toEqual({
+      write_key_hash: null,
+    });
+    expect(db.prepare("SELECT expires_at FROM share_tokens").get()).toEqual({
+      expires_at: "2026-01-08T00:00:00.000Z",
+    });
+  });
+
+  it("lets a share token have no expiry", () => {
+    migrateSqlite(db);
+    db.prepare(
+      "INSERT INTO maps VALUES ('m1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/m1.atlasdraw', 3, NULL)",
+    ).run();
+
+    expect(() =>
+      db
+        .prepare(
+          "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', NULL, '2026-01-01T00:00:00.000Z')",
+        )
+        .run(),
+    ).not.toThrow();
   });
 
   it("rolls back a migration that fails and records nothing for it", () => {
@@ -269,7 +310,20 @@ describe.skipIf(!PG_URL)("migratePostgres (real Postgres)", () => {
     expect(await tables()).toEqual(TABLES);
     expect(await columns("maps")).toEqual(MAP_COLUMNS);
     expect(await columns("share_tokens")).toEqual(SHARE_COLUMNS);
-    const maps = await pool.query("SELECT id FROM maps");
-    expect(maps.rows).toEqual([{ id: "m1" }]);
+    const maps = await pool.query("SELECT id, write_key_hash FROM maps");
+    expect(maps.rows).toEqual([{ id: "m1", write_key_hash: null }]);
+  });
+
+  it("lets a share token have no expiry", async () => {
+    await migratePostgres(pool);
+    await pool.query(
+      "INSERT INTO maps VALUES ('m1', now(), now(), 'maps/m1.atlasdraw', 3, NULL)",
+    );
+
+    await expect(
+      pool.query(
+        "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', NULL, now())",
+      ),
+    ).resolves.toBeDefined();
   });
 });

@@ -1,8 +1,7 @@
-// @atlasdraw/storage — Phase 4 T1: storage contract types.
-//
-// Defined first (Wave 0) so Wave 1 implementations (T3 server, T8/T9 share
-// clients, T13 atlas-app autosave wiring) can build against a stable
-// interface rather than a moving target. No runtime code — types only.
+// @atlasdraw/storage — the store contract. Both adapters implement
+// `StorageClient`; only the map service (./service/maps.ts) calls it. The
+// service owns the policy: write keys, expiry, the size cap. An adapter only
+// stores rows and bytes.
 
 /**
  * Selects which adapter the storage server loads at startup.
@@ -12,9 +11,10 @@
 export type StorageMode = "postgres-minio" | "sqlite-fs";
 
 /**
- * A persisted map document. `blob_ref` is the adapter-specific location of
- * the underlying scene+state JSON blob — an S3 key for postgres-minio, a
- * relative filesystem path for sqlite-fs.
+ * A stored map. `blob_ref` is where the adapter keeps the bytes (an S3 key
+ * or a path under DATA_DIR). `write_key_hash` is the hex SHA-256 of the
+ * map's write key, or null for a map stored before write keys: nobody can
+ * write that map. Neither field ever leaves the server.
  */
 export interface MapRecord {
   id: string;
@@ -22,45 +22,54 @@ export interface MapRecord {
   updated_at: string;
   blob_ref: string;
   byte_size: number;
+  write_key_hash: string | null;
 }
 
 /**
- * A read-only share token. `mode: 'read'` is the only mode in Phase 4;
- * write tokens are deferred to Phase 6.
+ * A read-only share token for one map. `expires_at` null means the token
+ * lives until its owner revokes it.
  */
 export interface ShareToken {
   token: string;
   map_id: string;
   mode: "read";
-  expires_at: string;
+  expires_at: string | null;
   created_at: string;
 }
 
-/**
- * Storage adapter contract. Both `postgres-minio` and `sqlite-fs` adapters
- * implement this; atlas-app consumes it through the HTTP layer (T3) and
- * never touches an adapter directly.
- */
+/** What one sweep removed. */
+export interface SweepResult {
+  tokens: number;
+  maps: number;
+}
+
 export interface StorageClient {
-  createMap(blob: Buffer): Promise<MapRecord>;
+  createMap(blob: Buffer, writeKeyHash: string | null): Promise<MapRecord>;
   getMap(id: string): Promise<MapRecord | null>;
+  /** Replaces the bytes. Rejects with `not found:` for an unknown id. */
   updateMap(id: string, blob: Buffer): Promise<MapRecord>;
-  createShareToken(mapId: string): Promise<ShareToken>;
+  /** Rejects with `not found:` for an unknown map. */
+  createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
+  /** Deletes the token if it belongs to `mapId`. True if a row went. */
+  deleteShareToken(mapId: string, token: string): Promise<boolean>;
   /**
-   * Retrieve the raw blob bytes for a map by id. Returns `null` if the id
-   * is malformed, the map row is missing, or the underlying blob storage
-   * is missing the object (orphaned row). Phase 4 T8/T9 share-via-link
-   * consumes this through the `GET /share/:token/blob` route.
+   * The bytes of a map. Null for a malformed id, a missing row, or a row
+   * whose blob is gone.
    */
   getBlob(id: string): Promise<Buffer | null>;
+  /** The sum of `byte_size` over every stored map. */
+  totalBytes(): Promise<number>;
+  /**
+   * Deletes every share token that expired at or before `now`, then every
+   * map that has no write key and no remaining token, with its bytes. Such a
+   * map can never be read or written again.
+   */
+  sweep(now: Date): Promise<SweepResult>;
 
   /**
-   * Verify the adapter's dependencies are actually reachable right now —
-   * DB connection for both adapters, plus the blob store for postgres-minio.
-   * Resolves on success, rejects on failure. Consumed by the `/health` route
-   * (ISSUES.md Issue 8) so readiness reflects real dependency state instead
-   * of an unconditional 200.
+   * Resolves when the adapter's dependencies answer right now: the database,
+   * and for postgres-minio the blob store. The `/health` route calls it.
    */
   ping(): Promise<void>;
 

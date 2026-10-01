@@ -17,7 +17,6 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { CameraBridge } from "@atlasdraw/basemap";
-import { computeSceneBounds } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type {
@@ -26,7 +25,7 @@ import type {
 } from "@atlasdraw/excalidraw/types";
 
 import { currentDocument, useDocumentStore } from "../state/document";
-import { fitMapToBox } from "../lib/fitMapToContent";
+import { fitMapToContent } from "../lib/fitMapToContent";
 
 import type maplibregl from "maplibre-gl";
 
@@ -50,13 +49,9 @@ export function zoomActionOnMap(
     case "zoomOut":
       map.zoomOut();
       break;
-    case "zoomToFit": {
-      const box = computeSceneBounds(action.elements, frame());
-      if (box) {
-        fitMapToBox(map, box);
-      }
+    case "zoomToFit":
+      fitMapToContent(map, action.elements, frame());
       break;
-    }
     case "resetZoom":
       break;
   }

@@ -276,8 +276,8 @@ vi.mock("../../hooks/useCameraBridge", () => ({
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
-vi.mock("../../hooks/useLayerRegistrySync", () => ({
-  useLayerRegistrySync: vi.fn(),
+vi.mock("../../hooks/useMapOverlays", () => ({
+  useMapOverlays: vi.fn(),
 }));
 vi.mock("../../hooks/useToolState", () => ({
   useToolState: () => ({ isDrawingMode: false }),

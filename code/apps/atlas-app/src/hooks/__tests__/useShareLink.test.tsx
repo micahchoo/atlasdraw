@@ -2,8 +2,11 @@
 //
 // useShareLink: a share link carries the whole document, or it is not a hash
 // link. The hook measures the encoded `.atlasdraw` bytes, not a JSON string
-// of the document (JSON writes the layer and file Maps as {}).
+// of the document (JSON writes the layer and file Maps as {}). A document
+// that does not fit goes to its own server map, which later saves update.
 
+import "fake-indexeddb/auto";
+import { openDB } from "idb";
 import { act, cleanup, render } from "@testing-library/react";
 import React, { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +15,7 @@ import { CURRENT_MANIFEST_VERSION } from "@atlasdraw/data";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
-import { useShareLink } from "../useShareLink";
+import { useShareLink, type ShareLink } from "../useShareLink";
 import { decodeHashDoc } from "../../state/loadShareDocument";
 
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
@@ -72,40 +75,47 @@ function noise(bytes: number): Blob {
 function makeMockClient(opts: { fail?: boolean } = {}): HttpStorageClient & {
   createMapSpy: ReturnType<typeof vi.fn>;
   createShareTokenSpy: ReturnType<typeof vi.fn>;
+  revokeShareTokenSpy: ReturnType<typeof vi.fn>;
 } {
   const createMapSpy = vi.fn(async () => {
     if (opts.fail) {
       throw new Error("storage is down");
     }
     return {
-      id: "abcdefghij1234567890K",
-      created_at: "2026-05-10T00:00:00.000Z",
-      updated_at: "2026-05-10T00:00:00.000Z",
-      byte_size: 42,
+      map: {
+        id: "abcdefghij1234567890K",
+        created_at: "2026-05-10T00:00:00.000Z",
+        updated_at: "2026-05-10T00:00:00.000Z",
+        byte_size: 42,
+      },
+      writeKey: "write-key",
     };
   });
-  const createShareTokenSpy = vi.fn(async () => ({
-    token: "tokentokentokentokenA",
-    map_id: "abcdefghij1234567890K",
-    mode: "read" as const,
-    expires_at: "2026-05-17T00:00:00.000Z",
-    created_at: "2026-05-10T00:00:00.000Z",
-  }));
+  const createShareTokenSpy = vi.fn(
+    async (_id: string, _key: string, days: number | null) => ({
+      token: "tokentokentokentokenA",
+      expiresAt: days === null ? null : "2026-05-17T00:00:00.000Z",
+    }),
+  );
+  const revokeShareTokenSpy = vi.fn(async () => {});
   return {
     createMap: createMapSpy,
-    getMap: vi.fn(async () => null),
     updateMap: vi.fn(),
+    readMap: vi.fn(),
     createShareToken: createShareTokenSpy,
+    revokeShareToken: revokeShareTokenSpy,
     getShareBlob: vi.fn(async () => null),
     createMapSpy,
     createShareTokenSpy,
+    revokeShareTokenSpy,
   };
 }
 
 interface Captured {
   mode: string | null;
   error: string | null;
-  generate: () => Promise<string | null>;
+  generate: (expiresInDays?: number | null) => Promise<ShareLink | null>;
+  revoke: (token: string) => Promise<boolean>;
 }
 
 function Harness({
@@ -117,17 +127,22 @@ function Harness({
   client: HttpStorageClient;
   onCapture: (s: Captured) => void;
 }): React.ReactElement {
-  const { generate, mode, error } = useShareLink({ getDoc, client });
+  const { generate, revoke, mode, error } = useShareLink({ getDoc, client });
   useEffect(() => {
-    onCapture({ mode, error, generate });
-  }, [mode, error, generate, onCapture]);
+    onCapture({ mode, error, generate, revoke });
+  }, [mode, error, generate, revoke, onCapture]);
   return <div data-testid="harness" />;
 }
 
 async function share(
   d: AtlasdrawDocument,
   client: HttpStorageClient,
-): Promise<{ url: string | null; captured: () => Captured }> {
+  expiresInDays: number | null = null,
+): Promise<{
+  url: string | null;
+  link: ShareLink | null;
+  captured: () => Captured;
+}> {
   let captured: Captured | null = null;
   render(
     <Harness
@@ -138,15 +153,26 @@ async function share(
       }}
     />,
   );
-  let url: string | null = null;
+  let link: ShareLink | null = null;
   await act(async () => {
-    url = await captured!.generate();
+    link = await captured!.generate(expiresInDays);
   });
-  return { url, captured: () => captured! };
+  const got = link as ShareLink | null;
+  return { url: got?.url ?? null, link: got, captured: () => captured! };
 }
 
 describe("useShareLink", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The server map and its key are kept per document in IndexedDB.
+    const db = await openDB("atlasdraw-autosave", 1, {
+      upgrade(d) {
+        if (!d.objectStoreNames.contains("state")) {
+          d.createObjectStore("state");
+        }
+      },
+    });
+    await db.clear("state");
+    db.close();
     Object.defineProperty(window, "location", {
       value: { ...window.location, origin: "https://test.example" },
       writable: true,
@@ -184,6 +210,39 @@ describe("useShareLink", () => {
     expect(captured().mode).toBe("upload");
     expect(client.createShareTokenSpy).toHaveBeenCalledWith(
       "abcdefghij1234567890K",
+      "write-key",
+      null,
+    );
+  });
+
+  it("an uploaded link lasts by default and carries the expiry when one is chosen", async () => {
+    const big = () => doc(new Map([["img-1", noise(64 * 1024)]]));
+
+    const lasting = await share(big(), makeMockClient());
+    cleanup();
+    const week = await share(big(), makeMockClient(), 7);
+
+    expect(lasting.link?.expiresAt).toBeNull();
+    expect(week.link?.expiresAt).toBe("2026-05-17T00:00:00.000Z");
+  });
+
+  it("revoke ends an uploaded link", async () => {
+    const client = makeMockClient();
+    const { link, captured } = await share(
+      doc(new Map([["img-1", noise(64 * 1024)]])),
+      client,
+    );
+
+    let revoked = false;
+    await act(async () => {
+      revoked = await captured().revoke(link!.token!);
+    });
+
+    expect(revoked).toBe(true);
+    expect(client.revokeShareTokenSpy).toHaveBeenCalledWith(
+      "abcdefghij1234567890K",
+      "write-key",
+      "tokentokentokentokenA",
     );
   });
 

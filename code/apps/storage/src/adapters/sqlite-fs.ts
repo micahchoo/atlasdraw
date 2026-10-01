@@ -1,19 +1,26 @@
-// @atlasdraw/storage — Phase 4 T3: sqlite-fs adapter.
+// @atlasdraw/storage — sqlite-fs adapter.
 //
-// Minimal stack — SQLite for metadata, filesystem for blobs. Used by the
-// "single-binary" self-host path.
+// Minimal stack: SQLite for metadata, the filesystem for blobs. A blob is
+// written to a temp file, flushed to disk and renamed over the old one, so a
+// crash leaves the old bytes or the new bytes, never a mix.
 
 import * as fs from "node:fs";
-
+import * as fsp from "node:fs/promises";
 import * as path from "node:path";
+import { randomBytes } from "node:crypto";
 
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 
-import { ID_RE, SHARE_TTL_MS } from "../constants";
+import { ID_RE } from "../constants";
 import { migrateSqlite } from "../db/migrate";
 
-import type { MapRecord, ShareToken, StorageClient } from "../types";
+import type {
+  MapRecord,
+  ShareToken,
+  StorageClient,
+  SweepResult,
+} from "../types";
 
 interface MapRow {
   id: string;
@@ -21,14 +28,56 @@ interface MapRow {
   updated_at: string;
   blob_ref: string;
   byte_size: number;
+  write_key_hash: string | null;
 }
 
 interface ShareRow {
   token: string;
   map_id: string;
   mode: string;
-  expires_at: string;
+  expires_at: string | null;
   created_at: string;
+}
+
+const TEMP_SUFFIX = ".tmp";
+
+/** Writes `bytes` to `target` through a flushed temp file and a rename. */
+async function writeAtomic(target: string, bytes: Buffer): Promise<void> {
+  const temp = `${target}.${randomBytes(6).toString("hex")}${TEMP_SUFFIX}`;
+  try {
+    const handle = await fsp.open(temp, "w");
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fsp.rename(temp, target);
+  } catch (err) {
+    await fsp.rm(temp, { force: true });
+    throw err;
+  }
+}
+
+function rowToMap(row: MapRow): MapRecord {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    blob_ref: row.blob_ref,
+    byte_size: row.byte_size,
+    write_key_hash: row.write_key_hash,
+  };
+}
+
+function rowToShare(row: ShareRow): ShareToken {
+  return {
+    token: row.token,
+    map_id: row.map_id,
+    mode: "read",
+    expires_at: row.expires_at,
+    created_at: row.created_at,
+  };
 }
 
 export function createSqliteFsAdapter(opts: {
@@ -37,14 +86,20 @@ export function createSqliteFsAdapter(opts: {
   const { dataDir } = opts;
   const blobsDir = path.join(dataDir, "blobs");
   fs.mkdirSync(blobsDir, { recursive: true });
+  // A temp file left by a crash mid-write belongs to no map.
+  for (const name of fs.readdirSync(blobsDir)) {
+    if (name.endsWith(TEMP_SUFFIX)) {
+      fs.rmSync(path.join(blobsDir, name), { force: true });
+    }
+  }
 
   const db = new Database(path.join(dataDir, "atlas.db"));
   db.pragma("journal_mode = WAL");
   migrateSqlite(db);
 
   const insertMap = db.prepare(
-    `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size, write_key_hash)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectMap = db.prepare(`SELECT * FROM maps WHERE id = ?`);
   const updateMapRow = db.prepare(
@@ -55,45 +110,58 @@ export function createSqliteFsAdapter(opts: {
      VALUES (?, ?, ?, ?, ?)`,
   );
   const selectShare = db.prepare(`SELECT * FROM share_tokens WHERE token = ?`);
+  const deleteShare = db.prepare(
+    `DELETE FROM share_tokens WHERE token = ? AND map_id = ?`,
+  );
+  const sumBytes = db.prepare(
+    `SELECT COALESCE(SUM(byte_size), 0) AS total FROM maps`,
+  );
+  const deleteExpired = db.prepare(
+    `DELETE FROM share_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+  );
+  const selectUnreachable = db.prepare(
+    `SELECT id, blob_ref FROM maps
+     WHERE write_key_hash IS NULL
+       AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)`,
+  );
+  const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
 
-  function rowToMap(row: MapRow): MapRecord {
-    return {
-      id: row.id,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      blob_ref: row.blob_ref,
-      byte_size: row.byte_size,
-    };
-  }
-
-  function rowToShare(row: ShareRow): ShareToken {
-    return {
-      token: row.token,
-      map_id: row.map_id,
-      mode: "read",
-      expires_at: row.expires_at,
-      created_at: row.created_at,
-    };
-  }
+  const sweepRows = db.transaction((nowIso: string) => {
+    const tokens = deleteExpired.run(nowIso).changes;
+    const maps = selectUnreachable.all() as Array<{
+      id: string;
+      blob_ref: string;
+    }>;
+    for (const map of maps) {
+      deleteMapRow.run(map.id);
+    }
+    return { tokens, maps };
+  });
 
   return {
-    async createMap(blob: Buffer): Promise<MapRecord> {
+    async createMap(blob, writeKeyHash) {
       const id = nanoid(21);
       const now = new Date().toISOString();
       const blobRef = `blobs/${id}.atlasdraw`;
       const fullPath = path.join(dataDir, blobRef);
-      fs.writeFileSync(fullPath, blob);
-      insertMap.run(id, now, now, blobRef, blob.byteLength);
+      await writeAtomic(fullPath, blob);
+      try {
+        insertMap.run(id, now, now, blobRef, blob.byteLength, writeKeyHash);
+      } catch (err) {
+        await fsp.rm(fullPath, { force: true });
+        throw err;
+      }
       return {
         id,
         created_at: now,
         updated_at: now,
         blob_ref: blobRef,
         byte_size: blob.byteLength,
+        write_key_hash: writeKeyHash,
       };
     },
 
-    async getMap(id: string): Promise<MapRecord | null> {
+    async getMap(id) {
       if (!ID_RE.test(id)) {
         return null;
       }
@@ -101,7 +169,7 @@ export function createSqliteFsAdapter(opts: {
       return row ? rowToMap(row) : null;
     },
 
-    async updateMap(id: string, blob: Buffer): Promise<MapRecord> {
+    async updateMap(id, blob) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
@@ -110,35 +178,25 @@ export function createSqliteFsAdapter(opts: {
         throw new Error(`not found: ${id}`);
       }
       const now = new Date().toISOString();
-      const fullPath = path.join(dataDir, existing.blob_ref);
-      fs.writeFileSync(fullPath, blob);
+      await writeAtomic(path.join(dataDir, existing.blob_ref), blob);
       updateMapRow.run(now, blob.byteLength, id);
       return {
-        id,
-        created_at: existing.created_at,
+        ...rowToMap(existing),
         updated_at: now,
-        blob_ref: existing.blob_ref,
         byte_size: blob.byteLength,
       };
     },
 
-    async createShareToken(mapId: string): Promise<ShareToken> {
-      if (!ID_RE.test(mapId)) {
+    async createShareToken(mapId, expiresAt) {
+      if (!ID_RE.test(mapId) || !selectMap.get(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
-      const existing = selectMap.get(mapId) as MapRow | undefined;
-      if (!existing) {
-        throw new Error(`not found: ${mapId}`);
-      }
-      const token = nanoid(21);
-      const now = new Date();
-      const expires = new Date(now.getTime() + SHARE_TTL_MS);
       const record: ShareToken = {
-        token,
+        token: nanoid(21),
         map_id: mapId,
         mode: "read",
-        expires_at: expires.toISOString(),
-        created_at: now.toISOString(),
+        expires_at: expiresAt ? expiresAt.toISOString() : null,
+        created_at: new Date().toISOString(),
       };
       insertShare.run(
         record.token,
@@ -150,7 +208,7 @@ export function createSqliteFsAdapter(opts: {
       return record;
     },
 
-    async resolveToken(token: string): Promise<ShareToken | null> {
+    async resolveToken(token) {
       if (!ID_RE.test(token)) {
         return null;
       }
@@ -158,15 +216,23 @@ export function createSqliteFsAdapter(opts: {
       return row ? rowToShare(row) : null;
     },
 
-    async getBlob(id: string): Promise<Buffer | null> {
-      // Defense-in-depth: reject malformed ids before any filesystem call.
-      // Phase 4 T8 amendment — consumed by GET /share/:token/blob.
+    async deleteShareToken(mapId, token) {
+      if (!ID_RE.test(mapId) || !ID_RE.test(token)) {
+        return false;
+      }
+      return deleteShare.run(token, mapId).changes > 0;
+    },
+
+    async getBlob(id) {
       if (!ID_RE.test(id)) {
         return null;
       }
-      const fullPath = path.join(dataDir, "blobs", `${id}.atlasdraw`);
+      const row = selectMap.get(id) as MapRow | undefined;
+      if (!row) {
+        return null;
+      }
       try {
-        return fs.readFileSync(fullPath);
+        return await fsp.readFile(path.join(dataDir, row.blob_ref));
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "ENOENT") {
           return null;
@@ -175,14 +241,26 @@ export function createSqliteFsAdapter(opts: {
       }
     },
 
-    async ping(): Promise<void> {
-      // Also confirms the blobs dir is still there — same filesystem the
-      // sqlite file lives on, so a disk-level failure would hit both.
-      db.prepare("SELECT 1").get();
-      fs.accessSync(blobsDir, fs.constants.R_OK | fs.constants.W_OK);
+    async totalBytes() {
+      return (sumBytes.get() as { total: number }).total;
     },
 
-    async close(): Promise<void> {
+    async sweep(now): Promise<SweepResult> {
+      const { tokens, maps } = sweepRows(now.toISOString());
+      for (const map of maps) {
+        await fsp.rm(path.join(dataDir, map.blob_ref), { force: true });
+      }
+      return { tokens, maps: maps.length };
+    },
+
+    async ping() {
+      // The blobs dir is on the same filesystem as the database, so a
+      // disk-level failure shows on both.
+      db.prepare("SELECT 1").get();
+      await fsp.access(blobsDir, fs.constants.R_OK | fs.constants.W_OK);
+    },
+
+    async close() {
       db.close();
     },
   };

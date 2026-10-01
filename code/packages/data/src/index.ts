@@ -11,6 +11,7 @@ export {
   GeoJSONParseError,
   requireHomogeneousGeometry,
   splitByGeometryKind,
+  geometryKindOf,
 } from "./geojson";
 export type { AtlasGeometryKind, GeometryKindPart } from "./geojson";
 
