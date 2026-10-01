@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 import { Pool } from "pg";
 
 import { ID_RE, SHARE_TTL_MS } from "../constants";
+import { migratePostgres } from "../db/migrate";
 import { logger } from "../logger";
 
 import type { MapRecord, ShareToken, StorageClient } from "../types";
@@ -97,32 +98,24 @@ export function createPostgresMinioAdapter(opts: {
   });
 
   let bucketReady = false;
-  let initReady: Promise<void> | null = null;
 
-  async function ensureSchema(): Promise<void> {
-    if (initReady) {
-      return initReady;
+  // The schema setup runs once per process. A setup that fails (Postgres not
+  // up yet at a cold start) is forgotten, so the next call tries again.
+  let schemaReady: Promise<void> | null = null;
+  function ensureSchema(): Promise<void> {
+    if (!schemaReady) {
+      schemaReady = migratePostgres(pool).catch((err: unknown) => {
+        schemaReady = null;
+        throw err;
+      });
     }
-    initReady = (async () => {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS maps (
-          id TEXT PRIMARY KEY,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          blob_ref TEXT NOT NULL,
-          byte_size BIGINT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS share_tokens (
-          token TEXT PRIMARY KEY,
-          map_id TEXT NOT NULL REFERENCES maps(id),
-          mode TEXT NOT NULL,
-          expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL
-        );
-      `);
-    })();
-    return initReady;
+    return schemaReady;
   }
+  // Start the setup with the server instead of at the first request. A
+  // failure here is only logged; the first request retries it.
+  ensureSchema().catch((err: unknown) => {
+    logger.warn({ err }, "postgres schema setup failed; will retry");
+  });
 
   async function ensureBucket(): Promise<void> {
     if (bucketReady) {
@@ -307,11 +300,3 @@ export function createPostgresMinioAdapter(opts: {
     },
   };
 }
-
-// Exposed for tests: the constant bucket name + ID validator.
-export const __postgresMinioInternals = { BUCKET, ID_RE };
-
-// Re-export the GetObjectCommand reference so the test file can assert on it
-// when mocking; we don't otherwise use blob-read in T3 (atlas-app reads via
-// a future T4 endpoint).
-export { GetObjectCommand };

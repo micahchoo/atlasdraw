@@ -1,0 +1,98 @@
+// The storage schema, as an ordered list of migrations. This list is the one
+// definition of the schema: both adapters run it at startup through
+// ./migrate.ts, and nothing else creates or alters a table.
+//
+// Rules for a new migration:
+//   - Append it. Never edit, rename or reorder one that has shipped; a
+//     database records each name once and never runs that name again.
+//   - Give both dialects. SQLite stores timestamps as ISO text; Postgres
+//     stores them as TIMESTAMPTZ.
+//   - The runner applies each migration in a transaction, so a migration
+//     that fails leaves no trace. Do not commit inside one.
+
+import type Database from "better-sqlite3";
+
+export interface Migration {
+  /** Unique and sortable. The runner applies migrations in list order. */
+  name: string;
+  sqlite: (db: Database.Database) => void;
+  postgres: string;
+}
+
+function hasColumn(
+  db: Database.Database,
+  table: string,
+  column: string,
+): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{
+    name: string;
+  }>;
+  return columns.some((c) => c.name === column);
+}
+
+export const MIGRATIONS: readonly Migration[] = [
+  {
+    // IF NOT EXISTS, because a database made before the runner existed
+    // already has these tables and no record of this migration.
+    name: "001_maps_and_share_tokens",
+    sqlite: (db) =>
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS maps (
+          id TEXT PRIMARY KEY,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          blob_ref TEXT NOT NULL,
+          byte_size INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS share_tokens (
+          token TEXT PRIMARY KEY,
+          map_id TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (map_id) REFERENCES maps(id)
+        );
+      `),
+    postgres: `
+      CREATE TABLE IF NOT EXISTS maps (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        blob_ref TEXT NOT NULL,
+        byte_size BIGINT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS share_tokens (
+        token TEXT PRIMARY KEY,
+        map_id TEXT NOT NULL REFERENCES maps(id),
+        mode TEXT NOT NULL,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL
+      );
+    `,
+  },
+  {
+    // Managed mode is removed (ADR-0013). A database that ran it has
+    // workspace_id columns, their index and a workspaces table. SQLite
+    // refuses to drop an indexed column, so the index goes first.
+    name: "002_drop_workspaces",
+    sqlite: (db) => {
+      db.exec(`
+        DROP INDEX IF EXISTS maps_workspace_id_idx;
+        DROP INDEX IF EXISTS workspaces_stripe_customer_id_idx;
+        DROP TABLE IF EXISTS workspaces;
+      `);
+      for (const table of ["maps", "share_tokens"]) {
+        if (hasColumn(db, table, "workspace_id")) {
+          db.exec(`ALTER TABLE ${table} DROP COLUMN workspace_id`);
+        }
+      }
+    },
+    postgres: `
+      DROP INDEX IF EXISTS maps_workspace_id_idx;
+      DROP INDEX IF EXISTS workspaces_stripe_customer_id_idx;
+      DROP TABLE IF EXISTS workspaces;
+      ALTER TABLE maps DROP COLUMN IF EXISTS workspace_id;
+      ALTER TABLE share_tokens DROP COLUMN IF EXISTS workspace_id;
+    `,
+  },
+];

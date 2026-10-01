@@ -38,6 +38,40 @@ jobs:
       - run: yarn test:falsifiable
       - run: yarn test:app --watch=false
 
+  storage-postgres:
+    name: Storage adapter and migrations against real Postgres
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atlasdraw_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      # The Postgres tests in apps/storage run only when this is set.
+      ATLASDRAW_TEST_PG_URL: postgres://postgres:test@localhost:5432/atlasdraw_test
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn vitest run apps/storage
+
   bench:
     name: Bench regression gate
     runs-on: ubuntu-latest

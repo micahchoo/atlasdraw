@@ -11,6 +11,7 @@ import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 
 import { ID_RE, SHARE_TTL_MS } from "../constants";
+import { migrateSqlite } from "../db/migrate";
 
 import type { MapRecord, ShareToken, StorageClient } from "../types";
 
@@ -39,23 +40,7 @@ export function createSqliteFsAdapter(opts: {
 
   const db = new Database(path.join(dataDir, "atlas.db"));
   db.pragma("journal_mode = WAL");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS maps (
-      id TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      blob_ref TEXT NOT NULL,
-      byte_size INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS share_tokens (
-      token TEXT PRIMARY KEY,
-      map_id TEXT NOT NULL,
-      mode TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      FOREIGN KEY (map_id) REFERENCES maps(id)
-    );
-  `);
+  migrateSqlite(db);
 
   const insertMap = db.prepare(
     `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
