@@ -17,14 +17,7 @@ import { Pool } from "pg";
 import { ID_RE, SHARE_TTL_MS } from "../constants";
 import { logger } from "../logger";
 
-import type {
-  MapRecord,
-  ShareToken,
-  StorageClient,
-  Workspace,
-  WorkspacePlan,
-  WorkspaceScope,
-} from "../types";
+import type { MapRecord, ShareToken, StorageClient } from "../types";
 
 const BUCKET = "atlasdraw-maps";
 
@@ -34,7 +27,6 @@ interface MapRow {
   updated_at: Date | string;
   blob_ref: string;
   byte_size: number | string;
-  workspace_id?: string | null;
 }
 
 interface ShareRow {
@@ -42,15 +34,6 @@ interface ShareRow {
   map_id: string;
   mode: string;
   expires_at: Date | string;
-  created_at: Date | string;
-  workspace_id?: string | null;
-}
-
-interface WorkspaceRow {
-  id: string;
-  name: string;
-  plan: string;
-  stripe_customer_id?: string | null;
   created_at: Date | string;
 }
 
@@ -68,7 +51,6 @@ function rowToMap(row: MapRow): MapRecord {
       typeof row.byte_size === "string"
         ? parseInt(row.byte_size, 10)
         : row.byte_size,
-    workspace_id: row.workspace_id ?? null,
   };
 }
 
@@ -78,19 +60,6 @@ function rowToShare(row: ShareRow): ShareToken {
     map_id: row.map_id,
     mode: "read",
     expires_at: isoize(row.expires_at),
-    created_at: isoize(row.created_at),
-    workspace_id: row.workspace_id ?? null,
-  };
-}
-
-function rowToWorkspace(row: WorkspaceRow): Workspace {
-  return {
-    id: row.id,
-    name: row.name,
-    // Validate against the WorkspacePlan union at the adapter boundary —
-    // anything else is a DB-corruption / hand-edit, surface loudly.
-    plan: row.plan as WorkspacePlan,
-    stripe_customer_id: row.stripe_customer_id ?? null,
     created_at: isoize(row.created_at),
   };
 }
@@ -141,31 +110,15 @@ export function createPostgresMinioAdapter(opts: {
           created_at TIMESTAMP WITH TIME ZONE NOT NULL,
           updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
           blob_ref TEXT NOT NULL,
-          byte_size BIGINT NOT NULL,
-          workspace_id TEXT
+          byte_size BIGINT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS share_tokens (
           token TEXT PRIMARY KEY,
           map_id TEXT NOT NULL REFERENCES maps(id),
           mode TEXT NOT NULL,
           expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-          workspace_id TEXT
-        );
-        ALTER TABLE maps ADD COLUMN IF NOT EXISTS workspace_id TEXT;
-        ALTER TABLE share_tokens ADD COLUMN IF NOT EXISTS workspace_id TEXT;
-        -- Phase 6 A13b: workspaces table.
-        CREATE TABLE IF NOT EXISTS workspaces (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          plan TEXT NOT NULL,
-          stripe_customer_id TEXT,
           created_at TIMESTAMP WITH TIME ZONE NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS workspaces_stripe_customer_id_idx
-          ON workspaces(stripe_customer_id);
-        CREATE INDEX IF NOT EXISTS maps_workspace_id_idx
-          ON maps(workspace_id);
       `);
     })();
     return initReady;
@@ -204,17 +157,16 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   return {
-    async createMap(blob: Buffer, scope?: WorkspaceScope): Promise<MapRecord> {
+    async createMap(blob: Buffer): Promise<MapRecord> {
       await ensureSchema();
       const id = nanoid(21);
       const blobRef = `maps/${id}.atlasdraw`;
       await putBlob(blobRef, blob);
       const now = new Date();
-      const workspaceId = scope?.workspaceId ?? null;
       await pool.query(
-        `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size, workspace_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, now, now, blobRef, blob.byteLength, workspaceId],
+        `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, now, now, blobRef, blob.byteLength],
       );
       return {
         id,
@@ -222,7 +174,6 @@ export function createPostgresMinioAdapter(opts: {
         updated_at: now.toISOString(),
         blob_ref: blobRef,
         byte_size: blob.byteLength,
-        workspace_id: workspaceId,
       };
     },
 
@@ -232,7 +183,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size, workspace_id
+        `SELECT id, created_at, updated_at, blob_ref, byte_size
          FROM maps WHERE id = $1`,
         [id],
       );
@@ -245,7 +196,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const existing = await pool.query<MapRow>(
-        `SELECT id, created_at, updated_at, blob_ref, byte_size, workspace_id
+        `SELECT id, created_at, updated_at, blob_ref, byte_size
          FROM maps WHERE id = $1`,
         [id],
       );
@@ -265,14 +216,10 @@ export function createPostgresMinioAdapter(opts: {
         updated_at: now.toISOString(),
         blob_ref: row.blob_ref,
         byte_size: blob.byteLength,
-        workspace_id: row.workspace_id ?? null,
       };
     },
 
-    async createShareToken(
-      mapId: string,
-      scope?: WorkspaceScope,
-    ): Promise<ShareToken> {
+    async createShareToken(mapId: string): Promise<ShareToken> {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
@@ -287,11 +234,10 @@ export function createPostgresMinioAdapter(opts: {
       const token = nanoid(21);
       const now = new Date();
       const expires = new Date(now.getTime() + SHARE_TTL_MS);
-      const workspaceId = scope?.workspaceId ?? null;
       await pool.query(
-        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, workspace_id)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [token, mapId, "read", expires, now, workspaceId],
+        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [token, mapId, "read", expires, now],
       );
       return {
         token,
@@ -299,7 +245,6 @@ export function createPostgresMinioAdapter(opts: {
         mode: "read",
         expires_at: expires.toISOString(),
         created_at: now.toISOString(),
-        workspace_id: workspaceId,
       };
     },
 
@@ -309,7 +254,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<ShareRow>(
-        `SELECT token, map_id, mode, expires_at, created_at, workspace_id
+        `SELECT token, map_id, mode, expires_at, created_at
          FROM share_tokens WHERE token = $1`,
         [token],
       );
@@ -346,85 +291,6 @@ export function createPostgresMinioAdapter(opts: {
         }
         throw err;
       }
-    },
-
-    // ─── Phase 6 A13b/A13c: workspaces ─────────────────────────────────
-    async createWorkspace(input: {
-      id: string;
-      name: string;
-      plan: WorkspacePlan;
-    }): Promise<Workspace> {
-      await ensureSchema();
-      const now = new Date();
-      await pool.query(
-        `INSERT INTO workspaces (id, name, plan, stripe_customer_id, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [input.id, input.name, input.plan, null, now],
-      );
-      return {
-        id: input.id,
-        name: input.name,
-        plan: input.plan,
-        stripe_customer_id: null,
-        created_at: now.toISOString(),
-      };
-    },
-
-    async getWorkspace(id: string): Promise<Workspace | null> {
-      await ensureSchema();
-      const res = await pool.query<WorkspaceRow>(
-        `SELECT id, name, plan, stripe_customer_id, created_at
-         FROM workspaces WHERE id = $1`,
-        [id],
-      );
-      return res.rows[0] ? rowToWorkspace(res.rows[0]) : null;
-    },
-
-    async listWorkspaces(): Promise<Workspace[]> {
-      await ensureSchema();
-      const res = await pool.query<WorkspaceRow>(
-        `SELECT id, name, plan, stripe_customer_id, created_at
-         FROM workspaces ORDER BY created_at ASC`,
-      );
-      return res.rows.map(rowToWorkspace);
-    },
-
-    async updateWorkspacePlan(
-      id: string,
-      plan: WorkspacePlan,
-      stripeCustomerId?: string | null,
-    ): Promise<void> {
-      await ensureSchema();
-      // Stripe customer id is sticky: COALESCE preserves existing value
-      // when a null arrives (e.g. cancellation event that doesn't re-send).
-      await pool.query(
-        `UPDATE workspaces
-         SET plan = $1,
-             stripe_customer_id = COALESCE($2, stripe_customer_id)
-         WHERE id = $3`,
-        [plan, stripeCustomerId ?? null, id],
-      );
-    },
-
-    async countWorkspaceMaps(id: string): Promise<number> {
-      await ensureSchema();
-      const res = await pool.query<{ n: string }>(
-        `SELECT COUNT(*)::text AS n FROM maps WHERE workspace_id = $1`,
-        [id],
-      );
-      return res.rows[0] ? parseInt(res.rows[0].n, 10) : 0;
-    },
-
-    async findWorkspaceByStripeCustomerId(
-      customerId: string,
-    ): Promise<Workspace | null> {
-      await ensureSchema();
-      const res = await pool.query<WorkspaceRow>(
-        `SELECT id, name, plan, stripe_customer_id, created_at
-         FROM workspaces WHERE stripe_customer_id = $1`,
-        [customerId],
-      );
-      return res.rows[0] ? rowToWorkspace(res.rows[0]) : null;
     },
 
     async ping(): Promise<void> {
