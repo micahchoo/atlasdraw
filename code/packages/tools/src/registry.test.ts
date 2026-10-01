@@ -52,7 +52,6 @@ describe("tools registry — registerTool()", () => {
       label: "Test Only",
       icon: "test-icon",
       cursor: "crosshair",
-      defaultScaleMode: "geographic" as const,
       onPointerDown: () => {},
     };
     registerTool(customTool);
@@ -68,7 +67,6 @@ describe("tools registry — registerTool()", () => {
         label: "Duplicate Pin",
         icon: "x",
         cursor: "x",
-        defaultScaleMode: "geographic" as const,
         onPointerDown: () => {},
       }),
     ).toThrow(/already registered/);

@@ -12,6 +12,7 @@
 import { ulid } from "ulid";
 
 import { CURRENT_MANIFEST_VERSION } from "@atlasdraw/data";
+import { documentFrame } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -111,6 +112,7 @@ function cameraNow(): Camera {
 
 function blankFile(): AtlasdrawDocument {
   const now = new Date().toISOString();
+  const camera = cameraNow();
   return {
     manifest: {
       id: ulid(),
@@ -122,7 +124,9 @@ function blankFile(): AtlasdrawDocument {
         type: "registry",
         id: useBasemapStore.getState().activeBasemapId,
       },
-      camera: cameraNow(),
+      camera,
+      // The world frame starts where the user is looking (ADR-0015).
+      world: documentFrame(camera.center[0], camera.center[1]),
       layers: [],
       permissions: { publicView: false },
     },

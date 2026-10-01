@@ -34,6 +34,7 @@ import type { AppState } from "@atlasdraw/excalidraw/types";
 
 import type { Mutable } from "@atlasdraw/common/utility-types";
 
+import { styleUnit } from "./atlasStyleUnit";
 import { generateRoughOptions } from "./shape";
 import { ShapeCache } from "./shape";
 import { LinearElementEditor } from "./linearElementEditor";
@@ -812,7 +813,8 @@ export const getArrowheadPoints = (
   const nx = (x2 - x1) / distance;
   const ny = (y2 - y1) / distance;
 
-  const size = getArrowheadSize(arrowhead);
+  // Atlasdraw: in the element's pixel unit (atlasStyleUnit.ts).
+  const size = getArrowheadSize(arrowhead) * styleUnit(element);
 
   let length = 0;
 

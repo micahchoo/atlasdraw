@@ -787,16 +787,20 @@ export interface ExcalidrawProps {
     collar: boolean;
   }) => void;
   /**
-   * Atlasdraw addition (ADR-0010): override the "scroll back to content"
-   * button's action. In atlasdraw the Excalidraw canvas is scroll-locked (the
-   * MapLibre map is the real camera), so the default `calculateScrollCenter` is
-   * a no-op. When provided, this is called with the current scene elements;
-   * return `true` if handled (e.g. the app moved the map to frame the geo
-   * content), or `false` to fall back to the default scroll behavior.
+   * Atlasdraw addition (ADR-0015). The scene is a world map at a fixed
+   * reference zoom, so one scene unit can be far less than one pixel. When
+   * true, the stroke width and font size the user picks are screen pixels:
+   * a new element, and a picker change, store them divided by the zoom value,
+   * and the pickers show an element's sizes times the zoom value.
    */
-  onScrollBackToContent?: (
-    elements: readonly NonDeletedExcalidrawElement[],
-  ) => boolean;
+  screenSizedStyles?: boolean;
+  /**
+   * Atlasdraw addition (ADR-0015). Called before a zoom action (zoom in, out,
+   * reset, fit) changes the viewport. Return true when the host moved its own
+   * camera instead; the action then does nothing. The atlas app's map owns
+   * the camera, and Excalidraw's zoom steps and clamp do not fit a map zoom.
+   */
+  onZoomAction?: (action: ZoomAction) => boolean;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
   zenModeEnabled?: boolean;
@@ -946,6 +950,18 @@ export type AppProps = Merge<
 
 /** A subset of App class properties that we need to use elsewhere
  * in the app, eg Manager. Factored out into a separate type to keep DRY. */
+/** A zoom action, as `onZoomAction` receives it. */
+export type ZoomAction =
+  | { type: "zoomIn" }
+  | { type: "zoomOut" }
+  | { type: "resetZoom" }
+  | {
+      type: "zoomToFit";
+      elements: readonly ExcalidrawElement[];
+      /** False when the fit may zoom past 100% (fit-to-selection). */
+      inViewport: boolean;
+    };
+
 export type AppClassProperties = {
   props: AppProps;
   state: AppState;

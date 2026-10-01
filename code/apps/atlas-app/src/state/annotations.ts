@@ -18,26 +18,42 @@
 // and so does collaboration. Every command raises the element's version and
 // records an undo step.
 
+import { useMemo } from "react";
+
 import {
   CaptureUpdateAction,
   newElementWith,
   syncMovedIndices,
 } from "@atlasdraw/element";
-import { isGeoCustomData, type GeoCustomData } from "@atlasdraw/geo";
+import { shapeCenter, toLngLat, type WorldFrame } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-/** What the panel stores on an element, under `customData.atlas`. */
+import { useDocument } from "./document";
+import { useSceneStore } from "./scene";
+
+/** What the atlas stores on an element, under `customData.atlas`. */
 export interface AtlasElementData {
   label?: string;
   hidden?: boolean;
+  /**
+   * Scene units per screen pixel at the zoom the element was drawn at. The
+   * editor draws arrowheads, dashes and jitter in it
+   * (packages/element/src/atlasStyleUnit.ts). Set at creation.
+   */
+  unit?: number;
 }
 
 /** The element fields the selector reads. */
 export interface AnnotationSource {
   readonly id: string;
   readonly type?: string;
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly points?: ReadonlyArray<readonly [number, number]>;
   readonly isDeleted?: boolean;
   readonly containerId?: string | null;
   readonly customData?: Record<string, unknown>;
@@ -87,25 +103,25 @@ const TOOL_NAMES: Record<string, string> = {
   selection: "Selection",
 };
 
-/** The approximate centre of a geo anchor. */
-function geoCenter(customData: unknown): { lat: number; lng: number } | null {
-  if (!isGeoCustomData(customData)) {
+/** Where on Earth the element's centre is, from its scene coordinates. */
+function placeOf(
+  el: AnnotationSource,
+  frame: WorldFrame,
+): { lat: number; lng: number } | null {
+  if (typeof el.x !== "number" || typeof el.y !== "number") {
     return null;
   }
-  const geo = (customData as GeoCustomData).geo;
-  switch (geo.kind) {
-    case "point":
-      return { lat: geo.lat, lng: geo.lng };
-    case "bbox":
-      return {
-        lat: (geo.north + geo.south) / 2,
-        lng: (geo.east + geo.west) / 2,
-      };
-    case "polyline": {
-      const first = geo.coordinates[0];
-      return first ? { lng: first[0], lat: first[1] } : null;
-    }
-  }
+  return toLngLat(
+    frame,
+    shapeCenter({
+      type: el.type ?? "",
+      x: el.x,
+      y: el.y,
+      width: el.width,
+      height: el.height,
+      points: el.points,
+    }),
+  );
 }
 
 /** "40.7°N, 74.0°W". */
@@ -118,14 +134,17 @@ function formatLatLng(lat: number, lng: number): string {
 }
 
 /**
- * The label an element gets when the user has not named it.
- *
- * With a geo anchor: "Rectangle near 40.7°N, 74.0°W". Without: "Rectangle".
- * An unknown type without an anchor: the element id.
+ * The label an element gets when the user has not named it:
+ * "Rectangle near 40.7°N, 74.0°W", from the element's centre in the world
+ * frame. It changes whenever the element moves. Without a position:
+ * "Rectangle". An unknown type without a position: the element id.
  */
-export function generateLayerLabel(el: AnnotationSource): string {
+export function generateLayerLabel(
+  el: AnnotationSource,
+  frame: WorldFrame,
+): string {
   const typeName = el.type ? TOOL_NAMES[el.type] ?? el.type : null;
-  const center = geoCenter(el.customData);
+  const center = placeOf(el, frame);
   if (typeName && center) {
     return `${typeName} near ${formatLatLng(center.lat, center.lng)}`;
   }
@@ -139,8 +158,12 @@ export function generateLayerLabel(el: AnnotationSource): string {
 // The selector
 // ---------------------------------------------------------------------------
 
-/** Text bound to a container is part of the container's row. */
-const isBoundText = (el: AnnotationSource): boolean => !!el.containerId;
+/**
+ * An element has a row of its own when it is live and is not text bound to a
+ * container (that text is part of the container's row).
+ */
+const isRow = (el: AnnotationSource): boolean =>
+  !el.isDeleted && !el.containerId;
 
 /**
  * The panel's annotation rows: one per live element, in scene order (the
@@ -148,10 +171,11 @@ const isBoundText = (el: AnnotationSource): boolean => !!el.containerId;
  */
 export function annotationRows(
   elements: readonly AnnotationSource[],
+  frame: WorldFrame,
 ): AnnotationRow[] {
   const rows: AnnotationRow[] = [];
   for (const el of elements) {
-    if (el.isDeleted || isBoundText(el)) {
+    if (!isRow(el)) {
       continue;
     }
     const atlas = atlasData(el);
@@ -159,13 +183,20 @@ export function annotationRows(
     rows.push({
       kind: "annotation",
       id: el.id,
-      label: userLabel ?? generateLayerLabel(el),
+      label: userLabel ?? generateLayerLabel(el, frame),
       renamedByUser: userLabel !== null,
       visible: atlas.hidden !== true,
       order: rows.length,
     });
   }
   return rows;
+}
+
+/** The layer panel's annotation rows, labelled in the open document's frame. */
+export function useAnnotationRows(): AnnotationRow[] {
+  const elements = useSceneStore((s) => s.elements);
+  const world = useDocument((s) => s.world);
+  return useMemo(() => annotationRows(elements, world), [elements, world]);
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +282,7 @@ export function moveAnnotation(
   toOrder: number,
 ): void {
   const all = scene.getSceneElementsIncludingDeleted();
-  const rows = annotationRows(all);
+  const rows = all.filter(isRow);
   const from = rows.findIndex((r) => r.id === id);
   if (from === -1) {
     return;

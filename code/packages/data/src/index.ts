@@ -37,6 +37,7 @@ export {
   LayerEntrySchema,
   PermissionsSchema,
   ULIDSchema,
+  WorldFrameSchema,
 } from "./manifest-schema";
 export type {
   Manifest,
@@ -45,6 +46,7 @@ export type {
   LayerEntry,
   TileLayerEntry,
   Permissions,
+  WorldFrameData,
   AtlasdrawDocument,
   SceneElement,
 } from "./manifest-schema";

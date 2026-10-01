@@ -10,6 +10,7 @@ import {
   getFontString,
   getUpdatedTimestamp,
   getLineHeight,
+  MAX_SCENE_EXTENT,
 } from "@atlasdraw/common";
 
 import type { Radians } from "@atlasdraw/math";
@@ -103,14 +104,14 @@ const _newElementBase = <T extends ExcalidrawElement>(
   // NOTE (mtolmacs): This is a temporary check to detect extremely large
   // element position or sizing
   if (
-    x < -1e6 ||
-    x > 1e6 ||
-    y < -1e6 ||
-    y > 1e6 ||
-    width < -1e6 ||
-    width > 1e6 ||
-    height < -1e6 ||
-    height > 1e6
+    x < -MAX_SCENE_EXTENT ||
+    x > MAX_SCENE_EXTENT ||
+    y < -MAX_SCENE_EXTENT ||
+    y > MAX_SCENE_EXTENT ||
+    width < -MAX_SCENE_EXTENT ||
+    width > MAX_SCENE_EXTENT ||
+    height < -MAX_SCENE_EXTENT ||
+    height > MAX_SCENE_EXTENT
   ) {
     console.error("New element size or position is too large", {
       x,

@@ -11,17 +11,29 @@ import { useCallback, useEffect } from "react";
 
 import {
   annotationToFeatureCollection,
+  elementGeometry,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "@atlasdraw/tools";
 import { defaultLayerStyle } from "@atlasdraw/basemap";
-import { isGeoCustomData } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { deleteAnnotation, generateLayerLabel } from "../state/annotations";
+import { currentDocument } from "../state/document";
 
 import type { DocumentCommand } from "../state/document";
+
+/**
+ * True when the element converts: it has a shape on the map, and it is not
+ * text (a label is not a feature). Read through the open document's frame.
+ */
+function isConvertible(el: ConvertibleElement): boolean {
+  return (
+    el.type !== "text" &&
+    elementGeometry(el, currentDocument().snapshot().world) !== null
+  );
+}
 
 /**
  * Registers the Convert-annotation-to-data-layer action on the element
@@ -57,19 +69,9 @@ export function useConvertToDataLayer(
         return null;
       }
       const el = excalidrawAPI.getSceneElements().find((x) => x.id === ids[0]);
-      if (!el || !isGeoCustomData(el.customData)) {
-        return null;
-      }
-      // text elements carry geo but aren't convertible. Filter at the gate
-      // so the menu item shows enabled only when the conversion will succeed.
-      if (el.type === "text") {
-        return null;
-      }
-      return {
-        id: el.id,
-        type: el.type,
-        customData: el.customData as ConvertibleElement["customData"],
-      };
+      // Filter at the gate so the menu item shows enabled only when the
+      // conversion will succeed.
+      return el && isConvertible(el) ? el : null;
     }, [excalidrawAPI]);
 
   const handleConvert = useCallback(
@@ -78,14 +80,15 @@ export function useConvertToDataLayer(
         return;
       }
       try {
-        const fc = annotationToFeatureCollection(el);
+        const world = currentDocument().snapshot().world;
+        const fc = annotationToFeatureCollection(el, world);
         const source = excalidrawAPI
           .getSceneElements()
           .find((x) => x.id === el.id);
         addDataLayer({
           id: `dl:${crypto.randomUUID()}`,
           fc,
-          label: source ? generateLayerLabel(source) : el.type,
+          label: source ? generateLayerLabel(source, world) : el.type,
           style: defaultLayerStyle(fc),
         });
         deleteAnnotation(excalidrawAPI, el.id);
@@ -111,7 +114,7 @@ export function useConvertToDataLayer(
   // Convert is a right-click context-menu item, through the
   // atlasdraw fork's `excalidrawAPI.registerContextMenuItem`. Item appears
   // at the tail of the element menu, gated the same way
-  // currentConvertibleSelection is (single geo selection, not text/arrow).
+  // currentConvertibleSelection is (single selection with a shape, not text).
   // Re-runs on handleConvert identity change; the unregister fn returned by the API
   // removes the prior closure so we don't accumulate stale items.
   useEffect(() => {
@@ -131,13 +134,7 @@ export function useConvertToDataLayer(
           return false;
         }
         const el = elements.find((x) => x.id === ids[0]);
-        if (!el || !isGeoCustomData(el.customData)) {
-          return false;
-        }
-        if (el.type === "text") {
-          return false;
-        }
-        return true;
+        return !!el && isConvertible(el);
       },
       perform: () => {
         // Defensive: predicate already passed, but recompute the

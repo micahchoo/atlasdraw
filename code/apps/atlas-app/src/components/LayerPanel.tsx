@@ -56,12 +56,13 @@ import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { currentDocument, dispatch, useDocument } from "../state/document";
 import { useSelectedLayerStore } from "../state/selectedLayer";
-import { useAnnotationRows, useSceneStore } from "../state/scene";
+import { useSceneStore } from "../state/scene";
 import {
   deleteAnnotation,
   moveAnnotation,
   renameAnnotation,
   setAnnotationVisible,
+  useAnnotationRows,
 } from "../state/annotations";
 import {
   fitMapToBox,
@@ -1791,7 +1792,10 @@ export function LayerPanel() {
         const element = scene()
           ?.getSceneElements()
           .find((el) => el.id === id);
-        if (element && fitMapToContent(map, [element])) {
+        if (
+          element &&
+          fitMapToContent(map, [element], currentDocument().snapshot().world)
+        ) {
           announce(`Zoomed to "${name}"`);
         } else {
           announce(`"${name}" has no geometry to zoom to`);

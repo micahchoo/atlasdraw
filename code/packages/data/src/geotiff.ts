@@ -125,11 +125,9 @@ export class RasterDecodeError extends Error {
 /**
  * Web Mercator metres → lng/lat.
  *
- * `packages/geo` says Mercator math lives in MapLibre and must not be
- * replicated — that rule is about the projection seam that CoordinateSync uses,
- * where a second implementation would drift from the map's own. This is a
- * one-shot conversion of four corner coordinates at import time, with no map
- * instance in scope and no live camera to stay in step with. It is the
+ * The drawing's own Mercator (pixels at a reference zoom) is
+ * `packages/geo`'s world frame. This is a one-shot conversion of four corner
+ * coordinates in metres at import time, with no frame in scope. It is the
  * published EPSG:3857 inverse, and it is six lines.
  */
 function webMercatorToLngLat(x: number, y: number): [number, number] {

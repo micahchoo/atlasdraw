@@ -98,11 +98,9 @@ vi.mock("@atlasdraw/data", () => ({
 vi.mock("@atlasdraw/tools", () => ({
   PinTool: { name: "pin" },
   annotationToFeatureCollection: vi.fn(),
+  drawingToFeatureCollection: vi.fn(),
+  elementGeometry: vi.fn(),
   UnsupportedConvertElementError: class {},
-}));
-
-vi.mock("@atlasdraw/geo", () => ({
-  isGeoCustomData: () => false,
 }));
 
 // loadDocument is called from openAtlasDocument, toFile from

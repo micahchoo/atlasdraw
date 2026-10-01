@@ -2,18 +2,20 @@
 /**
  * Phase 1 acceptance — "stays glued" smoke.
  *
- * Two cases covering the spec's load-bearing invariant: drawn elements have a
- * source-of-truth lat/lng (`customData.geo`) that survives map pan, while their
- * scene-space x/y shifts inversely so the rendered position tracks the world
- * point.
+ * The load-bearing invariant: a drawn element has one place on Earth, and
+ * it is drawn there at every camera. Under world coordinates (ADR-0015) the
+ * place is the element's scene x/y read through the document's world frame,
+ * and a camera move changes only Excalidraw's viewport.
  *
- * Source-of-truth assertion: customData.geo is byte-stable across pan.
- * Position assertion: scene x/y shifts by ~−panBy in pixels (within ±5px).
+ * Source-of-truth assertion: the element's lng/lat is byte-stable across pan
+ * and zoom (its scene coordinates are not rewritten).
+ * Position assertion: where the element is drawn on screen
+ * ((x + scrollX) * zoom) is where `map.project` puts its lng/lat.
  *
- * Test A (pin) — uses the Atlas-side PinTool path (kind: "point", scaleMode: "geographic").
- * Test B (rectangle) — uses Excalidraw's stock rectangle + useGeoAnchor stamp
- * (kind: "bbox", scaleMode: "geographic"). Programmatic drag in Excalidraw is
- * finicky in headless; if the rectangle never materializes, fixme.
+ * Test A (pin) — the Atlas-side PinTool path; a pin is centred on its point.
+ * Test B (rectangle) — Excalidraw's stock rectangle. Programmatic drag in
+ * Excalidraw is finicky in headless; if the rectangle never materializes,
+ * fixme.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -24,16 +26,29 @@ interface AtlasdrawWindow {
   __atlasdraw__?: {
     map: {
       isStyleLoaded: () => boolean;
+      getZoom: () => number;
+      zoomTo: (z: number, opts?: { duration?: number }) => unknown;
       panBy: (
         offset: [number, number],
         opts?: { duration?: number },
       ) => unknown;
+      project: (lngLat: [number, number]) => { x: number; y: number };
     };
     excalidrawAPI: {
       getSceneElements: () => ReadonlyArray<SceneElement>;
-      getAppState: () => { activeTool: { type: string } };
+      getAppState: () => {
+        activeTool: { type: string };
+        scrollX: number;
+        scrollY: number;
+        zoom: { value: number };
+      };
       setActiveTool: (tool: { type: string }) => void;
     };
+    frame: () => unknown;
+    toLngLat: (
+      frame: unknown,
+      p: { x: number; y: number },
+    ) => { lng: number; lat: number };
   };
 }
 
@@ -44,18 +59,69 @@ interface SceneElement {
   y: number;
   width: number;
   height: number;
-  customData?: {
-    geo?: GeoData;
-    scaleMode?: string;
-    projection?: string;
-    schemaVersion?: number;
-  };
+  customData?: { tool?: string };
 }
 
-type GeoData =
-  | { kind: "point"; lng: number; lat: number }
-  | { kind: "bbox"; west: number; east: number; south: number; north: number }
-  | { kind: "polyline"; points: Array<[number, number]> };
+/**
+ * One element, measured: its place on Earth (the pin's centre, or the box's
+ * NW and SE corners) and where those points are drawn on screen now.
+ */
+interface Measured {
+  el: SceneElement;
+  /** lng/lat of the measured points, from scene coordinates. */
+  geo: Array<{ lng: number; lat: number }>;
+  /** The same points on screen, through Excalidraw's viewport. */
+  drawn: Array<{ x: number; y: number }>;
+  /** The same lng/lats on screen, through the map. */
+  projected: Array<{ x: number; y: number }>;
+  zoom: number;
+}
+
+async function measure(
+  page: Page,
+  which: "pin" | "rectangle",
+): Promise<Measured | undefined> {
+  return page.evaluate((kind) => {
+    const a = (window as unknown as AtlasdrawWindow).__atlasdraw__!;
+    const el = a.excalidrawAPI
+      .getSceneElements()
+      .find((e) =>
+        kind === "pin" ? e.customData?.tool === "pin" : e.type === kind,
+      );
+    if (!el) {
+      return undefined;
+    }
+    const pts =
+      kind === "pin"
+        ? [{ x: el.x + el.width / 2, y: el.y + el.height / 2 }]
+        : [
+            { x: el.x, y: el.y },
+            { x: el.x + el.width, y: el.y + el.height },
+          ];
+    const frame = a.frame();
+    const { scrollX, scrollY, zoom } = a.excalidrawAPI.getAppState();
+    const geo = pts.map((p) => a.toLngLat(frame, p));
+    return {
+      el,
+      geo,
+      drawn: pts.map((p) => ({
+        x: (p.x + scrollX) * zoom.value,
+        y: (p.y + scrollY) * zoom.value,
+      })),
+      projected: geo.map((g) => a.map.project([g.lng, g.lat])),
+      zoom: a.map.getZoom(),
+    };
+  }, which);
+}
+
+/** Largest distance between where a point is drawn and where the map puts it. */
+function drift(m: Measured): number {
+  return Math.max(
+    ...m.drawn.map((d, i) =>
+      Math.hypot(d.x - m.projected[i].x, d.y - m.projected[i].y),
+    ),
+  );
+}
 
 /** Wait until the dev-only window expose is populated AND the map style loads. */
 async function waitForAtlasdrawReady(page: Page): Promise<void> {
@@ -83,24 +149,39 @@ async function panBy(page: Page, dx: number, dy: number): Promise<void> {
     },
     [dx, dy] as const,
   );
-  // CoordinateSync is throttled at 16ms; give the trailing call room to fire.
   await page.waitForTimeout(200);
 }
 
-async function getPinElement(page: Page): Promise<SceneElement | undefined> {
-  return page.evaluate(() => {
-    const w = window as unknown as AtlasdrawWindow;
-    const els = w.__atlasdraw__?.excalidrawAPI.getSceneElements() ?? [];
-    return els.find((el) => el.customData?.geo?.kind === "point");
+async function zoomInOneLevel(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const m = (window as unknown as AtlasdrawWindow).__atlasdraw__!.map;
+    m.zoomTo(m.getZoom() + 1, { duration: 0 });
   });
+  await page.waitForTimeout(300);
 }
 
-async function getRectElement(page: Page): Promise<SceneElement | undefined> {
-  return page.evaluate(() => {
-    const w = window as unknown as AtlasdrawWindow;
-    const els = w.__atlasdraw__?.excalidrawAPI.getSceneElements() ?? [];
-    return els.find((el) => el.type === "rectangle");
+async function placePin(page: Page, x: number, y: number): Promise<void> {
+  await page.getByTestId("pin-tool-button").click();
+  await expect(page.getByTestId("atlas-tool-overlay")).toBeVisible();
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(page.getByTestId("atlas-tool-overlay")).toBeHidden();
+}
+
+async function dragRectangle(page: Page): Promise<void> {
+  const startX = 500;
+  const startY = 300;
+  const endX = 700;
+  const endY = 450;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, {
+    steps: 5,
   });
+  await page.mouse.move(endX, endY, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
 }
 
 test.describe("Phase 1 — geo foundation stays glued", () => {
@@ -113,75 +194,43 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
 
     // The Pin button is one of the first pieces of MapEditor to render.
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
-
-    // Map style + window expose must both be live before we proceed.
     await waitForAtlasdrawReady(page);
 
-    // Activate PinTool — overlay mounts on top of Excalidraw.
-    await page.getByTestId("pin-tool-button").click();
-    const overlay = page.getByTestId("atlas-tool-overlay");
-    await expect(overlay).toBeVisible();
+    await placePin(page, 640, 400);
 
-    // Click at a known viewport point. Use absolute page coords via mouse so
-    // we don't depend on overlay box geometry.
-    const clickX = 640;
-    const clickY = 400;
-    await page.mouse.move(clickX, clickY);
-    await page.mouse.down();
-    await page.mouse.up();
-
-    // Pin lands as a "point" geo element.
-    const pin1 = await getPinElement(page);
+    const pin1 = await measure(page, "pin");
     expect(pin1, "pin element should exist after click").toBeDefined();
-    expect(pin1!.customData?.geo?.kind).toBe("point");
-    const geo1 = pin1!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
-    expect(typeof geo1.lng).toBe("number");
-    expect(typeof geo1.lat).toBe("number");
+    const geo1 = pin1!.geo[0];
     expect(Number.isFinite(geo1.lng)).toBe(true);
     expect(Number.isFinite(geo1.lat)).toBe(true);
-    // Geographic is the only creation mode since e5ed36f (maintainer decision
-    // 2026-07-19, packages/tools/src/PinTool.ts); "screen" is legacy render-only.
-    expect(pin1!.customData?.scaleMode).toBe("geographic");
-    expect(pin1!.customData?.projection).toBe("mercator");
-    expect(pin1!.customData?.schemaVersion).toBe(1);
+    // The pin marks the clicked point: it is drawn where the map puts it.
+    expect(drift(pin1!), "pin drawn on its lng/lat").toBeLessThan(1);
 
-    const pos1 = { x: pin1!.x, y: pin1!.y };
-
-    // Pan east by 200px → scene x should drop by ~200, geo unchanged.
+    // Pan east by 200px → the pin moves ~−200px on screen, geo unchanged.
     await panBy(page, 200, 0);
 
-    const pin2 = await getPinElement(page);
+    const pin2 = await measure(page, "pin");
     expect(pin2, "pin should still exist after pan").toBeDefined();
-
-    const geo2 = pin2!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
     // Source of truth: lat/lng are byte-stable. (load-bearing assertion)
-    expect(geo2.lng).toBe(geo1.lng);
-    expect(geo2.lat).toBe(geo1.lat);
+    expect(pin2!.geo[0].lng).toBe(geo1.lng);
+    expect(pin2!.geo[0].lat).toBe(geo1.lat);
+    // A pan writes no element.
+    expect({ x: pin2!.el.x, y: pin2!.el.y }).toEqual({
+      x: pin1!.el.x,
+      y: pin1!.el.y,
+    });
 
-    // Rendered position: scene-x shifted by ~−200 (panning east drags world
-    // points west on screen → element's scene-x decreases). Tolerance is ±15
-    // — empirically the screen-mode forward-projection path lands within ~10px
-    // due to sub-pixel rounding in MapLibre's `panBy` + Excalidraw scrollX
-    // composition. A broken "stays glued" pipeline either leaves dx≈0 (no
-    // sync) or produces wildly wrong values (>>200).
-    const dx = pin2!.x - pos1.x;
-    const dy = pin2!.y - pos1.y;
+    const dx = pin2!.drawn[0].x - pin1!.drawn[0].x;
+    const dy = pin2!.drawn[0].y - pin1!.drawn[0].y;
     expect(
       Math.abs(dx - -200),
-      `expected scene-x to shift ~−200px, got ${dx}`,
+      `expected the pin to shift ~−200px on screen, got ${dx}`,
     ).toBeLessThan(15);
     expect(
       Math.abs(dy),
-      `expected scene-y to be stable for horizontal pan, got ${dy}`,
+      `expected screen-y to be stable for horizontal pan, got ${dy}`,
     ).toBeLessThan(15);
+    expect(drift(pin2!), "pin drawn on its lng/lat after pan").toBeLessThan(1);
   });
 
   test("rectangle stays glued during pan", async ({ page }) => {
@@ -190,206 +239,74 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    // Default tool is "selection" → Excalidraw layer captures pointer events.
-    // Use Excalidraw's stock keyboard shortcut to switch to rectangle.
     // Focus the Excalidraw area first (click empty space well away from the
-    // Pin button to avoid toggling it).
+    // Pin button to avoid toggling it), then the stock rectangle shortcut.
     await page.mouse.move(900, 100);
     await page.mouse.click(900, 100);
     await page.keyboard.press("r");
+    await dragRectangle(page);
 
-    // Drag a rectangle on the Excalidraw layer. Programmatic drag in headless
-    // chromium can race Excalidraw's pointer-state machine — interpolate the
-    // move so a pointermove event fires before pointerup.
-    const startX = 500;
-    const startY = 300;
-    const endX = 700;
-    const endY = 450;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, {
-      steps: 5,
-    });
-    await page.mouse.move(endX, endY, { steps: 5 });
-    await page.mouse.up();
-
-    // Wait for useGeoAnchor's onChange to fire after pointerUp + element commit.
-    await page.waitForTimeout(300);
-
-    const rect1 = await getRectElement(page);
-    if (!rect1 || !rect1.customData?.geo) {
+    const rect1 = await measure(page, "rectangle");
+    if (!rect1) {
       test.fixme(
         true,
         "Excalidraw rectangle drag failed in headless — pin test (A) covers the load-bearing invariant.",
       );
       return;
     }
-
-    expect(rect1.customData.geo.kind).toBe("bbox");
-    const bbox1 = rect1.customData.geo as {
-      kind: "bbox";
-      west: number;
-      east: number;
-      south: number;
-      north: number;
-    };
-    expect(bbox1.west).toBeLessThan(bbox1.east);
-    expect(bbox1.south).toBeLessThan(bbox1.north);
-    expect(rect1.customData.scaleMode).toBe("geographic");
-    expect(rect1.customData.projection).toBe("mercator");
-    expect(rect1.customData.schemaVersion).toBe(1);
-
-    const pos1 = { x: rect1.x, y: rect1.y };
+    const [nw1, se1] = rect1.geo;
+    expect(nw1.lng).toBeLessThan(se1.lng);
+    expect(se1.lat).toBeLessThan(nw1.lat);
 
     await panBy(page, 200, 0);
 
-    const rect2 = await getRectElement(page);
+    const rect2 = await measure(page, "rectangle");
     expect(rect2, "rectangle should still exist after pan").toBeDefined();
 
-    // Source of truth: bbox is unchanged.
-    const bbox2 = rect2!.customData!.geo as typeof bbox1;
-    expect(bbox2.west).toBe(bbox1.west);
-    expect(bbox2.east).toBe(bbox1.east);
-    expect(bbox2.south).toBe(bbox1.south);
-    expect(bbox2.north).toBe(bbox1.north);
+    // Source of truth: the box is unchanged.
+    expect(rect2!.geo).toEqual(rect1.geo);
 
-    // Rendered position shifts by ~−200 in x.
-    const dx = rect2!.x - pos1.x;
-    const dy = rect2!.y - pos1.y;
+    // Drawn position shifts by ~−200 in x.
+    const dx = rect2!.drawn[0].x - rect1.drawn[0].x;
+    const dy = rect2!.drawn[0].y - rect1.drawn[0].y;
     expect(
       Math.abs(dx - -200),
-      `expected scene-x to shift ~−200px, got ${dx}`,
+      `expected the box to shift ~−200px on screen, got ${dx}`,
     ).toBeLessThan(5);
     expect(
       Math.abs(dy),
-      `expected scene-y to be stable for horizontal pan, got ${dy}`,
+      `expected screen-y to be stable for horizontal pan, got ${dy}`,
     ).toBeLessThan(5);
+    expect(drift(rect2!), "box drawn on its lng/lat after pan").toBeLessThan(1);
   });
 
-  // Reproduces atlasdraw-5afc as clarified by user: "dragging seems to let annos
-  // hold position, zoom does not." Drag is fine (re-projection happens; geo is
-  // stable). Zoom is the failure mode — annotations drift off their geographic
-  // anchor.
-  //
-  // Two zoom cases:
-  //  - PIN (scaleMode:"screen") — should stay glued: lat/lng stable, screen
-  //    position should reflect new map.project at the new zoom. If pin drifts
-  //    off the anchor pixel-for-pixel after zoom, that's a screen-mode bug.
-  //  - RECTANGLE (scaleMode:"geographic") — width/height should grow/shrink
-  //    inversely with zoom (1 zoom level = 2x px-per-degree). Plan Task 8 is
-  //    deferred (atlasdraw-375a), so geographic-mode width/height re-scaling
-  //    is NOT implemented — this test will document that limitation.
-  //
-  // Method: zoom in by 1 level, then call map.project([geo.lng, geo.lat]) to
-  // get the post-zoom screen position the element SHOULD have. Compare to the
-  // element's actual scene x/y. Tight tolerance; if they diverge, the element
-  // has detached from its anchor.
+  // atlasdraw-5afc: "dragging seems to let annos hold position, zoom does
+  // not." After a zoom, each element must still be drawn where map.project
+  // puts its lng/lat, and a box's drawn size must be its geographic span.
 
-  /** Read map zoom + project a lng/lat to screen px (matches CoordinateSync's projection path). */
-  async function projectGeo(
-    page: Page,
-    lng: number,
-    lat: number,
-  ): Promise<{ x: number; y: number; zoom: number }> {
-    return page.evaluate(
-      ([lng, lat]) => {
-        const m = (window as unknown as { __atlasdraw__?: { map: any } })
-          .__atlasdraw__!.map;
-        const p = (m as any).project([lng, lat]);
-        return { x: p.x, y: p.y, zoom: (m as any).getZoom() };
-      },
-      [lng, lat] as const,
-    );
-  }
-
-  test("pin stays glued during ZOOM (atlasdraw-5afc, scaleMode:screen)", async ({
-    page,
-  }) => {
+  test("pin stays glued during ZOOM (atlasdraw-5afc)", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    // Place pin at viewport center-ish.
-    await page.getByTestId("pin-tool-button").click();
-    await expect(page.getByTestId("atlas-tool-overlay")).toBeVisible();
-    await page.mouse.move(640, 400);
-    await page.mouse.down();
-    await page.mouse.up();
-    await expect(page.getByTestId("atlas-tool-overlay")).toBeHidden();
-
-    const pin1 = await getPinElement(page);
+    await placePin(page, 640, 400);
+    const pin1 = await measure(page, "pin");
     expect(pin1, "pin should exist after click").toBeDefined();
-    const geo1 = pin1!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
 
-    const before = await projectGeo(page, geo1.lng, geo1.lat);
-    // Sanity: at zoom 0 (initial map state), element's scene position should
-    // match the projected screen position of its lat/lng. Within ~2px of click.
-    console.log(
-      `[5afc-zoom-pin] pre: zoom=${before.zoom} scene=(${pin1!.x},${
-        pin1!.y
-      }) projected=(${before.x.toFixed(1)},${before.y.toFixed(1)})`,
-    );
+    await zoomInOneLevel(page);
 
-    // Zoom in by 1 level programmatically. duration:0 = synchronous.
-    await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      (m as any).zoomTo((m as any).getZoom() + 1, { duration: 0 });
-    });
-    await page.waitForTimeout(300); // throttle settle + frame
-
-    const pin2 = await getPinElement(page);
+    const pin2 = await measure(page, "pin");
     expect(pin2, "pin should still exist after zoom").toBeDefined();
-    const geo2 = pin2!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
-
     // Source of truth: geo must be unchanged.
-    expect(geo2.lng).toBe(geo1.lng);
-    expect(geo2.lat).toBe(geo1.lat);
-
-    const after = await projectGeo(page, geo1.lng, geo1.lat);
-    const expectedX = after.x;
-    const expectedY = after.y;
-    const actualX = pin2!.x;
-    const actualY = pin2!.y;
-    const driftX = actualX - expectedX;
-    const driftY = actualY - expectedY;
+    expect(pin2!.geo).toEqual(pin1!.geo);
+    expect(pin2!.zoom).toBeCloseTo(pin1!.zoom + 1, 6);
     console.log(
-      `[5afc-zoom-pin] post: zoom=${
-        after.zoom
-      } scene=(${actualX},${actualY}) expectedProjected=(${expectedX.toFixed(
-        1,
-      )},${expectedY.toFixed(1)}) drift=(${driftX.toFixed(1)},${driftY.toFixed(
-        1,
-      )})`,
+      `[5afc-zoom-pin] drift after zoom ${drift(pin2!).toExponential(2)} px`,
     );
-
-    // Pin should sit within a few px of where map.project says its lat/lng is.
-    // Larger tolerance (10px) accounts for mid-element vs corner-element offset
-    // (PinTool centers a 16x16 ellipse on the click point, so element.x is
-    // top-left = projected-x - 8). Bug presents as drift much larger than 10.
-    expect(
-      Math.abs(driftX),
-      `pin scene-x drifted ${driftX.toFixed(
-        1,
-      )}px from projected lat/lng after zoom`,
-    ).toBeLessThan(10);
-    expect(
-      Math.abs(driftY),
-      `pin scene-y drifted ${driftY.toFixed(
-        1,
-      )}px from projected lat/lng after zoom`,
-    ).toBeLessThan(10);
+    expect(drift(pin2!), "pin drawn on its lng/lat after zoom").toBeLessThan(1);
   });
 
-  test("rectangle stays glued during ZOOM (atlasdraw-5afc, scaleMode:geographic)", async ({
+  test("rectangle stays glued during ZOOM (atlasdraw-5afc)", async ({
     page,
   }) => {
     await page.goto("/");
@@ -402,106 +319,53 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
       w.__atlasdraw__?.excalidrawAPI.setActiveTool({ type: "rectangle" });
     });
     await page.waitForTimeout(50);
+    await dragRectangle(page);
 
-    // Drag a rectangle.
-    const startX = 500;
-    const startY = 300;
-    const endX = 700;
-    const endY = 450;
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move((startX + endX) / 2, (startY + endY) / 2, {
-      steps: 5,
-    });
-    await page.mouse.move(endX, endY, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(300);
-
-    const rect1 = await getRectElement(page);
-    if (!rect1 || !rect1.customData?.geo) {
+    const rect1 = await measure(page, "rectangle");
+    if (!rect1) {
       test.fixme(
         true,
         "Rectangle drag failed in headless — see Test B for context.",
       );
       return;
     }
-    const bbox1 = rect1.customData.geo as {
-      kind: "bbox";
-      west: number;
-      east: number;
-      south: number;
-      north: number;
-    };
-    const w1 = rect1.width;
-    const h1 = rect1.height;
-    console.log(
-      `[5afc-zoom-rect] pre: scene=(${rect1.x},${
-        rect1.y
-      }) wh=(${w1},${h1}) bbox.lng=[${bbox1.west.toFixed(
-        4,
-      )},${bbox1.east.toFixed(4)}]`,
-    );
 
     // Zoom in by 1 level → 2x pixel density per degree.
-    await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      (m as any).zoomTo((m as any).getZoom() + 1, { duration: 0 });
-    });
-    await page.waitForTimeout(300);
+    await zoomInOneLevel(page);
 
-    const rect2 = await getRectElement(page);
+    const rect2 = await measure(page, "rectangle");
     expect(rect2, "rectangle should still exist after zoom").toBeDefined();
-    const bbox2 = rect2!.customData!.geo as typeof bbox1;
 
-    // Source of truth: bbox is unchanged.
-    expect(bbox2.west).toBe(bbox1.west);
-    expect(bbox2.east).toBe(bbox1.east);
-    expect(bbox2.south).toBe(bbox1.south);
-    expect(bbox2.north).toBe(bbox1.north);
+    // Source of truth: the box is unchanged.
+    expect(rect2!.geo).toEqual(rect1.geo);
 
-    // Compute expected width/height from projected NW + SE corners at new zoom.
-    const nw = await projectGeo(page, bbox1.west, bbox1.north);
-    const se = await projectGeo(page, bbox1.east, bbox1.south);
-    const expectedW = se.x - nw.x;
-    const expectedH = se.y - nw.y;
-    const driftW = rect2!.width - expectedW;
-    const driftH = rect2!.height - expectedH;
+    // Drawn width/height equal the projected span of NW and SE at the new
+    // zoom, twice the drag.
+    const [nw, se] = rect2!.projected;
+    const [dnw, dse] = rect2!.drawn;
+    const driftW = dse.x - dnw.x - (se.x - nw.x);
+    const driftH = dse.y - dnw.y - (se.y - nw.y);
     console.log(
-      `[5afc-zoom-rect] post: scene=(${rect2!.x},${rect2!.y}) wh=(${
-        rect2!.width
-      },${rect2!.height}) expectedWH=(${expectedW.toFixed(
-        1,
-      )},${expectedH.toFixed(1)}) driftWH=(${driftW.toFixed(
-        1,
-      )},${driftH.toFixed(1)})`,
+      `[5afc-zoom-rect] drawn=(${(dse.x - dnw.x).toFixed(1)},${(
+        dse.y - dnw.y
+      ).toFixed(1)}) driftWH=(${driftW.toFixed(3)},${driftH.toFixed(3)})`,
     );
-
-    // EXPECTED TO FAIL until Task 8 (atlasdraw-375a) lands width/height
-    // re-scaling for scaleMode:geographic. After zoom-in by 1 level, the
-    // rectangle's pixel width/height should ~double; today they stay at the
-    // initial drag size (~200x150), so driftW ≈ -200 px.
-    test.info().annotations.push({
-      type: "issue",
-      description: `atlasdraw-5afc / atlasdraw-375a — scaleMode:geographic width/height not re-scaled on zoom`,
-    });
     expect(
-      Math.abs(driftW),
-      `rectangle width drifted ${driftW.toFixed(
-        1,
-      )}px from geographic span after zoom (Task 8 not implemented)`,
-    ).toBeLessThan(20);
-    expect(
-      Math.abs(driftH),
-      `rectangle height drifted ${driftH.toFixed(
-        1,
-      )}px from geographic span after zoom (Task 8 not implemented)`,
-    ).toBeLessThan(20);
+      Math.abs(dse.x - dnw.x - 2 * (rect1.drawn[1].x - rect1.drawn[0].x)),
+      "one zoom level doubles the drawn width",
+    ).toBeLessThan(2);
+    expect(Math.abs(driftW), "width matches the geographic span").toBeLessThan(
+      1,
+    );
+    expect(Math.abs(driftH), "height matches the geographic span").toBeLessThan(
+      1,
+    );
+    expect(drift(rect2!), "box drawn on its lng/lat after zoom").toBeLessThan(
+      1,
+    );
   });
 
-  // Interactive wheel zoom — the path the user actually uses. MapLibre's
-  // scrollZoom handler reads wheel events on its canvas and fires "zoom" + "move"
-  // events. If those don't reach useCoordinateSync, annotations won't re-project.
+  // Interactive wheel zoom — the path the user actually uses.
   test("pin stays glued during INTERACTIVE wheel zoom (atlasdraw-5afc)", async ({
     page,
   }) => {
@@ -509,20 +373,9 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    await page.getByTestId("pin-tool-button").click();
-    await expect(page.getByTestId("atlas-tool-overlay")).toBeVisible();
-    await page.mouse.move(640, 400);
-    await page.mouse.down();
-    await page.mouse.up();
-    await expect(page.getByTestId("atlas-tool-overlay")).toBeHidden();
-
-    const pin1 = await getPinElement(page);
+    await placePin(page, 640, 400);
+    const pin1 = await measure(page, "pin");
     expect(pin1, "pin should exist").toBeDefined();
-    const geo1 = pin1!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
 
     // Switch to HAND tool first so Excalidraw layer goes pointer-events:none.
     await page.evaluate(() => {
@@ -531,106 +384,34 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     });
     await page.waitForTimeout(50);
 
-    // Diagnostic: which element receives the wheel event at (300,300)?
-    const wheelTarget = await page.evaluate(() => {
-      const el = document.elementFromPoint(300, 300);
-      const chain: string[] = [];
-      let cur: Element | null = el;
-      while (cur && chain.length < 6) {
-        const cls =
-          cur.className && typeof cur.className === "string"
-            ? `.${cur.className.split(/\s+/).slice(0, 2).join(".")}`
-            : "";
-        chain.push(`${cur.tagName.toLowerCase()}${cls.slice(0, 50)}`);
-        cur = cur.parentElement;
-      }
-      const w2 = window as unknown as AtlasdrawWindow;
-      const tool =
-        w2.__atlasdraw__?.excalidrawAPI.getAppState().activeTool.type;
-      return { tool, chain: chain.join(" > ") };
-    });
-    console.log(
-      `[5afc-wheel] tool=${wheelTarget.tool} elFromPt(300,300)=${wheelTarget.chain}`,
-    );
-
-    const beforeZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      return (m as any).getZoom();
-    });
-
+    const beforeZoom = pin1!.zoom;
     // Mouse wheel zoom IN at (300,300) — well away from any UI buttons.
     await page.mouse.move(300, 300);
-    // MapLibre's default scrollZoom interprets wheel deltaY < 0 as zoom in.
-    // Send several to trigger a noticeable zoom (one wheel tick is small).
     for (let i = 0; i < 5; i++) {
       await page.mouse.wheel(0, -120);
       await page.waitForTimeout(40);
     }
-    // MapLibre's scrollZoom uses easing — wait for animation to settle.
     await page.waitForTimeout(500);
 
-    const afterZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      return (m as any).getZoom();
-    });
-    console.log(
-      `[5afc-wheel] zoom: ${beforeZoom.toFixed(2)} -> ${afterZoom.toFixed(2)}`,
-    );
-
-    const pin2 = await getPinElement(page);
+    const pin2 = await measure(page, "pin");
     expect(pin2, "pin should still exist").toBeDefined();
-    const geo2 = pin2!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
-
-    // Pre-check: did the zoom level actually change?
-    if (Math.abs(afterZoom - beforeZoom) < 0.1) {
+    if (Math.abs(pin2!.zoom - beforeZoom) < 0.1) {
       throw new Error(
-        `wheel zoom did not change camera zoom (${beforeZoom} -> ${afterZoom}). ` +
-          `Means wheel events were captured by an overlay (Excalidraw layer?) instead of MapLibre.`,
+        `wheel zoom did not change camera zoom (${beforeZoom} -> ${
+          pin2!.zoom
+        }). Means wheel events were captured by an overlay instead of MapLibre.`,
       );
     }
-
-    expect(geo2.lng).toBe(geo1.lng);
-    expect(geo2.lat).toBe(geo1.lat);
-
-    const projected = await projectGeo(page, geo1.lng, geo1.lat);
-    const driftX = pin2!.x - projected.x;
-    const driftY = pin2!.y - projected.y;
-    console.log(
-      `[5afc-wheel] post: scene=(${pin2!.x.toFixed(1)},${pin2!.y.toFixed(
-        1,
-      )}) projected=(${projected.x.toFixed(1)},${projected.y.toFixed(
-        1,
-      )}) drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
-    );
+    expect(pin2!.geo).toEqual(pin1!.geo);
+    console.log(`[5afc-wheel] drift ${drift(pin2!).toExponential(2)} px`);
     expect(
-      Math.abs(driftX),
-      `pin drifted ${driftX.toFixed(
-        1,
-      )}px in x from projected lat/lng after wheel zoom`,
-    ).toBeLessThan(15);
-    expect(
-      Math.abs(driftY),
-      `pin drifted ${driftY.toFixed(
-        1,
-      )}px in y from projected lat/lng after wheel zoom`,
-    ).toBeLessThan(15);
+      drift(pin2!),
+      "pin drawn on its lng/lat after wheel zoom",
+    ).toBeLessThan(1);
   });
 
-  // The actual user-reported failure mode (atlasdraw-5afc): in DRAWING mode
-  // (selection/rectangle/etc.), the Excalidraw layer is pointer-events:auto and
-  // captures wheel events before MapLibre's scrollZoom listener can see them.
-  // Result: scroll-to-zoom does nothing, annotations don't re-project, user
-  // perceives them as drifting off their geographic anchor.
-  //
-  // Pre-fix expectation: this test fails because zoom stays at 12.
-  // Post-fix expectation: useMapWheelRouter intercepts wheel in capture phase
-  // and routes the zoom delta to map.easeTo regardless of which layer is on top.
+  // In DRAWING mode (selection/rectangle/etc.) the Excalidraw layer takes
+  // pointer events; useMapWheelRouter must route the wheel to the map.
   test("pin stays glued during wheel zoom in DRAWING mode (atlasdraw-5afc)", async ({
     page,
   }) => {
@@ -638,35 +419,16 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    await page.getByTestId("pin-tool-button").click();
-    await page.mouse.move(640, 400);
-    await page.mouse.down();
-    await page.mouse.up();
-    await expect(page.getByTestId("atlas-tool-overlay")).toBeHidden();
-
-    // Force selection mode (the default after PinTool one-shot reset, but
-    // make it explicit so a future tool-state change doesn't silently break
-    // this test's premise).
+    await placePin(page, 640, 400);
     await page.evaluate(() => {
       const w = window as unknown as AtlasdrawWindow;
       w.__atlasdraw__?.excalidrawAPI.setActiveTool({ type: "selection" });
     });
     await page.waitForTimeout(50);
 
-    const pin1 = await getPinElement(page);
-    const geo1 = pin1!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
+    const pin1 = await measure(page, "pin");
+    expect(pin1, "pin should exist").toBeDefined();
 
-    const beforeZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      return (m as any).getZoom();
-    });
-
-    // Wheel zoom at a point clearly inside the map area but not on the Pin button.
     await page.mouse.move(300, 300);
     for (let i = 0; i < 5; i++) {
       await page.mouse.wheel(0, -120);
@@ -674,45 +436,21 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     }
     await page.waitForTimeout(500);
 
-    const afterZoom = await page.evaluate(() => {
-      const m = (window as unknown as { __atlasdraw__?: { map: any } })
-        .__atlasdraw__!.map;
-      return (m as any).getZoom();
-    });
+    const pin2 = await measure(page, "pin");
     console.log(
-      `[5afc-drawing-wheel] zoom: ${beforeZoom.toFixed(
+      `[5afc-drawing-wheel] zoom: ${pin1!.zoom.toFixed(
         2,
-      )} -> ${afterZoom.toFixed(2)}`,
+      )} -> ${pin2!.zoom.toFixed(2)}`,
     );
-
     expect(
-      afterZoom - beforeZoom,
-      `wheel zoom in selection mode must change camera zoom (${beforeZoom} -> ${afterZoom}) — ` +
+      pin2!.zoom - pin1!.zoom,
+      `wheel zoom in selection mode must change camera zoom — ` +
         `if 0, the wheel router fix is missing/regressed`,
     ).toBeGreaterThan(0.3);
-
-    const pin2 = await getPinElement(page);
-    const geo2 = pin2!.customData!.geo as {
-      kind: "point";
-      lng: number;
-      lat: number;
-    };
-    expect(geo2.lng).toBe(geo1.lng);
-    expect(geo2.lat).toBe(geo1.lat);
-
-    const projected = await projectGeo(page, geo1.lng, geo1.lat);
-    const driftX = pin2!.x - projected.x;
-    const driftY = pin2!.y - projected.y;
-    console.log(
-      `[5afc-drawing-wheel] drift=(${driftX.toFixed(1)},${driftY.toFixed(1)})`,
-    );
+    expect(pin2!.geo).toEqual(pin1!.geo);
     expect(
-      Math.abs(driftX),
-      `drawing-mode wheel drift x = ${driftX.toFixed(1)}`,
-    ).toBeLessThan(15);
-    expect(
-      Math.abs(driftY),
-      `drawing-mode wheel drift y = ${driftY.toFixed(1)}`,
-    ).toBeLessThan(15);
+      drift(pin2!),
+      "pin drawn on its lng/lat after drawing-mode wheel zoom",
+    ).toBeLessThan(1);
   });
 });

@@ -3,8 +3,8 @@
  *
  * The unit tests prove the store guard and the panel's editor separately. What
  * only a browser can show is the two of them against the *real* chain — scene
- * change → useGeoAnchor stamps a geo anchor → generateLayerLabel produces
- * "Rectangle near 20.8°N, 73.4°E" → the registry takes it. That chain is what
+ * change → generateLayerLabel reads the shape's position through the world
+ * frame → "Rectangle near 20.8°N, 73.4°E" in the panel. That chain is what
  * made the naive version of this feature silently lose renames: it re-runs on
  * every scene change, so a rename survived only until the shape next moved.
  *
@@ -19,13 +19,17 @@ import { test, expect } from "@playwright/test";
 interface SceneElement {
   id: string;
   type: string;
-  customData?: { geo?: unknown };
 }
 
 interface AtlasdrawWindow {
   __atlasdraw__?: {
     excalidrawAPI: {
       getSceneElements: () => ReadonlyArray<SceneElement>;
+      getAppState: () => {
+        scrollX: number;
+        scrollY: number;
+        zoom: { value: number };
+      };
       updateScene: (opts: { elements: ReadonlyArray<unknown> }) => void;
       toggleSidebar: (opts: { name: string; tab?: string }) => void;
     };
@@ -34,7 +38,10 @@ interface AtlasdrawWindow {
 
 const RECT_ID = "e2e-rect-1";
 
-/** A minimal but complete Excalidraw rectangle. No geo — the app stamps it. */
+/**
+ * A minimal but complete Excalidraw rectangle, sized in screen pixels. Its
+ * scene coordinates are set where it is put (putRectangle).
+ */
 function rectangleAt(x: number, y: number) {
   return {
     id: RECT_ID,
@@ -91,18 +98,42 @@ async function putRectangle(
   x: number,
   y: number,
 ) {
+  // (x, y) and the size are screen pixels: the scene is the world, so they
+  // go through the viewport the camera bridge set.
   await page.evaluate((el) => {
-    const w = window as unknown as AtlasdrawWindow;
-    w.__atlasdraw__?.excalidrawAPI.updateScene({ elements: [el] });
+    const api = (window as unknown as AtlasdrawWindow).__atlasdraw__
+      ?.excalidrawAPI;
+    if (!api) {
+      return;
+    }
+    const { scrollX, scrollY, zoom } = api.getAppState();
+    const z = zoom.value;
+    // Moving a shape keeps everything else on it (its user label included).
+    const existing = api.getSceneElements().find((e) => e.id === el.id);
+    api.updateScene({
+      elements: [
+        {
+          ...el,
+          ...existing,
+          x: el.x / z - scrollX,
+          y: el.y / z - scrollY,
+          width: el.width / z,
+          height: el.height / z,
+          strokeWidth: el.strokeWidth / z,
+          // A real move raises the version; the panel follows versions.
+          version: el.version + Date.now(),
+        },
+      ],
+    });
   }, rectangleAt(x, y));
-  // The geo anchor lands on a later onChange, and the generated label with it.
   await page.waitForFunction(
     (id) => {
       const w = window as unknown as AtlasdrawWindow;
-      const el = w.__atlasdraw__?.excalidrawAPI
-        .getSceneElements()
-        .find((e) => e.id === id);
-      return el?.customData?.geo != null;
+      return (
+        w.__atlasdraw__?.excalidrawAPI
+          .getSceneElements()
+          .some((e) => e.id === id) ?? false
+      );
     },
     RECT_ID,
     { timeout: 10_000 },
@@ -154,6 +185,31 @@ test.describe("LayerPanel — annotation rename", () => {
     await putRectangle(page, 900, 600);
     await page.waitForTimeout(1000);
     await expect(name).toHaveText("Ward 3");
+  });
+
+  test("the generated name follows the shape when it moves", async ({
+    page,
+  }) => {
+    await waitForApp(page);
+    await putRectangle(page, 400, 300);
+    await openLayersTab(page);
+
+    const name = page.locator(`[data-testid="layer-name-${RECT_ID}"]`);
+    await expect(name).toContainText("Rectangle near");
+    const before = await name.textContent();
+
+    // Far enough across the map for the one-decimal "near" text to change.
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __atlasdraw__: { map: { panBy: (o: [number, number]) => void } };
+      };
+      w.__atlasdraw__.map.panBy([-600, -400]);
+    });
+    await page.waitForTimeout(500);
+    await putRectangle(page, 400, 300);
+
+    await expect(name).toContainText("Rectangle near");
+    await expect(name).not.toHaveText(before ?? "");
   });
 
   test("Escape leaves the generated name alone", async ({ page }) => {

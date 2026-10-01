@@ -10,6 +10,7 @@ import { act } from "@testing-library/react";
 
 import { bindScene, useSceneStore } from "../../../state/scene";
 import { annotationRows } from "../../../state/annotations";
+import { currentDocument } from "../../../state/document";
 import { makeFakeExcalidraw } from "../../../state/__tests__/fixtures/documentWorld";
 
 import type { FakeExcalidraw } from "../../../state/__tests__/fixtures/documentWorld";
@@ -49,12 +50,16 @@ export function seedScene(
 
 /** The annotation rows the panel shows, as ids in panel order. */
 export function sceneAnnotationIds(): string[] {
-  return annotationRows(useSceneStore.getState().elements).map((r) => r.id);
+  return annotationRows(
+    useSceneStore.getState().elements,
+    currentDocument().snapshot().world,
+  ).map((r) => r.id);
 }
 
 /** One annotation row, as the panel shows it. */
 export function sceneRow(id: string) {
-  return annotationRows(useSceneStore.getState().elements).find(
-    (r) => r.id === id,
-  );
+  return annotationRows(
+    useSceneStore.getState().elements,
+    currentDocument().snapshot().world,
+  ).find((r) => r.id === id);
 }

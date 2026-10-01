@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // EmbedView dispatch tests. The heavy map layer (@atlasdraw/basemap) is stubbed
-// so `map` stays null — useBasemapStyle / useCoordinateSync early-return — and
+// so `map` stays null — useBasemapStyle / useCameraBridge early-return — and
 // this file exercises the load-state dispatch and the ready-state mount. The
-// end-to-end map render (basemap + geo-anchored annotations, cross-origin
+// end-to-end map render (basemap + the drawing, cross-origin
 // iframe) is validated in-browser; see ledgers/PROBE-embed.md.
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -29,10 +29,10 @@ vi.mock("@atlasdraw/basemap", () => ({
     Promise.resolve({ version: 8, sources: {}, layers: [] }),
   ),
   BasemapRemoteGatedError: class BasemapRemoteGatedError extends Error {},
-  CoordinateSync: class {
+  CameraBridge: class {
     attach() {}
     detach() {}
-    syncMapToScene() {}
+    push() {}
   },
 }));
 

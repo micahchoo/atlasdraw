@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Characterization tests for useExcalidrawChangeHandler — extracted from
-// MapEditor.tsx (DEADWOOD.md god-module split, Cut 5, the hardest: this
-// callback fused five concerns and was entirely uncovered before
-// extraction). One describe block per numbered sub-concern from the
-// original handler's comments.
+// Tests for useExcalidrawChangeHandler. One describe block per numbered
+// concern in the handler's comments.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -15,8 +12,6 @@ import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
 import { useExcalidrawChangeHandler } from "./useExcalidrawChangeHandler";
-
-import type maplibregl from "maplibre-gl";
 
 function makeAppState(overrides: Record<string, unknown> = {}): AppState {
   return {
@@ -39,46 +34,15 @@ function fakeElements(
   return partials as unknown as readonly OrderedExcalidrawElement[];
 }
 
-function makeGeoElement(
-  id: string,
-  x: number,
-  y: number,
-  geo: Record<string, unknown> = { kind: "point", lng: 0, lat: 0, zRef: 0 },
-) {
-  return {
-    id,
-    x,
-    y,
-    customData: {
-      geo,
-      scaleMode: "geographic",
-      projection: "mercator",
-      schemaVersion: 1,
-    },
-  };
-}
-
 function makeParams(
   overrides: Partial<Parameters<typeof useExcalidrawChangeHandler>[0]> = {},
 ) {
   const updateScene = vi.fn();
-  const panBy = vi.fn();
-  const project = vi.fn(() => ({ x: 0, y: 0 }));
-  const map = { panBy, project } as unknown as maplibregl.Map;
   const excalidrawAPI = { updateScene } as unknown as ExcalidrawImperativeAPI;
   return {
     excalidrawAPI,
-    map,
-    syncNow: vi.fn(),
-    // Sub-concern 3 is gated on this being present, so leaving it out makes
-    // every "does not call syncNow" assertion in that block pass for the wrong
-    // reason. Default it to a stand-in origin and let each test say what it
-    // means. See mapRotationDriftLoop.repro.test.ts for why the handler stopped
-    // deriving this itself.
-    expectedOrigin: vi.fn(() => ({ x: 0, y: 0 })),
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
-    spaceHeldRef: { current: false },
     ...overrides,
   };
 }
@@ -143,129 +107,7 @@ describe("useExcalidrawChangeHandler — 1. background color intercept", () => {
   });
 });
 
-describe("useExcalidrawChangeHandler — 2. scroll lock + space-pan bridge", () => {
-  it("resets non-identity scroll/zoom to identity and returns early", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([]),
-      makeAppState({ scrollX: 50, scrollY: 0 }),
-      NO_FILES,
-    );
-
-    expect(params.excalidrawAPI!.updateScene).toHaveBeenCalledWith({
-      appState: { scrollX: 0, scrollY: 0, zoom: { value: 1 } },
-    });
-    // Early return means no markDirty/announce processing happened for this
-    // call — verified indirectly by the sync-gate tests below.
-  });
-
-  it("bridges a small scroll delta to map.panBy when space is held", () => {
-    const params = makeParams({ spaceHeldRef: { current: true } });
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([]),
-      makeAppState({ scrollX: 20, scrollY: -10 }),
-      NO_FILES,
-    );
-
-    expect(params.map!.panBy).toHaveBeenCalledWith([-20, 10], {
-      animate: false,
-    });
-  });
-
-  it("does not bridge a large scroll jump (scrollToContent, not a user drag)", () => {
-    const params = makeParams({ spaceHeldRef: { current: true } });
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([]),
-      makeAppState({ scrollX: 500, scrollY: 0 }),
-      NO_FILES,
-    );
-
-    expect(params.map!.panBy).not.toHaveBeenCalled();
-  });
-
-  it("does not bridge when space is not held", () => {
-    const params = makeParams({ spaceHeldRef: { current: false } });
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([]),
-      makeAppState({ scrollX: 20, scrollY: 0 }),
-      NO_FILES,
-    );
-
-    expect(params.map!.panBy).not.toHaveBeenCalled();
-  });
-});
-
-describe("useExcalidrawChangeHandler — 3. post-load geo sync", () => {
-  it("calls syncNow when a geo element's position diverges from where the sync would put it", () => {
-    const params = makeParams();
-    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue({
-      x: 100,
-      y: 100,
-    });
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    const el = makeGeoElement("el1", 50, 50); // 50px off from expected (100,100)
-    result.current(fakeElements([el]), makeAppState(), NO_FILES);
-
-    expect(params.syncNow).toHaveBeenCalled();
-  });
-
-  it("does not call syncNow when the element is already where the sync would put it", () => {
-    const params = makeParams();
-    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue({
-      x: 50,
-      y: 50,
-    });
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    const el = makeGeoElement("el1", 50, 50);
-    result.current(fakeElements([el]), makeAppState(), NO_FILES);
-
-    expect(params.expectedOrigin).toHaveBeenCalled(); // not vacuous
-    expect(params.syncNow).not.toHaveBeenCalled();
-  });
-
-  it("does not call syncNow when the sync disowns the element", () => {
-    // `expectedOrigin` returns null for anything CoordinateSync would not
-    // write. Treating that as "drifted to (0,0)" would sync on every change.
-    const params = makeParams();
-    (params.expectedOrigin as ReturnType<typeof vi.fn>).mockReturnValue(null);
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([makeGeoElement("el1", 500, 500)]),
-      makeAppState(),
-      NO_FILES,
-    );
-
-    expect(params.expectedOrigin).toHaveBeenCalled();
-    expect(params.syncNow).not.toHaveBeenCalled();
-  });
-
-  it("ignores non-geo elements", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([{ id: "el1", x: 0, y: 0 }]),
-      makeAppState(),
-      NO_FILES,
-    );
-
-    expect(params.expectedOrigin).not.toHaveBeenCalled();
-    expect(params.syncNow).not.toHaveBeenCalled();
-  });
-});
-
-describe("useExcalidrawChangeHandler — 4. autosave markDirty gate", () => {
+describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
   it("does not mark dirty on the first call (establishes the baseline)", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
@@ -324,18 +166,17 @@ describe("useExcalidrawChangeHandler — 4. autosave markDirty gate", () => {
     expect(usePersistenceStore.getState().isDirty).toBe(true);
   });
 
-  it("does not mark dirty for a new array of the same element versions (a camera move)", () => {
+  it("does not mark dirty for a camera move (a viewport change, same elements)", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+    const elements = fakeElements([
+      { id: "el1", version: 3, versionNonce: 5, x: 10 },
+    ]);
 
+    result.current(elements, makeAppState(), NO_FILES);
     result.current(
-      fakeElements([{ id: "el1", version: 3, versionNonce: 5, x: 10 }]),
-      makeAppState(),
-      NO_FILES,
-    );
-    result.current(
-      fakeElements([{ id: "el1", version: 3, versionNonce: 5, x: 210 }]),
-      makeAppState(),
+      [...elements],
+      makeAppState({ scrollX: -200, scrollY: 40, zoom: { value: 0.001 } }),
       NO_FILES,
     );
 
@@ -343,7 +184,7 @@ describe("useExcalidrawChangeHandler — 4. autosave markDirty gate", () => {
   });
 });
 
-describe("useExcalidrawChangeHandler — 5. selection aria-live announce", () => {
+describe("useExcalidrawChangeHandler — 3. selection aria-live announce", () => {
   it("announces a single selected element by type", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));

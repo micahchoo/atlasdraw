@@ -14,12 +14,10 @@
 // shift+arrows come from MapLibre's own handlers, re-enabled by
 // `allowRotation` on MapCanvas.
 //
-// **The needle reads the measurement, not the bearing.** `rotation` comes from
-// useCameraRotation, which measures the screen angle of geographic east off
-// the live projection. The needle, the bbox anchors (RT-2) and the printed
-// north arrow (RT-4) therefore all turn off one number and cannot disagree —
-// including if MapLibre's bearing sign convention is the opposite of what we
-// assume. Only `setCameraRotation` speaks bearing, and only when the user
+// **One angle for everything.** `rotation` comes from useCameraRotation: the
+// screen angle of geographic east. The needle, the turned drawing layer and
+// the printed north arrow (RT-4) all turn off that one number and cannot
+// disagree. Only `setCameraRotation` speaks bearing, and only when the user
 // drags.
 
 import { useCallback, useRef } from "react";

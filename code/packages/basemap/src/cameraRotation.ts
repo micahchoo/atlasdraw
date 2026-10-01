@@ -81,22 +81,12 @@ export function applyRotationPolicy(map: MapLibreMap, allow: boolean): void {
 /**
  * Turn the camera to put a given screen rotation on geographic east.
  *
- * `degrees` is in the same frame `cameraRotation()` reports: the screen angle
- * of geographic east, y-down, 0 when north-up. Passing 0 is exactly north-up.
- *
- * **This is the one place in the app that depends on MapLibre's bearing sign
- * convention, and that is on purpose.** Every *geometry* consumer — the bbox
- * anchors (RT-2), the printed north arrow (RT-4), the compass needle — measures
- * the rotation off the live projection instead of reading `getBearing()`, so
- * being wrong about the convention cannot silently misplace anything. But a
- * control has to speak the setter's language, and `setBearing` is the only
- * setter there is. Confining the conversion here means the convention has one
- * site, and getting it wrong turns the map the wrong way from the drag —
- * visible on the first frame, not silent.
+ * `degrees` is the screen angle of geographic east, y-down, 0 when north-up:
+ * the angle the drawing layer is turned by. Passing 0 is exactly north-up.
  *
  * The conversion: MapLibre defines bearing as the compass direction that is
  * "up" on screen, so at bearing 90 (east is up) east points along screen
- * (0, -1) and `cameraRotation` reports -90°. Hence `bearing = -degrees`.
+ * (0, -1), which is -90°. Hence `bearing = -degrees`.
  */
 export function setCameraRotation(map: MapLibreMap, degrees: number): void {
   map.setBearing(-degrees);

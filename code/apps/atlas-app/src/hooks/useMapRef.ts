@@ -6,14 +6,12 @@
  *                 event handlers / imperative code that must not stale-close
  *                 over an old instance.
  *   map         — state copy: triggers a re-render (and therefore re-runs
- *                 dependent hooks like useCoordinateSync) when the Map
+ *                 dependent hooks like useCameraBridge) when the Map
  *                 instance first becomes available after mount.
  *   onMapReady  — pass to <MapCanvas onMapReady={onMapReady}>; called once
  *                 after the map's "load" event fires.
  *
- * Consumed by:
- *   MapEditor   (Task 11) — passes onMapReady to <MapCanvas>
- *   useCoordinateSync (Task 12) — reads `map` as a reactive dep
+ * Consumed by MapEditor and EmbedView, which pass onMapReady to <MapCanvas>.
  */
 
 import { useRef, useState, useCallback } from "react";

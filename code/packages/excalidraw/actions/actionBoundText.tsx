@@ -47,6 +47,8 @@ import type { Mutable } from "@atlasdraw/common/utility-types";
 
 import type { Radians } from "@atlasdraw/math";
 
+import { styleScale } from "../atlasStyleScale";
+
 import { register } from "./register";
 
 import type { AppState } from "../types";
@@ -249,7 +251,10 @@ export const actionWrapTextInContainer = register({
           fillStyle: appState.currentItemFillStyle,
           strokeColor: appState.currentItemStrokeColor,
           roughness: appState.currentItemRoughness,
-          strokeWidth: appState.currentItemStrokeWidth,
+          // Atlasdraw (ADR-0015): screen pixels to scene units.
+          strokeWidth:
+            appState.currentItemStrokeWidth *
+            styleScale(app.props.screenSizedStyles, appState.zoom.value),
           strokeStyle: appState.currentItemStrokeStyle,
           roundness:
             appState.currentItemRoundness === "round"

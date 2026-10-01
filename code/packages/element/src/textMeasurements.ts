@@ -4,6 +4,7 @@ import {
   DEFAULT_FONT_FAMILY,
   getFontString,
   isTestEnv,
+  MAX_CANVAS_FONT_SIZE,
   normalizeEOL,
 } from "@atlasdraw/common";
 
@@ -134,9 +135,20 @@ class CanvasTextMetricsProvider implements TextMetricsProvider {
    */
   public getLineWidth(text: string, fontString: FontString): number {
     const context = this.canvas.getContext("2d")!;
-    context.font = fontString;
+    // Atlasdraw: a font above MAX_CANVAS_FONT_SIZE is measured at that size
+    // and scaled, because the browser clamps canvas fonts.
+    const fontSize = parseFloat(fontString);
+    const scale =
+      fontSize > MAX_CANVAS_FONT_SIZE ? fontSize / MAX_CANVAS_FONT_SIZE : 1;
+    context.font =
+      scale === 1
+        ? fontString
+        : (fontString.replace(
+            /^[\d.e+]+px/,
+            `${MAX_CANVAS_FONT_SIZE}px`,
+          ) as FontString);
     const metrics = context.measureText(text);
-    const advanceWidth = metrics.width;
+    const advanceWidth = metrics.width * scale;
 
     // since in test env the canvas measureText algo
     // doesn't measure text and instead just returns number of

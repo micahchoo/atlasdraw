@@ -16,7 +16,7 @@
  * (atlasdraw-7899, 2026-05-10).
  *
  * Phase 1 constraints enforced at construction:
- *   maxPitch: 0          — pitch=0 assumption keeps CoordinateSync projection-agnostic (OQ-2)
+ *   maxPitch: 0          — the drawing is a flat world map; at pitch 0 it is a 2D transform of the map (ADR-0015)
  *   pitchWithRotate: false
  *   dragRotate: false    — FU-14; right-drag belongs to Excalidraw's context
  *                          menu, and stays off even when `allowRotation` is
@@ -138,8 +138,8 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       style: styleUrl,
       center: initialView?.center ?? DEFAULT_CENTER,
       zoom: initialView?.zoom ?? DEFAULT_ZOOM,
-      // Phase 1 constraint: lock to 2D top-down view so CoordinateSync
-      // can use simple Mercator math without perspective correction (OQ-2).
+      // A 2D top-down view: the drawing layer follows the map with a scroll,
+      // a zoom and a rotation, and has no perspective (ADR-0015).
       maxPitch: 0,
       pitchWithRotate: false,
       // FU-14 / RT-0: rotation is reachable by default and there is no way

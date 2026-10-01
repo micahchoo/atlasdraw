@@ -139,6 +139,17 @@ export const LayerEntrySchema = z.discriminatedUnion("kind", [
 ]);
 export type LayerEntry = z.infer<typeof LayerEntrySchema>;
 
+/**
+ * The world frame (ADR-0015): a scene coordinate is a Web Mercator pixel at
+ * zoom `z0`, minus `origin` (a world pixel at z0). Integers, so the frame
+ * adds no rounding error.
+ */
+export const WorldFrameSchema = z.object({
+  z0: z.number().int().min(0).max(30),
+  origin: z.object({ x: z.number().int(), y: z.number().int() }),
+});
+export type WorldFrameData = z.infer<typeof WorldFrameSchema>;
+
 export const PermissionsSchema = z.object({
   publicView: z.boolean().default(false),
 });
@@ -155,6 +166,7 @@ export const ManifestSchema = z
     updatedAt: ISOTimestampSchema,
     basemap: BasemapRefSchema,
     camera: CameraSchema,
+    world: WorldFrameSchema,
     layers: z.array(LayerEntrySchema),
     /** W9d. Optional: see TileLayerEntrySchema. */
     tileLayers: z.array(TileLayerEntrySchema).optional(),

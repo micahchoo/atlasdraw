@@ -1,22 +1,25 @@
 # @atlasdraw/geo
 
-Coordinate math and GeoAnchor plumbing for Atlasdraw — plain functions, no React. This is the layer that keeps drawings glued to lat/lng while MapLibre pans and zooms; projection helpers delegate to a MapLibre map instance passed in by the caller.
+Coordinate math for Atlasdraw: plain functions, no React, no MapLibre.
 
-Workspace-internal package (not published). Consumed by `@atlasdraw/basemap`, `@atlasdraw/tools`, and `apps/atlas-app`.
+A drawing's scene coordinates are Web Mercator world pixels at a reference zoom (22), measured from the document's origin (ADR-0015). This package maps between scene coordinates, lng/lat and the map camera.
+
+Workspace-internal package (not published). Consumed by `@atlasdraw/basemap`, `@atlasdraw/tools`, `@atlasdraw/data` and `apps/atlas-app`.
 
 ## Capabilities
 
-- **Projection** — `projectPoint` / `unprojectPoint` / `normalizeLng` (Web-Mercator, `projection.ts`, property-tested).
-- **GeoAnchor types** — the discriminated union (`point` / `bbox` / `polyline`, per escalation E-03) in `types.ts`, plus `parseGeoCustomData` for validating anchors read from element `customData`.
-- **Element ↔ geo conversion** — `geoToExcalidraw` / `excalidrawToGeo` reprojection helpers, `computeSceneBounds`, `normalizeElementsForExport`.
-- **Scale modes** — `scaleMode.ts` (`screen` vs `map` sizing behaviour, Spec §3.4).
+- **World frame** (`world.ts`): `documentFrame`, `toScene` / `toLngLat`, `viewportFor` / `cameraFor` (map camera to Excalidraw scroll and zoom), `sceneUnitsPerPixel`.
+- **Scene geometry** (`sceneGeometry.ts`, `bounds.ts`): the outline of an element as Excalidraw draws it, and the lng/lat box of a drawing.
+- **Version 1 migration** (`migrateV1.ts`): a version 1 element (screen pixels plus `customData.geo`) to world coordinates.
 
 ## Usage
 
 ```ts
-import { projectPoint, parseGeoCustomData } from "@atlasdraw/geo";
+import { documentFrame, toLngLat, toScene } from "@atlasdraw/geo";
 
-const { x, y } = projectPoint(map, -122.4194, 37.7749);
+const frame = documentFrame(-122.4194, 37.7749);
+const p = toScene(frame, -122.4194, 37.7749); // { x: ~0, y: ~0 }
+const { lng, lat } = toLngLat(frame, p);
 ```
 
 ## Development
@@ -25,9 +28,3 @@ const { x, y } = projectPoint(map, -122.4194, 37.7749);
 yarn workspace @atlasdraw/geo test         # vitest (incl. property tests)
 yarn test:typecheck
 ```
-
-Architecture notes: [`docs/architecture/subsystems/geo/`](../../../docs/architecture/subsystems/geo/).
-
-## License
-
-MIT (see [/code/LICENSING.md](../../LICENSING.md) for the per-package breakdown).

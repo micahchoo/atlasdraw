@@ -79,7 +79,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     hideDefaultSidebarTabTriggers,
     rightSidebarWidth,
     onSidebarLayoutChange,
-    onScrollBackToContent,
+    screenSizedStyles,
+    onZoomAction,
     langCode = defaultLang.code,
     viewModeEnabled,
     zenModeEnabled,
@@ -196,7 +197,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           hideDefaultSidebarTabTriggers={hideDefaultSidebarTabTriggers}
           rightSidebarWidth={rightSidebarWidth}
           onSidebarLayoutChange={onSidebarLayoutChange}
-          onScrollBackToContent={onScrollBackToContent}
+          screenSizedStyles={screenSizedStyles}
+          onZoomAction={onZoomAction}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
           zenModeEnabled={zenModeEnabled}

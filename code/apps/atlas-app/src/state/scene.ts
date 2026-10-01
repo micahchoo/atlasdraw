@@ -8,17 +8,16 @@
 // This store holds both.
 //
 // `elements` changes only when the drawing changes (the scene signature), not
-// on every onChange. A pan gives Excalidraw a new elements array on every
-// frame; the panel must not render on every frame.
+// on every onChange: Excalidraw also calls onChange for a viewport or
+// selection change, and the panel must not render on every camera frame.
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { create } from "zustand";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import { annotationRows, type AnnotationRow } from "./annotations";
 import { sceneSignature } from "./sceneSignature";
 
 /**
@@ -93,10 +92,4 @@ export function bindScene(api: ExcalidrawImperativeAPI): () => void {
 /** Bind the scene for the lifetime of the calling component. */
 export function useSceneBinding(api: ExcalidrawImperativeAPI | null): void {
   useEffect(() => (api ? bindScene(api) : undefined), [api]);
-}
-
-/** The layer panel's annotation rows. */
-export function useAnnotationRows(): AnnotationRow[] {
-  const elements = useSceneStore((s) => s.elements);
-  return useMemo(() => annotationRows(elements), [elements]);
 }

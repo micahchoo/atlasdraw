@@ -121,27 +121,22 @@ describe("useMapWheelRouter", () => {
     expect(call.zoom).toBeCloseTo(9.825);
   });
 
-  it("lets ctrl+wheel pass through untouched (browser pinch-zoom)", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const map = makeMockMap();
-    renderHook(() => useMapWheelRouter(container, map));
+  // A trackpad pinch arrives as ctrl+wheel (meta on some macOS paths).
+  // Excalidraw's own wheel zoom clamps to [0.1, 30] and would jump the map
+  // many zoom levels, so the pinch goes to the map like any wheel.
+  it.each([{ ctrlKey: true }, { metaKey: true }])(
+    "routes a pinch (%o) to the map and keeps it from the page",
+    (mods) => {
+      const container = document.createElement("div");
+      document.body.appendChild(container);
+      const map = makeMockMap();
+      renderHook(() => useMapWheelRouter(container, map));
 
-    const event = fireWheel(container, { ctrlKey: true });
-    expect(event.defaultPrevented).toBe(false);
-    expect(map.easeTo).not.toHaveBeenCalled();
-  });
-
-  it("lets meta+wheel pass through untouched (macOS pinch-zoom)", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const map = makeMockMap();
-    renderHook(() => useMapWheelRouter(container, map));
-
-    const event = fireWheel(container, { metaKey: true });
-    expect(event.defaultPrevented).toBe(false);
-    expect(map.easeTo).not.toHaveBeenCalled();
-  });
+      const event = fireWheel(container, mods);
+      expect(event.defaultPrevented).toBe(true);
+      expect(map.easeTo).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("intercepts shift+wheel as map zoom (deliberate atlasdraw semantic)", () => {
     const container = document.createElement("div");

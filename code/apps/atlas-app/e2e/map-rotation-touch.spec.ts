@@ -44,15 +44,9 @@
 
 import { test, expect } from "@playwright/test";
 
-import type { Page } from "@playwright/test";
+import { measureTurn } from "./helpers/rotation";
 
-interface GeoBbox {
-  kind: string;
-  west: number;
-  east: number;
-  north: number;
-  south: number;
-}
+import type { Page } from "@playwright/test";
 
 interface AtlasdrawWindow {
   __atlasdraw__?: {
@@ -70,7 +64,6 @@ interface AtlasdrawWindow {
         width: number;
         height: number;
         angle?: number;
-        customData?: { geo?: GeoBbox };
       }>;
     };
   };
@@ -172,56 +165,7 @@ test.describe("map rotation — two-finger twist", () => {
    * itself.
    */
   function measure(page: Page) {
-    return page.evaluate(() => {
-      const w = window as unknown as AtlasdrawWindow;
-      const map = w.__atlasdraw__!.map;
-      const els = w
-        .__atlasdraw__!.excalidrawAPI.getSceneElements()
-        .filter((e) => !e.isDeleted);
-
-      const c = map.getCenter();
-      const a = map.project([c.lng - 0.02, c.lat]);
-      const b = map.project([c.lng + 0.02, c.lat]);
-      const eastDeg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
-
-      const el = els[0];
-      let cornerErrPx: number | null = null;
-      if (el?.customData?.geo?.kind === "bbox") {
-        const geo = el.customData.geo;
-        const ang = el.angle ?? 0;
-        const ecx = el.x + el.width / 2;
-        const ecy = el.y + el.height / 2;
-        const corner = (dx: number, dy: number) => ({
-          x: ecx + dx * Math.cos(ang) - dy * Math.sin(ang),
-          y: ecy + dx * Math.sin(ang) + dy * Math.cos(ang),
-        });
-        const hw = el.width / 2;
-        const hh = el.height / 2;
-        const drawn = [
-          corner(-hw, -hh),
-          corner(hw, -hh),
-          corner(hw, hh),
-          corner(-hw, hh),
-        ];
-        const truth = [
-          map.project([geo.west, geo.north]),
-          map.project([geo.east, geo.north]),
-          map.project([geo.east, geo.south]),
-          map.project([geo.west, geo.south]),
-        ];
-        cornerErrPx = Math.max(
-          ...drawn.map((d, i) =>
-            Math.hypot(d.x - truth[i]!.x, d.y - truth[i]!.y),
-          ),
-        );
-      }
-      return {
-        eastDeg,
-        count: els.length,
-        elAngleDeg: el ? ((el.angle ?? 0) * 180) / Math.PI : null,
-        cornerErrPx,
-      };
-    });
+    return measureTurn(page);
   }
 
   test("under the default selection tool the plate swallows the gesture", async ({

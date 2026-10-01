@@ -35,6 +35,7 @@ function synthDoc(
     updatedAt: "2026-05-03T00:00:00.000Z",
     basemap: { type: "registry", id: "default" },
     camera: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [
       {
         kind: "data",

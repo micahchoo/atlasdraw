@@ -1,69 +1,45 @@
 // packages/tools/src/convert.ts
 // SPDX-License-Identifier: MPL-2.0
-// Phase 2 Wave 2b Task T14 — Annotation → data-layer geometry conversion.
 //
-// This module is the pure geometry side of the convert-to-data-layer flow.
-// It takes an Excalidraw element decorated with GeoCustomData (and optionally
-// a `_data.radiusKm` field for circles) and emits a single-feature
-// FeatureCollection that the LayerRegistry + MapLibre stack can consume.
+// A drawn element as GeoJSON: the one converter for "convert to data layer"
+// and for the GeoJSON export.
 //
-// The right-click context menu in MapEditor wires this up:
-//   1. read the selected element via excalidrawAPI.getSceneElements()
-//   2. call annotationToFeatureCollection(el) → FeatureCollection
-//   3. registerDataLayer / addSource / addLayer (mirrors T13 drop flow)
-//   4. remove the original element from the Excalidraw scene
+// It reads the element's scene geometry (x, y, size, points and its own
+// turn) and maps each vertex to lng/lat through the document's world frame
+// (ADR-0015). The geometry is the shape as drawn on the map, turn included.
 //
-// Plan-literal drift adjusted (Wave 2b pre-impl scrub 2026-05-04):
-//   The plan referenced `customData.radiusKm`, but the host bridge in
-//   atlas-app's seedToElement.ts:131 writes seed.data → `customData._data`
-//   (escape-hatch pattern). So a circle ellipse element's radius lives at
-//   `customData._data.radiusKm`, not `customData.radiusKm`. We accept BOTH
-//   shapes here to keep the function robust to future bridge refactors.
+//   rectangle, image, frame, embed → Polygon (the four corners)
+//   ellipse                        → Polygon (64 points on the ellipse)
+//   diamond                        → Polygon (the four edge midpoints)
+//   freedraw, closed               → Polygon
+//   freedraw, open | line | arrow  → LineString
+//   text, pin                      → Point (the centre)
 //
-// GeoAnchor.kind is closed-vs-open agnostic: there is no "polygon" or
-// "freehand" kind. Closed-vs-open is determined by element.type (see mapping
-// table below).
-//
-// Mapping table (element.type → output geometry):
-//   rectangle           → Polygon    (geo.kind === "bbox" → 4-corner closed ring)
-//   ellipse/bbox        → Polygon    (64-pt ellipse approximation from bbox extents)
-//   ellipse/point       → Polygon    (geo.kind === "point" + radiusKm → @turf/circle)
-//   polygon             → Polygon    (geo.kind === "polyline" → auto-close ring)
-//   freedraw (closed)   → Polygon    (geo.kind === "polyline", first==last → closed ring)
-//   freedraw (open)     → LineString (geo.kind === "polyline", open path → coords as-is)
-//   line | polyline | arrow → LineString (geo.kind === "polyline" → coords as-is)
-//   diamond             → Polygon    (geo.kind === "bbox" → 4 midpoint vertices)
-//   text                → throw UnsupportedConvertElementError
+// Convert-to-data-layer refuses text: a label is not a feature.
 
-import circle from "@turf/circle";
+import {
+  rotateAbout,
+  shapeCenter,
+  shapeOutline,
+  toLngLat,
+  type SceneShape,
+  type ScenePoint,
+  type WorldFrame,
+} from "@atlasdraw/geo";
 
-import type { GeoCustomData } from "@atlasdraw/geo";
+import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
 
-import type { FeatureCollection, Polygon, LineString, Position } from "geojson";
-
-/**
- * Minimal element shape this module needs. We avoid taking a wide structural
- * dep on Excalidraw's internal element types — the convert function is pure
- * geometry, no scene-mutation surface, no styling concerns. Atlas-app casts
- * its scene element down to this when calling.
- *
- * `customData._data.radiusKm` is the bridge's escape-hatch shape (see header).
- * `customData.radiusKm` is accepted as a fallback in case future refactors
- * promote the field to a top-level customData key.
- */
-export type ConvertibleElement = {
-  id: string;
-  type: string;
-  customData?: GeoCustomData & {
-    radiusKm?: number;
-    _data?: { radiusKm?: number; [k: string]: unknown };
-  };
+/** The element fields the converter reads. */
+export type ConvertibleElement = SceneShape & {
+  readonly id: string;
+  readonly isDeleted?: boolean;
+  readonly containerId?: string | null;
+  readonly customData?: Record<string, unknown> | null;
 };
 
 /**
- * Thrown when an element type cannot be converted (text, arrow, or unknown
- * type with valid geo). Caller is expected to catch and surface to the user
- * (e.g. window.alert in MapEditor's right-click handler).
+ * Thrown when an element type cannot be converted (text, or a type with no
+ * geometry). The caller tells the user.
  */
 export class UnsupportedConvertElementError extends Error {
   constructor(elementType: string) {
@@ -76,219 +52,137 @@ export class UnsupportedConvertElementError extends Error {
   }
 }
 
-/**
- * Read the circle radius from either bridge-shape or future flat-shape.
- * Returns undefined if neither is present (caller throws).
- */
-function readRadiusKm(el: ConvertibleElement): number | undefined {
-  const direct = el.customData?.radiusKm;
-  if (typeof direct === "number") {
-    return direct;
-  }
-  const nested = el.customData?._data?.radiusKm;
-  if (typeof nested === "number") {
-    return nested;
-  }
-  return undefined;
+const ELLIPSE_STEPS = 64;
+
+/** A pin is an ellipse the pin tool made (`customData.tool`). */
+function isPin(el: ConvertibleElement): boolean {
+  return el.type === "ellipse" && el.customData?.tool === "pin";
 }
 
-/** Close a ring if its first and last positions are not already equal. */
-function closeRing(coords: Position[]): Position[] {
-  if (coords.length === 0) {
-    return coords;
+function ring(frame: WorldFrame, pts: readonly ScenePoint[]): Position[] {
+  const out = pts.map((p) => {
+    const { lng, lat } = toLngLat(frame, p);
+    return [lng, lat];
+  });
+  out.push(out[0]);
+  return out;
+}
+
+function line(frame: WorldFrame, pts: readonly ScenePoint[]): Position[] {
+  return pts.map((p) => {
+    const { lng, lat } = toLngLat(frame, p);
+    return [lng, lat];
+  });
+}
+
+/** Points of the box shape, before the turn, then turned about the centre. */
+function turned(el: ConvertibleElement, pts: ScenePoint[]): ScenePoint[] {
+  const c = shapeCenter(el);
+  return el.angle ? pts.map((p) => rotateAbout(p, c, el.angle!)) : pts;
+}
+
+/** The element's geometry in lng/lat, or null when its type has none. */
+export function elementGeometry(
+  el: ConvertibleElement,
+  frame: WorldFrame,
+): Geometry | null {
+  if (el.type === "text" || isPin(el)) {
+    const { lng, lat } = toLngLat(frame, shapeCenter(el));
+    return { type: "Point", coordinates: [lng, lat] };
   }
-  const first = coords[0];
-  const last = coords[coords.length - 1];
-  if (first[0] === last[0] && first[1] === last[1]) {
-    return coords;
+  const w = el.width ?? 0;
+  const h = el.height ?? 0;
+  switch (el.type) {
+    case "rectangle":
+    case "image":
+    case "frame":
+    case "magicframe":
+    case "embeddable":
+    case "iframe":
+      return { type: "Polygon", coordinates: [ring(frame, shapeOutline(el))] };
+    case "diamond": {
+      const mid = turned(el, [
+        { x: el.x + w / 2, y: el.y },
+        { x: el.x + w, y: el.y + h / 2 },
+        { x: el.x + w / 2, y: el.y + h },
+        { x: el.x, y: el.y + h / 2 },
+      ]);
+      return { type: "Polygon", coordinates: [ring(frame, mid)] };
+    }
+    case "ellipse": {
+      const cx = el.x + w / 2;
+      const cy = el.y + h / 2;
+      const pts: ScenePoint[] = [];
+      for (let i = 0; i < ELLIPSE_STEPS; i++) {
+        const a = (2 * Math.PI * i) / ELLIPSE_STEPS;
+        pts.push({
+          x: cx + (w / 2) * Math.cos(a),
+          y: cy + (h / 2) * Math.sin(a),
+        });
+      }
+      return { type: "Polygon", coordinates: [ring(frame, turned(el, pts))] };
+    }
+    case "freedraw": {
+      const pts = shapeOutline(el);
+      const first = el.points?.[0];
+      const last = el.points?.[el.points.length - 1];
+      const closed =
+        !!first && !!last && first[0] === last[0] && first[1] === last[1];
+      if (closed && pts.length >= 4) {
+        return {
+          type: "Polygon",
+          coordinates: [ring(frame, pts.slice(0, -1))],
+        };
+      }
+      return { type: "LineString", coordinates: line(frame, pts) };
+    }
+    case "line":
+    case "arrow":
+      return { type: "LineString", coordinates: line(frame, shapeOutline(el)) };
+    default:
+      return null;
   }
-  return [...coords, first];
 }
 
 /**
- * Convert an Excalidraw element with attached GeoCustomData into a single-feature
- * FeatureCollection. The function trusts the element has valid customData.geo —
- * upstream callers should run parseGeoCustomData before passing untrusted input.
+ * One element as a single-feature FeatureCollection, for a new data layer.
  *
- * @throws UnsupportedConvertElementError for text/arrow/unknown types.
- * @throws Error for malformed geometry (missing radius on ellipse, wrong geo.kind, etc.)
+ * @throws UnsupportedConvertElementError for text and for types with no geometry.
  */
 export function annotationToFeatureCollection(
   el: ConvertibleElement,
+  frame: WorldFrame,
 ): FeatureCollection {
-  const t = el.type;
-  const geo = el.customData?.geo;
-
-  if (t === "text") {
-    throw new UnsupportedConvertElementError(t);
+  if (el.type === "text") {
+    throw new UnsupportedConvertElementError(el.type);
   }
-
-  if (!geo) {
-    throw new Error(
-      `annotationToFeatureCollection: element ${el.id} has no customData.geo`,
-    );
+  const geometry = elementGeometry(el, frame);
+  if (!geometry) {
+    throw new UnsupportedConvertElementError(el.type);
   }
+  return {
+    type: "FeatureCollection",
+    features: [{ type: "Feature", properties: {}, geometry }],
+  };
+}
 
-  // ----- rectangle → Polygon (from bbox)
-  if (t === "rectangle") {
-    if (geo.kind !== "bbox") {
-      throw new Error(
-        `annotationToFeatureCollection: rectangle requires geo.kind="bbox", got "${geo.kind}"`,
-      );
+/**
+ * The whole drawing as GeoJSON: one feature per live element with geometry.
+ * Text bound to a shape is part of the shape and is left out.
+ */
+export function drawingToFeatureCollection(
+  elements: readonly ConvertibleElement[],
+  frame: WorldFrame,
+): FeatureCollection {
+  const features: Feature[] = [];
+  for (const el of elements) {
+    if (el.isDeleted || el.containerId) {
+      continue;
     }
-    const { west: w, south: s, east: e, north: n } = geo;
-    const ring: Position[] = [
-      [w, s],
-      [e, s],
-      [e, n],
-      [w, n],
-      [w, s],
-    ];
-    const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
-    return {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: polygon }],
-    };
+    const geometry = elementGeometry(el, frame);
+    if (geometry) {
+      features.push({ type: "Feature", properties: {}, geometry });
+    }
   }
-
-  // ----- ellipse → Polygon
-  // useGeoAnchor stamps user-drawn ellipses as geo.kind="bbox". We approximate
-  // the ellipse with 64 points so the rendered shape looks like an ellipse/circle
-  // rather than its bounding rectangle.
-  // geo.kind="point" + radiusKm is kept for future programmatic use.
-  if (t === "ellipse") {
-    if (geo.kind === "bbox") {
-      const { west: w, south: s, east: e, north: n } = geo;
-      const cx = (w + e) / 2;
-      const cy = (s + n) / 2;
-      const rx = (e - w) / 2;
-      const ry = (n - s) / 2;
-      const steps = 64;
-      const ring: Position[] = [];
-      for (let i = 0; i < steps; i++) {
-        const angle = (2 * Math.PI * i) / steps;
-        ring.push([cx + rx * Math.cos(angle), cy + ry * Math.sin(angle)]);
-      }
-      ring.push(ring[0]); // close
-      const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
-      return {
-        type: "FeatureCollection",
-        features: [{ type: "Feature", properties: {}, geometry: polygon }],
-      };
-    }
-    if (geo.kind === "point") {
-      const radiusKm = readRadiusKm(el);
-      if (typeof radiusKm !== "number" || radiusKm <= 0) {
-        throw new Error(
-          `annotationToFeatureCollection: ellipse ${el.id} missing positive customData._data.radiusKm`,
-        );
-      }
-      const feat = circle([geo.lng, geo.lat], radiusKm, {
-        steps: 64,
-        units: "kilometers",
-      });
-      return {
-        type: "FeatureCollection",
-        features: [feat],
-      };
-    }
-    throw new Error(
-      `annotationToFeatureCollection: ellipse requires geo.kind="bbox" or "point", got "${geo.kind}"`,
-    );
-  }
-
-  // ----- polygon → Polygon (always auto-close ring)
-  if (t === "polygon") {
-    if (geo.kind !== "polyline") {
-      throw new Error(
-        `annotationToFeatureCollection: polygon requires geo.kind="polyline", got "${geo.kind}"`,
-      );
-    }
-    const ring = closeRing(geo.coordinates as Position[]);
-    if (ring.length < 4) {
-      throw new Error(
-        `annotationToFeatureCollection: polygon ${el.id} needs >=3 distinct points to form a polygon`,
-      );
-    }
-    const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
-    return {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: polygon }],
-    };
-  }
-
-  // ----- freedraw → Polygon (closed stroke) or LineString (open stroke)
-  if (t === "freedraw") {
-    if (geo.kind !== "polyline") {
-      throw new Error(
-        `annotationToFeatureCollection: freedraw requires geo.kind="polyline", got "${geo.kind}"`,
-      );
-    }
-    const coords = geo.coordinates as Position[];
-    const first = coords[0];
-    const last = coords[coords.length - 1];
-    const isClosed =
-      first && last && first[0] === last[0] && first[1] === last[1];
-    if (isClosed) {
-      if (coords.length < 4) {
-        throw new Error(
-          `annotationToFeatureCollection: freedraw ${el.id} needs >=3 distinct points to form a polygon`,
-        );
-      }
-      const polygon: Polygon = { type: "Polygon", coordinates: [coords] };
-      return {
-        type: "FeatureCollection",
-        features: [{ type: "Feature", properties: {}, geometry: polygon }],
-      };
-    }
-    const ls: LineString = { type: "LineString", coordinates: coords };
-    return {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: ls }],
-    };
-  }
-
-  // ----- diamond → Polygon (4 midpoint vertices)
-  if (t === "diamond") {
-    if (geo.kind !== "bbox") {
-      throw new Error(
-        `annotationToFeatureCollection: diamond requires geo.kind="bbox", got "${geo.kind}"`,
-      );
-    }
-    const { west: w, south: s, east: e, north: n } = geo;
-    const midX = (w + e) / 2;
-    const midY = (s + n) / 2;
-    const ring: Position[] = [
-      [midX, n], // North
-      [e, midY], // East
-      [midX, s], // South
-      [w, midY], // West
-      [midX, n], // close
-    ];
-    const polygon: Polygon = { type: "Polygon", coordinates: [ring] };
-    return {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: polygon }],
-    };
-  }
-
-  // ----- line | polyline | arrow → LineString
-  if (t === "line" || t === "polyline" || t === "arrow") {
-    if (geo.kind !== "polyline") {
-      throw new Error(
-        `annotationToFeatureCollection: ${t} requires geo.kind="polyline", got "${geo.kind}"`,
-      );
-    }
-    const ls: LineString = {
-      type: "LineString",
-      coordinates: geo.coordinates as Position[],
-    };
-    return {
-      type: "FeatureCollection",
-      features: [{ type: "Feature", properties: {}, geometry: ls }],
-    };
-  }
-
-  // ----- unknown type → unsupported
-  throw new UnsupportedConvertElementError(t);
+  return { type: "FeatureCollection", features };
 }

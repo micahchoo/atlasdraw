@@ -22,7 +22,10 @@ import {
   within,
 } from "@testing-library/react";
 
+import { toScene } from "@atlasdraw/geo";
+
 import { LayerPanel } from "../LayerPanel";
+
 import { useMapInstanceStore } from "../../state/mapInstance";
 
 import {
@@ -34,10 +37,7 @@ import {
 import { bindScene } from "../../state/scene";
 import { useOverlayReport } from "../../hooks/useMapOverlays";
 import { useSelectedLayerStore } from "../../state/selectedLayer";
-import {
-  geoRect,
-  makeFakeExcalidraw,
-} from "../../state/__tests__/fixtures/documentWorld";
+import { makeFakeExcalidraw } from "../../state/__tests__/fixtures/documentWorld";
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
 
@@ -316,7 +316,23 @@ describe("data layer card — the three missing actions", () => {
   });
 
   it("zoom to layer on an annotation fits the map to the shape and leaves the selection alone", () => {
-    const fx = makeFakeExcalidraw([geoRect("g1")]);
+    // A 100 × 80 rectangle centred on 13.4°E, 52.5°N in the open
+    // document's world frame.
+    const c = toScene(currentDocument().snapshot().world, 13.4, 52.5);
+    const fx = makeFakeExcalidraw([
+      {
+        id: "g1",
+        type: "rectangle",
+        version: 3,
+        versionNonce: 1,
+        index: "a0",
+        x: c.x - 50,
+        y: c.y - 40,
+        width: 100,
+        height: 80,
+        isDeleted: false,
+      },
+    ]);
     let unbind = () => {};
     act(() => {
       unbind = bindScene(fx.api);

@@ -27,6 +27,7 @@ const makeDoc = (
     updatedAt,
     basemap: { type: "registry", id: "default" },
     camera: { center: [0, 0], zoom: 4, bearing: 0, pitch: 0 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [],
     permissions: { publicView: false },
   },

@@ -207,7 +207,7 @@ const mockMap = {
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   // RT-3 — useCameraRotation reads the live camera on mount, via
-  // cameraRotation()'s north-up fast path. A map without it is not a map.
+  // useCameraRotation reads it. A map without it is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
@@ -224,14 +224,11 @@ vi.mock("../../hooks/useMapRef", () => ({
     onMapReady: vi.fn(),
   }),
 }));
-vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
+vi.mock("../../hooks/useCameraBridge", () => ({
+  useCameraBridge: () => ({ bridge: null, onZoomAction: () => false }),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
-}));
-vi.mock("../../hooks/useGeoAnchor", () => ({
-  useGeoAnchor: vi.fn(),
 }));
 vi.mock("../../hooks/useMapOverlays", () => ({
   useMapOverlays: vi.fn(),

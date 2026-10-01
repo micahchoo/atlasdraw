@@ -21,9 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 
-import { CoordinateSync } from "@atlasdraw/basemap";
-
-import type { CoordinateSyncOptions } from "@atlasdraw/basemap";
+import { CameraBridge } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -33,7 +31,7 @@ import { usePersistenceWiring } from "../../hooks/usePersistenceWiring";
 import { useMapOverlays } from "../../hooks/useMapOverlays";
 import { FakeMapLibre } from "../../lib/__tests__/fixtures/fakeMapLibre";
 import { useExcalidrawChangeHandler } from "../../hooks/useExcalidrawChangeHandler";
-import { FakeMercatorMap } from "../../hooks/geoOpFuzz.harness";
+import { FakeMercatorMap } from "../../hooks/__tests__/fakeMercatorMap";
 import { useShareLink } from "../../hooks/useShareLink";
 import { createPersistenceStore } from "../persistence";
 import { createDocument, currentDocument, openDocument } from "../document";
@@ -180,12 +178,8 @@ function mountEditor(
     useMapOverlays(map);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
-      map,
-      syncNow: undefined,
-      expectedOrigin: undefined,
       announceMapEditor: () => {},
       setMapBg: () => {},
-      spaceHeldRef: { current: false },
     });
     useEffect(
       () =>
@@ -423,25 +417,44 @@ describe("dirty tracking", () => {
   });
 
   it("a pure map pan does not mark the document dirty", async () => {
-    const map = new FakeMercatorMap(11, { lng: 13.4, lat: 52.5 });
+    // A camera move reaches the drawing through the camera bridge, as in
+    // MapEditor (useCameraBridge): the map's `move` writes the viewport.
+    const map = new (class extends FakeMercatorMap {
+      private readonly moves = new Set<() => void>();
+      on(_: "move", fn: () => void) {
+        this.moves.add(fn);
+      }
+      off(_: "move", fn: () => void) {
+        this.moves.delete(fn);
+      }
+      jumpTo(o: { center: { lng: number; lat: number }; zoom: number }) {
+        this.center = o.center;
+        this.zoom = o.zoom;
+        this.fire();
+      }
+      fire() {
+        this.moves.forEach((fn) => fn());
+      }
+    })(11, { lng: 13.4, lat: 52.5 });
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
-    const sync = new CoordinateSync({
-      map: map as unknown as maplibregl.Map,
-      excalidrawAPI:
-        fx.api as unknown as CoordinateSyncOptions["excalidrawAPI"],
+    const bridge = new CameraBridge({
+      map,
+      scene: { updateScene: (data) => fx.api.updateScene(data as never) },
+      frame: () => currentDocument().snapshot().world,
+      viewportSize: () => ({ width: map.containerW, height: map.containerH }),
     });
     mountEditor(fx.api);
-    // First projection establishes where the drawing sits on screen.
-    act(() => sync.syncMapToScene());
+    // First push establishes where the drawing sits on screen.
+    act(() => bridge.attach());
     await saveAndSettle();
     expect(isDirty()).toBe(false);
 
-    const xBefore = fx.api.getSceneElements()[0].x;
+    const scrollBefore = fx.api.getAppState().scrollX;
     act(() => {
       map.panByScreen(200, 0);
-      sync.syncMapToScene();
+      map.fire();
     });
-    expect(fx.api.getSceneElements()[0].x).not.toBe(xBefore); // it did pan
+    expect(fx.api.getAppState().scrollX).not.toBe(scrollBefore); // it did pan
 
     expect(isDirty()).toBe(false);
   });
@@ -467,7 +480,10 @@ function shownOnCanvas(el: {
 
 /** The annotation rows the layer panel shows. */
 function panelRows() {
-  return annotationRows(useSceneStore.getState().elements);
+  return annotationRows(
+    useSceneStore.getState().elements,
+    currentDocument().snapshot().world,
+  );
 }
 
 describe("annotation rows after reload and undo", () => {

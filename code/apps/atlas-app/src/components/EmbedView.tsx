@@ -8,7 +8,8 @@
 //   - MapLibre basemap (from manifest.basemap.id) at the authored camera
 //   - the document's data and raster layers, opened with the editor's loader
 //     (documentIO.loadDocument)
-//   - geo-anchored Excalidraw annotations, reprojected via CoordinateSync
+//   - the drawing, in world coordinates; the camera bridge moves Excalidraw's
+//     viewport with the map (useCameraBridge)
 //
 // Routes (App.tsx):
 //   /embed#<hash>    — hash mode (self-contained; see loadShareDocument)
@@ -35,7 +36,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
-import { useCoordinateSync } from "../hooks/useCoordinateSync";
+import { useCameraBridge } from "../hooks/useCameraBridge";
 import { useMapOverlays } from "../hooks/useMapOverlays";
 import {
   useFeaturePopup,
@@ -152,8 +153,9 @@ const EmbedCanvas: React.FC<{
   const basemapId = doc.manifest?.basemap?.id ?? "blank";
   useBasemapStyle(map, basemapId, getAppConfig().allowRemoteBasemaps);
 
-  // Keep geo-anchored annotations pinned to the map on pan/zoom.
-  const { syncNow } = useCoordinateSync(map, api);
+  // Excalidraw's viewport follows the map camera.
+  const [layer, setLayer] = useState<HTMLDivElement | null>(null);
+  const { bridge, onZoomAction } = useCameraBridge(map, api, layer);
 
   // Draw the open document's data and raster layers on the map.
   useMapOverlays(map);
@@ -174,17 +176,6 @@ const EmbedCanvas: React.FC<{
     void loadDocument(doc, api, { signal: abort.signal });
     return () => abort.abort();
   }, [doc, api]);
-
-  // Once the map and the API are up, project the geo-anchored elements onto
-  // the camera. Deferred a frame so getSceneElements() is settled (MapEditor
-  // drives the equivalent post-load sync from Excalidraw's onChange).
-  useEffect(() => {
-    if (!map || !api) {
-      return;
-    }
-    const raf = requestAnimationFrame(() => syncNow?.());
-    return () => cancelAnimationFrame(raf);
-  }, [map, api, syncNow]);
 
   // ?lock=1 — pin the camera. Disable every MapLibre interaction handler.
   useEffect(() => {
@@ -234,12 +225,14 @@ const EmbedCanvas: React.FC<{
       </div>
       {/* Top layer: transparent, read-only Excalidraw. pointer-events:none
           (from .excalidrawLayer) so the map underneath stays pannable. */}
-      <div className={mapStyles.excalidrawLayer}>
+      <div ref={setLayer} className={mapStyles.excalidrawLayer}>
         <Excalidraw
           initialData={initialData}
           viewModeEnabled
           gridModeEnabled={false}
           onExcalidrawAPI={(a) => setApi(a)}
+          onScrollChange={bridge?.onScrollChange}
+          onZoomAction={onZoomAction}
           UIOptions={EMBED_UI_OPTIONS}
         />
       </div>

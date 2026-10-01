@@ -4,10 +4,8 @@
 //
 // Excalidraw raises an element's `version` (and draws a new `versionNonce`)
 // on every edit it records: a move, a restyle, a delete, an undo. A camera
-// move does not. CoordinateSync writes the new screen x/y with a plain spread
-// and keeps both fields, so a pan gives a new elements array with the same
-// versions. Array identity therefore says "something ran"; this signature
-// says "the drawing changed".
+// move changes only the viewport and touches no element. onChange fires for
+// both, so this signature, not the call, says "the drawing changed".
 //
 // Deleted elements count. A delete sets `isDeleted` and keeps the element, so
 // the length alone cannot see it.

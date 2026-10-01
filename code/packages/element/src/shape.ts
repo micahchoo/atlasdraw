@@ -24,6 +24,7 @@ import {
   COLOR_PALETTE,
   LINE_POLYGON_POINT_MERGE_DISTANCE,
   applyDarkModeFilter,
+  MAX_SCENE_EXTENT,
 } from "@atlasdraw/common";
 
 import { RoughGenerator } from "roughjs/bin/generator";
@@ -42,6 +43,7 @@ import type {
   SVGPathString,
 } from "@atlasdraw/excalidraw/scene/types";
 
+import { styleUnit } from "./atlasStyleUnit";
 import { elementWithCanvasCache } from "./renderElement";
 
 import {
@@ -163,9 +165,16 @@ export class ShapeCache {
   };
 }
 
-const getDashArrayDashed = (strokeWidth: number) => [8, 8 + strokeWidth];
+// Atlasdraw: `unit` is the element's pixel unit (atlasStyleUnit.ts).
+const getDashArrayDashed = (strokeWidth: number, unit = 1) => [
+  8 * unit,
+  8 * unit + strokeWidth,
+];
 
-const getDashArrayDotted = (strokeWidth: number) => [1.5, 6 + strokeWidth];
+const getDashArrayDotted = (strokeWidth: number, unit = 1) => [
+  1.5 * unit,
+  6 * unit + strokeWidth,
+];
 
 function adjustRoughness(element: ExcalidrawElement): number {
   const roughness = element.roughness;
@@ -199,9 +208,9 @@ export const generateRoughOptions = (
     seed: element.seed,
     strokeLineDash:
       element.strokeStyle === "dashed"
-        ? getDashArrayDashed(element.strokeWidth)
+        ? getDashArrayDashed(element.strokeWidth, styleUnit(element))
         : element.strokeStyle === "dotted"
-        ? getDashArrayDotted(element.strokeWidth)
+        ? getDashArrayDotted(element.strokeWidth, styleUnit(element))
         : undefined,
     // for non-solid strokes, disable multiStroke because it tends to make
     // dashes/dots overlay each other
@@ -218,6 +227,15 @@ export const generateRoughOptions = (
     fillWeight: element.strokeWidth / 2,
     hachureGap: element.strokeWidth * 4,
     roughness: adjustRoughness(element),
+    // Atlasdraw: rough jitter in the element's pixel unit. roughjs's default
+    // offset is 2 and its bow is offset × length × bowing / 200, so the bow
+    // keeps upstream's look when bowing is divided by the unit.
+    ...(styleUnit(element) !== 1
+      ? {
+          maxRandomnessOffset: 2 * styleUnit(element),
+          bowing: 1 / styleUnit(element),
+        }
+      : {}),
     stroke: isDarkMode
       ? applyDarkModeFilter(element.strokeColor)
       : element.strokeColor,
@@ -335,8 +353,9 @@ const getArrowheadLineOptions = (
 
   if (element.strokeStyle === "dotted") {
     // for dotted arrows caps, reduce gap to make it more legible
-    const dash = getDashArrayDotted(element.strokeWidth - 1);
-    lineOptions.strokeLineDash = [dash[0], dash[1] - 1];
+    const unit = styleUnit(element);
+    const dash = getDashArrayDotted(element.strokeWidth - unit, unit);
+    lineOptions.strokeLineDash = [dash[0], dash[1] - unit];
   } else {
     // for solid/dashed, keep solid arrow cap
     delete lineOptions.strokeLineDash;
@@ -890,7 +909,9 @@ const _generateElementShape = (
         // NOTE (mtolmacs): Temporary fix for extremely big arrow shapes
         if (
           !points.every(
-            (point) => Math.abs(point[0]) <= 1e6 && Math.abs(point[1]) <= 1e6,
+            (point) =>
+              Math.abs(point[0]) <= MAX_SCENE_EXTENT &&
+              Math.abs(point[1]) <= MAX_SCENE_EXTENT,
           )
         ) {
           console.error(

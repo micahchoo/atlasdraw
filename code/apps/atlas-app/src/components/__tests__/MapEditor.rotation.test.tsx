@@ -153,13 +153,12 @@ vi.mock("../../hooks/useMapRef", () => ({
   }),
 }));
 
-vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
+vi.mock("../../hooks/useCameraBridge", () => ({
+  useCameraBridge: () => ({ bridge: null, onZoomAction: () => false }),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
-vi.mock("../../hooks/useGeoAnchor", () => ({ useGeoAnchor: vi.fn() }));
 vi.mock("../../hooks/useMapOverlays", () => ({
   useMapOverlays: vi.fn(),
 }));

@@ -86,15 +86,10 @@ export interface PrintOptions extends PageSpec {
   units?: ScaleUnits;
   /**
    * Screen rotation of the exported view: the direction geographic east ran
-   * on screen, in degrees, y-down — i.e. `cameraRotation(map)` converted from
-   * radians. Read at export time so it describes the same viewport the image
-   * does.
-   *
-   * It is deliberately NOT `map.getBearing()`. RT-2 measures the rotation off
-   * the live projection rather than trusting MapLibre's bearing sign
-   * convention; taking a bearing here would put that convention back on the
-   * trust surface for the one graphic whose entire job is to be right about
-   * direction.
+   * on screen, in degrees, y-down (`-map.getBearing()`, the angle the drawing
+   * layer is turned by). Read at export time so it describes the same
+   * viewport the image does. The sign is checked against a real Mercator
+   * projection in hooks/cameraRotationRoundTrip.test.ts.
    *
    * Omitted or 0 prints the arrow pointing up — correct for a north-up export.
    */
@@ -486,15 +481,13 @@ const NORTH_ARROW_SIZE = 18;
  * wrong about the one thing a north arrow is for.
  *
  * **The sign, derived rather than guessed.** Let `r` be the screen rotation of
- * geographic east, y-down — what `cameraRotation` returns and what
- * `cameraRotationDeg` carries. East on screen is `(cos r, sin r)`, so north,
+ * geographic east, y-down — what `cameraRotationDeg` carries. East on screen is `(cos r, sin r)`, so north,
  * east turned a quarter-turn in that same y-down frame, is `(sin r, -cos r)`;
  * at `r = 0` that is `(0, -1)`, straight up the screen, as it should be. The
  * raster lands on the page unflipped, so converting y-down to PDF's y-up makes
  * north on the page `(sin r, cos r)`. The rotation below is y-up
  * counter-clockwise by `theta`, which sends page-up `(0, 1)` to
- * `(-sin θ, cos θ)`. Matching the two gives `θ = -r`, hence the negation — and
- * nothing here has to be right about which way MapLibre counts a bearing.
+ * `(-sin θ, cos θ)`. Matching the two gives `θ = -r`, hence the negation.
  *
  * @param cx - Arrow centre, page x.
  * @param cy - Arrow centre, page y.
