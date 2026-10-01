@@ -31,3 +31,15 @@ data-layer export, measure tool.
 Backlog of found defects: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/lead/backlog.md
 Audit reports: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/audit-*.md, research-08-product-gaps.md
 Lead gate: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/lead/roadmap-gate.sh "<msg>" [vitest paths]
+
+## Update (late 2026-10-01)
+- Round 1 complete and pushed to main (8cb4bde, then 1597929). Pages deploy is
+  SKIPPED because CI on main is red: run 36910532844 failed in "Typecheck,
+  lint, format, unit tests" (step `yarn test:app`; cause not yet read — check
+  `gh run view 36910532844 --log-failed`) and in "Self-host images build and
+  run" (not yet read). Bench is report-only now. Browser and Postgres jobs pass.
+- Round 2: survey https://claude.ai/artifact/3SB9hydxNcedcCj3UPrwxV.
+  R0a (relay) merged into roadmap/2026-10. R0b (storage/deploy, worktree
+  ../atlasdraw-r0b) and R0c (app/fork, ../atlasdraw-r0c) agents may still be
+  running; merge their branches r0/storage and r0/app when green.
+- Then: R1 known-red tests, R2..R9 per the survey; push main again at the end.
