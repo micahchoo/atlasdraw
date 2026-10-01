@@ -30,10 +30,10 @@ import { inferGeometryType } from "./geometryType";
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type {
-  LayerRegistryEntry,
+  OverlayEntry,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 
 /**
  * Every source spec this module hands to MapLibre.
@@ -252,7 +252,7 @@ function sameSequence(a: readonly string[], b: readonly string[]): boolean {
  */
 export function applyOrderToMap(
   map: MapOrderSurface,
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly OverlayEntry[],
 ): void {
   // Rasters first, then data layers. Both are MapLibre layers in one style, so
   // one sequence covers the whole stack — and putting every raster below every
@@ -315,9 +315,8 @@ export function applyOrderToMap(
  * Three callers, one behaviour:
  *   - a basemap switch (useBasemapStyle), because setStyle() drops every
  *     custom source and layer;
- *   - a document load / registry replay (state/hydrate.ts writes entries but
- *     never touches the map);
- *   - a registry gaining a data-layer id from anywhere else (convert).
+ *   - opening a document, whose layers arrive without touching the map;
+ *   - the document gaining a data-layer id from anywhere else (convert).
  *
  * FU-1: rasters go back too, and they go back FIRST so a rebuilt style has them
  * under the vector band. Without this a basemap switch would drop every scanned
@@ -336,7 +335,7 @@ export function applyOrderToMap(
  */
 export function reconcileDataLayers(
   map: DataLayerMapSurface,
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly OverlayEntry[],
   fcs: Record<string, FeatureCollection>,
   /**
    * FU-1: raster id → object URL. Optional so the three existing callers that
@@ -393,9 +392,9 @@ export function reconcileDataLayers(
     }
     const fc = fcs[entry.id];
     if (!fc) {
-      // A registry entry with no FC mirror can't be rendered. hydrate() already
-      // skips manifest layers whose blob is missing, so this is the drift case
-      // (e.g. an entry written without going through registerDataLayer).
+      // An entry with no FeatureCollection cannot be drawn. Opening a file
+      // already leaves out a layer whose GeoJSON is missing
+      // (documentIO.fromFile), so this is a drift case.
       // eslint-disable-next-line no-console
       console.warn(
         "[dataLayerRender] no FeatureCollection for data layer, skipping",

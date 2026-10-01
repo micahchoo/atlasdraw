@@ -51,10 +51,7 @@ import {
   setPendingAnchor,
   usePendingAnchor,
 } from "../state/comments-anchor-picker";
-import {
-  useLayerRegistryStore,
-  type RasterLayerEntry,
-} from "../state/layerRegistry";
+import { currentDocument, type RasterLayerEntry } from "../state/document";
 
 import styles from "../styles/CommentAnchorsOverlay.module.css";
 
@@ -244,9 +241,9 @@ export function CommentAnchorsOverlay(
     if (!map) {
       return null;
     }
-    const rasters = useLayerRegistryStore
-      .getState()
-      .entries.filter((e): e is RasterLayerEntry => e.kind === "raster");
+    const rasters = currentDocument()
+      .snapshot()
+      .overlays.filter((e): e is RasterLayerEntry => e.kind === "raster");
     for (const entry of rasters) {
       const screenCorners = entry.corners.map((c) => map.project(c));
       if (pointInPolygon({ x, y }, screenCorners)) {
@@ -326,9 +323,9 @@ export function CommentAnchorsOverlay(
       if (!map) {
         return null;
       }
-      const entry = useLayerRegistryStore
-        .getState()
-        .entries.find(
+      const entry = currentDocument()
+        .snapshot()
+        .overlays.find(
           (e): e is RasterLayerEntry =>
             e.kind === "raster" && e.id === anchor.rasterId,
         );

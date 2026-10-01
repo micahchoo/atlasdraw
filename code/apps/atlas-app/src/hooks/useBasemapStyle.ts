@@ -14,8 +14,7 @@ import {
   BasemapRemoteGatedError,
 } from "@atlasdraw/basemap";
 
-import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { currentDocument } from "../state/document";
 import { useRasterImageStore } from "../state/useRasterImageStore";
 import { reconcileDataLayers } from "../lib/dataLayerRender";
 
@@ -49,10 +48,11 @@ export function useBasemapStyle(
       if (cancelled) {
         return;
       }
+      const doc = currentDocument().snapshot();
       reconcileDataLayers(
         map,
-        useLayerRegistryStore.getState().entries,
-        useDataLayerFCStore.getState().getAll(),
+        doc.overlays,
+        { ...doc.featureCollections },
         // FU-1: without these the basemap switch puts every vector layer back
         // and leaves the scanned sheets off the map, with their rows still in
         // the panel. Same shape of failure FU-3 fixed for the collab layer.

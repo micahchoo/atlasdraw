@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// useLayerRegistrySync — the bridge from the layer registry to MapLibre.
+// useLayerRegistrySync — the bridge from the open document's layers to MapLibre.
 //
-// MapLibre sources cannot be read back, so the registry is the truth for the
+// MapLibre sources cannot be read back, so the document is the truth for the
 // data and raster layers and this hook pushes its changes onto the map:
 //
 //   1. Visibility — a flipped `visible` sets the layer's layout visibility.
@@ -10,14 +10,14 @@
 //      old and new style is diffed and only changed properties are pushed
 //      (applyStyleToMap / diffStyles).
 //   3. Membership — a MapLibre `setStyle()` drops every custom source and
-//      layer, and a document load fills the registry without touching the
-//      map. So map membership is diffed against the registry's set of data
-//      layer ids: added ids are reconciled onto the map, removed ids leave it.
-//      Geometry is read from the DataLayerFCStore.
+//      layer, and opening a document replaces the layers without touching
+//      the map. So map membership is diffed against the document's set of
+//      data layer ids: added ids are reconciled onto the map, removed ids
+//      leave it. Geometry is read from the document's FeatureCollections.
 //   4. Order — a changed data-layer id sequence restacks the style
 //      (applyOrderToMap).
 //
-// Annotations are not in the registry; they are scene elements.
+// Annotations are not map layers; they are scene elements.
 //
 // The diffs are plain exported functions so tests can drive them without a
 // React renderer. Everything that writes the MapLibre style lives in
@@ -30,11 +30,11 @@ import { compilePaint } from "@atlasdraw/basemap";
 import type { LayerGeometryType } from "@atlasdraw/basemap";
 
 import {
-  useLayerRegistryStore,
-  type LayerRegistryEntry,
+  currentDocument,
+  followDocument,
   type LayerStyle,
-} from "../state/layerRegistry";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+  type OverlayEntry,
+} from "../state/document";
 import { useRasterImageStore } from "../state/useRasterImageStore";
 
 import { inferGeometryType } from "../lib/geometryType";
@@ -153,8 +153,8 @@ export function applyStyleToMap(
  * Exported for unit testing.
  */
 export function diffStyles(
-  prev: readonly LayerRegistryEntry[],
-  next: readonly LayerRegistryEntry[],
+  prev: readonly OverlayEntry[],
+  next: readonly OverlayEntry[],
 ): Array<{ id: string; prevStyle: LayerStyle; nextStyle: LayerStyle }> {
   const prevStyles = new Map<string, LayerStyle>();
   for (const entry of prev) {
@@ -185,7 +185,7 @@ export function diffStyles(
 // ---------------------------------------------------------------------------
 
 /** The registry's data-layer ids, in array order (= intended z-order). */
-function dataLayerIds(entries: readonly LayerRegistryEntry[]): string[] {
+function dataLayerIds(entries: readonly OverlayEntry[]): string[] {
   const out: string[] = [];
   for (const entry of entries) {
     if (entry.kind === "data") {
@@ -212,8 +212,8 @@ function dataLayerIds(entries: readonly LayerRegistryEntry[]): string[] {
  * Exported for unit testing.
  */
 export function diffDataLayerIds(
-  prev: readonly LayerRegistryEntry[],
-  next: readonly LayerRegistryEntry[],
+  prev: readonly OverlayEntry[],
+  next: readonly OverlayEntry[],
 ): { added: string[]; removed: string[]; orderChanged: boolean } {
   const prevIds = dataLayerIds(prev);
   const nextIds = dataLayerIds(next);
@@ -239,11 +239,11 @@ export function diffDataLayerIds(
  * Exported for unit testing.
  */
 export function diffVisibility(
-  prev: readonly LayerRegistryEntry[],
-  next: readonly LayerRegistryEntry[],
-): LayerRegistryEntry[] {
+  prev: readonly OverlayEntry[],
+  next: readonly OverlayEntry[],
+): OverlayEntry[] {
   const prevMap = new Map(prev.map((e) => [e.id, e.visible]));
-  const out: LayerRegistryEntry[] = [];
+  const out: OverlayEntry[] = [];
   for (const entry of next) {
     const prevVisible = prevMap.get(entry.id);
     if (prevVisible === undefined) {
@@ -257,54 +257,53 @@ export function diffVisibility(
 }
 
 /**
- * Push the layer registry's data and raster layers onto the map.
+ * Push the open document's data and raster layers onto the map.
  *
  * @param map - MapLibre Map instance (null until the map mounts)
  */
 export function useLayerRegistrySync(map: maplibregl.Map | null): void {
-  // ---- P2: registry → map, on a fresh map instance -------------------------
-  // A document can be loaded before the map is ready — hydrate() populates the
-  // registry with data-layer entries without ever touching MapLibre. Reconcile
-  // once per map instance to close that gap (a no-op when the registry has no
-  // data layers, which is the common case).
+  // ---- document → map, on a fresh map instance -----------------------------
+  // A document can open before the map is ready; its layers then never
+  // reached MapLibre. Reconcile once per map instance (a no-op when the
+  // document has no layers, which is the common case).
   useEffect(() => {
     if (!map) {
       return;
     }
+    const doc = currentDocument().snapshot();
     reconcileDataLayers(
       map,
-      useLayerRegistryStore.getState().entries,
-      useDataLayerFCStore.getState().getAll(),
+      doc.overlays,
+      { ...doc.featureCollections },
       rasterUrlSnapshot(),
     );
   }, [map]);
 
-  // ---- registry → map ------------------------------------------------------
-  // Zustand subscribe with a manual diff against the previous entries snapshot.
-  // We don't use a selector-form subscriber because we need both the kind and
-  // the visibility — selecting just `entries` and diffing in a useEffect would
-  // re-fire on any unrelated mutation (label/order/style), wasting work.
-  // Subscribe-style still re-fires on those, but we filter via diffVisibility /
-  // diffStyles, which only report actual changes.
+  // ---- document → map ------------------------------------------------------
+  // Diff each new layer list against the previous one. The diffs report only
+  // real changes, so a rename or a reorder of another kind costs nothing on
+  // the map. Opening another document is one more new list.
   useEffect(() => {
     if (!map) {
       return;
     }
 
-    let prevEntries = useLayerRegistryStore.getState().entries;
-    const unsub = useLayerRegistryStore.subscribe((state) => {
+    let prevEntries = currentDocument().snapshot().overlays;
+    const unsub = followDocument((doc) => {
+      const state = { entries: doc.snapshot().overlays };
+      if (state.entries === prevEntries) {
+        return;
+      }
       const flips = diffVisibility(prevEntries, state.entries);
-      const styleChanges = map ? diffStyles(prevEntries, state.entries) : [];
-      const idChanges = map
-        ? diffDataLayerIds(prevEntries, state.entries)
-        : { added: [], removed: [], orderChanged: false };
+      const styleChanges = diffStyles(prevEntries, state.entries);
+      const idChanges = diffDataLayerIds(prevEntries, state.entries);
       prevEntries = state.entries;
 
       // P1 — push style patches as setPaintProperty calls. Geometry kind comes
       // from the FC mirror, the same source addDataLayerToMap infers from, so
       // the paint property names always match the layer that's on the map.
       if (map && styleChanges.length > 0) {
-        const fcs = useDataLayerFCStore.getState().getAll();
+        const fcs = doc.snapshot().featureCollections;
         for (const change of styleChanges) {
           const fc = fcs[change.id];
           if (!fc) {
@@ -337,7 +336,7 @@ export function useLayerRegistrySync(map: maplibregl.Map | null): void {
         reconcileDataLayers(
           map,
           state.entries,
-          useDataLayerFCStore.getState().getAll(),
+          { ...doc.snapshot().featureCollections },
           rasterUrlSnapshot(),
         );
       }
