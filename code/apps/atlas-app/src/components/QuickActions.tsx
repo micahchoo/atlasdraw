@@ -1,16 +1,22 @@
 /**
- * QuickActions — Cmd+K command palette. Search and execute any action.
+ * QuickActions — the command palette (⌘K or Ctrl+K). Type to filter the
+ * commands; the arrow keys move the active one; Enter runs it; Escape closes.
  *
- * Summoned with Cmd+K / Ctrl+K. Type to filter across all registered actions.
- * Arrow keys + Enter to navigate and select. Esc to dismiss.
+ * Screen readers read it as a combobox that controls a listbox: the input
+ * keeps focus, and `aria-activedescendant` names the active option, which
+ * is `aria-selected`. The active option is marked by a bar as well as by
+ * colour. The dialog itself is a Modal, so Tab stays in it and Escape
+ * closes it from anywhere in it.
  *
  * Design: drafting-room instrument palette — fast, keyboard-driven, precise.
  * Mono prompt character, blueprint accent on the `>` cursor.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import styles from "../styles/QuickActions.module.css";
+
+import { Modal } from "./Modal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +46,9 @@ interface QuickActionsProps {
 
 const CATEGORY_ORDER = ["File", "Edit", "Tools", "View", "Help"];
 
+/** The palette's own key, which closes it. */
+const PALETTE_COMMANDS = ["app.palette"] as const;
+
 function groupByCategory(actions: QuickAction[]): Map<string, QuickAction[]> {
   const map = new Map<string, QuickAction[]>();
   for (const a of actions) {
@@ -57,10 +66,8 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const id = useId();
+  const optionId = (index: number) => `${id}-option-${index}`;
 
   const filtered = useMemo(() => {
     if (query.trim() === "") {
@@ -117,10 +124,6 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
           flattened[selectedIndex].onSelect();
         }
         break;
-      case "Escape":
-        e.preventDefault();
-        onClose();
-        break;
     }
   };
 
@@ -133,79 +136,106 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
     el?.scrollIntoView?.({ block: "nearest" });
   }, [selectedIndex]);
 
+  const active = flattened[selectedIndex];
+
   return (
-    <div
-      className={styles.scrim}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      data-testid="quick-actions-scrim"
+    <Modal
+      label="Command palette"
+      onClose={onClose}
+      // Ctrl+K closes the palette it opened.
+      commands={PALETTE_COMMANDS}
+      scrimClassName={styles.scrim}
+      scrimTestId="quick-actions-scrim"
+      className={styles.panel}
+      testId="quick-actions-panel"
     >
-      <div
-        className={styles.panel}
-        role="dialog"
-        aria-label="Quick actions"
-        data-testid="quick-actions-panel"
-      >
-        <div className={styles.searchRow}>
-          <span className={styles.prompt}>&gt;</span>
-          <input
-            ref={inputRef}
-            className={styles.searchInput}
-            type="text"
-            placeholder="Search actions..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            data-testid="quick-actions-search"
-          />
-        </div>
-
-        <div className={styles.list} ref={listRef}>
-          {flattened.length === 0 ? (
-            <div className={styles.empty}>No actions match "{query}"</div>
-          ) : (
-            CATEGORY_ORDER.filter((c) => grouped.has(c)).map((category) => (
-              <div key={category} className={styles.category}>
-                <div className={styles.categoryTitle}>{category}</div>
-                {grouped.get(category)!.map((a) => {
-                  const idx = flattened.indexOf(a);
-                  return (
-                    <div
-                      key={a.id}
-                      className={[
-                        styles.item,
-                        idx === selectedIndex ? styles.itemSelected : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      data-action-index={idx}
-                      data-testid={`quick-action-${a.id}`}
-                      onClick={() => {
-                        onClose();
-                        a.onSelect();
-                      }}
-                      onMouseEnter={() => setSelectedIndex(idx)}
-                    >
-                      <span className={styles.itemLabel}>{a.label}</span>
-                      {a.hint && (
-                        <span className={styles.itemHint}>{a.hint}</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className={styles.footer}>
-          <span>↑↓ Navigate</span>
-          <span>Enter to select · Esc to close</span>
-        </div>
+      <div className={styles.searchRow}>
+        <span className={styles.prompt} aria-hidden="true">
+          &gt;
+        </span>
+        <input
+          ref={inputRef}
+          className={styles.searchInput}
+          type="text"
+          role="combobox"
+          aria-label="Search commands"
+          aria-expanded="true"
+          aria-controls={`${id}-list`}
+          aria-autocomplete="list"
+          aria-activedescendant={active ? optionId(selectedIndex) : undefined}
+          placeholder="Search actions..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          data-testid="quick-actions-search"
+        />
       </div>
-    </div>
+
+      <div
+        className={styles.list}
+        ref={listRef}
+        id={`${id}-list`}
+        role="listbox"
+        aria-label="Commands"
+      >
+        {flattened.length === 0 ? (
+          <div className={styles.empty} role="presentation">
+            No actions match "{query}"
+          </div>
+        ) : (
+          CATEGORY_ORDER.filter((c) => grouped.has(c)).map((category) => (
+            <div
+              key={category}
+              className={styles.category}
+              role="group"
+              aria-labelledby={`${id}-group-${category}`}
+            >
+              <div
+                className={styles.categoryTitle}
+                id={`${id}-group-${category}`}
+                role="presentation"
+              >
+                {category}
+              </div>
+              {grouped.get(category)!.map((a) => {
+                const idx = flattened.indexOf(a);
+                return (
+                  <div
+                    key={a.id}
+                    id={optionId(idx)}
+                    role="option"
+                    aria-selected={idx === selectedIndex}
+                    className={[
+                      styles.item,
+                      idx === selectedIndex ? styles.itemSelected : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    data-action-index={idx}
+                    data-testid={`quick-action-${a.id}`}
+                    onClick={() => {
+                      onClose();
+                      a.onSelect();
+                    }}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                  >
+                    <span className={styles.itemLabel}>{a.label}</span>
+                    {a.hint && (
+                      <span className={styles.itemHint}>{a.hint}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className={styles.footer} aria-hidden="true">
+        <span>↑↓ Navigate</span>
+        <span>Enter to select · Esc to close</span>
+      </div>
+    </Modal>
   );
 }

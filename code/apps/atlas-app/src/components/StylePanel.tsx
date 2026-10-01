@@ -14,7 +14,7 @@
 // `overflow:hidden` sidebar body, under a stacking context above itself, a
 // floating box is clipped and occluded at once.
 //
-// So it has no dialog chrome: no FocusTrap, no Escape-to-close, no × button,
+// So it has no dialog chrome: no Modal, no Escape-to-close, no × button,
 // no `role="dialog"`, and no "Layer not found" branch — the card only renders
 // inside a row whose entry it just read, so `layerId` cannot dangle.
 //

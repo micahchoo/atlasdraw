@@ -102,3 +102,46 @@ describe("a question", () => {
     expect(screen.queryByTestId("confirm-dialog")).toBeNull();
   });
 });
+
+describe("the palette for a screen reader", () => {
+  it("is a combobox that names the active option, and the arrows move it", () => {
+    act(() => session.view.getState().openDialog({ kind: "palette" }));
+    renderDialogs();
+
+    const box = screen.getByRole("combobox", { name: "Search commands" });
+    const listbox = screen.getByRole("listbox", { name: "Commands" });
+    expect(box.getAttribute("aria-controls")).toBe(listbox.id);
+    const first = box.getAttribute("aria-activedescendant");
+    expect(document.getElementById(first!)?.getAttribute("aria-selected")).toBe(
+      "true",
+    );
+
+    fireEvent.keyDown(box, { key: "ArrowDown" });
+
+    const second = box.getAttribute("aria-activedescendant");
+    expect(second).not.toBe(first);
+    expect(
+      document.getElementById(second!)?.getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(document.getElementById(first!)?.getAttribute("aria-selected")).toBe(
+      "false",
+    );
+  });
+});
+
+describe("the first-run tour", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("is a dialog in the slot, named by its step, and Escape ends it for good", () => {
+    act(() => session.view.getState().openDialog({ kind: "onboarding" }));
+    renderDialogs();
+
+    const tour = screen.getByRole("dialog", { name: "Welcome to Atlasdraw" });
+    expect(tour.contains(document.activeElement)).toBe(true);
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+
+    expect(session.view.getState().dialog).toBeNull();
+    expect(localStorage.getItem("atlasdraw-onboarding-dismissed")).toBe("1");
+  });
+});

@@ -221,3 +221,37 @@ test.describe("a room between two browsers", () => {
     await Promise.all([a, b, c].map((p) => p.context().close()));
   });
 });
+
+test.describe("a room link in a tab where the editor is open", () => {
+  test.skip(!COLLAB_URL, "needs the collaboration editor (playwright.config)");
+  test.setTimeout(120_000);
+
+  test("joins the room, where before nothing happened", async ({ browser }) => {
+    const a = await person(browser);
+    const b = await person(browser);
+
+    await openEditor(a);
+    await drawBox(a, 400, 300);
+    const [first] = await elementIds(a);
+    await a.getByTestId("main-menu-trigger").click();
+    await a.getByTestId("main-menu-share").click();
+    await a.getByTestId("share-dialog-pick-collab").click();
+    const url = await a.getByTestId("share-dialog-url").inputValue();
+    await a.getByTestId("share-dialog-close").click();
+
+    // B has the editor open on B's own map, then the link arrives in the
+    // same tab: a hash change, which does not load the page again.
+    await openEditor(b);
+    expect(await elementIds(b)).toEqual([]);
+    await b.evaluate((hash) => {
+      window.location.hash = hash;
+    }, new URL(url).hash);
+
+    await expect.poll(() => elementIds(b)).toEqual([first]);
+    await expect(b.getByTestId("presence-list")).toContainText(
+      "1 collaborator",
+    );
+
+    await Promise.all([a, b].map((p) => p.context().close()));
+  });
+});

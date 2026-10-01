@@ -78,7 +78,7 @@ import { LayerPanel } from "./LayerPanel";
 import { MapCompass } from "./MapCompass";
 import { MeasureLayer } from "./MeasureLayer";
 import { MeasureToolButton } from "./MeasureToolButton";
-import { OnboardingTips, useOnboarding } from "./OnboardingTips";
+import { shouldShowOnboarding } from "./OnboardingTips";
 import { PinToolButton } from "./PinToolButton";
 import { PresenceList } from "./PresenceList";
 import { SheetNameField } from "./SheetNameField";
@@ -219,7 +219,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
   useConvertToDataLayer(api, addDataLayer, toast);
-  useCommandKeys(session, drawingLayer);
+  useCommandKeys(session);
 
   // Drawing is off while the camera is turned. Unprojecting the corners of a
   // rectangle dragged at 30° gives a north-aligned box that is not the box
@@ -251,7 +251,12 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   const isDirty = useStore(session.persistence, (s) => s.isDirty);
   // Another tab holds the open map (session/mapOwnership.ts).
   const readOnly = useStore(session.persistence, (s) => s.readOnly);
-  const onboarding = useOnboarding();
+  // The first-run tour is a dialog in the slot: the commands wait for it.
+  useEffect(() => {
+    if (shouldShowOnboarding()) {
+      view.getState().openDialog({ kind: "onboarding" });
+    }
+  }, [view]);
   const announce = useAnnounce();
   const onDrawingChange = useExcalidrawChangeHandler({
     excalidrawAPI: api,
@@ -489,8 +494,6 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               {problem}
             </div>
           )}
-
-          {onboarding.show && <OnboardingTips onDismiss={onboarding.dismiss} />}
         </div>
       </CollarShell>
     </SessionProvider>

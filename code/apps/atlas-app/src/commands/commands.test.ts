@@ -22,6 +22,7 @@ import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
 import {
   COMMANDS,
   EDITOR_KEYS,
+  paletteKeyText,
   MAIN_MENU,
   commandById,
   paletteCommands,
@@ -134,6 +135,25 @@ describe("the registry", () => {
         ).toBe(true);
       }
     }
+  });
+
+  it("the drawing's keys name the platform's modifier: Ctrl, or ⌘ on macOS", () => {
+    const row = (mac: boolean, label: string) =>
+      shortcutRows(mac)
+        .find((r) => r.label === label)
+        ?.keys.join(" ");
+    expect(row(false, "Undo")).toBe("Ctrl Z");
+    expect(row(true, "Undo")).toBe("⌘ Z");
+    expect(row(true, "Redo")).toBe("⌘ Shift Z");
+    expect(row(true, "Command palette")).toBe("⌘ K");
+    for (const r of shortcutRows(true)) {
+      expect(r.keys, r.label).not.toContain("Ctrl");
+    }
+  });
+
+  it("the palette's key reads as the platform types it", () => {
+    expect(paletteKeyText(false)).toBe("Ctrl+K");
+    expect(paletteKeyText(true)).toBe("⌘K");
   });
 
   it("the palette offers every available command but itself", () => {

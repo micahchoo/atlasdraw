@@ -13,6 +13,13 @@
   pointer-events: none;
 }
 
+/* A live region: the polite one, and above it the alert one. */
+.region {
+  display: flex;
+  flex-direction: column-reverse; /* newest at bottom */
+  gap: 6px;
+}
+
 .toast {
   display: flex;
   align-items: center;

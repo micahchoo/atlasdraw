@@ -11,6 +11,8 @@
 
 import React from "react";
 
+import { paletteKeyText } from "../commands/commands";
+
 import styles from "../styles/CollarShell.module.css";
 
 import { GraticuleTicks } from "./GraticuleTicks";
@@ -92,7 +94,7 @@ export function CollarShell({
       <div className={styles.tools} data-testid="collar-tools">
         <div className={styles.toolStripHost} ref={toolStripHostRef} />
         <span className={styles.toolHint} aria-hidden="true">
-          <kbd>⌘K</kbd> anything
+          <kbd>{paletteKeyText()}</kbd> anything
         </span>
       </div>
 

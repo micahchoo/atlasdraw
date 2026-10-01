@@ -4,6 +4,11 @@
 // #dialog), mounted at the editor's root. The menu, the palette and the keys
 // only set the dialog; this shows it. Mounted outside the main menu, whose
 // auto-close would unmount a dialog it held.
+//
+// Every dialog here is a Modal (components/Modal.tsx). The slot read where
+// focus goes back when the dialog opened (view.returnFocus); this hands that
+// to the Modal, because by the time it mounts a menu item that opened it is
+// gone.
 
 import React, { Suspense, lazy, useCallback, useMemo } from "react";
 
@@ -31,7 +36,9 @@ import { createHttpStorageClient } from "../services/createHttpStorageClient";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
+import { ReturnFocusContext } from "./Modal";
 import { MyMapsDialog } from "./MyMapsDialog";
+import { OnboardingTips } from "./OnboardingTips";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { ShareDialog } from "./ShareDialog";
 
@@ -65,6 +72,7 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
   const api = useView((s) => s.api);
   const background = useView((s) => s.mapBackground);
   const close = useView((s) => s.closeDialog);
+  const returnFocus = useView((s) => s.returnFocus);
   const basemap = useDocument((s) => s.basemap);
   const attribution = getBasemap(basemap)?.attribution;
 
@@ -140,77 +148,90 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
   if (!dialog) {
     return null;
   }
-  switch (dialog.kind) {
-    case "palette":
-      return <QuickActions actions={paletteActions()} onClose={close} />;
-    case "shortcuts":
-      return <KeyboardShortcuts rows={shortcutRows()} onClose={close} />;
-    case "confirm":
-      return (
-        <ConfirmDialog
-          title={dialog.title}
-          body={dialog.body}
-          confirmLabel={dialog.confirmLabel}
-          cancelLabel={dialog.cancelLabel}
-          tone={dialog.tone}
-          onConfirm={() => dialog.answer(true)}
-          onCancel={() => dialog.answer(false)}
-        />
-      );
-    case "about":
-      return (
-        <Suspense fallback={null}>
-          <AboutDialog onCloseRequest={close} />
-        </Suspense>
-      );
-    case "settings":
-      return (
-        <Suspense fallback={null}>
-          <SettingsDialog onCloseRequest={close} />
-        </Suspense>
-      );
-    case "export":
-      return (
-        <Suspense fallback={null}>
-          <ExportDialog
-            initialFormat={dialog.format}
-            onCloseRequest={close}
-            onExportPNG={exportPNG}
-            onExportGeoJSON={exportGeoJSON}
-            onExportAtlasdraw={() => void saveMap(session, session.notify)}
-            getView={() => (map ? measureView(map) : null)}
-            getMapImageDataUrl={mapImage}
-            // The PDF's north arrow: the screen angle of geographic east,
-            // the angle the drawing layer is turned by.
-            getCameraRotationDeg={() => (map ? -map.getBearing() : 0)}
-            getLegendEntries={legend}
-            attribution={attribution}
+  return (
+    <ReturnFocusContext.Provider value={returnFocus}>
+      {shown()}
+    </ReturnFocusContext.Provider>
+  );
+
+  function shown(): React.ReactNode {
+    if (!dialog) {
+      return null;
+    }
+    switch (dialog.kind) {
+      case "onboarding":
+        return <OnboardingTips onDismiss={close} />;
+      case "palette":
+        return <QuickActions actions={paletteActions()} onClose={close} />;
+      case "shortcuts":
+        return <KeyboardShortcuts rows={shortcutRows()} onClose={close} />;
+      case "confirm":
+        return (
+          <ConfirmDialog
+            title={dialog.title}
+            body={dialog.body}
+            confirmLabel={dialog.confirmLabel}
+            cancelLabel={dialog.cancelLabel}
+            tone={dialog.tone}
+            onConfirm={() => dialog.answer(true)}
+            onCancel={() => dialog.answer(false)}
           />
-        </Suspense>
-      );
-    case "asset-library":
-      return <AssetLibraryPanel excalidrawAPI={api} onCloseRequest={close} />;
-    case "my-maps":
-      return api ? (
-        <MyMapsDialog
-          excalidrawAPI={api}
-          map={map}
-          persistence={session.persistence}
-          notify={session.notify}
-          onClose={close}
-          server={getAppConfig().enableBackendPersistence ? storage : null}
-        />
-      ) : null;
-    case "share":
-      return api ? (
-        <ShareDialog
-          onCloseRequest={close}
-          getDoc={() =>
-            toFile(session.store.getState().doc, undefined, liveCamera(map))
-          }
-          client={storage}
-          startRoom={startRoom}
-        />
-      ) : null;
+        );
+      case "about":
+        return (
+          <Suspense fallback={null}>
+            <AboutDialog onCloseRequest={close} />
+          </Suspense>
+        );
+      case "settings":
+        return (
+          <Suspense fallback={null}>
+            <SettingsDialog onCloseRequest={close} />
+          </Suspense>
+        );
+      case "export":
+        return (
+          <Suspense fallback={null}>
+            <ExportDialog
+              initialFormat={dialog.format}
+              onCloseRequest={close}
+              onExportPNG={exportPNG}
+              onExportGeoJSON={exportGeoJSON}
+              onExportAtlasdraw={() => void saveMap(session, session.notify)}
+              getView={() => (map ? measureView(map) : null)}
+              getMapImageDataUrl={mapImage}
+              // The PDF's north arrow: the screen angle of geographic east,
+              // the angle the drawing layer is turned by.
+              getCameraRotationDeg={() => (map ? -map.getBearing() : 0)}
+              getLegendEntries={legend}
+              attribution={attribution}
+            />
+          </Suspense>
+        );
+      case "asset-library":
+        return <AssetLibraryPanel excalidrawAPI={api} onCloseRequest={close} />;
+      case "my-maps":
+        return api ? (
+          <MyMapsDialog
+            excalidrawAPI={api}
+            map={map}
+            persistence={session.persistence}
+            notify={session.notify}
+            onClose={close}
+            server={getAppConfig().enableBackendPersistence ? storage : null}
+          />
+        ) : null;
+      case "share":
+        return api ? (
+          <ShareDialog
+            onCloseRequest={close}
+            getDoc={() =>
+              toFile(session.store.getState().doc, undefined, liveCamera(map))
+            }
+            client={storage}
+            startRoom={startRoom}
+          />
+        ) : null;
+    }
   }
 }

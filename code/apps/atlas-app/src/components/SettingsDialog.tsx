@@ -13,7 +13,7 @@ import styles from "../styles/SettingsDialog.module.css";
 
 import { getAppConfig } from "../config/app-config";
 
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -40,77 +40,64 @@ export function SettingsDialog({ onCloseRequest }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<Tab>("storage");
 
   return (
-    <FocusTrap>
-      <div
-        className={styles.scrim}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onCloseRequest();
-          }
-        }}
-        data-testid="settings-dialog-scrim"
-      >
-        <div
-          className={styles.dialog}
-          role="dialog"
-          aria-label="Settings"
-          data-testid="settings-dialog"
+    <Modal
+      label="Settings"
+      onClose={onCloseRequest}
+      scrimClassName={styles.scrim}
+      scrimTestId="settings-dialog-scrim"
+      className={styles.dialog}
+      testId="settings-dialog"
+    >
+      {/* Header */}
+      <div className={styles.header}>
+        <span className={styles.title}>Settings</span>
+        <button
+          type="button"
+          className={styles.closeBtn}
+          onClick={onCloseRequest}
+          aria-label="Close"
+          data-testid="settings-dialog-close"
         >
-          {/* Header */}
-          <div className={styles.header}>
-            <span className={styles.title}>Settings</span>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              onClick={onCloseRequest}
-              aria-label="Close"
-              data-testid="settings-dialog-close"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Tabs */}
-          <div className={styles.tabStrip}>
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={[
-                  styles.tab,
-                  activeTab === t.id ? styles.tabActive : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => setActiveTab(t.id)}
-                aria-pressed={activeTab === t.id}
-                data-testid={`settings-tab-${t.id}`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Body */}
-          <div className={styles.body}>
-            {activeTab === "storage" && <StorageTab />}
-            {activeTab === "collaboration" && <CollaborationTab />}
-          </div>
-
-          {/* Footer */}
-          <div className={styles.footer}>
-            <button
-              type="button"
-              className={styles.footerBtn}
-              onClick={onCloseRequest}
-              data-testid="settings-dialog-done"
-            >
-              Done
-            </button>
-          </div>
-        </div>
+          ×
+        </button>
       </div>
-    </FocusTrap>
+
+      {/* Tabs */}
+      <div className={styles.tabStrip}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={[styles.tab, activeTab === t.id ? styles.tabActive : ""]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={() => setActiveTab(t.id)}
+            aria-pressed={activeTab === t.id}
+            data-testid={`settings-tab-${t.id}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Body */}
+      <div className={styles.body}>
+        {activeTab === "storage" && <StorageTab />}
+        {activeTab === "collaboration" && <CollaborationTab />}
+      </div>
+
+      {/* Footer */}
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.footerBtn}
+          onClick={onCloseRequest}
+          data-testid="settings-dialog-done"
+        >
+          Done
+        </button>
+      </div>
+    </Modal>
   );
 }
 

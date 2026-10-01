@@ -14,12 +14,16 @@
 //              build has no rooms
 //   view       the editor's view state (session/view.ts)
 //   persistence the autosave's state (state/persistenceState.ts)
+//   keys       who hears a key: the dialogs, the tools, then the commands
+//              (commands/keyScopes.ts)
 //   notify     where an action tells the user how it went (the toasts)
 
 import {
   createPersistenceState,
   type PersistenceStateStore,
 } from "../state/persistenceState";
+
+import { createKeyScopes, type KeyScopes } from "../commands/keyScopes";
 
 import { createViewStore, type ViewStore } from "./view";
 
@@ -50,6 +54,7 @@ export interface EditorSession {
   readonly notify: Notify;
   readonly view: ViewStore;
   readonly persistence: PersistenceStateStore;
+  readonly keys: KeyScopes;
 }
 
 export function createSession(deps: SessionDeps): EditorSession {
@@ -60,5 +65,6 @@ export function createSession(deps: SessionDeps): EditorSession {
     notify: deps.notify,
     view: createViewStore({ map: deps.map }),
     persistence: createPersistenceState(),
+    keys: createKeyScopes(),
   };
 }

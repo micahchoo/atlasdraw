@@ -130,6 +130,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     await waitFor(() => expect(result.current.status).toBe("joined"));
@@ -159,6 +160,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     let url = "";
@@ -196,6 +198,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     await waitFor(() => expect(result.current.status).toBe("joined"));
@@ -268,6 +271,7 @@ describe("useRoom", () => {
       return useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       });
     });
     await waitFor(() => expect(result.current.room).not.toBeNull());
@@ -315,6 +319,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     let refusal: unknown = null;
@@ -340,6 +345,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     await waitFor(() => expect(result.current.status).toBe("joined"));
@@ -363,6 +369,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
     expect(roomConnection(result.current)).toMatch(/connecting/i);
@@ -383,6 +390,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: memoryRelay().transport,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
 
@@ -398,11 +406,140 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: null,
         persistence: session.persistence,
+        view: session.view,
       }),
     );
 
     expect(result.current.available).toBe(false);
     expect(result.current.error).toMatch(/not set up for shared maps/);
     expect(result.current.room).toBeNull();
+  });
+
+  describe("a room link that arrives in an open editor", () => {
+    async function seeded(title: string) {
+      const relay = memoryRelay();
+      await seedRoom(relay.server, createDocument({ title }), "host");
+      return relay;
+    }
+
+    /**
+     * Put `hash` in the address bar, as a paste or a link click does. The
+     * event is sent here, once: jsdom would send its own a task later.
+     */
+    function navigate(hash: string) {
+      act(() => {
+        window.history.replaceState(null, "", `/${hash}`);
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+    }
+
+    it("joins that room", async () => {
+      const relay = await seeded("Shared survey");
+      const fake = makeFakeExcalidraw();
+      const { result } = renderHook(() =>
+        useRoom(fake.api, null, {
+          transport: relay.transport,
+          persistence: session.persistence,
+          view: session.view,
+        }),
+      );
+      expect(result.current.room).toBeNull();
+
+      navigate(roomFragment(newRoomLink()));
+
+      await waitFor(() => expect(result.current.status).toBe("joined"));
+      expect(currentDocument().snapshot().title).toBe("Shared survey");
+    });
+
+    it("asks before it leaves one room for another; no keeps the room and its link", async () => {
+      const relay = await seeded("First");
+      const first = newRoomLink();
+      window.history.replaceState(null, "", `/${roomFragment(first)}`);
+      const fake = makeFakeExcalidraw();
+      const { result } = renderHook(() =>
+        useRoom(fake.api, null, {
+          transport: relay.transport,
+          persistence: session.persistence,
+          view: session.view,
+        }),
+      );
+      await waitFor(() => expect(result.current.status).toBe("joined"));
+      const room = result.current.room;
+
+      navigate(roomFragment(newRoomLink()));
+
+      const question = session.view.getState().dialog;
+      expect(question?.kind).toBe("confirm");
+      await act(async () => {
+        (question as { answer(yes: boolean): void }).answer(false);
+      });
+      expect(result.current.room).toBe(room);
+      expect(window.location.hash).toBe(roomFragment(first));
+    });
+
+    it("yes leaves the room and joins the other", async () => {
+      const relay = await seeded("Shared");
+      window.history.replaceState(null, "", `/${roomFragment(newRoomLink())}`);
+      const fake = makeFakeExcalidraw();
+      const { result } = renderHook(() =>
+        useRoom(fake.api, null, {
+          transport: relay.transport,
+          persistence: session.persistence,
+          view: session.view,
+        }),
+      );
+      await waitFor(() => expect(result.current.status).toBe("joined"));
+      const room = result.current.room;
+      const second = newRoomLink();
+
+      navigate(roomFragment(second));
+      await act(async () => {
+        (
+          session.view.getState().dialog as { answer(yes: boolean): void }
+        ).answer(true);
+      });
+
+      await waitFor(() =>
+        expect(result.current.room?.link.roomId).toBe(second.roomId),
+      );
+      expect(result.current.room).not.toBe(room);
+    });
+
+    it("the link of the room it is in changes nothing", async () => {
+      const relay = await seeded("Shared");
+      const link = newRoomLink();
+      window.history.replaceState(null, "", `/${roomFragment(link)}`);
+      const fake = makeFakeExcalidraw();
+      const { result } = renderHook(() =>
+        useRoom(fake.api, null, {
+          transport: relay.transport,
+          persistence: session.persistence,
+          view: session.view,
+        }),
+      );
+      await waitFor(() => expect(result.current.status).toBe("joined"));
+      const room = result.current.room;
+
+      navigate(roomFragment(link));
+
+      expect(session.view.getState().dialog).toBeNull();
+      expect(result.current.room).toBe(room);
+    });
+
+    it("a broken link says so", () => {
+      const fake = makeFakeExcalidraw();
+      const { result } = renderHook(() =>
+        useRoom(fake.api, null, {
+          transport: memoryRelay().transport,
+          persistence: session.persistence,
+          view: session.view,
+        }),
+      );
+
+      navigate("#room:not-a-room");
+
+      expect(result.current.error).toMatch(/not valid/);
+      expect(result.current.room).toBeNull();
+    });
   });
 });

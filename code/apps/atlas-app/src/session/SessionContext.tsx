@@ -5,6 +5,8 @@
 import React, { createContext, useContext } from "react";
 import { useStore } from "zustand";
 
+import { KeyScopesContext } from "../commands/keyScopes";
+
 import type { EditorSession } from "./EditorSession";
 import type { PersistenceState } from "../state/persistenceState";
 import type { ViewState } from "./view";
@@ -20,7 +22,9 @@ export function SessionProvider({
 }) {
   return (
     <SessionContext.Provider value={session}>
-      {children}
+      <KeyScopesContext.Provider value={session.keys}>
+        {children}
+      </KeyScopesContext.Provider>
     </SessionContext.Provider>
   );
 }

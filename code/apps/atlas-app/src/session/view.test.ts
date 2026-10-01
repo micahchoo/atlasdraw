@@ -3,7 +3,7 @@
 // The session's view state: the sheet-panel width (clamping and keeping it
 // in this browser), and one store per session.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   RIGHT_SIDEBAR_DEFAULT_WIDTH,
@@ -251,5 +251,112 @@ describe("dialogs", () => {
     (dialog as { answer(yes: boolean): void }).answer(true);
     await expect(answer).resolves.toBe(true);
     expect(view.getState().dialog).toBeNull();
+  });
+});
+
+describe("a question that loses the slot is answered", () => {
+  const question = {
+    title: "Clear the drawing?",
+    body: "…",
+    confirmLabel: "Clear",
+  };
+
+  it("another dialog opening over it answers no", async () => {
+    const view = createViewStore();
+    const answer = view.getState().ask(question);
+    view.getState().openDialog({ kind: "about" });
+    await expect(answer).resolves.toBe(false);
+    expect(view.getState().dialog).toEqual({ kind: "about" });
+  });
+
+  it("a second question answers the first no and stays open", async () => {
+    const view = createViewStore();
+    const first = view.getState().ask(question);
+    const second = view.getState().ask({ ...question, title: "Open?" });
+    await expect(first).resolves.toBe(false);
+    const open = view.getState().dialog;
+    expect(open?.kind === "confirm" && open.title).toBe("Open?");
+    (open as { answer(yes: boolean): void }).answer(true);
+    await expect(second).resolves.toBe(true);
+  });
+
+  it("a toggle over it answers no", async () => {
+    const view = createViewStore();
+    const answer = view.getState().ask(question);
+    view.getState().toggleDialog("palette");
+    await expect(answer).resolves.toBe(false);
+    expect(view.getState().dialog).toEqual({ kind: "palette" });
+  });
+
+  it("closing the slot answers no", async () => {
+    const view = createViewStore();
+    const answer = view.getState().ask(question);
+    view.getState().closeDialog();
+    await expect(answer).resolves.toBe(false);
+  });
+
+  it("a late answer from a replaced question does not close the new dialog", () => {
+    const view = createViewStore();
+    void view.getState().ask(question);
+    const stale = view.getState().dialog as { answer(yes: boolean): void };
+    view.getState().openDialog({ kind: "settings" });
+    stale.answer(true);
+    expect(view.getState().dialog).toEqual({ kind: "settings" });
+  });
+});
+
+describe("where focus goes back to", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  function button(name: string, parent: HTMLElement = document.body) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    parent.appendChild(b);
+    return b;
+  }
+
+  it("the element that had focus when the dialog opened", () => {
+    const view = createViewStore();
+    const opener = button("Pin");
+    opener.focus();
+    view.getState().openDialog({ kind: "about" });
+    expect(view.getState().returnFocus).toBe(opener);
+  });
+
+  it("the menu's trigger, when a menu item opened it: the item goes with the menu", () => {
+    const view = createViewStore();
+    const trigger = button("Menu");
+    trigger.id = "menu-trigger";
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-labelledby", "menu-trigger");
+    document.body.appendChild(menu);
+    const item = button("Settings…", menu);
+    item.focus();
+    view.getState().openDialog({ kind: "settings" });
+    expect(view.getState().returnFocus).toBe(trigger);
+  });
+
+  it("the first opener, when a dialog opens from inside another (the palette)", () => {
+    const view = createViewStore();
+    const opener = button("Pin");
+    opener.focus();
+    view.getState().openDialog({ kind: "palette" });
+    const modal = document.createElement("div");
+    modal.setAttribute("aria-modal", "true");
+    document.body.appendChild(modal);
+    button("Settings…", modal).focus();
+    view.getState().closeDialog();
+    view.getState().openDialog({ kind: "settings" });
+    expect(view.getState().returnFocus).toBe(opener);
+  });
+
+  it("nothing, when nothing had focus", () => {
+    const view = createViewStore();
+    (document.activeElement as HTMLElement | null)?.blur();
+    view.getState().openDialog({ kind: "about" });
+    expect(view.getState().returnFocus).toBeNull();
   });
 });

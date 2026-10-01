@@ -78,3 +78,24 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 export function keyText(b: KeyBinding, mac: boolean = isDarwin): string {
   return keyLabels(b, mac).join(mac ? "" : "+");
 }
+
+/**
+ * True when the event came from inside a menu, a listbox or a dialog: a
+ * popup that owns its own keys, Escape first of all.
+ */
+export function isPopupTarget(target: EventTarget | null): boolean {
+  const el = target as Element | null;
+  return Boolean(
+    el?.closest?.(
+      '[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]',
+    ),
+  );
+}
+
+/**
+ * True when a tool (Measure, the Pin, comment mode) may take this key: not
+ * typed into a field, not pressed in a popup.
+ */
+export function isToolKey(e: KeyboardEvent): boolean {
+  return !isTypingTarget(e.target) && !isPopupTarget(e.target);
+}

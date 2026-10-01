@@ -16,6 +16,8 @@ triggers:
 
 Read this before writing any atlas-app UI. Source of truth:
 - `MapEditor.tsx` + `MapEditor.module.css` — existing atlas-app patterns
+- `src/styles/tokens.css` — the atlas-app design tokens (`--ad-*`)
+- `src/components/Modal.tsx` — the one way a dialog is modal
 - `packages/excalidraw/css/variables.module.scss` — Excalidraw design tokens
 - `packages/excalidraw/css/theme.scss` — Excalidraw CSS custom properties
 - `packages/excalidraw/components/FilledButton.scss` — button size/weight reference
@@ -35,12 +37,12 @@ Decision tree — work top-to-bottom, stop at the first match:
 
 | Need | Correct slot |
 |---|---|
-| Toggle an atlas tool on/off | Top-left button group (`top:12px, left:12px`, z-index 10) — extend horizontally alongside `pinButton` |
-| Layer / data-layer management | `<Sidebar>` tab → `LayerPanel.tsx` (Phase 2 surface) |
-| Per-element contextual action | Right-click context menu (`role="menu"`, position:fixed, z-index 100) |
-| App-wide action (export, share, settings) | Excalidraw `<MainMenu>` replacement → `Toolbar.tsx` |
-| Transient status / one-liner feedback | `ui.setStatusBarMessage()` — no new DOM |
-| Truly standalone multi-step workflow | New modal/dialog — **only** if none of the above fits (ImportDialog, ShareDialog are correct; a new "layer opacity" slider is not) |
+| Toggle an atlas tool on/off | The drawing's tool strip in the collar: `renderToolbarExtras` in `MapEditor.tsx`, beside `PinToolButton`, `MeasureToolButton` and `CommentModeButton` |
+| Layer / data-layer management | `<Sidebar>` tab → `LayerPanel.tsx` |
+| Per-layer contextual action | The layer row's actions menu in `LayerPanel.tsx` (`role="menu"`, `menuitem`s, arrow keys) |
+| App-wide action (export, share, settings) | A `Command` in `commands/commands.ts`. Put its id in `MAIN_MENU` and the main menu (`EditorMenu.tsx`), the palette and the shortcuts panel all show it |
+| Transient feedback | `session.notify` (the toasts), or `useAnnounce()` for words only a screen reader needs — no new DOM |
+| Truly standalone multi-step workflow | A dialog in the slot (`view.openDialog`, shown by `EditorDialogs.tsx`), rendered through `Modal` — **only** if none of the above fits (Export and Share are correct; a new "layer opacity" slider is not) |
 
 **Failure mode to avoid:** adding a free-floating `<div>` on the canvas for
 something that belongs in `LayerPanel` or the context menu. If it's a control
@@ -61,8 +63,9 @@ only, with an explicit comment in `MapEditor.module.css` explaining why.
 | Collar legend (selection) | 4 | `.App-collar-legend` (`packages/excalidraw/components/LayerUI.scss`) — collar-mode selection legend panel over the plate |
 | Atlas tool overlay | 5 | `.atlasToolOverlay` — transparent, interaction capture only, no visual chrome |
 | Collar neatline (inner) | 6 | `.plate::after` (`CollarShell.module.css`) — printed inner double-neatline rule, above the map but below chrome |
-| Toolbar buttons / banners | 10 | `.pinButton` and siblings, demo banners |
-| Context menus | 100 | `position:fixed`, dismiss on `onMouseLeave` |
+| Hints / banners / presence | 10 | `.commentModeHint`, `.drawBlockedHint`, the presence list, the sheet-panel handle |
+| Toasts | 50 | `Toast.module.css` `.container` — always mounted, it holds the live regions |
+| Dialog scrims / menus | 100 | Each dialog's scrim (`ConfirmDialog`, `QuickActions` …); menus dismiss on an outside press and on Escape |
 
 ---
 
@@ -83,7 +86,7 @@ import styles from "../styles/ComponentName.module.css";
 
 // conditional — match this pattern exactly
 <button
-  className={[styles.pinButton, isActive ? styles.pinButtonActive : ""]
+  className={[styles.toolButton, isActive ? styles.toolButtonActive : ""]
     .filter(Boolean)
     .join(" ")}
 />
@@ -104,10 +107,16 @@ import styles from "../styles/ComponentName.module.css";
 
 ## Color Tokens
 
-Atlas-app uses literal hex values. These are Bootstrap 5's scale, the same
-values as Excalidraw's SCSS variables — they are deliberately aligned.
+**New UI uses the `--ad-*` custom properties in `src/styles/tokens.css`**
+(surfaces, ink, accent, rules, focus ring, danger/caution/confirm, the
+spacing and radius scales, fonts). `high-contrast.css` redefines them, so a
+literal hex skips the high-contrast theme.
 
-### Atlas-side palette (atlas-app only, no CSS vars yet)
+Some CSS Modules and the older inline-styled dialogs (About, Share, the
+asset library) still carry the literals below. Replace one with its token
+when you touch the file for another reason.
+
+### Legacy literals and their tokens
 
 | Role | Hex | Excalidraw SCSS equivalent |
 |---|---|---|
@@ -126,9 +135,8 @@ values as Excalidraw's SCSS variables — they are deliberately aligned.
 | Annotation kind badge — bg | `#fef3c7` | — (Tailwind amber-100; new role) |
 | Annotation kind badge — text | `#92400e` | — (Tailwind amber-900; new role) |
 
-**Do not invent new hex values.** If the role doesn't exist in this table, check
-`packages/excalidraw/css/variables.module.scss` for the nearest grey or blue.
-Use that value, and add it to this table when you do.
+**Do not invent new hex values.** If the role has no token, add one to
+`tokens.css` (and to `high-contrast.css`) rather than a literal.
 
 ### Excalidraw CSS variables (available inside `.excalidraw` scope)
 
@@ -156,10 +164,12 @@ hex literals above, not Excalidraw CSS vars — those are only defined inside th
 
 ### Three button types in the codebase
 
-#### 1. Atlas toolbar button (text label, absolute-positioned)
+#### 1. Atlas tool toggle (in the drawing's tool strip)
 
-The current pattern — `pinButton` in `MapEditor.module.css`.
-Use for: atlas tool toggles in the top-left button group.
+The current pattern — `PinToolButton.tsx`, `MeasureToolButton.tsx`.
+Use for: atlas tool toggles rendered through `renderToolbarExtras`. The
+values below are the older free-floating version; match the neighbours in
+the strip first.
 
 ```css
 /* default */
@@ -368,7 +378,11 @@ Layer names, attribute values, and status messages are `font-weight: 400`.
 | Toggle buttons | `aria-pressed={boolean}` |
 | Icon-only buttons | `aria-label="..."` OR visually-hidden `<span>` child |
 | Disabled actions | `disabled` attr + `aria-disabled="true"` + `title` explaining why |
-| Context menus | `role="menu"` on container |
+| Menus | `role="menu"` on the container, `role="menuitem"` on items, arrow keys move, Escape and an outside press close, focus goes back to the trigger. Never dismiss on `onMouseLeave`: a keyboard user has no mouse to leave with |
+| Dialogs | Render through `components/Modal.tsx`, a question inside a dialog too. It gives the role, `aria-modal`, the name, focus in and Tab kept inside, Escape, the scrim, the inert page and focus back. Never write a dialog's own Escape `keydown` or focus trap |
+| Keys | A tool that takes keys pushes a `tool` scope (`commands/keyScopes.ts#useKeyScope`) while it is on. A new key for the user is a `Command`. No component adds its own `window` `keydown` |
+| Key labels | From the binding: `keyText` / `keyLabels` (`commands/keys.ts`), so Linux and Windows read "Ctrl" and macOS "⌘". Never type "⌘K" or "Ctrl" into a string |
+| Live regions | In the page before they speak (the toast regions, `PresenceList`'s connection line). A region added together with its text is often not read out. An error is `role="alert"`; the rest `role="status"`. Mark a region outside a dialog `data-live-region` so `Modal` leaves it out of the inert page |
 | Every interactive element | `data-testid="..."` — Playwright reads these |
 | SVG decorative | `aria-hidden="true"` on the `<svg>` |
 
@@ -377,20 +391,48 @@ Toggle button template:
 ```tsx
 <button
   type="button"
-  className={[styles.pinButton, isActive ? styles.pinButtonActive : ""]
+  className={[styles.toolButton, isActive ? styles.toolButtonActive : ""]
     .filter(Boolean)
     .join(" ")}
   onClick={() => setActive(!isActive)}
   aria-pressed={isActive}
-  data-testid="pin-tool-button"
+  data-testid="my-tool-button"
 >
-  Pin
+  My tool
 </button>
 ```
 
 ---
 
-## Context Menu Pattern
+## Dialog Pattern
+
+```tsx
+// A dialog in the slot: a command opens it, EditorDialogs shows it.
+run: (s) => s.view.getState().openDialog({ kind: "my-dialog" }),
+
+// The dialog itself.
+<Modal
+  labelledBy={titleId}          // or label="…" when nothing visible names it
+  onClose={onClose}             // Escape, a press on the scrim
+  scrimClassName={styles.scrim}
+  className={styles.dialog}
+  testId="my-dialog"
+>
+  <h2 id={titleId}>…</h2>
+  …
+  {asking && <ConfirmDialog … />}  {/* a question inside: a Modal too */}
+</Modal>
+```
+
+A yes/no question is `await view.ask({...})`; it answers false when the user
+cancels or another dialog takes the slot.
+
+---
+
+## Menu Pattern
+
+The layer row's actions menu (`LayerPanel.tsx`) is the model; the sketch
+below is its shape, not a component to copy.
 
 ```tsx
 {contextMenu && (
@@ -406,7 +448,8 @@ Toggle button template:
       border: "1px solid #ccc",
       padding: 4,
     }}
-    onMouseLeave={() => setContextMenu(null)}
+    // Close on an outside pointerdown and on Escape (both in an effect),
+    // and give focus back to the trigger. Never on onMouseLeave.
   >
     {canDoAction ? (
       <button type="button" onClick={handleAction} data-testid="action-button">
@@ -445,13 +488,14 @@ Everything else goes in a CSS module.
   {activeAtlasTool && (
     <div className={styles.atlasToolOverlay} />     ← z:5 — transparent, events only
   )}
-  <button className={styles.pinButton [+ Active]}/> ← z:10 — top-left button group
-  {contextMenu && <div role="menu" style={{zIndex:100}}/>}  ← context menu
+  {commentMode && <div className={styles.commentModeHint}/>} ← z:10 — hints
+  <EditorDialogs />                                  ← z:100 — the one dialog (Modal)
 </div>
 ```
 
-New atlas-side controls land at **z:10** in the toolbar group or as a new
-CSS-module class at the appropriate band. They do **not** create new z-index
+Atlas tool toggles are not in this stack: they render into the drawing's
+tool strip in the collar (`renderToolbarExtras`). New atlas-side controls
+land at **z:10** as a CSS-module class, or in an existing surface. They do **not** create new z-index
 bands without updating this table and adding a comment in `MapEditor.module.css`.
 
 ---
@@ -521,7 +565,7 @@ Neither check can see a weak assertion that does run. That one is on you.
 
 - [ ] **Surface decision:** checked the decision tree; documented why a new surface was needed if one was created
 - [ ] **CSS Module:** all persistent styles in `src/styles/*.module.css`, not inline
-- [ ] **Colors:** match the hex token table; no new values invented
+- [ ] **Colors:** `--ad-*` tokens; no new hex values
 - [ ] **Z-index:** correct band; comment added in `MapEditor.module.css` if a new band
 - [ ] **Icons:** inline SVG, `currentColor`, `aria-hidden="true"`, `width`/`height` from CSS
 - [ ] **Text:** correct size/weight for the role
@@ -529,7 +573,10 @@ Neither check can see a weak assertion that does run. That one is on you.
 - [ ] **`aria-pressed`** on toggles
 - [ ] **`aria-disabled` + `title`** on disabled actions
 - [ ] **`data-testid`** on every interactive element
-- [ ] **Context menu:** `role="menu"`, `onMouseLeave` dismiss, `position:fixed`
+- [ ] **Menu:** `role="menu"` + `menuitem`s, arrow keys, Escape and outside press close, focus back to the trigger
+- [ ] **Dialog:** rendered through `Modal`; opened through the slot (`view.openDialog` / `view.ask`)
+- [ ] **Keys:** a `Command` or a `tool` key scope; labels from `keyText`
+- [ ] **Live regions:** mounted before they speak
 - [ ] **Conditional class:** uses `.filter(Boolean).join(" ")` pattern
 - [ ] **Layout / keyboard / focus claims:** proved by a Playwright probe in
       `apps/atlas-app/e2e/`, not by a jsdom CSS read

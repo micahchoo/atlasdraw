@@ -318,6 +318,33 @@ describe("MyMapsDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("Escape answers its question no and leaves the dialog open", async () => {
+    await seedTwoMaps();
+    fx.setElements([{ id: "drawn", type: "ellipse" }]);
+    openDocument(createDocument({ title: "Fresh work" }, sceneOf(fx.api)));
+    const fresh = currentDocument().id;
+    persistence.getState().markDirty();
+    persistence.getState().setForceSave(async () => {
+      throw new Error("quota");
+    });
+    const { onClose } = renderDialog();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open Field sites" }),
+    );
+    const question = await screen.findByRole("alertdialog", {
+      name: "Open another map?",
+    });
+
+    fireEvent.keyDown(within(question).getByTestId("confirm-dialog-cancel"), {
+      key: "Escape",
+    });
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "My maps" })).toBeTruthy();
+    expect(currentDocument().id).toBe(fresh);
+  });
+
   it("lists the open map's latest changes", async () => {
     fx.setElements([{ id: "drawn", type: "ellipse" }]);
     openDocument(createDocument({ title: "Fresh work" }, sceneOf(fx.api)));

@@ -15,9 +15,10 @@
 // Both measure through the document's world frame (`measureShape`,
 // `scenePathLength`), so a kept line reads the same as the path it came from.
 //
-// The `m` key, Enter, Backspace and Escape are read on window in the capture
-// phase and stopped there while the tool is on: Excalidraw listens on
-// document, and Backspace there deletes the selection.
+// Enter, Backspace, Delete and Escape go to the tool's key scope while it is
+// on (commands/keyScopes.ts), which stops them before the drawing: Excalidraw
+// listens on document, and Backspace there deletes the selection. A dialog
+// open above the tool hears them instead. The `m` key is a command.
 
 import {
   useCallback,
@@ -45,7 +46,12 @@ import type { UnitSystem } from "@atlasdraw/tools";
 
 import { buildToolContext } from "../hooks/useAtlasdrawTool";
 import { currentDocument } from "../state/document";
-import { isTypingTarget } from "../commands/keys";
+import { isToolKey } from "../commands/keys";
+import {
+  useKeyScope,
+  useKeyScopes,
+  type KeyScope,
+} from "../commands/keyScopes";
 import { useSession, useView } from "../session/SessionContext";
 import styles from "../styles/MeasureLayer.module.css";
 
@@ -288,27 +294,35 @@ function MeasureTool({
     onExit();
   }, [excalidrawAPI, map, onExit, state.points]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) {
-        return;
-      }
-      const handled =
-        e.key === "Escape"
-          ? (onExit(), true)
-          : e.key === "Enter"
-          ? (dispatch({ type: "finish" }), true)
-          : e.key === "Backspace" || e.key === "Delete"
-          ? (dispatch({ type: "undo" }), true)
-          : false;
-      if (handled) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onExit]);
+  // A tool scope: a dialog open above the tool takes its own Enter and
+  // Escape, and the tool never hears them.
+  const keyScope = useMemo<KeyScope>(
+    () => ({
+      name: "measure",
+      layer: "tool",
+      onKey: (e) => {
+        if (!isToolKey(e)) {
+          return false;
+        }
+        switch (e.key) {
+          case "Escape":
+            onExit();
+            return true;
+          case "Enter":
+            dispatch({ type: "finish" });
+            return true;
+          case "Backspace":
+          case "Delete":
+            dispatch({ type: "undo" });
+            return true;
+          default:
+            return false;
+        }
+      },
+    }),
+    [onExit],
+  );
+  useKeyScope(useKeyScopes(), keyScope);
 
   // Screen positions for the drawn path, relative to the overlay.
   const container = map.getContainer().getBoundingClientRect();

@@ -4,19 +4,33 @@
  * Shows a brief tour of key UI elements. Dismissed permanently via
  * localStorage flag. Steps point at real UI landmarks with position hints.
  *
+ * It is a dialog in the editor's one slot (`{ kind: "onboarding" }`), so the
+ * commands wait while it is open, focus goes into it, and Tab stays in it.
+ * Skip, "Got it" and Escape end the tour for good. A press on the scrim
+ * does nothing: the tour asks for one of those.
+ *
  * Design: warm, brief, dismissable — the drafting-room greets you, then
  * gets out of your way.
  */
 
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useId, useState } from "react";
 
 import styles from "../styles/OnboardingTips.module.css";
+
+import { paletteKeyText } from "../commands/commands";
+
+import { Modal } from "./Modal";
 
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = "atlasdraw-onboarding-dismissed";
+
+/** True when this browser has not seen the tour to its end or skipped it. */
+export function shouldShowOnboarding(): boolean {
+  return !isDismissed();
+}
 
 function isDismissed(): boolean {
   try {
@@ -63,7 +77,7 @@ const STEPS: Step[] = [
   },
   {
     title: "Quick actions",
-    body: "Press Cmd+K (Ctrl+K) to search across all tools, actions, and panels. Press ? to see all keyboard shortcuts.",
+    body: `Press ${paletteKeyText()} to search across all tools, actions, and panels. Press ? to see all keyboard shortcuts.`,
     position: { top: 200, left: 24 },
   },
   {
@@ -84,6 +98,7 @@ interface OnboardingTipsProps {
 export function OnboardingTips({ onDismiss }: OnboardingTipsProps) {
   const [step, setStep] = useState(0);
   const current = STEPS[step];
+  const titleId = useId();
 
   const handleNext = useCallback(() => {
     if (step < STEPS.length - 1) {
@@ -100,58 +115,49 @@ export function OnboardingTips({ onDismiss }: OnboardingTipsProps) {
   }, [onDismiss]);
 
   return (
-    <div className={styles.scrim} data-testid="onboarding-scrim">
-      <div
-        className={styles.tip}
-        style={{
-          top: current.position.top,
-          left: current.position.left,
-          bottom: current.position.bottom,
-          right: current.position.right,
-        }}
-        data-testid="onboarding-tip"
-      >
-        <h2 className={styles.title}>{current.title}</h2>
-        <p className={styles.body}>{current.body}</p>
-        <div className={styles.actions}>
-          <span className={styles.steps}>
-            {step + 1} / {STEPS.length}
-          </span>
-          <div className={styles.buttons}>
-            <button
-              type="button"
-              className={styles.btn}
-              onClick={handleSkip}
-              data-testid="onboarding-skip"
-            >
-              Skip
-            </button>
-            <button
-              type="button"
-              className={[styles.btn, styles.btnPrimary].join(" ")}
-              onClick={handleNext}
-              data-testid="onboarding-next"
-            >
-              {step < STEPS.length - 1 ? "Next" : "Got it"}
-            </button>
-          </div>
+    <Modal
+      labelledBy={titleId}
+      onClose={handleSkip}
+      scrimCloses={false}
+      scrimClassName={styles.scrim}
+      scrimTestId="onboarding-scrim"
+      className={styles.tip}
+      style={{
+        top: current.position.top,
+        left: current.position.left,
+        bottom: current.position.bottom,
+        right: current.position.right,
+      }}
+      testId="onboarding-tip"
+    >
+      <h2 id={titleId} className={styles.title}>
+        {current.title}
+      </h2>
+      <p className={styles.body}>{current.body}</p>
+      <div className={styles.actions}>
+        <span className={styles.steps}>
+          {step + 1} / {STEPS.length}
+        </span>
+        <div className={styles.buttons}>
+          <button
+            type="button"
+            className={styles.btn}
+            onClick={handleSkip}
+            data-testid="onboarding-skip"
+          >
+            Skip
+          </button>
+          <button
+            type="button"
+            className={[styles.btn, styles.btnPrimary].join(" ")}
+            onClick={handleNext}
+            data-testid="onboarding-next"
+            autoFocus
+          >
+            {step < STEPS.length - 1 ? "Next" : "Got it"}
+          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Hook — returns whether to show onboarding, and the dismiss handler
-// ---------------------------------------------------------------------------
-
-export function useOnboarding(): {
-  show: boolean;
-  dismiss: () => void;
-} {
-  const [show, setShow] = useState(!isDismissed());
-
-  const dismiss = useCallback(() => setShow(false), []);
-
-  return { show, dismiss };
 }

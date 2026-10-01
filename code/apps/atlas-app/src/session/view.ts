@@ -27,6 +27,8 @@ import type { AtlasdrawTool, UnitSystem } from "@atlasdraw/tools";
 
 import { loadUnitSystem, saveUnitSystem } from "../state/measure";
 
+import { focusOrigin } from "./focusReturn";
+
 import type { ExportFormat } from "../components/ExportDialog";
 import type maplibregl from "maplibre-gl";
 
@@ -49,9 +51,14 @@ export type SimpleDialog =
   | "settings"
   | "share"
   | "my-maps"
-  | "asset-library";
+  | "asset-library"
+  | "onboarding";
 
-/** The editor's dialogs. Only one is open at a time. */
+/**
+ * The editor's dialogs. Only one is open at a time. A question that loses
+ * the slot (another dialog opens, or the slot closes) is answered no, so the
+ * code that asked it never waits forever.
+ */
 export type Dialog =
   | { kind: SimpleDialog }
   | { kind: "export"; format: ExportFormat }
@@ -106,6 +113,11 @@ export interface ViewState {
   atlasTool: AtlasdrawTool | null;
   /** The open dialog, or null. */
   dialog: Dialog | null;
+  /**
+   * Where focus goes back to when the dialog closes: what had focus when it
+   * opened (session/focusReturn.ts). Null when nothing had.
+   */
+  returnFocus: Element | null;
   /** The canvas colour chosen in the drawing's menu, shown behind the map. */
   mapBackground: string;
   /** True when this browser holds a server backup of the open map. */
@@ -131,15 +143,27 @@ export interface ViewState {
   select(id: string): void;
   clearSelection(): void;
   setAtlasTool(tool: AtlasdrawTool | null): void;
+  /** Open `dialog` in the slot; an open question is answered no. */
   openDialog(dialog: Dialog): void;
   /** Open the dialog when another (or none) is open; close it when it is. */
   toggleDialog(kind: SimpleDialog): void;
+  /** Close the slot; an open question is answered no. */
   closeDialog(): void;
-  /** Show `question` and resolve with the answer. */
+  /**
+   * Show `question` and resolve with the answer: false when the user cancels
+   * or another dialog takes the slot.
+   */
   ask(question: Question): Promise<boolean>;
 }
 
 export type ViewStore = StoreApi<ViewState>;
+
+/** Answer an open question no, before it leaves the slot. */
+function answerNo(dialog: Dialog | null): void {
+  if (dialog?.kind === "confirm") {
+    dialog.answer(false);
+  }
+}
 
 export function createViewStore(
   initial: { map?: maplibregl.Map | null } = {},
@@ -154,6 +178,7 @@ export function createViewStore(
     selection: {},
     atlasTool: null,
     dialog: null,
+    returnFocus: null,
     mapBackground: "transparent",
     backupAvailable: false,
     importFile: null,
@@ -189,22 +214,38 @@ export function createViewStore(
     select: (id) => set({ selection: { [id]: true } }),
     clearSelection: () => set({ selection: {} }),
     setAtlasTool: (tool) => set({ atlasTool: tool }),
-    openDialog: (dialog) => set({ dialog }),
+    openDialog: (dialog) => {
+      const returnFocus = focusOrigin(get().returnFocus);
+      answerNo(get().dialog);
+      set({ dialog, returnFocus });
+    },
     toggleDialog: (kind) =>
-      set({ dialog: get().dialog?.kind === kind ? null : { kind } }),
-    closeDialog: () => set({ dialog: null }),
+      get().dialog?.kind === kind
+        ? get().closeDialog()
+        : get().openDialog({ kind }),
+    closeDialog: () => {
+      answerNo(get().dialog);
+      set({ dialog: null });
+    },
     ask: (question) =>
       new Promise<boolean>((resolve) => {
-        set({
-          dialog: {
-            kind: "confirm",
-            ...question,
-            answer: (yes) => {
+        let answered = false;
+        const dialog: Dialog = {
+          kind: "confirm",
+          ...question,
+          answer: (yes) => {
+            if (answered) {
+              return;
+            }
+            answered = true;
+            // A replaced question closes nothing: the slot holds another.
+            if (get().dialog === dialog) {
               set({ dialog: null });
-              resolve(yes);
-            },
+            }
+            resolve(yes);
           },
-        });
+        };
+        get().openDialog(dialog);
       }),
   }));
 }

@@ -25,10 +25,10 @@
 // We use `excalidrawAPI` (the Excalidraw imperative API) directly — there is
 // no atlasdraw-side automation surface.
 //
-// Modal pattern: root-level mount, inline styles, Escape handled inline,
-// focus held by FocusTrap.
+// A Modal: Escape and a press outside close it, focus starts on Close and
+// stays inside, and goes back to what opened it.
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@atlasdraw/common";
 
 import { getBuiltInLibraries, type ExcalidrawLibrary } from "@atlasdraw/data";
@@ -38,7 +38,7 @@ import type {
   LibraryItem,
 } from "@atlasdraw/excalidraw/types";
 
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 import { useToast } from "./ToastProvider";
 
 export interface AssetLibraryPanelProps {
@@ -93,8 +93,6 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   excalidrawAPI,
   onCloseRequest,
 }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
   const toast = useToast();
 
   // Compute once: built-in libraries + aggregated items + group summary.
@@ -130,22 +128,6 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     );
   }, [excalidrawAPI, items, toast]);
 
-  // Focus management + Escape to close. Same pattern as AboutDialog.
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) {
-      return;
-    }
-    closeBtnRef.current?.focus();
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onCloseRequest();
-      }
-    };
-    panel.addEventListener("keydown", handleKeyDown);
-    return () => panel.removeEventListener("keydown", handleKeyDown);
-  }, [onCloseRequest]);
-
   const handleViewInLibrary = () => {
     if (!excalidrawAPI) {
       return;
@@ -162,13 +144,10 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
   };
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onCloseRequest();
-        }
-      }}
-      style={{
+    <Modal
+      label="Asset library"
+      onClose={onCloseRequest}
+      scrimStyle={{
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.25)",
@@ -177,151 +156,141 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
         justifyContent: "center",
         zIndex: 999,
       }}
-      data-testid="asset-library-dialog-overlay"
+      scrimTestId="asset-library-dialog-overlay"
+      style={{
+        background: "var(--color-surface, #fff)",
+        borderRadius: "0.5rem",
+        padding: "1rem",
+        width: "min(90vw, 480px)",
+        maxHeight: "85vh",
+        overflowY: "auto",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+        fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        fontSize: "0.875rem",
+        color: "var(--ad-ink, #1f2937)",
+      }}
+      testId="asset-library-dialog"
     >
-      <FocusTrap>
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Asset library"
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "0.75rem",
+        }}
+      >
+        <h2
           style={{
-            background: "var(--color-surface, #fff)",
-            borderRadius: "0.5rem",
-            padding: "1rem",
-            width: "min(90vw, 480px)",
-            maxHeight: "85vh",
-            overflowY: "auto",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-            fontFamily:
-              "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-            fontSize: "0.875rem",
-            color: "var(--ad-ink, #1f2937)",
+            fontSize: "1rem",
+            margin: 0,
+            fontWeight: 600,
           }}
-          data-testid="asset-library-dialog"
         >
-          <div
+          Asset library
+        </h2>
+        <button
+          autoFocus
+          type="button"
+          onClick={onCloseRequest}
+          aria-label="Close asset library dialog"
+          data-testid="asset-library-close"
+          style={{
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            padding: "0.25rem 0.5rem",
+            fontSize: "1.25rem",
+            lineHeight: 1,
+            color: "var(--ad-ink-secondary, #4b5563)",
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <p
+        style={{
+          marginTop: 0,
+          marginBottom: "0.75rem",
+          color: "var(--ad-ink-secondary, #4b5563)",
+        }}
+      >
+        {items.length} curated items across {groups.length} libraries are
+        available in Excalidraw's built-in library panel.
+      </p>
+
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: "0 0 1rem 0",
+        }}
+        data-testid="asset-library-groups"
+      >
+        {groups.map((group) => (
+          <li
+            key={group.source}
+            data-testid={`asset-library-group-${group.source}`}
             style={{
+              padding: "0.5rem 0",
+              borderBottom: "1px solid var(--ad-rule, #e5e7eb)",
               display: "flex",
-              alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: "0.75rem",
             }}
           >
-            <h2
-              style={{
-                fontSize: "1rem",
-                margin: 0,
-                fontWeight: 600,
-              }}
-            >
-              Asset library
-            </h2>
-            <button
-              ref={closeBtnRef}
-              type="button"
-              onClick={onCloseRequest}
-              aria-label="Close asset library dialog"
-              data-testid="asset-library-close"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "0.25rem 0.5rem",
-                fontSize: "1.25rem",
-                lineHeight: 1,
-                color: "var(--ad-ink-secondary, #4b5563)",
-              }}
-            >
-              ×
-            </button>
-          </div>
+            <span style={{ fontWeight: 500 }}>{group.label}</span>
+            <span style={{ color: "var(--ad-ink-tertiary, #6b7280)" }}>
+              {group.itemCount} items
+            </span>
+          </li>
+        ))}
+      </ul>
 
-          <p
-            style={{
-              marginTop: 0,
-              marginBottom: "0.75rem",
-              color: "var(--ad-ink-secondary, #4b5563)",
-            }}
-          >
-            {items.length} curated items across {groups.length} libraries are
-            available in Excalidraw's built-in library panel.
-          </p>
+      <button
+        type="button"
+        onClick={handleViewInLibrary}
+        disabled={!excalidrawAPI}
+        aria-label="View in Excalidraw library"
+        data-testid="asset-library-view"
+        style={{
+          width: "100%",
+          padding: "0.5rem 0.75rem",
+          background: "var(--ad-accent, #6965db)",
+          color: "var(--ad-ink-inverse, #fff)",
+          border: "none",
+          borderRadius: "0.25rem",
+          cursor: excalidrawAPI ? "pointer" : "not-allowed",
+          opacity: excalidrawAPI ? 1 : 0.6,
+          fontSize: "0.875rem",
+          marginBottom: "0.75rem",
+        }}
+      >
+        View in Excalidraw library
+      </button>
 
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: "0 0 1rem 0",
-            }}
-            data-testid="asset-library-groups"
-          >
-            {groups.map((group) => (
-              <li
-                key={group.source}
-                data-testid={`asset-library-group-${group.source}`}
-                style={{
-                  padding: "0.5rem 0",
-                  borderBottom: "1px solid var(--ad-rule, #e5e7eb)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span style={{ fontWeight: 500 }}>{group.label}</span>
-                <span style={{ color: "var(--ad-ink-tertiary, #6b7280)" }}>
-                  {group.itemCount} items
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            onClick={handleViewInLibrary}
-            disabled={!excalidrawAPI}
-            aria-label="View in Excalidraw library"
-            data-testid="asset-library-view"
-            style={{
-              width: "100%",
-              padding: "0.5rem 0.75rem",
-              background: "var(--ad-accent, #6965db)",
-              color: "var(--ad-ink-inverse, #fff)",
-              border: "none",
-              borderRadius: "0.25rem",
-              cursor: excalidrawAPI ? "pointer" : "not-allowed",
-              opacity: excalidrawAPI ? 1 : 0.6,
-              fontSize: "0.875rem",
-              marginBottom: "0.75rem",
-            }}
-          >
-            View in Excalidraw library
-          </button>
-
-          <footer
-            style={{
-              fontSize: "0.75rem",
-              color: "var(--ad-ink-tertiary, #6b7280)",
-              borderTop: "1px solid var(--ad-rule, #e5e7eb)",
-              paddingTop: "0.75rem",
-            }}
-            data-testid="asset-library-attribution"
-          >
-            <div style={{ marginBottom: "0.25rem", fontWeight: 500 }}>
-              License attribution
-            </div>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-              {libraries.map((lib) => (
-                <li
-                  key={lib.source ?? "anon"}
-                  data-testid={`asset-library-license-${lib.source ?? "anon"}`}
-                >
-                  {deriveLabel(lib.source)} — MIT (atlasdraw contributors, 2026)
-                </li>
-              ))}
-            </ul>
-          </footer>
+      <footer
+        style={{
+          fontSize: "0.75rem",
+          color: "var(--ad-ink-tertiary, #6b7280)",
+          borderTop: "1px solid var(--ad-rule, #e5e7eb)",
+          paddingTop: "0.75rem",
+        }}
+        data-testid="asset-library-attribution"
+      >
+        <div style={{ marginBottom: "0.25rem", fontWeight: 500 }}>
+          License attribution
         </div>
-      </FocusTrap>
-    </div>
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {libraries.map((lib) => (
+            <li
+              key={lib.source ?? "anon"}
+              data-testid={`asset-library-license-${lib.source ?? "anon"}`}
+            >
+              {deriveLabel(lib.source)} — MIT (atlasdraw contributors, 2026)
+            </li>
+          ))}
+        </ul>
+      </footer>
+    </Modal>
   );
 };
