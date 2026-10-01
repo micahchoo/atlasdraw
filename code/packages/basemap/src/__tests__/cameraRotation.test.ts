@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// FU-14 / RT-0.
+// Rotation stays off unless a view ships a way back to north.
 //
 // The point of these tests is the *asymmetry*: rotation goes off, pan and
 // zoom stay on. `touchZoomRotate.disable()` and `keyboard.disable()` would
@@ -74,7 +74,7 @@ describe("disableCameraRotation", () => {
   });
 });
 
-// RT-3. The asymmetry here runs the other way, and matters more: enabling is
+// The asymmetry here runs the other way, and matters more: enabling is
 // what a reviewer would expect to be the plain inverse of disabling, and it
 // deliberately is not. `dragRotate` stays off because right-drag is
 // Excalidraw's context menu across the whole plate.
@@ -125,7 +125,7 @@ describe("enableCameraRotation", () => {
   });
 });
 
-// RT-3. What MapCanvas does at construction, extracted so the decision is
+// What MapCanvas does at construction, as a function so the decision is
 // testable in the node environment this package's suite runs in.
 describe("applyRotationPolicy", () => {
   it("leaves rotation off when the view did not ask for it", () => {
@@ -159,7 +159,7 @@ describe("applyRotationPolicy", () => {
   });
 });
 
-// RT-3. The single site in the app that converts between "screen rotation of
+// The single site in the app that converts between "screen rotation of
 // geographic east" (what everything else measures) and MapLibre's bearing.
 //
 // **What these two cases can and cannot establish.** Against a `setBearing`
@@ -172,12 +172,8 @@ describe("applyRotationPolicy", () => {
 // `apps/atlas-app/src/hooks/cameraRotationRoundTrip.test.ts`, which drives
 // `setCameraRotation` and `cameraRotation` against `FakeMercatorMap`.
 //
-// A third case here previously claimed to assert the conversion against RT-2's
-// `angle = -bearing`. It asserted `-(-137) === 137` — true for every possible
-// convention including a wrong one — and its premise was wrong as well: RT-2
-// measures the rotation off the live projection and never converts a bearing
-// at all. Found by Chief Opus reviewing `40dc175`. Deleted rather than
-// repaired; the round-trip is the test it was pretending to be.
+// Do not add a case that negates twice (`-(-137) === 137`): it passes under
+// every sign convention, the wrong one included.
 describe("setCameraRotation", () => {
   it("negates: bearing is the compass direction that is up, east-angle is not", () => {
     const map = makeMap();

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// @atlasdraw/basemap — style compiler (Phase 2, Wave 2a; Phase 6, Wave 1b).
+// @atlasdraw/basemap — style compiler.
 // Converts a LayerStyle + geometry-type hint into a MapLibre LayerSpecification.
-// Geometry-type is passed in by the caller (Wave 2b T13) so this stays pure.
+// The caller passes the geometry type, so this stays pure.
 //
-// Phase 6 (A6): when `style.expression` is set, the compiler emits a
+// When `style.expression` is set, the compiler emits a
 // data-driven MapLibre expression on the geometry-appropriate color paint
 // property instead of the flat color literal. The compiler is intentionally
 // data-blind: graduated stops are concrete breakpoints supplied by the
@@ -78,11 +78,11 @@ function compileExpression(expr: StyleExpression): PaintValue {
  *
  * Split out of `compileLayer` so incremental style edits have exactly one
  * LayerStyle → paint translation to lean on: `compileLayer` uses it to build a
- * whole layer spec for `addLayer`, and atlas-app's registry sync diffs two
- * compiled paints to derive the `setPaintProperty` calls for a style patch.
- * A second translation would be free to drift from this one.
+ * whole layer spec for `addLayer`, and atlas-app's lib/mapOverlays.ts diffs
+ * two compiled layers to derive the `setPaintProperty` calls for a style
+ * patch. A second translation would be free to drift from this one.
  *
- * Phase 6 (A6): when `style.expression` is set, the geometry's primary color
+ * When `style.expression` is set, the geometry's primary color
  * paint property (`fill-color` / `line-color` / `circle-color`) receives the
  * compiled expression. Stroke / width / opacity remain flat literals.
  */

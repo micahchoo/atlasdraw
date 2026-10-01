@@ -1,18 +1,14 @@
 // packages/basemap/src/cameraRotation.ts
 // SPDX-License-Identifier: MIT
-// FU-14 / RT-0 — close the "rotated with no way back to north" defect.
+// No view may rotate the map unless it gives a way back to north.
 //
-// MapLibre enables every rotation gesture by default, and Atlasdraw shipped no
-// compass and no resetNorth — so a user who twisted the map could not
-// straighten it again without reloading the page. (An earlier version of this
-// comment said the twist also persisted through save/load. It did not: nothing
-// reads `map.getBearing()` and `MapCanvasInitialView` has no bearing field, so
-// the format carries a bearing the app never writes or applies. The defect was
-// session-scoped.)
+// MapLibre enables every rotation gesture by default. A view with no compass
+// and no resetNorth lets a user twist the map and then gives no way to
+// straighten it without a page reload.
 //
 // So rotation is off by default, and a view turns it back on only if it ships
-// a way back to north. The editor does, via RT-3's compass; the embed does not,
-// and stays locked.
+// a way back to north. The editor does, with its compass (MapCompass); the
+// embed does not, and stays locked.
 //
 // Three gestures, and only one of them can be turned off at construction:
 //
@@ -44,8 +40,8 @@ export function disableCameraRotation(map: MapLibreMap): void {
 }
 
 /**
- * Turn rotation back on for a view that ships a way back to north — RT-0 is a
- * defect about being *stuck*, not about rotation existing.
+ * Turn rotation back on for a view that ships a way back to north. The hazard
+ * is a user *stuck* in a rotated view, not rotation itself.
  *
  * **Two of the three gestures, deliberately.** `dragRotate` stays off. It is
  * bound to right-drag and ctrl-drag, and right-click belongs to Excalidraw's
@@ -67,8 +63,8 @@ export function enableCameraRotation(map: MapLibreMap): void {
  *
  * Always disables first, then re-enables if allowed, so the result does not
  * depend on which gestures MapLibre happened to construct enabled. `allow`
- * defaults off: FU-14 is the defect of being turned with no way back, so a
- * view earns rotation by shipping a compass, and forgetting the argument
+ * defaults off: a view earns rotation by shipping a compass, and forgetting
+ * the argument
  * cannot accidentally grant it.
  */
 export function applyRotationPolicy(map: MapLibreMap, allow: boolean): void {

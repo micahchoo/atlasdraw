@@ -1,13 +1,9 @@
 /// <reference types="vite/client" />
 // SPDX-License-Identifier: MPL-2.0
-// @atlasdraw/basemap — Phase 4 Wave 0 (T2428): style-builder.
 // Loads a vendored MapLibre style JSON for a given BasemapConfig and (for
 // pmtiles-backed basemaps) substitutes the `__PMTILES_PATH__` token with the
-// caller-provided path.
-//
-// TODO(Phase 4 Task 5 Steps 1-3): vendor the actual style JSON files at
-// packages/basemap/src/styles/{protomaps-light,protomaps-dark,openfreemap-bright}.json.
-// Until then, buildStyle() falls back to a minimal valid StyleSpecification.
+// caller-provided path. A config whose styleFile is not in ./styles/ gets a
+// minimal valid placeholder style.
 
 import type maplibregl from "maplibre-gl";
 
@@ -26,16 +22,14 @@ const PMTILES_TOKEN = "__PMTILES_PATH__";
 
 /**
  * Build a MapLibre style spec for the given basemap. Loads the vendored style
- * JSON via dynamic import; if the file does not exist (Wave 0 stub state),
- * returns a minimal valid placeholder so downstream consumers can compile.
+ * JSON via dynamic import; if the file does not exist, returns a minimal valid
+ * placeholder so downstream consumers can compile.
  */
-// Vite-compatible glob: registers every JSON in ./styles/ at build time so
-// the bundler emits real chunks. The prior `import(`./styles/${file}`)`
-// template-literal form is NOT statically analyzable — Vite skipped emitting
-// any style JSONs, and the production build silently 404'd on style fetches
-// (atlasdraw-styles-prod-missing, 2026-05-10). `query: '?import'` keeps the
-// JSONs as ES-module imports rather than as URL references. `eager: false`
-// (default) preserves lazy loading per basemap.
+// A static glob, so Vite emits every JSON in ./styles/ as a real chunk. Do not
+// use a template-literal `import(`./styles/${file}`)`: Vite cannot analyse it,
+// emits no style JSON, and the production build then 404s on every style
+// fetch with no error at build time. `eager: false` (the default) keeps one
+// lazy chunk per basemap.
 const STYLE_MODULES = import.meta.glob<{ default: unknown }>("./styles/*.json");
 
 export async function buildStyle(
@@ -47,8 +41,8 @@ export async function buildStyle(
   if (loader) {
     raw = (await loader()).default;
   } else {
-    // Phase 4 Task 5 Steps 1-3 will vendor real styles. Until then, return
-    // a minimal valid spec so the pipeline can be exercised end-to-end.
+    // No vendored style for this config: a minimal valid spec keeps the
+    // pipeline working.
     raw = placeholderStyle();
   }
 
@@ -64,7 +58,7 @@ export async function buildStyle(
 
 function placeholderStyle(): maplibregl.StyleSpecification {
   // Valid empty-but-renderable style. The `__PMTILES_PATH__` token is included
-  // in the source URL so substitution logic is exercised even in stub mode.
+  // in the source URL so the placeholder exercises substitution too.
   return {
     version: 8,
     name: "atlasdraw-placeholder",

@@ -39,8 +39,7 @@ describe("BasemapRegistry", () => {
   });
 
   it("getBasemap returns undefined for unknown id", () => {
-    // `id` widened from a closed union to `string` (ISSUES.md Direction 4) —
-    // no longer a type error to pass an id that isn't (yet) registered.
+    // `id` is a `string`, so an id that is not registered is not a type error.
     expect(getBasemap("does-not-exist")).toBeUndefined();
   });
 
@@ -52,9 +51,8 @@ describe("BasemapRegistry", () => {
   });
 });
 
-// ISSUES.md Direction 4 — registerBasemap()/listBasemaps() are the new
-// registration API; BASEMAPS/getBasemap above keep their exact prior
-// behavior, seeded from the same 4 entries via registerBasemap() internally.
+// registerBasemap()/listBasemaps() are the registration API; BASEMAPS and
+// getBasemap above read the same entries, seeded through registerBasemap().
 describe("BasemapRegistry — registerBasemap/listBasemaps", () => {
   it("listBasemaps() returns the same 4 seeded entries as BASEMAPS", () => {
     expect(listBasemaps()).toEqual(BASEMAPS);

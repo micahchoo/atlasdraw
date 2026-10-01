@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// W9d — labels from a property, and a filter by property. The compiler turns
+// Labels from a property, and a filter by property. The compiler turns
 // `style.label` into a symbol layer and `style.filter` into a filter
 // expression on every layer of the data layer.
 
