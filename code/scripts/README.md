@@ -22,4 +22,4 @@ Lines annotated with `// telemetry-allowed: opt-in (ADR 0006)` are exempt (inten
 
 ## When CI runs these
 
-Nothing runs `check-license.sh` or `check-telemetry.sh` today. The `atlasdraw-checks` workflow that ran them lived in `code/.github/`, which GitHub never executes, and that directory is gone. The root `.github/workflows/ci.yml` runs `find-unfalsifiable-tests.mjs` through `yarn test:falsifiable`.
+The `check` job of `.github/workflows/ci.yml` runs `check-license.sh`, `check-telemetry.sh` and `find-unfalsifiable-tests.mjs` (through `yarn test:falsifiable`) on every pull request and every push to `main`.

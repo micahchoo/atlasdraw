@@ -8062,7 +8062,6 @@ __metadata:
     prettier: "npm:2.6.2"
     react: "npm:19.0.0"
     react-dom: "npm:19.0.0"
-    rewire: "npm:6.0.0"
     rimraf: "npm:^5.0.0"
     typescript: "npm:5.9.3"
     vite: "npm:5.4.21"
@@ -14528,15 +14527,6 @@ __metadata:
   version: 1.1.0
   resolution: "reusify@npm:1.1.0"
   checksum: 10/af47851b547e8a8dc89af144fceee17b80d5beaf5e6f57ed086432d79943434ff67ca526e92275be6f54b6189f6920a24eace75c2657eed32d02c400312b21ec
-  languageName: node
-  linkType: hard
-
-"rewire@npm:6.0.0":
-  version: 6.0.0
-  resolution: "rewire@npm:6.0.0"
-  dependencies:
-    eslint: "npm:^7.32.0"
-  checksum: 10/07f7c3e063658e9aaaeaa73999acb40b03762fd7a6f66d0806594011b73f6908c54d8d5fb73f2311e8f14bb9494441a1c37937fe354f84948e2bca1eb8d1edb4
   languageName: node
   linkType: hard
 

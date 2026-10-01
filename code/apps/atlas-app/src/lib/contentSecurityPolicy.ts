@@ -32,9 +32,6 @@ export interface PolicyInputs {
   scripts: readonly string[];
 }
 
-/** The origin of the fork's fallback copy of the drawing's fonts. */
-const FONT_FALLBACK_ORIGIN = "https://esm.sh";
-
 /** The origin of an absolute URL or URL template, or null. */
 function originOf(url: string): string | null {
   try {
@@ -117,11 +114,10 @@ export function contentSecurityPolicy({
     // inline <style> for the boot shell.
     ["style-src", ["'self'", "'unsafe-inline'"]],
     ["img-src", ["'self'", "data:", "blob:", ...remote]],
-    // The fork's font loader lists a CDN copy after the page's own
-    // (packages/excalidraw/fonts/ExcalidrawFontFace.ts#createUrls), and
-    // Chromium checks every listed source when a FontFace is made. The
-    // page's copy loads first; a font cannot run code.
-    ["font-src", ["'self'", "data:", FONT_FALLBACK_ORIGIN]],
+    // The page's own fonts only. index.html sets EXCALIDRAW_ASSET_PATH, so
+    // the fork lists no CDN copy
+    // (packages/excalidraw/fonts/ExcalidrawFontFace.ts#createUrls).
+    ["font-src", ["'self'", "data:"]],
     ["connect-src", ["'self'", "data:", "blob:", ...remote]],
     // MapLibre starts its worker from a blob URL.
     ["worker-src", ["'self'", "blob:"]],

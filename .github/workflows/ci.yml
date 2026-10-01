@@ -32,6 +32,8 @@ jobs:
           cache: yarn
           cache-dependency-path: code/yarn.lock
       - run: yarn install --immutable
+      - run: bash scripts/check-license.sh
+      - run: bash scripts/check-telemetry.sh
       - run: yarn test:typecheck
       - run: yarn test:code
       - run: yarn test:other
