@@ -12,17 +12,13 @@ import { WebSocket } from "ws";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
-import { withRoomToken } from "@atlasdraw/protocol";
+import { CLOSE, ROOM_SIZE, withRoomToken } from "@atlasdraw/protocol";
 
 import { registerHealth } from "../src/health";
 import { sqliteRoomStore, type RoomStore } from "../src/room-store";
 import {
-  CLOSE_DENIED,
-  CLOSE_FULL,
-  CLOSE_LIMITED,
-  CLOSE_NO_SPACE,
-  CLOSE_TOO_LARGE,
   registerRoomServer,
+  roomLimitsFromEnv,
   type RoomServer,
   type RoomServerOptions,
 } from "../src/rooms";
@@ -167,7 +163,7 @@ describe("room server", () => {
 
     const outsider = connect(relay, room, token());
     await until("the outsider is closed as denied", () =>
-      outsider.closeCodes.includes(CLOSE_DENIED),
+      outsider.closeCodes.includes(CLOSE.denied),
     );
     expect(outsider.doc.getMap("meta").get("title")).toBeUndefined();
   });
@@ -224,7 +220,7 @@ describe("room server", () => {
     const second = await startRelay(store);
     const squatter = connect(second, room, token());
     await until("the squatter is denied", () =>
-      squatter.closeCodes.includes(CLOSE_DENIED),
+      squatter.closeCodes.includes(CLOSE.denied),
     );
   });
 
@@ -235,7 +231,7 @@ describe("room server", () => {
       ws.on("open", () => ws.send(new Uint8Array([0, 0, 1, 0])));
       ws.on("close", (c) => resolve(c));
     });
-    expect(code).toBe(CLOSE_DENIED);
+    expect(code).toBe(CLOSE.denied);
     expect(relay.rooms.rooms()).toBe(0);
   });
 
@@ -247,7 +243,7 @@ describe("room server", () => {
     await until("A is synced", () => a.provider.synced);
     const b = connect(relay, room, tok);
     await until("B is told the room is full", () =>
-      b.closeCodes.includes(CLOSE_FULL),
+      b.closeCodes.includes(CLOSE.full),
     );
   });
 
@@ -280,7 +276,7 @@ describe("room server", () => {
     const relay = await startRelay(counted);
     const outsider = connect(relay, room, token());
     await until("the outsider is denied", () =>
-      outsider.closeCodes.includes(CLOSE_DENIED),
+      outsider.closeCodes.includes(CLOSE.denied),
     );
     expect(loads).toBe(0);
   });
@@ -313,7 +309,7 @@ describe("room server", () => {
     );
     a.doc.getMap("meta").set("second", "y".repeat(40 * 1024));
     await until("A is closed as too large", () =>
-      a.closeCodes.includes(CLOSE_TOO_LARGE),
+      a.closeCodes.includes(CLOSE.roomTooLarge),
     );
     a.provider.destroy();
     expect(a.closeReasons.find((r) => r.startsWith("room too large"))).toMatch(
@@ -327,6 +323,12 @@ describe("room server", () => {
     expect(c.doc.getMap("meta").has("first")).toBe(true);
     expect(c.doc.getMap("meta").has("second")).toBe(false);
     expect(b.doc.getMap("meta").has("second")).toBe(false);
+  });
+
+  it("takes its default message and room caps from the protocol's size table", () => {
+    const limits = roomLimitsFromEnv();
+    expect(limits.maxMessageBytes).toBe(ROOM_SIZE.messageBytes);
+    expect(limits.maxRoomBytes).toBe(ROOM_SIZE.roomBytes);
   });
 
   it("answers /health with the room and connection counts", async () => {
@@ -378,7 +380,7 @@ describe("abuse limits", () => {
 
     const c = connect(relay, randomUUID(), tok);
     await until("the third new room is refused as limited", () =>
-      c.closeCodes.includes(CLOSE_LIMITED),
+      c.closeCodes.includes(CLOSE.limited),
     );
     expect(c.closeReasons).toContain("too many new rooms");
 
@@ -411,7 +413,7 @@ describe("abuse limits", () => {
       forwardedFor("203.0.113.2"),
     );
     await until("a forged header does not buy a second room", () =>
-      u2.closeCodes.includes(CLOSE_LIMITED),
+      u2.closeCodes.includes(CLOSE.limited),
     );
 
     const trusted = await startRelay(memoryStore(), {
@@ -426,7 +428,7 @@ describe("abuse limits", () => {
     );
     const t3 = connect(trusted, randomUUID(), tok, forwardedFor("203.0.113.1"));
     await until("the same client address is still limited", () =>
-      t3.closeCodes.includes(CLOSE_LIMITED),
+      t3.closeCodes.includes(CLOSE.limited),
     );
   });
 
@@ -443,7 +445,7 @@ describe("abuse limits", () => {
 
     const c = connect(relay, room, tok);
     await until("the third connection is refused as limited", () =>
-      c.closeCodes.includes(CLOSE_LIMITED),
+      c.closeCodes.includes(CLOSE.limited),
     );
     expect(c.closeReasons).toContain("too many connections");
     expect(relay.rooms.connections()).toBe(2);
@@ -461,7 +463,7 @@ describe("abuse limits", () => {
     const a = connect(relay, randomUUID(), tok);
     a.doc.getMap("meta").set("title", "x".repeat(2500));
     await until("the big room is closed as out of space", () =>
-      a.closeCodes.includes(CLOSE_NO_SPACE),
+      a.closeCodes.includes(CLOSE.noSpace),
     );
     expect(a.closeReasons).toContain("relay storage full");
     expect(store.totalBytes()).toBeLessThanOrEqual(2000);
@@ -478,7 +480,7 @@ describe("abuse limits", () => {
     const full = await startRelay(store, { maxTotalBytes: store.totalBytes() });
     const c = connect(full, randomUUID(), tok);
     await until("a new room on a full relay is refused", () =>
-      c.closeCodes.includes(CLOSE_NO_SPACE),
+      c.closeCodes.includes(CLOSE.noSpace),
     );
     // A room that exists can still be opened and edited downward.
     const back = connect(full, small, tok);

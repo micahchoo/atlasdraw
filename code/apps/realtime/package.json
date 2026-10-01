@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --noEmit && node build.mjs",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "test:typecheck": "tsc --noEmit",
@@ -25,6 +25,7 @@
     "@types/better-sqlite3": "*",
     "@types/node": "*",
     "@types/ws": "^8.18.1",
+    "esbuild": "0.19.10",
     "tsx": "^4.7.0",
     "typescript": "5.9.3",
     "vitest": "3.2.7",

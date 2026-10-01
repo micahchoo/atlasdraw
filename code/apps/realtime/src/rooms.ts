@@ -40,32 +40,26 @@ import * as syncProtocol from "y-protocols/sync";
 import { WebSocket, WebSocketServer } from "ws";
 import * as Y from "yjs";
 
+import {
+  CLOSE,
+  ROOM_SIZE,
+  closeReason,
+  isRoomId,
+  readRoomTokenMessage,
+} from "@atlasdraw/protocol";
+
 import { logger } from "./logger.js";
 
 import type { RoomStore } from "./room-store.js";
 import type http from "http";
 import type { Duplex } from "stream";
 
-/** Close codes the client reads (apps/atlas-app/src/state/room.ts). */
-export const CLOSE_DENIED = 4403;
-export const CLOSE_FULL = 4409;
-export const CLOSE_TOO_LARGE = 4413;
-export const CLOSE_LIMITED = 4429;
-export const CLOSE_NO_SPACE = 4507;
-
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
-const MESSAGE_TOKEN = 3;
 const PING_INTERVAL_MS = 30_000;
 const AUTH_TIMEOUT_MS = 10_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
-
-/** A room id is a UUID, as `crypto.randomUUID()` makes it. */
-const ROOM_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-/** A token is 32 bytes in base64url without padding. */
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 export interface RoomServerOptions {
   store: RoomStore;
@@ -125,20 +119,6 @@ interface Room {
   saveTimer: ReturnType<typeof setTimeout> | null;
 }
 
-/** The token in a token message, or null when the message is not one. */
-function readTokenMessage(message: Uint8Array): string | null {
-  try {
-    const decoder = decoding.createDecoder(message);
-    if (decoding.readVarUint(decoder) !== MESSAGE_TOKEN) {
-      return null;
-    }
-    const token = decoding.readVarString(decoder);
-    return TOKEN.test(token) ? token : null;
-  } catch {
-    return null;
-  }
-}
-
 function verifierOf(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -184,11 +164,26 @@ export function parseTrustProxy(raw: string | undefined): boolean | number {
 /** Defaults, with the environment variables that change them. */
 export function roomLimitsFromEnv(): Omit<RoomServerOptions, "store"> {
   const env = process.env;
+  const maxMessageBytes = positiveInt(
+    env.MAX_MESSAGE_BYTES,
+    ROOM_SIZE.messageBytes,
+  );
+  const maxRoomBytes = positiveInt(env.MAX_ROOM_BYTES, ROOM_SIZE.roomBytes);
+  if (
+    maxMessageBytes < ROOM_SIZE.messageBytes ||
+    maxRoomBytes < ROOM_SIZE.roomBytes
+  ) {
+    logger.warn(
+      { maxMessageBytes, maxRoomBytes, protocol: ROOM_SIZE },
+      "caps below the protocol's size table: the editor lets users make " +
+        "records and rooms this relay refuses",
+    );
+  }
   return {
     maxRooms: positiveInt(env.MAX_ROOMS, 1000),
     maxPeersPerRoom: positiveInt(env.MAX_ROOM_SIZE, 50),
-    maxMessageBytes: positiveInt(env.MAX_MESSAGE_BYTES, 16 << 20),
-    maxRoomBytes: positiveInt(env.MAX_ROOM_BYTES, 64 << 20),
+    maxMessageBytes,
+    maxRoomBytes,
     maxNewRoomsPerIp: countOrOff(env.MAX_NEW_ROOMS_PER_IP, 30),
     maxConnectionsPerIp: countOrOff(env.MAX_CONNECTIONS_PER_IP, 64),
     maxTotalBytes: countOrOff(env.MAX_TOTAL_ROOM_BYTES, 2 * 1024 ** 3),
@@ -234,8 +229,8 @@ export function registerRoomServer(
     store,
     maxRooms = 1000,
     maxPeersPerRoom = 50,
-    maxMessageBytes = 16 << 20,
-    maxRoomBytes = 64 << 20,
+    maxMessageBytes = ROOM_SIZE.messageBytes,
+    maxRoomBytes = ROOM_SIZE.roomBytes,
     saveDelayMs = 2000,
     maxNewRoomsPerIp = 0,
     maxConnectionsPerIp = 0,
@@ -270,7 +265,10 @@ export function registerRoomServer(
         "room is over the size limit, not saved",
       );
       for (const conn of room.conns.keys()) {
-        conn.close(CLOSE_TOO_LARGE, "room too large");
+        conn.close(
+          CLOSE.roomTooLarge,
+          closeReason("room too large", state.byteLength, maxRoomBytes),
+        );
       }
       return;
     }
@@ -285,7 +283,7 @@ export function registerRoomServer(
         "stored rooms are at the total limit, not saved",
       );
       for (const conn of room.conns.keys()) {
-        conn.close(CLOSE_NO_SPACE, "relay storage full");
+        conn.close(CLOSE.noSpace, "relay storage full");
       }
       return;
     }
@@ -422,10 +420,12 @@ export function registerRoomServer(
               !fits(room, data.byteLength)
             ) {
               conn.close(
-                CLOSE_TOO_LARGE,
-                `room too large: ${
-                  room.bytes + data.byteLength
-                } > ${maxRoomBytes}`,
+                CLOSE.roomTooLarge,
+                closeReason(
+                  "room too large",
+                  room.bytes + data.byteLength,
+                  maxRoomBytes,
+                ),
               );
               return;
             }
@@ -520,33 +520,33 @@ export function registerRoomServer(
     let room = rooms.get(name);
     if (!room) {
       if (rooms.size >= maxRooms) {
-        ws.close(CLOSE_FULL, "server full");
+        ws.close(CLOSE.full, "server full");
         return;
       }
       // Only the verifier: a refused token must not cost a read of the
       // whole room.
       const stored = store.verifierOf(name);
       if (stored !== null && !sameVerifier(stored, verifier)) {
-        ws.close(CLOSE_DENIED, "denied");
+        ws.close(CLOSE.denied, "denied");
         return;
       }
       if (stored === null) {
         if (maxTotalBytes > 0 && store.totalBytes() >= maxTotalBytes) {
-          ws.close(CLOSE_NO_SPACE, "relay storage full");
+          ws.close(CLOSE.noSpace, "relay storage full");
           return;
         }
         if (!takeNewRoom(ip)) {
-          ws.close(CLOSE_LIMITED, "too many new rooms");
+          ws.close(CLOSE.limited, "too many new rooms");
           return;
         }
       }
       room = openRoom(name, verifier);
     } else if (!sameVerifier(room.verifier, verifier)) {
-      ws.close(CLOSE_DENIED, "denied");
+      ws.close(CLOSE.denied, "denied");
       return;
     }
     if (room.conns.size >= maxPeersPerRoom) {
-      ws.close(CLOSE_FULL, "room full");
+      ws.close(CLOSE.full, "room full");
       return;
     }
     join(room, ws);
@@ -563,7 +563,7 @@ export function registerRoomServer(
       return;
     }
     const name = url.pathname.slice("/yjs/".length);
-    if (!ROOM_ID.test(name)) {
+    if (!isRoomId(name)) {
       socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
       return;
     }
@@ -581,7 +581,7 @@ export function registerRoomServer(
       });
       const open = connectionsByIp.get(ip) ?? 0;
       if (maxConnectionsPerIp > 0 && open >= maxConnectionsPerIp) {
-        ws.close(CLOSE_LIMITED, "too many connections");
+        ws.close(CLOSE.limited, "too many connections");
         return;
       }
       connectionsByIp.set(ip, open + 1);
@@ -596,14 +596,14 @@ export function registerRoomServer(
       // The token is the first message, never part of the URL: a URL is
       // written to proxy access logs.
       const timer = setTimeout(
-        () => ws.close(CLOSE_DENIED, "no token"),
+        () => ws.close(CLOSE.denied, "no token"),
         AUTH_TIMEOUT_MS,
       );
       ws.once("message", (data: ArrayBuffer) => {
         clearTimeout(timer);
-        const token = readTokenMessage(new Uint8Array(data));
+        const token = readRoomTokenMessage(new Uint8Array(data));
         if (token === null) {
-          ws.close(CLOSE_DENIED, "no token");
+          ws.close(CLOSE.denied, "no token");
           return;
         }
         admit(ws, name, token, ip);

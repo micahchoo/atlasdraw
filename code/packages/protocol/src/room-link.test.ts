@@ -70,6 +70,13 @@ describe("token message", () => {
     expect(readRoomTokenMessage(roomTokenMessage(token))).toBe(token);
   });
 
+  it("reads nothing from a token message whose token is not 32 bytes in base64url", () => {
+    expect(readRoomTokenMessage(roomTokenMessage("short"))).toBeNull();
+    expect(
+      readRoomTokenMessage(roomTokenMessage(`${SECRET.slice(1)}+`)),
+    ).toBeNull();
+  });
+
   it("reads nothing from a y-websocket sync message", () => {
     expect(readRoomTokenMessage(new Uint8Array([0, 0, 1, 0]))).toBeNull();
   });
