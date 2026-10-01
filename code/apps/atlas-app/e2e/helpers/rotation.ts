@@ -7,7 +7,8 @@ import type { Page } from "@playwright/test";
  * - `eastDeg`: the screen angle of geographic east, y-down, straight off real
  *   MapLibre (two points along the centre parallel, projected).
  * - `elAngleDeg`: how far the drawing of the element is turned on screen: the
- *   drawing layer's CSS turn (`--world-rotate`, ADR-0015) plus the element's
+ *   drawing layer's CSS turn (`--world-rotate`,
+ *   docs/architecture/adr/0015-world-coordinates-gate.md) plus the element's
  *   own `angle`.
  * - `cornerErrPx`: for a box, the largest distance between a corner as the
  *   browser draws it (scene → Excalidraw's viewport → the canvas's computed

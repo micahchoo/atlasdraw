@@ -1,5 +1,6 @@
 /**
- * A room between two browsers, through a real relay (W6, ADR-0014).
+ * A room between two browsers, through a real relay
+ * (docs/architecture/adr/0014-collab-trust-model.md).
  *
  * Two browser contexts are two people: separate storage, separate
  * identities. Both use the editor built for rooms (E2E_COLLAB_URL; the

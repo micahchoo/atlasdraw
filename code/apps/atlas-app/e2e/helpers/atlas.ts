@@ -23,7 +23,7 @@ export interface AtlasdrawHook {
     };
     setActiveTool: (tool: { type: string }) => void;
   };
-  /** The open document's world frame (ADR-0015). */
+  /** The open document's world frame (docs/architecture/adr/0015-world-coordinates-gate.md). */
   frame: () => unknown;
   toLngLat: (
     frame: unknown,

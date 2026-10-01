@@ -9,8 +9,7 @@
  * every scene change, so a rename survived only until the shape next moved.
  *
  * Shapes go in through `updateScene` rather than a pointer drag. The drag path
- * is unreliable headless — phase-1-geo-foundation.spec.ts carries a `test.fixme`
- * for exactly that — and it is not what these tests are about. Everything after
+ * is unreliable headless, and it is not what these tests are about. Everything after
  * the injection is the app's own machinery, unmocked.
  */
 

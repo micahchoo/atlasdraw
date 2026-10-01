@@ -1,8 +1,8 @@
 /**
  * Ctrl+0 and the zoom readout on a map.
  *
- * Excalidraw's "reset zoom" is its 100%. In world coordinates (ADR-0015) that
- * is map zoom 22, so the map routes it: Ctrl+0 frames everything drawn, as
+ * Excalidraw's "reset zoom" is its 100%. In world coordinates
+ * (docs/architecture/adr/0015-world-coordinates-gate.md) that is map zoom 22, so the map routes it: Ctrl+0 frames everything drawn, as
  * zoom-to-fit does, and does nothing on an empty drawing. The only zoom
  * readout is the status bar's map zoom; Excalidraw's percentage control is
  * not rendered in the collar shell.

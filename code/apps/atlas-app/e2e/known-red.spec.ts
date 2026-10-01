@@ -1,11 +1,9 @@
 /**
- * KNOWN-RED — Playwright tests of the CORRECT behaviour that fail on today's
- * code. Each is marked `test.fail(true, ...)`, so the suite stays green while
- * the defect stands; Playwright reports "unexpectedly passed" the moment a fix
- * lands, which is the signal to delete the `test.fail` line.
- *
- * Every test here was first run WITHOUT `test.fail` and seen to fail for the
- * stated reason.
+ * Playwright tests of the CORRECT behaviour for hazards that once failed.
+ * Each was seen to fail for its stated reason before the fix. A new known-red
+ * case is marked `test.fail(true, ...)` so the suite stays green while the
+ * defect stands; Playwright reports "unexpectedly passed" when a fix lands,
+ * which is the signal to delete the `test.fail` line.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -64,8 +62,8 @@ async function paintedPixels(page: Page): Promise<number> {
 }
 
 test.describe("known-red", () => {
-  // Fixed in W7a: /m is the viewer, with the map stack.
-  test("W7: the read-only share page renders a map", async ({ page }) => {
+  // /m is the viewer, with the map stack.
+  test("the read-only share page renders a map", async ({ page }) => {
     const url = await shareLinkWithRectangle(page);
     const path = url.slice(url.indexOf("/m#"));
 
@@ -77,7 +75,7 @@ test.describe("known-red", () => {
     });
   });
 
-  // Fixed in W3: the document saves the live camera.
+  // The document saves the live camera.
   test("an embed opens on the saved camera", async ({ page }) => {
     const url = await shareLinkWithRectangle(page);
     const hash = url.slice(url.indexOf("#"));
@@ -96,7 +94,7 @@ test.describe("known-red", () => {
     ).toBeGreaterThan(100);
   });
 
-  test("W5/W7: clicking a shape with the selection tool leaves the camera alone", async ({
+  test("clicking a shape with the selection tool leaves the camera alone", async ({
     page,
   }) => {
     await openEditor(page);
@@ -135,8 +133,8 @@ test.describe("known-red", () => {
     );
   });
 
-  // Fixed in W7a: the fork's help door is closed (toggleShortcuts: false).
-  test("W7: pressing ? opens exactly one help surface", async ({ page }) => {
+  // The fork's help door is closed (toggleShortcuts: false).
+  test("pressing ? opens exactly one help surface", async ({ page }) => {
     await openEditor(page);
     await page.mouse.click(300, 650);
     await page.keyboard.press("?");
@@ -150,13 +148,14 @@ test.describe("known-red", () => {
     ).toBe(1);
   });
 
-  test("W4: undo after a pan restores the shape's original geography", async ({
+  test("undo after a pan restores the shape's original geography", async ({
     page,
   }) => {
     await openEditor(page);
     await drawRectangle(page, RECT);
     // The rectangle's place on Earth: its scene coordinates through the
-    // world frame (ADR-0015). No anchor is stored.
+    // world frame (docs/architecture/adr/0015-world-coordinates-gate.md). No
+    // anchor is stored.
     const anchor = await rectangleGeography(page);
     expect(anchor, "rectangle is geo-anchored").toBeDefined();
 

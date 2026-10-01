@@ -1,5 +1,5 @@
 /**
- * Data-layer export in a real browser (W9e).
+ * Data-layer export in a real browser.
  *
  * The unit tests read the Blob that jsdom is handed. Only a browser settles
  * that the <a download> on a blob URL really saves a file, with the layer's

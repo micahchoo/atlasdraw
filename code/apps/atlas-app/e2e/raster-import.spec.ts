@@ -2,7 +2,7 @@
  * Dropping a GeoTIFF, in a real browser.
  *
  * The unit tests prove each piece: the decoder against real TIFF bytes, the
- * map write against a stub, the panel against a seeded registry, the round trip
+ * map write against a stub, the panel against a seeded document, the round trip
  * against a synthesised document. What none of them can prove is the chain —
  * drop → decode → OffscreenCanvas encode → object URL → MapLibre `image` source
  * → a layer that is actually in the style. Three of those five links do not
@@ -111,7 +111,7 @@ test.describe("GeoTIFF import", () => {
     await waitForApp(page);
     await dropFile(page, "survey-sheet.tif", makeGeoTiff());
 
-    // The panel row. Its testid carries the registry id, so matching `rl:`
+    // The panel row. Its testid carries the layer id, so matching `rl:`
     // also proves the id namespace survived the whole path.
     const row = page.locator('[data-testid^="layer-name-rl:"]');
     await expect(row).toHaveCount(1, { timeout: 15_000 });

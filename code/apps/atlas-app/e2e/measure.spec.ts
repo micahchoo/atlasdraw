@@ -1,5 +1,5 @@
 /**
- * Measuring, in a real browser (W9).
+ * Measuring, in a real browser.
  *
  * The unit tests run MeasureLayer on a fake Mercator map. Three things only a
  * browser settles:

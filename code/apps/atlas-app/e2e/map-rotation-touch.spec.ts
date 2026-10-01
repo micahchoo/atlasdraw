@@ -1,10 +1,8 @@
 /**
- * Two-finger twist — the last of the three claims the rotation wave shipped on
- * and nobody had run.
+ * Two-finger twist.
  *
- * The other two were settled in `map-rotation.spec.ts`: the compass is
- * clickable where it sits, and a turned map draws its annotations turned. This
- * one stayed open because it needs real multi-touch, and Playwright's
+ * `map-rotation.spec.ts` settles the compass and a turned map's annotations.
+ * This file needs real multi-touch, and Playwright's
  * `page.touchscreen` only taps. So it goes through CDP
  * `Input.dispatchTouchEvent`, which means chromium only — the other browser
  * projects skip rather than pretend.
@@ -24,13 +22,11 @@
  *
  * Scope that claim to *pointer gestures on the canvas*, because the map is not
  * otherwise unreachable. Two paths deliberately bypass the plate and still work
- * under the selection tool, both built for this exact gate and both already
- * unit-tested — wheel zoom, via `useMapWheelRouter` (`useMapWheelRouter.ts:1`,
- * whose header names the same `atlasdraw-5afc` resolution and installs a
- * capture-phase listener above the plate; `useMapWheelRouter.test.ts`, 15
- * cases), and space+drag, via the bridge at `useExcalidrawChangeHandler.ts:132`
- * that forwards Excalidraw's own scroll pan onto the camera
- * (`useExcalidrawChangeHandler.test.ts:164-202`, 3 cases). Measured here under
+ * under the selection tool, both built for this exact gate and both
+ * unit-tested — wheel zoom, via `useMapWheelRouter` (a capture-phase listener
+ * above the plate; `useMapWheelRouter.test.ts`), and space+drag, via the
+ * camera bridge (`useCameraBridge`), which forwards Excalidraw's own scroll
+ * pan onto the camera (`CameraBridge.test.ts`). Measured here under
  * the selection tool: wheel `z 4 -> 5.4` with the centre tracking the cursor,
  * space+drag moves the centre, left-drag and middle-drag do not. So the hand
  * tool is required for *drag*-panning and for the twist, not for map
@@ -178,8 +174,8 @@ test.describe("map rotation — two-finger twist", () => {
 
     await twist(page, 90);
 
-    // Not a bug report — the shipped gate (`classifyTool.ts:20`, an
-    // atlasdraw-dd91 resolution). Recorded because it is the whole reason the
+    // Not a bug report — the shipped gate (`classifyTool`). Recorded because
+    // it is the whole reason the
     // tests below pick up a tool first, and because if the gate ever moves off
     // `classifyTool`, this is the line that says so. It claims nothing about
     // wheel or space+drag, which bypass the plate and still reach the map here
