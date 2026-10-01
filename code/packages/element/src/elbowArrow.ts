@@ -21,6 +21,7 @@ import {
   getSizeFromPoints,
   isDevEnv,
   arrayToMap,
+  MAX_SCENE_EXTENT,
 } from "@atlasdraw/common";
 
 import type { AppState } from "@atlasdraw/excalidraw/types";
@@ -899,7 +900,7 @@ const handleEndpointDrag = (
   );
 };
 
-const MAX_POS = 1e6;
+const MAX_POS = MAX_SCENE_EXTENT;
 
 /**
  *
@@ -2128,25 +2129,25 @@ const normalizeArrowElementUpdate = (
     offsetY + points[points.length - 1][1] < -MAX_POS ||
     offsetY + points[points.length - 1][1] > MAX_POS
   ) {
-    console.error(
-      "Elbow arrow normalization is outside reasonable bounds (> 1e6)",
-      {
-        x: offsetX,
-        y: offsetY,
-        points,
-        ...getSizeFromPoints(points),
-      },
-    );
+    console.error("Elbow arrow normalization is outside reasonable bounds", {
+      x: offsetX,
+      y: offsetY,
+      points,
+      ...getSizeFromPoints(points),
+    });
   }
 
   points = points.map(([x, y]) =>
-    pointFrom<LocalPoint>(clamp(x, -1e6, 1e6), clamp(y, -1e6, 1e6)),
+    pointFrom<LocalPoint>(
+      clamp(x, -MAX_POS, MAX_POS),
+      clamp(y, -MAX_POS, MAX_POS),
+    ),
   );
 
   return {
     points,
-    x: clamp(offsetX, -1e6, 1e6),
-    y: clamp(offsetY, -1e6, 1e6),
+    x: clamp(offsetX, -MAX_POS, MAX_POS),
+    y: clamp(offsetY, -MAX_POS, MAX_POS),
     fixedSegments:
       (nextFixedSegments?.length ?? 0) > 0 ? nextFixedSegments : null,
     ...getSizeFromPoints(points),

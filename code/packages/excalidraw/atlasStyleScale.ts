@@ -30,3 +30,70 @@ export const pickerStyleValue = (
   }
   return shown;
 };
+
+/**
+ * Elements from outside the atlas (a library item, a paste from another
+ * Excalidraw) are sized for scene = screen. With `screenSizedStyles` they go
+ * in at the size they had there: every element without a pixel unit
+ * (`customData.atlas.unit`) is scaled by `scale` about (`ox`, `oy`) and
+ * records `scale` as its unit. An element that has a unit is the atlas's own
+ * and is returned as it is.
+ */
+export const scaleForeignElements = <
+  T extends {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    strokeWidth: number;
+    customData?: Record<string, any>;
+  },
+>(
+  elements: readonly T[],
+  scale: number,
+  ox: number,
+  oy: number,
+): T[] =>
+  elements.map((el) => {
+    const atlas = el.customData?.atlas;
+    if (scale === 1 || typeof atlas?.unit === "number") {
+      return el;
+    }
+    const e = el as T & {
+      points?: readonly (readonly [number, number])[];
+      fontSize?: number;
+      fixedSegments?:
+        | readonly {
+            start: readonly [number, number];
+            end: readonly [number, number];
+          }[]
+        | null;
+    };
+    const pt = (p: readonly [number, number]) =>
+      [p[0] * scale, p[1] * scale] as [number, number];
+    return {
+      ...el,
+      x: ox + (el.x - ox) * scale,
+      y: oy + (el.y - oy) * scale,
+      width: el.width * scale,
+      height: el.height * scale,
+      strokeWidth: el.strokeWidth * scale,
+      ...(e.points ? { points: e.points.map(pt) } : {}),
+      ...(typeof e.fontSize === "number"
+        ? { fontSize: e.fontSize * scale }
+        : {}),
+      ...(e.fixedSegments
+        ? {
+            fixedSegments: e.fixedSegments.map((s) => ({
+              ...s,
+              start: pt(s.start),
+              end: pt(s.end),
+            })),
+          }
+        : {}),
+      customData: {
+        ...el.customData,
+        atlas: { ...atlas, unit: scale },
+      },
+    };
+  });

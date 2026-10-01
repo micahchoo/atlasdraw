@@ -4,7 +4,7 @@ import { vi } from "vitest";
 import { CODES, FONT_SIZES, STROKE_WIDTH } from "@atlasdraw/common";
 
 import { Excalidraw } from "../index";
-import { pickerStyleValue } from "../atlasStyleScale";
+import { pickerStyleValue, scaleForeignElements } from "../atlasStyleScale";
 
 import { API } from "./helpers/api";
 import { Keyboard, UI } from "./helpers/ui";
@@ -62,11 +62,22 @@ describe("screenSizedStyles", () => {
     );
   });
 
+  it("a new shape records its pixel unit in customData.atlas.unit", async () => {
+    await render(<Excalidraw screenSizedStyles />);
+    setZoom();
+    const rect = UI.createElement("rectangle", { x: 10, y: 10, size: 40 });
+    const arrow = UI.createElement("arrow", { x: 60, y: 10, size: 40 });
+    for (const el of [rect, arrow]) {
+      expect(el.get().customData).toEqual({ atlas: { unit: 1 / ZOOM } });
+    }
+  });
+
   it("without the prop, sizes are stored as chosen", async () => {
     await render(<Excalidraw />);
     setZoom();
     const rect = UI.createElement("rectangle", { x: 10, y: 10, size: 40 });
     expect(rect.get().strokeWidth).toBe(STROKE_WIDTH.bold);
+    expect(rect.get().customData).toBeUndefined();
   });
 
   it("the stroke picker writes screen pixels as scene units", async () => {
@@ -108,6 +119,81 @@ describe("screenSizedStyles", () => {
     const after = h.elements[0] as { fontSize: number };
     expect(after.fontSize).toBe(FONT_SIZES.lg / ZOOM);
     expect(h.state.currentItemFontSize).toBe(FONT_SIZES.lg);
+  });
+});
+
+describe("elements from outside the atlas", () => {
+  it("a library item goes in at screen size, with its pixel unit", async () => {
+    await render(<Excalidraw screenSizedStyles />);
+    setZoom();
+    const item = API.createElement({
+      type: "rectangle",
+      width: 100,
+      height: 50,
+      strokeWidth: 2,
+    });
+    act(() => {
+      h.app.addElementsFromPasteOrLibrary({
+        elements: [item],
+        files: null,
+        position: "center",
+      });
+    });
+    const added = h.elements[h.elements.length - 1];
+    expect(added.width).toBe(100 / ZOOM);
+    expect(added.height).toBe(50 / ZOOM);
+    expect(added.strokeWidth).toBe(2 / ZOOM);
+    expect(added.customData).toEqual({ atlas: { unit: 1 / ZOOM } });
+  });
+
+  it("without the prop, a library item keeps its size", async () => {
+    await render(<Excalidraw />);
+    setZoom();
+    act(() => {
+      h.app.addElementsFromPasteOrLibrary({
+        elements: [API.createElement({ type: "rectangle", width: 100 })],
+        files: null,
+        position: "center",
+      });
+    });
+    expect(h.elements[h.elements.length - 1].width).toBe(100);
+  });
+});
+
+describe("scaleForeignElements", () => {
+  const base = {
+    x: 10,
+    y: 20,
+    width: 30,
+    height: 40,
+    strokeWidth: 2,
+  };
+
+  it("scales position about the origin, sizes, points and font", () => {
+    const [out] = scaleForeignElements(
+      [{ ...base, points: [[0, 0] as const, [5, 6] as const], fontSize: 20 }],
+      4,
+      10,
+      0,
+    );
+    expect(out).toMatchObject({
+      x: 10,
+      y: 80,
+      width: 120,
+      height: 160,
+      strokeWidth: 8,
+      points: [
+        [0, 0],
+        [20, 24],
+      ],
+      fontSize: 80,
+      customData: { atlas: { unit: 4 } },
+    });
+  });
+
+  it("leaves an element that has a unit alone: it is the atlas's own", () => {
+    const own = { ...base, customData: { atlas: { unit: 1024 } } };
+    expect(scaleForeignElements([own], 4, 0, 0)[0]).toBe(own);
   });
 });
 

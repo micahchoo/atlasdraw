@@ -34,6 +34,7 @@ import type {
   Zoom,
 } from "@atlasdraw/excalidraw/types";
 
+import { styleUnit } from "./atlasStyleUnit";
 import { elementCenterPoint, getDiamondPoints } from "./bounds";
 
 import { generateLinearCollisionShape } from "./shape";
@@ -489,7 +490,9 @@ export const getCornerRadius = (x: number, element: ExcalidrawElement) => {
   }
 
   if (element.roundness?.type === ROUNDNESS.ADAPTIVE_RADIUS) {
-    const fixedRadiusSize = element.roundness?.value ?? DEFAULT_ADAPTIVE_RADIUS;
+    // Atlasdraw: the default radius in the element's pixel unit.
+    const fixedRadiusSize =
+      element.roundness?.value ?? DEFAULT_ADAPTIVE_RADIUS * styleUnit(element);
 
     const CUTOFF_SIZE = fixedRadiusSize / DEFAULT_PROPORTIONAL_RADIUS;
 

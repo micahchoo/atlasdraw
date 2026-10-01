@@ -15,6 +15,7 @@ import {
   getRectangle,
   openEditor,
   readCamera,
+  rectangleGeography,
   setTool,
   type AtlasdrawHook,
 } from "./helpers/atlas";
@@ -90,7 +91,7 @@ test.describe("known-red", () => {
     await embed.goto(`/embed${hash}`);
     await expect(embed.getByTestId("embed-canvas")).toBeVisible();
     await embed.waitForSelector("canvas.maplibregl-canvas");
-    // CoordinateSync projects the scene a frame after map + api are up.
+    // The camera bridge sets the viewport once Excalidraw has initialized.
     await embed.waitForTimeout(1500);
 
     const painted = await paintedPixels(embed);
@@ -160,15 +161,12 @@ test.describe("known-red", () => {
   test("W4: undo after a pan restores the shape's original geography", async ({
     page,
   }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W4 undo after pan): Ctrl+Z after drag-then-pan yields an anchor that is neither the pre-drag nor the dragged one, offset by the pan. Remove when fixed.",
-    );
     await openEditor(page);
     await drawRectangle(page, RECT);
-    const drawn = await getRectangle(page);
-    expect(drawn?.customData?.geo, "rectangle is geo-anchored").toBeDefined();
-    const anchor = drawn!.customData!.geo;
+    // The rectangle's place on Earth: its scene coordinates through the
+    // world frame (ADR-0015). No anchor is stored.
+    const anchor = await rectangleGeography(page);
+    expect(anchor, "rectangle is geo-anchored").toBeDefined();
 
     // The new rectangle is selected; drag it by its interior.
     await setTool(page, "selection");
@@ -180,7 +178,7 @@ test.describe("known-red", () => {
     await page.mouse.move(cx + 120, cy + 80, { steps: 8 });
     await page.mouse.up();
     await page.waitForTimeout(400);
-    const moved = (await getRectangle(page))!.customData!.geo;
+    const moved = await rectangleGeography(page);
     expect(moved, "the drag moved the anchor").not.toEqual(anchor);
 
     await page.evaluate(() => {
@@ -193,7 +191,7 @@ test.describe("known-red", () => {
     await page.keyboard.press("Control+z");
     await page.waitForTimeout(500);
 
-    const undone = (await getRectangle(page))?.customData?.geo;
+    const undone = await rectangleGeography(page);
     expect(
       undone,
       `undo restores the pre-drag anchor (after the drag it was ` +

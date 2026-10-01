@@ -41,7 +41,9 @@ export function seedShapes(
   const container = map.getContainer();
   const W = container.clientWidth;
   const H = container.clientHeight;
-  const stroke = 2 * sceneUnitsPerPixel(frame, map.getZoom());
+  const unit = sceneUnitsPerPixel(frame, map.getZoom());
+  const stroke = 2 * unit;
+  const customData = { atlas: { unit } };
   /** Screen px → scene coordinates. */
   const scene = (x: number, y: number) => {
     const p = map.unproject([x, y]);
@@ -68,6 +70,7 @@ export function seedShapes(
           backgroundColor: "#a5d8ff",
           fillStyle: "solid",
           roughness: 0,
+          customData,
         }),
       );
     } else {
@@ -88,6 +91,7 @@ export function seedShapes(
           points: pts,
           strokeWidth: stroke,
           roughness: 0,
+          customData,
         }),
       );
     }

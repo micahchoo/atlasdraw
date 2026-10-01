@@ -34,6 +34,7 @@ describe("placeDrawing", () => {
     expect(rect.width).toBeCloseTo(200 * s, 9);
     expect(rect.height).toBeCloseTo(100 * s, 9);
     expect(rect.strokeWidth).toBeCloseTo(2 * s, 9);
+    expect(rect.customData).toEqual({ atlas: { unit: s } });
   });
 
   it("scales points and font sizes, and keeps every other field", () => {

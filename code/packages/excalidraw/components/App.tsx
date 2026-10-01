@@ -341,7 +341,7 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
-import { styleScale } from "../atlasStyleScale";
+import { scaleForeignElements, styleScale } from "../atlasStyleScale";
 import { isCollarMode } from "../collar";
 import {
   getDefaultAppState,
@@ -3839,9 +3839,17 @@ class App extends React.Component<AppProps, AppState> {
     retainSeed?: boolean;
     fitToContent?: boolean;
   }) => {
-    const elements = restoreElements(opts.elements, null, {
+    const restored = restoreElements(opts.elements, null, {
       deleteInvisibleElements: true,
     });
+    // Atlasdraw (ADR-0015): elements from outside go in at screen size.
+    const [rx, ry] = getCommonBounds(restored);
+    const elements = scaleForeignElements(
+      restored,
+      styleScale(this.props.screenSizedStyles, this.state.zoom.value),
+      rx,
+      ry,
+    );
     const [minX, minY, maxX, maxY] = getCommonBounds(elements);
 
     const elementsCenterX = distance(minX, maxX) / 2;
@@ -4261,6 +4269,17 @@ class App extends React.Component<AppProps, AppState> {
    */
   private sceneStyleSize = (size: number): number =>
     size * styleScale(this.props.screenSizedStyles, this.state.zoom.value);
+
+  /**
+   * Atlasdraw (ADR-0015): with `screenSizedStyles`, a new shape records its
+   * pixel unit (scene units per screen pixel now) in `customData.atlas.unit`,
+   * so its arrowheads, dashes and jitter look as upstream draws them at the
+   * zoom where it is drawn (element/src/atlasStyleUnit.ts).
+   */
+  private atlasUnitData = (): { customData?: Record<string, unknown> } =>
+    this.props.screenSizedStyles
+      ? { customData: { atlas: { unit: 1 / this.state.zoom.value } } }
+      : {};
 
   scrollToContent = (
     /**
@@ -8793,6 +8812,7 @@ class App extends React.Component<AppProps, AppState> {
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
       strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
+      ...this.atlasUnitData(),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,
@@ -9065,6 +9085,7 @@ class App extends React.Component<AppProps, AppState> {
               strokeWidth: this.sceneStyleSize(
                 this.state.currentItemStrokeWidth,
               ),
+              ...this.atlasUnitData(),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -9094,6 +9115,7 @@ class App extends React.Component<AppProps, AppState> {
               strokeWidth: this.sceneStyleSize(
                 this.state.currentItemStrokeWidth,
               ),
+              ...this.atlasUnitData(),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -9254,6 +9276,7 @@ class App extends React.Component<AppProps, AppState> {
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
       strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
+      ...this.atlasUnitData(),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,

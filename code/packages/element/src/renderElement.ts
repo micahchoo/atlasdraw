@@ -24,6 +24,7 @@ import {
   invariant,
   applyDarkModeFilter,
   isSafari,
+  MAX_CANVAS_FONT_SIZE,
 } from "@atlasdraw/common";
 
 import type {
@@ -42,6 +43,7 @@ import type {
   InteractiveCanvasRenderConfig,
 } from "@atlasdraw/excalidraw/scene/types";
 
+import { styleUnit } from "./atlasStyleUnit";
 import { getElementAbsoluteCoords, getElementBounds } from "./bounds";
 import { getUncroppedImageElement } from "./cropElement";
 import { LinearElementEditor } from "./linearElementEditor";
@@ -95,13 +97,14 @@ const getCanvasPadding = (element: ExcalidrawElement) => {
       return element.strokeWidth * 12;
     case "text":
       return element.fontSize / 2;
+    // Atlasdraw: in the element's pixel unit (atlasStyleUnit.ts).
     case "arrow":
       if (element.endArrowhead || element.endArrowhead) {
-        return 40;
+        return 40 * styleUnit(element);
       }
-      return 20;
+      return 20 * styleUnit(element);
     default:
-      return 20;
+      return 20 * styleUnit(element);
   }
 };
 
@@ -554,7 +557,18 @@ const drawElementOnCanvas = (
         }
         context.canvas.setAttribute("dir", rtl ? "rtl" : "ltr");
         context.save();
-        context.font = getFontString(element);
+        // Atlasdraw: a font above MAX_CANVAS_FONT_SIZE is drawn at that size
+        // into a context scaled up by the rest, because the browser clamps
+        // canvas fonts.
+        const fontScale =
+          element.fontSize > MAX_CANVAS_FONT_SIZE
+            ? element.fontSize / MAX_CANVAS_FONT_SIZE
+            : 1;
+        context.scale(fontScale, fontScale);
+        context.font = getFontString({
+          fontSize: element.fontSize / fontScale,
+          fontFamily: element.fontFamily,
+        });
         context.fillStyle =
           renderConfig.theme === THEME.DARK
             ? applyDarkModeFilter(element.strokeColor)
@@ -585,8 +599,8 @@ const drawElementOnCanvas = (
         for (let index = 0; index < lines.length; index++) {
           context.fillText(
             lines[index],
-            horizontalOffset,
-            index * lineHeightPx + verticalOffset,
+            horizontalOffset / fontScale,
+            (index * lineHeightPx + verticalOffset) / fontScale,
           );
         }
         context.restore();

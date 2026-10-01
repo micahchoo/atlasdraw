@@ -22,11 +22,25 @@ export interface PlaceableElement {
   readonly [key: string]: unknown;
 }
 
+/** customData with `atlas.unit` multiplied by `s` (a missing unit is 1). */
+function withUnit(customData: unknown, s: number): Record<string, unknown> {
+  const cd =
+    typeof customData === "object" && customData !== null
+      ? (customData as Record<string, unknown>)
+      : {};
+  const atlas =
+    typeof cd.atlas === "object" && cd.atlas !== null
+      ? (cd.atlas as Record<string, unknown>)
+      : {};
+  const unit = typeof atlas.unit === "number" ? atlas.unit : 1;
+  return { ...cd, atlas: { ...atlas, unit: unit * s } };
+}
+
 export function placeDrawing<T extends PlaceableElement>(
   elements: readonly T[],
   frame: WorldFrame,
   camera: { readonly center: readonly [number, number]; readonly zoom: number },
-): T[] {
+): Array<T & { customData: Record<string, unknown> }> {
   if (elements.length === 0) {
     return [];
   }
@@ -47,6 +61,8 @@ export function placeDrawing<T extends PlaceableElement>(
   const scale = (v: number | undefined) => (v === undefined ? v : v * s);
   return elements.map((el) => ({
     ...el,
+    // The drawing's pixel-sized details (arrowheads, dashes) scale with it.
+    customData: withUnit(el.customData, s),
     x: c.x + (el.x - mx) * s,
     y: c.y + (el.y - my) * s,
     ...(el.width !== undefined ? { width: scale(el.width) } : {}),

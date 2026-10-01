@@ -300,6 +300,21 @@ export const TITLE_TIMEOUT = 10000;
 export const VERSION_TIMEOUT = 30000;
 export const SCROLL_TIMEOUT = 100;
 export const ZOOM_STEP = 0.1;
+/**
+ * Atlasdraw (ADR-0015): the largest scene coordinate or size the editor
+ * treats as sane. The atlas app's scene is a world map at zoom 22, which is
+ * 2^31 units wide, so upstream's 1e6 cut off real drawings.
+ */
+export const MAX_SCENE_EXTENT = 2 ** 32;
+
+/**
+ * Atlasdraw (ADR-0015): canvas text is measured and drawn at no more than
+ * this size, and scaled up to the element's font size. Chromium clamps a
+ * canvas font to 10000px, and the atlas app's text is 20 px × 2^(22 − zoom)
+ * scene units. Text width is linear in font size at this size and above.
+ */
+export const MAX_CANVAS_FONT_SIZE = 1000;
+
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 30;
 export const HYPERLINK_TOOLTIP_DELAY = 300;

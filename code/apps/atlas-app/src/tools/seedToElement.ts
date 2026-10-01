@@ -10,8 +10,10 @@
 //   2. Gives every size the tool states in screen pixels (pin diameter,
 //      default circle, font size, stroke width) in scene units at zRef, so it
 //      looks that size at the zoom where it was made.
-//   3. Keeps tool data under `customData._data`, and marks a pin with
-//      `customData.tool = "pin"` so export can give it as a point.
+//   3. Keeps tool data under `customData._data`, marks a pin with
+//      `customData.tool = "pin"` so export can give it as a point, and
+//      records the unit in `customData.atlas.unit`, for the editor's
+//      arrowheads, dashes and jitter.
 //
 // PinTool is the only built-in producer. The other branches accept the rest
 // of the seed union: `registerTool` is public, and a registered tool may emit
@@ -74,17 +76,20 @@ function linearGeometry(
   };
 }
 
-/** Tool data, and the tool that made the element when it is a pin. */
+/**
+ * Tool data, the tool that made the element when it is a pin, and the
+ * element's pixel unit (`customData.atlas.unit`, scene units per screen
+ * pixel at the seed's zoom).
+ */
 function customDataOf(
   seed: AtlasdrawElementSeed,
-): Record<string, unknown> | undefined {
+  unit: number,
+): Record<string, unknown> {
   const pin = seed.type === "custom" && seed.customType === "pin";
-  if (!seed.data && !pin) {
-    return undefined;
-  }
   return {
     ...(seed.data ? { _data: seed.data } : {}),
     ...(pin ? { tool: "pin" } : {}),
+    atlas: { unit },
   };
 }
 
@@ -107,9 +112,11 @@ export function seedToElement(
   const unit = sceneUnitsPerPixel(frame, seed.geo.zRef);
   const strokeWidth =
     (seed.style?.strokeWidth ?? DEFAULT_STROKE_WIDTH_PX) * unit;
-  const customData = customDataOf(seed);
-  const withData = <T extends ExcalidrawElement>(el: T): T =>
-    customData ? { ...el, customData } : el;
+  const customData = customDataOf(seed, unit);
+  const withData = <T extends ExcalidrawElement>(el: T): T => ({
+    ...el,
+    customData,
+  });
 
   // A pin, or a circle placed by its centre.
   if (

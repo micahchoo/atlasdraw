@@ -23,6 +23,12 @@ export interface AtlasdrawHook {
     };
     setActiveTool: (tool: { type: string }) => void;
   };
+  /** The open document's world frame (ADR-0015). */
+  frame: () => unknown;
+  toLngLat: (
+    frame: unknown,
+    p: { x: number; y: number },
+  ) => { lng: number; lat: number };
 }
 
 export interface SceneElement {
@@ -32,7 +38,16 @@ export interface SceneElement {
   y: number;
   width: number;
   height: number;
-  customData?: { geo?: unknown; scaleMode?: string };
+  angle?: number;
+  customData?: Record<string, unknown>;
+}
+
+/** Where a box is on Earth: its NW and SE corners in lng/lat. */
+export interface Geography {
+  west: number;
+  north: number;
+  east: number;
+  south: number;
 }
 
 export interface Camera {
@@ -98,7 +113,7 @@ export async function drawRectangle(page: Page, box: Box): Promise<void> {
   });
   await page.mouse.move(box.x1, box.y1, { steps: 5 });
   await page.mouse.up();
-  // useGeoAnchor stamps customData.geo from onChange after commit.
+  // Let Excalidraw commit the element.
   await page.waitForTimeout(300);
 }
 
@@ -112,4 +127,27 @@ export async function getRectangle(
       .getSceneElements()
       .find((el) => el.type === "rectangle"),
   );
+}
+
+/**
+ * Where the first rectangle is on Earth, from its scene coordinates through
+ * the document's world frame. Undefined when there is no rectangle.
+ */
+export async function rectangleGeography(
+  page: Page,
+): Promise<Geography | undefined> {
+  return page.evaluate(() => {
+    const a = (window as unknown as { __atlasdraw__: AtlasdrawHook })
+      .__atlasdraw__;
+    const el = a.excalidrawAPI
+      .getSceneElements()
+      .find((e) => e.type === "rectangle");
+    if (!el) {
+      return undefined;
+    }
+    const frame = a.frame();
+    const nw = a.toLngLat(frame, { x: el.x, y: el.y });
+    const se = a.toLngLat(frame, { x: el.x + el.width, y: el.y + el.height });
+    return { west: nw.lng, north: nw.lat, east: se.lng, south: se.lat };
+  });
 }

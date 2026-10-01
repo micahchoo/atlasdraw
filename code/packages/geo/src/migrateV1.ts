@@ -48,18 +48,26 @@ const V1_KEYS = new Set([
   "_lastSync",
 ]);
 
-function stripV1(
+/**
+ * The element's customData without the v1 keys, plus `extra`, and with
+ * `customData.atlas.unit` set: scene units per screen pixel at the zoom the
+ * element was drawn at. The editor draws arrowheads, dashes and rough
+ * jitter in that unit (packages/element/src/atlasStyleUnit.ts).
+ */
+function worldCustomData(
   customData: unknown,
   extra: Record<string, unknown>,
-): Record<string, unknown> | undefined {
+  unit: number,
+): Record<string, unknown> {
   const rest: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(customData as Record<string, unknown>)) {
     if (!V1_KEYS.has(k)) {
       rest[k] = v;
     }
   }
-  Object.assign(rest, extra);
-  return Object.keys(rest).length > 0 ? rest : undefined;
+  const atlas =
+    typeof rest.atlas === "object" && rest.atlas !== null ? rest.atlas : {};
+  return { ...rest, ...extra, atlas: { ...atlas, unit } };
 }
 
 function num(v: unknown): number | undefined {
@@ -119,7 +127,7 @@ export function migrateElementV1<T extends V1Element>(
   const isPin = anchor.kind === "point" && el.type === "ellipse";
   const base = {
     ...el,
-    customData: stripV1(el.customData, isPin ? { tool: "pin" } : {}),
+    customData: worldCustomData(el.customData, isPin ? { tool: "pin" } : {}, s),
     ...(strokeWidth0 !== undefined ? { strokeWidth: strokeWidth0 * s } : {}),
   };
   switch (anchor.kind) {

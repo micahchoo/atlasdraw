@@ -131,11 +131,21 @@ describe("v1 → v2: world coordinates", () => {
         expect(cd).not.toHaveProperty(key);
       }
     }
+    // Drawn at zoom 12: one screen pixel was 2^(22 - 12) scene units.
+    const unit = Math.pow(2, 22 - 12);
     const [renamed, , hidden] = doc.scene;
     expect(renamed.customData).toEqual({
-      atlas: { label: "Ward 3 boundary" },
+      atlas: { label: "Ward 3 boundary", unit },
     });
-    expect(hidden.customData).toEqual({ atlas: { hidden: true } });
+    expect(hidden.customData).toEqual({ atlas: { hidden: true, unit } });
+  });
+
+  it("records each element's pixel unit, for its arrowheads and dashes", async () => {
+    const doc = await read(fixture());
+    for (const el of doc.scene) {
+      const atlas = (el.customData as { atlas?: { unit?: number } }).atlas;
+      expect(atlas?.unit, el.id).toBe(Math.pow(2, 22 - 12));
+    }
   });
 
   it("marks the pin, so export can give it as a point", async () => {

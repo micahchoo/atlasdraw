@@ -74,7 +74,11 @@ describe("seedToElement: pin", () => {
 
   it("keeps the tool data and marks the pin", () => {
     const el = seedToElement(seed, frame);
-    expect(el.customData).toEqual({ _data: { label: "NYC" }, tool: "pin" });
+    expect(el.customData).toEqual({
+      _data: { label: "NYC" },
+      tool: "pin",
+      atlas: { unit: UNIT },
+    });
   });
 });
 
@@ -175,7 +179,7 @@ describe("seedToElement: ellipse", () => {
     expect(el.type).toBe("ellipse");
     expect(el.width).toBe(el.height);
     expect(el.width).toBeCloseTo(40 * UNIT, 9);
-    expect(el.customData).toBeUndefined();
+    expect(el.customData).toEqual({ atlas: { unit: UNIT } });
   });
 });
 
@@ -196,7 +200,10 @@ describe("seedToElement: text", () => {
       20 * UNIT,
       9,
     );
-    expect(el.customData).toEqual({ _data: { text: "Hello" } });
+    expect(el.customData).toEqual({
+      _data: { text: "Hello" },
+      atlas: { unit: UNIT },
+    });
   });
 });
 

@@ -33,10 +33,16 @@ import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import { useDocument } from "./document";
 import { useSceneStore } from "./scene";
 
-/** What the panel stores on an element, under `customData.atlas`. */
+/** What the atlas stores on an element, under `customData.atlas`. */
 export interface AtlasElementData {
   label?: string;
   hidden?: boolean;
+  /**
+   * Scene units per screen pixel at the zoom the element was drawn at. The
+   * editor draws arrowheads, dashes and jitter in it
+   * (packages/element/src/atlasStyleUnit.ts). Set at creation.
+   */
+  unit?: number;
 }
 
 /** The element fields the selector reads. */
