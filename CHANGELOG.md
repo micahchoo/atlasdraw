@@ -8,6 +8,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **Managed (hosted) mode.** Atlasdraw is self-host only, one trusted
+  tenant per deployment (ADR-0013). The storage server loses the
+  `/api/workspaces` and `/api/billing/*` routes, the `X-Workspace-ID`
+  middleware, the map quota, Stripe, and the `MANAGED_MODE`,
+  `QUOTA_*`, `STRIPE_*` and `SITE_URL` env vars. The atlas-app loses the
+  workspace switcher, the `/billing` page, the Settings "Workspace" tab
+  and `VITE_MANAGED_MODE`. No managed-mode user flow worked end to end,
+  and the mode enforced no tenant isolation. The 1.0.0 entry below
+  describes it as it shipped.
+- **`packages/sdk`.** It was a stub that nothing imported (ADR-0016). A
+  read-only map embeds through the `/embed` route.
+
+### Changed
+
+- **One owner for the storage schema.** Both storage adapters apply the
+  migrations in `apps/storage/src/db/migrations.ts` at startup, and record
+  them in a `schema_migrations` table. The Postgres adapter now retries a
+  schema setup that failed at a cold start, instead of failing every
+  request until a restart.
+
+### Migration notes for self-hosters
+
+- Back up the storage volume before you upgrade. At first start the
+  server drops the `workspace_id` columns and the `workspaces` table.
+  Maps and share links are kept.
+- Remove `MANAGED_MODE`, `QUOTA_FREE_MAPS`, `QUOTA_PRO_MAPS`, `STRIPE_*`,
+  `SITE_URL` and `VITE_MANAGED_MODE` from your environment. The server
+  ignores them.
+
 - **"Pro+" billing tier.** `pro_25` was a separate `WorkspacePlan` with its
   own Stripe price ID but an identical map quota to `pro` — no code ever
   read a difference between the two (ISSUES.md Direction 5, headroom audit,

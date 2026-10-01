@@ -10,13 +10,13 @@ Atlasdraw must balance two tensions:
 1. **Protect against SaaS resale** — AGPL-3.0 prevents proprietary SaaS competitors from reselling the product unmodified
 2. **Enable library adoption** — MIT permits closed-source embedding, maximizing developer reach and ecosystem integration
 
-A monolithic AGPL license deters SDK adoption; monolithic MIT enables hyperscale SaaS resellers to undercut the official hosted offering.
+A monolithic AGPL license deters SDK adoption; monolithic MIT lets hyperscale SaaS resellers sell the product and contribute nothing back.
 
 ## Decision
 
 Adopt a **three-tier license split** by package type:
 
-- **AGPL-3.0** — `apps/atlas-app`, `apps/realtime`, `apps/storage` (server and hosted instance)
+- **AGPL-3.0** — `apps/atlas-app`, `apps/realtime`, `apps/storage` (the running app and its servers)
 - **MIT** — `packages/sdk`, `packages/cli`, `packages/geo`, `packages/data` (libraries and tools)
 - **MPL-2.0** — `packages/basemap`, `packages/tools` (bridges between domains)
 
@@ -40,6 +40,11 @@ Each `package.json` declares `"license"` field. CI fails if omitted. Plain-Engli
 - `LICENSING.md` includes worked examples for common scenarios
 - License field validation in PR checks
 - Developer guide clarifies: embedding read-only SDK in closed-source = permitted; modifying server and exposing as SaaS = must open-source modifications
+
+## Amendments
+
+- ADR-0013 (`docs/architecture/adr/0013-self-host-only.md`): Atlasdraw is self-host only. There is no official hosted offering.
+- ADR-0016 (`docs/architecture/adr/0016-sdk-removed-cli-deferred.md`): `packages/sdk` is deleted. Read-only embedding uses the `/embed` route.
 
 ## References
 

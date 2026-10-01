@@ -187,9 +187,9 @@ docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 ```
 
 Compose detects changed images and recreates the affected containers.
-Volumes survive. Atlasdraw uses additive schema migrations only in
-Phase 4 (no destructive changes), so a backup is recommended but not
-strictly required.
+Volumes survive. The storage server applies schema migrations when it
+starts. Some migrations remove columns (for example, the managed-mode
+workspace columns), so back up the volumes before you upgrade.
 
 For major version bumps (`v0.x → v1.x`), check the release notes for
 explicit migration steps.

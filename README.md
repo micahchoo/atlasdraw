@@ -150,7 +150,6 @@ Server (`apps/storage`): Fastify, optional Postgres / SQLite, optional MinIO / S
   expression output.
 - **Print-to-PDF** layout panel built on `pdf-lib`.
 - **Excalidraw asset library** — `.excalidrawlib` reader with curated fixtures.
-- **Workspace abstraction** — `WorkspaceId` throughout storage routes.
 - **Accessibility** — `@react-aria/focus` keyboard nav, `FocusTrap`, `AriaAnnouncer`.
 
 Full list and per-phase recaps: [`CHANGELOG.md`](CHANGELOG.md).

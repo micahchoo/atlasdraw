@@ -22,7 +22,7 @@ This is a Yarn workspaces monorepo. See [`CLAUDE.md`](./CLAUDE.md) for the full 
 
 - `apps/atlas-app/` — the product (editor SPA).
 - `apps/realtime/` — collaboration server.
-- `apps/storage/` — backend API (auth, storage, billing).
+- `apps/storage/` — backend API (map storage and share links).
 - `packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/` — atlasdraw-native packages.
 - `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/` — the forked [Excalidraw](https://github.com/excalidraw/excalidraw) canvas engine that powers the sketching layer.
 

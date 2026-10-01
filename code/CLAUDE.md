@@ -6,7 +6,7 @@ Atlasdraw is a **yarn workspaces monorepo**: a collaborative map-drawing product
 
 - **`apps/atlas-app/`** - The product: the Atlasdraw editor SPA (MapLibre + Excalidraw stacked), hosted at app.atlasdraw.org. This is where atlasdraw-specific feature work happens.
 - **`apps/realtime/`** - Collaboration server (Socket.IO + Yjs sync).
-- **`apps/storage/`** - Backend API (Fastify + Postgres/S3 + Stripe billing).
+- **`apps/storage/`** - Backend API (Fastify; SQLite + filesystem, or Postgres + S3).
 - **`packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/`** - The forked Excalidraw core, owned outright per ADR 0010 and scoped `@atlasdraw/*` like everything else (renamed from `@excalidraw/*` 2026-07-04; all five are `private: true`, never published). Grep the vendored source before trusting any plan that names an Excalidraw API — see `.claude/rules/excalidraw-api.md`.
 - **`packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/`** - Atlasdraw-native packages, also `@atlasdraw/*`.
 - **`excalidraw-app/`** - The original unmodified upstream Excalidraw demo app. Not built, tested, or deployed by any CI workflow or the Docker path — kept only as a reference/diff target against upstream. Do not add atlasdraw product work here.

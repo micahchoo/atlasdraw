@@ -126,11 +126,10 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     // -----------------------------------------------------------------------
     // JOIN_ROOM — with room-size guard (MAX_ROOM_SIZE, default 4)
     //
-    // Phase 6 A9: payload accepts an optional `workspaceId: string`. When
-    // present, the actual Socket.IO room key becomes `${workspaceId}/${roomId}`
-    // so cross-workspace leakage is impossible at the relay layer. Self-host
-    // clients (Phase 5 collab) omit the field and the legacy single-tenant
-    // room key is preserved — existing tests must keep passing.
+    // The payload accepts an optional `workspaceId: string`. When present,
+    // the Socket.IO room key becomes `${workspaceId}/${roomId}`. The client
+    // chooses this prefix and the relay checks nothing, so it separates
+    // names, not tenants. Clients that omit it get the bare room key.
     //
     // The relay is opaque — it never reads the joined room key out of any
     // subsequent event. SCENE_UPDATE / CURSOR / COMMENT carry the same
