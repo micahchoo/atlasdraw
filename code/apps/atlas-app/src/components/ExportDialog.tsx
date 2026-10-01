@@ -40,11 +40,14 @@ import {
 import { safeFileName } from "../lib/safeFileName";
 
 import { creditLine } from "../lib/tileLayers";
+
 import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
 
 import { FocusTrap } from "./FocusTrap";
+
+import type { GeoJsonExportOptions } from "../lib/dataLayerExport";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,7 +79,7 @@ const FORMATS: FormatDef[] = [
     id: "geojson",
     label: "GeoJSON",
     icon: "&",
-    hint: "Geo-anchored annotations only",
+    hint: "Drawn shapes, and data layers if you choose",
   },
   {
     id: "atlasdraw",
@@ -100,7 +103,7 @@ interface ExportDialogProps {
   onCloseRequest: () => void;
   /** Export a PNG of the view at `pixelRatio` output px per CSS px. */
   onExportPNG: (pixelRatio: PngPixelRatio) => void;
-  onExportGeoJSON: () => void;
+  onExportGeoJSON: (opts: GeoJsonExportOptions) => void;
   onExportAtlasdraw: () => void;
   /**
    * The live view's CSS size and ground resolution (`measureView`), or null
@@ -189,6 +192,10 @@ export function ExportDialog({
   const documentTitle = useDocument((s) => s.title);
   const overlays = useDocument((s) => s.overlays);
   const [title, setTitle] = useState(documentTitle);
+  // Off by default: the GeoJSON file keeps what it held before the option
+  // existed until the user asks for more.
+  const [includeDataLayers, setIncludeDataLayers] = useState(false);
+  const hasDataLayers = overlays.some((e) => e.kind === "data");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -258,7 +265,9 @@ export function ExportDialog({
         void handleExportPDF();
         break;
       case "geojson":
-        onExportGeoJSON();
+        onExportGeoJSON({
+          includeDataLayers: hasDataLayers && includeDataLayers,
+        });
         onCloseRequest();
         break;
       case "atlasdraw":
@@ -445,9 +454,36 @@ export function ExportDialog({
                 <div className={styles.settingRow}>
                   <span className={styles.settingLabel}>Content</span>
                   <span className={styles.settingHint}>
-                    Geo-anchored annotations only (data layers excluded)
+                    Drawn shapes that are fixed to the map
                   </span>
                 </div>
+                {hasDataLayers && (
+                  <>
+                    <div className={styles.settingRow}>
+                      <label
+                        className={styles.settingLabel}
+                        htmlFor="export-geojson-include-data"
+                      >
+                        Include imported data layers
+                      </label>
+                      <input
+                        id="export-geojson-include-data"
+                        type="checkbox"
+                        checked={includeDataLayers}
+                        onChange={(e) => setIncludeDataLayers(e.target.checked)}
+                        data-testid="export-geojson-include-data"
+                      />
+                    </div>
+                    <div className={styles.settingRow}>
+                      <span className={styles.settingHint}>
+                        Adds all features of all data layers, also hidden
+                        layers. Each feature keeps its properties and gets a
+                        "layer" property with the layer name. Raster and tile
+                        layers are not vector data and are not included.
+                      </span>
+                    </div>
+                  </>
+                )}
               </>
             )}
             {format === "atlasdraw" && (

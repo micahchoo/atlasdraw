@@ -105,6 +105,11 @@ import styles from "../styles/MapEditor.module.css";
 import { exportCompositeDataURL, measureView } from "../lib/export";
 
 import { exportLegendEntries } from "../lib/legend";
+import {
+  geoJsonExportFile,
+  type GeoJsonExportOptions,
+} from "../lib/dataLayerExport";
+import { downloadBlob } from "../lib/download";
 
 import { useToast } from "./ToastProvider";
 
@@ -938,23 +943,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const handleExportPNG = useExportPNG(map, excalidrawAPI, mapBg, toast);
 
   // Export callbacks for ExportDialog — wraps existing handlers.
-  const handleExportGeoJSON = useCallback(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-    const fc = drawingToFeatureCollection(
-      excalidrawAPI.getSceneElements(),
-      currentDocument().snapshot().world,
-    );
-    const json = JSON.stringify(fc, null, 2);
-    const blob = new Blob([json], { type: "application/geo+json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `atlasdraw-${Date.now()}.geojson`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [excalidrawAPI]);
+  const handleExportGeoJSON = useCallback(
+    (opts: GeoJsonExportOptions) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+      const fc = drawingToFeatureCollection(
+        excalidrawAPI.getSceneElements(),
+        currentDocument().snapshot().world,
+      );
+      // Data layers join the drawn shapes here, never inside the drawn-shape
+      // converter.
+      const file = geoJsonExportFile(fc, currentDocument().snapshot(), opts);
+      downloadBlob(new Blob([file.text], { type: file.type }), file.fileName);
+    },
+    [excalidrawAPI],
+  );
 
   const handleExportAtlasdraw = useCallback(() => {
     // Same single door as the MainMenu "Save" item and Cmd+S — the

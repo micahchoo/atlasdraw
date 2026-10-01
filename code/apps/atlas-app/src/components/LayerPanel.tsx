@@ -73,6 +73,14 @@ import { useOverlayOutcome } from "../hooks/useMapOverlays";
 
 import styles from "../styles/LayerPanel.module.css";
 
+import {
+  csvMenuLabel,
+  dataLayerFile,
+  type DataExportFormat,
+} from "../lib/dataLayerExport";
+
+import { downloadBlob } from "../lib/download";
+
 import { useAnnounce } from "./AriaAnnouncer";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
@@ -300,6 +308,8 @@ type LayerActions = {
   rename: (id: string, label: string) => void;
   remove: (id: string) => void;
   zoomTo: (id: string) => void;
+  /** Save a data layer as a file. Other kinds have no vector data. */
+  exportData: (id: string, format: DataExportFormat) => void;
 };
 
 /** A row in any section: a registry layer, or an annotation from the scene. */
@@ -674,6 +684,15 @@ function OverflowMenu({
    * of crashing for a layer with neither. The kind check stays explicit so a
    * future kind without bounds doesn't inherit the item by accident.
    */
+  /**
+   * Read only while the menu is open: deciding it walks every feature, and
+   * every card renders this component.
+   */
+  const csvLabel =
+    open && entry.kind === "data"
+      ? csvMenuLabel(currentDocument().snapshot().featureCollections[entry.id])
+      : "";
+
   const canZoom =
     entry.kind === "data" ||
     entry.kind === "raster" ||
@@ -731,6 +750,32 @@ function OverflowMenu({
             onStartRename();
           },
         },
+        // W9e — only a data layer has features to write. A raster is a
+        // picture and a tile layer stays on its server, so neither is offered.
+        ...(entry.kind === "data"
+          ? [
+              {
+                key: "export-geojson",
+                testid: `layer-export-geojson-${entry.id}`,
+                label: "Export as GeoJSON",
+                danger: false,
+                onSelect: () => {
+                  close();
+                  actions.exportData(entry.id, "geojson");
+                },
+              },
+              {
+                key: "export-csv",
+                testid: `layer-export-csv-${entry.id}`,
+                label: csvLabel,
+                danger: false,
+                onSelect: () => {
+                  close();
+                  actions.exportData(entry.id, "csv");
+                },
+              },
+            ]
+          : []),
         {
           key: "delete",
           testid: `layer-delete-${entry.id}`,
@@ -1720,6 +1765,13 @@ export function LayerPanel() {
   };
 
   const actions: LayerActions = {
+    exportData: (id, format) => {
+      const file = dataLayerFile(currentDocument().snapshot(), id, format);
+      if (file) {
+        downloadBlob(new Blob([file.text], { type: file.type }), file.fileName);
+        announce(`Exported "${labelOf(id)}" as ${file.fileName}`);
+      }
+    },
     rename: (id, label) => {
       const api = scene();
       if (isAnnotation(id)) {

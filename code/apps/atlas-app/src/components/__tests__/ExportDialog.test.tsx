@@ -15,7 +15,12 @@ import {
 } from "@testing-library/react";
 
 import { ExportDialog } from "../ExportDialog";
-import { DEFAULT_DOCUMENT_TITLE, currentDocument } from "../../state/document";
+import {
+  DEFAULT_DOCUMENT_TITLE,
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 import { exportSize } from "../../lib/export";
 import { jpegOfSize, readPdf } from "../../lib/__tests__/fixtures/print";
 
@@ -268,5 +273,40 @@ describe("ExportDialog — closing", () => {
     const props = renderDialog();
     fireEvent.click(screen.getByTestId("export-dialog-cancel"));
     expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ExportDialog — GeoJSON", () => {
+  beforeEach(() => {
+    openDocument(createDocument());
+  });
+
+  it("offers no data-layer option when the map has no data layers", () => {
+    const props = renderDialog({ initialFormat: "geojson" });
+    expect(screen.queryByTestId("export-geojson-include-data")).toBeNull();
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    expect(props.onExportGeoJSON).toHaveBeenCalledWith({
+      includeDataLayers: false,
+    });
+  });
+
+  it("includes the data layers when the user ticks the option", () => {
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:trails",
+      fc: { type: "FeatureCollection", features: [] },
+      label: "Trails",
+      style: {},
+    });
+    const props = renderDialog({ initialFormat: "geojson" });
+    const box = screen.getByLabelText(
+      "Include imported data layers",
+    ) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    fireEvent.click(box);
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    expect(props.onExportGeoJSON).toHaveBeenCalledWith({
+      includeDataLayers: true,
+    });
   });
 });

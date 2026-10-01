@@ -461,7 +461,7 @@ describe("data layer card — the three missing actions", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(
       within(screen.getByRole("menu")).getAllByRole("menuitem"),
-    ).toHaveLength(3);
+    ).toHaveLength(5);
   });
 
   it("Escape closes the ⋯ menu and returns focus to its trigger", () => {
@@ -484,8 +484,11 @@ describe("data layer card — the three missing actions", () => {
     const items = (id: string) => [
       `layer-zoom-${id}`,
       `layer-rename-${id}`,
+      `layer-export-geojson-${id}`,
+      `layer-export-csv-${id}`,
       `layer-delete-${id}`,
     ];
+    const last = (id: string) => items(id)[items(id).length - 1];
 
     it("focuses the first item on open", () => {
       const id = seedParcels();
@@ -500,7 +503,7 @@ describe("data layer card — the three missing actions", () => {
       render(<LayerPanel />);
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
-      for (const testid of [items(id)[1], items(id)[2], items(id)[0]]) {
+      for (const testid of [...items(id).slice(1), items(id)[0]]) {
         fireEvent.keyDown(document.activeElement as Element, {
           key: "ArrowDown",
         });
@@ -514,7 +517,7 @@ describe("data layer card — the three missing actions", () => {
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       fireEvent.keyDown(document.activeElement as Element, { key: "ArrowUp" });
-      expect(document.activeElement).toBe(screen.getByTestId(items(id)[2]));
+      expect(document.activeElement).toBe(screen.getByTestId(last(id)));
     });
 
     it("Home and End jump to the ends", () => {
@@ -523,7 +526,7 @@ describe("data layer card — the three missing actions", () => {
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       fireEvent.keyDown(document.activeElement as Element, { key: "End" });
-      expect(document.activeElement).toBe(screen.getByTestId(items(id)[2]));
+      expect(document.activeElement).toBe(screen.getByTestId(last(id)));
       fireEvent.keyDown(document.activeElement as Element, { key: "Home" });
       expect(document.activeElement).toBe(screen.getByTestId(items(id)[0]));
     });
@@ -536,7 +539,7 @@ describe("data layer card — the three missing actions", () => {
       const tabIndices = items(id).map((t) =>
         screen.getByTestId(t).getAttribute("tabindex"),
       );
-      expect(tabIndices).toEqual(["0", "-1", "-1"]);
+      expect(tabIndices).toEqual(["0", "-1", "-1", "-1", "-1"]);
     });
 
     // The confirm step replaces the item list. Focus has to follow it or the
