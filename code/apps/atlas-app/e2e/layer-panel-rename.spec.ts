@@ -122,6 +122,13 @@ async function openLayersTab(page: import("@playwright/test").Page) {
   });
 }
 
+async function startRename(page: import("@playwright/test").Page) {
+  // The name is an inert label since 7de0ea6 (a row click selects); the ⋯
+  // menu's "Rename…" is the door into the editor.
+  await page.locator(`[data-testid="layer-menu-${RECT_ID}"]`).click();
+  await page.locator(`[data-testid="layer-rename-${RECT_ID}"]`).click();
+}
+
 test.describe("LayerPanel — annotation rename", () => {
   test("a renamed annotation keeps its name when the shape moves", async ({
     page,
@@ -134,7 +141,7 @@ test.describe("LayerPanel — annotation rename", () => {
     // The generated name, geo segment and all — the thing being replaced.
     await expect(name).toContainText("Rectangle near");
 
-    await name.click();
+    await startRename(page);
     const input = page.locator(`[data-testid="layer-rename-input-${RECT_ID}"]`);
     await expect(input).toBeFocused();
     await input.fill("Ward 3");
@@ -157,7 +164,7 @@ test.describe("LayerPanel — annotation rename", () => {
     const name = page.locator(`[data-testid="layer-name-${RECT_ID}"]`);
     const before = await name.textContent();
 
-    await name.click();
+    await startRename(page);
     const input = page.locator(`[data-testid="layer-rename-input-${RECT_ID}"]`);
     await input.fill("oops");
     await input.press("Escape");

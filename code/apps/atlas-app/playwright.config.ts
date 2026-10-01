@@ -1,5 +1,11 @@
 import { defineConfig } from "@playwright/test";
 
+// E2E_PORT lets a run sit beside other checkouts' dev servers. When it is set,
+// the run always starts its own server on exactly that port (--strictPort), so
+// it can never attach to, or fall through to, another tree's server.
+const PORT = Number(process.env.E2E_PORT ?? 5174);
+const BASE_URL = `http://localhost:${PORT}`;
+
 /**
  * Playwright config for atlas-app E2E tests.
  *
@@ -23,7 +29,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:5174",
+    baseURL: BASE_URL,
     headless: true,
     viewport: { width: 1280, height: 800 },
     video: "retain-on-failure",
@@ -49,10 +55,10 @@ export default defineConfig({
     // It used to name one developer's main checkout absolutely, which meant an
     // e2e run from a git worktree started the OTHER tree's dev server and
     // silently tested code that was not the code under test.
-    command: "yarn workspace @atlasdraw/atlas-app dev",
-    url: "http://localhost:5174",
+    command: `yarn workspace @atlasdraw/atlas-app dev --port ${PORT} --strictPort`,
+    url: BASE_URL,
     timeout: 60_000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && !process.env.E2E_PORT,
     stdout: "ignore",
     stderr: "pipe",
   },
