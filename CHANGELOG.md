@@ -32,11 +32,32 @@ the new images. Then:
    `docker compose -f infra/docker-compose.minimal.yml run --rm --user root --entrypoint chown storage -R node:node /data`
    (the relay: the same with `realtime`; `docs/self-host/production.md`,
    "Upgrading").
-5. **Full stack: set `MINIO_APP_PASSWORD` in `.env`.** The storage server
-   now uses its own MinIO user, which the new `minio-init` job makes with
-   access to the bucket only. Compose refuses to start without it. The
-   MinIO image is pinned by digest; see "Blob storage" in
-   `docs/self-host/production.md` if your host cannot pull it.
+5. **Full stack: bring your own S3 bucket.** The stack no longer runs
+   MinIO: MinIO stopped publishing community images (ADR-0019). Set
+   `BLOB_ENDPOINT`, `BLOB_ACCESS_KEY` and `BLOB_SECRET_KEY` in `.env`;
+   compose refuses to start without them. For AWS S3, also set
+   `BLOB_FORCE_PATH_STYLE=false`. Remove `MINIO_ROOT_USER`,
+   `MINIO_ROOT_PASSWORD`, `MINIO_APP_USER` and `MINIO_APP_PASSWORD`. See
+   "Blob storage" in `docs/self-host/production.md`.
+
+   **If you ran the bundled MinIO, your maps are in the `miniodata`
+   volume** (`docker volume ls` shows it with the compose project's
+   prefix). The new compose file does not mount it, and it does not delete
+   it. Keep it until the maps are safe. Do one of these:
+
+   - **Keep your MinIO.** Run it outside this compose file, with the same
+     volume, and point `BLOB_ENDPOINT` at it. Give the storage server a key
+     that reaches the bucket only, not MinIO's root user ("Limit the key
+     to one bucket" in `docs/self-host/production.md`).
+   - **Move to a new provider.** Before you start the new stack, copy the
+     bucket from the old MinIO to the new one, with `mc mirror` or
+     `rclone sync`. For example, with both servers as `mc` aliases:
+     `mc mirror old/atlasdraw-maps new/atlasdraw-maps`. Then compare the
+     object counts.
+
+   Remove the `miniodata` volume only after the new bucket holds every
+   object. A row whose blob is missing is a map that cannot open.
+
 6. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
    and each client address may make 60 new maps an hour
    (`MAX_NEW_MAPS_PER_IP`). `POST /maps` is open to anyone who reaches the

@@ -3,8 +3,8 @@
 This guide runs Atlasdraw on one computer in about five minutes, with the
 **minimal stack**: SQLite and files, no other services.
 
-For a server on the internet (Postgres, MinIO or S3, TLS, a domain, live
-rooms), read [`production.md`](production.md).
+For a server on the internet (Postgres, your own S3-compatible bucket,
+TLS, a domain, live rooms), read [`production.md`](production.md).
 
 ---
 
@@ -226,8 +226,8 @@ tree. Later builds reuse the cached layers. To build from nothing:
 
 ## Next steps
 
-- [Production guide](production.md) — Postgres, MinIO, Caddy TLS, a domain
-  and the relay.
+- [Production guide](production.md) — Postgres, your S3 bucket, Caddy
+  TLS, a domain and the relay.
 - [Architecture decisions](../architecture/adr/) — the product ADRs.
 
 Licence: [AGPL-3.0-only](../../code/LICENSE-AGPL).
