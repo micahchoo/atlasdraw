@@ -35,7 +35,7 @@ import {
   type LayerStyle,
   type OverlayEntry,
 } from "../state/document";
-import { useRasterImageStore } from "../state/useRasterImageStore";
+import { rasterUrls } from "../state/rasterUrls";
 
 import { inferGeometryType } from "../lib/geometryType";
 
@@ -47,21 +47,6 @@ import {
 } from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
-
-/**
- * FU-1: raster id → object URL, in the shape reconcileDataLayers wants.
- *
- * The store holds `{ blob, url }` because the blob is what gets written into a
- * saved document; the map only ever needs the url. Projecting here keeps
- * dataLayerRender ignorant of the store, which is the whole reason it takes a
- * plain record rather than reading one.
- */
-function rasterUrlSnapshot(): Record<string, string> {
-  const images = useRasterImageStore.getState().getAll();
-  return Object.fromEntries(
-    Object.entries(images).map(([id, image]) => [id, image.url]),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // P1 — data-layer style (MapLibre setPaintProperty) factory.
@@ -275,7 +260,7 @@ export function useLayerRegistrySync(map: maplibregl.Map | null): void {
       map,
       doc.overlays,
       { ...doc.featureCollections },
-      rasterUrlSnapshot(),
+      rasterUrls(),
     );
   }, [map]);
 
@@ -337,7 +322,7 @@ export function useLayerRegistrySync(map: maplibregl.Map | null): void {
           map,
           state.entries,
           { ...doc.snapshot().featureCollections },
-          rasterUrlSnapshot(),
+          rasterUrls(),
         );
       }
       // P3 — restack. Needed after a reorder, and also after add/remove:

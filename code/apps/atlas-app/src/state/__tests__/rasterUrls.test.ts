@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useRasterImageStore } from "../useRasterImageStore";
+import { rasterUrl, rasterUrls } from "../rasterUrls";
 import { createDocument, currentDocument, openDocument } from "../document";
 
 const created: string[] = [];
@@ -16,9 +16,8 @@ beforeEach(() => {
   created.length = 0;
   revoked.length = 0;
   let n = 0;
-  // jsdom has no object-URL implementation, so the store's own fallback would
-  // otherwise be what runs — and a test of the revoke path that never revokes
-  // is exactly the shape of check FU-10 is about.
+  // jsdom has no object-URL implementation, so the cache's own fallback would
+  // otherwise run, and a test of the revoke path would never revoke.
   vi.stubGlobal("URL", {
     createObjectURL: vi.fn(() => {
       const url = `blob:test/${n++}`;
@@ -55,43 +54,56 @@ function addRaster(id: string, image: Blob = blob()): void {
 }
 
 describe("raster object URLs follow the open document's images", () => {
-  it("mints an object URL alongside the blob", () => {
+  it("mints one object URL per image, on first ask", () => {
+    addRaster("rl:a");
+
+    expect(rasterUrls()).toEqual({ "rl:a": created[0] });
+    expect(rasterUrls()).toEqual({ "rl:a": created[0] });
+    expect(created).toHaveLength(1);
+  });
+
+  it("gives an importer the URL before the layer is added, and keeps it", () => {
     const image = blob();
+    const url = rasterUrl("rl:a", image);
     addRaster("rl:a", image);
 
-    const cached = useRasterImageStore.getState().get("rl:a");
-    expect(cached?.url).toBe(created[0]);
-    expect(cached?.blob).toBe(image);
+    expect(rasterUrls()).toEqual({ "rl:a": url });
+    expect(revoked).toEqual([]);
   });
 
   it("keeps the URL while the image is unchanged", () => {
     addRaster("rl:a");
+    const first = rasterUrls();
     currentDocument().dispatch({
       type: "rename-layer",
       id: "rl:a",
       label: "x",
     });
 
+    expect(rasterUrls()).toEqual(first);
     expect(created).toHaveLength(1);
     expect(revoked).toEqual([]);
   });
 
   it("revokes when the layer is removed", () => {
     addRaster("rl:a");
+    rasterUrls();
     currentDocument().dispatch({ type: "remove-layer", id: "rl:a" });
 
     expect(revoked).toEqual([created[0]]);
-    expect(useRasterImageStore.getState().get("rl:a")).toBeUndefined();
+    expect(rasterUrls()).toEqual({});
   });
 
   it("revokes every URL when another document opens, not just the last", () => {
     addRaster("rl:a");
     addRaster("rl:b");
     addRaster("rl:c");
+    rasterUrls();
 
     openDocument(createDocument());
 
+    expect(created).toHaveLength(3);
     expect(revoked.sort()).toEqual([...created].sort());
-    expect(useRasterImageStore.getState().getAll()).toEqual({});
+    expect(rasterUrls()).toEqual({});
   });
 });

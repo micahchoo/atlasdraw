@@ -51,7 +51,7 @@ import { getAppConfig } from "../config/app-config";
 import { useToast } from "../components/ToastProvider";
 
 import { addDataLayerToMap, addRasterLayerToMap } from "../lib/dataLayerRender";
-import { useRasterImageStore } from "../state/useRasterImageStore";
+import { rasterUrl } from "../state/rasterUrls";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
@@ -125,7 +125,7 @@ function detectExt(fileName: string): DataFileExt | null {
  * one bad line can't fail a 10k-row file); GeoJSON and shapefile reject the
  * whole file instead, so 0 from those branches is a fact rather than a
  * placeholder. The count is recorded as layer provenance — see
- * `LayerProvenance` in state/layerRegistry.
+ * `LayerProvenance` in state/document.
  */
 async function parseDroppedFile(
   file: File,
@@ -246,13 +246,10 @@ export function useDataFileImport(
 
         const id = `rl:${crypto.randomUUID()}`;
         const imageKey = `raster-${id.slice(3)}.png`;
-        // Image store before the map, and the map before the registry: the
-        // registry subscriber reconciles new entries onto the map and reads
-        // the URL from the store, so writing it last would have it find a
-        // raster with no image and skip it. Same ordering rule as the data
-        // path, one store deeper.
-        useRasterImageStore.getState().set(id, png);
-        const url = useRasterImageStore.getState().get(id)!.url;
+        // The map first, then the document: a bridge that reconciles new
+        // layers onto the map then finds this one already there. The URL
+        // cache keeps this URL once the document holds the same image.
+        const url = rasterUrl(id, png);
         addRasterLayerToMap(map, id, url, decoded.corners, 1);
         registerRasterLayer?.({
           id,

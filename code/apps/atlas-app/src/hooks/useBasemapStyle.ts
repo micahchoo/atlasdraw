@@ -3,9 +3,9 @@
 // Applies the resolved MapLibre style when the active basemap changes.
 //
 // setStyle() replaces the whole style document, which drops every custom
-// source and layer the app added — imported data layers included. The
-// LayerRegistry survives the swap, so after each successful setStyle we
-// reconcile the map back to the registry once the new style has loaded.
+// source and layer the app added — imported data layers included. The open
+// document survives the swap, so after each successful setStyle we reconcile
+// the map back to the document's layers once the new style has loaded.
 import { useEffect } from "react";
 
 import {
@@ -15,7 +15,7 @@ import {
 } from "@atlasdraw/basemap";
 
 import { currentDocument } from "../state/document";
-import { useRasterImageStore } from "../state/useRasterImageStore";
+import { rasterUrls } from "../state/rasterUrls";
 import { reconcileDataLayers } from "../lib/dataLayerRender";
 
 import type maplibregl from "maplibre-gl";
@@ -56,11 +56,7 @@ export function useBasemapStyle(
         // FU-1: without these the basemap switch puts every vector layer back
         // and leaves the scanned sheets off the map, with their rows still in
         // the panel. Same shape of failure FU-3 fixed for the collab layer.
-        Object.fromEntries(
-          Object.entries(useRasterImageStore.getState().getAll()).map(
-            ([id, image]) => [id, image.url],
-          ),
-        ),
+        rasterUrls(),
       );
     };
 
