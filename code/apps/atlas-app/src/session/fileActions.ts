@@ -13,7 +13,6 @@ import {
   toFile,
 } from "../state/documentIO";
 import { restoreServerBackup } from "../state/myMaps";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 
@@ -33,7 +32,7 @@ export async function saveMap(
   notify?: Notify,
 ): Promise<void> {
   const { api, map } = s.view.getState();
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = s.persistence.getState().persistenceStore;
   if (!api || !store) {
     return;
   }
@@ -41,7 +40,7 @@ export async function saveMap(
     const doc = s.store.getState().doc;
     await store.saveToDisk(toFile(doc, undefined, liveCamera(map)));
     markSavedToFile(doc);
-    usePersistenceStore.getState().clearDirty();
+    s.persistence.getState().clearDirty();
     notify?.success("Map saved as .atlasdraw");
   } catch (err) {
     if (isPickerCancel(err)) {
@@ -74,7 +73,7 @@ export async function openMap(
     s.view.getState().ask(REPLACE_QUESTION),
 ): Promise<void> {
   const { api, map } = s.view.getState();
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = s.persistence.getState().persistenceStore;
   if (!api || !store) {
     return;
   }
@@ -91,7 +90,7 @@ export async function openMap(
       markSavedToFile(opened);
     }
     // The opened file becomes the autosaved map.
-    usePersistenceStore.getState().markDirty();
+    s.persistence.getState().markDirty();
     const n = loaded.manifest.layers.length;
     notify?.success(
       `Opened "${loaded.manifest.title}" — ${n} layer${n === 1 ? "" : "s"}`,
@@ -120,6 +119,7 @@ export async function restoreBackup(s: EditorSession): Promise<void> {
   await restoreServerBackup({
     api,
     map,
+    persistence: s.persistence,
     notify: s.notify,
     client: createHttpStorageClient({
       baseUrl: getAppConfig().storageBaseUrl ?? "",

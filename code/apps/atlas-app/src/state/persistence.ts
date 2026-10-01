@@ -525,9 +525,8 @@ export function createPersistenceStore(
   const saveToDisk = async (doc: AtlasdrawDocument): Promise<void> => {
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
-      // The document names its own file. This module stays framework-free
-      // (see usePersistenceStore's header), so the title arrives on the doc
-      // rather than by reaching into the title store.
+      // The document names its own file: the title arrives on the doc, so
+      // this module stays framework-free.
       const suggestedName = `${safeFileName(doc.manifest.title)}.atlasdraw`;
       const w = fsaWindow();
       if (hasFSA() && w && w.showSaveFilePicker) {

@@ -22,7 +22,6 @@ import {
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { ShareDialog } from "../ShareDialog";
-import { usePersistenceStore } from "../../state/usePersistenceStore";
 
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 
@@ -101,7 +100,6 @@ describe("ShareDialog", () => {
     });
     await db.clear("state");
     db.close();
-    usePersistenceStore.setState({ isDraining: false });
     Object.defineProperty(window, "location", {
       value: { ...window.location, origin: "https://test.example" },
       writable: true,

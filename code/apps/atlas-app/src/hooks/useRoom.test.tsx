@@ -23,6 +23,8 @@ import { isRoomDocument, type RoomTransport } from "../state/room";
 import { seedRoom } from "../state/roomDocument";
 import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
 
+import { testSession } from "../session/__tests__/sessionFixture";
+
 import { usePersistenceWiring } from "./usePersistenceWiring";
 import { useRoom } from "./useRoom";
 
@@ -71,7 +73,11 @@ function memoryRelay() {
   return { server, transport };
 }
 
+/** The editor's session; a new one for every case. */
+let session = testSession();
+
 beforeEach(() => {
+  session = testSession();
   vi.spyOn(appConfig, "getAppConfig").mockReturnValue({
     realtime: { enabled: true, wsUrl: "ws://relay.invalid" },
   } as AppConfig);
@@ -100,7 +106,10 @@ describe("useRoom", () => {
     const fake = makeFakeExcalidraw([rect("own")] as never);
 
     const { result, unmount } = renderHook(() =>
-      useRoom(fake.api, null, relay.transport),
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
     );
     await waitFor(() => expect(result.current.status).toBe("joined"));
 
@@ -126,7 +135,10 @@ describe("useRoom", () => {
     );
 
     const { result } = renderHook(() =>
-      useRoom(fake.api, null, relay.transport),
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
     );
     let url = "";
     await act(async () => {
@@ -160,7 +172,10 @@ describe("useRoom", () => {
     const fake = makeFakeExcalidraw();
 
     const { result } = renderHook(() =>
-      useRoom(fake.api, null, relay.transport),
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
     );
     await waitFor(() => expect(result.current.status).toBe("joined"));
 
@@ -220,8 +235,11 @@ describe("useRoom", () => {
     const fake = makeFakeExcalidraw();
     const notify = { error: vi.fn() };
     const { result, unmount } = renderHook(() => {
-      usePersistenceWiring(fake.api, notify);
-      return useRoom(fake.api, null, relay.transport);
+      usePersistenceWiring(session, fake.api, notify);
+      return useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      });
     });
     await waitFor(() => expect(result.current.room).not.toBeNull());
     // The room is ready before the autosave is.
@@ -244,7 +262,10 @@ describe("useRoom", () => {
     const fake = makeFakeExcalidraw();
 
     const { result } = renderHook(() =>
-      useRoom(fake.api, null, memoryRelay().transport),
+      useRoom(fake.api, null, {
+        transport: memoryRelay().transport,
+        persistence: session.persistence,
+      }),
     );
 
     expect(result.current.error).toMatch(/not valid/);
@@ -255,7 +276,12 @@ describe("useRoom", () => {
     window.history.replaceState(null, "", `/${roomFragment(newRoomLink())}`);
     const fake = makeFakeExcalidraw();
 
-    const { result } = renderHook(() => useRoom(fake.api, null, null));
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, {
+        transport: null,
+        persistence: session.persistence,
+      }),
+    );
 
     expect(result.current.available).toBe(false);
     expect(result.current.error).toMatch(/not set up for shared maps/);

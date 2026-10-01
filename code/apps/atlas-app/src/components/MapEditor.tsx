@@ -60,7 +60,6 @@ import {
 } from "../state/document";
 import { configuredTransport } from "../state/room";
 import { editorScene, useSceneBinding } from "../state/scene";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import styles from "../styles/MapEditor.module.css";
 
 import { useAnnounce } from "./AriaAnnouncer";
@@ -182,7 +181,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   );
 
   const { bridge, onZoomAction } = useCameraBridge(map, api, drawingLayer);
-  const room = useRoom(api, map, session.transport);
+  const room = useRoom(api, map, session);
   useEffect(() => {
     if (room.status === "joined") {
       toast.success(
@@ -205,12 +204,12 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   const basemap = useDocument((s) => s.basemap);
   useBasemapStyle(map, basemap, getAppConfig().allowRemoteBasemaps);
   useDevHandles(session, map, api, bridge);
-  usePersistenceWiring(api, session.notify, open, view);
+  usePersistenceWiring(session, api, session.notify, open);
   useSceneBinding(api);
   useMapWheelRouter(rootRef.current, map);
   // The only writer of the overlay part of the map style.
   useMapOverlays(map);
-  useServerBackup(view);
+  useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
   useConvertToDataLayer(api, addDataLayer, toast);
   useCommandKeys(session, drawingLayer);
@@ -242,7 +241,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
     map,
     excalidrawAPI: api,
   });
-  const isDirty = usePersistenceStore((s) => s.isDirty);
+  const isDirty = useStore(session.persistence, (s) => s.isDirty);
   const onboarding = useOnboarding();
   const announce = useAnnounce();
   const onDrawingChange = useExcalidrawChangeHandler({
@@ -253,6 +252,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
       [view],
     ),
     view,
+    persistence: session.persistence,
   });
   const mapBackground = useStore(view, (s) => s.mapBackground);
 

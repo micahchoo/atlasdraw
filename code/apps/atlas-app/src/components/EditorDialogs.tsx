@@ -193,6 +193,7 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
         <MyMapsDialog
           excalidrawAPI={api}
           map={map}
+          persistence={session.persistence}
           notify={session.notify}
           onClose={close}
           server={getAppConfig().enableBackendPersistence ? storage : null}

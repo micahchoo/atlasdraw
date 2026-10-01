@@ -13,7 +13,13 @@
 //   transport  how a room reaches its relay (state/room.ts); null when this
 //              build has no rooms
 //   view       the editor's view state (session/view.ts)
+//   persistence the autosave's state (state/persistenceState.ts)
 //   notify     where an action tells the user how it went (the toasts)
+
+import {
+  createPersistenceState,
+  type PersistenceStateStore,
+} from "../state/persistenceState";
 
 import { createViewStore, type ViewStore } from "./view";
 
@@ -43,6 +49,7 @@ export interface EditorSession {
   readonly transport: RoomTransport | null;
   readonly notify: Notify;
   readonly view: ViewStore;
+  readonly persistence: PersistenceStateStore;
 }
 
 export function createSession(deps: SessionDeps): EditorSession {
@@ -52,5 +59,6 @@ export function createSession(deps: SessionDeps): EditorSession {
     transport: deps.transport,
     notify: deps.notify,
     view: createViewStore({ map: deps.map }),
+    persistence: createPersistenceState(),
   };
 }

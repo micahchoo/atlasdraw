@@ -9,7 +9,7 @@
 // Once the room has joined, the editor opens the room's Document and shows
 // the room's drawing; the user's own document waits in memory and comes
 // back when the editor unmounts. A room joined before the autosave opened
-// the user's own map waits for it (usePersistenceStore#ownMapLoaded): the
+// the user's own map waits for it (persistenceState.ts#ownMapLoaded): the
 // map that waits in memory must be theirs, not the blank start. Opening another document leaves the room. Nothing in the room is written to
 // the user's own map: the autosave skips a room's document.
 //
@@ -45,8 +45,8 @@ import {
 } from "../state/room";
 import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 
+import type { PersistenceStateStore } from "../state/persistenceState";
 import type maplibregl from "maplibre-gl";
 
 export interface RoomSession {
@@ -78,9 +78,16 @@ const NO_PEERS: readonly Peer[] = [];
 export function useRoom(
   api: ExcalidrawImperativeAPI | null,
   map: maplibregl.Map | null,
-  /** How rooms reach the relay; null when this editor has no rooms. */
-  transport: RoomTransport | null,
+  /**
+   * The session's room transport (null: this editor has no rooms) and its
+   * autosave state, which a room waits for.
+   */
+  session: {
+    transport: RoomTransport | null;
+    persistence: PersistenceStateStore;
+  },
 ): RoomSession {
+  const { transport, persistence } = session;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
@@ -149,10 +156,10 @@ export function useRoom(
       if (previous || !roomDocument) {
         return;
       }
-      const persistence = usePersistenceStore.getState();
-      if (!persistence.ownMapLoaded) {
+      const own = persistence.getState();
+      if (!own.ownMapLoaded) {
         stopWaiting();
-        stopWaiting = usePersistenceStore.subscribe((state) => {
+        stopWaiting = persistence.subscribe((state) => {
           if (state.ownMapLoaded) {
             stopWaiting();
             enter();
@@ -161,8 +168,8 @@ export function useRoom(
         return;
       }
       // Write the user's unsaved changes before their map leaves the editor.
-      if (persistence.isDirty) {
-        void persistence.forceSave();
+      if (own.isDirty) {
+        void own.forceSave();
       }
       previous = {
         doc: currentDocument(),
@@ -222,7 +229,7 @@ export function useRoom(
       setSelf(null);
       setStatus(null);
     };
-  }, [room, api]);
+  }, [room, api, persistence]);
 
   // Presence: the camera after each move, the pointer while over the map.
   useEffect(() => {

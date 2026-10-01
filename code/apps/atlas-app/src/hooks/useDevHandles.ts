@@ -12,7 +12,6 @@ import type { CameraBridge } from "@atlasdraw/basemap";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { seedShapes } from "../lib/devSeedShapes";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 
 import type { EditorSession } from "../session/EditorSession";
 import type maplibregl from "maplibre-gl";
@@ -36,8 +35,8 @@ export function useDevHandles(
       cameraBridge,
       seed: (n: number) => seedShapes(map, api, n, frame()),
       frame,
-      isDirty: () => usePersistenceStore.getState().isDirty,
-      clearDirty: () => usePersistenceStore.getState().clearDirty(),
+      isDirty: () => session.persistence.getState().isDirty,
+      clearDirty: () => session.persistence.getState().clearDirty(),
       toLngLat,
       toScene,
     };

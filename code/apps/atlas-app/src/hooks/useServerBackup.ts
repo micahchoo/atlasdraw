@@ -7,18 +7,22 @@
 
 import { useEffect } from "react";
 
+import { useStore } from "zustand";
+
 import { getAppConfig } from "../config/app-config";
 import { useDocumentStore } from "../state/document";
 import { hasServerMap } from "../state/remoteMapIdCache";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 
-import type { ViewStore } from "../session/view";
+import type { EditorSession } from "../session/EditorSession";
 
-export function useServerBackup(view: ViewStore): void {
+export function useServerBackup(
+  session: Pick<EditorSession, "view" | "persistence">,
+): void {
+  const { view } = session;
   const enabled = getAppConfig().enableBackendPersistence;
   const documentId = useDocumentStore((s) => s.doc.id);
   // The first push of a document makes its server map; look again after it.
-  const lastSavedAt = usePersistenceStore((s) => s.lastSavedAt);
+  const lastSavedAt = useStore(session.persistence, (s) => s.lastSavedAt);
 
   useEffect(() => {
     if (!enabled) {

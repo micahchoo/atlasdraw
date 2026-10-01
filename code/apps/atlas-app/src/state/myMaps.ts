@@ -31,13 +31,15 @@ import {
   type CameraSource,
 } from "./documentIO";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
-import { usePersistenceStore } from "./usePersistenceStore";
 
+import type { PersistenceStateStore } from "./persistenceState";
 import type { StorageClient } from "../services/createHttpStorageClient";
 import type maplibregl from "maplibre-gl";
 
 export interface MapActionContext {
   api: ExcalidrawImperativeAPI;
+  /** The editor's autosave: the maps saved in this browser. */
+  persistence: PersistenceStateStore;
   /** The editor's map: a new map starts where it looks, an opened one moves it. */
   map?: (CameraSource & Pick<maplibregl.Map, "jumpTo">) | null;
   notify?: { success: (msg: string) => void; error: (msg: string) => void };
@@ -53,7 +55,7 @@ export interface MapActionContext {
  * not be saved and the user did not agree to lose them.
  */
 async function keepOpenMap(ctx: MapActionContext): Promise<boolean> {
-  const persistence = usePersistenceStore.getState();
+  const persistence = ctx.persistence.getState();
   if (!persistence.persistenceStore?.isDirty()) {
     return true;
   }
@@ -75,7 +77,7 @@ export async function openSavedMap(
   ctx: MapActionContext,
   id: string,
 ): Promise<boolean> {
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = ctx.persistence.getState().persistenceStore;
   if (!store || id === currentDocument().id) {
     return false;
   }
@@ -185,7 +187,7 @@ export async function startNewMap(ctx: MapActionContext): Promise<boolean> {
   if (!opened) {
     return false;
   }
-  usePersistenceStore.getState().markDirty();
+  ctx.persistence.getState().markDirty();
   return true;
 }
 
@@ -201,7 +203,7 @@ export async function deleteSavedMap(
   id: string,
   opts: { server?: StorageClient } = {},
 ): Promise<void> {
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = ctx.persistence.getState().persistenceStore;
   if (!store) {
     return;
   }
@@ -227,7 +229,7 @@ export async function deleteSavedMap(
     if (!opened) {
       return;
     }
-    usePersistenceStore.getState().markDirty();
+    ctx.persistence.getState().markDirty();
   }
   try {
     await store.remove(id);
@@ -283,7 +285,7 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
   if (!opened) {
     return;
   }
-  usePersistenceStore.getState().markDirty();
+  ctx.persistence.getState().markDirty();
   ctx.notify?.success(
     `Restored "${decoded.file.manifest.title}" from the server backup`,
   );

@@ -16,10 +16,10 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import { sceneSignature } from "../state/sceneSignature";
 import { isOverlayId } from "../state/selectedLayer";
 
+import type { PersistenceStateStore } from "../state/persistenceState";
 import type { ViewStore } from "../session/view";
 
 export interface ExcalidrawChangeHandlerParams {
@@ -29,6 +29,8 @@ export interface ExcalidrawChangeHandlerParams {
   setMapBg: (color: string) => void;
   /** The session view whose layer selection follows the canvas. */
   view: ViewStore;
+  /** The session's autosave state, marked dirty by a drawing change. */
+  persistence: PersistenceStateStore;
 }
 
 export function useExcalidrawChangeHandler({
@@ -36,6 +38,7 @@ export function useExcalidrawChangeHandler({
   announceMapEditor,
   setMapBg,
   view,
+  persistence,
 }: ExcalidrawChangeHandlerParams): NonNullable<
   React.ComponentProps<typeof Excalidraw>["onChange"]
 > {
@@ -89,7 +92,7 @@ export function useExcalidrawChangeHandler({
       const prevSignature = prevSignatureRef.current;
       prevSignatureRef.current = signature;
       if (prevSignature !== null && signature !== prevSignature) {
-        usePersistenceStore.getState().markDirty();
+        persistence.getState().markDirty();
       }
 
       // --- 3. Selection-change aria-live announcement.
@@ -147,6 +150,6 @@ export function useExcalidrawChangeHandler({
         viewState.setSelection(merged);
       }
     },
-    [excalidrawAPI, announceMapEditor, setMapBg, view],
+    [excalidrawAPI, announceMapEditor, setMapBg, view, persistence],
   );
 }

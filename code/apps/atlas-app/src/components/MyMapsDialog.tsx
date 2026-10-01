@@ -21,7 +21,6 @@ import {
   startNewMap,
   type MapActionContext,
 } from "../state/myMaps";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import { hasServerMap } from "../state/remoteMapIdCache";
 
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -34,6 +33,8 @@ export interface MyMapsDialogProps {
   excalidrawAPI: ExcalidrawImperativeAPI;
   /** The editor's map; null while it loads. */
   map?: MapActionContext["map"];
+  /** The editor's autosave, which holds the maps. */
+  persistence: MapActionContext["persistence"];
   notify: MapActionContext["notify"];
   onClose: () => void;
   /** The clock the relative times are read against. */
@@ -50,6 +51,7 @@ type Prompt =
 export function MyMapsDialog({
   excalidrawAPI,
   map = null,
+  persistence,
   notify,
   onClose,
   now = Date.now,
@@ -61,18 +63,18 @@ export function MyMapsDialog({
   const openId = useDocumentStore((s) => s.doc.id);
 
   const refresh = useCallback(async () => {
-    const persistence = usePersistenceStore.getState();
-    const store = persistence.persistenceStore;
+    const state = persistence.getState();
+    const store = state.persistenceStore;
     if (!store) {
       setMaps([]);
       return;
     }
     // The open map's latest changes belong in the list.
     if (store.isDirty()) {
-      await persistence.forceSave().catch(() => undefined);
+      await state.forceSave().catch(() => undefined);
     }
     setMaps(await store.list());
-  }, []);
+  }, [persistence]);
 
   useEffect(() => {
     void refresh();
@@ -94,6 +96,7 @@ export function MyMapsDialog({
   const ctx: MapActionContext = {
     api: excalidrawAPI,
     map,
+    persistence,
     notify,
     confirmLoss: () =>
       new Promise<boolean>((resolve) =>

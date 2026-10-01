@@ -15,7 +15,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
-import { usePersistenceStore } from "../state/usePersistenceStore";
+import { testSession } from "../session/__tests__/sessionFixture";
 
 import * as persistenceModule from "../state/persistence";
 import * as documentIO from "../state/documentIO";
@@ -88,16 +88,12 @@ function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
 
 const fakeExcalidrawAPI = {} as ExcalidrawImperativeAPI;
 
+/** The editor's session; a new one for every case. */
+let session = testSession();
+
 beforeEach(() => {
   vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue(BASE_CONFIG);
-  usePersistenceStore.setState({
-    persistenceStore: null,
-    isDirty: false,
-    isDraining: false,
-    lastSavedAt: null,
-    remoteSaveFailed: false,
-    autosaveDispose: null,
-  });
+  session = testSession();
 });
 
 afterEach(() => {
@@ -128,7 +124,7 @@ describe("usePersistenceWiring — closing the tab", () => {
     );
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     hide();
@@ -143,7 +139,7 @@ describe("usePersistenceWiring — closing the tab", () => {
     );
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     window.dispatchEvent(new Event("pagehide"));
@@ -161,7 +157,7 @@ describe("usePersistenceWiring — closing the tab", () => {
       .spyOn(persistenceModule, "startAutoSave")
       .mockReturnValue(vi.fn());
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     hide();
@@ -178,7 +174,7 @@ describe("usePersistenceWiring — closing the tab", () => {
     );
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     hide();
@@ -190,11 +186,11 @@ describe("usePersistenceWiring — closing the tab", () => {
 describe("usePersistenceWiring", () => {
   it("does nothing when excalidrawAPI is null", () => {
     const createSpy = vi.spyOn(persistenceModule, "createPersistenceStore");
-    renderHook(() => usePersistenceWiring(null, { error: vi.fn() }));
+    renderHook(() => usePersistenceWiring(session, null, { error: vi.fn() }));
     expect(createSpy).not.toHaveBeenCalled();
   });
 
-  it("registers the created store into usePersistenceStore", () => {
+  it("registers the created store into the session", () => {
     const store = makeFakeStore();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
       store,
@@ -202,10 +198,10 @@ describe("usePersistenceWiring", () => {
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
-    expect(usePersistenceStore.getState().persistenceStore).toBe(store);
+    expect(session.persistence.getState().persistenceStore).toBe(store);
   });
 
   it("opens the loaded document when load() resolves one", async () => {
@@ -219,7 +215,7 @@ describe("usePersistenceWiring", () => {
       .mockResolvedValue(undefined as never);
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     await waitFor(() => {
@@ -256,7 +252,9 @@ describe("usePersistenceWiring", () => {
       const notify = { error: vi.fn(), success: vi.fn() };
 
       renderHook(() =>
-        usePersistenceWiring(fakeExcalidrawAPI, notify, { hash: "v2:AAAA" }),
+        usePersistenceWiring(session, fakeExcalidrawAPI, notify, {
+          hash: "v2:AAAA",
+        }),
       );
 
       await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
@@ -265,7 +263,7 @@ describe("usePersistenceWiring", () => {
       const opened = open.mock.calls[0][0];
       expect(opened.manifest.title).toBe("Wells");
       expect(opened.manifest.id).not.toBe("shared-1");
-      expect(usePersistenceStore.getState().isDirty).toBe(true);
+      expect(session.persistence.getState().isDirty).toBe(true);
       expect(window.location.hash).toBe("");
       expect(notify.success).toHaveBeenCalledWith('Opened a copy of "Wells"');
     });
@@ -285,7 +283,7 @@ describe("usePersistenceWiring", () => {
       const notify = { error: vi.fn(), success: vi.fn() };
 
       renderHook(() =>
-        usePersistenceWiring(fakeExcalidrawAPI, notify, {
+        usePersistenceWiring(session, fakeExcalidrawAPI, notify, {
           token: "abcdefghij1234567890K",
         }),
       );
@@ -303,7 +301,7 @@ describe("usePersistenceWiring", () => {
     });
   });
 
-  it("mirrors the store's onDirty into usePersistenceStore (isDirty + isDraining)", () => {
+  it("mirrors the store's onDirty into the session (isDirty + isDraining)", () => {
     const store = makeFakeStore();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
       store,
@@ -311,13 +309,13 @@ describe("usePersistenceWiring", () => {
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(session.persistence.getState().isDirty).toBe(false);
     store.markDirty();
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
-    expect(usePersistenceStore.getState().isDraining).toBe(true);
+    expect(session.persistence.getState().isDirty).toBe(true);
+    expect(session.persistence.getState().isDraining).toBe(true);
   });
 
   it("calls documentNotify.error when auto-save reports a failure", () => {
@@ -335,7 +333,7 @@ describe("usePersistenceWiring", () => {
     const notifyError = vi.fn();
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: notifyError }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: notifyError }),
     );
 
     onSaveError?.(new Error("boom"));
@@ -357,7 +355,7 @@ describe("usePersistenceWiring", () => {
     const notifyError = vi.fn();
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: notifyError }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: notifyError }),
     );
 
     await waitFor(() => {
@@ -380,7 +378,7 @@ describe("usePersistenceWiring", () => {
     const notifyError = vi.fn();
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: notifyError }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: notifyError }),
     );
 
     const opts = (
@@ -394,10 +392,10 @@ describe("usePersistenceWiring", () => {
     expect(notifyError).toHaveBeenCalledWith(
       "Couldn't sync to the server — your changes are saved locally but not backed up",
     );
-    expect(usePersistenceStore.getState().remoteSaveFailed).toBe(true);
+    expect(session.persistence.getState().remoteSaveFailed).toBe(true);
   });
 
-  it("disposes the store and clears usePersistenceStore on unmount", () => {
+  it("disposes the store and clears it from the session on unmount", () => {
     const store = makeFakeStore();
     const dispose = vi.fn();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
@@ -406,16 +404,15 @@ describe("usePersistenceWiring", () => {
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(dispose);
 
     const { unmount } = renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
-    expect(usePersistenceStore.getState().persistenceStore).toBe(store);
+    expect(session.persistence.getState().persistenceStore).toBe(store);
 
     unmount();
 
     expect(dispose).toHaveBeenCalled();
     expect(store.close).toHaveBeenCalled();
-    expect(usePersistenceStore.getState().persistenceStore).toBeNull();
-    expect(usePersistenceStore.getState().autosaveDispose).toBeNull();
+    expect(session.persistence.getState().persistenceStore).toBeNull();
   });
 
   it("builds a remote-save callback only when enableBackendPersistence is true", () => {
@@ -431,7 +428,7 @@ describe("usePersistenceWiring", () => {
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
 
     renderHook(() =>
-      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
     );
 
     expect(createSpy).toHaveBeenCalledWith(

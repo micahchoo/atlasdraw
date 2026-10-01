@@ -2,8 +2,8 @@
 //
 // Persistence wiring. When Excalidraw is ready: create the PersistenceStore,
 // load the last autosaved document and open it (documentIO.loadDocument),
-// start autosave, and mirror the dirty and drain state into
-// usePersistenceStore for the "Unsaved" indicator and the share flush.
+// start autosave, and mirror the dirty and drain state into the session's
+// persistence state for the "Unsaved" indicator and the share flush.
 //
 // What marks the document dirty: a change of the open Document's revision
 // (its layers, payloads, title, basemap), and, from
@@ -16,7 +16,6 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import { currentDocument, followDocument } from "../state/document";
 import {
   liveCamera,
@@ -35,7 +34,7 @@ import {
 import { copyOfSharedMap } from "../state/myMaps";
 import { buildRoute, type SharedMap } from "../routes";
 
-import type { ViewStore } from "../session/view";
+import type { EditorSession } from "../session/EditorSession";
 
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
@@ -56,21 +55,24 @@ function shareFailure(result: Exclude<ShareLoadResult, { kind: "ready" }>) {
   }
 }
 
+/** What the wiring needs of the editor's session. */
+export type PersistenceSession = Pick<EditorSession, "view" | "persistence">;
+
 /**
  * Wires the persistence lifecycle to `excalidrawAPI`: constructs the
  * PersistenceStore (with optional backend remote-save), loads and opens the
- * last autosaved document, starts auto-save, and mirrors dirty/drain
- * state into the Zustand usePersistenceStore for the MainMenu indicator and
- * useShareLink's pre-share flush.
+ * last autosaved document, starts auto-save, and mirrors dirty/drain state
+ * into the session's persistence state. A save reads the camera from the
+ * session's map; a load moves it.
  */
 export function usePersistenceWiring(
+  session: PersistenceSession,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   documentNotify: PersistenceWiringNotify,
   /** A shared map to open as a copy in place of the autosave. */
   open: SharedMap | null = null,
-  /** The editor's view: a save reads the map's camera, a load moves it. */
-  view: ViewStore | null = null,
 ): void {
+  const { view, persistence } = session;
   // Read once: the link is consumed by the first open.
   const openRef = useRef(open);
 
@@ -79,12 +81,10 @@ export function usePersistenceWiring(
       return;
     }
 
-    // T13 — backend persistence wire-up. Only constructed when the build
-    // target opts in (hosted edition); local-only/pages tiers run the IDB
-    // path unchanged. The factory holds an in-memory `mapId` ref so the
-    // first save mints a new id (POST /maps) and subsequent saves hit
-    // PUT /maps/:id. The id is persisted to localStorage under a known
-    // key so reloads continue updating the same map.
+    // A build that saves to a server pushes each save there too. The first
+    // push of a map creates it (POST /maps); later pushes update it
+    // (PUT /maps/:id). The id and write key are kept in IndexedDB
+    // (state/remoteMapIdCache.ts), so a reload goes on updating the same map.
     const cfg = getAppConfig();
     const remoteSave = cfg.enableBackendPersistence
       ? buildRemoteSaveCallback(
@@ -97,8 +97,8 @@ export function usePersistenceWiring(
         // Edge-triggered: notify once on the ok->failed transition, not on
         // every subsequent autosave tick while the server stays down (that
         // would spam a toast every debounce cycle).
-        const wasFailed = usePersistenceStore.getState().remoteSaveFailed;
-        usePersistenceStore.getState().setRemoteSaveFailed(true);
+        const wasFailed = persistence.getState().remoteSaveFailed;
+        persistence.getState().setRemoteSaveFailed(true);
         if (!wasFailed) {
           documentNotify.error(
             "Couldn't sync to the server — your changes are saved locally but not backed up",
@@ -106,33 +106,29 @@ export function usePersistenceWiring(
         }
       },
     });
-    usePersistenceStore.getState().setPersistenceStore(store);
+    persistence.getState().setPersistenceStore(store);
 
-    // T13: register an imperative `forceSave` that bypasses the debounce
-    // (option (b) from the T13 brief — hold the store + getDoc pair here,
-    // call store.save(getDoc())). useShareLink consumes this via
-    // usePersistenceStore to guarantee a fresh snapshot before
-    // share-link minting.
-    // A room's document is the relay's to keep (ADR-0018): the autosave
+    // `forceSave` saves now, past the autosave delay: My maps and a room
+    // call it before the open map leaves the editor. A room's document is the relay's to keep (ADR-0018): the autosave
     // writes only the user's own maps.
     const getDoc = () => {
       const doc = currentDocument();
       return isRoomDocument(doc)
         ? null
-        : toFile(doc, undefined, liveCamera(view?.getState().map ?? null));
+        : toFile(doc, undefined, liveCamera(view.getState().map));
     };
-    usePersistenceStore.getState().setForceSave(async () => {
+    persistence.getState().setForceSave(async () => {
       try {
         const doc = getDoc();
         if (doc) {
           await store.save(doc);
         }
-        usePersistenceStore.getState().setLastSavedAt(Date.now());
-        usePersistenceStore.getState().setDraining(false);
+        persistence.getState().setLastSavedAt(Date.now());
+        persistence.getState().setDraining(false);
       } catch (err) {
         // Surface the failure but always clear isDraining — leaving it
         // stuck would silently freeze the Share button forever.
-        usePersistenceStore.getState().setDraining(false);
+        persistence.getState().setDraining(false);
         throw err;
       }
     });
@@ -140,7 +136,7 @@ export function usePersistenceWiring(
     let cancelled = false;
     const abort = new AbortController();
     let unsubCamera: () => void = () => {};
-    usePersistenceStore.getState().setOwnMapLoaded(false);
+    persistence.getState().setOwnMapLoaded(false);
     // A copy of a shared map, or null when there is none or it did not load.
     const sharedCopy = async (): Promise<AtlasdrawDocument | null> => {
       const link = openRef.current;
@@ -169,7 +165,7 @@ export function usePersistenceWiring(
         if (loaded && !isRoomDocument(currentDocument())) {
           const opened = await loadDocument(loaded, excalidrawAPI, {
             signal: abort.signal,
-            map: view?.getState().map ?? null,
+            map: view.getState().map,
           });
           if (!opened) {
             return;
@@ -177,7 +173,7 @@ export function usePersistenceWiring(
           if (copy) {
             // The copy is a new map: save it, and drop the link so a reload
             // opens the copy, not another one.
-            usePersistenceStore.getState().markDirty();
+            persistence.getState().markDirty();
             window.history.replaceState(
               window.history.state,
               "",
@@ -190,7 +186,7 @@ export function usePersistenceWiring(
           // loadDocument moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,
           // for as long as this editor is mounted.
-          if (view && !view.getState().map) {
+          if (!view.getState().map) {
             unsubCamera = view.subscribe((state) => {
               if (restoreCamera(state.map, loaded.manifest.camera)) {
                 unsubCamera();
@@ -211,16 +207,15 @@ export function usePersistenceWiring(
           "Couldn't load your saved map — starting from a blank canvas",
         );
       } finally {
-        usePersistenceStore.getState().setOwnMapLoaded(true);
+        persistence.getState().setOwnMapLoaded(true);
       }
     })();
 
     const unsubDirty = store.onDirty(() => {
       // The underlying store's onDirty fires on its own markDirty(); mirror
-      // into Zustand for the MainMenu indicator. Wrapped in setState rather
-      // than markDirty() to avoid re-forwarding back into the store.
-      // T13: also flip isDraining so consumers know a save will fire.
-      usePersistenceStore.setState({ isDirty: true, isDraining: true });
+      // it for the indicator. setState, not markDirty(), which would forward
+      // back into the store. isDraining: a save will fire.
+      persistence.setState({ isDirty: true, isDraining: true });
     });
 
     // A command on the open document is an edit. Opening another document
@@ -229,7 +224,7 @@ export function usePersistenceWiring(
     let followedRevision = followed.revision;
     const unsubDocument = followDocument((doc) => {
       if (doc === followed && doc.revision !== followedRevision) {
-        usePersistenceStore.getState().markDirty();
+        persistence.getState().markDirty();
       }
       followed = doc;
       followedRevision = doc.revision;
@@ -241,11 +236,11 @@ export function usePersistenceWiring(
       undefined,
       undefined,
       () => {
-        usePersistenceStore.getState().clearDirty();
-        usePersistenceStore.getState().setDraining(false);
-        usePersistenceStore.getState().setLastSavedAt(Date.now());
+        persistence.getState().clearDirty();
+        persistence.getState().setDraining(false);
+        persistence.getState().setLastSavedAt(Date.now());
         if (!store.remoteSaveFailed()) {
-          usePersistenceStore.getState().setRemoteSaveFailed(false);
+          persistence.getState().setRemoteSaveFailed(false);
         }
       },
       () => {
@@ -256,7 +251,6 @@ export function usePersistenceWiring(
         );
       },
     );
-    usePersistenceStore.getState().setAutosaveDispose(dispose);
 
     // Closing or leaving the tab: write unsaved changes now, not after the
     // autosave delay. 'visibilitychange' to hidden comes first and leaves the
@@ -286,11 +280,10 @@ export function usePersistenceWiring(
       unsubDirty();
       unsubDocument();
       unsubCamera();
-      usePersistenceStore.getState().setOwnMapLoaded(true);
+      persistence.getState().setOwnMapLoaded(true);
       dispose();
-      usePersistenceStore.getState().setAutosaveDispose(null);
-      usePersistenceStore.getState().setPersistenceStore(null);
+      persistence.getState().setPersistenceStore(null);
       void store.close();
     };
-  }, [excalidrawAPI, documentNotify, view]);
+  }, [excalidrawAPI, documentNotify, view, persistence]);
 }

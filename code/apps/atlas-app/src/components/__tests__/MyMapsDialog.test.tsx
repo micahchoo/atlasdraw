@@ -29,7 +29,10 @@ import {
 } from "../../state/persistence";
 import { sceneOf } from "../../state/scene";
 import { buildRemoteSaveCallback } from "../../state/remoteMapIdCache";
-import { usePersistenceStore } from "../../state/usePersistenceStore";
+import {
+  createPersistenceState,
+  type PersistenceStateStore,
+} from "../../state/persistenceState";
 import {
   makeFakeExcalidraw,
   type FakeExcalidraw,
@@ -69,11 +72,14 @@ const savedFile = (
 let n = 0;
 let store: PersistenceStore;
 let fx: FakeExcalidraw;
+/** The editor's autosave state; a new one for every case. */
+let persistence: PersistenceStateStore;
 
 beforeEach(() => {
   store = createPersistenceStore({ dbName: `my-maps-ui-${++n}` });
-  usePersistenceStore.getState().setPersistenceStore(store);
-  usePersistenceStore
+  persistence = createPersistenceState();
+  persistence.getState().setPersistenceStore(store);
+  persistence
     .getState()
     .setForceSave(() => store.save(toFile(currentDocument())));
   fx = makeFakeExcalidraw();
@@ -82,7 +88,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
-  usePersistenceStore.getState().setPersistenceStore(null);
+  persistence.getState().setPersistenceStore(null);
   await store.close();
 });
 
@@ -92,6 +98,7 @@ function renderDialog(server: StorageClient | null = null) {
   render(
     <MyMapsDialog
       excalidrawAPI={fx.api}
+      persistence={persistence}
       notify={notify}
       onClose={onClose}
       now={() => NOW}
@@ -295,7 +302,7 @@ describe("MyMapsDialog", () => {
   it("lists the open map's latest changes", async () => {
     fx.setElements([{ id: "drawn", type: "ellipse" }]);
     openDocument(createDocument({ title: "Fresh work" }, sceneOf(fx.api)));
-    usePersistenceStore.getState().markDirty();
+    persistence.getState().markDirty();
     renderDialog();
 
     expect(await screen.findByText("Fresh work")).toBeTruthy();

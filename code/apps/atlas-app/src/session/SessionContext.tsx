@@ -6,6 +6,7 @@ import React, { createContext, useContext } from "react";
 import { useStore } from "zustand";
 
 import type { EditorSession } from "./EditorSession";
+import type { PersistenceState } from "../state/persistenceState";
 import type { ViewState } from "./view";
 
 const SessionContext = createContext<EditorSession | null>(null);
@@ -39,4 +40,9 @@ export function useSession(): EditorSession {
  */
 export function useView<T>(selector: (state: ViewState) => T): T {
   return useStore(useSession().view, selector);
+}
+
+/** Read the session's autosave state. */
+export function usePersistence<T>(selector: (state: PersistenceState) => T): T {
+  return useStore(useSession().persistence, selector);
 }

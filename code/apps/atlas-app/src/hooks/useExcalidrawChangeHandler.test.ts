@@ -2,7 +2,7 @@
 // Tests for useExcalidrawChangeHandler. One describe block per numbered
 // concern in the handler's comments.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
@@ -10,7 +10,7 @@ import type { OrderedExcalidrawElement } from "@atlasdraw/element/types";
 import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
 import { createViewStore } from "../session/view";
-import { usePersistenceStore } from "../state/usePersistenceStore";
+import { createPersistenceState } from "../state/persistenceState";
 
 import { useExcalidrawChangeHandler } from "./useExcalidrawChangeHandler";
 
@@ -45,13 +45,10 @@ function makeParams(
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
     view: createViewStore(),
+    persistence: createPersistenceState(),
     ...overrides,
   };
 }
-
-beforeEach(() => {
-  usePersistenceStore.setState({ isDirty: false, isDraining: false });
-});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -115,7 +112,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
 
     result.current(fakeElements([{ id: "el1" }]), makeAppState(), NO_FILES);
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(params.persistence.getState().isDirty).toBe(false);
   });
 
   it("marks dirty when an element is added", () => {
@@ -129,7 +126,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("marks dirty when an element's version rises (an edit)", () => {
@@ -147,7 +144,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("marks dirty when an element is deleted", () => {
@@ -165,7 +162,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("does not mark dirty for a camera move (a viewport change, same elements)", () => {
@@ -182,7 +179,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(params.persistence.getState().isDirty).toBe(false);
   });
 });
 

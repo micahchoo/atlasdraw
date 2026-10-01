@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as appConfigModule from "../config/app-config";
 import { createDocument, openDocument } from "../state/document";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
-import { createViewStore } from "../session/view";
+import { testSession } from "../session/__tests__/sessionFixture";
 
 import { useServerBackup } from "./useServerBackup";
 
@@ -61,9 +61,10 @@ describe("useServerBackup", () => {
     await pushServerMap(A);
     openDocument(createDocument({ id: A }));
 
-    const view = createViewStore();
+    const session = testSession();
+    const { view } = session;
     view.setState({ backupAvailable: true });
-    renderHook(() => useServerBackup(view));
+    renderHook(() => useServerBackup(session));
     await act(async () => {});
 
     expect(view.getState().backupAvailable).toBe(false);
@@ -74,8 +75,9 @@ describe("useServerBackup", () => {
     await pushServerMap(A);
     openDocument(createDocument({ id: A }));
 
-    const view = createViewStore();
-    renderHook(() => useServerBackup(view));
+    const session = testSession();
+    const { view } = session;
+    renderHook(() => useServerBackup(session));
     await waitFor(() => expect(view.getState().backupAvailable).toBe(true));
 
     act(() => openDocument(createDocument({ id: B })));

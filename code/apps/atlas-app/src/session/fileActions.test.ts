@@ -3,7 +3,7 @@
 // Save and Open: the .atlasdraw file is the one way in and out of the
 // editor. Real document IO; the file picker is the one thing faked.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { read, write, type AtlasdrawDocument } from "@atlasdraw/data";
 
@@ -15,7 +15,6 @@ import {
 } from "../state/document";
 import { decode, hasUnsavedWork, markSavedToFile } from "../state/documentIO";
 import { editorScene } from "../state/scene";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import {
   FakeCameraMap,
   makeFakeExcalidraw,
@@ -29,7 +28,7 @@ import type { PersistenceStore } from "../state/persistence";
 import type maplibregl from "maplibre-gl";
 
 /** The picker: what Save wrote, and what Open will hand back. */
-function fakeDisk() {
+function fakeDisk(session: EditorSession) {
   const disk = {
     written: [] as AtlasdrawDocument[],
     next: null as AtlasdrawDocument | null,
@@ -53,7 +52,7 @@ function fakeDisk() {
     markDirty: () => {},
     isDirty: () => false,
   } as unknown as PersistenceStore;
-  usePersistenceStore.setState({ persistenceStore: store, isDirty: true });
+  session.persistence.setState({ persistenceStore: store, isDirty: true });
   return disk;
 }
 
@@ -86,14 +85,10 @@ beforeEach(() => {
   openDocument(createDocument({ title: "Field notes" }));
 });
 
-afterEach(() => {
-  usePersistenceStore.setState({ persistenceStore: null, isDirty: false });
-});
-
 describe("saveMap", () => {
   it("writes the open map, at the camera the user sees, and marks it saved", async () => {
-    const disk = fakeDisk();
     const { session } = editorSession();
+    const disk = fakeDisk(session);
     const n = notify();
 
     await saveMap(session, n);
@@ -103,14 +98,14 @@ describe("saveMap", () => {
     expect(file.manifest.title).toBe("Field notes");
     expect(file.manifest.camera.center).toEqual([2.35, 48.85]);
     expect(file.manifest.camera.zoom).toBe(9);
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(session.persistence.getState().isDirty).toBe(false);
     expect(n.success).toHaveBeenCalledWith("Map saved as .atlasdraw");
   });
 
   it("a dismissed picker is a choice, not a failure: no message", async () => {
-    const disk = fakeDisk();
-    disk.fail = new DOMException("dismissed", "AbortError");
     const { session } = editorSession();
+    const disk = fakeDisk(session);
+    disk.fail = new DOMException("dismissed", "AbortError");
     const n = notify();
 
     await saveMap(session, n);
@@ -120,9 +115,9 @@ describe("saveMap", () => {
   });
 
   it("a failed write says so", async () => {
-    const disk = fakeDisk();
-    disk.fail = new Error("disk full");
     const { session } = editorSession();
+    const disk = fakeDisk(session);
+    disk.fail = new Error("disk full");
     const n = notify();
 
     await saveMap(session, n);
@@ -131,8 +126,8 @@ describe("saveMap", () => {
   });
 
   it("does nothing before the drawing mounts", async () => {
-    const disk = fakeDisk();
     const { session } = editorSession();
+    const disk = fakeDisk(session);
     session.view.getState().setApi(null);
 
     await saveMap(session, notify());
@@ -143,9 +138,9 @@ describe("saveMap", () => {
 
 describe("openMap", () => {
   it("opens the file in place of the open map and moves the map to its camera", async () => {
-    const disk = fakeDisk();
-    disk.next = await fileOnDisk();
     const { session, map } = editorSession();
+    const disk = fakeDisk(session);
+    disk.next = await fileOnDisk();
     const n = notify();
 
     await openMap(session, n, async () => true);
@@ -160,9 +155,9 @@ describe("openMap", () => {
   });
 
   it("asks before it replaces unsaved work, and opens nothing on No", async () => {
-    const disk = fakeDisk();
-    disk.next = await fileOnDisk();
     const { session } = editorSession();
+    const disk = fakeDisk(session);
+    disk.next = await fileOnDisk();
     const before = currentDocument();
     before.dispatch({ type: "rename-document", title: "Changed" });
     const confirm = vi.fn(async () => false);
@@ -182,9 +177,9 @@ describe("openMap", () => {
   });
 
   it("does not ask when the open map is in a file", async () => {
-    const disk = fakeDisk();
-    disk.next = await fileOnDisk();
     const { session } = editorSession();
+    const disk = fakeDisk(session);
+    disk.next = await fileOnDisk();
     markSavedToFile(currentDocument());
     const confirm = vi.fn(async () => false);
 
@@ -195,9 +190,9 @@ describe("openMap", () => {
   });
 
   it("a file that does not read says so", async () => {
-    const disk = fakeDisk();
-    disk.fail = new Error("not a zip");
     const { session } = editorSession();
+    const disk = fakeDisk(session);
+    disk.fail = new Error("not a zip");
     const n = notify();
 
     await openMap(session, n, async () => true);
@@ -208,8 +203,8 @@ describe("openMap", () => {
 
 describe("a saved map opens again as it was", () => {
   it("round trip through the file", async () => {
-    const disk = fakeDisk();
     const { session } = editorSession();
+    const disk = fakeDisk(session);
     currentDocument().dispatch({ type: "set-basemap", id: "protomaps-dark" });
     await saveMap(session, notify());
     disk.next = await read(await write(disk.written[0]));
