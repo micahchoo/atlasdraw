@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // @atlasdraw/storage — per-IP fixed-window rate limiter.
 //
-// The storage API is the internet-facing service (behind Caddy). Before this,
-// the only abuse control was the 50 MiB body cap — nothing throttled request
-// counts, so POST /maps, share-token guessing, and blob fill were unbounded.
+// The storage API is the internet-facing service (behind Caddy). The 50 MiB
+// body cap bounds one request, not request counts; without this limiter
+// POST /maps, share-token guessing and blob fill are unbounded
+// (SECURITY.md row 7).
 //
-// Hand-rolled fixed-window counter keyed by client IP, mirroring the relay's
-// rate-limit.ts (no external dependency). Fastify is constructed with
-// `trustProxy` so `request.ip` reflects X-Forwarded-For from Caddy rather than
-// the proxy's own address. /health is exempt so liveness probes never 429.
+// Hand-rolled fixed-window counter keyed by client IP (no external
+// dependency). Fastify's `trustProxy` follows TRUST_PROXY (config.ts), so
+// behind Caddy `request.ip` is the client from X-Forwarded-For, not the
+// proxy's own address. /health is exempt so liveness probes never 429.
 //
 // This is a coarse abuse blunt, not a fairness scheduler: one window, one cap,
 // per IP. Multi-instance deployments that need shared limits should front the

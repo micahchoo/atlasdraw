@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 3 Wave 2 Task 8 — atlas-app local-first persistence.
+// Atlas-app local-first persistence.
 //
 // Two surfaces:
 //   - IndexedDB autosave (universal across all browsers — primary path)
@@ -7,9 +7,8 @@
 //     enhancement; Firefox/Safari fall through to a download anchor / file
 //     input which is the *intended* path for those browsers, not a fallback)
 //
-// The contract + behavioural invariants come from Task 8 of
-// docs/superpowers/plans/2026-05-03-atlasdraw-phase-3-file-format.md and
-// the Phase 3 Open Question Q3 (5s trailing-edge debounce + 30s ceiling).
+// Autosave timing: a 5 s trailing-edge debounce with a 30 s ceiling (see
+// `startAutoSave`).
 
 import { openDB, type IDBPDatabase } from "idb";
 import {
@@ -319,10 +318,10 @@ export function createPersistenceStore(
       if (dirtySeq === seqAtStart) {
         dirty = false;
       }
-      // T13: best-effort push to the remote storage API. Sequenced AFTER the
-      // IDB write so the local source of truth lands first; failures are
-      // observable in logs only and do not block the dirty-bit clearing
-      // above. The Blob is the same one we wrote locally — no re-serialize.
+      // Best-effort push to the remote storage API. Sequenced AFTER the IDB
+      // write so the local source of truth lands first; a failure is logged,
+      // sets `remoteSaveFailed` and calls `onRemoteSaveFailed`, and does not
+      // block the dirty-bit clearing above. The Blob is the same one we wrote locally — no re-serialize.
       if (options.remoteSave) {
         try {
           await options.remoteSave(blob, doc.manifest.id);
@@ -660,7 +659,7 @@ export function createPersistenceStore(
 /**
  * Drive `store.save()` from `markDirty()` events.
  *
- * Behaviour (Q3 resolution):
+ * Behaviour:
  *   - Trailing-edge debounce: every `markDirty` resets a timer; flush fires
  *     `intervalMs` after the *last* edit.
  *   - Ceiling: a second timer is started on the *first* `markDirty` since the

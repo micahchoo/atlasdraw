@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Phase 6 Wave 1b — A6 tests. Cover the data-driven expression branch added to
-// compileLayer, plus the determinism + fallback guarantees the compiler owes
-// callers (StylePanel writes a LayerStyle; map render reads compileLayer output).
+// Cover the data-driven expression branch of compileLayer, plus the determinism
+// + fallback guarantees the compiler owes callers (StylePanel writes a
+// LayerStyle; map render reads compileLayer output).
 
 import { describe, expect, it } from "vitest";
 

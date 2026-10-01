@@ -12,7 +12,8 @@
 //
 // The write key goes in `Authorization: Bearer <key>`. Only the server map's
 // owner holds it (state/remoteMapIdCache.ts keeps it per document); a share
-// token never opens a write. See ADR-0017.
+// token never opens a write. See
+// docs/architecture/adr/0017-maps-carry-a-write-key.md.
 //
 // Types mirror `code/apps/storage/src/service/maps.ts#PublicMap` by hand: the
 // storage workspace is Node-only (better-sqlite3, pg) and has no `types`

@@ -2,12 +2,11 @@
 //
 // safeFileName — turn a document title into a download filename stem.
 //
-// The document name is free text (the user types it in the collar head bar)
-// and reaches two download paths that used to hardcode their filenames: the
-// `.atlasdraw` save picker (state/persistence.ts) and the PDF export
-// (components/ExportDialog.tsx). Both need the same conservative reduction,
-// so it lives here rather than being written twice.
-//
+// The document name is free text (the user types it in the collar head bar) and
+// reaches two download paths: the `.atlasdraw` save picker
+// (state/persistence.ts) and the PDF export (components/ExportDialog.tsx). Both
+// need the same conservative reduction, so it lives here rather than being
+// written twice.
 // Conservative on purpose: `\w`, dash and space survive; everything else
 // collapses to a single underscore. That covers path separators, the Windows
 // reserved set (`<>:"|?*`), leading dots, and control characters in one rule

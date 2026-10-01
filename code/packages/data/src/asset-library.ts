@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 // SPDX-License-Identifier: MIT
-// Phase 6 A11 — `.excalidrawlib` reader + built-in library index.
+// `.excalidrawlib` reader + built-in library index.
 //
 // Upstream schema reference:
 //   code/packages/excalidraw/types.ts:532-541 — `LibraryItem` (v2)
@@ -15,10 +15,9 @@
 // any `.excalidrawlib` exported by Excalidraw itself, and a future fork-bump
 // surfaces field changes as type errors.
 //
-// Phase 6 amended scope §A11 (cites Q-P6-1): the original §Task 14b spec
-// referenced `AtlasdrawAPI.addAnnotation()` which is cut in v1.0. The atlas-app
-// panel inserts items directly via `excalidrawAPI.updateLibrary` (Path A —
-// extend Excalidraw's own library). This reader is unaware of insertion path.
+// The atlas-app panel inserts items with `excalidrawAPI.updateLibrary`
+// (Excalidraw's own library). This reader does not know how items are
+// inserted.
 
 import type { LibraryItem } from "@atlasdraw/excalidraw/types";
 
@@ -106,8 +105,8 @@ export function parseLibraryFile(
  *
  * Sourced from `code/packages/data/fixtures/libraries/*.excalidrawlib`.
  * Each fixture has a sibling `LICENSE.txt` declaring SPDX (MIT / ISC /
- * CC0-1.0 / Unlicense only — enforced by `scripts/check-license-libraries.sh`
- * per OQ7).
+ * CC0-1.0 / Unlicense only — enforced by the repository's
+ * `scripts/check-license-libraries.sh`).
  *
  * Loading strategy:
  *  - Vite build (atlas-app): `import.meta.glob(..., { eager: true, query: '?raw', import: 'default' })`

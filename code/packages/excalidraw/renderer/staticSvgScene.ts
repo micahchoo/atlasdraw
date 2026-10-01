@@ -669,8 +669,9 @@ const renderElementToSvg = (
             : element.textAlign === "right" || direction === "rtl"
             ? "end"
             : "start";
-        // Atlasdraw (ADR-0015): browsers clamp an SVG font-size to 10000px.
-        // A larger font is written at MAX_CANVAS_FONT_SIZE in a scaled <text>.
+        // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
+        // browsers clamp an SVG font-size to 10000px. A larger font is written
+        // at MAX_CANVAS_FONT_SIZE in a scaled <text>.
         const fontScale =
           element.fontSize > MAX_CANVAS_FONT_SIZE
             ? element.fontSize / MAX_CANVAS_FONT_SIZE

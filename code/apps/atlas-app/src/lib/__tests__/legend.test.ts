@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// FU-13 — the export legend must describe the exported page, not the document.
+// The export legend must describe the exported page, not the document.
 
 import { describe, it, expect, vi } from "vitest";
 

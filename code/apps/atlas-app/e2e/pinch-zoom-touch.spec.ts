@@ -5,8 +5,9 @@
  * pointer input, so a touch pinch reaches Excalidraw's own pinch handler
  * (`App.tsx#handleCanvasPointerMove`), which hands the new viewport to the
  * camera bridge. Excalidraw clamps its zoom to [0.1, 30]; the scene's zoom
- * value is 2^(z - 22) (ADR-0015), so before W4b the first frame of a pinch at
- * map zoom 4 sent the map to zoom 18.68.
+ * value is 2^(z - 22) (docs/architecture/adr/0015-world-coordinates-gate.md),
+ * so with that clamp the first frame of a pinch at map zoom 4 sends the map to
+ * zoom 18.68. With `onZoomAction` set the fork leaves the zoom unclamped.
  *
  * Multi-touch needs CDP `Input.dispatchTouchEvent`, so chromium only.
  */
@@ -72,7 +73,7 @@ test.describe("touch pinch under a drawing tool", () => {
       type,
     );
     await page.waitForTimeout(300);
-    // The plate takes the input: this is the state the bug lived in.
+    // The plate takes the input: this is the state the hazard lives in.
     await expect(page.locator('[class*="excalidrawLayer"]').first()).toHaveCSS(
       "pointer-events",
       "auto",

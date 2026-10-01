@@ -1,35 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — pending-anchor picker store.
+// Pending-anchor picker store.
 //
-// The CommentsPanel (now the Threads section of the Layers tab, not a tab of
-// its own) and the MapEditor canvas overlay (MapLibre click handler +
-// Excalidraw selection observer) need to share a single `pendingAnchor` slot:
+// The CommentsPanel (the Threads section of the Layers tab) and the canvas
+// overlay (CommentAnchorsOverlay, which hit-tests a click on the plate) share
+// a single `pendingAnchor` slot:
 //
-//   - Panel: "user wants to anchor on the map"        → setMode("map")
-//   - Map click → translate to {lng,lat}              → setAnchor({kind:"map",...})
-//   - Excalidraw element selected → take elementId    → setAnchor({kind:"element",...})
-//   - Panel submits comment                           → setAnchor(null)
+//   - Panel: "user wants to anchor on the map"   → setAnchorMode("map")
+//   - Click on an element / a raster / the map   → setPendingAnchor(annotation | map)
+//   - Panel submits comment                      → setPendingAnchor(null)
 //
 // Implemented as a tiny vanilla store with subscribe + getSnapshot so React
-// can consume it via useSyncExternalStore without forcing a context provider
-// to wrap MapEditor (the existing component tree doesn't have one). Single
+// can consume it via useSyncExternalStore with no context provider. Single
 // instance per app — module-level state matches the lifetime of MapEditor.
 
 import { useSyncExternalStore } from "react";
 
 import type { CommentAnchor } from "@atlasdraw/protocol";
 
-// "any" (Step 5) is comment MODE's armed state: the user has entered the mode
+// "any" is comment MODE's armed state: the user has entered the mode
 // but has not told us which kind of anchor they want, so the overlay's
 // hit-test accepts every kind (element → raster → map). The panel's explicit
-// Map/Element toggle still narrows to a single kind — that path is unchanged.
+// Map/Element toggle still narrows to a single kind.
 export type AnchorMode = "map" | "element" | "any" | null;
 
 interface PickerState {
   mode: AnchorMode;
   anchor: CommentAnchor | null;
   /**
-   * Step 5 — arm generation. The overlay's click-intercept re-appears when
+   * Arm generation. The overlay's click-intercept re-appears when
    * the pending anchor is nulled, so `setAnchorMode` clearing the anchor is
    * the re-arm; this monotonically-increasing counter is what makes that
    * re-arm observable to any subscription-based consumer (`mode` alone cannot

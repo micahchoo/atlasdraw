@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// RT-3 — tests for MapCompass.
+// Tests for MapCompass.
 //
-// The control closes FU-14: rotation may ship only because there is a way
+// Rotation may ship only because there is a way
 // back to north. So the assertions that matter most are the two that keep the
 // escape hatch reachable — a click resets north, and a drag does not eat the
 // click that would have.

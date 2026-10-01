@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// W9e — the ⋯ menu of a data layer exports it as GeoJSON or CSV. The test
+// The ⋯ menu of a data layer exports it as GeoJSON or CSV. The test
 // catches the Blob the browser would save and reads its bytes. A raster or
 // tile layer has no vector data, so its menu offers no export.
 

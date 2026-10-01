@@ -118,7 +118,7 @@ test.describe("comment mode — the tool is not borrowed", () => {
     await enterCommentMode(page);
 
     await page.keyboard.press("r");
-    // A tool pick is no longer an exit — the mode survives the rectangle.
+    // A tool pick is not an exit — the mode survives the rectangle.
     await expect(page.getByTestId("comment-mode-button")).toHaveAttribute(
       "aria-pressed",
       "true",

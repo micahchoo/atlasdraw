@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Test doubles for the document known-red tests (W1). They stand in for the
+// Test doubles for the document known-red tests. They stand in for the
 // two things a test cannot construct — Excalidraw and MapLibre — and nothing
 // else. Every Atlasdraw module under test runs for real against them.
 //

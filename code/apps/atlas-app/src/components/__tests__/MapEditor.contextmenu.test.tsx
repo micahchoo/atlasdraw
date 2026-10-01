@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// W-C — Convert-to-data-layer right-click context-menu integration test.
+// Convert-to-data-layer right-click context-menu integration test.
 //
-// History: T14 surfaced Convert via a custom <div role="menu">; W-B
-// pivoted it to a MainMenu.Item; W-C moves it to its proper home —
-// the right-click element context menu — via the atlasdraw fork's
-// new `excalidrawAPI.registerContextMenuItem` API
+// Convert lives in the right-click element context menu, through the
+// atlasdraw fork's `excalidrawAPI.registerContextMenuItem` API
 // (packages/excalidraw/components/App.tsx).
 //
 // We can't drive the real Excalidraw context-menu DOM in unit tests
@@ -17,8 +15,8 @@
 //       text selection      → false
 //       multi-selection     → false
 //   - invoke `perform(elements, appState)` with the polygon fixture and
-//     assert the same downstream pipeline (registerDataLayer →
-//     map.addSource/addLayer → updateScene) the W-B test exercised.
+//     assert the downstream pipeline (a data layer added to the document →
+//     map.addSource/addLayer → updateScene).
 //   - assert the unregister fn returned by the API is invoked on unmount.
 
 import React from "react";
@@ -262,8 +260,8 @@ const mockMap = {
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
-  // RT-3 — useCameraRotation reads the live camera on mount, via
-  // useCameraRotation reads it. A map without it is not a map.
+  // useCameraRotation reads the live camera's bearing on mount. A map
+  // without getBearing is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,

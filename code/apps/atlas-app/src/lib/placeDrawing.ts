@@ -3,7 +3,8 @@
 // Put a drawing that has no place on Earth onto the map view.
 //
 // A plain .excalidraw file has scene coordinates in screen pixels at zoom 1.
-// In a document a scene unit is a map pixel at the reference zoom (ADR-0015),
+// In a document a scene unit is a map pixel at the reference zoom
+// (docs/architecture/adr/0015-world-coordinates-gate.md),
 // so the drawing is scaled to one screen pixel per unit at the camera's zoom
 // and centred on the camera: it opens where the user is looking, at the size
 // it had in Excalidraw.

@@ -9,10 +9,11 @@ import { render } from "./test-utils";
 
 import type { UIOptions } from "../types";
 
-// Atlasdraw addition (ADR-0010). A host with its own help surface sets
-// canvasActions.toggleShortcuts to false; then `?` opens nothing here and
-// the key goes on to the host. The atlas app does (MapEditor.tsx
-// EXCALIDRAW_UI_OPTIONS), so `?` opens one help surface, its own.
+// Atlasdraw addition (code/decisions/0010-own-the-fork.md). A host with its own
+// help surface sets canvasActions.toggleShortcuts to false; then `?` opens
+// nothing here and the key goes on to the host. The atlas app does
+// (MapEditor.tsx EXCALIDRAW_UI_OPTIONS), so `?` opens one help surface, its
+// own.
 
 const renderEditor = (uiOptions?: UIOptions) =>
   render(<Excalidraw UIOptions={uiOptions} handleKeyboardGlobally />);

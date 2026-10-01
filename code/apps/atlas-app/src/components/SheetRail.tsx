@@ -12,11 +12,10 @@
 // horizontal strip caps out at ~3 labels; a vertical icon rail is O(n) in
 // height, the axis that has room. Labels live in `aria-label` + a tooltip.
 //
-// Why it is driven by `excalidrawAPI.getSidebarTabs()`: its predecessor
-// (`CollarSheetTabs`) hardcoded `[layers, comments, library]` and had already
-// drifted — no `search` entry at all, and structurally blind to any future
+// Why it is driven by `excalidrawAPI.getSidebarTabs()`: a hardcoded tab list
+// drifts from what the sidebar shows and cannot see a new
 // `registerSidebarTab` call. `getSidebarTabs` is the same list DefaultSidebar
-// renders from, stock tabs included, so the two can no longer disagree.
+// renders from, stock tabs included, so the two cannot disagree.
 //
 // Accessibility: the rail lives in a different React tree from the sidebar's
 // Radix tablist, so it cannot honestly be `role="tab"` — a tab must be owned
@@ -29,12 +28,11 @@
 // open a panel in the sidebar. State is `aria-expanded`, because that is what
 // a disclosure of a panel is.
 //
-// Step 5 briefly parked comment mode here too, as a `data-rail-item="mode"`
-// toggle. It has since moved to the drawing-tools toolbar
-// (`CommentModeButton`, the `renderToolbarExtras` slot): a mode changes what a
-// click on the plate does and discloses nothing, so it belongs with the tools
-// rather than with the panel triggers. If a second mode ever wants a home,
-// that is where it goes — do not re-introduce the two-kinds rail.
+// A mode does not belong here. Comment mode is on the drawing-tools toolbar
+// (`CommentModeButton`, the `renderToolbarExtras` slot): a mode changes what
+// a click on the plate does and discloses nothing, so it belongs with the
+// tools rather than with the panel triggers. A second mode goes there too —
+// do not make this a rail of two kinds of item.
 
 import {
   useCallback,

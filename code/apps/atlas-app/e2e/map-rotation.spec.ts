@@ -1,17 +1,16 @@
 /**
  * What rotating the map actually does, in a real browser.
  *
- * The rotation wave merged on 2878 green tests and two independent reviews,
- * and then crashed on its own primary path the first time anyone opened it:
- * turn the map with a rectangle on it and React hit its nested-update ceiling,
- * the ErrorBoundary recreated the tree, and the user's drawing was gone. The
- * unit suite could not see it because the loop ran between two onChange
- * consumers. World coordinates (ADR-0015) removed both consumers' camera
- * work: a turn is now a CSS rotation of the drawing layer and writes no
- * element. This file is the part that only a browser settles.
+ * A unit suite cannot see a loop that runs between two onChange consumers.
+ * Such a loop is a measured hazard here: turn the map with a rectangle on it,
+ * React hits its nested-update ceiling, the ErrorBoundary recreates the tree,
+ * and the user's drawing is gone. World coordinates
+ * (docs/architecture/adr/0015-world-coordinates-gate.md) take the camera work
+ * out of both consumers: a turn is a CSS rotation of the drawing layer and
+ * writes no element. This file is the part that only a browser settles.
  *
- * Three claims live here, and every one of them was argued from source and got
- * it partly wrong before someone ran it:
+ * Three claims live here. Each is easy to argue from source and get partly
+ * wrong:
  *
  *   1. The compass is reachable and a turned map keeps its annotations.
  *   2. A turned map draws its annotations turned — *correctly*, not merely at
@@ -25,8 +24,7 @@
  *      convention is a reading of the docs. Only real MapLibre settles it, and
  *      it is settled by measuring the screen angle of a due-east vector.
  *
- * Not covered: two-finger twist. Synthesising touch gestures is its own
- * harness, so the touch path remains unverified rather than quietly assumed.
+ * Two-finger twist needs synthesised touch: see map-rotation-touch.spec.ts.
  */
 
 import { test, expect } from "@playwright/test";
@@ -58,7 +56,7 @@ interface AtlasdrawWindow {
 }
 
 /**
- * Shapes whose geometry is a box crashed under the bug; polylines never did.
+ * Shapes whose geometry is a box hit the update loop; polylines never did.
  * "anchor" is the shape's kind of geometry: a box, or a polyline of points.
  */
 const SHAPES = [
@@ -155,7 +153,7 @@ test.describe("map rotation", () => {
 
       // Both halves matter. The crash string alone would pass if the element
       // vanished silently; the element count alone would pass if the boundary
-      // caught and restored. Under the bug, bbox anchors fail both.
+      // caught and restored. Under the update loop, bbox anchors fail both.
       expect(crashed(), "React nested-update ceiling was hit").toBe(false);
       const after = await liveElements(page);
       expect(after, "the drawing survived the rotation").toHaveLength(1);
@@ -211,8 +209,8 @@ test.describe("map rotation", () => {
     await compass.click();
     await page.waitForTimeout(1500);
 
-    // RT-0 is the defect of being turned with no way back, so this is the
-    // assertion that closes it: the state a user is stuck in must be exitable.
+    // The hazard is being turned with no way back, so this is the assertion
+    // that matters: the state a user is stuck in must be exitable.
     await expect(compass).not.toHaveAttribute("data-rotated", "true");
     const els = await liveElements(page);
     expect(els).toHaveLength(1);

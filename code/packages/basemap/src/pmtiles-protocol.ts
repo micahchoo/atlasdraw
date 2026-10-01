@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
-// @atlasdraw/basemap — Phase 4 Wave 0 (T2428): pmtiles protocol registration.
-// Idempotently registers the `pmtiles://` scheme on maplibre-gl so vendored
-// PMTiles files can be referenced from style JSONs. Atlas-app's resolver
-// (Phase 4 T7) calls this once at startup.
+// Registers the `pmtiles://` scheme on maplibre-gl, idempotently, so style
+// JSONs can reference vendored PMTiles files. Atlas-app's useBasemapStyle
+// calls it before it resolves a style.
 
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";

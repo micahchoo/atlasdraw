@@ -1,24 +1,22 @@
 /**
- * MapCanvas — Phase 1 skeleton.
+ * MapCanvas — a React shell around a `maplibregl.Map` instance. Creates the
+ * map on mount, tears it down on unmount, and calls `onMapReady` once the
+ * map's `load` event fires.
  *
- * React shell around a `maplibregl.Map` instance. Creates the map on mount,
- * tears it down on unmount, and calls `onMapReady` once the map's `load`
- * event fires.
- *
- * Deliberately minimal: no basemap registry, no PMTiles protocol, no style
- * switching logic. Those land in later waves.
+ * It holds no basemap catalog, no PMTiles protocol and no style switching;
+ * the caller does those (atlas-app's useBasemapStyle).
  *
  * Default style: an empty in-memory MapLibre style (transparent canvas, no
- * tile fetch). Callers wire a real style via setStyle() or by passing the
- * `styleUrl` prop. The previous Phase 1 default fetched OpenFreeMap "liberty"
- * on every mount, which (a) caused a spurious network request before the
- * Phase 4 T6/T7 picker effect overrode it, and (b) couldn't run offline.
- * (atlasdraw-7899, 2026-05-10).
+ * tile fetch). Callers set a real style with setStyle() or the `styleUrl`
+ * prop. A default that fetches tiles sends a request before the caller's
+ * style replaces it, and fails offline.
  *
- * Phase 1 constraints enforced at construction:
- *   maxPitch: 0          — the drawing is a flat world map; at pitch 0 it is a 2D transform of the map (ADR-0015)
+ * Constraints set at construction:
+ *   maxPitch: 0          — the drawing is a flat world map; at pitch 0 it is a
+ *                          2D transform of the map
+ *                          (docs/architecture/adr/0015-world-coordinates-gate.md)
  *   pitchWithRotate: false
- *   dragRotate: false    — FU-14; right-drag belongs to Excalidraw's context
+ *   dragRotate: false    — right-drag belongs to Excalidraw's context
  *                          menu, and stays off even when `allowRotation` is
  *                          set. See cameraRotation.ts for the other two.
  */
@@ -41,8 +39,8 @@ export interface MapCanvasInitialView {
 export interface MapCanvasProps {
   /**
    * MapLibre-compatible style URL or inline StyleSpecification.
-   * Defaults to an empty offline style (no tile fetch). Phase 4 callers
-   * supply the real style via setStyle() after mount (see MapEditor.tsx).
+   * Defaults to an empty offline style (no tile fetch). Atlas-app supplies
+   * the real style with setStyle() after mount (see useBasemapStyle.ts).
    */
   styleUrl?: string | maplibregl.StyleSpecification;
 
@@ -67,9 +65,9 @@ export interface MapCanvasProps {
 
   /**
    * Let the user rotate the camera (two-finger twist, shift+arrows). Off by
-   * default, and the default is the safe one: FU-14 / RT-0 is the defect of
-   * being turned with no way back to north, so a view earns rotation by
-   * shipping a compass. The editor does; the embed and every other MapCanvas
+   * default, and the default is the safe one: a view earns rotation by
+   * shipping a compass, so that a user always has a way back to north. The
+   * editor does; the embed and every other MapCanvas
    * caller does not. Mount-time only, like `initialView`.
    */
   allowRotation?: boolean;
@@ -80,10 +78,9 @@ export interface MapCanvasProps {
 // ---------------------------------------------------------------------------
 
 // Empty offline style — no network fetch, no opaque background. Atlas-app's
-// basemap-effect (Phase 4 T6/T7) replaces this with the active basemap style
-// after mount. A `#f0f0f0` placeholder bled through behind the real style on
-// the 2026-05-10 smoke test; using `rgba(0,0,0,0)` keeps the WebGL canvas
-// clear so map.setStyle's transition has no leftover paint to fight.
+// useBasemapStyle replaces it with the active basemap style after mount. The
+// background must be transparent: an opaque placeholder shows through behind
+// the real style during map.setStyle's transition.
 const DEFAULT_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   name: "atlasdraw-empty",
@@ -139,13 +136,13 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       center: initialView?.center ?? DEFAULT_CENTER,
       zoom: initialView?.zoom ?? DEFAULT_ZOOM,
       // A 2D top-down view: the drawing layer follows the map with a scroll,
-      // a zoom and a rotation, and has no perspective (ADR-0015).
+      // a zoom and a rotation, and has no perspective
+      // (docs/architecture/adr/0015-world-coordinates-gate.md).
       maxPitch: 0,
       pitchWithRotate: false,
-      // FU-14 / RT-0: rotation is reachable by default and there is no way
-      // back to north yet. The other two rotation gestures are turned off
-      // just below — they have no construction option that spares pinch-zoom
-      // and arrow-key panning.
+      // Right-drag rotation stays off. applyRotationPolicy below handles the
+      // other two rotation gestures — they have no construction option that
+      // spares pinch-zoom and arrow-key panning.
       dragRotate: false,
       // No preserveDrawingBuffer: export renders its own offscreen map
       // (apps/atlas-app/src/lib/export.ts), so the live map need not keep
@@ -169,7 +166,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       });
     }
 
-    // 2026-05-10 — keep the WebGL canvas sized to the container. With an
+    // Keep the WebGL canvas sized to the container. With an
     // inline `style` arg, the map's "load" fires synchronously enough that
     // MapLibre measures the container BEFORE the surrounding flex/grid layout
     // has settled. Without this, the canvas is locked at the initial measured
@@ -187,7 +184,7 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
     // Intentionally excluding `initialView`, `onMapReady` and `allowRotation`
     // — initialView and allowRotation are consumed once at construction;
     // onMapReady is a stable callback contract.
-    // styleUrl changes are NOT reacted to in Phase 1 (deferred to Wave 2+).
+    // A styleUrl change after mount is ignored; callers use setStyle().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

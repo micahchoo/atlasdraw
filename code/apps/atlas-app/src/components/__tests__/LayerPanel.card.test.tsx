@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Sheet-panel step 4 + 6 — the data-layer card.
+// The data-layer card.
 //
-// Covers what the card added over the old row: expand-in-place with real
-// disclosure semantics, provenance, attribute preview, the three actions that
-// had store support but no UI (zoom / rename / delete), the accordion, and the
-// >= 10 filter threshold.
-//
-// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2, §4
+// Covers expand-in-place with real disclosure semantics, provenance,
+// attribute preview, the actions (zoom / rename / delete), the accordion, and
+// the >= 10 filter threshold.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -472,8 +469,8 @@ describe("data layer card — the three missing actions", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
-  // FU-6 — the rail got roving tabindex + arrow/Home/End in Step 2 and this
-  // menu, one component over, did not. Assert focus itself rather than the
+  // The ⋯ menu has the sheet rail's roving tabindex + arrow/Home/End. Assert
+  // focus itself rather than the
   // tabIndex attribute: a roving tabindex whose focus call is missing still
   // renders the right attributes and still strands the keyboard user.
   describe("⋯ menu keyboard navigation", () => {
@@ -802,7 +799,7 @@ describe("annotations are not data layers", () => {
     render(withSession(<LayerPanel />));
 
     expect(screen.queryByTestId("layer-disclosure-el-1")).toBeNull();
-    // The ⋯ menu is per-row for every layer kind now — rename / delete / zoom
+    // The ⋯ menu is per-row for every layer kind — rename / delete / zoom
     // apply to annotations too; only the card body doesn't exist.
     expect(screen.getByTestId("layer-menu-el-1")).toBeTruthy();
     expect(screen.queryByTestId("style-panel")).toBeNull();

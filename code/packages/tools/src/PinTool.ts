@@ -1,7 +1,5 @@
 // packages/tools/src/PinTool.ts
 // SPDX-License-Identifier: MPL-2.0
-// Phase 1 Wave 3b Task 14 — PinTool.
-//
 // PinTool is an `AtlasdrawTool`, NOT an Excalidraw custom tool. The
 // `<Excalidraw>` component does not have a `customTools` prop in v0.18, so we
 // cannot register PinTool with Excalidraw's tool system. Instead, atlas-app
@@ -20,7 +18,7 @@ import type { AtlasdrawTool } from "./types.js";
  * PinTool — places a small geo-anchored marker at a click location.
  *
  * Lifecycle: idle → (user clicks Pin button) → active → (user clicks map) →
- * onPointerDown → committed → idle (one-shot per dispatch host conventions).
+ * onPointerDown → committed → idle (one shot per activation).
  *
  * Interactions used: just `onPointerDown`. No drag, no keyboard, no
  * activate/deactivate hooks. The tool is fire-and-forget at a single point.

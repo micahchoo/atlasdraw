@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// The world frame (ADR-0015).
+// The world frame (docs/architecture/adr/0015-world-coordinates-gate.md).
 //
 // A scene coordinate is a Web Mercator world pixel at the reference zoom `z0`
 // (512-px tiles, as MapLibre uses), minus the frame's floating origin. The map
@@ -22,7 +22,8 @@ export const MAX_MERCATOR_LAT = 85.051129;
 /**
  * The reference zoom of every document. With z0 = 22 the Excalidraw zoom
  * value `2^(zoom - z0)` is never above 1 at MapLibre's zoom range, so an
- * element's cache canvas never reaches its size cap (ADR-0015, condition 1).
+ * element's cache canvas never reaches its size cap
+ * (docs/architecture/adr/0015-world-coordinates-gate.md, condition 1).
  */
 export const REFERENCE_ZOOM = 22;
 

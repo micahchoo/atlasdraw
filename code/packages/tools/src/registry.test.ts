@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: MIT
-// Tests for the tool registration API (ISSUES.md Direction 4 — headroom
-// audit, verdict: pursue). Before this, `ToolRegistry` (types.ts) was
-// documented as "built up in apps/atlas-app from @atlasdraw/tools exports"
-// but nothing anywhere ever actually constructed one — only PinTool was
-// ever imported by name.
+// Tests for the tool registration API.
 //
-// FU-2 deleted the seven tools this file used to enumerate. What it tested
-// about them — that a built-in self-registers and is reachable by id — is a
-// property of the registry, not of the count, so the cases below assert it
-// against the one built-in that ships and against a tool registered from
-// outside. The registry's real users are the latter.
+// That a built-in self-registers and is reachable by id is a property of the
+// registry, not of how many tools ship, so the cases below assert it against
+// the one built-in (PinTool) and against a tool registered from outside. The
+// registry's real users are the latter.
 
 import { describe, expect, it } from "vitest";
 

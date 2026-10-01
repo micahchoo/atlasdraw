@@ -7,13 +7,14 @@
  * the commands (commands/commands.ts) and the hooks it wires here.
  *
  * Who takes the pointer: every Excalidraw tool except the hand tool captures
- * pointer events (classifyTool, decision atlasdraw-dd91), so a drag with the
+ * pointer events (classifyTool), so a drag with the
  * selection tool selects. The hand tool lets the pointer through to the map,
  * and Space+drag pans with any tool. Wheel and pinch always go to the map
  * (useMapWheelRouter).
  *
  * The map owns the camera; Excalidraw's scroll and zoom follow it
- * (useCameraBridge, ADR-0015). A drawn element is stored in world
+ * (useCameraBridge, docs/architecture/adr/0015-world-coordinates-gate.md).
+ * A drawn element is stored in world
  * coordinates, so no camera move rewrites it.
  */
 

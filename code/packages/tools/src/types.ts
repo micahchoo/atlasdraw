@@ -1,7 +1,6 @@
 // packages/tools/src/types.ts
 // SPDX-License-Identifier: MPL-2.0
-// AtlasdrawTool interface — Phase 1 Wave 0 Task 2.
-// See docs/architecture/subsystems/tools/contracts.md for the full contract.
+// AtlasdrawTool — the contract of a geo-aware tool, and what it may touch.
 
 import type { GeoAnchor } from "@atlasdraw/geo";
 
@@ -35,8 +34,6 @@ export interface ToolPointerEvent {
 /**
  * Context provided to every tool handler. Tools never directly mutate state;
  * they call ctx methods that go through the central scene API.
- *
- * Designed to be postMessage-safe per Q11 (so plugin tools work via Worker boundary in Phase 7).
  */
 export interface ToolContext {
   /** MapLibre instance — tools use only `project` / `unproject` / `getZoom`. Other access is discouraged. */
@@ -82,7 +79,7 @@ export interface AtlasdrawElementSeed {
   customType?: string;
   /** Where the element goes, and the zoom it was made at. */
   geo: GeoAnchor;
-  /** Visual style — minimal subset; full styling comes Phase 6. */
+  /** Visual style — a minimal subset. */
   style?: {
     strokeColor?: string;
     fillColor?: string;
@@ -104,11 +101,11 @@ export interface AtlasdrawElementSeed {
  * No async methods in v1 (kept synchronous to match Excalidraw's tool model).
  */
 export interface AtlasdrawTool {
-  /** Stable id, registered into Excalidraw via customType. */
+  /** Stable id in the tool registry. Not registered with Excalidraw. */
   readonly id: string;
   /** User-facing label. */
   readonly label: string;
-  /** Path or component for the toolbar icon (Phase 1: just a string identifier). */
+  /** The toolbar icon's identifier. */
   readonly icon: string;
   /** CSS cursor when this tool is active. */
   readonly cursor: string;

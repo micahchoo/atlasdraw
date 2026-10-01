@@ -1,7 +1,8 @@
 // The map service: the one owner of storage policy. Routes parse HTTP and
 // call it; it calls the store.
 //
-// A map's write key is the only write capability (ADR-0017). `create` makes
+// A map's write key is the only write capability
+// (docs/architecture/adr/0017-maps-carry-a-write-key.md). `create` makes
 // it from 32 random bytes and returns it once; the store keeps only its
 // SHA-256. Every write, owner read, share and revoke compares hashes in
 // constant time. A share token reads the map's latest bytes and nothing else.

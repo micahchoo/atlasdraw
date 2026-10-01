@@ -1,7 +1,7 @@
-// Atlasdraw addition (ADR-0015). Browsers clamp a canvas font to 10000px, and
-// the atlas app's text is 20 px × 2^(22 − zoom) scene units. A font above
-// MAX_CANVAS_FONT_SIZE is measured at that size and scaled up, so a measured
-// width stays linear in the font size.
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+// Browsers clamp a canvas font to 10000px, and the atlas app's text is 20 px ×
+// 2^(22 − zoom) scene units. A font above MAX_CANVAS_FONT_SIZE is measured at
+// that size and scaled up, so a measured width stays linear in the font size.
 
 import { MAX_CANVAS_FONT_SIZE } from "@atlasdraw/common";
 

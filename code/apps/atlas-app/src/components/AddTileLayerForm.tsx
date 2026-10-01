@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// AddTileLayerForm — "Add tile layer…" in the layer panel (W9d).
+// AddTileLayerForm — "Add tile layer…" in the layer panel.
 //
 // Surface decision (atlasdraw-ui-conventions, Rule 0): adding a layer is
 // layer management, so it is in the layer panel, inline, like the panel's

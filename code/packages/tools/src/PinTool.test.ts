@@ -1,6 +1,6 @@
 // packages/tools/src/PinTool.test.ts
 // SPDX-License-Identifier: MPL-2.0
-// Phase 1 Wave 3b Task 14 — PinTool unit tests.
+// PinTool unit tests.
 //
 // Mocks the `ToolContext` and `ToolPointerEvent` literals; verifies that
 // onPointerDown calls `map.unproject` with the click point and emits an

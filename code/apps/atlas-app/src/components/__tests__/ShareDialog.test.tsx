@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 4 T8 + Phase 5 collab integration — ShareDialog tests.
+// ShareDialog tests.
 //
-// Dialog now opens to a mode-picker (Share read-only / Collaborate). The
-// existing read-only flow is exercised by clicking "Share read-only" first,
-// then asserting the same hash-mode generation as before. New tests exercise
-// the Collaborate path: clicking the button calls generateRoomKey + connect,
-// and the success URL has the `#room:` prefix.
+// The dialog opens to a mode-picker (Share read-only / Collaborate). The
+// read-only flow is exercised by clicking "Share read-only" first, then
+// asserting hash-mode generation. Other tests exercise the Collaborate path:
+// clicking the button starts a room, and the success URL has the `#room:`
+// prefix.
 
 import "fake-indexeddb/auto";
 import { openDB } from "idb";

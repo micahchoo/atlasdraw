@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/csv.test.ts
-// Phase 3 Wave 1 Task 6 — colocated tests for CSV parser.
+// Colocated tests for CSV parser.
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -313,7 +313,7 @@ describe("parseCSV — onStats row accounting", () => {
     expect(onStats.mock.calls[0][0].emitted).toBe(fc.features.length);
   });
 
-  it("is optional — omitting it is the pre-existing behaviour", async () => {
+  it("is optional — omitting it still parses", async () => {
     const fc = await parseCSV(csvBlob("name,lat,lng\na,1,2\n"));
     expect(fc.features).toHaveLength(1);
   });

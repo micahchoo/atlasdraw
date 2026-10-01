@@ -6,7 +6,8 @@
 // A tool says where an element goes in lng/lat (`seed.geo`) and at which map
 // zoom it was made (`seed.geo.zRef`). This bridge:
 //   1. Places every vertex with `toScene`: the element's x/y/points are world
-//      coordinates (ADR-0015), so no camera move ever rewrites them.
+//      coordinates (docs/architecture/adr/0015-world-coordinates-gate.md),
+//      so no camera move ever rewrites them.
 //   2. Gives every size the tool states in screen pixels (pin diameter,
 //      default circle, font size, stroke width) in scene units at zRef, so it
 //      looks that size at the zoom where it was made.

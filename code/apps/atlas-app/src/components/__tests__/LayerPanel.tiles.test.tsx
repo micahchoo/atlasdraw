@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Tile layers in the layer panel (W9d): "Add tile layer…" checks the URL
+// Tile layers in the layer panel: "Add tile layer…" checks the URL
 // template before it adds anything, and a tile row shows, hides, fades and
 // deletes its layer. Every assertion reads the open document or the DOM.
 

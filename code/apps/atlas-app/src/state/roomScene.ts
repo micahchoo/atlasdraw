@@ -3,7 +3,8 @@
 // The drawing in a room: Excalidraw's elements, one entry per element id in
 // the room doc's `elements` map, and the files they use in `files`.
 //
-// Scene coordinates are world coordinates (ADR-0015), the same for every
+// Scene coordinates are world coordinates
+// (docs/architecture/adr/0015-world-coordinates-gate.md), the same for every
 // viewer, so an element record travels as it is.
 //
 // Conflicts resolve per element as Excalidraw's reconcile does: the higher

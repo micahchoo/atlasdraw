@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
-// @atlasdraw/basemap — Phase 4 Wave 1 (T7): basemap style resolver + remote gate.
+// Basemap style resolver and remote-tile gate.
 //
-// Boundary contract (per 2026-05-10 scrub note on plan §5 Task 7 Step 1):
-//   - pmtiles-protocol.ts stays argument-less (registers the `pmtiles://` scheme).
-//   - style-builder.ts is the substitution engine (consumes opts.pmtilesPath).
+// Boundary contract:
+//   - pmtiles-protocol.ts takes no arguments (registers the `pmtiles://` scheme).
+//   - style-builder.ts does the substitution (consumes opts.pmtilesPath).
 //   - This module enforces the remote-tile gate and delegates substitution.
-//
-// Boundary contract (per 2026-05-10 smoke-test fix atlasdraw-bff1):
 //   - This package does NOT read environment variables. Vite's textual
 //     `import.meta.env.X` replacement only fires on the literal pattern, and
 //     cross-package source files can't rely on its semantics. The caller
@@ -19,8 +17,9 @@ import type maplibregl from "maplibre-gl";
 
 /**
  * Thrown by resolveStyle when a basemap config has `requiresRemote: true` and
- * the caller did not pass `allowRemote: true`. Atlas-app's Q3 default is
- * `allow_remote = false`; callers should warn-and-bail when they see this.
+ * the caller did not pass `allowRemote: true`. Atlas-app passes
+ * VITE_ALLOW_REMOTE_BASEMAPS (default true); callers warn and stop when they
+ * see this.
  */
 export class BasemapRemoteGatedError extends Error {
   constructor(public readonly basemapId: string) {

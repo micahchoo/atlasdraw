@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 //
 // The room link: `#room:<roomId>,<secret>`. The fragment never reaches a
-// server. The secret is 32 random bytes in base64url (ADR-0008, ADR-0014).
+// server. The secret is 32 random bytes in base64url
+// (docs/architecture/adr/0008-share-link-encoding.md,
+// docs/architecture/adr/0014-collab-trust-model.md).
 //
 // The relay never sees the secret. A client derives a room token from it,
 // one-way (HKDF-SHA256, salt = the room id, info = TOKEN_LABEL), and sends the

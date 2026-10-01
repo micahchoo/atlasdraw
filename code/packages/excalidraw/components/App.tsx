@@ -957,7 +957,8 @@ class App extends React.Component<AppProps, AppState> {
       viewModeEnabled,
       zenModeEnabled,
       objectsSnapModeEnabled,
-      // Atlasdraw (ADR-0015): the prop, mirrored for the element package.
+      // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+      // prop, mirrored for the element package.
       screenSizedStyles: !!props.screenSizedStyles,
       gridModeEnabled: gridModeEnabled ?? defaultAppState.gridModeEnabled,
       name,
@@ -2251,11 +2252,12 @@ class App extends React.Component<AppProps, AppState> {
       renderCustomStats,
     } = this.props;
 
-    // Atlasdraw fork addition (ADR-0010, Collar shell): "collar mode" is the
-    // same condition LayerUI derives — the host portaled the toolbar into its
-    // own frame and this is not a phone. Published as a container class so the
-    // *sheet margin* treatment of the sidebar can live in CSS (see
-    // Sidebar.scss) instead of being threaded through every subcomponent.
+    // Atlasdraw fork addition (code/decisions/0010-own-the-fork.md, Collar
+    // shell): "collar mode" is the same condition LayerUI derives — the host
+    // portaled the toolbar into its own frame and this is not a phone.
+    // Published as a container class so the *sheet margin* treatment of the
+    // sidebar can live in CSS (see Sidebar.scss) instead of being threaded
+    // through every subcomponent.
     const collarMode = isCollarMode(
       collarToolbarTarget,
       this.editorInterface.formFactor,
@@ -2305,15 +2307,16 @@ class App extends React.Component<AppProps, AppState> {
             this.state.viewModeEnabled ||
             this.state.openDialog?.name === "elementLinkSelector",
           "excalidraw--mobile": this.editorInterface.formFactor === "phone",
-          // Atlasdraw fork addition (ADR-0010, Collar shell).
+          // Atlasdraw fork addition (code/decisions/0010-own-the-fork.md,
+          // Collar shell).
           "excalidraw--collar": collarMode,
         })}
         style={{
           ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
             ? POINTER_EVENTS.disabled
             : POINTER_EVENTS.enabled,
-          // Atlasdraw fork addition: was the inline literal `"302px"`. The
-          // value is the host's (it owns the resize handle and its
+          // Atlasdraw fork addition: upstream has the inline literal `"302px"`.
+          // The value is the host's (it owns the resize handle and its
           // persistence); the editor's job is to clamp it and publish it, so
           // every downstream reader — Sidebar.scss, the `.layer-ui__wrapper`
           // narrowing, the collar legend offset — keeps working unchanged.
@@ -3465,7 +3468,8 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ zenModeEnabled: !!this.props.zenModeEnabled });
     }
 
-    // Atlasdraw (ADR-0015): the prop wins over a scene update or restore.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // prop wins over a scene update or restore.
     if (this.state.screenSizedStyles !== !!this.props.screenSizedStyles) {
       this.setState({ screenSizedStyles: !!this.props.screenSizedStyles });
     }
@@ -3852,7 +3856,8 @@ class App extends React.Component<AppProps, AppState> {
     const restored = restoreElements(opts.elements, null, {
       deleteInvisibleElements: true,
     });
-    // Atlasdraw (ADR-0015): elements from outside go in at screen size.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
+    // elements from outside go in at screen size.
     const [rx, ry] = getCommonBounds(restored);
     const elements = scaleForeignElements(
       restored,
@@ -4273,18 +4278,20 @@ class App extends React.Component<AppProps, AppState> {
   private cancelInProgressAnimation: (() => void) | null = null;
 
   /**
-   * Atlasdraw (ADR-0015): a stroke width or font size from the current item
-   * styles, in scene units for a new element. With `screenSizedStyles` the
-   * style is screen pixels, so it is divided by the zoom value.
+   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): a stroke
+   * width or font size from the current item styles, in scene units for a new
+   * element. With `screenSizedStyles` the style is screen pixels, so it is
+   * divided by the zoom value.
    */
   private sceneStyleSize = (size: number): number =>
     size * styleScale(this.props.screenSizedStyles, this.state.zoom.value);
 
   /**
-   * Atlasdraw (ADR-0015): with `screenSizedStyles`, a new shape records its
-   * pixel unit (scene units per screen pixel now) in `customData.atlas.unit`,
-   * so its arrowheads, dashes and jitter look as upstream draws them at the
-   * zoom where it is drawn (element/src/atlasStyleUnit.ts).
+   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): with
+   * `screenSizedStyles`, a new shape records its pixel unit (scene units per
+   * screen pixel now) in `customData.atlas.unit`, so its arrowheads, dashes and
+   * jitter look as upstream draws them at the zoom where it is drawn
+   * (element/src/atlasStyleUnit.ts).
    */
   private atlasUnitData = (): { customData?: Record<string, unknown> } =>
     this.props.screenSizedStyles
@@ -4359,7 +4366,8 @@ class App extends React.Component<AppProps, AppState> {
     // convert provided target into ExcalidrawElement[] if necessary
     const targetElements = Array.isArray(target) ? target : [target];
 
-    // Atlasdraw (ADR-0015): a fit is a zoom; the host's map may own it.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): a fit
+    // is a zoom; the host's map may own it.
     if (
       (opts?.fitToContent || opts?.fitToViewport) &&
       this.props.onZoomAction?.({
@@ -5631,9 +5639,10 @@ class App extends React.Component<AppProps, AppState> {
   });
 
   /**
-   * Atlasdraw (ADR-0015): the zoom a pinch asks for. A host that owns the
-   * camera (`onZoomAction`) takes it unclamped through `onScrollChange`:
-   * Excalidraw's clamp to [0.1, 30] jumps a map zoom many levels.
+   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the zoom
+   * a pinch asks for. A host that owns the camera (`onZoomAction`) takes it
+   * unclamped through `onScrollChange`: Excalidraw's clamp to [0.1, 30] jumps a
+   * map zoom many levels.
    */
   private pinchZoom(zoom: number): NormalizedZoomValue {
     return this.props.onZoomAction

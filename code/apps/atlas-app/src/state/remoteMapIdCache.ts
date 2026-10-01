@@ -9,7 +9,8 @@
 //
 // Kept in the IndexedDB the PersistenceStore uses (db `atlasdraw-autosave`,
 // store `state`, key `remoteMap:<document id>`). The write key is the only
-// write capability for the map (ADR-0017): a script on this origin can read
+// write capability for the map
+// (docs/architecture/adr/0017-maps-carry-a-write-key.md): a script on this origin can read
 // it, a share link holder cannot. An older build kept bare map ids under
 // `remoteMapId` and `remoteMapId:<document id>`; they have no key, so they are
 // deleted and the document gets a new map.

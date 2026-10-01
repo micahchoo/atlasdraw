@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// MapCompass — RT-3. The way back to north, and the only mouse affordance for
+// MapCompass — the way back to north, and the only mouse affordance for
 // getting away from it.
 //
-// This control is why rotation can ship at all. FU-14 / RT-0 was not "the map
-// rotates"; it was "the map rotates and nothing brings it back". Click resets
+// This control is why rotation can ship at all. The hazard is not "the map
+// rotates"; it is "the map rotates and nothing brings it back". Click resets
 // north, drag rotates, and the needle shows the current angle — so no camera
 // state is reachable that the user cannot see and cannot undo.
 //
@@ -16,7 +16,7 @@
 //
 // **One angle for everything.** `rotation` comes from useCameraRotation: the
 // screen angle of geographic east. The needle, the turned drawing layer and
-// the printed north arrow (RT-4) all turn off that one number and cannot
+// the printed north arrow all turn off that one number and cannot
 // disagree. Only `setCameraRotation` speaks bearing, and only when the user
 // drags.
 

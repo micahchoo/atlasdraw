@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 Wave 1b A5 — ColorRampPicker.
+// ColorRampPicker.
 //
 // Renders a static row of preset color ramps as horizontal gradient swatches.
 // Click selects; the active ramp is reported back via `onChange` as an array
 // of hex colors of length `stops`.
 //
-// Static palette table inline (no chroma / d3-color dependency — Phase 6 plan
-// constraint). Names align with ColorBrewer / viridis conventions; the actual
-// hex values are sampled at 5 stops.
+// Static palette table inline (no chroma / d3-color dependency). Names align
+// with ColorBrewer / viridis conventions; the actual hex values are sampled
+// at 5 stops.
 //
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A5
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React from "react";

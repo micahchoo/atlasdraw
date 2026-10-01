@@ -17,7 +17,7 @@ import type {
   ExcalidrawTextElement,
 } from "@atlasdraw/element/types";
 
-// `../../index`, not `../..` — FU-8. A bare `../..` resolves the package
+// `../../index`, not `../..`. A bare `../..` resolves the package
 // DIRECTORY, so Vite reads packages/excalidraw/package.json and follows
 // `main` to ./dist/prod/index.js. With no dist/ that silently falls back to
 // this same source file and everything passes; once `test:typecheck` has

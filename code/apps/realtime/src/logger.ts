@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// @atlasdraw/realtime — structured logger (ISSUES.md Issue 8).
+// @atlasdraw/realtime — structured logger.
 //
-// Mirrors apps/storage/src/logger.ts's shape so both server apps log to the
-// same structured/correlated standard — the relay previously logged
-// exclusively via raw console.log/console.warn with no request/socket
-// correlation.
+// Same shape as apps/storage/src/logger.ts, so both server apps write the
+// same structured pino log.
 
 import { pino } from "pino";
 

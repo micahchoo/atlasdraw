@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/cli/src/__tests__/convert.test.ts
-// Phase 3 Wave 2 T11 — vitest suite for `runConvert`.
+// Vitest suite for `runConvert`.
 //
 // Strategy: build small fixtures in a temp dir (raw GeoJSON, CSV, or
 // `write()`-emitted .atlasdraw bytes), then drive `runConvert` directly with

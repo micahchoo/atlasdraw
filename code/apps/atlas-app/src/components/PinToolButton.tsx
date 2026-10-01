@@ -4,12 +4,9 @@
 // portaled into the collar tool strip via the vendored `renderToolbarExtras`
 // slot (alongside GeoSearchControl).
 //
-// IA note: the pin toggle previously lived as a MainMenu.Item ("Pin to map",
-// W-B Rule-0 retrofit). The menu is document/app scope; a drawing tool
-// belongs on the toolbar with the other tools — this is the first step of
-// the atlas-tools/toolbar merge (anchoring-as-a-mode), not a revival of the
-// old free-floating .pinButton overlay. The Pin tool itself is dispatched
-// atlas-side (useAtlasdrawTool); this button only toggles it.
+// The main menu is document/app scope; a drawing tool belongs on the toolbar
+// with the other tools. The Pin tool itself is dispatched atlas-side
+// (useAtlasdrawTool); this button only toggles it.
 //
 // Styling: renders inside the `.excalidraw` scope (the collar strip host
 // re-establishes it), so it uses Excalidraw CSS vars with fallbacks to match

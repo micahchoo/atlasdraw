@@ -1,29 +1,18 @@
 // SPDX-License-Identifier: MPL-2.0
-// @atlasdraw/basemap — Phase 4 Wave 0 (T2428): BasemapRegistry.
-// Source-of-truth catalog of basemap configurations consumed by atlas-app
-// (Phase 4 Task 5/6/7). Style JSON files are vendored separately at
-// packages/basemap/src/styles/*.json (Phase 4 Task 5 Steps 1-3); this module
-// only references them by relative filename.
+// The catalog of basemap configurations atlas-app offers. Style JSON files
+// live in packages/basemap/src/styles/*.json; this module references them
+// by filename only.
 //
-// ISSUES.md Direction 4 (headroom audit, verdict: pursue): this used to be
-// a frozen 4-entry array with a read-only getBasemap(id) lookup and no way
-// to add a 5th basemap without editing this file — "registry" in name only.
-// Now backed by a minimal register/get/list map, seeded with the same 4
-// entries at module load via registerBasemap(). Zero breaking changes:
-// BASEMAPS/getBasemap keep their exact prior shape and behavior for
-// existing consumers; registerBasemap()/listBasemaps() are new. This is the
-// registration API shape only — NOT the Phase 7 (v1.5) plugin loader (Web
-// Worker sandbox, PluginManifest/SPDX validation, PluginRegistry's SHA-256
-// integrity all remain future work sitting on top of this primitive).
+// A register/get/list map, seeded with the built-in entries at module load
+// through registerBasemap(). BASEMAPS and getBasemap read the same entries.
+// This is a registration API only, not a plugin loader: it does no
+// sandboxing and no manifest or integrity check.
 //
-// The generic registry factory is duplicated (not shared via
-// @atlasdraw/common) deliberately: the root tsconfig.json's composite
-// project graph explicitly excludes @atlasdraw/common from the atlas-owned
-// package graph basemap belongs to ("Vendored Excalidraw packages...
-// prevent composite... path-resolved via tsconfig.base.json paths" — see
-// that file's own comment). Crossing that boundary for ~15 lines of
-// trivial Map wrapping isn't worth it; packages/tools carries its own
-// identical copy for the same reason.
+// The generic registry factory is duplicated, not shared through
+// @atlasdraw/common, on purpose: the root tsconfig.json's composite project
+// graph excludes @atlasdraw/common from the atlas-owned packages (see that
+// file's own comment). packages/tools carries an identical copy for the
+// same reason.
 
 interface Registry<T> {
   register(id: string, item: T): void;
@@ -46,9 +35,9 @@ function createRegistry<T>(): Registry<T> {
 }
 
 export interface BasemapConfig {
-  /** Widened from a closed 4-value union to `string` so registerBasemap()
-   * can accept caller-provided ids — uniqueness is enforced at runtime by
-   * the registry (throws on a duplicate id), not by the type system. */
+  /** Any string, so registerBasemap() can accept caller-provided ids. The
+   * registry enforces uniqueness at runtime (it throws on a duplicate id);
+   * the type system does not. */
   id: string;
   /** Human-facing label (used in basemap picker UI). */
   label: string;
@@ -73,9 +62,7 @@ export function registerBasemap(config: BasemapConfig): void {
   registry.register(config.id, config);
 }
 
-/** All registered basemaps, in registration order. Replaces the
- * `getBasemap("__all__")` sentinel-string hack some callers used before
- * this function existed. */
+/** All registered basemaps, in registration order. */
 export function listBasemaps(): readonly BasemapConfig[] {
   return registry.list();
 }

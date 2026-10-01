@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// The map owns the camera (ADR-0015). This hook connects it to Excalidraw:
+// The map owns the camera
+// (docs/architecture/adr/0015-world-coordinates-gate.md). This hook connects it
+// to Excalidraw:
 //
 //   - a CameraBridge writes Excalidraw's scrollX / scrollY / zoom from every
 //     map `move`, and sends Excalidraw's own viewport changes (space-drag,

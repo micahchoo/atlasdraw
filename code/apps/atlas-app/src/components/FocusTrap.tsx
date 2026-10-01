@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14a — FocusTrap.
+// FocusTrap.
 //
-// Thin wrapper over `@react-aria/focus`'s FocusScope. We share one canonical
-// trap across every atlas-app modal (ExportDialog, AssetLibraryPanel, StylePanel, ShareDialog) so they all get:
+// Thin wrapper over `@react-aria/focus`'s FocusScope. Every atlas-app modal
+// dialog shares this one trap, so they all get:
 //   - contain   — Tab/Shift+Tab cycle within the modal, never escape it.
 //   - restoreFocus — when the modal unmounts, focus returns to whichever
 //     element opened it (the menu item, button, etc).

@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/shapefile.test.ts
-// Phase 3 Wave 1 T7 — colocated tests for the Shapefile zip → GeoJSON adapter.
+// Colocated tests for the Shapefile zip → GeoJSON adapter.
 //
-// Error-path coverage (Option B from the worker brief):
+// Error-path coverage:
 //   - non-zip blob          → ShapefileParseError code === "BAD_ZIP"
 //   - empty blob            → ShapefileParseError (any code)
 //   - empty zip (no layers) → ShapefileParseError code === "NO_SHP_FILE"
 //
-// Happy-path coverage (ISSUES.md Direction 1 — closed the [SNAG] this file
-// used to carry: "no happy-path test ships with this file"): a real 2-point
-// shapefile bundle at __fixtures__/point.zip, produced once via Python's
+// Happy-path coverage: a real 2-point shapefile bundle at __fixtures__/point.zip, produced once via Python's
 // `pyshp` (no GDAL/ogr2ogr required — this environment doesn't have it).
 
 import * as fs from "node:fs";

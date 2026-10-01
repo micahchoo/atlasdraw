@@ -15,9 +15,9 @@ import { migratePostgres, migrateSqlite } from "../migrate";
 
 import type { Migration } from "../migrations";
 
-// The schema that the sqlite-fs adapter created inline before the runner
-// owned the schema, including the managed-mode columns and table. A database
-// in the field can have this shape and no migration record.
+// The schema of a database made before the migration runner existed,
+// including the managed-mode columns and table. A database in the field can
+// have this shape and no migration record.
 const LEGACY_SQLITE_SCHEMA = `
   CREATE TABLE maps (
     id TEXT PRIMARY KEY,

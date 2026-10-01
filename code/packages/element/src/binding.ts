@@ -692,7 +692,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
       draggingPoints,
       elementsMap,
       elements,
-      editorUnit(appState), // Atlasdraw: was `opts?.zoom`, never passed.
+      editorUnit(appState), // Atlasdraw: upstream has `opts?.zoom`, never passed.
     );
   }
 
@@ -1346,7 +1346,7 @@ export const getHeadingForElbowArrowSnap = (
   aabb: Bounds | undefined | null,
   origPoint: GlobalPoint,
   elementsMap: ElementsMap,
-  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
+  unit = 1, // Atlasdraw: upstream has `zoom`, never passed; the arrow's pixel unit.
 ): Heading => {
   const otherPointHeading = vectorToHeading(vectorFromPoint(otherPoint, p));
 
@@ -1374,7 +1374,7 @@ const getDistanceForBinding = (
   point: Readonly<GlobalPoint>,
   bindableElement: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
-  unit = 1, // Atlasdraw: was `zoom`, never passed.
+  unit = 1, // Atlasdraw: upstream has `zoom`, never passed.
 ) => {
   const distance = distanceToElement(bindableElement, elementsMap, point);
   const bindDistance = maxBindingDistance_simple(undefined, unit);

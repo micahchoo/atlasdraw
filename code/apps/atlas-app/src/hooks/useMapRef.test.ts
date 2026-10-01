@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useMapRef (ISSUES.md Issue 6 — coverage climb).
+// Tests for useMapRef.
 //
 // Small hook, but the ref-vs-state split is exactly the kind of thing that's
 // easy to get subtly wrong (e.g. reading `map` in an event handler and

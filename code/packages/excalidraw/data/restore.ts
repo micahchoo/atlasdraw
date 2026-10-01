@@ -231,7 +231,7 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
               boundElement,
               startOrEnd,
               elementsMap,
-              // Atlasdraw: was `{ value: 1 }`; upstream's reach, no editor.
+              // Atlasdraw: upstream has `{ value: 1 }`; upstream's reach, no editor.
               { zoom: { value: 1 }, screenSizedStyles: false },
             ) || p;
       const { fixedPoint } = calculateFixedPointForNonElbowArrowBinding(

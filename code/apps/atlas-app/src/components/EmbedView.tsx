@@ -223,7 +223,8 @@ const EmbedCanvas: React.FC<{
         h?.enable?.();
       }
       // The blanket re-enable above would resurrect the rotation gestures
-      // MapCanvas turned off at mount (FU-14 / RT-0), so re-apply the lock.
+      // MapCanvas turned off at mount (the embed has no compass), so
+      // re-apply the lock.
       disableCameraRotation(map);
     };
   }, [map, options.lock]);

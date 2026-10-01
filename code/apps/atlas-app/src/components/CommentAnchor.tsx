@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentAnchor.
+// CommentAnchor.
 //
 // Renders a comment-bubble badge at the anchor's screen-projected position.
 // Two canonical anchor kinds (data-anchor-kind is always the normalized kind):
-//   - "map":        MapLibre map.project([lng, lat]) → screen-space pixel point.
-//   - "annotation": Excalidraw scene-coords → viewport-coords via
-//                   @atlasdraw/common's sceneCoordsToViewportCoords helper
-//                   (verified at code/packages/common/src/utils.ts:439); or
-//                   map.project of the raster's centroid. v1 "element"
-//                   anchors are normalized to this shape on read.
+//   - "map":        map.project([lng, lat]).
+//   - "annotation": an element's corner through the world frame to lng/lat,
+//                   then map.project; or map.project of the raster's corner
+//                   centroid. v1 "element" anchors are normalized to this
+//                   shape on read.
 //
-// Re-projection is computed every map move / app-state update. CommentAnchor
-// is a thin presentational component; the parent (MapEditor overlay) owns
-// the reactive subscription and supplies the current `screenX/screenY` here.
+// CommentAnchor is a thin presentational component; the parent
+// (CommentAnchorsOverlay) owns the projection and the reactive subscription
+// and supplies the current `screenX/screenY` here.
 //
-// Click → popover with text + Resolve action (no replies in v1 per Q-P6-1).
+// Click → popover with text + Resolve action. There are no replies.
 //
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";

@@ -24,9 +24,10 @@
 //
 // Overlays draw beneath the basemap's first symbol layer, so place names stay
 // readable over a filled area. The one exception is a data layer's labels
-// (a symbol layer, W9d): they go on top of everything, above the basemap's
-// own labels, because MapLibre gives the upper label the place when two
-// collide, and a label the user asked for must not lose to a street name. Tile layers (XYZ map tiles) are the bottom
+// (a symbol layer): they go on top of everything, above the basemap's own
+// labels, because MapLibre gives the upper label the place when two collide,
+// and a label the user asked for must not lose to a street name. Tile layers
+// (XYZ map tiles) are the bottom
 // band, rasters (georeferenced pictures) are above them, and data layers
 // above those.
 

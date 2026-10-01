@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Sheet-panel step 4 — LayerPanel ↔ StylePanel wiring.
+// LayerPanel ↔ StylePanel wiring.
 //
-// Was: "clicking the per-row style button mounts the floating StylePanel."
-// There is no style button and no floating panel any more — symbology is a
-// section of the expanded card. What still needs pinning is the same
-// invariant, restated for the new host: exactly one layer's symbology is on
-// screen, and it is the one the user opened.
+// Symbology is a section of the expanded card. The invariant: exactly one
+// layer's symbology is on screen, and it is the one the user opened.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

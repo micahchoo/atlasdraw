@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// XYZ tile layers (W9d): map tiles from a URL template, such as aerial
+// XYZ tile layers: map tiles from a URL template, such as aerial
 // imagery or a scanned historic map served as tiles.
 //
 //   validateTileTemplate(text)    the template the editor accepts, or the

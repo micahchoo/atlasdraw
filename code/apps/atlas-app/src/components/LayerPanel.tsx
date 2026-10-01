@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 2 Wave 2b T12 — LayerPanel.
+// LayerPanel.
 //
 // Annotation rows are computed from the Excalidraw scene (state/annotations.ts)
 // and their commands write the element. Data and raster rows are the open
@@ -8,35 +8,27 @@
 // parent surface (DefaultSidebar via the atlasdraw fork's
 // `excalidrawAPI.registerSidebarTab` API) provides the dockable shell,
 // trigger button, and tab routing. MapEditor registers this component
-// as the "layers" tab so it shares the existing Library trigger button
-// instead of mounting a parallel sidebar that competes for the same
-// screen surface.
+// as the "layers" tab. Do not render a `<Sidebar name="layers">` here: a
+// parallel sidebar has no trigger button and competes with DefaultSidebar
+// for the same screen surface.
 //
-// History: pre-`registerSidebarTab` revisions of this file rendered
-// `<Sidebar name="layers">` directly. That carved out a parallel sidebar
-// with no public trigger button and required a separate MainMenu item to
-// open it. Removed in favor of the DefaultSidebar splice.
-//
-// Sheet-panel step 4 + 6 (2026-07-30) — a data layer is now a CARD that
-// expands in place. Three things follow from that, each with a reason:
+// A data layer is a CARD that expands in place. Three things follow from
+// that, each with a reason:
 //
 //   * One card open at a time (accordion). A vertical column is zero-sum;
-//     letting every card stay open is the QGIS legend explosion, and the
-//     design doc names it as this design's weakest point (§4).
+//     letting every card stay open is the QGIS legend explosion.
 //   * The filter field appears at >= FILTER_THRESHOLD data layers, not
 //     before. QGIS force-collapses at >= 10 nodes and ArcGIS Online reveals
 //     layer search at >= 10 — two products picked the same number
 //     independently, which is about as strong as UI precedent gets.
-//   * Symbology is StylePanel, inline (see StylePanel.tsx's header for what
-//     the move cost). It is no longer a floating dialog clipped by this
+//   * Symbology is StylePanel, inline in the card, in normal flow (see
+//     StylePanel.tsx's header): a floating dialog is clipped by this
 //     panel's own overflow.
 //
 // Annotation rows are NOT data layers: no style, no FeatureCollection, no
 // attributes. They keep a plain row rather than a card with four empty
 // sections.
 //
-// Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T12
-// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2, §4
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, {
@@ -250,8 +242,8 @@ function joinClass(...names: Array<string | false | null | undefined>): string {
 /**
  * GeoJSON geometry type of the layer, as the user would name it ("Polygon").
  *
- * Deliberately the raw GeoJSON name and not `inferGeometryType`'s MapLibre
- * kind ("fill"): provenance answers "what did I import?", and nobody imports a
+ * Deliberately the raw GeoJSON name and not the layer's MapLibre kind
+ * ("fill"): provenance answers "what did I import?", and nobody imports a
  * fill. Reads the first feature that actually has geometry — a leading
  * `geometry: null` feature is legal and would otherwise report "unknown" for a
  * layer full of polygons.
@@ -301,7 +293,7 @@ type Mutators = {
   updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
 };
 
-/** The three actions the design doc calls out as missing (§2). */
+/** The per-layer actions of the ⋯ menu and the expanded card. */
 type LayerActions = {
   rename: (id: string, label: string) => void;
   remove: (id: string) => void;
@@ -310,7 +302,7 @@ type LayerActions = {
   exportData: (id: string, format: DataExportFormat) => void;
 };
 
-/** A row in any section: a registry layer, or an annotation from the scene. */
+/** A row in any section: a document layer, or an annotation from the scene. */
 type PanelEntry = OverlayEntry | AnnotationRow;
 
 interface LayerRowProps {
@@ -324,9 +316,9 @@ interface LayerRowProps {
  *
  * `draggable` sits on the grip and nowhere else. The browser looks *up* the
  * tree for a draggable ancestor when a press starts, so a draggable row makes
- * every control inside the card a drag source too: since Step 4 the row expands
- * into a card, and reaching for the colour input or sweeping across the rename
- * box began a layer reorder with the whole expanded card as the drag image.
+ * every control inside the card a drag source too: the row expands into a
+ * card, and reaching for the colour input or sweeping across the rename box
+ * would begin a layer reorder with the whole expanded card as the drag image.
  * One drag source, and it is the thing that looks like one.
  *
  * Drop target stays the row — you aim at a row, not at its grip. Dropping above
@@ -370,8 +362,8 @@ function SortableRow({
   // today, but this keeps the row honest about what it can address.
   //
   // Note `allIds` stays the UNFILTERED section list even when the filter field
-  // is hiding rows: reorder addresses real stack positions, and handing it
-  // filtered indices is exactly the class of bug P3 fixed.
+  // is hiding rows: reorder addresses real stack positions, and filtered
+  // indices would move the wrong layer.
   const index = allIds.indexOf(id);
   const rowRef = useRef<HTMLDivElement>(null);
   const rowTopRef = useRef<HTMLDivElement>(null);
@@ -454,7 +446,7 @@ function SortableRow({
     [id, allIds, mutators, dragOverPos],
   );
 
-  // Bounds are the section's, not the registry's: a row can only move within
+  // Bounds are the section's, not the whole panel's: a row can only move within
   // its own kind, so the top data layer and the top annotation are both
   // "first". The up/down buttons are kept for keyboard-only users and as a
   // discoverable alternative to drag.
@@ -602,9 +594,9 @@ function LayerNameInput({
  * A layer's name: a read-only label in the panel, or the inline editor itself.
  *
  * The label is deliberately inert — a row click is the select gesture, so the
- * name must not fight it (it used to be a button that opened the editor on
- * click). Renaming now happens only through the ⋯ menu's "Rename…" item, or
- * the expanded card's Rename button for data layers.
+ * name must not fight it with a click of its own. Renaming happens only
+ * through the ⋯ menu's "Rename…" item, or the expanded card's Rename button
+ * for data layers.
  *
  * `editing` is the parent's, not this component's, because a data layer can
  * enter the state from the ⋯ menu and from the expanded card's Rename button —
@@ -650,7 +642,7 @@ function LayerNameField({
  * "zoom to this layer" — the universal gesture after an import — never costs a
  * disclosure click first.
  *
- * Delete is two-step inside the menu. The registry has no undo, an imported
+ * Delete is two-step inside the menu. The document has no undo, an imported
  * layer can represent a real parsing session, and a single mis-click sits 4px
  * from Rename.
  */
@@ -748,7 +740,7 @@ function OverflowMenu({
             onStartRename();
           },
         },
-        // W9e — only a data layer has features to write. A raster is a
+        // Only a data layer has features to write. A raster is a
         // picture and a tile layer stays on its server, so neither is offered.
         ...(entry.kind === "data"
           ? [
@@ -805,8 +797,7 @@ function OverflowMenu({
     itemsRef.current[index]?.focus();
   }, []);
 
-  // Same arrow/Home/End contract the rail got in Step 2 — one component over,
-  // and the gap that FU-6 is about.
+  // Same arrow/Home/End contract as the sheet rail (SheetRail.tsx).
   const onItemKeyDown = (event: React.KeyboardEvent, index: number) => {
     const last = items.length - 1;
     switch (event.key) {
@@ -922,10 +913,10 @@ function OverflowMenu({
 /**
  * Provenance — always visible while the card is expanded.
  *
- * This is Dr. Ana's reproducibility need (PRD §3 persona C). Before this it
- * lived only in a 4-second import toast, which didn't even carry the drop
- * count, and `label` stops answering "which file?" the first time anyone
- * renames a layer.
+ * Reproducibility: a user must be able to tell which file a layer came from
+ * and how many records the import dropped. A toast is gone in seconds, and
+ * `label` stops answering "which file?" the first time anyone renames a
+ * layer.
  */
 function ProvenanceSection({
   entry,
@@ -1022,8 +1013,8 @@ function SymbologySection({
           onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
-      {/* Was a floating dialog clipped by this panel's own overflow; now the
-          rest of this section. See StylePanel.tsx's header. */}
+      {/* In normal flow, the rest of this section: a floating dialog is
+          clipped by this panel's own overflow. See StylePanel.tsx's header. */}
       <StylePanel layerId={id} />
     </div>
   );
@@ -1327,13 +1318,12 @@ function AnnotationLayerRow({
 }
 
 /**
- * A raster row — FU-1.
+ * A raster row.
  *
  * A row, not a card, for the same reason an annotation gets one: a card's four
  * sections are provenance, symbology, attributes and actions, and a raster has
- * exactly one of those. Symbology for a picture is an opacity slider, and that
- * is RA-7, after MIXI has seen a sheet on screen and can say what fading should
- * feel like.
+ * exactly one of those. Symbology for a picture is an opacity slider, and the
+ * raster row has none yet (`opacity` is stored).
  *
  * Delete lives in the ⋯ overflow menu with the same two-step confirm every
  * layer gets — a scanned sheet may be the only digital copy of the drawing,
@@ -1408,7 +1398,7 @@ function RasterLayerRow({
 }
 
 /**
- * A tile layer row (W9d). A row like a raster's, plus its one style: an
+ * A tile layer row. A row like a raster's, plus its one style: an
  * opacity slider, so a user can fade aerial imagery under their own data.
  * No "Zoom to layer": tiles cover the whole world, so there is no extent.
  */
@@ -1559,18 +1549,17 @@ function TileLayersSection({
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// Threads section — Step 5 (2026-07-30)
+// Threads section
 //
-// The demoted CommentsPanel. It used to be its own sidebar tab; comments are a
-// mode now (rail toggle + `C`, threads anchored on the map). What the tab was
-// genuinely good at — "read every thread in order, resolve the stale ones" —
-// is Marcus's review pass in the PRD, and that survives here, one level down,
-// in the same Sheet scope as Basemap / Data Layers / Annotations.
+// CommentsPanel, one level down. Comments are a mode (the toolbar toggle +
+// `C`, threads anchored on the map); this section is the review pass — read
+// every thread in order, resolve the stale ones — in the same Sheet scope as
+// Basemap / Data Layers / Annotations.
 //
 // Collapsed by default, deliberately: it is the review surface, not the
-// default one, and an always-open chronological list is exactly the 90%-empty
-// column the tab was. The disclosure carries the open-thread count so the
-// section still tells you there is something to read while closed.
+// default one, and an always-open chronological list is a mostly empty
+// column. The disclosure carries the open-thread count so the section still
+// tells you there is something to read while closed.
 // ---------------------------------------------------------------------------
 
 function ThreadsSection() {

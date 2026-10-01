@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/geojson.test.ts
-// Phase 2 Wave 1b T10 — colocated tests for geojson parser/writer.
+// Colocated tests for geojson parser/writer.
 
 import { describe, expect, it } from "vitest";
 

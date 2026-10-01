@@ -134,7 +134,10 @@ export function rejectFrom(
 // Shared pieces
 // ---------------------------------------------------------------------------
 
-/** Scene numbers reach 2^31 (ADR-0015); this leaves room and stops Infinity. */
+/**
+ * Scene numbers reach 2^31 (docs/architecture/adr/0015-world-coordinates-gate.md);
+ * this leaves room and stops Infinity.
+ */
 const MAX_SCENE_NUMBER = 2 ** 40;
 
 const sceneNumber = z

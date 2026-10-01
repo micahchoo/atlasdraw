@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// FU-1 RA-2 — GeoTIFF decode.
+// GeoTIFF decode.
 //
 // Fixtures are WRITTEN here rather than committed as binaries, using geotiff's
 // own writer. Three reasons, in order of how much they matter:
@@ -12,8 +12,8 @@
 //   3. It keeps the reader and the writer honest about each other.
 //
 // The cost is real and worth naming: these files are geotiff's idea of a
-// GeoTIFF, not a scanner's or GDAL's. That is why RA-4 also gets a Playwright
-// probe against a real drop — a round-trip through one library's writer cannot
+// GeoTIFF, not a scanner's or GDAL's. That is why raster import also has a
+// Playwright probe against a real drop (e2e/raster-import.spec.ts) — a round-trip through one library's writer cannot
 // prove we read what the world actually produces.
 
 import { describe, expect, it } from "vitest";

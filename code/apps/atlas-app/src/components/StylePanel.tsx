@@ -1,32 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 Wave 1b A5 — StylePanel.
+// StylePanel.
 //
 // Per-layer style editor: three tabs (Single color / Categorical / Graduated)
 // that author either a flat `style.color`/`fillColor` or a data-driven
-// `style.expression` (compiled by @atlasdraw/basemap's compileLayer — see A6).
+// `style.expression` (compiled by @atlasdraw/basemap's compileLayer).
 //
 // Reads the layer + first-feature properties via the existing
 // open document (`useDocument`). Writes through a `restyle` command — never
 // mutates `style` directly.
 //
-// Sheet-panel step 4 (2026-07-30) — this stopped being a floating dialog and
-// became the symbology section of LayerPanel's expanded layer card. It used to
-// be `position:absolute; right:20px; width:280px; z-index:100` rendered inside
-// a ~294px `overflow:hidden` sidebar body at z-120: a box wider than its
-// container, under a stacking context above itself, so it was clipped and
-// occluded at once. Nothing repositions it now — it is in normal flow inside
-// the card, which deletes the defect by deleting its cause.
+// It is the symbology section of LayerPanel's expanded layer card, in normal
+// flow. Do not make it a positioned dialog again: inside the ~294px
+// `overflow:hidden` sidebar body, under a stacking context above itself, a
+// floating box is clipped and occluded at once.
 //
-// What that cost, deliberately: the dialog chrome went with the dialog. No
-// FocusTrap, no Escape-to-close, no × button, no `role="dialog"`, and no
-// "Layer not found" branch — the card only renders inside a row whose entry it
-// just read, so `layerId` cannot dangle. Everything that authors style
-// survived intact: all three tabs, the linear/quantile/equal-interval stop
-// computation, ColorRampPicker, fallback colors, per-tab Apply, and deriving
-// the initial tab from an existing `style.expression`.
+// So it has no dialog chrome: no FocusTrap, no Escape-to-close, no × button,
+// no `role="dialog"`, and no "Layer not found" branch — the card only renders
+// inside a row whose entry it just read, so `layerId` cannot dangle.
 //
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A5
-// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useMemo, useState } from "react";
@@ -50,7 +41,7 @@ import { ColorRampPicker } from "./ColorRampPicker";
 
 import type { DataLayerEntry, LayerStyle } from "../state/document";
 
-// ---- stop-computation helpers (kept inline per Phase 6 constraint) ----------
+// ---- stop-computation helpers (inline: no stats dependency) -----------------
 
 /**
  * Linear stops: N evenly-spaced breakpoints from min..max.
@@ -164,7 +155,7 @@ export function StylePanel({ layerId }: StylePanelProps) {
   const [tab, setTab] = useState<Tab>(initialTab);
 
   // Introspect feature properties from the first feature. Empty list when the
-  // FC is missing (e.g. a registry entry exists but no FC was registered — a
+  // FC is missing (e.g. a layer entry exists but has no FC — a
   // converted annotation, perhaps). Categorical accepts string|number; graduated
   // is filtered to numeric only.
   const { allProps, numericProps } = useMemo(() => {
@@ -264,7 +255,7 @@ export function StylePanel({ layerId }: StylePanelProps) {
   );
 }
 
-// ---- labels (W9d) -----------------------------------------------------------
+// ---- labels -----------------------------------------------------------------
 
 const DEFAULT_LABEL_SIZE = 12;
 
@@ -362,7 +353,7 @@ function LabelSection({
   );
 }
 
-// ---- filter (W9d) -----------------------------------------------------------
+// ---- filter -----------------------------------------------------------------
 
 /** The comparisons, in the order the menu shows them, with their signs. */
 const FILTER_OPS: ReadonlyArray<{ op: FilterOp; sign: string }> = [

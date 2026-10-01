@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// StylePanel — labels from a property and a filter by property (W9d). The
+// StylePanel — labels from a property and a filter by property. The
 // panel writes `style.label` and `style.filter` through a restyle command,
 // refuses what the map cannot apply with the reason, and says when the
 // basemap has no glyphs to draw labels with.

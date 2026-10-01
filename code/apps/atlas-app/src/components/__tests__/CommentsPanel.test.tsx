@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentsPanel tests.
+// CommentsPanel tests.
 //
 // Asserts: renders rows, compose-bar adds comments, resolve flips,
 // show-resolved filter, delete is gated to own comments.

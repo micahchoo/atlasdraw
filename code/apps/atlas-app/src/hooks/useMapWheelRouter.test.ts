@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useMapWheelRouter (ISSUES.md Issue 6 — coverage climb).
+// Tests for useMapWheelRouter.
 //
 // Intercepts wheel events on a container and routes them to map.easeTo with
 // the canonical scrollZoom delta math, so scroll-to-zoom keeps working even
@@ -67,11 +67,9 @@ describe("useMapWheelRouter", () => {
     expect(map.easeTo).not.toHaveBeenCalled();
   });
 
-  // FU-10. This case had NO assertion at all — only a comment saying the event
-  // "should pass through untouched", which is the claim and not a check. It
-  // could fail only by throwing. "Passes through untouched" is observable:
-  // the router's whole job is preventDefault + stopPropagation, so with no map
-  // it must do neither.
+  // "Passes through untouched" is observable, so assert it: the router's
+  // whole job is preventDefault + stopPropagation, so with no map it must do
+  // neither. A case with no assertion can fail only by throwing.
   it("does nothing when map is null", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -162,9 +160,9 @@ describe("useMapWheelRouter", () => {
   // Chrome that scrolls itself keeps its own wheel.
   //
   // The listener is capture-phase on the editor root, which is an ancestor of
-  // the sidebar. Before this guard it preventDefaulted every wheel in the app,
-  // so nothing in the app could scroll: at 25 data layers the layer panel
-  // clipped 11 rows and no gesture could reach them.
+  // the sidebar. Without this guard it preventDefaults every wheel in the
+  // app, so nothing in the app can scroll: at 25 data layers the layer panel
+  // clips 11 rows and no gesture reaches them.
   // -------------------------------------------------------------------------
 
   /** jsdom reports 0 for both, so a scroll port has to be declared. */

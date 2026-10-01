@@ -18,7 +18,7 @@
 // target is "outside" every panel.
 //
 // A `#room:` link lets anyone who has it edit; the room id alone grants
-// nothing (ADR-0014). Read-only links (`/m#v2:`, `/m#v1:`, `/m/<token>`) stay
+// nothing (docs/architecture/adr/0014-collab-trust-model.md). Read-only links (`/m#v2:`, `/m#v1:`, `/m/<token>`) stay
 // read-only. The hint in the collab success state says so.
 
 import React, { useEffect, useRef, useState } from "react";
@@ -496,7 +496,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// Embed snippet (D1) — a read-only share URL doubles as a map embed. The embed
+// Embed snippet — a read-only share URL doubles as a map embed. The embed
 // route (`/embed…`) mounts the same document chromeless for cross-origin
 // <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
 // ---------------------------------------------------------------------------

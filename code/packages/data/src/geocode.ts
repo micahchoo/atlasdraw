@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/geocode.ts
-// Phase 6 A7 — Photon-compatible geocoder client + in-process LRU cache.
+// Photon-compatible geocoder client + in-process LRU cache.
 //
 // Pure module. Single dependency surface is the global `fetch`. No SDK,
 // no node-fetch polyfill — Vite/jsdom/Node 18+ all provide native fetch.
 //
-// CALL-HOME POLICY (ADR-0006 telemetry):
+// CALL-HOME POLICY (docs/architecture/adr/0006-telemetry.md):
 //   The Photon endpoint is OPERATOR-CONFIGURED and OPT-IN. There is NO
 //   default endpoint. Constructing a `PhotonGeocoder` requires the caller
 //   to supply an endpoint URL — there's nowhere for atlasdraw itself to
@@ -42,7 +42,8 @@ export interface GeocoderConfig {
   /**
    * Photon-compatible base URL — e.g. "https://photon.komoot.io" or a
    * self-hosted instance. NO trailing slash required; we strip one if
-   * present. Required: there is no default per ADR-0006 + ADR-0011.
+   * present. Required: there is no default (docs/architecture/adr/
+   * 0006-telemetry.md and 0011-hosted-mode-telemetry.md).
    */
   endpoint: string;
   /** Max in-memory cache entries. Default 500. */
@@ -263,7 +264,8 @@ export class PhotonGeocoder {
    * the Photon URL, fetches, and returns the parsed JSON body.
    *
    * Note: the operator-configured endpoint is the only outbound URL. See
-   * ADR-0006 / ADR-0011 — atlasdraw never calls home; this fetch only fires
+   * docs/architecture/adr/0006-telemetry.md and 0011-hosted-mode-telemetry.md
+   * — atlasdraw never calls home; this fetch only fires
    * when an operator has opted in by supplying `endpoint`.
    */
   private async fetchPhotonBody(

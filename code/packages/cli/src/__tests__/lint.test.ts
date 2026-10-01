@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/cli/src/__tests__/lint.test.ts
-// Phase 3 Wave 2 T10 — vitest suite for `runLint`.
+// Vitest suite for `runLint`.
 //
 // Strategy: build .atlasdraw fixtures in a temp dir using `write()` from
 // @atlasdraw/data, then drive `runLint` directly with mock streams. We assert

@@ -5,9 +5,6 @@
 // strip → lon graticule → [lat graticule | map plate | sheet-panel icon
 // rail] → bottom marginalia. Nothing floats over the map at rest.
 //
-// Visual spec: prototypes/collar-shell/index.html (?variant=a); direction
-// record: .interface-design/system.md § "Shell Direction — The Collar".
-//
 // This component is layout + frame only. The plate content (MapLibre +
 // Excalidraw stack) comes in as `children`; the tool strip / tabs / foot
 // rows are slots the editor fills in.

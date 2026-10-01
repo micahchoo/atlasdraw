@@ -71,7 +71,8 @@ export const MIGRATIONS: readonly Migration[] = [
     `,
   },
   {
-    // Managed mode is removed (ADR-0013). A database that ran it has
+    // Managed mode is removed (docs/architecture/adr/0013-self-host-only.md).
+    // A database that ran it has
     // workspace_id columns, their index and a workspaces table. SQLite
     // refuses to drop an indexed column, so the index goes first.
     name: "002_drop_workspaces",
@@ -96,7 +97,8 @@ export const MIGRATIONS: readonly Migration[] = [
     `,
   },
   {
-    // A map carries the SHA-256 of its write key (ADR-0017). A map stored
+    // A map carries the SHA-256 of its write key
+    // (docs/architecture/adr/0017-maps-carry-a-write-key.md). A map stored
     // before this has no key: nobody can write it, and it lives only while a
     // share token reads it. A share token may have no expiry, so
     // expires_at becomes nullable. SQLite cannot drop NOT NULL in place, so

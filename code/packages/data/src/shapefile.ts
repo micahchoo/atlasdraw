@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/shapefile.ts
-// Phase 3 Wave 1 T7 — Shapefile (.zip) → GeoJSON FeatureCollection adapter.
+// Shapefile (.zip) → GeoJSON FeatureCollection adapter.
 //
 // Pure module. No Yjs, no MapLibre, no @excalidraw imports — like the GeoJSON
 // adapter, this layer is strictly bytes-in / FeatureCollection-out. Higher
-// layers translate the parsed FC into Yjs-backed layers or Excalidraw elements.
+// layers turn the parsed FC into the document's data layers.
 //
 // shpjs ^6.2 ships no TypeScript types and no @types/shpjs package. We declare
 // an ambient module shim below; signature derived from

@@ -6,7 +6,7 @@
 //
 // It reads the element's scene geometry (x, y, size, points and its own
 // turn) and maps each vertex to lng/lat through the document's world frame
-// (ADR-0015). The geometry is the shape as drawn on the map, turn included.
+// (docs/architecture/adr/0015-world-coordinates-gate.md). The geometry is the shape as drawn on the map, turn included.
 //
 //   rectangle, image, frame, embed → Polygon (the four corners)
 //   ellipse                        → Polygon (64 points on the ellipse)

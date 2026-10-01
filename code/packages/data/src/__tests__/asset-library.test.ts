@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Phase 6 A11 — asset-library reader tests.
+// Asset-library reader tests.
 
 import { describe, it, expect } from "vitest";
 

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Atlasdraw fork addition (ADR-0010, Collar shell).
+// Atlasdraw fork addition (code/decisions/0010-own-the-fork.md, Collar shell).
 
 /**
  * Is the collar treatment in force?

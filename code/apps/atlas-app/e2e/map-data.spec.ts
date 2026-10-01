@@ -1,5 +1,5 @@
 /**
- * Tile layers, labels and filters, in a real browser (W9d).
+ * Tile layers, labels and filters, in a real browser.
  *
  * The unit tests prove the spec against MapLibre's validator and a fake map.
  * What only a browser settles: the real MapLibre accepts the raster source

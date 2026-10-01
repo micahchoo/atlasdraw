@@ -16,8 +16,8 @@ import {
   _fallbackBase64UrlToUint8Array,
 } from "./base64url.js";
 
-// The original (pre-optimization) implementation, kept as the reference the
-// fast paths must match byte for byte.
+// The plain-loop implementation: the reference the fast paths must match
+// byte for byte.
 function referenceEncode(buf: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < buf.length; i++) {

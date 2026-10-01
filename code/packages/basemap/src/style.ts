@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: MIT
-// @atlasdraw/basemap — LayerStyle interface (Phase 2, Wave 2a).
-// Shared style shape consumed by style-compiler and atlas-app's layer registry.
-// See docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md
+// @atlasdraw/basemap — LayerStyle, the style of one data layer. Consumed by
+// style-compiler and by atlas-app's data layers.
 //
-// Phase 6 (Wave 1b, A5+A6): added optional `expression` field for MapLibre
-// data-driven paint expressions (categorical + graduated). The forward-compat
-// convention here is intentionally "kept liberal" (mx-91343d): new optional
-// fields stack onto the existing shape without breaking existing styles or
-// existing consumers — `defaultLayerStyle` callers and the Phase 2 LayerPanel
-// continue to function unchanged when `expression` is absent.
+// Forward-compatibility convention: every new field is optional, so an
+// existing style and every existing consumer keep working when it is absent.
 
 /**
  * Data-driven paint expression. Compiled into a MapLibre expression by
@@ -32,7 +27,7 @@ export type StyleExpression =
     };
 
 /**
- * W9d — labels from one property of each feature. `size` is in pixels
+ * Labels from one property of each feature. `size` is in pixels
  * (6..48); `halo` draws a white outline round the text so it reads over any
  * colour. Labels need the basemap's glyphs: the compiler draws none without
  * a font (see `compileLayers`).
@@ -47,7 +42,7 @@ export interface LabelStyle {
 export type FilterOp = "==" | "!=" | "<" | ">" | "contains";
 
 /**
- * W9d — draw only the features whose `property` passes the comparison.
+ * Draw only the features whose `property` passes the comparison.
  * `value` is kept as the user typed it; < and > read it as a number.
  */
 export interface FilterStyle {
@@ -61,12 +56,10 @@ export interface LayerStyle {
   strokeColor?: string;
   strokeWidth?: number;
   opacity?: number; // 0..1
-  // Phase 6 (A6) — optional. When set, compileLayer emits a MapLibre paint
-  // expression instead of a flat color literal. See mx-91343d: extending the
-  // LayerStyle shape with optional fields is the project's forward-compat
-  // convention; absent `expression` preserves Phase 2 literal-color behavior.
+  // When set, compileLayer emits a MapLibre paint expression instead of a
+  // flat color literal. Absent means the flat colors above.
   expression?: StyleExpression;
-  // W9d — optional, same convention: absent means no labels, no filter.
+  // Absent means no labels and no filter.
   label?: LabelStyle;
   filter?: FilterStyle;
 }

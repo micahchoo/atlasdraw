@@ -2,26 +2,27 @@ import { z } from "zod";
 
 import type { StorageMode } from "./types";
 
-// @atlasdraw/storage — Phase 4 T2: startup config + StorageMode detection.
+// @atlasdraw/storage — startup config + StorageMode detection.
 //
-// Reads env at server boot and selects which adapter loads. Failure mode is
-// loud-and-named (see formatZodError) — Phase 4's first-run experience
-// depends on misconfiguration being obvious instead of cryptic.
+// Reads env at server boot and selects which adapter loads. A misconfiguration
+// fails loudly and names the variable (see formatZodError), so a first run
+// with a wrong env is obvious, not cryptic.
 
 const BaseSchema = z.object({
   STORAGE_MODE: z.enum(["postgres-minio", "sqlite-fs"]),
   PORT: z.coerce.number().int().positive().default(4000),
-  // T4: prefix for share URLs returned by POST /maps/:id/share. Empty
+  // Prefix for share URLs returned by POST /maps/:id/share. Empty
   // default → relative `/m/<token>` (works when storage is reverse-proxied
   // on the same origin as atlas-app). Operators override in compose env
   // for absolute URLs (e.g. `https://atlas.example.com`).
   PUBLIC_URL: z.string().default(""),
-  // T18: structured-log level for pino. Standard pino levels apply
+  // Structured-log level for pino. Standard pino levels apply
   // ("fatal","error","warn","info","debug","trace","silent").
   LOG_LEVEL: z.string().default("info"),
-  // T18: optional Sentry DSN. When unset, Sentry init is a no-op — the
+  // Optional Sentry DSN. When unset, Sentry init is a no-op — the
   // server runs identically without any third-party data egress. An
-  // operator opts in by setting this env (see ADR-0009).
+  // operator opts in by setting this env
+  // (see docs/architecture/adr/0009-error-capture.md).
   SENTRY_DSN: z.string().optional(),
   // Which proxies may set X-Forwarded-For (Fastify `trustProxy`). Off by
   // default: with no proxy in front, a client could otherwise choose its own

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/atlasdraw.test.ts
-// Phase 3 Wave 1 T2 + T3 — colocated tests for the .atlasdraw zip writer/reader.
+// Colocated tests for the .atlasdraw zip writer/reader.
 
 import JSZip from "jszip";
 

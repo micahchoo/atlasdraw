@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// RT-9 — the drawing gate, and the way out of it.
+// The drawing gate, and the way out of it.
 //
-// D6: drawing is blocked while the camera is turned. Unprojecting the pointer
+// Drawing is blocked while the camera is turned. Unprojecting the pointer
 // is correct at any rotation but the *shape* is not — drag a rectangle at 30°
 // and unprojecting its corners yields a north-aligned bbox that is not the box
 // you dragged. This suite covers the wiring: the gate closes only when a

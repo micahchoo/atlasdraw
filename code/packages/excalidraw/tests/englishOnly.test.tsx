@@ -5,8 +5,9 @@ import { getLanguage, languages, t } from "../i18n";
 
 import { render } from "./test-utils";
 
-// Atlasdraw addition (ADR-0010). The editor ships English only. A host that
-// asks for another language gets English, and no other locale is bundled.
+// Atlasdraw addition (code/decisions/0010-own-the-fork.md). The editor ships
+// English only. A host that asks for another language gets English, and no
+// other locale is bundled.
 
 describe("English only", () => {
   it("offers English as the only real language", () => {

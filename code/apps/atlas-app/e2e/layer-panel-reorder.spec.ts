@@ -2,7 +2,8 @@
 /**
  * LayerPanel smoke — sidebar tab rendering + LayerPanel body.
  *
- * Uses the same window.__atlasdraw__ pattern as the phase-1 test for
+ * Uses the same window.__atlasdraw__ pattern as
+ * phase-1-geo-foundation.spec.ts for
  * direct access to the map + Excalidraw API. The sidebar tabs are
  * registered via excalidrawAPI.registerSidebarTab in MapEditor's
  * useEffect — we verify they appear in the DefaultSidebar.

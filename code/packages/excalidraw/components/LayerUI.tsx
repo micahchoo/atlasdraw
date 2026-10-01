@@ -190,10 +190,11 @@ const LayerUI = ({
 
   const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
 
-  // Atlasdraw Collar shell (ADR-0010): when the host app provides a collar
-  // toolbar target, desktop chrome renders flush into the app's frame (via
-  // portals) instead of floating over the canvas. Stock island layout is
-  // untouched when the prop is absent; the phone layout always ignores it.
+  // Atlasdraw Collar shell (code/decisions/0010-own-the-fork.md): when the host
+  // app provides a collar toolbar target, desktop chrome renders flush into the
+  // app's frame (via portals) instead of floating over the canvas. Stock island
+  // layout is untouched when the prop is absent; the phone layout always
+  // ignores it.
   const collarMode = isCollarMode(
     collarToolbarTarget,
     editorInterface.formFactor,
@@ -487,10 +488,11 @@ const LayerUI = ({
   const isUIShrunkForSidebar =
     !!appState.openSidebar && isSidebarDocked && editorInterface.canFitSidebar;
 
-  // Atlasdraw fork addition (ADR-0010, Collar shell): publish the sidebar's
-  // layout to the host so it can reflow its OWN surfaces — atlas-app narrows
-  // the MapLibre plate by the sidebar's width instead of letting the panel
-  // cover it, and anchors its resize handle at the panel's left edge.
+  // Atlasdraw fork addition (code/decisions/0010-own-the-fork.md, Collar
+  // shell): publish the sidebar's layout to the host so it can reflow its OWN
+  // surfaces — atlas-app narrows the MapLibre plate by the sidebar's width
+  // instead of letting the panel cover it, and anchors its resize handle at the
+  // panel's left edge.
   //
   // `collar` rides along because "the panel's left edge is at `width` from the
   // right" is only true under the collar treatment (Sidebar.scss); off it — no
@@ -515,11 +517,11 @@ const LayerUI = ({
     onSidebarLayoutChange,
   ]);
 
-  // Atlasdraw Collar shell (ADR-0010): the shapes toolbar as a flush,
-  // full-width strip portaled into the app's collar tool row. The wrapper
-  // re-establishes the `.excalidraw` scope (CSS custom properties) because
-  // the collar rows live outside the editor container. No Island — the
-  // collar frame provides the surface.
+  // Atlasdraw Collar shell (code/decisions/0010-own-the-fork.md): the shapes
+  // toolbar as a flush, full-width strip portaled into the app's collar tool
+  // row. The wrapper re-establishes the `.excalidraw` scope (CSS custom
+  // properties) because the collar rows live outside the editor container. No
+  // Island — the collar frame provides the surface.
   const renderCollarToolbar = () => {
     if (!collarMode || !collarToolbarTarget || !shouldRenderToolbar) {
       return null;

@@ -18,9 +18,10 @@ import { act, render } from "./test-utils";
 
 import type { NormalizedZoomValue, ZoomAction } from "../types";
 
-// Atlasdraw addition (ADR-0015). The atlas app's scene is a world map at a
-// fixed reference zoom, so the editor's zoom value is far below 1 where people
-// draw. Two props keep the editor usable there:
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+// The atlas app's scene is a world map at a fixed reference zoom, so the
+// editor's zoom value is far below 1 where people draw. Two props keep the
+// editor usable there:
 //
 //   screenSizedStyles — stroke width and font size are screen pixels; a new
 //                       element and a picker change store them in scene units.

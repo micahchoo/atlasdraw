@@ -61,12 +61,12 @@
     z-index: 1;
   }
 
-  // --- Atlasdraw Collar shell (ADR-0010) ---------------------------------
-  // Portal hosts re-establish the .excalidraw scope inside the app's collar
-  // frame (the hosts live OUTSIDE the editor container). Chrome sits flush
-  // in the frame: no Island, no shadow — the collar row is the surface.
-  // Styled with the app's --ad-* tokens (fallbacks keep it usable if the
-  // token sheet is absent).
+  // --- Atlasdraw Collar shell (code/decisions/0010-own-the-fork.md)
+  // --------------------------------- Portal hosts re-establish the .excalidraw
+  // scope inside the app's collar frame (the hosts live OUTSIDE the editor
+  // container). Chrome sits flush in the frame: no Island, no shadow — the
+  // collar row is the surface. Styled with the app's --ad-* tokens (fallbacks
+  // keep it usable if the token sheet is absent).
   &.App-collar-host {
     position: relative;
     overflow: visible; // .excalidraw base clips; dropdowns must escape

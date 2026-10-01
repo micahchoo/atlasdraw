@@ -5,8 +5,6 @@
  * is active. Shows the tool label and an optional "Escape to cancel" hint.
  * The Measure tool and the selection readout (MeasureLayer) put their values
  * and controls in it as children.
- * (The Geo/Screen/Hybrid scale-mode toggle that briefly lived here was
- * removed 2026-07-19: "geographic" is the only creation mode.)
  *
  * Design: drafting instrument panel — compact, precise, disappears when not
  * needed. Same surface temperature as the raised dialog level.

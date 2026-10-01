@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 Wave 1b A5 — StylePanel tests.
+// StylePanel tests.
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -147,13 +147,12 @@ describe("StylePanel", () => {
 
     fireEvent.click(screen.getByTestId("cat-apply"));
 
-    // FU-10. Every assertion here used to sit inside `if (entry?.kind ===
-    // "data")` and a second nested `if`. Those reads as type narrowing, and
-    // they are — but they also SKIP. If Apply silently wrote nothing, or wrote
-    // a graduated expression, both guards go false, zero assertions run, and
-    // the test passes green. Narrow by asserting the narrowing condition and
-    // then projecting: a wrong shape lands as `undefined` in an expect that
-    // always executes.
+    // No `if (entry?.kind === "data")` around the assertions: such a guard
+    // reads as type narrowing, and it is — but it also SKIPS. If Apply wrote
+    // nothing, or wrote a graduated expression, the guard goes false, zero
+    // assertions run, and the test passes green. Narrow by asserting the
+    // narrowing condition and then projecting: a wrong shape lands as
+    // `undefined` in an expect that always executes.
     const entry = currentDocument()
       .snapshot()
       .overlays.find((e) => e.id === "dl:t1");
@@ -211,13 +210,11 @@ describe("StylePanel", () => {
     }
   });
 
-  // Replaces the two former dialog tests ("closes on ×" / "closes on Escape").
-  // Sheet-panel step 4 folded this component into the layer card, so there is
-  // no dialog to close and nothing to trap focus in — the card's disclosure
-  // owns open/closed now (see LayerPanel.card.test.tsx). What remains to pin
-  // here is that the surface is genuinely NOT a dialog any more, because the
-  // defect it caused (a 280px absolutely-positioned box inside a 294px
-  // overflow:hidden sidebar) came straight from that framing.
+  // This component is a section of the layer card: there is no dialog to
+  // close and nothing to trap focus in — the card's disclosure owns
+  // open/closed (see LayerPanel.card.test.tsx). Pin that the surface is NOT a
+  // dialog, because dialog framing (a 280px absolutely-positioned box inside
+  // a 294px overflow:hidden sidebar) is clipped and occluded at once.
   it("renders in normal flow — no dialog role, no fixed width, no z-index", () => {
     render(<StylePanel layerId="dl:t1" />);
 
@@ -229,7 +226,7 @@ describe("StylePanel", () => {
     expect(screen.getByTestId("style-panel").className).toContain("panel");
 
     const rule = panelRuleBody();
-    // The defect was the whole dialog framing: `position: absolute` +
+    // The hazard is the whole dialog framing: `position: absolute` +
     // `right: 20px` + `z-index: 100` + `width: 280px`, a box wider than its
     // container and under a stacking context above itself. Each part is named,
     // rather than banning `position` outright — a `position: relative` for an
@@ -252,7 +249,7 @@ describe("StylePanel", () => {
     window.removeEventListener("keydown", onEscape);
 
     expect(onEscape).toHaveBeenCalledTimes(1);
-    // Still mounted: Escape is no longer this component's business.
+    // Still mounted: Escape is not this component's business.
     expect(screen.getByTestId("style-panel")).toBeTruthy();
   });
 

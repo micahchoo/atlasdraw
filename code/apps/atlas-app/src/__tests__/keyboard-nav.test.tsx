@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14a — keyboard nav tests.
+// Keyboard nav tests.
 //
 // Cross-component assertions: modals auto-focus a sensible target on open,
 // Escape triggers onCloseRequest (which the calling parent uses to unmount),
@@ -14,10 +14,8 @@ afterEach(() => {
   cleanup();
 });
 
-// BasemapPickerDialog was deleted in the IA restructure (basemap picking
-// moved into LayerPanel's Basemap section — a sidebar surface, not a modal).
-// ExportDialog stands in as the second modal-under-test: it wires FocusTrap
-// and its own Escape handler the same way.
+// ExportDialog is the modal under test: it wires FocusTrap and its own Escape
+// handler the way every modal does.
 function renderExportDialog(onClose: () => void = () => {}) {
   return render(
     <ExportDialog

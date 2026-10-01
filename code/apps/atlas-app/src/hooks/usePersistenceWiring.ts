@@ -109,8 +109,9 @@ export function usePersistenceWiring(
     persistence.getState().setPersistenceStore(store);
 
     // `forceSave` saves now, past the autosave delay: My maps and a room
-    // call it before the open map leaves the editor. A room's document is the relay's to keep (ADR-0018): the autosave
-    // writes only the user's own maps.
+    // call it before the open map leaves the editor. A room's document is the
+    // relay's to keep (docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md):
+    // the autosave writes only the user's own maps.
     const getDoc = () => {
       const doc = currentDocument();
       return isRoomDocument(doc)

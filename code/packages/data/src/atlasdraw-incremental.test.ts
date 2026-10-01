@@ -156,8 +156,8 @@ describe("incremental .atlasdraw writer", () => {
   it("produces deterministic bytes under a pinned date across clock ticks", async () => {
     const doc = synthDoc();
     const first = await bytesOf(await write(doc, { date: PINNED }));
-    // Jump the clock past the zip DOS-time 2 s granularity; folder entries
-    // used to pick up `new Date()` here.
+    // Jump the clock past the zip DOS-time 2 s granularity: folder entries
+    // must take the pinned date, not `new Date()`.
     vi.setSystemTime(new Date(PINNED.getTime() + 3000));
     const second = await bytesOf(await write(doc, { date: PINNED }));
     expect(second).toEqual(first);

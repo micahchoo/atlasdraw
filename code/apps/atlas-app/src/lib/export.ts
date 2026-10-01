@@ -7,9 +7,9 @@
 // same ratio. A 3x PNG of a 1440 x 900 view is 4320 x 2700 px with 4320 x 2700
 // px of basemap in it, not a 1440 x 900 screenshot stretched to fit.
 //
-// Before this, the "2x" export drew the screen's map canvas (1x on a 1x
-// screen) and the drawings (1x) into a 2x canvas through ctx.scale(2): both
-// layers were upscaled, and the PDF was the same picture as a JPEG.
+// Do not draw the screen's map canvas (1x on a 1x screen) and the drawings
+// (1x) into a 2x canvas through ctx.scale(2): both layers are upscaled, and
+// the "2x" export is a stretched screenshot.
 
 import { exportToCanvas } from "@atlasdraw/excalidraw";
 import maplibregl from "maplibre-gl";
@@ -180,9 +180,8 @@ function assertSize(
  * Excalidraw annotations on top, both rendered at `pixelRatio`.
  *
  * This is the single definition of "what an export contains". Every export
- * surface must go through it. The PDF path did not, and shipped a document
- * with the basemap and none of the user's shapes — see FU-12 in
- * `.agents/docs/SHEET_PANEL_FOLLOWUPS.md`.
+ * surface must go through it: a path that composites on its own can ship a
+ * document with the basemap and none of the user's shapes.
  */
 export async function compositeMapScene(
   map: maplibregl.Map,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // "Show me THAT comment" — the one-shot focus signal.
 //
-// Canvas search can now match comment text (see hooks/useCommentSearchSource).
+// Canvas search can match comment text (see hooks/useCommentSearchSources).
 // Picking a result has to do two things: move the viewport to the anchor, and
 // open that anchor's popover — the search preview is a few words wide, so
 // landing on a closed bubble is not an answer.
@@ -10,8 +10,8 @@
 // second is this store: the search result and the anchor are in unrelated
 // React trees (the result is inside Excalidraw's sidebar, the anchor is in
 // MapEditor's overlay), so the signal has to travel through module state —
-// same vanilla subscribe + getSnapshot shape as its neighbours
-// `commentMode.ts` and `comments-anchor-picker.ts`.
+// same vanilla subscribe + getSnapshot shape as its neighbour
+// `comments-anchor-picker.ts`.
 //
 // It carries a NONCE, not just an id, because this is an event and not a
 // piece of state: picking the same result twice after closing the popover

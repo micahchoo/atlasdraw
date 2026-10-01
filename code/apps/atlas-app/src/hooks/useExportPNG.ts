@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Extracted from MapEditor.tsx (2026-05-25) — composite PNG export callback.
+// Composite PNG export callback.
 import { useCallback } from "react";
 
 import { getBasemap } from "@atlasdraw/basemap";

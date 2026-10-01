@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 4 T14 — AboutDialog tests.
+// AboutDialog tests.
 //
 // Default render (no VITE_BUILD_TARGET set) → buildTarget "local-only", no
 // demo note. Demo-badge path is covered by app-config.test.ts; the dialog

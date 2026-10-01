@@ -1,4 +1,5 @@
-// Atlasdraw addition (ADR-0015): the unit of an element's pixel-sized details.
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md):
+// the unit of an element's pixel-sized details.
 //
 // The atlas app's scene is a world map at a fixed reference zoom, so an
 // element drawn at a lower zoom is many scene units wide. Upstream draws some

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// FU-1 RA-2 — GeoTIFF decode.
+// GeoTIFF decode.
 //
 // Bytes in, pixels plus four lng/lat corners out. Nothing here knows about
-// MapLibre, the registry, or the panel: this module's whole job is turning a
+// MapLibre, the document, or the panel: this module's whole job is turning a
 // file someone dropped into the two things a raster layer needs, or refusing
 // clearly.
 //

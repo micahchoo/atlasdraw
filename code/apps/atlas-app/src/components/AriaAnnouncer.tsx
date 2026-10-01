@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14b — AriaAnnouncer.
+// AriaAnnouncer.
 //
 // One hidden aria-live region rendered near the root. Surfaces use a Zustand
 // store via `useAnnounce()` to publish polite text into it: layer-visibility

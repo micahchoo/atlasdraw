@@ -117,7 +117,8 @@ function blankFile(ctx: MapActionContext): AtlasdrawDocument {
       updatedAt: now,
       basemap: { type: "registry", id: currentDocument().snapshot().basemap },
       camera,
-      // The world frame starts where the user is looking (ADR-0015).
+      // The world frame starts where the user is looking
+      // (docs/architecture/adr/0015-world-coordinates-gate.md).
       world: documentFrame(camera.center[0], camera.center[1]),
       layers: [],
       permissions: { publicView: false },

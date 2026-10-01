@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 //
-// The camera bridge (ADR-0015).
+// The camera bridge (docs/architecture/adr/0015-world-coordinates-gate.md).
 //
 // The map owns the camera. On every map `move` the bridge writes Excalidraw's
 // scrollX / scrollY / zoom from it and writes no element. When Excalidraw moves
 // its own viewport (space-drag, zoom actions, scroll-to-content), the change
 // arrives through the `onScrollChange` prop and goes back to `map.jumpTo` once.
 //
-// Loop suppression (audit R1): the bridge remembers the viewport it last
+// Loop suppression: the bridge remembers the viewport it last
 // wrote. A scroll change equal to it is the echo of its own write and is
 // dropped; any other value is Excalidraw's own and is forwarded. `jumpTo`
 // fires `move` synchronously, which writes the map's answer back — that write

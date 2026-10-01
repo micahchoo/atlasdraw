@@ -4,11 +4,10 @@
 // portaled into the collar tool strip via the vendored `renderToolbarExtras`
 // slot (alongside PinToolButton and GeoSearchControl).
 //
-// IA note: the toggle previously lived on <SheetRail>, the right icon rail.
-// The rail is the trigger surface for *panels* — every other item on it
-// discloses a sidebar tab (`aria-expanded`). Comment mode discloses nothing;
-// it changes what a click on the plate does, which is what the tool strip is
-// for. Same move PinToolButton made when it left the main menu.
+// Not on <SheetRail>, the right icon rail: the rail is the trigger surface
+// for *panels* — every item on it discloses a sidebar tab (`aria-expanded`).
+// Comment mode discloses nothing; it changes what a click on the plate does,
+// which is what the tool strip is for.
 //
 // The mode is session view state (session/view.ts); this button only flips
 // it. The `c` key is the "Comment mode" command, and Escape leaves the mode

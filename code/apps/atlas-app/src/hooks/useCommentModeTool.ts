@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Step 5 — the side of comment mode that touches the editor.
+// The side of comment mode that touches the editor.
 //
 // The session view holds the boolean; this hook is everything that has to
 // happen at the two edges of it. MapEditor mounts it exactly once.
@@ -12,11 +12,10 @@
 //     mode is the overlay's signal that a fresh thread is expected; the
 //     overlay re-arms it (submit / cancel) while the mode stays on.
 //
-// The Excalidraw tool is NOT borrowed anymore. Comment mode used to swap the
-// editor to `hand` so map clicks reached MapLibre; the overlay now intercepts
-// clicks itself (see CommentAnchorsOverlay), so the tool stays exactly as the
-// user left it — and a tool pick is no longer an exit. Escape and the rail
-// toggle are the only ways out.
+// The Excalidraw tool is NOT borrowed. The overlay intercepts clicks itself
+// (see CommentAnchorsOverlay), so the tool stays exactly as the user left it,
+// and a tool pick is not an exit. Escape and the toolbar toggle are the only
+// ways out.
 //
 // EXIT — the mode is over and nothing else changed, so put back what was
 // borrowed: the atlas tool. There is no Excalidraw tool to restore because

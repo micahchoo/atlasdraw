@@ -2,11 +2,11 @@ import { Excalidraw } from "../index";
 
 import { render } from "./test-utils";
 
-// Atlasdraw addition (ADR-0010): the `renderToolbarExtras` prop injects
-// app-provided content INSIDE the shapes toolbar Island, after the tool
-// buttons. The atlas app uses it to place its geo-search control on the same
-// toolbar as the drawing tools. This pins the vendored slot end-to-end — the
-// one seam atlas-side unit tests mock away.
+// Atlasdraw addition (code/decisions/0010-own-the-fork.md): the
+// `renderToolbarExtras` prop injects app-provided content INSIDE the shapes
+// toolbar Island, after the tool buttons. The atlas app uses it to place its
+// geo-search control on the same toolbar as the drawing tools. This pins the
+// vendored slot end-to-end — the one seam atlas-side unit tests mock away.
 
 describe("renderToolbarExtras", () => {
   it("injects app content inside the .App-toolbar island", async () => {

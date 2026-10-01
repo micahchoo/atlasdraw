@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/round-trip.test.ts
-// Phase 3 Wave 3 T12 — round-trip acceptance suite.
+// Round-trip acceptance suite.
 //
-// This is the trust boundary for Phase 3: synthetic AtlasdrawDocument →
+// This is the trust boundary of the file format: synthetic AtlasdrawDocument →
 // writer → reader → identity. If anything silently drops or mutates between
 // the two ends (key ordering, blob bytes, blob.type, encoding drift, manifest
 // schema mismatch), this suite is what catches it.
@@ -228,7 +228,7 @@ async function blobBytes(b: Blob): Promise<Uint8Array> {
 // tests
 // ---------------------------------------------------------------------------
 
-describe("T12 round-trip — write (zip) → read", () => {
+describe("round-trip — write (zip) → read", () => {
   it("preserves manifest, scene, layers, files, and styleRef end-to-end", async () => {
     const doc = buildSyntheticDoc();
 
@@ -261,7 +261,7 @@ describe("T12 round-trip — write (zip) → read", () => {
     const roundBlob = back.files.get(FILE_NAME)!;
     expect(await blobBytes(roundBlob)).toEqual(await blobBytes(origBlob));
 
-    // [T12 finding] Blob.type does NOT round-trip through the zip path.
+    // Blob.type does NOT round-trip through the zip path.
     // The zip format has no per-entry MIME field; JSZip extracts entries with
     // type === "". Callers that need MIME info must derive it from the
     // filename extension (or stash it in manifest/style metadata). The bytes
@@ -314,7 +314,7 @@ describe("round-trip — data-layer import provenance", () => {
   });
 });
 
-describe("T12 round-trip — writeJSON → readJSON", () => {
+describe("round-trip — writeJSON → readJSON", () => {
   it("preserves manifest, scene, layers, and styleRef for a no-binary doc", async () => {
     // JSON variant cannot carry binaries — strip files for this case.
     const fileless: AtlasdrawDocument = {
@@ -345,7 +345,7 @@ describe("T12 round-trip — writeJSON → readJSON", () => {
   });
 });
 
-describe("T12 — writeJSON rejects when files non-empty", () => {
+describe("writeJSON rejects when files non-empty", () => {
   it("throws AtlasdrawJSONError with code HAS_BINARY_ATTACHMENTS", async () => {
     const doc = buildSyntheticDoc(); // has 1 file
     expect(doc.files.size).toBeGreaterThan(0);
@@ -360,10 +360,10 @@ describe("T12 — writeJSON rejects when files non-empty", () => {
   });
 });
 
-describe("T12 — read rejects on tampered manifest.json", () => {
+describe("read rejects on tampered manifest.json", () => {
   it("throws AtlasdrawFormatError with code UNSUPPORTED_VERSION for a newer manifest version", async () => {
     // Start from a real, valid blob then mutate manifest.json in-place via JSZip
-    // (same surgery pattern T10's lint test uses).
+    // (the CLI lint test uses the same surgery).
     const doc = buildSyntheticDoc();
     const blob = await write(doc);
 
@@ -386,7 +386,7 @@ describe("T12 — read rejects on tampered manifest.json", () => {
   });
 });
 
-describe("T12 — empty-doc round-trip", () => {
+describe("empty-doc round-trip", () => {
   it("write → read survives empty layers/files/scene", async () => {
     const doc = buildEmptyDoc();
     const blob = await write(doc);
@@ -397,7 +397,7 @@ describe("T12 — empty-doc round-trip", () => {
     expect(back.layers.size).toBe(0);
     expect(back.files.size).toBe(0);
 
-    // [T12 finding] styleRef divergence between paths:
+    // styleRef diverges between the two paths:
     //   - zip writer:  JSON.stringify(doc.styleRef ?? {}) → null becomes `{}`
     //   - JSON writer: doc.styleRef ?? null               → null stays `null`
     // Same source `null` produces different round-trip values across the two

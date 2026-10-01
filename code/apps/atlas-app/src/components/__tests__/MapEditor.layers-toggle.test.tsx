@@ -92,7 +92,7 @@ const mockFakeExcalidrawAPI = {
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
   toggleSidebar: mockToggleSidebarSpy,
-  // W-C — MapEditor calls excalidrawAPI.registerContextMenuItem in a
+  // MapEditor calls excalidrawAPI.registerContextMenuItem in a
   // useEffect to wire the Convert action. Stub returns an unregister fn.
   registerContextMenuItem: vi.fn(() => vi.fn()),
   // Sidebar-tab fork — MapEditor mounts LayerPanel as a tab inside
@@ -209,8 +209,8 @@ const mockMap = {
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
-  // RT-3 — useCameraRotation reads the live camera on mount, via
-  // useCameraRotation reads it. A map without it is not a map.
+  // useCameraRotation reads the live camera's bearing on mount. A map
+  // without getBearing is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
@@ -279,14 +279,13 @@ describe("MapEditor — the Layers tab", () => {
 });
 
 // ---------------------------------------------------------------------------
-// IA restructure: the basemap is presented as a LAYER — bottom of the stack
-// in LayerPanel — replacing the MainMenu "Basemap: …" item + standalone
-// BasemapPickerDialog. These tests render the registered Layers-tab content
+// The basemap is presented as a LAYER — bottom of the stack in LayerPanel.
+// These tests render the registered Layers-tab content
 // (the same element MapEditor hands to registerSidebarTab) and drive the
 // Basemap section against the shared basemap store.
 // ---------------------------------------------------------------------------
 
-describe("LayerPanel Basemap section (IA restructure)", () => {
+describe("LayerPanel Basemap section", () => {
   async function renderLayersTabContent() {
     render(
       <ToastProvider>

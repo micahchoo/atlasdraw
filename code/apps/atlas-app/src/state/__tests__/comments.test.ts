@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentsLayer unit tests.
+// CommentsLayer unit tests.
 //
 // Exercises the CRDT semantics of CommentsLayer in isolation: addComment
 // appends, resolve flips, delete removes, and two layers wired together
 // through a shared Y.Doc update channel converge — the same wire-level
 // semantics a real y-websocket connection enforces.
 //
-// We do NOT mock y-websocket internals here (per advisor guidance). The
-// realtime-side test `comments-yjs.test.ts` owns wire-level integration.
+// We do NOT mock y-websocket internals here. collab.known-red.test.ts owns
+// wire-level integration, through a real relay.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import * as Y from "yjs";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Step 5 — comment MODE, at the two seams that decide whether it works.
+// Comment MODE, at the two seams that decide whether it works.
 //
 // 1. useCommentModeTool: the mode's editor-side edges — it arms the anchor
 //    picker and manages the atlas tool (drop on enter, restore on exit). The
@@ -8,8 +8,6 @@
 // 2. CommentAnchorsOverlay: click → draft → post, all on the plate. This is
 //    the thing that makes it a mode rather than a tab with a different button:
 //    the whole gesture happens where the thread will live.
-//
-// Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §3
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -207,8 +205,8 @@ describe("useCommentModeTool — arms the picker, manages the atlas tool", () =>
 
   it("does not exit when an atlas tool is armed mid-mode, and leaves it alone on exit", () => {
     // Entering drops the Pin, but the Pin button stays mounted and enabled, so
-    // it can come back while the mode is live. That is no longer an exit: no
-    // tool pick is. On exit the mode restores only the pre-entry tool (null
+    // it can come back while the mode is live. That is not an exit: no tool
+    // pick is. On exit the mode restores only the pre-entry tool (null
     // here), so the Pin the user armed mid-mode stays put.
     const setAtlasTool = vi.fn();
     const { rerender } = render(

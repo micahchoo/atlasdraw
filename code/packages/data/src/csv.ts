@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/csv.ts
-// Phase 3 Wave 1 Task 6 — CSV → GeoJSON parser with column auto-detection.
+// CSV → GeoJSON parser with column auto-detection.
 //
 // Pure module. Text-in / FeatureCollection-out, no Yjs / MapLibre / Excalidraw.
 //
@@ -24,16 +24,17 @@
 // case-insensitive) and feeds the `_addressColumn_v1` property hint that
 // downstream geocoding consumes.
 //
-// Rows whose lat/lng fail to parse are silently dropped — we don't surface
-// per-row warnings here (Phase 5 concern). Empty file → EMPTY_FILE.
+// Rows whose lat/lng fail to parse are dropped with no per-row warning; the
+// caller gets the count through `onStats`. Empty file → EMPTY_FILE.
 // No coord columns identifiable → NO_COORD_COLUMNS. Papa-level parse failure
 // → PARSE_FAILED.
 //
-// Phase 6 A8 — optional geocoder hook (CsvReadOptions.geocoder). When set
-// AND the CSV has an address column, rows that don't already carry a valid
-// lat/lng pair are resolved via the geocoder. The geocoder is operator-
-// configured (ADR-0006 / ADR-0011, zero call-home); when `opts.geocoder`
-// is absent the reader's behaviour is identical to pre-A8.
+// Optional geocoder hook (CsvReadOptions.geocoder). When set AND the CSV has
+// an address column, rows that don't already carry a valid lat/lng pair are
+// resolved via the geocoder. The geocoder is operator-configured, so there is
+// no call-home (docs/architecture/adr/0006-telemetry.md and
+// 0011-hosted-mode-telemetry.md); when `opts.geocoder` is absent the reader
+// makes no network call.
 
 import Papa from "papaparse";
 
@@ -42,12 +43,12 @@ import type { Feature, FeatureCollection } from "geojson";
 import type { PhotonGeocoder } from "./geocode.js";
 
 /**
- * Optional parameters for `parseCSV`. Forward-compatible: existing callers
- * pass nothing and get the pre-A8 behaviour.
+ * Optional parameters for `parseCSV`. A caller that passes nothing gets no
+ * geocoding and no stats.
  */
 export interface CsvReadOptions {
   /**
-   * Phase 6 A8 — Photon-compatible geocoder used to resolve rows that have
+   * Photon-compatible geocoder used to resolve rows that have
    * an address column but no parseable lat/lng. When omitted, geocoding is
    * skipped entirely and the reader makes NO network calls.
    */
@@ -153,9 +154,9 @@ export async function parseCSV(
   const addressCol = headers.find((h) => ADDRESS_NAME_RE.test(h));
   const hasCoordCols = latCol !== null && lngCol !== null && latCol !== lngCol;
 
-  // A8: if there are no coord columns but a geocoder + address column are
+  // If there are no coord columns but a geocoder + address column are
   // available, fall through to the geocoder pass instead of throwing.
-  // Without a geocoder, behaviour matches pre-A8 (throw).
+  // Without a geocoder, throw.
   if (!hasCoordCols && !(opts?.geocoder && addressCol !== undefined)) {
     throw new CSVParseError(
       "NO_COORD_COLUMNS",
@@ -204,8 +205,7 @@ export async function parseCSV(
     }
 
     // Missing/invalid coords. If a geocoder is wired and we have an
-    // address value, defer to pass 2. Otherwise the row is dropped
-    // (matches pre-A8 behaviour).
+    // address value, defer to pass 2. Otherwise the row is dropped.
     if (opts?.geocoder && addressCol !== undefined) {
       const addr = row[addressCol];
       if (typeof addr === "string" && addr.trim() !== "") {

@@ -21,7 +21,8 @@ import { createMapService } from "./service/maps";
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  // T18: opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009.
+  // Opt-in Sentry. No-op when SENTRY_DSN is unset; see
+  // docs/architecture/adr/0009-error-capture.md.
   // beforeSend scrubs Authorization headers and request IPs — operators who
   // wire this DSN should still document the data flow in their privacy notice.
   if (config.SENTRY_DSN) {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // The comment schema: a "comments" Y.Array of Y.Maps in a document's Y.Doc.
-// In a room it is the room doc (ADR-0014): the relay reads comments like
+// In a room it is the room doc (docs/architecture/adr/0014-collab-trust-model.md):
+// the relay reads comments like
 // everything else in the room. In a saved file it is `comments.json`.
 //
 //   Y.Array "comments"

@@ -1,9 +1,10 @@
 /* eslint-disable no-console */
 /**
- * Phase 1 acceptance — "stays glued" smoke.
+ * "Stays glued" smoke.
  *
  * The load-bearing invariant: a drawn element has one place on Earth, and
- * it is drawn there at every camera. Under world coordinates (ADR-0015) the
+ * it is drawn there at every camera. Under world coordinates
+ * (docs/architecture/adr/0015-world-coordinates-gate.md) the
  * place is the element's scene x/y read through the document's world frame,
  * and a camera move changes only Excalidraw's viewport.
  *
@@ -192,7 +193,7 @@ async function dragRectangle(page: Page): Promise<void> {
   await page.waitForTimeout(300);
 }
 
-test.describe("Phase 1 — geo foundation stays glued", () => {
+test.describe("geo foundation stays glued", () => {
   test.beforeEach(async ({ page }) => {
     await skipOnboarding(page);
   });
@@ -278,11 +279,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     expect(drift(rect2!), "box drawn on its lng/lat after pan").toBeLessThan(1);
   });
 
-  // atlasdraw-5afc: "dragging seems to let annos hold position, zoom does
-  // not." After a zoom, each element must still be drawn where map.project
-  // puts its lng/lat, and a box's drawn size must be its geographic span.
+  // A zoom must not let a drawing drift where a pan does not. After a zoom,
+  // each element must still be drawn where map.project puts its lng/lat, and
+  // a box's drawn size must be its geographic span.
 
-  test("pin stays glued during ZOOM (atlasdraw-5afc)", async ({ page }) => {
+  test("pin stays glued during ZOOM", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
@@ -304,9 +305,7 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     expect(drift(pin2!), "pin drawn on its lng/lat after zoom").toBeLessThan(1);
   });
 
-  test("rectangle stays glued during ZOOM (atlasdraw-5afc)", async ({
-    page,
-  }) => {
+  test("rectangle stays glued during ZOOM", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
@@ -353,9 +352,7 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
   });
 
   // Interactive wheel zoom — the path the user actually uses.
-  test("pin stays glued during INTERACTIVE wheel zoom (atlasdraw-5afc)", async ({
-    page,
-  }) => {
+  test("pin stays glued during INTERACTIVE wheel zoom", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
@@ -399,7 +396,7 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
 
   // In DRAWING mode (selection/rectangle/etc.) the Excalidraw layer takes
   // pointer events; useMapWheelRouter must route the wheel to the map.
-  test("pin stays glued during wheel zoom in DRAWING mode (atlasdraw-5afc)", async ({
+  test("pin stays glued during wheel zoom in DRAWING mode", async ({
     page,
   }) => {
     await page.goto("/");

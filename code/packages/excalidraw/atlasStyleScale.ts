@@ -1,4 +1,4 @@
-// Atlasdraw addition (ADR-0015).
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
 //
 // The atlas app's scene is a world map at a fixed reference zoom: one scene
 // unit is one map pixel at zoom 22, so at the zoom where people draw a scene
