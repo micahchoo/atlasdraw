@@ -356,6 +356,45 @@ describe("collaboration between two clients", () => {
   });
 });
 
+describe("the relay's abuse limits reach the user", () => {
+  it("a client over the relay's new-room limit is told so and stops trying", async () => {
+    const limitedServer = http.createServer();
+    const limitedStore = sqliteRoomStore(":memory:");
+    const limited = registerRoomServer(limitedServer, {
+      store: limitedStore,
+      maxNewRoomsPerIp: 1,
+    });
+    await new Promise<void>((resolve) => limitedServer.listen(0, resolve));
+    const url = `ws://127.0.0.1:${
+      (limitedServer.address() as { port: number }).port
+    }`;
+    try {
+      const first = joinRoom(newRoomLink(), relayTransport(url));
+      const second = joinRoom(newRoomLink(), relayTransport(url));
+      const seen: string[] = [];
+      second.status((s) => seen.push(s));
+      await until("the first room is made", () => first.document !== null);
+      await until("the second is refused as limited", () =>
+        seen.includes("limited"),
+      );
+      await new Promise((r) => setTimeout(r, 300));
+      expect(seen.at(-1), "no retry turned it into another status").toBe(
+        "limited",
+      );
+      expect(limited.connections()).toBe(1);
+      first.leave();
+      second.leave();
+    } finally {
+      limited.close();
+      await new Promise<void>((resolve) => {
+        limitedServer.close(() => resolve());
+        limitedServer.closeAllConnections();
+      });
+      limitedStore.close();
+    }
+  });
+});
+
 describe("comments outlive the room", () => {
   it("comments survive the room emptying and refilling", async () => {
     const link = newRoomLink();

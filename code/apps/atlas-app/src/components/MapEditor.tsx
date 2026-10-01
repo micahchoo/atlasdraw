@@ -454,6 +454,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       ? "This shared map link was refused. Ask for a new link."
       : roomSession.status === "full"
       ? "This shared map is full. Try again later."
+      : roomSession.status === "limited"
+      ? "Too many shared maps were opened from your network. Try again in an hour."
+      : roomSession.status === "no-space"
+      ? "The server has no space for shared maps. Tell the person who runs it."
       : null);
 
   useBrowserTabTitle();
