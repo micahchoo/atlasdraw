@@ -17,9 +17,8 @@
 #   - MinIO on the internal network; console on 9001 reachable only via
 #     compose exec or by adding a Caddy route for it.
 #
-# Phase 5 adds a `realtime` service via compose profiles
-# (`profiles: ["realtime"]`); the placeholder block at the bottom is the
-# anchor — uncomment when realtime ships.
+# Collaboration: the `realtime` service runs with the "realtime" profile:
+#   docker compose --profile realtime -f infra/docker-compose.yml up -d
 
 services:
   storage:
@@ -36,6 +35,11 @@ services:
       PUBLIC_URL: https://${PUBLIC_DOMAIN}
       # One hop: Caddy. Lets the rate limiter see the real client IP.
       TRUST_PROXY: "1"
+      # Limits; the defaults equal the server defaults (docs/self-host/production.md).
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      MAX_TOTAL_BYTES: ${MAX_TOTAL_BYTES:-0}
+      SWEEP_INTERVAL_MS: ${SWEEP_INTERVAL_MS:-3600000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
@@ -54,8 +58,8 @@ services:
         # tells it to prefix requests with /api before they hit Caddy.
         VITE_STORAGE_BASE_URL: /api
         VITE_PMTILES_PATH: /data/world-low-zoom.pmtiles
-        # Realtime — set VITE_REALTIME_ENABLED=true and provide the ws:// URL
-        # when the [realtime] config.toml section has enabled = true.
+        # Collaboration — set VITE_REALTIME_ENABLED=true (and run the
+        # "realtime" profile). An empty URL means same origin: Caddy routes /yjs.
         VITE_REALTIME_ENABLED: ${VITE_REALTIME_ENABLED:-false}
         VITE_REALTIME_WS_URL: ${VITE_REALTIME_WS_URL:-}
     depends_on:
@@ -98,6 +102,8 @@ services:
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
+      # Which sites may frame /embed (CSP frame-ancestors). Default: any.
+      EMBED_FRAME_ANCESTORS: ${EMBED_FRAME_ANCESTORS:-*}
     depends_on:
       - web
       - storage
