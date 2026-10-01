@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 4 T8/T9 — App path-detection tests.
-//
-// Verify the path-detection switch in App.tsx routes correctly between
-// MapEditor (default) and ShareView (`/m...` paths). We mock both children
-// down to sentinels so we don't need the full Excalidraw + MapLibre stack
-// in jsdom; the test is purely about routing.
+// App routing: which root mounts for a location. The roots are mocked down
+// to sentinels; routes.test.ts covers the URL grammar itself.
 //
 // Every assertion is async because App.tsx loads the route roots through
 // React.lazy (see the code-splitting comment there). `findByTestId` waits for
@@ -63,10 +59,11 @@ describe("App path routing", () => {
     expect(await screen.findByTestId("route-share-view")).not.toBeNull();
   });
 
-  it("renders MapEditor for /m without the v1: hash prefix", async () => {
+  it("keeps a damaged /m link on the read-only view, which says so", async () => {
     setLocation("/m", "#something-else");
     render(<App />);
-    expect(await screen.findByTestId("route-map-editor")).not.toBeNull();
+    expect(await screen.findByTestId("route-share-view")).not.toBeNull();
+    expect(screen.queryByTestId("route-map-editor")).toBeNull();
   });
 
   it("renders MapEditor on /billing, which is not a route", async () => {

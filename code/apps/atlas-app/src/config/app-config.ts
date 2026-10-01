@@ -1,33 +1,43 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// The app's configuration: every VITE_* variable, read through one schema.
+// Vite puts the variables in import.meta.env at build time. Read them through
+// getAppConfig(), never import.meta.env, so a wrong value fails at boot with
+// the name of the variable.
+
 import { z } from "zod";
+
+import { normalizeBase } from "../routes";
 
 const BuildTargetSchema = z.enum(["pages", "local-only", "hosted"]);
 export type BuildTarget = z.infer<typeof BuildTargetSchema>;
 
+const Flag = z.enum(["true", "false"]);
+
 const EnvSchema = z.object({
   VITE_BUILD_TARGET: BuildTargetSchema.default("local-only"),
-  // T13: storage HTTP base URL. Empty string = same-origin (production deploy
-  // behind a reverse proxy). Only consulted when buildTarget === "hosted".
+  // The storage HTTP API. Empty: the same origin, behind a reverse proxy.
+  // Read only when the build target is "hosted".
   VITE_STORAGE_BASE_URL: z.string().default(""),
-  // Phase 5 T2: realtime feature flag + WebSocket URL. Both are Vite build-time
-  // env vars injected by the compose file from config.toml values.
-  VITE_REALTIME_ENABLED: z.enum(["true", "false"]).default("false"),
+  // Rooms, and the relay's WebSocket URL. Rooms need a hosted build too.
+  VITE_REALTIME_ENABLED: Flag.default("false"),
   VITE_REALTIME_WS_URL: z.string().default(""),
-  // Phase 6 A4: Maputnik base URL for the "Edit basemap style" modal. Default
-  // points at the public Maputnik instance; self-hosters who don't want the
-  // public Maputnik can point this at a self-hosted instance.
+  // The Maputnik editor for "Edit basemap style".
   VITE_MAPUTNIK_URL: z.string().default("https://maputnik.github.io/editor/"),
-  // Phase 6 A8: Photon-compatible geocoder endpoint. EMPTY by default — no
-  // call-home. Operators opt in by setting this to e.g.
-  //   https://photon.komoot.io      (public, rate-limited)
-  //   https://photon.self-host.lan  (their own instance)
-  // See ADR-0006 / ADR-0011 (zero call-home, telemetry posture).
+  // A Photon-compatible geocoder. Empty by default: no call-home
+  // (ADR-0006, ADR-0011).
   VITE_GEOCODER_ENDPOINT: z.string().default(""),
-  // T14/T15: allow remote basemap tile sources (e.g. OpenFreeMap, OSM).
-  // Default TRUE as of 2026-06-13 (user decision) so the Bright/OSM basemaps
-  // render out of the box. Operators opt OUT by setting this to "false".
-  // NOTE: this is a deliberate deviation from ADR-0006's original
-  // default-false posture — see ADR-0006 "Update (2026-06-13)".
-  VITE_ALLOW_REMOTE_BASEMAPS: z.enum(["true", "false"]).default("true"),
+  // Remote basemap tiles (OpenFreeMap, OSM). On by default; see ADR-0006
+  // "Update (2026-06-13)".
+  VITE_ALLOW_REMOTE_BASEMAPS: Flag.default("true"),
+  // The /embed route. On by default.
+  VITE_EMBED_ENABLED: Flag.default("true"),
+  // The offline basemap archive. Default: data/ under the base path.
+  VITE_PMTILES_PATH: z.string().optional(),
+  VITE_APP_VERSION: z.string().default("unknown"),
+  VITE_GIT_HASH: z.string().default("unknown"),
+  // Set by Vite: the path the build serves under.
+  BASE_URL: z.string().default("/"),
 });
 
 /** Whether rooms are offered, and where the relay is. */
@@ -39,91 +49,68 @@ export type RealtimeConfig = {
 
 export type AppConfig = {
   buildTarget: BuildTarget;
-  enableShareUI: boolean;
   /** When `enabled` is false no room is joined and no collab UI shows. */
   realtime: RealtimeConfig;
   enableBackendPersistence: boolean;
   showDemoBadge: boolean;
-  /**
-   * Base URL for the storage HTTP API (e.g. "http://localhost:4000"). Empty
-   * string means same-origin. Only meaningful when buildTarget === "hosted";
-   * otherwise it's set but unused (`enableBackendPersistence` is false).
-   */
+  /** The storage HTTP API; empty means the same origin. Hosted builds only. */
   storageBaseUrl: string;
-  /**
-   * Phase 6 A4: base URL of the Maputnik editor used by the "Edit basemap
-   * style" modal. Defaults to the public instance
-   * `https://maputnik.github.io/editor/`. Self-hosters who don't want the
-   * public Maputnik can point this at a self-hosted instance via
-   * `VITE_MAPUTNIK_URL`.
-   */
+  /** The Maputnik editor for "Edit basemap style". */
   maputnikUrl: string;
-  /**
-   * Phase 6 A8: optional Photon-compatible geocoder endpoint. When the
-   * field is `undefined`, geocoding is disabled and CSV imports behave
-   * exactly as in Phase 3 (no fetch is ever issued). When set, the
-   * MapEditor's CSV-import path constructs a `PhotonGeocoder` against this
-   * URL. Operator-configured; ADR-0006 / ADR-0011 (zero call-home).
-   */
+  /** The geocoder; undefined means geocoding is off and nothing is fetched. */
   geocoder?: { endpoint: string };
-  /** T14/T15: gate for remote basemap tile sources. Default true as of
-   *  2026-06-13 (user decision); opt out with VITE_ALLOW_REMOTE_BASEMAPS=false. */
   allowRemoteBasemaps: boolean;
+  /** Whether /embed shows the viewer; otherwise it opens the editor. */
+  embedEnabled: boolean;
+  /** The URL of the offline basemap archive. */
+  pmtilesPath: string;
+  appVersion: string;
+  gitHash: string;
 };
 
-export function loadAppConfig(
-  rawTarget: string | undefined = import.meta.env.VITE_BUILD_TARGET,
-  rawStorageBaseUrl: string | undefined = import.meta.env.VITE_STORAGE_BASE_URL,
-  rawRealtimeEnabled: string | undefined = import.meta.env
-    .VITE_REALTIME_ENABLED,
-  rawRealtimeWsUrl: string | undefined = import.meta.env.VITE_REALTIME_WS_URL,
-  rawMaputnikUrl: string | undefined = import.meta.env.VITE_MAPUTNIK_URL,
-  rawGeocoderEndpoint: string | undefined = import.meta.env
-    .VITE_GEOCODER_ENDPOINT,
-  rawAllowRemoteBasemaps: string | undefined = import.meta.env
-    .VITE_ALLOW_REMOTE_BASEMAPS,
-): AppConfig {
-  const parsed = EnvSchema.safeParse({
-    VITE_BUILD_TARGET: rawTarget,
-    VITE_STORAGE_BASE_URL: rawStorageBaseUrl,
-    VITE_REALTIME_ENABLED: rawRealtimeEnabled,
-    VITE_REALTIME_WS_URL: rawRealtimeWsUrl,
-    VITE_MAPUTNIK_URL: rawMaputnikUrl,
-    VITE_GEOCODER_ENDPOINT: rawGeocoderEndpoint,
-    VITE_ALLOW_REMOTE_BASEMAPS: rawAllowRemoteBasemaps,
-  });
+export type Env = Record<string, string | boolean | undefined>;
+
+/** The config from a set of env variables. Throws, naming the bad variable. */
+export function loadAppConfig(env: Env = import.meta.env): AppConfig {
+  const known = Object.fromEntries(
+    Object.keys(EnvSchema.shape).map((key) => [
+      key,
+      typeof env[key] === "string" ? env[key] : undefined,
+    ]),
+  );
+  const parsed = EnvSchema.safeParse(known);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
+    const name = String(issue.path[0]);
     throw new Error(
-      `Invalid env var ${issue.path.join(".")}: ${issue.message}. ` +
-        `Expected one of "pages" | "local-only" | "hosted" (got ${JSON.stringify(
-          rawTarget,
-        )}).`,
+      `Invalid ${name}=${JSON.stringify(known[name])}: ${issue.message}`,
     );
   }
-  const buildTarget = parsed.data.VITE_BUILD_TARGET;
-  // Realtime is only available on hosted builds; the env flag gates it within
-  // that tier. Pages + local-only never have a realtime relay to connect to.
+  const e = parsed.data;
+  const buildTarget = e.VITE_BUILD_TARGET;
+  // Rooms need a relay, and only a hosted build has one.
   const realtimeEnabled =
-    buildTarget === "hosted" && parsed.data.VITE_REALTIME_ENABLED === "true";
-  const wsUrl = parsed.data.VITE_REALTIME_WS_URL || undefined;
-  const geocoderEndpoint = parsed.data.VITE_GEOCODER_ENDPOINT.trim();
-  // Empty string → undefined (i.e. geocoder OFF). Zero call-home: when the
-  // operator hasn't supplied an endpoint, no geocoder is constructed and
-  // the CSV-import path makes no network calls. ADR-0006 / ADR-0011.
-  const geocoder =
-    geocoderEndpoint === "" ? undefined : { endpoint: geocoderEndpoint };
-  const allowRemoteBasemaps = parsed.data.VITE_ALLOW_REMOTE_BASEMAPS === "true";
+    buildTarget === "hosted" && e.VITE_REALTIME_ENABLED === "true";
+  const geocoderEndpoint = e.VITE_GEOCODER_ENDPOINT.trim();
   return {
     buildTarget,
-    enableShareUI: buildTarget === "hosted",
-    realtime: { enabled: realtimeEnabled, wsUrl },
+    realtime: {
+      enabled: realtimeEnabled,
+      wsUrl: e.VITE_REALTIME_WS_URL || undefined,
+    },
     enableBackendPersistence: buildTarget === "hosted",
     showDemoBadge: buildTarget === "pages",
-    storageBaseUrl: parsed.data.VITE_STORAGE_BASE_URL,
-    maputnikUrl: parsed.data.VITE_MAPUTNIK_URL,
-    geocoder,
-    allowRemoteBasemaps,
+    storageBaseUrl: e.VITE_STORAGE_BASE_URL,
+    maputnikUrl: e.VITE_MAPUTNIK_URL,
+    geocoder:
+      geocoderEndpoint === "" ? undefined : { endpoint: geocoderEndpoint },
+    allowRemoteBasemaps: e.VITE_ALLOW_REMOTE_BASEMAPS === "true",
+    embedEnabled: e.VITE_EMBED_ENABLED === "true",
+    pmtilesPath:
+      e.VITE_PMTILES_PATH ??
+      `${normalizeBase(e.BASE_URL)}data/world-low-zoom.pmtiles`,
+    appVersion: e.VITE_APP_VERSION,
+    gitHash: e.VITE_GIT_HASH,
   };
 }
 

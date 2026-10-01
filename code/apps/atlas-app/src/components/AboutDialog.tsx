@@ -24,8 +24,8 @@ const BUILD_TARGET_LABEL: Record<BuildTarget, string> = {
 export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const cfg = getAppConfig();
-  const version = import.meta.env.VITE_APP_VERSION ?? "unknown";
-  const gitHash = import.meta.env.VITE_GIT_HASH ?? "unknown";
+  const version = cfg.appVersion;
+  const gitHash = cfg.gitHash;
 
   useEffect(() => {
     const panel = panelRef.current;

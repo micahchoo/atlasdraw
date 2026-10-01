@@ -27,6 +27,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { getAppConfig } from "../config/app-config";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
+import { toEmbedUrl } from "../routes";
 
 import { FocusTrap } from "./FocusTrap";
 
@@ -482,11 +483,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 // route (`/embed…`) mounts the same document chromeless for cross-origin
 // <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
 // ---------------------------------------------------------------------------
-
-/** `/m#v2:<enc>` → `/embed#v2:<enc>` · `/m/<token>` → `/embed/<token>`. */
-export function toEmbedUrl(shareUrl: string): string {
-  return shareUrl.replace(/\/m(#v[12]:|\/)/, "/embed$1");
-}
 
 const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
   const [copied, setCopied] = useState(false);

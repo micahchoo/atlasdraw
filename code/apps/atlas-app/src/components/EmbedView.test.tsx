@@ -12,7 +12,6 @@ import LZString from "lz-string";
 import { savedManifest } from "../state/__tests__/fixtures/documentWorld";
 
 import { EmbedView, parseEmbedOptions } from "./EmbedView";
-import { toEmbedUrl } from "./ShareDialog";
 
 // Excalidraw renders a heavy canvas (Path2D, fonts) unavailable in jsdom —
 // mock it to a sentinel, matching ShareView.test. The real map+annotation
@@ -89,18 +88,5 @@ describe("parseEmbedOptions", () => {
   });
   it("treats any other lock value as false", () => {
     expect(parseEmbedOptions("?lock=yes")).toEqual({ lock: false });
-  });
-});
-
-describe("toEmbedUrl", () => {
-  it("repoints a hash share URL at /embed", () => {
-    expect(toEmbedUrl("https://x.test/m#v1:AAA")).toBe(
-      "https://x.test/embed#v1:AAA",
-    );
-  });
-  it("repoints a token share URL at /embed", () => {
-    expect(toEmbedUrl("https://x.test/m/abc123DEF456ghi789JKL")).toBe(
-      "https://x.test/embed/abc123DEF456ghi789JKL",
-    );
   });
 });

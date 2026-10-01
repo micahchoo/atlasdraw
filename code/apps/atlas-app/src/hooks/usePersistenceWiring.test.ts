@@ -41,7 +41,6 @@ vi.mock("../services/createHttpStorageClient", () => ({
 
 const BASE_CONFIG: AppConfig = {
   buildTarget: "local-only",
-  enableShareUI: true,
   realtime: { enabled: false, wsUrl: undefined },
   enableBackendPersistence: false,
   showDemoBadge: false,
@@ -49,6 +48,10 @@ const BASE_CONFIG: AppConfig = {
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
+  embedEnabled: true,
+  pmtilesPath: "/data/world-low-zoom.pmtiles",
+  appVersion: "unknown",
+  gitHash: "unknown",
 };
 
 const FAKE_DOC = {
