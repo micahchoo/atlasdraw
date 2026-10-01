@@ -26,7 +26,9 @@ describe("sqlite-fs adapter", () => {
 
     expect(record.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
     expect(record.byte_size).toBe(blob.byteLength);
-    expect(record.blob_ref).toBe(`blobs/${record.id}.atlasdraw`);
+    expect(record.blob_ref).toMatch(
+      new RegExp(`^blobs/${record.id}\\.[0-9a-f]{12}\\.atlasdraw$`),
+    );
     expect(record.created_at).toBe(record.updated_at);
 
     // Blob actually written to disk.
@@ -90,8 +92,9 @@ describe("sqlite-fs adapter", () => {
     const map = await client.createMap(bodyOf("v1"), null);
     await client.updateMap(map.id, bodyOf("v2"));
 
+    const updated = await client.getMap(map.id);
     expect(fs.readdirSync(path.join(scratch.name, "blobs"))).toEqual([
-      `${map.id}.atlasdraw`,
+      path.basename(updated!.blob_ref),
     ]);
   });
 

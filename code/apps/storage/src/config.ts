@@ -60,10 +60,23 @@ const BaseSchema = z.object({
   IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   // The longest a client may take to send a whole request, body included.
   REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(300_000),
-  // The cap on the sum of all stored map sizes, in bytes. A create or a
-  // write that would pass it gets 507. 0: no cap. POST /maps is open to
-  // anyone who reaches the API, so an internet-facing server should set one.
-  MAX_TOTAL_BYTES: z.coerce.number().int().nonnegative().default(0),
+  // The cap on the sum of all stored map sizes, in bytes, writes in flight
+  // included. A create or a write that would pass it gets 507. POST /maps is
+  // open to anyone who reaches the API, so the default is a cap, not none:
+  // 10 GiB. 0: no cap.
+  MAX_TOTAL_BYTES: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(10 * 1024 * 1024 * 1024),
+  // New maps one client address may create per NEW_MAPS_WINDOW_MS (an IPv6
+  // client counts by its /64); past it, 429. 0: no limit.
+  MAX_NEW_MAPS_PER_IP: z.coerce.number().int().nonnegative().default(60),
+  NEW_MAPS_WINDOW_MS: z.coerce.number().int().positive().default(3_600_000),
+  // Maps stored before write keys (no key: nobody can write them) are kept
+  // for this many days after the upgrade that added keys, then deleted by
+  // the sweep once no live share link reads them. 0: at the next sweep.
+  LEGACY_MAP_GRACE_DAYS: z.coerce.number().int().nonnegative().default(90),
   // How often the server deletes expired share tokens and the keyless maps
   // that no live token reads (see StorageClient.sweep). It also sweeps once at
   // start. 0: never.

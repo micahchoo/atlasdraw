@@ -8,7 +8,11 @@
 // (`http://<access key>:<secret>@host:port`, e.g. a MinIO container), each
 // test in its own bucket; otherwise an in-memory bucket stands in for it.
 
-import { Readable } from "node:stream";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { PassThrough, Readable } from "node:stream";
+
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { Pool } from "pg";
 import * as tmp from "tmp";
@@ -44,12 +48,24 @@ vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
   class GetObjectCommand extends Command {}
   class DeleteObjectCommand extends Command {}
   class S3Client {
-    async send(cmd: Command): Promise<unknown> {
+    async send(
+      cmd: Command,
+      opts?: { abortSignal?: AbortSignal },
+    ): Promise<unknown> {
       if (cmd instanceof PutObjectCommand) {
+        // Like the SDK: an abort ends the upload with a rejection.
+        const aborted = new Promise<never>((_, reject) =>
+          opts?.abortSignal?.addEventListener("abort", () =>
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          ),
+        );
         const chunks: Buffer[] = [];
-        for await (const c of cmd.input.Body as AsyncIterable<Uint8Array>) {
-          chunks.push(Buffer.from(c));
-        }
+        const read = (async () => {
+          for await (const c of cmd.input.Body as AsyncIterable<Uint8Array>) {
+            chunks.push(Buffer.from(c));
+          }
+        })();
+        await Promise.race([read, aborted]);
         bucket.set(cmd.input.Key!, {
           bytes: Buffer.concat(chunks),
           modified: new Date(),
@@ -96,8 +112,27 @@ vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
 /** Opens a client on one store. Every call reaches the same data. */
 interface Store {
   open(): StorageClient;
+  /** Puts a blob in the store that no row points to, as a crash would. */
+  plantOrphan(name: string): Promise<void>;
   dispose(): Promise<void>;
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+/** Sweep options that delete every keyless map and every orphan at once. */
+const NO_GRACE = { legacyGraceMs: 0, orphanGraceMs: 0 };
+
+/** A body whose bytes the test releases: part now, the rest on `finish`. */
+function heldBody(size: number) {
+  const stream = new PassThrough();
+  stream.write(Buffer.alloc(size / 2, 1));
+  return {
+    body: { stream, size },
+    finish: () => stream.end(Buffer.alloc(size - size / 2, 2)),
+    fail: () => stream.destroy(new Error("connection reset")),
+  };
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 20));
 
 const UNKNOWN_ID = "a".repeat(21);
 const HASH = "f".repeat(64);
@@ -289,9 +324,9 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       // Gone: no key and no link at all.
       const bare = await client.createMap(bodyOf("bare"), null);
 
-      const swept = await client.sweep(now);
+      const swept = await client.sweep(now, NO_GRACE);
 
-      expect(swept).toEqual({ tokens: 2, maps: 2 });
+      expect(swept).toEqual({ tokens: 2, maps: 2, orphans: 0 });
       expect(await client.resolveToken(ownedExpired.token)).toBeNull();
       expect(await client.resolveToken(dead.token)).toBeNull();
       expect(await client.resolveToken(live.token)).not.toBeNull();
@@ -302,7 +337,129 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
         expect(await client.getMap(gone.id)).toBeNull();
         expect(await client.getBlob(gone.id)).toBeNull();
       }
-      expect(await client.sweep(now)).toEqual({ tokens: 0, maps: 0 });
+      expect(await client.sweep(now, NO_GRACE)).toEqual({
+        tokens: 0,
+        maps: 0,
+        orphans: 0,
+      });
+    });
+
+    it("keeps a keyless map until the grace after the upgrade has passed", async () => {
+      const client = open();
+      const legacy = await client.createMap(bodyOf("pre-key map"), null);
+      const grace = { legacyGraceMs: 90 * DAY_MS, orphanGraceMs: HOUR_MS };
+
+      const early = await client.sweep(new Date(), grace);
+      const late = await client.sweep(
+        new Date(Date.now() + 91 * DAY_MS),
+        grace,
+      );
+
+      expect(early.maps).toBe(0);
+      expect(late.maps).toBe(1);
+      expect(await client.getMap(legacy.id)).toBeNull();
+    });
+
+    it("sweep removes a blob no row points to, once it is older than the grace", async () => {
+      const client = open();
+      const kept = await client.createMap(bodyOf("kept"), HASH);
+      await store.plantOrphan("zzzzzzzzzzzzzzzzzzzzz.orphan.atlasdraw");
+      const grace = { legacyGraceMs: 0, orphanGraceMs: HOUR_MS };
+
+      const fresh = await client.sweep(new Date(), grace);
+      const old = await client.sweep(new Date(Date.now() + 2 * HOUR_MS), grace);
+
+      expect(fresh.orphans).toBe(0);
+      expect(old.orphans).toBe(1);
+      expect(await textOf(client.getBlob(kept.id))).toBe("kept");
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("updateMap writes under a new blob and leaves no old one behind", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+
+      const updated = await client.updateMap(map.id, bodyOf("v2"));
+
+      expect(updated.blob_ref).not.toBe(map.blob_ref);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+      expect(await textOf(client.getBlob(map.id))).toBe("v2");
+    });
+
+    it("a write cut partway leaves the old map whole and counts nothing", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("old"), HASH);
+      const held = heldBody(64 * 1024);
+
+      const write = client.updateMap(map.id, held.body);
+      await tick();
+      held.fail();
+
+      await expect(write).rejects.toThrow();
+      expect(await textOf(client.getBlob(map.id))).toBe("old");
+      expect(await client.totalBytes()).toBe(3);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("a write that loses the race with a delete answers not found and leaves no blob", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("old"), HASH);
+      const held = heldBody(64 * 1024);
+
+      const write = client.updateMap(map.id, held.body);
+      await tick();
+      expect(await client.deleteMap(map.id)).toBe(true);
+      held.finish();
+
+      await expect(write).rejects.toThrow(/^not found:/);
+      expect(await client.getMap(map.id)).toBeNull();
+      expect(await client.totalBytes()).toBe(0);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("concurrent creates cannot pass the cap", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 1000 };
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, () =>
+          client.createMap(bodyOf(Buffer.alloc(100)), HASH, cap),
+        ),
+      );
+
+      const made = results.filter((r) => r.status === "fulfilled").length;
+      expect(made).toBe(10);
+      expect(await client.totalBytes()).toBe(1000);
+      for (const r of results) {
+        if (r.status === "rejected") {
+          expect(String(r.reason)).toMatch(/storage full/);
+        }
+      }
+    });
+
+    it("counts a rewrite by its growth, and refuses growth past the cap", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 10 };
+      const map = await client.createMap(bodyOf("12345678"), HASH, cap);
+
+      await client.updateMap(map.id, bodyOf("87654321"), cap);
+      await expect(
+        client.updateMap(map.id, bodyOf("12345678901"), cap),
+      ).rejects.toThrow(/storage full/);
+
+      expect(await textOf(client.getBlob(map.id))).toBe("87654321");
+      expect(await client.totalBytes()).toBe(8);
+    });
+
+    it("a failed write gives its reserved bytes back", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 10 };
+      const short = { stream: Readable.from([Buffer.from("abc")]), size: 10 };
+
+      await expect(client.createMap(short, HASH, cap)).rejects.toThrow();
+      await client.createMap(bodyOf("1234567890"), HASH, cap);
+
+      expect(await client.totalBytes()).toBe(10);
     });
 
     it("a restarted server reads what the first one wrote", async () => {
@@ -326,6 +483,8 @@ describeContract("sqlite-fs", async () => {
   const dir = tmp.dirSync({ unsafeCleanup: true });
   return {
     open: () => createSqliteFsAdapter({ dataDir: dir.name }),
+    plantOrphan: async (name) =>
+      fs.writeFileSync(path.join(dir.name, "blobs", name), "orphan"),
     dispose: async () => dir.removeCallback(),
   };
 });
@@ -356,6 +515,30 @@ describe.skipIf(!PG_URL)("against real Postgres", () => {
           blobBucket,
           blobRegion: "us-east-1",
         }),
+      plantOrphan: async (name) => {
+        if (!s3) {
+          bucket.set(`maps/${name}`, {
+            bytes: Buffer.from("orphan"),
+            modified: new Date(),
+          });
+          return;
+        }
+        await new S3Client({
+          endpoint: s3.origin,
+          region: "us-east-1",
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: decodeURIComponent(s3.username),
+            secretAccessKey: decodeURIComponent(s3.password),
+          },
+        }).send(
+          new PutObjectCommand({
+            Bucket: blobBucket,
+            Key: `maps/${name}`,
+            Body: "orphan",
+          }),
+        );
+      },
       dispose: async () => {
         await admin.query(`DROP SCHEMA ${schema} CASCADE`);
         await admin.end();

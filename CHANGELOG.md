@@ -26,10 +26,11 @@ the new images. Then:
 3. **Full stack with the relay: add the `roomsdata` volume.** The relay now
    saves rooms to SQLite at `/data/rooms.sqlite`. The new
    `infra/docker-compose.yml` declares the volume.
-4. **On a server that faces the internet,** set `MAX_TOTAL_BYTES` on the
-   storage server. `POST /maps` is open to anyone who reaches the API. The
-   relay has its own caps with defaults (`docs/self-host/production.md`,
-   "Realtime relay").
+4. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
+   and each client address may make 60 new maps an hour
+   (`MAX_NEW_MAPS_PER_IP`). `POST /maps` is open to anyone who reaches the
+   API. The relay has its own caps with defaults
+   (`docs/self-host/production.md`, "Realtime relay").
 
 What happens by itself:
 
@@ -39,13 +40,22 @@ What happens by itself:
   build cannot open a version 2 file.
 - **Maps saved on the server before write keys become read-only.** Migration
   `003_write_keys_and_lasting_links` gives them no key, so nobody can write
-  them. Their share links work until their 7-day expiry, then the sweep
-  deletes the map and its blob. The owner's browser creates a new map with a
-  key at its next save. The server does not let anyone claim a key for an old
-  map, because its id may have leaked (SECURITY.md row 10).
+  them. The owner's browser creates a new map with a key at its next save.
+  The server does not let anyone claim a key for an old map, because its id
+  may have leaked (SECURITY.md row 10).
+- **Those old maps are kept for `LEGACY_MAP_GRACE_DAYS` (default 90) after
+  the upgrade.** Then the sweep deletes each one that no live share link
+  reads, with its blob. Their share links still work until their 7-day
+  expiry. Set a longer grace before the first start if you want to keep the
+  copies on the volume longer; `0` deletes them at the first sweep.
 - **The storage schema migrates at start.** It drops the `workspace_id`
-  columns and the `workspaces` table, and records each step in
-  `schema_migrations`. Maps and share links stay.
+  columns and the `workspaces` table, adds the size counter
+  (`storage_usage`, `storage_reservations`), and records each step in
+  `schema_migrations`. Every map and share link stays through the
+  migration; only the sweep above removes old maps, after the grace.
+- **The size cap is on by default: 10 GiB** (`MAX_TOTAL_BYTES`). A server
+  that holds more than that already refuses new maps and growing saves (507)
+  until you raise it or set `0` for no cap.
 - **The browser's autosave moves to one slot per map.** The old single slot
   opens on the next reload and moves at the next save.
 - **Rooms start empty.** The old relay kept nothing after the last person

@@ -10,7 +10,7 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
-import { OCTETS, bearer, makeTestApp } from "./test-support";
+import { OCTETS, bearer, bodyOf, makeTestApp } from "./test-support";
 
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
@@ -106,6 +106,29 @@ describe("buildApp", () => {
     expect(first.statusCode).not.toBe(429);
     expect(sameNet.statusCode).toBe(429);
     expect(otherNet.statusCode).not.toBe(429);
+  });
+
+  it("keeps a map from before write keys through the start-up sweep, inside the grace", async () => {
+    const t = makeTestApp();
+    apps.push(t.app);
+    const legacy = await t.client.createMap(bodyOf("pre-key map"), null);
+
+    await t.app.ready();
+    await t.app.sweepIdle();
+
+    expect(await t.client.getMap(legacy.id)).not.toBeNull();
+  });
+
+  it("sweeps a map from before write keys at start when the grace is 0", async () => {
+    const t = makeTestApp({ LEGACY_MAP_GRACE_DAYS: "0" });
+    apps.push(t.app);
+    const legacy = await t.client.createMap(bodyOf("pre-key map"), null);
+
+    await t.app.ready();
+    await t.app.sweepIdle();
+
+    expect(await t.client.getMap(legacy.id)).toBeNull();
+    expect(t.log.text()).toContain("storage sweep");
   });
 
   it("drains a request in flight before it closes the store", async () => {

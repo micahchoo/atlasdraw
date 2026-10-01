@@ -10,6 +10,8 @@
 // There is no route that returns a map's record: nothing needs one.
 
 import { ID_RE } from "../constants";
+import { clientKey } from "../middleware/client-key";
+import { FixedWindow } from "../middleware/rate-limit";
 
 import { isBlobBody, sendBlob } from "./blob-body";
 import { REFUSAL, writeKeyOrRefuse } from "./write-key";
@@ -23,13 +25,36 @@ interface IdParams {
 
 const NOT_OCTETS = { error: "Content-Type must be application/octet-stream" };
 
+export interface NewMapLimit {
+  /** New maps per address per window. 0: no limit. */
+  maxNewMaps: number;
+  windowMs: number;
+}
+
 export function registerMapRoutes(
   fastify: FastifyInstance,
   service: MapService,
+  limit: NewMapLimit = { maxNewMaps: 0, windowMs: 1 },
 ): void {
+  // POST /maps hands anyone a key; this bounds how many per address.
+  const newMaps =
+    limit.maxNewMaps > 0
+      ? new FixedWindow(limit.maxNewMaps, limit.windowMs)
+      : null;
+  if (newMaps) {
+    fastify.addHook("onClose", async () => newMaps.stop());
+  }
+
   fastify.post("/maps", async (request, reply) => {
     if (!isBlobBody(request.body)) {
       return reply.code(415).send(NOT_OCTETS);
+    }
+    const client = clientKey(request.ip);
+    if (newMaps && !newMaps.take(client)) {
+      return reply
+        .code(429)
+        .header("Retry-After", String(newMaps.retryAfter(client)))
+        .send({ error: "too many new maps from this address" });
     }
     const result = await service.create(request.body);
     if (result.kind === "full") {

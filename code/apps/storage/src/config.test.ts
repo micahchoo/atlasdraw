@@ -152,9 +152,9 @@ describe("loadConfig", () => {
   describe("MAX_TOTAL_BYTES and SWEEP_INTERVAL_MS", () => {
     const base = { STORAGE_MODE: "sqlite-fs", DATA_DIR: "/tmp/x" };
 
-    it("default to no cap and an hourly sweep", () => {
+    it("default to a 10 GiB cap and an hourly sweep", () => {
       const cfg = loadConfig(base);
-      expect(cfg.MAX_TOTAL_BYTES).toBe(0);
+      expect(cfg.MAX_TOTAL_BYTES).toBe(10 * 1024 ** 3);
       expect(cfg.SWEEP_INTERVAL_MS).toBe(3_600_000);
     });
 

@@ -3,6 +3,7 @@
 // it in `Authorization: Bearer <key>`.
 
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as path from "node:path";
 import { Readable } from "node:stream";
 
@@ -12,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { OCTETS, bearer, makeTestApp } from "../test-support";
 
+import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 
 const UNKNOWN_ID = "a".repeat(21);
@@ -333,8 +335,10 @@ describe("/maps routes", () => {
       expect(rows("maps", id)).toBe(0);
       expect(rows("share_tokens", id)).toBe(0);
       expect(
-        fs.existsSync(path.join(scratch.name, "blobs", `${id}.atlasdraw`)),
-      ).toBe(false);
+        fs
+          .readdirSync(path.join(scratch.name, "blobs"))
+          .filter((f) => f.startsWith(id)),
+      ).toEqual([]);
       const again = await app.inject({
         method: "GET",
         url: `/maps/${id}/blob`,
@@ -442,6 +446,101 @@ describe("/maps routes", () => {
       payload: Buffer.from("again"),
     });
     const files = fs.readdirSync(path.join(scratch.name, "blobs"));
-    expect(files).toEqual([`${id}.atlasdraw`]);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(new RegExp(`^${id}\\.[0-9a-f]+\\.atlasdraw$`));
+  });
+
+  it("a PUT that loses the race with a DELETE answers 404 and leaves no blob", async () => {
+    const { id, writeKey } = await create("old");
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const { port } = app.server.address() as AddressInfo;
+    const body = Buffer.alloc(1024 * 1024, 3);
+
+    let finish = () => {};
+    const status = new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        {
+          host: "127.0.0.1",
+          port,
+          method: "PUT",
+          path: `/maps/${id}`,
+          agent: false,
+          headers: {
+            ...OCTETS,
+            ...bearer(writeKey),
+            "content-length": String(body.length),
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on("error", reject);
+      req.write(body.subarray(0, body.length / 2));
+      finish = () => req.end(body.subarray(body.length / 2));
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/maps/${id}`,
+      headers: bearer(writeKey),
+    });
+    finish();
+
+    expect(deleted.statusCode).toBe(204);
+    expect(await status).toBe(404);
+    expect(fs.readdirSync(path.join(scratch.name, "blobs"))).toEqual([]);
+  });
+
+  it("concurrent creates cannot pass the cap", async () => {
+    const capped = makeApp(scratch.name, { maxTotalBytes: 4000 });
+    await capped.ready();
+
+    const codes = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        capped.inject({
+          method: "POST",
+          url: "/maps",
+          headers: OCTETS,
+          payload: Buffer.alloc(900, 1),
+        }),
+      ),
+    );
+
+    expect(codes.filter((r) => r.statusCode === 201)).toHaveLength(4);
+    expect(codes.filter((r) => r.statusCode === 507)).toHaveLength(16);
+    const db = new Database(path.join(scratch.name, "atlas.db"));
+    const { total } = db
+      .prepare("SELECT SUM(byte_size) AS total FROM maps")
+      .get() as { total: number };
+    db.close();
+    expect(total).toBe(3600);
+    await capped.close();
+  });
+
+  it("limits new maps per client address", async () => {
+    const limited = makeTestApp(
+      { MAX_NEW_MAPS_PER_IP: "2" },
+      { dataDir: scratch.name },
+    ).app;
+    const post = (remoteAddress: string) =>
+      limited.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("m"),
+        remoteAddress,
+      });
+
+    const codes = [];
+    for (let i = 0; i < 3; i++) {
+      codes.push((await post("203.0.113.9")).statusCode);
+    }
+    const other = await post("203.0.113.10");
+
+    expect(codes).toEqual([201, 201, 429]);
+    expect(other.statusCode).toBe(201);
+    await limited.close();
   });
 });

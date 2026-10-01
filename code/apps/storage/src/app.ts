@@ -24,6 +24,13 @@ import type { Logger } from "pino";
 import type { AppConfig } from "./config";
 import type { StorageClient } from "./types";
 
+declare module "fastify" {
+  interface FastifyInstance {
+    /** Resolves when the sweep that is running, if any, has finished. */
+    sweepIdle(): Promise<void>;
+  }
+}
+
 export interface BuildAppOptions {
   config: AppConfig;
   client: StorageClient;
@@ -65,6 +72,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
 
   const service = createMapService(client, {
     maxTotalBytes: config.MAX_TOTAL_BYTES,
+    legacyGraceDays: config.LEGACY_MAP_GRACE_DAYS,
     now: opts.now,
   });
 
@@ -74,7 +82,10 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     windowMs: config.RATE_LIMIT_WINDOW_MS,
   });
   registerInFlightLimit(app, config.MAX_CONCURRENT_PER_IP);
-  registerMapRoutes(app, service);
+  registerMapRoutes(app, service, {
+    maxNewMaps: config.MAX_NEW_MAPS_PER_IP,
+    windowMs: config.NEW_MAPS_WINDOW_MS,
+  });
   registerShareRoutes(app, service, config.PUBLIC_URL);
 
   // A 4xx carries Fastify's own message (body too large, bad JSON): it names
@@ -114,6 +125,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
         }
       });
   };
+  app.decorate("sweepIdle", () => running);
   app.addHook("onReady", async () => {
     sweep();
     if (config.SWEEP_INTERVAL_MS > 0) {

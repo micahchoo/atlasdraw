@@ -75,7 +75,13 @@ const LEGACY_POSTGRES_SCHEMA = `
   CREATE INDEX maps_workspace_id_idx ON maps(workspace_id);
 `;
 
-const TABLES = ["maps", "schema_migrations", "share_tokens"];
+const TABLES = [
+  "maps",
+  "schema_migrations",
+  "share_tokens",
+  "storage_reservations",
+  "storage_usage",
+];
 const MAP_COLUMNS = [
   "id",
   "created_at",
@@ -162,6 +168,24 @@ describe("migrateSqlite", () => {
     expect(db.prepare("SELECT token, map_id FROM share_tokens").all()).toEqual([
       { token: "t1", map_id: "m1" },
     ]);
+  });
+
+  it("starts the size counter at the bytes already stored", () => {
+    db.exec(LEGACY_SQLITE_SCHEMA);
+    for (const [id, size] of [
+      ["m1", 3],
+      ["m2", 40],
+    ] as const) {
+      db.prepare(
+        `INSERT INTO maps VALUES ('${id}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/${id}.atlasdraw', ${size}, NULL)`,
+      ).run();
+    }
+
+    migrateSqlite(db);
+
+    expect(
+      db.prepare("SELECT id, total_bytes FROM storage_usage").all(),
+    ).toEqual([{ id: 1, total_bytes: 43 }]);
   });
 
   it("gives an old map no write key and keeps its link's expiry", () => {
@@ -312,6 +336,10 @@ describe.skipIf(!PG_URL)("migratePostgres (real Postgres)", () => {
     expect(await columns("share_tokens")).toEqual(SHARE_COLUMNS);
     const maps = await pool.query("SELECT id, write_key_hash FROM maps");
     expect(maps.rows).toEqual([{ id: "m1", write_key_hash: null }]);
+    const usage = await pool.query(
+      "SELECT id, total_bytes::int AS total_bytes FROM storage_usage",
+    );
+    expect(usage.rows).toEqual([{ id: 1, total_bytes: 3 }]);
   });
 
   it("lets a share token have no expiry", async () => {

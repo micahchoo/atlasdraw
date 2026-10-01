@@ -34,6 +34,8 @@ export function sqliteConfig(
     DATA_DIR: dataDir,
     // Tests make many requests from one address; a test of a limit sets it.
     RATE_LIMIT_MAX: "0",
+    MAX_CONCURRENT_PER_IP: "0",
+    MAX_NEW_MAPS_PER_IP: "0",
     ...env,
   });
 }

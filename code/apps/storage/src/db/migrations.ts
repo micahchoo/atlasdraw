@@ -128,4 +128,43 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS share_tokens_map_id_idx ON share_tokens(map_id);
     `,
   },
+  {
+    // The size cap without a race and without a full scan. storage_usage
+    // holds SUM(maps.byte_size) in one row; every statement that changes a
+    // map's size changes it in the same transaction. storage_reservations
+    // holds the bytes of writes in flight, so concurrent writes see each
+    // other before their bytes land. A reservation that a crash left is
+    // removed by the sweep.
+    name: "004_storage_usage",
+    sqlite: (db) =>
+      db.exec(`
+        CREATE TABLE storage_usage (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          total_bytes INTEGER NOT NULL
+        );
+        INSERT INTO storage_usage (id, total_bytes)
+          SELECT 1, COALESCE(SUM(byte_size), 0) FROM maps;
+        CREATE TABLE storage_reservations (
+          id TEXT PRIMARY KEY,
+          bytes INTEGER NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `),
+    postgres: `
+      CREATE TABLE storage_usage (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        total_bytes BIGINT NOT NULL
+      );
+      INSERT INTO storage_usage (id, total_bytes)
+        SELECT 1, COALESCE(SUM(byte_size), 0) FROM maps;
+      CREATE TABLE storage_reservations (
+        id TEXT PRIMARY KEY,
+        bytes BIGINT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL
+      );
+    `,
+  },
 ];
+
+/** The migration that gave maps write keys; the legacy grace counts from it. */
+export const WRITE_KEYS_MIGRATION = "003_write_keys_and_lasting_links";
