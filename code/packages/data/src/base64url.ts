@@ -1,10 +1,7 @@
 // packages/data/src/base64url.ts
 // SPDX-License-Identifier: MIT
 //
-// Shared base64url encode/decode helpers for AES-GCM payloads. Used by
-// yjs-crypto.ts (Yjs binary updates) and, via the package barrel, by
-// apps/atlas-app/src/collab/scene-crypto.ts (Excalidraw scene JSON) — both
-// need the same IV/ciphertext framing, just over different payload shapes.
+// base64url encode/decode for bytes in URLs (the share-link payload).
 //
 // Three implementations, picked at module load, fastest available first. All
 // three produce identical output for valid input (asserted across sizes and
@@ -13,15 +10,14 @@
 //      (Chrome 140+, Firefox 133+, Safari 18.2+, Node 25+).
 //   2. Node Buffer "base64url" codec (storage/realtime apps, vitest).
 //   3. Chunked String.fromCharCode + btoa/atob for every other browser.
-// The chunking in (3) is load-bearing: the previous per-byte
-// `binary += String.fromCharCode(buf[i])` loop cost ~17 ms per MB on the
-// emitSceneUpdate hot path; chunked apply is ~3× faster, the native paths
-// are 20–400× faster.
+// The chunking in (3) is load-bearing: a per-byte
+// `binary += String.fromCharCode(buf[i])` loop costs ~17 ms per MB; chunked
+// apply is ~3× faster, the native paths are 20–400× faster.
 //
 // Malformed input (not produced by this encoder) fails in all three decode
 // paths, but at different sites: atob/fromBase64 throw here, the Buffer codec
-// skips invalid characters and leaves the AES-GCM auth tag to reject the
-// garbage bytes. Callers treat any failure identically (discard payload).
+// skips invalid characters and leaves the caller's own parse to reject the
+// garbage bytes.
 
 interface NativeBase64Uint8Array extends Uint8Array {
   toBase64(opts: { alphabet: "base64url"; omitPadding: boolean }): string;

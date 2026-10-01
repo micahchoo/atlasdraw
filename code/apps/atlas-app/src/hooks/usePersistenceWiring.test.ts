@@ -23,6 +23,7 @@ import { usePersistenceStore } from "../state/usePersistenceStore";
 
 import * as persistenceModule from "../state/persistence";
 import * as documentIO from "../state/documentIO";
+import * as roomModule from "../state/room";
 import * as appConfigModule from "../config/app-config";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
@@ -80,7 +81,6 @@ function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
     }),
     isDirty: vi.fn(() => false),
     remoteSaveFailed: vi.fn(() => false),
-    suspendWrites: vi.fn(),
     close: vi.fn(async () => {}),
     ...overrides,
   };
@@ -150,6 +150,26 @@ describe("usePersistenceWiring — closing the tab", () => {
     window.dispatchEvent(new Event("pagehide"));
 
     expect(store.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing for a room's document: the relay keeps it", () => {
+    vi.spyOn(roomModule, "isRoomDocument").mockReturnValue(true);
+    const store = makeFakeStore({ isDirty: vi.fn(() => true) });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    const autoSave = vi
+      .spyOn(persistenceModule, "startAutoSave")
+      .mockReturnValue(vi.fn());
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    hide();
+    const getDoc = autoSave.mock.calls[0]![1];
+
+    expect(store.save).not.toHaveBeenCalled();
+    expect(getDoc()).toBeNull();
   });
 
   it("writes nothing when nothing changed", () => {

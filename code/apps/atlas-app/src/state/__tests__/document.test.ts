@@ -386,3 +386,101 @@ describe("provenance", () => {
     });
   });
 });
+
+describe("comments", () => {
+  const comment = {
+    id: "c1",
+    authorId: "u1",
+    authorName: "Ada",
+    text: "check the culvert",
+    createdAt: 1,
+    anchor: { kind: "map" as const, lng: 13.4, lat: 52.5 },
+    resolved: false,
+    schemaVersion: 2 as const,
+  };
+
+  it("a document opens with the comments it was saved with", () => {
+    const doc = createDocument({ comments: [comment] });
+
+    expect(doc.comments.comments).toEqual([comment]);
+  });
+
+  it("a comment added, resolved or deleted is a change: the revision rises", () => {
+    const doc = createDocument();
+    const seen: number[] = [];
+    doc.subscribe(() => seen.push(doc.revision));
+
+    const id = doc.comments.addComment({
+      text: "new",
+      anchor: { kind: "map", lng: 0, lat: 0 },
+      authorId: "u1",
+      authorName: "Ada",
+    });
+    doc.comments.resolve(id);
+    doc.comments.delete(id);
+
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it("two documents never share comments", () => {
+    const a = createDocument();
+    const b = createDocument();
+    a.comments.addComment({
+      text: "only in A",
+      anchor: { kind: "map", lng: 0, lat: 0 },
+      authorId: "u1",
+      authorName: "Ada",
+    });
+
+    expect(b.comments.comments).toEqual([]);
+  });
+});
+
+describe("replace-content", () => {
+  const fc: FeatureCollection = { type: "FeatureCollection", features: [] };
+
+  it("takes the new content and keeps every entry it did not change, object for object", () => {
+    const doc = createDocument();
+    doc.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc,
+      label: "A",
+      style: {},
+    });
+    const before = doc.snapshot();
+    const [a] = before.overlays;
+    const b = { ...a!, id: "dl:b", label: "B", order: 1 };
+
+    doc.dispatch({
+      type: "replace-content",
+      title: "Shared",
+      overlays: [a!, b],
+      featureCollections: { "dl:a": fc, "dl:b": fc },
+      images: {},
+    });
+
+    const after = doc.snapshot();
+    expect(after.title).toBe("Shared");
+    expect(after.overlays[0]).toBe(a);
+    expect(after.overlays.map((e) => e.id)).toEqual(["dl:a", "dl:b"]);
+    expect(after.featureCollections["dl:a"]).toBe(fc);
+    expect(doc.revision).toBe(2);
+  });
+
+  it("changes nothing, and raises no revision, for the content the document holds", () => {
+    const doc = createDocument({ title: "Same" });
+    const before = doc.snapshot();
+
+    doc.dispatch({
+      type: "replace-content",
+      title: "Same",
+      overlays: [...before.overlays],
+      featureCollections: { ...before.featureCollections },
+      images: { ...before.images },
+    });
+
+    expect(doc.snapshot()).toBe(before);
+    expect(doc.revision).toBe(0);
+  });
+});

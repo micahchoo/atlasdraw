@@ -6,8 +6,7 @@ drawing surface on top of a [MapLibre GL JS](https://maplibre.org/) basemap
 so that hand-drawn annotations stay geographically anchored under pan,
 zoom, and collaborative editing.
 
-> [!NOTE]
-> **Status:** `v1.0.0` — released 2026-05-15. See [`CHANGELOG.md`](CHANGELOG.md).
+> [!NOTE] > **Status:** `v1.0.0` — released 2026-05-15. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Why Atlasdraw?
 
@@ -62,18 +61,18 @@ graph LR
     R[realtime<br/>WS relay] -.-> ws
 ```
 
-| Subsystem | Path | Boundary |
-|-----------|------|----------|
-| Editor SPA (hub) | `code/apps/atlas-app` | Porous — consumes all |
-| Vendored Excalidraw Kernel | `code/packages/{excalidraw,element,math,common,utils}` | Tight — self-contained fork |
-| Geospatial Engine | `code/packages/geo` | Tight — pure functions + types |
-| Drawing Tools | `code/packages/tools` | Loose — 8 independent tools |
-| Map Renderer | `code/packages/basemap` | Loose — 4 concerns |
-| Data Interchange | `code/packages/data` | Loose — I/O + Yjs + geocoding |
-| Collaboration Protocol | `code/packages/protocol` | Tight — pure types |
-| Storage Server | `code/apps/storage` | Tight — zero atlas imports |
-| Collaboration Relay | `code/apps/realtime` | Tight — opaque relay |
-| CLI Tooling | `code/packages/cli` | Tight — 2 commands |
+| Subsystem                  | Path                                                   | Boundary                       |
+| -------------------------- | ------------------------------------------------------ | ------------------------------ |
+| Editor SPA (hub)           | `code/apps/atlas-app`                                  | Porous — consumes all          |
+| Vendored Excalidraw Kernel | `code/packages/{excalidraw,element,math,common,utils}` | Tight — self-contained fork    |
+| Geospatial Engine          | `code/packages/geo`                                    | Tight — pure functions + types |
+| Drawing Tools              | `code/packages/tools`                                  | Loose — 8 independent tools    |
+| Map Renderer               | `code/packages/basemap`                                | Loose — 4 concerns             |
+| Data Interchange           | `code/packages/data`                                   | Loose — I/O + Yjs + geocoding  |
+| Collaboration Protocol     | `code/packages/protocol`                               | Tight — pure types             |
+| Storage Server             | `code/apps/storage`                                    | Tight — zero atlas imports     |
+| Collaboration Relay        | `code/apps/realtime`                                   | Tight — opaque relay           |
+| CLI Tooling                | `code/packages/cli`                                    | Tight — 2 commands             |
 
 Full system map: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
@@ -116,20 +115,19 @@ files (no submodule). Resync procedure in [`VENDOR.md`](VENDOR.md).
 
 ## Tech stack
 
-| Concern | Choice | Version |
-|---|---|---|
-| UI runtime | React | `19.0.0` |
-| Drawing surface | `@excalidraw/excalidraw` (vendored) | `0.18.0` |
-| Basemap | `maplibre-gl` | `^4.7.1` |
-| Realtime CRDT | `yjs` + `y-websocket` | `^13.6.20` / `^2.0.0` |
-| Realtime presence | `socket.io-client` | `^4.7.0` |
-| State | `zustand` | `5.0.13` |
-| Local persistence | `idb` (IndexedDB) | `^8.0.0` |
-| Schemas | `zod` | `^3.22.0` |
-| Accessibility | `@react-aria/focus` | `^3.20.0` |
-| Print/PDF | `pdf-lib` | `^1.17.1` |
-| Build | `vite` | `^5.0.12` |
-| Tests | `vitest`, `@playwright/test` | `3.0.6` / `^1.48.0` |
+| Concern                         | Choice                              | Version               |
+| ------------------------------- | ----------------------------------- | --------------------- |
+| UI runtime                      | React                               | `19.0.0`              |
+| Drawing surface                 | `@excalidraw/excalidraw` (vendored) | `0.18.0`              |
+| Basemap                         | `maplibre-gl`                       | `^4.7.1`              |
+| Realtime rooms (doc + presence) | `yjs` + `y-websocket`               | `^13.6.20` / `^2.0.0` |
+| State                           | `zustand`                           | `5.0.13`              |
+| Local persistence               | `idb` (IndexedDB)                   | `^8.0.0`              |
+| Schemas                         | `zod`                               | `^3.22.0`             |
+| Accessibility                   | `@react-aria/focus`                 | `^3.20.0`             |
+| Print/PDF                       | `pdf-lib`                           | `^1.17.1`             |
+| Build                           | `vite`                              | `^5.0.12`             |
+| Tests                           | `vitest`, `@playwright/test`        | `3.0.6` / `^1.48.0`   |
 
 Server (`apps/storage`): Fastify, optional Postgres / SQLite, optional MinIO / S3.
 
@@ -190,12 +188,12 @@ discussion issue before writing code.
 Atlasdraw ships under three open-source licenses; the split is deliberate.
 Authoritative table: [`code/LICENSING.md`](code/LICENSING.md).
 
-| Component | License |
-|---|---|
-| `apps/atlas-app` | MIT |
-| `apps/realtime`, `apps/storage` | AGPL-3.0-only |
-| `packages/cli`, `packages/geo`, `packages/data` | MIT |
-| `packages/basemap`, `packages/tools` | MPL-2.0 |
+| Component                                                  | License        |
+| ---------------------------------------------------------- | -------------- |
+| `apps/atlas-app`                                           | MIT            |
+| `apps/realtime`, `apps/storage`                            | AGPL-3.0-only  |
+| `packages/cli`, `packages/geo`, `packages/data`            | MIT            |
+| `packages/basemap`, `packages/tools`                       | MPL-2.0        |
 | Vendored `packages/{excalidraw,element,math,common,utils}` | MIT (upstream) |
 
 License files: [`code/LICENSE-AGPL`](code/LICENSE-AGPL),

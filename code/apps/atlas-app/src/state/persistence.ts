@@ -199,12 +199,6 @@ export interface PersistenceStore {
   isDirty(): boolean;
   /** True if the last remoteSave failed (IDB succeeded, server did not). */
   remoteSaveFailed(): boolean;
-  /**
-   * Stop writing the autosave slot for the rest of this session. Used when
-   * the scene stops being the user's own map (a shared room replaced it).
-   * Disk saves the user asks for are unaffected.
-   */
-  suspendWrites(): void;
   /** Internal: dispose IDB connection + clear listeners (test helper). */
   close(): Promise<void>;
 }
@@ -295,18 +289,12 @@ export function createPersistenceStore(
     }
   };
 
-  let writesSuspended = false;
-
   const save = (doc: AtlasdrawDocument): Promise<void> => {
     // Capture dirtySeq SYNCHRONOUSLY at call-time. If we deferred this into
     // the enqueueWrite microtask, any `markDirty()` issued by the caller
     // immediately after `save(doc)` (before awaiting) would land BEFORE the
     // capture and we'd never observe the race.
     const seqAtStart = dirtySeq;
-    if (writesSuspended) {
-      dirty = false;
-      return Promise.resolve();
-    }
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
       const stored = await blobToStored(blob);
@@ -657,9 +645,6 @@ export function createPersistenceStore(
     isDirty,
     remoteSaveFailed,
     close,
-    suspendWrites: () => {
-      writesSuspended = true;
-    },
   };
 }
 
@@ -689,7 +674,8 @@ export function createPersistenceStore(
  */
 export function startAutoSave(
   store: PersistenceStore,
-  getDoc: () => AtlasdrawDocument,
+  /** The document to save; null when there is nothing to save here. */
+  getDoc: () => AtlasdrawDocument | null,
   intervalMs = 5000,
   maxFlushMs = 30000,
   onSaved?: () => void,
@@ -712,6 +698,10 @@ export function startAutoSave(
   const flush = (): void => {
     clearTimers();
     const snapshot = getDoc();
+    if (!snapshot) {
+      onSaved?.();
+      return;
+    }
     // The store's internal write chain serializes writes, so an in-flight
     // save before the next flush still completes in order. We DO await the
     // promise here (via .then) so the onSaved callback fires only after the

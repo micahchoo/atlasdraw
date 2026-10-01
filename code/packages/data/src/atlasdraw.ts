@@ -8,6 +8,7 @@
 //   scene.excalidraw.json         (DEFLATE)  the Excalidraw scene
 //   data/layer-<id>.geojson       (DEFLATE)  per data-layer FeatureCollection
 //   style.json                    (DEFLATE)  basemap style ref (opaque)
+//   comments.json                 (DEFLATE)  the comments, when there are any
 //   files/<name>                  (STORE)    binary assets — already-compressed
 //   meta/thumbnail.png            (STORE)    optional preview, write-only here
 //
@@ -18,7 +19,9 @@ import JSZip from "jszip";
 
 import {
   ManifestSchema,
+  SavedCommentSchema,
   type AtlasdrawDocument,
+  type SavedComment,
   type SceneElement,
 } from "./manifest-schema.js";
 import { migrate, MigrationError, type StoredDocument } from "./migrations.js";
@@ -30,6 +33,7 @@ export const ATLASDRAW_MIME = "application/vnd.atlasdraw+zip";
 const MANIFEST_PATH = "manifest.json";
 const SCENE_PATH = "scene.excalidraw.json";
 const STYLE_PATH = "style.json";
+const COMMENTS_PATH = "comments.json";
 const THUMBNAIL_PATH = "meta/thumbnail.png";
 const LAYER_PATH_RE = /^data\/layer-(.+)\.geojson$/;
 const FILES_PREFIX = "files/";
@@ -144,6 +148,11 @@ export async function write(
     texts.set(`data/layer-${id}.geojson`, JSON.stringify(fc));
   }
   texts.set(STYLE_PATH, JSON.stringify(doc.styleRef ?? {}));
+  // Written only when there is a comment, so a document without comments
+  // gives the same bytes as before comments were saved.
+  if (doc.comments && doc.comments.length > 0) {
+    texts.set(COMMENTS_PATH, JSON.stringify(doc.comments));
+  }
 
   // Incremental path: reopen the previous archive so JSZip can pass the
   // compressed bytes of untouched entries straight through to the output.
@@ -423,11 +432,30 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
     }
   }
 
+  // --- comments.json --------------------------------------------------------
+  const comments: SavedComment[] = [];
+  const commentsEntry = zip.file(COMMENTS_PATH);
+  if (commentsEntry) {
+    let raw: unknown = [];
+    try {
+      raw = JSON.parse(await commentsEntry.async("string"));
+    } catch {
+      // An unreadable comments file loses the comments, not the map.
+    }
+    for (const item of Array.isArray(raw) ? raw : []) {
+      const parsed = SavedCommentSchema.safeParse(item);
+      if (parsed.success) {
+        comments.push(parsed.data);
+      }
+    }
+  }
+
   return {
     manifest,
     scene,
     layers,
     styleRef,
     files,
+    comments,
   };
 }

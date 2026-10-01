@@ -1,28 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// atlas-app — Phase 6 A3 anchored-comment client state.
 //
-// CommentsLayer wraps a Y.Doc + y-websocket WebsocketProvider for a single
-// room's comments. The doc lives on the relay at the URL path produced by
-// `buildCommentsDocPath(roomId, workspaceId)` — see protocol/comment-schema.ts
-// for the document shape and ADR-0010 trust posture.
+// CommentsLayer: the comments of one document, kept in a Y.Doc array of
+// Y.Maps (protocol/comment-schema.ts). The document owns the Y.Doc. For a
+// map of the user's own it is private to the Document; in a room it is the
+// room's Y.Doc, so comments sync with everything else in the room.
 //
-// Lifecycle is owned by CollabState: when CollabState.connect(roomId, key,
-// workspaceId) opens the data-layer Yjs WebSocket, it also instantiates a
-// CommentsLayer; CollabState.disconnect() tears it down.
-//
-// This module is the React-facing seam: it exposes a stable observer API
-// (`subscribe(listener) → unsubscribe`) that components turn into useSyncExternalStore
-// state, plus mutation helpers (addComment, resolve, delete).
-//
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
-// Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
+// This is the React-facing seam: a stable observer API (`subscribe`), the
+// mutators, and plain-object snapshots.
 
 import * as Y from "yjs";
-import { WebsocketProvider } from "y-websocket";
 import {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
-  buildCommentsDocPath,
   normalizeAnchor,
   type CommentAnchor,
   type CommentSchemaV1,
@@ -41,45 +30,21 @@ export type Comment = CommentSchemaV1;
 // CommentsLayer
 // ---------------------------------------------------------------------------
 
-export interface CommentsLayerOptions {
-  /** WebSocket base URL — same shape CollabState resolves from RealtimeConfig. */
-  wsUrl: string;
-  /** Room identifier (Q-P5-2). */
-  roomId: string;
-  /** Workspace scope; null for self-host / Phase-5-compatible deployments. */
-  workspaceId: string | null;
-  /**
-   * Optional injected Y.Doc — tests pass two docs and bypass the provider
-   * to exercise CRDT semantics without a WebSocket. Production code omits
-   * this and gets a fresh doc.
-   */
-  doc?: Y.Doc;
-  /**
-   * Optional injected WebsocketProvider factory — tests pass a no-op factory
-   * to exercise pure CRDT semantics; production uses the real provider.
-   */
-  providerFactory?: (
-    wsUrl: string,
-    docName: string,
-    doc: Y.Doc,
-  ) => { destroy: () => void } | null;
-}
-
 type Listener = (comments: ReadonlyArray<Comment>) => void;
 /**
- * Phase 6 A14b — fires once per newly-arrived comment, after the initial
+ * fires once per newly-arrived comment, after the initial
  * sync window. Used by aria-live announcers; not used by render code.
  */
 type AdditionListener = (comment: Comment) => void;
 
 export class CommentsLayer {
   readonly doc: Y.Doc;
-  private readonly _provider: { destroy: () => void } | null;
+  private readonly _observer: () => void;
   private readonly _listeners: Set<Listener> = new Set();
   private readonly _additionListeners: Set<AdditionListener> = new Set();
   private _cachedSnapshot: ReadonlyArray<Comment> = [];
   /**
-   * Phase 6 A14b — wall-clock timestamp captured at construction. Any
+   * wall-clock timestamp captured at construction. Any
    * comment whose `createdAt` is older than this is considered "already
    * present at sync time" and is NOT announced as a new arrival. This
    * suppresses the initial replay storm that y-websocket fires when the
@@ -95,42 +60,18 @@ export class CommentsLayer {
   /** Ids we've already announced — Y.Array.observeDeep can fire repeatedly. */
   private readonly _announcedIds: Set<string> = new Set();
 
-  constructor(opts: CommentsLayerOptions) {
-    this.doc = opts.doc ?? new Y.Doc();
+  constructor(doc: Y.Doc = new Y.Doc()) {
+    this.doc = doc;
     this._syncedAt = Date.now();
 
-    // The y-websocket WebsocketProvider expects a base URL and a room name;
-    // it appends `/${roomName}` itself, which collides with our docName-as-URL-path
-    // contract. To get a docName like `comments/room-abc` we set the room name
-    // to that path and let the relay treat the suffix verbatim.
-    const docName = buildCommentsDocPath(opts.roomId, opts.workspaceId).slice(
-      "/yjs/".length,
-    );
-
-    if (opts.providerFactory) {
-      this._provider = opts.providerFactory(opts.wsUrl, docName, this.doc);
-    } else if (typeof WebSocket !== "undefined") {
-      // Strip trailing slash so y-websocket's concatenation
-      // (`${url}/${roomName}/...`) lands on /yjs/<docName>.
-      const base = opts.wsUrl.replace(/\/+$/, "");
-      // WebsocketProvider's first arg is the base URL; it joins `/${roomname}`.
-      // We pass `/yjs` as the base so the final URL is /yjs/<docName>.
-      this._provider = new WebsocketProvider(`${base}/yjs`, docName, this.doc, {
-        connect: true,
-      });
-    } else {
-      this._provider = null;
-    }
-
     // Observe deep so anchor-nested Y.Maps also trigger.
-    const arr = this._array();
-    arr.observeDeep(() => {
+    this._observer = () => {
       this._cachedSnapshot = this._compute();
       // Fire generic snapshot listeners.
       for (const l of this._listeners) {
         l(this._cachedSnapshot);
       }
-      // Phase 6 A14b — addition listeners. We announce only comments
+      // addition listeners. We announce only comments
       // we've never seen before AND whose `createdAt` is newer than the
       // sync window (suppresses replay storm of pre-existing comments
       // when the relay sends the initial state).
@@ -154,7 +95,8 @@ export class CommentsLayer {
           this._announcedIds.add(c.id);
         }
       }
-    });
+    };
+    this._array().observeDeep(this._observer);
 
     // Seed the snapshot for the first subscriber.
     this._cachedSnapshot = this._compute();
@@ -166,7 +108,7 @@ export class CommentsLayer {
   }
 
   /**
-   * Phase 6 A14b — Subscribe to NEW comments (not the full snapshot). The
+   * Subscribe to NEW comments (not the full snapshot). The
    * listener fires once per id, and only for comments whose createdAt is at
    * or after the sync window (`Date.now()` at construction). Returns an
    * unsubscribe function. Used by aria-live announcers.
@@ -225,19 +167,7 @@ export class CommentsLayer {
       resolved: false,
       schemaVersion: COMMENT_SCHEMA_VERSION,
     };
-    const m = new Y.Map<unknown>();
-    for (const [k, v] of Object.entries(row)) {
-      if (k === "anchor") {
-        const a = new Y.Map<unknown>();
-        for (const [ak, av] of Object.entries(v as object)) {
-          a.set(ak, av);
-        }
-        m.set("anchor", a);
-      } else {
-        m.set(k, v);
-      }
-    }
-    this._array().push([m]);
+    this._array().push([commentMap(row)]);
     return id;
   }
 
@@ -264,12 +194,9 @@ export class CommentsLayer {
   }
 
   /**
-   * Remove the comment from the Y.Array. LWW; no soft-delete.
-   *
-   * Authorization (delete-own-only) is enforced client-side by the UI —
-   * authorId rotates on socket reconnect, so this is best-effort. Phase 7
-   * is expected to introduce a stable user identity; see TODO in
-   * components/CommentsPanel.tsx.
+   * Remove the comment from the Y.Array. No soft-delete. Only the UI keeps
+   * a user to their own comments (by `identity.id`); anyone in a room can
+   * write the room doc.
    */
   delete(commentId: string): void {
     const idx = this._indexOf(commentId);
@@ -283,10 +210,11 @@ export class CommentsLayer {
   // Lifecycle
   // -------------------------------------------------------------------------
 
+  /** Stop observing the Y.Doc. The doc itself belongs to its owner. */
   destroy(): void {
     this._listeners.clear();
-    this._provider?.destroy();
-    this.doc.destroy();
+    this._additionListeners.clear();
+    this._array().unobserveDeep(this._observer);
   }
 
   // -------------------------------------------------------------------------
@@ -342,4 +270,37 @@ export class CommentsLayer {
         .padStart(8, "0");
     return `${rand()}-${rand()}`;
   }
+}
+
+/** A comment as the Y.Map the array holds; the anchor is a nested Y.Map. */
+function commentMap(row: Comment): Y.Map<unknown> {
+  const m = new Y.Map<unknown>();
+  for (const [k, v] of Object.entries(row)) {
+    if (k === "anchor") {
+      const a = new Y.Map<unknown>();
+      for (const [ak, av] of Object.entries(v as object)) {
+        a.set(ak, av);
+      }
+      m.set("anchor", a);
+    } else {
+      m.set(k, v);
+    }
+  }
+  return m;
+}
+
+/** Append `comments` to the comments array of `doc`, in one transaction. */
+export function seedComments(
+  doc: Y.Doc,
+  comments: readonly Comment[],
+  origin?: unknown,
+): void {
+  if (comments.length === 0) {
+    return;
+  }
+  doc.transact(() => {
+    doc
+      .getArray<Y.Map<unknown>>(COMMENTS_ARRAY_KEY)
+      .push(comments.map(commentMap));
+  }, origin);
 }

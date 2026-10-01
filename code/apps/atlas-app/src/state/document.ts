@@ -30,11 +30,13 @@ import { ulid } from "ulid";
 
 import { geometryKindOf } from "@atlasdraw/data";
 import { documentFrame, type WorldFrame } from "@atlasdraw/geo";
+import * as Y from "yjs";
 
 import type { LayerStyle } from "@atlasdraw/basemap";
 
 import type { AtlasGeometryKind, Camera } from "@atlasdraw/data";
 
+import { CommentsLayer, seedComments, type Comment } from "./comments";
 import { editorScene, type SceneAccess } from "./scene";
 
 import type { FeatureCollection } from "geojson";
@@ -218,13 +220,32 @@ export type DocumentCommand =
   | { type: "restyle"; id: string; patch: Partial<LayerStyle> }
   /** A raster's or tile layer's opacity, clamped to 0..1. */
   | { type: "set-opacity"; id: string; opacity: number }
-  | { type: "remove-layer"; id: string };
+  | { type: "remove-layer"; id: string }
+  /**
+   * Take this title and these layers and payloads as a whole. An entry or
+   * payload equal by identity to the one held stays as it is. A room uses
+   * it to apply what its collaborators changed.
+   */
+  | {
+      type: "replace-content";
+      title: string;
+      overlays: readonly OverlayEntry[];
+      featureCollections: Readonly<Record<string, FeatureCollection>>;
+      images: Readonly<Record<string, Blob>>;
+    };
+
+/** What a document is created from: its state, and its comments. */
+export type DocumentInit = Partial<DocumentState> & {
+  comments?: readonly Comment[];
+};
 
 export interface Document {
   /** Fixed at creation. */
   readonly id: string;
   /** The drawing this document is saved with. */
   readonly scene: SceneAccess;
+  /** The comments. A change to them raises the revision. */
+  readonly comments: CommentsLayer;
   /** Rises by one on every change; 0 for a document just created or loaded. */
   readonly revision: number;
   snapshot(): DocumentState;
@@ -291,6 +312,32 @@ function withoutKey<T>(
   }
   const { [key]: _removed, ...rest } = record;
   return rest;
+}
+
+const KIND_RANK: Record<OverlayEntry["kind"], number> = {
+  data: 0,
+  raster: 1,
+  tile: 2,
+};
+
+/** Kinds in a fixed order, each kind by `order`, ties by id. */
+function canonicalOrder(entries: readonly OverlayEntry[]): OverlayEntry[] {
+  return [...entries].sort(
+    (a, b) =>
+      KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
+      a.order - b.order ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
+function sameRecord<T>(
+  a: Readonly<Record<string, T>>,
+  b: Readonly<Record<string, T>>,
+): boolean {
+  const keys = Object.keys(a);
+  return (
+    keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
+  );
 }
 
 /**
@@ -433,6 +480,39 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
       });
       return { ...state, overlays: reindex(next) };
     }
+    case "replace-content": {
+      const title = command.title.trim() || DEFAULT_DOCUMENT_TITLE;
+      const held = new Map(state.overlays.map((e) => [e.id, e]));
+      const sameOverlays =
+        command.overlays.length === state.overlays.length &&
+        command.overlays.every((e) => held.get(e.id) === e);
+      const featureCollections = sameRecord(
+        state.featureCollections,
+        command.featureCollections,
+      )
+        ? state.featureCollections
+        : command.featureCollections;
+      const images = sameRecord(state.images, command.images)
+        ? state.images
+        : command.images;
+      if (
+        title === state.title &&
+        sameOverlays &&
+        featureCollections === state.featureCollections &&
+        images === state.images
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        title,
+        overlays: sameOverlays
+          ? state.overlays
+          : reindex(canonicalOrder(command.overlays)),
+        featureCollections,
+        images,
+      };
+    }
     case "remove-layer": {
       if (!state.overlays.some((e) => e.id === command.id)) {
         return state;
@@ -447,9 +527,15 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
   }
 }
 
+/**
+ * A new document. Its comments live in `commentsDoc` when one is given (a
+ * room passes its own Y.Doc, already holding the room's comments), and
+ * otherwise in a Y.Doc of the document's own, seeded with `initial.comments`.
+ */
 export function createDocument(
-  initial: Partial<DocumentState> = {},
+  initial: DocumentInit = {},
   scene: SceneAccess = editorScene,
+  commentsDoc?: Y.Doc,
 ): Document {
   const createdAt = initial.createdAt ?? new Date().toISOString();
   let state: DocumentState = {
@@ -478,9 +564,21 @@ export function createDocument(
     }
   };
 
+  let ownDoc: Y.Doc | undefined;
+  if (!commentsDoc) {
+    ownDoc = new Y.Doc();
+    seedComments(ownDoc, initial.comments ?? []);
+  }
+  const comments = new CommentsLayer(commentsDoc ?? ownDoc);
+  comments.subscribe(() => {
+    revision += 1;
+    notify();
+  });
+
   return {
     id: state.id,
     scene,
+    comments,
     get revision() {
       return revision;
     },

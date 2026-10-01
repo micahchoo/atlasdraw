@@ -580,3 +580,36 @@ describe("unsaved work", () => {
     expect(doc && hasUnsavedWork(doc)).toBe(true);
   });
 });
+
+describe("comments in the file", () => {
+  it("a comment is saved with the document and comes back on open", async () => {
+    const doc = createDocument({ title: "With a comment" });
+    doc.comments.addComment({
+      text: "survey marker is 2 m east",
+      anchor: { kind: "map", lng: 13.4, lat: 52.5 },
+      authorId: "u1",
+      authorName: "Ada",
+    });
+
+    const result = await decode(await encode(doc));
+    if (!result.ok) {
+      throw result.error;
+    }
+    const reopened = createDocument(fromFile(result.file));
+
+    expect(reopened.comments.comments).toEqual(doc.comments.comments);
+  });
+
+  it("a comment change is unsaved work", () => {
+    const doc = createDocument();
+    markSavedToFile(doc);
+    doc.comments.addComment({
+      text: "late note",
+      anchor: { kind: "map", lng: 0, lat: 0 },
+      authorId: "u1",
+      authorName: "Ada",
+    });
+
+    expect(hasUnsavedWork(doc)).toBe(true);
+  });
+});

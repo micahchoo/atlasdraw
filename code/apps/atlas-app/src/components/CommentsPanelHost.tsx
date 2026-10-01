@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentsPanelHost.
+// CommentsPanelHost.
 //
-// Thin wrapper that reads the active CollabState from useCollab() and
-// supplies it to <CommentsPanel/>. Pending-anchor coordination flows through
+// Thin wrapper that gives <CommentsPanel/> the open document's comments and
+// this browser's identity (state/identity.ts) as the author. Pending-anchor coordination flows through
 // the comments-anchor-picker store: the panel signals "I want a map/element
 // anchor" via onRequestAnchor → setAnchorMode; the canvas overlay
 // (CommentsAnchorPicker, owned by MapEditor) listens for the next map click
@@ -13,12 +13,11 @@
 // Mounted by LayerPanel's ThreadsSection, inside the Layers tab. There is no
 // "comments" Sidebar tab any more — Step 5 turned comments into a mode and
 // demoted the list one level down.
-//
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 
 import React, { useCallback } from "react";
 
-import { useCollab } from "../hooks/useCollab";
+import { useDocumentStore } from "../state/document";
+import { localIdentity } from "../state/identity";
 
 import {
   clearAnchorPicker,
@@ -29,16 +28,10 @@ import {
 import { CommentsPanel } from "./CommentsPanel";
 
 export function CommentsPanelHost(): React.JSX.Element {
-  const { commentsLayer } = useCollab();
+  const commentsLayer = useDocumentStore((s) => s.doc.comments);
   const { anchor: pendingAnchor } = usePendingAnchor();
 
-  // Author identity — for Phase 6 v1, derive from the Y.Doc clientID (stable
-  // across the session). socket.id would rotate on reconnect.
-  // TODO(phase-7): replace with a stable user identity from auth.
-  const authorId = commentsLayer
-    ? `client-${commentsLayer.doc.clientID}`
-    : "anonymous";
-  const authorName = "You";
+  const { id: authorId, name: authorName } = localIdentity();
 
   const onRequestAnchor = useCallback((kind: "map" | "element") => {
     setAnchorMode(kind);

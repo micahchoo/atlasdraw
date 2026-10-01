@@ -19,15 +19,12 @@ import {
   waitFor,
 } from "@testing-library/react";
 
-import * as protocol from "@atlasdraw/protocol";
-
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { ShareDialog } from "../ShareDialog";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
 
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
-import type { CollabState } from "../../state/collab";
 
 function tinyDoc(): AtlasdrawDocument {
   return {
@@ -86,11 +83,10 @@ function stubClient(): HttpStorageClient {
 /** Lets any deferred setup in the dialog run before the first press. */
 const settle = () => new Promise((r) => setTimeout(r, 20));
 
-function stubCollab(): CollabState & { connect: ReturnType<typeof vi.fn> } {
-  return {
-    active: true,
-    connect: vi.fn(),
-  } as unknown as CollabState & { connect: ReturnType<typeof vi.fn> };
+const ROOM_URL = "https://test.example/#room:abc-123,KEYB64";
+
+function stubStartRoom() {
+  return vi.fn(async () => ROOM_URL);
 }
 
 describe("ShareDialog", () => {
@@ -122,7 +118,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
     expect(screen.queryByTestId("share-dialog-mode-picker")).not.toBeNull();
@@ -137,7 +133,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
 
@@ -167,7 +163,7 @@ describe("ShareDialog", () => {
         onCloseRequest={onClose}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
     await settle();
@@ -184,7 +180,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
 
@@ -205,7 +201,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => bigDoc()}
         client={client}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
 
@@ -247,7 +243,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => bigDoc()}
         client={client}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
 
@@ -282,7 +278,7 @@ describe("ShareDialog", () => {
         onCloseRequest={() => {}}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
 
@@ -310,7 +306,7 @@ describe("ShareDialog", () => {
         onCloseRequest={onClose}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
     await waitFor(() => {
@@ -327,7 +323,7 @@ describe("ShareDialog", () => {
         onCloseRequest={onClose}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={stubCollab()}
+        startRoom={stubStartRoom()}
       />,
     );
     await waitFor(() => {
@@ -337,22 +333,14 @@ describe("ShareDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("Collaborate button calls generateRoomKey + connect and shows a #room: URL", async () => {
-    const stubKey = { type: "secret" } as unknown as CryptoKey;
-    const generateSpy = vi
-      .spyOn(protocol, "generateRoomKey")
-      .mockResolvedValue({
-        roomId: "abc-123",
-        key: stubKey,
-        fragment: "#room:abc-123,KEYB64",
-      });
-    const collab = stubCollab();
+  it("Collaborate starts the room and shows its #room: URL", async () => {
+    const startRoom = stubStartRoom();
     render(
       <ShareDialog
         onCloseRequest={() => {}}
         getDoc={() => tinyDoc()}
         client={stubClient()}
-        collabState={collab}
+        startRoom={startRoom}
       />,
     );
 
@@ -360,21 +348,29 @@ describe("ShareDialog", () => {
       fireEvent.click(screen.getByTestId("share-dialog-pick-collab"));
     });
 
-    await waitFor(() => {
-      expect(generateSpy).toHaveBeenCalled();
-    });
-    await waitFor(() => {
-      expect(collab.connect).toHaveBeenCalledWith("abc-123", stubKey);
-    });
+    expect(startRoom).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(screen.queryByTestId("share-dialog-url")).not.toBeNull();
     });
     const input = screen.getByTestId("share-dialog-url") as HTMLInputElement;
     expect(input.value).toContain("#room:");
-    expect(input.value).toBe("https://test.example/#room:abc-123,KEYB64");
+    expect(input.value).toBe(ROOM_URL);
 
     const hint = screen.getByTestId("share-dialog-mode-hint");
     expect(hint.getAttribute("data-mode")).toBe("collab");
     expect(hint.textContent).toMatch(/anyone with this link can edit/i);
+  });
+
+  it("offers no Collaborate when the editor has no rooms", () => {
+    render(
+      <ShareDialog
+        onCloseRequest={() => {}}
+        getDoc={() => tinyDoc()}
+        client={stubClient()}
+        startRoom={null}
+      />,
+    );
+    expect(screen.queryByTestId("share-dialog-pick-readonly")).not.toBeNull();
+    expect(screen.queryByTestId("share-dialog-pick-collab")).toBeNull();
   });
 });

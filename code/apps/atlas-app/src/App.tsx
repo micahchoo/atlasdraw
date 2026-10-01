@@ -5,16 +5,14 @@
 // recipient navigates to a `/m...` link freshly; no SPA navigation is needed
 // within the share view, so we read `window.location` once at mount.
 //
-// Phase 5 collab integration (Step 8) — adds a `#room:` fragment route on `/`
-// that mounts MapEditor (write-capable) per Q-P5-2. Defensive: `#room:` on a
-// `/m` path is treated as ShareView (read-only) — never grants write
-// capability via path mismatch.
+// A `#room:` fragment on `/` joins a room (hooks/useRoom.ts). On `/m` it is
+// treated as a read-only share: a path mismatch never joins a room.
 //
 // Routes:
 //   /m#v2:<encoded>      → ShareView (hash mode; #v1: links still open)
 //   /m/<token>           → ShareView (upload mode)
-//   /m#room:...          → ShareView (defensive — Q-P5-2; treat as read-only)
-//   /#room:<id>,<key>    → MapEditor (collab session; URL key = write cap)
+//   /m#room:...          → ShareView (read-only)
+//   /#room:<id>,<secret> → MapEditor, in the room
 //   anything else        → MapEditor (the editor)
 
 import { Suspense, lazy, useEffect } from "react";
@@ -68,8 +66,7 @@ function pickView() {
   ) {
     return <EmbedView />;
   }
-  // Q-P5-2: a `#room:` fragment under `/m` is a path mismatch — never grant
-  // write capability via the share-view path. Treat as read-only.
+  // A `#room:` fragment under `/m` never joins a room.
   if (path === "/m" && hash.startsWith("#room:")) {
     return <ShareView />;
   }
@@ -78,12 +75,6 @@ function pickView() {
   }
   if (path.startsWith("/m/")) {
     return <ShareView />;
-  }
-  // Q-P5-2: `#room:` on the editor path (`/`) is the write-capable collab
-  // entry point. MapEditor mounts useCollabRoom which decodes the key and
-  // opens the live session.
-  if (path === "/" && hash.startsWith("#room:")) {
-    return <MapEditor initialView={INITIAL_VIEW} />;
   }
   return <MapEditor initialView={INITIAL_VIEW} />;
 }

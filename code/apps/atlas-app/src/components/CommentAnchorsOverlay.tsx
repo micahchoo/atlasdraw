@@ -37,8 +37,6 @@ import {
   type CommentAnchor as CommentAnchorData,
 } from "@atlasdraw/protocol";
 
-import { useCollab } from "../hooks/useCollab";
-
 import { useCommentFocus } from "../state/commentFocus";
 import { useCommentMode } from "../state/commentMode";
 import {
@@ -46,7 +44,12 @@ import {
   setPendingAnchor,
   usePendingAnchor,
 } from "../state/comments-anchor-picker";
-import { currentDocument, type RasterLayerEntry } from "../state/document";
+import {
+  currentDocument,
+  useDocumentStore,
+  type RasterLayerEntry,
+} from "../state/document";
+import { localIdentity } from "../state/identity";
 
 import styles from "../styles/CommentAnchorsOverlay.module.css";
 
@@ -123,7 +126,7 @@ export function CommentAnchorsOverlay(
   props: CommentAnchorsOverlayProps,
 ): React.JSX.Element | null {
   const { map, excalidrawAPI } = props;
-  const { commentsLayer } = useCollab();
+  const commentsLayer = useDocumentStore((s) => s.doc.comments);
   const { anchor: pendingAnchor } = usePendingAnchor();
   const commentMode = useCommentMode();
   // A canvas-search hit asks for one comment by id; the anchor that owns it
@@ -144,7 +147,7 @@ export function CommentAnchorsOverlay(
     return commentsLayer.subscribe(setComments);
   }, [commentsLayer]);
 
-  // Phase 6 A14b — aria-live announcements for newly-arrived comments. The
+  // aria-live announcements for newly-arrived comments. The
   // CommentsLayer's sync-window guard suppresses the replay storm; this
   // overlay just routes the addition events into the announcer.
   const announce = useAnnounce();
@@ -376,9 +379,7 @@ export function CommentAnchorsOverlay(
     }
   }
 
-  const authorId = commentsLayer
-    ? `client-${commentsLayer.doc.clientID}`
-    : "anonymous";
+  const { id: authorId, name: authorName } = localIdentity();
 
   const draftPoint =
     draftVisible && pendingAnchor ? project(pendingAnchor) : null;
@@ -447,7 +448,7 @@ export function CommentAnchorsOverlay(
               text,
               anchor,
               authorId,
-              authorName: "You",
+              authorName,
             });
             // Re-arm rather than clear: comment mode stays on, so the next
             // click starts the next thread. `setAnchorMode` bumps

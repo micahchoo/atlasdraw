@@ -96,12 +96,7 @@ describe("aria-live: new comment", () => {
   const mapAnchor: CommentAnchor = { kind: "map", lng: 0, lat: 0 };
 
   function makeLayer(): CommentsLayer {
-    return new CommentsLayer({
-      wsUrl: "ws://test.invalid",
-      roomId: "test-room",
-      workspaceId: null,
-      providerFactory: () => null,
-    });
+    return new CommentsLayer();
   }
 
   it("subscribeAdditions fires for a comment added AFTER sync window", async () => {
@@ -156,13 +151,7 @@ describe("aria-live: new comment", () => {
     m.set("schemaVersion", 1);
     arr.push([m]);
 
-    const layer = new CommentsLayer({
-      wsUrl: "ws://test.invalid",
-      roomId: "shared-room",
-      workspaceId: null,
-      doc,
-      providerFactory: () => null,
-    });
+    const layer = new CommentsLayer(doc);
     const seen: string[] = [];
     layer.subscribeAdditions((c) => seen.push(c.authorName));
 

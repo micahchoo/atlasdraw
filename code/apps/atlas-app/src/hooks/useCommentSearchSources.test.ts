@@ -22,13 +22,7 @@ import { useCommentSearchSources } from "./useCommentSearchSources";
 import type maplibregl from "maplibre-gl";
 
 function makeLayer(): CommentsLayer {
-  return new CommentsLayer({
-    wsUrl: "ws://test.invalid",
-    roomId: "test-room",
-    workspaceId: null,
-    doc: new Y.Doc(),
-    providerFactory: () => null,
-  });
+  return new CommentsLayer(new Y.Doc());
 }
 
 const author = { authorId: "alice", authorName: "Alice" };

@@ -1,25 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 5 Task 11 — PresenceList.
 //
-// Compact sidebar widget showing connected collaborators. Each peer renders
-// as a colored avatar dot with truncated username. Shows "N collaborators"
-// header. Collapses to icon-only (dots only) when 4 or more peers are
-// connected, conserving screen space.
+// PresenceList — who else is in the room. One coloured dot and name per
+// peer; it collapses to dots alone at four or more. A peer whose camera is
+// known can be clicked to look where they look.
 //
-// Flow position: Step 2 of 3 in client-collab (collab-state → cursor-presence
-// → presence-list). Upstream contract: useCollab().peers map.
-// Downstream contract: mounted directly by MapEditor (CollabWrapper, the
-// original Task 11 mount point, was deleted 2026-05-25 as an unused
-// gateway — collab wiring moved into MapEditor but this mount never
-// followed; see ledgers/DEADWOOD.md).
-//
-// Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 11
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React from "react";
 
-import { useCollab } from "../hooks/useCollab";
+import type { Camera } from "@atlasdraw/data";
+
 import styles from "../styles/PresenceList.module.css";
+
+import type { Peer } from "../state/room";
 
 /**
  * Truncate a string to `max` characters, appending "..." when exceeded.
@@ -31,17 +24,15 @@ function truncate(name: string, max = 12): string {
   return `${name.slice(0, max)}…`;
 }
 
-/**
- * Compact sidebar collaborator list.
- *
- * Renders the current set of connected peers as colored dots with truncated
- * usernames. When 4+ peers are connected the list collapses to icon-only
- * (dots in a row) to conserve screen space. Returns null when there are no
- * peers (collab inactive or empty room).
- */
-export function PresenceList() {
-  const { peers } = useCollab();
-  const entries = Array.from(peers.values());
+export interface PresenceListProps {
+  peers: readonly Peer[];
+  /** Move this viewer's map to a peer's camera. */
+  onGoTo?: (camera: Camera) => void;
+}
+
+/** The peers in the room; nothing when there are none. */
+export function PresenceList({ peers, onGoTo }: PresenceListProps) {
+  const entries = peers;
   const count = entries.length;
 
   if (count === 0) {
@@ -55,11 +46,11 @@ export function PresenceList() {
       <div className={styles.rootCompact} data-testid="presence-list-compact">
         {entries.map((peer) => (
           <span
-            key={peer.id}
+            key={peer.clientId}
             className={styles.avatarDot}
-            style={{ backgroundColor: peer.color }}
-            title={peer.username}
-            data-testid={`presence-dot-${peer.id}`}
+            style={{ backgroundColor: peer.user.color }}
+            title={peer.user.name}
+            data-testid={`presence-dot-${peer.clientId}`}
           />
         ))}
       </div>
@@ -74,21 +65,40 @@ export function PresenceList() {
         {headerText}
       </h3>
       <div className={styles.peerList}>
-        {entries.map((peer) => (
-          <div
-            key={peer.id}
-            className={styles.peerRow}
-            data-testid={`presence-peer-${peer.id}`}
-          >
-            <span
-              className={styles.avatarDot}
-              style={{ backgroundColor: peer.color }}
-            />
-            <span className={styles.username} title={peer.username}>
-              {truncate(peer.username)}
-            </span>
-          </div>
-        ))}
+        {entries.map((peer) => {
+          const camera = peer.camera;
+          const content = (
+            <>
+              <span
+                className={styles.avatarDot}
+                style={{ backgroundColor: peer.user.color }}
+              />
+              <span className={styles.username} title={peer.user.name}>
+                {truncate(peer.user.name)}
+              </span>
+            </>
+          );
+          return camera && onGoTo ? (
+            <button
+              key={peer.clientId}
+              type="button"
+              className={`${styles.peerRow} ${styles.peerButton}`}
+              data-testid={`presence-peer-${peer.clientId}`}
+              aria-label={`Go to where ${peer.user.name} is looking`}
+              onClick={() => onGoTo(camera)}
+            >
+              {content}
+            </button>
+          ) : (
+            <div
+              key={peer.clientId}
+              className={styles.peerRow}
+              data-testid={`presence-peer-${peer.clientId}`}
+            >
+              {content}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

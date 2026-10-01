@@ -20,9 +20,11 @@ RUN yarn workspaces focus --production @atlasdraw/realtime
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+ENV ROOMS_DB=/data/rooms.sqlite
 COPY --from=deps /repo/code/node_modules ./node_modules
 COPY --from=build /repo/code/apps/realtime/dist ./dist
 COPY --from=build /repo/code/apps/realtime/package.json ./package.json
+VOLUME /data
 EXPOSE 4001
 HEALTHCHECK CMD node -e "fetch('http://localhost:4001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "dist/index.js"]
