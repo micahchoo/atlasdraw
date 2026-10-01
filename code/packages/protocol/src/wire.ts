@@ -60,7 +60,7 @@ export const CLOSE = {
   messageTooLarge: 1009,
 } as const;
 
-export type CloseCode = typeof CLOSE[keyof typeof CLOSE];
+export type CloseCode = (typeof CLOSE)[keyof typeof CLOSE];
 
 /** The reason of a size refusal: what was measured, and the cap. */
 export function closeReason(what: string, size: number, cap: number): string {

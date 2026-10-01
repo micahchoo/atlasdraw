@@ -100,7 +100,6 @@ export function usePersistenceWiring(
         save = flushRef.current?.() ?? null;
       } catch (err) {
         // A cleanup must not throw: the crash screen says the save failed.
-        // eslint-disable-next-line no-console
         console.error("[persistence] save on unmount failed", err);
         save = Promise.reject(err);
         save.catch(() => undefined);
@@ -170,7 +169,6 @@ export function usePersistenceWiring(
     const onConflict = (conflict: Conflict, doc: AtlasdrawDocument) => {
       answering ??= answerConflict(ownership, store, conflict, doc)
         .catch((err) => {
-          // eslint-disable-next-line no-console
           console.warn("[atlasdraw] could not settle a save conflict", err);
         })
         .finally(() => {
@@ -279,7 +277,6 @@ export function usePersistenceWiring(
           });
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[atlasdraw] persistence.load() failed", err);
         documentNotify.error(
           isNewerBuildError(err)
@@ -343,7 +340,6 @@ export function usePersistenceWiring(
       }
       const save = store.save(doc);
       save.catch((err) => {
-        // eslint-disable-next-line no-console
         console.error("[persistence] save on leave failed", err);
       });
       return save;

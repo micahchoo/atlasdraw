@@ -350,7 +350,6 @@ export function compileLayer(
  * v1: returns a fixed teal/dark-teal palette regardless of geometry.
  * Tighten in a later wave when LayerStyle gains geometry-specific fields.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function defaultLayerStyle(_fc: FeatureCollection): LayerStyle {
   return {
     fillColor: "#0aa",

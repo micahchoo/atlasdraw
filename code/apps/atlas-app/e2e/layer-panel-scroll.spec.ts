@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * The layer list must stay reachable as layers pile up.
  *

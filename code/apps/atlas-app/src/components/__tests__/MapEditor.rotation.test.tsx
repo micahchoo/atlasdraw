@@ -85,7 +85,6 @@ const mockFakeExcalidrawAPI = {
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactInner = require("react") as typeof import("react");
   const MainMenuStub = Object.assign(
     ({ children }: { children?: React.ReactNode }) =>

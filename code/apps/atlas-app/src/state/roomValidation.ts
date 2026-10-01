@@ -124,7 +124,6 @@ export function rejectFrom(
     return;
   }
   seen.add(writer);
-  // eslint-disable-next-line no-console
   console.warn(
     `[atlasdraw] room: ignored an invalid ${what} from peer ${
       writer ?? "unknown"

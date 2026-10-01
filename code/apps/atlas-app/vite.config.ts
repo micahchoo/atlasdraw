@@ -263,7 +263,6 @@ export default defineConfig({
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(APP_VERSION),
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(GIT_HASH),
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   plugins: [
     react(),
     pmtilesNotFoundPlugin,

@@ -299,7 +299,6 @@ async function runWithConcurrency<T, R>(
   const workers = Math.max(1, Math.min(cap, items.length));
   for (let w = 0; w < workers; w++) {
     runners.push(
-      // eslint-disable-next-line no-loop-func
       (async () => {
         while (true) {
           const i = next++;

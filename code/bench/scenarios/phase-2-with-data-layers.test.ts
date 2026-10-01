@@ -146,9 +146,7 @@ describe("phase-2 with data layers", () => {
     };
     await writeFile(out, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 
-    // eslint-disable-next-line no-console
     console.log("[bench] wrote", out);
-    // eslint-disable-next-line no-console
     console.log(JSON.stringify(scenarios, null, 2));
   });
 });

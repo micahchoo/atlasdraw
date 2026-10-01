@@ -105,7 +105,7 @@ const CJK = {
    *      ↑ BREAK BEFORE "「"
    *         ↑ BREAK AFTER "」"
    */
-  // eslint-disable-next-line prettier/prettier
+  // prettier-ignore
   OPENING:/（［｛〈《｟｢「『【〖〔〘〚＜〝/u,
   CLOSING: /）］｝〉》｠｣」』】〗〕〙〛＞。．，、〟‥？！：；・〜〞/u,
   /**

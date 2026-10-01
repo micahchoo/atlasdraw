@@ -162,10 +162,8 @@ describe("paste text as single lines", () => {
     mouse.moveTo(100, 100);
     pasteWithCtrlCmdV(text);
     await waitFor(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const [fx, firstElY] = getElementBounds(h.elements[0], elementsMap);
       for (let i = 1; i < h.elements.length; i++) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const [fx, elY] = getElementBounds(h.elements[i], elementsMap);
         expect(elY).toEqual(firstElY + lineHeightPx * i);
       }
@@ -185,9 +183,7 @@ describe("paste text as single lines", () => {
     pasteWithCtrlCmdV(text);
 
     await waitFor(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const [fx, firstElY] = getElementBounds(h.elements[0], elementsMap);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const [lx, lastElY] = getElementBounds(h.elements[1], elementsMap);
       expect(lastElY).toEqual(firstElY + lineHeightPx * 2);
     });

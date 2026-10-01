@@ -9,7 +9,7 @@
  * nothing floats over the plate.
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { creditLine } from "../lib/tileLayers";
 import { useDocument } from "../state/document";

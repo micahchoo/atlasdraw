@@ -11,7 +11,6 @@
 // container's right edge means a 100px panel" — because jsdom has no layout and
 // getBoundingClientRect is the only place the geometry can come from.
 
-import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // SPDX-License-Identifier: MIT
 // Bench CI gate: compare the run in results/current/ against the committed
 // baseline in results/phase-1-baseline.json. A bench run never writes the

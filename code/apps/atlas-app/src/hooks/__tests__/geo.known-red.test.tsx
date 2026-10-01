@@ -14,7 +14,7 @@
 
 import "vitest-canvas-mock";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   act,

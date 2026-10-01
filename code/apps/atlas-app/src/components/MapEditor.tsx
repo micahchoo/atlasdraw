@@ -18,7 +18,7 @@
  * coordinates, so no camera move rewrites it.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import { MapCanvas, getBasemap } from "@atlasdraw/basemap";

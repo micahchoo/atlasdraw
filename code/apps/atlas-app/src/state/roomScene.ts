@@ -219,7 +219,6 @@ export function bindScene(
       try {
         handle(event);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error("[atlasdraw] room: a remote change was not applied", err);
       }
     };

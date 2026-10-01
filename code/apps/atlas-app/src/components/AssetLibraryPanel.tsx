@@ -119,13 +119,12 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     if (items.length === 0) {
       return;
     }
-    excalidrawAPI.updateLibrary({ libraryItems: items, merge: true }).catch(
-      // eslint-disable-next-line no-console
-      (err: unknown) => {
+    excalidrawAPI
+      .updateLibrary({ libraryItems: items, merge: true })
+      .catch((err: unknown) => {
         console.warn("AssetLibraryPanel updateLibrary failed:", err);
         toast.error("Couldn't load the built-in asset libraries");
-      },
-    );
+      });
   }, [excalidrawAPI, items, toast]);
 
   const handleViewInLibrary = () => {

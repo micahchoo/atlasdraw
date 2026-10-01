@@ -16,8 +16,6 @@
 // BENCH_FRAMES, BENCH_RUNS, BENCH_ONLY (pan,bridge,undo), BENCH_UNCAPPED=1
 // (no vsync: a rAF delta is the frame's real cost).
 
-/* eslint-disable no-console -- a measurement script: its output is the console. */
-
 import fs from "node:fs";
 
 import { chromium } from "playwright";

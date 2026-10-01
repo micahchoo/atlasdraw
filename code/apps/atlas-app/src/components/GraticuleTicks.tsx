@@ -68,7 +68,6 @@ export function GraticuleTicks({ map, axis, count }: GraticuleTicksProps) {
     >
       {labels.map((label, i) => (
         // Position in the row is the identity — labels change on every move.
-        // eslint-disable-next-line react/no-array-index-key
         <span key={i}>{label}</span>
       ))}
     </div>

@@ -120,7 +120,6 @@ const mockFakeExcalidrawAPI = {
 vi.mock("@atlasdraw/excalidraw", () => {
   // Local React import — the hoisted factory runs before the file's top
   // import binding is initialized.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactInner = require("react") as typeof import("react");
   const MainMenuStub = Object.assign(
     ({ children }: { children?: React.ReactNode }) =>

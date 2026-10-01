@@ -13,7 +13,7 @@
  * gets out of your way.
  */
 
-import React, { useCallback, useId, useState } from "react";
+import { useCallback, useId, useState } from "react";
 
 import styles from "../styles/OnboardingTips.module.css";
 

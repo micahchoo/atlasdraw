@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // SPDX-License-Identifier: MIT
 // Deliberately replace the committed baseline with the latest phase-1 run.
 // Commit the result with a message that says why the baseline moved.

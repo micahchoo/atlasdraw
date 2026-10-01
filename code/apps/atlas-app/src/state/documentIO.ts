@@ -448,7 +448,6 @@ export async function loadDocument(
 
   const dropped = droppedMessage(admitted);
   if (dropped) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] opened with parts left out", admitted.dropped);
     options.onDropped?.(dropped);
   }

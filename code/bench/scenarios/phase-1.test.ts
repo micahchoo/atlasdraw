@@ -132,9 +132,7 @@ describe("phase-1 baseline", () => {
 
     // Surface the result in the test output so a human reading the run
     // can sanity-check timings without opening the file.
-    // eslint-disable-next-line no-console
     console.log("[bench] wrote", out);
-    // eslint-disable-next-line no-console
     console.log(JSON.stringify(scenarios, null, 2));
   });
 });

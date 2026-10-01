@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- a console debugging helper */
 const lessPrecise = (num: number, precision = 5) =>
   parseFloat(num.toPrecision(precision));
 
@@ -143,10 +144,8 @@ export class Debug {
     name = "default",
   ) => {
     return (...args: T) => {
-      // eslint-disable-next-line no-console
       console.time(name);
       const ret = fn(...args);
-      // eslint-disable-next-line no-console
       console.timeEnd(name);
       return ret;
     };

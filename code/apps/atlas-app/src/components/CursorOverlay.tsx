@@ -7,7 +7,7 @@
 //
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useEffect, useReducer } from "react";
+import { useEffect, useReducer } from "react";
 
 import styles from "../styles/CursorOverlay.module.css";
 

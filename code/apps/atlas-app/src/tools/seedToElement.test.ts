@@ -20,7 +20,6 @@ import { seedToElement } from "./seedToElement.js";
 // text branch test can run without pulling in the heavy `canvas` package.
 beforeAll(() => {
   if (typeof HTMLCanvasElement !== "undefined") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (HTMLCanvasElement.prototype as any).getContext = function (
       kind: string,
     ): unknown {

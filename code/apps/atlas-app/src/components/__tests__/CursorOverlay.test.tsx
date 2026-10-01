@@ -4,7 +4,6 @@
 // viewer's map projects that place, and again after the map moves.
 
 import { act, cleanup, render, screen } from "@testing-library/react";
-import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CursorOverlay } from "../CursorOverlay";

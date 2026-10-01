@@ -80,7 +80,6 @@ async function main(): Promise<void> {
 
 if (require.main === module) {
   main().catch((err) => {
-    // eslint-disable-next-line no-console
     console.error(err);
     Sentry.captureException(err);
     process.exit(1);

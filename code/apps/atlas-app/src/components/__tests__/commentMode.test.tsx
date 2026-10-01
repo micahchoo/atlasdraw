@@ -9,7 +9,6 @@
 //    the thing that makes it a mode rather than a tab with a different button:
 //    the whole gesture happens where the thread will live.
 
-import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,

@@ -312,7 +312,6 @@ export async function admit(
   } catch (err) {
     // A check that throws is a defect here, not in the map; refuse rather
     // than let the map past.
-    // eslint-disable-next-line no-console
     console.error("[atlasdraw] the document gate failed", err);
     return refused("This map could not be checked, so it was not opened.");
   }

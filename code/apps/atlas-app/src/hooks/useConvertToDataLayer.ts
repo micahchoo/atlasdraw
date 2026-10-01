@@ -99,7 +99,6 @@ export function useConvertToDataLayer(
         }
         // `handleConvert` runs inside the context menu's onClick; a rethrow
         // would be an uncaught exception with nothing shown to the user.
-        // eslint-disable-next-line no-console
         console.error("[useConvertToDataLayer] convert failed:", err);
         notify.error(
           `Couldn't convert to a data layer${

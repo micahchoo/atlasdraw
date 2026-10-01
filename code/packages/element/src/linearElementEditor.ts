@@ -1020,7 +1020,7 @@ export class LinearElementEditor {
     const appState = app.state;
     const elementsMap = scene.getNonDeletedElementsMap();
 
-    const ret: ReturnType<typeof LinearElementEditor["handlePointerDown"]> = {
+    const ret: ReturnType<(typeof LinearElementEditor)["handlePointerDown"]> = {
       didAddPoint: false,
       hitElement: null,
       linearElementEditor: null,

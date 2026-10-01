@@ -67,7 +67,6 @@ describe("PhotonGeocoder — construction", () => {
 });
 
 describe("PhotonGeocoder.geocode — request shape", () => {
-  // eslint-disable-next-line no-template-curly-in-string
   it("hits ${endpoint}/api with q + limit, URL-encoding the query", async () => {
     const fetchMock = vi.fn(async () =>
       okResponse(photonFC([{ coords: [-74, 40.7], city: "New York" }])),

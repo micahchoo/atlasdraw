@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 // scripts/prepare-husky.js
 //
 // Closes atlasdraw-0c97. The Excalidraw monorepo's `code/` lived as a git

@@ -51,7 +51,6 @@ export async function saveMap(
     if (isPickerCancel(err)) {
       return;
     }
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] saveToDisk failed", err);
     notify?.error(
       `Couldn't save the map${err instanceof Error ? ` — ${err.message}` : ""}`,
@@ -197,7 +196,6 @@ async function openInPlace(
     if (isPickerCancel(err)) {
       return;
     }
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] open failed", err);
     notify?.error(
       "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
