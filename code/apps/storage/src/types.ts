@@ -3,6 +3,8 @@
 // service owns the policy: write keys, expiry, the size cap. An adapter only
 // stores rows and bytes.
 
+import type { Readable } from "node:stream";
+
 /**
  * Selects which adapter the storage server loads at startup.
  * - `postgres-minio`: full stack (Postgres for metadata, MinIO/S3 for blobs).
@@ -43,21 +45,37 @@ export interface SweepResult {
   maps: number;
 }
 
+/**
+ * Bytes on their way into the store: a stream and its announced length. The
+ * adapter stores exactly `size` bytes or nothing: a stream that ends early or
+ * runs long rejects with `BodySizeError` (lib/body.ts).
+ */
+export interface BlobBody {
+  stream: Readable;
+  size: number;
+}
+
+/** Bytes on their way out: a stream to pipe to the client, and its length. */
+export interface BlobRead {
+  stream: Readable;
+  size: number;
+}
+
 export interface StorageClient {
-  createMap(blob: Buffer, writeKeyHash: string | null): Promise<MapRecord>;
+  createMap(body: BlobBody, writeKeyHash: string | null): Promise<MapRecord>;
   getMap(id: string): Promise<MapRecord | null>;
   /** Replaces the bytes. Rejects with `not found:` for an unknown id. */
-  updateMap(id: string, blob: Buffer): Promise<MapRecord>;
+  updateMap(id: string, body: BlobBody): Promise<MapRecord>;
   /** Rejects with `not found:` for an unknown map. */
   createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
   /** Deletes the token if it belongs to `mapId`. True if a row went. */
   deleteShareToken(mapId: string, token: string): Promise<boolean>;
   /**
-   * The bytes of a map. Null for a malformed id, a missing row, or a row
-   * whose blob is gone.
+   * The bytes of a map, as a stream. Null for a malformed id, a missing row,
+   * or a row whose blob is gone. The caller must consume or destroy it.
    */
-  getBlob(id: string): Promise<Buffer | null>;
+  getBlob(id: string): Promise<BlobRead | null>;
   /**
    * Deletes the map, its share tokens and its bytes. False when no map has
    * the id.

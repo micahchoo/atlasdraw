@@ -169,6 +169,22 @@ describe("share routes", () => {
       expect(res.body).toBe("hello, atlas world");
     });
 
+    it("serves the bytes as a download that no browser renders or runs", async () => {
+      const { id, writeKey } = await createMap("<script>alert(1)</script>");
+      const { token } = await share(id, writeKey);
+
+      const res = await readShared(token);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["x-content-type-options"]).toBe("nosniff");
+      expect(res.headers["content-disposition"]).toMatch(/^attachment/);
+      expect(res.headers["content-security-policy"]).toMatch(/\bsandbox\b/);
+      expect(res.headers["content-security-policy"]).toContain(
+        "default-src 'none'",
+      );
+      expect(res.headers["content-length"]).toBe("25");
+    });
+
     it("serves the latest bytes: a write updates every link", async () => {
       const { id, writeKey } = await createMap("v1");
       const first = await share(id, writeKey);

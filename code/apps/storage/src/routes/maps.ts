@@ -1,5 +1,6 @@
-// /maps routes. Bodies are raw octet-stream (parsed at server init); the
-// 50 MiB bodyLimit answers 413 before a handler runs.
+// /maps routes. A body is raw octet-stream with a Content-Length, streamed
+// to the store (blob-body.ts): 411 without the length, 413 past
+// MAX_MAP_BYTES, both before a handler runs.
 //
 //   POST /maps            create; answers the map and its write key, once
 //   PUT  /maps/:id        replace the bytes            (write key)
@@ -10,6 +11,7 @@
 
 import { ID_RE } from "../constants";
 
+import { isBlobBody, sendBlob } from "./blob-body";
 import { REFUSAL, writeKeyOrRefuse } from "./write-key";
 
 import type { FastifyInstance } from "fastify";
@@ -26,7 +28,7 @@ export function registerMapRoutes(
   service: MapService,
 ): void {
   fastify.post("/maps", async (request, reply) => {
-    if (!Buffer.isBuffer(request.body)) {
+    if (!isBlobBody(request.body)) {
       return reply.code(415).send(NOT_OCTETS);
     }
     const result = await service.create(request.body);
@@ -48,7 +50,7 @@ export function registerMapRoutes(
     if (writeKey === null) {
       return reply;
     }
-    if (!Buffer.isBuffer(request.body)) {
+    if (!isBlobBody(request.body)) {
       return reply.code(415).send(NOT_OCTETS);
     }
     const result = await service.write(id, writeKey, request.body);
@@ -92,11 +94,7 @@ export function registerMapRoutes(
         const refusal = REFUSAL[result.kind];
         return reply.code(refusal.status).send(refusal.body);
       }
-      return reply
-        .code(200)
-        .header("Content-Type", "application/octet-stream")
-        .header("Cache-Control", "no-store")
-        .send(result.bytes);
+      return sendBlob(reply, result.blob, "no-store");
     },
   );
 }

@@ -67,6 +67,7 @@ vi.mock("@aws-sdk/client-s3", () => {
     PutObjectCommand: class PutObjectCommand extends Command {},
     GetObjectCommand: class GetObjectCommand extends Command {},
     CreateBucketCommand: class CreateBucketCommand extends Command {},
+    HeadBucketCommand: class HeadBucketCommand extends Command {},
     ListBucketsCommand: class ListBucketsCommand extends Command {},
     DeleteObjectCommand: class DeleteObjectCommand extends Command {},
   };
@@ -147,7 +148,7 @@ describe("postgres-minio adapter", () => {
 
     it("returns null when S3 has no such key", async () => {
       const client = makeAdapter();
-      s3SendMock.mockResolvedValueOnce({}); // CreateBucket
+      s3SendMock.mockResolvedValueOnce({}); // HeadBucket
       s3SendMock.mockRejectedValueOnce(
         Object.assign(new Error("missing"), { name: "NoSuchKey" }),
       );
@@ -157,12 +158,77 @@ describe("postgres-minio adapter", () => {
 
     it("passes any other S3 error to the caller", async () => {
       const client = makeAdapter();
-      s3SendMock.mockResolvedValueOnce({}); // CreateBucket
+      s3SendMock.mockResolvedValueOnce({}); // HeadBucket
       s3SendMock.mockRejectedValueOnce(
         Object.assign(new Error("denied"), { name: "AccessDenied" }),
       );
 
       await expect(client.getBlob(ID)).rejects.toThrow("denied");
+    });
+  });
+
+  describe("the bucket", () => {
+    const sent = () =>
+      s3SendMock.mock.calls.map(([c]) => c?.constructor?.name as string);
+    beforeEach(() => {
+      queryMock.mockResolvedValue({
+        rows: [{ id: ID, blob_ref: "k", byte_size: 1, write_key_hash: null }],
+        rowCount: 1,
+      });
+    });
+
+    it("makes the bucket when HeadBucket finds none", async () => {
+      s3SendMock.mockRejectedValueOnce(
+        Object.assign(new Error("nf"), {
+          name: "NotFound",
+          $metadata: { httpStatusCode: 404 },
+        }),
+      );
+      s3SendMock.mockResolvedValueOnce({}); // CreateBucket
+      s3SendMock.mockRejectedValueOnce(
+        Object.assign(new Error("missing"), { name: "NoSuchKey" }),
+      );
+
+      expect(await makeAdapter().getBlob(ID)).toBeNull();
+      expect(sent().slice(0, 2)).toEqual([
+        "HeadBucketCommand",
+        "CreateBucketCommand",
+      ]);
+    });
+
+    it("refuses a bucket name that another account owns", async () => {
+      s3SendMock.mockRejectedValueOnce(
+        Object.assign(new Error("nf"), {
+          name: "NotFound",
+          $metadata: { httpStatusCode: 404 },
+        }),
+      );
+      s3SendMock.mockRejectedValueOnce(
+        Object.assign(new Error("taken"), { name: "BucketAlreadyExists" }),
+      );
+
+      await expect(makeAdapter().getBlob(ID)).rejects.toThrow("taken");
+    });
+
+    it("uses the bucket it is given, not a fixed name", async () => {
+      s3SendMock.mockResolvedValueOnce({}); // HeadBucket
+      s3SendMock.mockRejectedValueOnce(
+        Object.assign(new Error("missing"), { name: "NoSuchKey" }),
+      );
+      const client = createPostgresMinioAdapter({
+        databaseUrl: "postgres://x",
+        blobEndpoint: "http://minio:9000",
+        blobAccessKey: "k",
+        blobSecretKey: "s",
+        blobBucket: "operator-maps",
+      });
+
+      await client.getBlob(ID);
+
+      const buckets = s3SendMock.mock.calls.map(
+        ([c]) => (c as { input: { Bucket?: string } }).input.Bucket,
+      );
+      expect(buckets).toEqual(["operator-maps", "operator-maps"]);
     });
   });
 

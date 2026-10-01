@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Readable } from "node:stream";
 
 import Database from "better-sqlite3";
 import * as tmp from "tmp";
@@ -107,6 +108,16 @@ describe("/maps routes", () => {
         payload: "{}",
       });
       expect(res.statusCode).toBe(415);
+    });
+
+    it("returns 411 for a body with no Content-Length", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Readable.from([Buffer.from("no length")]),
+      });
+      expect(res.statusCode).toBe(411);
     });
 
     it("returns 413 when the body exceeds bodyLimit", async () => {

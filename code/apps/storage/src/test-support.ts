@@ -2,7 +2,7 @@
 // Every route test goes through `buildApp`, so the error handler, the
 // limiters, the proxy setting and the shutdown order are the ones that ship.
 
-import { Writable } from "node:stream";
+import { Readable, Writable } from "node:stream";
 
 import * as tmp from "tmp";
 
@@ -13,7 +13,7 @@ import { createLogger } from "./logger";
 
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "./config";
-import type { StorageClient } from "./types";
+import type { BlobBody, BlobRead, StorageClient } from "./types";
 
 // Temp dirs made here go when the test process exits.
 tmp.setGracefulCleanup();
@@ -74,4 +74,32 @@ export function makeTestApp(
     logger: createLogger("info", log.stream),
   });
   return { app, client, dataDir, log };
+}
+
+/** A body for an adapter call: the bytes as a stream, and their length. */
+export function bodyOf(bytes: string | Buffer): BlobBody {
+  const buf = typeof bytes === "string" ? Buffer.from(bytes) : bytes;
+  return { stream: Readable.from([buf]), size: buf.byteLength };
+}
+
+/** Every byte of a blob read, or null when there was none. */
+export async function bytesOf(
+  read: BlobRead | null | Promise<BlobRead | null>,
+): Promise<Buffer | null> {
+  const r = await read;
+  if (!r) {
+    return null;
+  }
+  const chunks: Buffer[] = [];
+  for await (const chunk of r.stream) {
+    chunks.push(Buffer.from(chunk as Uint8Array));
+  }
+  return Buffer.concat(chunks);
+}
+
+/** A blob read as text, or null. */
+export async function textOf(
+  read: BlobRead | null | Promise<BlobRead | null>,
+): Promise<string | null> {
+  return (await bytesOf(read))?.toString() ?? null;
 }

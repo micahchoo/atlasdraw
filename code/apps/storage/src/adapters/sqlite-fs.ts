@@ -1,21 +1,25 @@
 // @atlasdraw/storage — sqlite-fs adapter.
 //
 // Minimal stack: SQLite for metadata, the filesystem for blobs. A blob is
-// written to a temp file, flushed to disk and renamed over the old one, so a
-// crash leaves the old bytes or the new bytes, never a mix.
+// streamed to a temp file, flushed to disk and renamed over the old one, so a
+// crash leaves the old bytes or the new bytes, never a mix. Reads stream from
+// an open file; no blob is ever held whole in memory.
 
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 
 import { ID_RE } from "../constants";
 import { migrateSqlite } from "../db/migrate";
+import { measured } from "../lib/body";
 
 import type {
+  BlobBody,
   MapRecord,
   ShareToken,
   StorageClient,
@@ -41,17 +45,15 @@ interface ShareRow {
 
 const TEMP_SUFFIX = ".tmp";
 
-/** Writes `bytes` to `target` through a flushed temp file and a rename. */
-async function writeAtomic(target: string, bytes: Buffer): Promise<void> {
+/** Streams `body` to `target` through a flushed temp file and a rename. */
+async function writeAtomic(target: string, body: BlobBody): Promise<void> {
   const temp = `${target}.${randomBytes(6).toString("hex")}${TEMP_SUFFIX}`;
   try {
-    const handle = await fsp.open(temp, "w");
-    try {
-      await handle.writeFile(bytes);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
+    await pipeline(
+      body.stream,
+      measured(body.size),
+      fs.createWriteStream(temp, { flush: true }),
+    );
     await fsp.rename(temp, target);
   } catch (err) {
     await fsp.rm(temp, { force: true });
@@ -152,14 +154,14 @@ export function createSqliteFsAdapter(opts: {
   });
 
   return {
-    async createMap(blob, writeKeyHash) {
+    async createMap(body, writeKeyHash) {
       const id = nanoid(21);
       const now = new Date().toISOString();
       const blobRef = `blobs/${id}.atlasdraw`;
       const fullPath = path.join(dataDir, blobRef);
-      await writeAtomic(fullPath, blob);
+      await writeAtomic(fullPath, body);
       try {
-        insertMap.run(id, now, now, blobRef, blob.byteLength, writeKeyHash);
+        insertMap.run(id, now, now, blobRef, body.size, writeKeyHash);
       } catch (err) {
         await fsp.rm(fullPath, { force: true });
         throw err;
@@ -169,7 +171,7 @@ export function createSqliteFsAdapter(opts: {
         created_at: now,
         updated_at: now,
         blob_ref: blobRef,
-        byte_size: blob.byteLength,
+        byte_size: body.size,
         write_key_hash: writeKeyHash,
       };
     },
@@ -182,7 +184,7 @@ export function createSqliteFsAdapter(opts: {
       return row ? rowToMap(row) : null;
     },
 
-    async updateMap(id, blob) {
+    async updateMap(id, body) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
@@ -191,12 +193,12 @@ export function createSqliteFsAdapter(opts: {
         throw new Error(`not found: ${id}`);
       }
       const now = new Date().toISOString();
-      await writeAtomic(path.join(dataDir, existing.blob_ref), blob);
-      updateMapRow.run(now, blob.byteLength, id);
+      await writeAtomic(path.join(dataDir, existing.blob_ref), body);
+      updateMapRow.run(now, body.size, id);
       return {
         ...rowToMap(existing),
         updated_at: now,
-        byte_size: blob.byteLength,
+        byte_size: body.size,
       };
     },
 
@@ -244,12 +246,23 @@ export function createSqliteFsAdapter(opts: {
       if (!row) {
         return null;
       }
+      let handle: fsp.FileHandle;
       try {
-        return await fsp.readFile(path.join(dataDir, row.blob_ref));
+        handle = await fsp.open(path.join(dataDir, row.blob_ref), "r");
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "ENOENT") {
           return null;
         }
+        throw err;
+      }
+      // The open handle keeps the bytes readable even if a later write
+      // replaces the file. The stream closes the handle when it ends or is
+      // destroyed.
+      try {
+        const { size } = await handle.stat();
+        return { stream: handle.createReadStream(), size };
+      } catch (err) {
+        await handle.close();
         throw err;
       }
     },

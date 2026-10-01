@@ -1,13 +1,21 @@
 // @atlasdraw/storage — postgres-minio adapter.
 //
-// Full stack: Postgres for metadata, a MinIO/S3-compatible store for the
-// blobs. Same semantics as sqlite-fs. The bucket is made on first use. An S3
-// PUT replaces an object whole, so a write is atomic without a temp object.
+// Full stack: Postgres for metadata, an S3-compatible store (MinIO, AWS S3)
+// for the blobs. Same semantics as sqlite-fs. An S3 PUT replaces an object
+// whole, so a write is atomic without a temp object. Bodies stream in and out
+// with a known length; no blob is held whole in memory.
+//
+// The bucket is BLOB_BUCKET in BLOB_REGION. If it does not exist, the adapter
+// makes it; a bucket that another account owns is an error.
+
+import { PassThrough, Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   ListBucketsCommand,
   PutObjectCommand,
   S3Client,
@@ -17,16 +25,19 @@ import { Pool } from "pg";
 
 import { ID_RE } from "../constants";
 import { migratePostgres } from "../db/migrate";
+import { measured } from "../lib/body";
 import { logger } from "../logger";
 
 import type {
+  BlobBody,
   MapRecord,
   ShareToken,
   StorageClient,
   SweepResult,
 } from "../types";
 
-const BUCKET = "atlasdraw-maps";
+export const DEFAULT_BUCKET = "atlasdraw-maps";
+export const DEFAULT_REGION = "us-east-1";
 
 interface MapRow {
   id: string;
@@ -78,7 +89,10 @@ export function createPostgresMinioAdapter(opts: {
   blobEndpoint: string;
   blobAccessKey: string;
   blobSecretKey: string;
+  blobBucket?: string;
+  blobRegion?: string;
 }): StorageClient {
+  const BUCKET = opts.blobBucket ?? DEFAULT_BUCKET;
   const pool = new Pool({ connectionString: opts.databaseUrl });
   // node-postgres requirement, not optional: an idle client that the server
   // drops (restart, `terminating connection due to administrator command`,
@@ -97,7 +111,7 @@ export function createPostgresMinioAdapter(opts: {
   });
   const s3 = new S3Client({
     endpoint: opts.blobEndpoint,
-    region: "us-east-1",
+    region: opts.blobRegion ?? DEFAULT_REGION,
     credentials: {
       accessKeyId: opts.blobAccessKey,
       secretAccessKey: opts.blobSecretKey,
@@ -125,36 +139,68 @@ export function createPostgresMinioAdapter(opts: {
     logger.warn({ err }, "postgres schema setup failed; will retry");
   });
 
+  // HeadBucket first: an app user that may not create buckets (the compose
+  // stack's MinIO user) still works with a bucket made for it. A bucket that
+  // exists but is not ours is an error: on AWS, BucketAlreadyExists means
+  // another account owns the name.
   async function ensureBucket(): Promise<void> {
     if (bucketReady) {
       return;
     }
     try {
-      await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
     } catch (err: unknown) {
+      const status = (err as { $metadata?: { httpStatusCode?: number } })
+        .$metadata?.httpStatusCode;
       const name = (err as { name?: string })?.name ?? "";
-      // Ignore "already exists" variants from MinIO/S3.
-      if (
-        name !== "BucketAlreadyOwnedByYou" &&
-        name !== "BucketAlreadyExists"
-      ) {
-        // Surface any other error (e.g. credentials).
+      if (status !== 404 && name !== "NotFound" && name !== "NoSuchBucket") {
         throw err;
+      }
+      try {
+        await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      } catch (createErr: unknown) {
+        // Another server made it between the two calls.
+        if (
+          (createErr as { name?: string })?.name !== "BucketAlreadyOwnedByYou"
+        ) {
+          throw createErr;
+        }
       }
     }
     bucketReady = true;
   }
 
-  async function putBlob(key: string, blob: Buffer): Promise<void> {
+  /** Streams `body` to `key`; exactly `body.size` bytes or a rejection. */
+  async function putBlob(key: string, body: BlobBody): Promise<void> {
     await ensureBucket();
-    await s3.send(
+    // The SDK must never read a stream that errors: it leaves that rejection
+    // unhandled. So the measured bytes reach it through `pipe`, which does
+    // not pass errors on, and a wrong length aborts the request instead.
+    const abort = new AbortController();
+    const meter = measured(body.size);
+    const toS3 = new PassThrough();
+    meter.pipe(toS3);
+    const pump = pipeline(body.stream, meter).catch((err: unknown) => {
+      abort.abort(err);
+      throw err;
+    });
+    const sent = s3.send(
       new PutObjectCommand({
         Bucket: BUCKET,
         Key: key,
-        Body: blob,
+        Body: toS3,
+        ContentLength: body.size,
         ContentType: "application/octet-stream",
       }),
+      { abortSignal: abort.signal },
     );
+    const [pumped, put] = await Promise.allSettled([pump, sent]);
+    if (pumped.status === "rejected") {
+      throw pumped.reason;
+    }
+    if (put.status === "rejected") {
+      throw put.reason;
+    }
   }
 
   async function deleteBlob(key: string): Promise<void> {
@@ -174,16 +220,16 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   return {
-    async createMap(blob, writeKeyHash) {
+    async createMap(body, writeKeyHash) {
       await ensureSchema();
       const id = nanoid(21);
       const blobRef = `maps/${id}.atlasdraw`;
-      await putBlob(blobRef, blob);
+      await putBlob(blobRef, body);
       const now = new Date();
       try {
         await pool.query(
           `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, now, now, blobRef, blob.byteLength, writeKeyHash],
+          [id, now, now, blobRef, body.size, writeKeyHash],
         );
       } catch (err) {
         await deleteBlob(blobRef).catch(() => undefined);
@@ -194,7 +240,7 @@ export function createPostgresMinioAdapter(opts: {
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
         blob_ref: blobRef,
-        byte_size: blob.byteLength,
+        byte_size: body.size,
         write_key_hash: writeKeyHash,
       };
     },
@@ -208,7 +254,7 @@ export function createPostgresMinioAdapter(opts: {
       return row ? rowToMap(row) : null;
     },
 
-    async updateMap(id, blob) {
+    async updateMap(id, body) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
@@ -217,16 +263,16 @@ export function createPostgresMinioAdapter(opts: {
       if (!row) {
         throw new Error(`not found: ${id}`);
       }
-      await putBlob(row.blob_ref, blob);
+      await putBlob(row.blob_ref, body);
       const now = new Date();
       await pool.query(
         `UPDATE maps SET updated_at = $1, byte_size = $2 WHERE id = $3`,
-        [now, blob.byteLength, id],
+        [now, body.size, id],
       );
       return {
         ...rowToMap(row),
         updated_at: now.toISOString(),
-        byte_size: blob.byteLength,
+        byte_size: body.size,
       };
     },
 
@@ -351,16 +397,16 @@ export function createPostgresMinioAdapter(opts: {
         const res = await s3.send(
           new GetObjectCommand({ Bucket: BUCKET, Key: key }),
         );
-        const body = (res as { Body?: unknown }).Body as
-          | {
-              transformToByteArray?: () => Promise<Uint8Array>;
-            }
-          | undefined;
-        if (!body || typeof body.transformToByteArray !== "function") {
+        // In Node the SDK's Body is an IncomingMessage: a Readable that
+        // streams from the socket.
+        const body = res.Body;
+        if (!(body instanceof Readable)) {
           return null;
         }
-        const bytes = await body.transformToByteArray();
-        return Buffer.from(bytes);
+        return {
+          stream: body,
+          size: res.ContentLength ?? rowToMap(row).byte_size,
+        };
       } catch (err: unknown) {
         const name = (err as { name?: string })?.name ?? "";
         if (name === "NoSuchKey" || name === "NotFound") {

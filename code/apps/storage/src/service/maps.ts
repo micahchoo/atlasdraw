@@ -10,7 +10,13 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { isNotFoundError } from "../lib/errors";
 
-import type { MapRecord, StorageClient, SweepResult } from "../types";
+import type {
+  BlobBody,
+  BlobRead,
+  MapRecord,
+  StorageClient,
+  SweepResult,
+} from "../types";
 
 /** What a client may see of a map. */
 export interface PublicMap {
@@ -23,16 +29,16 @@ export interface PublicMap {
 export type Forbidden = { kind: "forbidden" };
 export type Missing = { kind: "missing" };
 export type Full = { kind: "full" };
-export type Bytes = { kind: "bytes"; bytes: Buffer };
+export type Bytes = { kind: "bytes"; blob: BlobRead };
 
 export interface MapService {
   create(
-    bytes: Buffer,
+    body: BlobBody,
   ): Promise<{ kind: "created"; map: PublicMap; writeKey: string } | Full>;
   write(
     id: string,
     writeKey: string,
-    bytes: Buffer,
+    body: BlobBody,
   ): Promise<{ kind: "saved"; map: PublicMap } | Forbidden | Missing | Full>;
   /** The owner's backup: the map's latest bytes. */
   read(id: string, writeKey: string): Promise<Bytes | Forbidden | Missing>;
@@ -123,27 +129,27 @@ export function createMapService(
   }
 
   return {
-    async create(bytes) {
-      if (!(await fits(bytes.byteLength))) {
+    async create(body) {
+      if (!(await fits(body.size))) {
         return { kind: "full" };
       }
       const writeKey = randomBytes(32).toString("base64url");
-      const map = await store.createMap(bytes, hashWriteKey(writeKey));
+      const map = await store.createMap(body, hashWriteKey(writeKey));
       return { kind: "created", map: publicMap(map), writeKey };
     },
 
-    async write(id, writeKey, bytes) {
+    async write(id, writeKey, body) {
       const map = await owned(id, writeKey);
       if (refused(map)) {
         return map;
       }
-      if (!(await fits(bytes.byteLength - map.byte_size))) {
+      if (!(await fits(body.size - map.byte_size))) {
         return { kind: "full" };
       }
       try {
         return {
           kind: "saved",
-          map: publicMap(await store.updateMap(id, bytes)),
+          map: publicMap(await store.updateMap(id, body)),
         };
       } catch (err) {
         if (isNotFoundError(err)) {
@@ -158,8 +164,8 @@ export function createMapService(
       if (refused(map)) {
         return map;
       }
-      const bytes = await store.getBlob(id);
-      return bytes ? { kind: "bytes", bytes } : { kind: "missing" };
+      const blob = await store.getBlob(id);
+      return blob ? { kind: "bytes", blob } : { kind: "missing" };
     },
 
     async share(id, writeKey, expiresInDays) {
@@ -198,8 +204,8 @@ export function createMapService(
         return { kind: "expired" };
       }
       // A token whose map or bytes are gone reads as expired: it worked once.
-      const bytes = await store.getBlob(share.map_id);
-      return bytes ? { kind: "bytes", bytes } : { kind: "expired" };
+      const blob = await store.getBlob(share.map_id);
+      return blob ? { kind: "bytes", blob } : { kind: "expired" };
     },
 
     async revoke(id, writeKey, token) {

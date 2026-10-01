@@ -121,6 +121,34 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("BLOB_BUCKET and BLOB_REGION", () => {
+    const base = {
+      STORAGE_MODE: "postgres-minio",
+      DATABASE_URL: "x",
+      BLOB_ENDPOINT: "x",
+      BLOB_ACCESS_KEY: "x",
+      BLOB_SECRET_KEY: "x",
+    };
+    it("default to the bucket and region the compose stack makes", () => {
+      const cfg = loadConfig(base);
+      expect(cfg).toMatchObject({
+        BLOB_BUCKET: "atlasdraw-maps",
+        BLOB_REGION: "us-east-1",
+      });
+    });
+    it("read an operator's bucket and region", () => {
+      const cfg = loadConfig({
+        ...base,
+        BLOB_BUCKET: "maps-prod",
+        BLOB_REGION: "eu-central-1",
+      });
+      expect(cfg).toMatchObject({
+        BLOB_BUCKET: "maps-prod",
+        BLOB_REGION: "eu-central-1",
+      });
+    });
+  });
+
   describe("MAX_TOTAL_BYTES and SWEEP_INTERVAL_MS", () => {
     const base = { STORAGE_MODE: "sqlite-fs", DATA_DIR: "/tmp/x" };
 

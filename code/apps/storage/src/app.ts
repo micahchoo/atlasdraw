@@ -12,7 +12,9 @@ import * as Sentry from "@sentry/node";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { createLogger } from "./logger";
+import { registerInFlightLimit } from "./middleware/in-flight";
 import { registerRateLimitMiddleware } from "./middleware/rate-limit";
+import { registerBlobBodyParser } from "./routes/blob-body";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
@@ -33,6 +35,9 @@ export interface BuildAppOptions {
 /** A failed start-up sweep is tried again after this long, not an hour. */
 const SWEEP_RETRY_MS = 30_000;
 
+/** The longest a client may take to send its request headers. */
+const HEADERS_TIMEOUT_MS = 20_000;
+
 export function buildApp(opts: BuildAppOptions): FastifyInstance {
   const { config, client } = opts;
 
@@ -41,16 +46,22 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
   // plain FastifyInstance does not accept, so the result is asserted to it.
   const app = Fastify({
     loggerInstance: opts.logger ?? createLogger(config.LOG_LEVEL),
-    bodyLimit: config.MAX_MAP_BYTES,
+    // JSON bodies only (share expiry); map bytes stream (blob-body.ts).
+    bodyLimit: 64 * 1024,
     // `request.ip` feeds the limiters. See TRUST_PROXY in config.ts.
     trustProxy: config.TRUST_PROXY,
+    // Socket idle: no bytes either way. Ends a stalled upload or a reader
+    // that stopped reading.
+    connectionTimeout: config.IDLE_TIMEOUT_MS,
+    // The whole request, body included.
+    requestTimeout: config.REQUEST_TIMEOUT_MS,
   }) as unknown as FastifyInstance;
-
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
+  app.server.headersTimeout = Math.min(
+    HEADERS_TIMEOUT_MS,
+    config.REQUEST_TIMEOUT_MS,
   );
+
+  registerBlobBodyParser(app, config.MAX_MAP_BYTES);
 
   const service = createMapService(client, {
     maxTotalBytes: config.MAX_TOTAL_BYTES,
@@ -62,6 +73,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     max: config.RATE_LIMIT_MAX,
     windowMs: config.RATE_LIMIT_WINDOW_MS,
   });
+  registerInFlightLimit(app, config.MAX_CONCURRENT_PER_IP);
   registerMapRoutes(app, service);
   registerShareRoutes(app, service, config.PUBLIC_URL);
 
