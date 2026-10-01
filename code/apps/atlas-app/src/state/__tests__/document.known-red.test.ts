@@ -31,7 +31,14 @@ import { useExcalidrawChangeHandler } from "../../hooks/useExcalidrawChangeHandl
 import { FakeMercatorMap } from "../../hooks/__tests__/fakeMercatorMap";
 import { useShareLink } from "../../hooks/useShareLink";
 import { createPersistenceStore } from "../persistence";
-import { createDocument, currentDocument, openDocument } from "../document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+  useDocumentStore,
+} from "../document";
+import { followDocumentHistory } from "../documentUndo";
+import { createHistory } from "../../session/history";
 import { toFile } from "../documentIO";
 import { sceneOf } from "../scene";
 import { loadShareDocument } from "../loadShareDocument";
@@ -163,10 +170,13 @@ async function autosaveDocument(): Promise<AtlasdrawDocument> {
 
 /** The editor's autosave state; a new one for every case. */
 let persistence = createPersistenceState();
+/** The editor's history, whose position says what is unsaved. */
+let history = createHistory();
 
 /**
- * Mount the editor's document wiring the way MapEditor does: persistence,
- * the document <-> scene binding, and the onChange handler that marks dirty.
+ * Mount the editor's document wiring the way MapEditor does: the history
+ * on the open document, persistence, the document <-> scene binding, and
+ * the onChange handler.
  */
 function mountEditor(
   api: ExcalidrawImperativeAPI,
@@ -175,7 +185,8 @@ function mountEditor(
   // The editor's view holds the map; a save reads its camera from there.
   const view = createViewStore({ map });
   return renderHook(() => {
-    usePersistenceWiring({ view, persistence }, api, NOTIFY, null);
+    useEffect(() => followDocumentHistory(useDocumentStore, history), []);
+    usePersistenceWiring({ view, persistence, history }, api, NOTIFY, null);
     useSceneBinding(api);
     useMapOverlays(map);
     const onChange = useExcalidrawChangeHandler({
@@ -183,7 +194,6 @@ function mountEditor(
       announceMapEditor: () => {},
       setMapBg: () => {},
       view,
-      persistence,
     });
     useEffect(
       () =>
@@ -202,7 +212,7 @@ async function waitForHydrate(api: ExcalidrawImperativeAPI): Promise<void> {
   await waitFor(() =>
     expect(api.getSceneElements().map((e) => e.id)).toContain("rect-1"),
   );
-  // Loading clears the UI dirty flag in a microtask; let it run.
+  // Let the open finish its microtasks.
   await act(async () => {
     await Promise.resolve();
   });
@@ -213,12 +223,10 @@ async function saveAndSettle(): Promise<void> {
   await act(async () => {
     await persistence.getState().forceSave();
   });
-  persistence.getState().clearDirty();
 }
 
 function isDirty(): boolean {
-  const s = persistence.getState();
-  return s.isDirty || (s.persistenceStore?.isDirty() ?? false);
+  return history.dirty;
 }
 
 beforeEach(async () => {
@@ -236,6 +244,7 @@ beforeEach(async () => {
   // A new, empty open document for every case.
   openDocument(createDocument());
   persistence = createPersistenceState();
+  history = createHistory();
 });
 
 afterEach(() => {
@@ -360,6 +369,15 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(false);
     return fx;
   }
+
+  it("opening the saved map is not an edit", async () => {
+    await seedAutosave(docWithDataLayers());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
+
+    expect(isDirty()).toBe(false);
+  });
 
   it("renaming a layer marks the document dirty", async () => {
     await loadedAndClean();

@@ -28,6 +28,8 @@ import {
   type PersistenceStateStore,
 } from "../persistenceState";
 
+import { createHistory, type EditorHistory } from "../../session/history";
+
 import {
   makeFakeExcalidraw,
   type FakeExcalidraw,
@@ -87,6 +89,8 @@ let store: PersistenceStore;
 let fx: FakeExcalidraw;
 /** The editor's autosave state; a new one for every case. */
 let persistence: PersistenceStateStore = createPersistenceState();
+/** The editor's history; a new one for every case. */
+let history: EditorHistory = createHistory();
 const notify = { success: vi.fn(), error: vi.fn() };
 
 /** The open map: a drawing with one element, edited since its last save. */
@@ -94,13 +98,14 @@ function openEditedMap(title = "Current"): string {
   fx = makeFakeExcalidraw([{ id: "drawn", type: "ellipse" }]);
   const doc = createDocument({ title }, sceneOf(fx.api));
   openDocument(doc);
-  persistence.getState().markDirty();
+  history.record({ undo: () => {}, redo: () => {} });
   return doc.id;
 }
 
 beforeEach(async () => {
   store = createPersistenceStore({ dbName: `my-maps-${++n}-${Date.now()}` });
   persistence = createPersistenceState();
+  history = createHistory();
   persistence.getState().setPersistenceStore(store);
   persistence.getState().setForceSave(async () => {
     await store.save(toFile(currentDocument()));
@@ -126,7 +131,10 @@ describe("openSavedMap", () => {
     await store.save(savedFile(A, "Harbour walk", "2026-05-02T00:00:00.000Z"));
     openEditedMap();
 
-    const opened = await openSavedMap({ api: fx.api, persistence, notify }, A);
+    const opened = await openSavedMap(
+      { api: fx.api, persistence, history, notify },
+      A,
+    );
 
     expect(opened).toBe(true);
     expect(currentDocument().id).toBe(A);
@@ -139,7 +147,7 @@ describe("openSavedMap", () => {
     await store.save(savedFile(A, "Harbour walk", "2026-05-02T00:00:00.000Z"));
     const current = openEditedMap("Field sites");
 
-    await openSavedMap({ api: fx.api, persistence, notify }, A);
+    await openSavedMap({ api: fx.api, persistence, history, notify }, A);
 
     const listed = await store.list();
     expect(listed.map((m) => m.id).sort()).toEqual([A, current].sort());
@@ -155,7 +163,7 @@ describe("openSavedMap", () => {
     const confirmLoss = vi.fn(async () => false);
 
     const opened = await openSavedMap(
-      { api: fx.api, persistence, notify, confirmLoss },
+      { api: fx.api, persistence, history, notify, confirmLoss },
       A,
     );
 
@@ -169,7 +177,10 @@ describe("openSavedMap", () => {
     openEditedMap();
     const confirmLoss = vi.fn(async () => false);
 
-    await openSavedMap({ api: fx.api, persistence, notify, confirmLoss }, A);
+    await openSavedMap(
+      { api: fx.api, persistence, history, notify, confirmLoss },
+      A,
+    );
 
     expect(confirmLoss).not.toHaveBeenCalled();
     expect(currentDocument().id).toBe(A);
@@ -178,7 +189,10 @@ describe("openSavedMap", () => {
   it("tells the user when the map is no longer saved", async () => {
     const current = openEditedMap();
 
-    const opened = await openSavedMap({ api: fx.api, persistence, notify }, B);
+    const opened = await openSavedMap(
+      { api: fx.api, persistence, history, notify },
+      B,
+    );
 
     expect(opened).toBe(false);
     expect(currentDocument().id).toBe(current);
@@ -231,12 +245,11 @@ describe("startNewMap", () => {
   it("opens a blank map and saves it in My maps", async () => {
     const before = openEditedMap();
 
-    await startNewMap({ api: fx.api, persistence, notify });
+    await startNewMap({ api: fx.api, persistence, history, notify });
 
     const doc = currentDocument();
     expect(doc.id).not.toBe(before);
     expect(fx.all()).toEqual([]);
-    await persistence.getState().forceSave();
     expect((await store.list()).map((m) => m.id)).toContain(doc.id);
   });
 });
@@ -246,7 +259,7 @@ describe("deleteSavedMap", () => {
     await store.save(savedFile(A, "Harbour walk", "2026-05-02T00:00:00.000Z"));
     const current = openEditedMap();
 
-    await deleteSavedMap({ api: fx.api, persistence, notify }, A);
+    await deleteSavedMap({ api: fx.api, persistence, history, notify }, A);
 
     expect(currentDocument().id).toBe(current);
     expect((await store.list()).map((m) => m.id)).not.toContain(A);
@@ -265,7 +278,9 @@ describe("deleteSavedMap", () => {
     } as unknown as StorageClient;
     await buildRemoteSaveCallback(server)(new Blob(["x"]), A);
 
-    await deleteSavedMap({ api: fx.api, persistence, notify }, A, { server });
+    await deleteSavedMap({ api: fx.api, persistence, history, notify }, A, {
+      server,
+    });
 
     expect(server.deleteMap).toHaveBeenCalledWith(
       "map000000000000000001",
@@ -291,7 +306,9 @@ describe("deleteSavedMap", () => {
     } as unknown as StorageClient;
     await buildRemoteSaveCallback(server)(new Blob(["x"]), A);
 
-    await deleteSavedMap({ api: fx.api, persistence, notify }, A, { server });
+    await deleteSavedMap({ api: fx.api, persistence, history, notify }, A, {
+      server,
+    });
 
     expect((await store.list()).map((m) => m.id)).toContain(A);
     expect(notify.error).toHaveBeenCalledWith(
@@ -303,7 +320,10 @@ describe("deleteSavedMap", () => {
     const current = openEditedMap("Field sites");
     await persistence.getState().forceSave();
 
-    await deleteSavedMap({ api: fx.api, persistence, notify }, current);
+    await deleteSavedMap(
+      { api: fx.api, persistence, history, notify },
+      current,
+    );
 
     expect(currentDocument().id).not.toBe(current);
     expect(fx.all()).toEqual([]);
@@ -336,6 +356,7 @@ describe("restoreServerBackup", () => {
     await restoreServerBackup({
       api: fx.api,
       persistence,
+      history,
       notify,
       client,
       confirm: async () => true,
@@ -358,6 +379,7 @@ describe("restoreServerBackup", () => {
     await restoreServerBackup({
       api: fx.api,
       persistence,
+      history,
       notify,
       client,
       confirm: async () => false,
@@ -380,6 +402,7 @@ describe("restoreServerBackup", () => {
     await restoreServerBackup({
       api: fx.api,
       persistence,
+      history,
       notify,
       client,
       confirm: async () => true,

@@ -7,24 +7,14 @@ import { createPersistenceState } from "./persistenceState";
 
 import type { PersistenceStore } from "./persistence";
 
-const makeFakePersistenceStore = (): PersistenceStore & {
-  markDirtySpy: ReturnType<typeof vi.fn>;
-} => {
-  const markDirtySpy = vi.fn();
-  return {
+const makeFakePersistenceStore = (): PersistenceStore =>
+  ({
     save: vi.fn(() => Promise.resolve()),
     load: vi.fn(() => Promise.resolve(null)),
     saveToDisk: vi.fn(() => Promise.resolve()),
     openFromDisk: vi.fn(() => Promise.resolve(null)),
-    onDirty: vi.fn(() => () => {}),
-    markDirty: markDirtySpy,
-    isDirty: vi.fn(() => false),
     close: vi.fn(() => Promise.resolve()),
-    markDirtySpy,
-  } as unknown as PersistenceStore & {
-    markDirtySpy: ReturnType<typeof vi.fn>;
-  };
-};
+  } as unknown as PersistenceStore);
 
 let persistence = createPersistenceState();
 
@@ -33,10 +23,12 @@ describe("persistence state", () => {
     persistence = createPersistenceState();
   });
 
-  it("two sessions never share a dirty flag", () => {
+  it("two sessions never share their save state", () => {
     const other = createPersistenceState();
-    persistence.getState().markDirty();
-    expect(other.getState().isDirty).toBe(false);
+    persistence.getState().setLastSavedAt(1);
+    persistence.getState().setReadOnly(true);
+    expect(other.getState().lastSavedAt).toBe(null);
+    expect(other.getState().readOnly).toBe(false);
   });
 
   it("setPersistenceStore stores the reference", () => {
@@ -45,27 +37,8 @@ describe("persistence state", () => {
     expect(persistence.getState().persistenceStore).toBe(fake);
   });
 
-  it("markDirty flips isDirty true", () => {
-    expect(persistence.getState().isDirty).toBe(false);
-    persistence.getState().markDirty();
-    expect(persistence.getState().isDirty).toBe(true);
-  });
-
-  it("markDirty forwards to underlying PersistenceStore.markDirty when set", () => {
-    const fake = makeFakePersistenceStore();
-    persistence.getState().setPersistenceStore(fake);
-    persistence.getState().markDirty();
-    expect(fake.markDirtySpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("markDirty is safe with no underlying store (no throw)", () => {
-    expect(() => persistence.getState().markDirty()).not.toThrow();
-    expect(persistence.getState().isDirty).toBe(true);
-  });
-
-  it("clearDirty flips isDirty false", () => {
-    persistence.getState().markDirty();
-    persistence.getState().clearDirty();
-    expect(persistence.getState().isDirty).toBe(false);
+  it("holds no dirty flag: the history is the one source", () => {
+    expect("isDirty" in persistence.getState()).toBe(false);
+    expect("markDirty" in persistence.getState()).toBe(false);
   });
 });

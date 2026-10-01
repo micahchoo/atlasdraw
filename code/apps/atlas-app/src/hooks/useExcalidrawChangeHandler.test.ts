@@ -10,7 +10,6 @@ import type { OrderedExcalidrawElement } from "@atlasdraw/element/types";
 import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
 import { createViewStore } from "../session/view";
-import { createPersistenceState } from "../state/persistenceState";
 
 import { useExcalidrawChangeHandler } from "./useExcalidrawChangeHandler";
 
@@ -45,7 +44,6 @@ function makeParams(
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
     view: createViewStore(),
-    persistence: createPersistenceState(),
     ...overrides,
   };
 }
@@ -106,84 +104,7 @@ describe("useExcalidrawChangeHandler — 1. background color intercept", () => {
   });
 });
 
-describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
-  it("does not mark dirty on the first call (establishes the baseline)", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(fakeElements([{ id: "el1" }]), makeAppState(), NO_FILES);
-    expect(params.persistence.getState().isDirty).toBe(false);
-  });
-
-  it("marks dirty when an element is added", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(fakeElements([{ id: "el1" }]), makeAppState(), NO_FILES);
-    result.current(
-      fakeElements([{ id: "el1" }, { id: "el2" }]),
-      makeAppState(),
-      NO_FILES,
-    );
-
-    expect(params.persistence.getState().isDirty).toBe(true);
-  });
-
-  it("marks dirty when an element's version rises (an edit)", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([{ id: "el1", version: 1, versionNonce: 7 }]),
-      makeAppState(),
-      NO_FILES,
-    );
-    result.current(
-      fakeElements([{ id: "el1", version: 2, versionNonce: 9 }]),
-      makeAppState(),
-      NO_FILES,
-    );
-
-    expect(params.persistence.getState().isDirty).toBe(true);
-  });
-
-  it("marks dirty when an element is deleted", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-
-    result.current(
-      fakeElements([{ id: "el1", version: 1 }]),
-      makeAppState(),
-      NO_FILES,
-    );
-    result.current(
-      fakeElements([{ id: "el1", version: 1, isDeleted: true }]),
-      makeAppState(),
-      NO_FILES,
-    );
-
-    expect(params.persistence.getState().isDirty).toBe(true);
-  });
-
-  it("does not mark dirty for a camera move (a viewport change, same elements)", () => {
-    const params = makeParams();
-    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-    const elements = fakeElements([
-      { id: "el1", version: 3, versionNonce: 5, x: 10 },
-    ]);
-
-    result.current(elements, makeAppState(), NO_FILES);
-    result.current(
-      [...elements],
-      makeAppState({ scrollX: -200, scrollY: 40, zoom: { value: 0.001 } }),
-      NO_FILES,
-    );
-
-    expect(params.persistence.getState().isDirty).toBe(false);
-  });
-});
-
-describe("useExcalidrawChangeHandler — 3. selection aria-live announce", () => {
+describe("useExcalidrawChangeHandler — 2. selection aria-live announce", () => {
   it("announces a single selected element by type", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
@@ -250,7 +171,7 @@ describe("useExcalidrawChangeHandler — 3. selection aria-live announce", () =>
   });
 });
 
-describe("useExcalidrawChangeHandler — 4. the canvas selection reaches the panel", () => {
+describe("useExcalidrawChangeHandler — 3. the canvas selection reaches the panel", () => {
   it("the selected elements become the selection; a panel-selected data layer stays", () => {
     const params = makeParams();
     params.view.getState().setSelection({ "dl:roads": true, old: true });

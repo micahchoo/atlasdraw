@@ -37,7 +37,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import { createPersistenceState } from "../../state/persistenceState";
+import { createHistory } from "../../session/history";
 import {
   createDocument,
   currentDocument,
@@ -138,7 +138,7 @@ interface World {
 }
 
 /** The editor's autosave state; a new one for every mount. */
-let persistence = createPersistenceState();
+let history = createHistory();
 
 function Harness({
   map,
@@ -157,7 +157,6 @@ function Harness({
     announceMapEditor: () => {},
     setMapBg: () => {},
     view,
-    persistence,
   });
   return (
     <div ref={setLayer} style={{ width: 1024, height: 768 }}>
@@ -167,6 +166,7 @@ function Harness({
         onExcalidrawAPI={(a) => {
           setApi(a);
           if (a) {
+            history.attachDrawing(a.history);
             onApi(a);
           }
         }}
@@ -180,7 +180,7 @@ function Harness({
 }
 
 async function mount(zoom = 10): Promise<World> {
-  persistence = createPersistenceState();
+  history = createHistory();
   openDocument(
     createDocument({ camera: { center: [0, 0], zoom, bearing: 0, pitch: 0 } }),
   );
@@ -340,11 +340,11 @@ describe("geography survives undo, pins, pans (audit 01)", () => {
     const w = await mount(10);
     draw(w, rectangle());
     w.pan(0, 0);
-    act(() => persistence.getState().clearDirty());
+    act(() => history.markSaved());
 
     w.pan(200, 0);
 
-    expect(persistence.getState().isDirty).toBe(false);
+    expect(history.dirty).toBe(false);
   });
 
   it("a pure pan leaves every element's scene geometry and version alone", async () => {

@@ -8,7 +8,8 @@
 //     input which is the *intended* path for those browsers, not a fallback)
 //
 // Autosave timing: a 5 s trailing-edge debounce with a 30 s ceiling (see
-// `startAutoSave`).
+// `startAutoSave`). What needs a save is the editor's history's to say
+// (session/history.ts#dirty); this module keeps no dirty flag of its own.
 
 import { openDB, type IDBPDatabase } from "idb";
 import {
@@ -38,6 +39,8 @@ import {
   type StoredBlob,
   type StoredSummary,
 } from "./documentStore";
+
+import type { History, HistoryPosition } from "../session/history";
 
 // ---------------------------------------------------------------------------
 // IndexedDB schema
@@ -134,7 +137,7 @@ function isSummary(v: unknown): v is DocumentSummary {
 export interface PersistenceStore {
   /**
    * Serialize doc into its own IndexedDB slot (by manifest id) and make it
-   * the one a reload opens; clears dirty if no edits raced. A Conflict, and
+   * the one a reload opens. A Conflict, and
    * no write, when the slot holds a newer copy (DocumentStore.save): the
    * caller asks the user, then saves with `over` the stored revision to
    * replace it, or saves a copy under a new id. The server gets only what
@@ -170,12 +173,6 @@ export interface PersistenceStore {
    * `.excalidraw` drawing comes in at `camera`, where the user is looking.
    */
   openFromDisk(camera?: Camera | null): Promise<AtlasdrawDocument | null>;
-  /** Register a callback invoked when `markDirty()` fires. */
-  onDirty(cb: () => void): () => void;
-  /** Mark the in-memory state as ahead of the persisted state. */
-  markDirty(): void;
-  /** True if dirty (in-memory state diverges from last persisted). */
-  isDirty(): boolean;
   /** True if the last remoteSave failed (IDB succeeded, server did not). */
   remoteSaveFailed(): boolean;
   /** Internal: dispose IDB connection + clear listeners (test helper). */
@@ -211,9 +208,9 @@ function sessionStore(): Pick<Storage, "getItem" | "setItem"> | null {
 /**
  * Build a `PersistenceStore` backed by a single IDB database.
  *
- * The store is a thin wrapper — all the orchestration logic (debounce,
- * ceiling, snapshot race) lives in `startAutoSave`. The store itself is
- * concerned with the I/O surface and the dirty bit.
+ * The store is the I/O surface. When to save (debounce, ceiling) is
+ * `startAutoSave`'s; what is saved is the history's (a save marks the
+ * position it read at, so an edit made during a save stays dirty).
  */
 export function createPersistenceStore(
   options: CreatePersistenceStoreOptions = {},
@@ -258,20 +255,10 @@ export function createPersistenceStore(
    */
   const bases = new Map<string, number>();
 
-  // Dirty bit + listener set.
-  let dirty = false;
-  const dirtyListeners = new Set<() => void>();
-
   // Remote save failure tracking — set on failed remoteSave, cleared on
   // successful remoteSave. IDB is always the local source of truth; this
-  // flag lets the UI surface "server out of sync" without blocking the
-  // dirty-bit clearing at the end of save().
+  // flag lets the UI surface "server out of sync".
   let _remoteSaveFailed = false;
-
-  // Snapshot race guard: every `markDirty` after a save begins bumps this.
-  // `save()` captures the value at start; if it differs at await-resolve, the
-  // save raced and dirty stays set.
-  let dirtySeq = 0;
 
   // Incremental-write cache: text entries whose serialized JSON is unchanged
   // since the previous write are carried over from that archive without
@@ -293,27 +280,10 @@ export function createPersistenceStore(
     return next;
   };
 
-  const markDirty = (): void => {
-    dirty = true;
-    dirtySeq += 1;
-    for (const cb of dirtyListeners) {
-      try {
-        cb();
-      } catch {
-        /* listeners must not break the producer */
-      }
-    }
-  };
-
   const save = (
     doc: AtlasdrawDocument,
     saveOptions: { over?: number } = {},
   ): Promise<SaveResult> => {
-    // Capture dirtySeq SYNCHRONOUSLY at call-time. If we deferred this into
-    // the enqueueWrite microtask, any `markDirty()` issued by the caller
-    // immediately after `save(doc)` (before awaiting) would land BEFORE the
-    // capture and we'd never observe the race.
-    const seqAtStart = dirtySeq;
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
       const id = doc.manifest.id;
@@ -328,7 +298,7 @@ export function createPersistenceStore(
         },
       );
       if (result.kind === "conflict") {
-        // Nothing written, here or on the server; the map stays dirty.
+        // Nothing written, here or on the server.
         return result;
       }
       bases.set(id, result.revision);
@@ -337,14 +307,10 @@ export function createPersistenceStore(
       // The older single slot held this document or an earlier one; either
       // way its content now has a slot of its own.
       await database.delete(STORE, KEY_LEGACY_CURRENT);
-      // Clear dirty only if no `markDirty()` arrived during the write.
-      if (dirtySeq === seqAtStart) {
-        dirty = false;
-      }
       // Best-effort push to the remote storage API. Sequenced AFTER the IDB
       // write so the local source of truth lands first; a failure is logged,
-      // sets `remoteSaveFailed` and calls `onRemoteSaveFailed`, and does not
-      // block the dirty-bit clearing above. The Blob is the same one we wrote locally — no re-serialize.
+      // sets `remoteSaveFailed` and calls `onRemoteSaveFailed`, and the save
+      // still counts as saved. The Blob is the same one we wrote locally — no re-serialize.
       if (options.remoteSave) {
         try {
           await options.remoteSave(blob, doc.manifest.id);
@@ -684,19 +650,9 @@ export function createPersistenceStore(
     return doc;
   };
 
-  const onDirty = (cb: () => void): (() => void) => {
-    dirtyListeners.add(cb);
-    return () => {
-      dirtyListeners.delete(cb);
-    };
-  };
-
-  const isDirty = (): boolean => dirty;
-
   const remoteSaveFailed = (): boolean => _remoteSaveFailed;
 
   const close = async (): Promise<void> => {
-    dirtyListeners.clear();
     _remoteSaveFailed = false;
     if (dbPromise) {
       const database = await dbPromise;
@@ -714,9 +670,6 @@ export function createPersistenceStore(
     remove,
     saveToDisk,
     openFromDisk,
-    onDirty,
-    markDirty,
-    isDirty,
     remoteSaveFailed,
     close,
   };
@@ -726,39 +679,72 @@ export function createPersistenceStore(
 // Auto-save pump
 // ---------------------------------------------------------------------------
 
+/** A save the autosave made: what it wrote, and the history position read. */
+export interface AutoSaved {
+  readonly result: SaveResult;
+  readonly doc: AtlasdrawDocument;
+  readonly at: HistoryPosition;
+}
+
+export interface AutoSave {
+  /**
+   * Save the document now, dirty or not, past the delay. On success the
+   * history is saved at the position read before the document was. Null
+   * when there is nothing to save here (`getDoc` gave null).
+   */
+  saveNow(): Promise<AutoSaved> | null;
+  /** Clear the timers and stop following the history. */
+  stop(): void;
+}
+
+export interface AutoSaveOptions {
+  /** Trailing-edge debounce after the last edit. */
+  intervalMs?: number;
+  /** The longest an edit waits while edits keep coming. */
+  maxFlushMs?: number;
+  onSaved?: () => void;
+  onSaveError?: (err: unknown) => void;
+  /** The slot held a newer copy; nothing was written. */
+  onConflict?: (
+    conflict: Conflict,
+    doc: AtlasdrawDocument,
+    at: HistoryPosition,
+  ) => void;
+}
+
 /**
- * Drive `store.save()` from `markDirty()` events.
+ * Save the document when the history says it changed.
  *
- * Behaviour:
- *   - Trailing-edge debounce: every `markDirty` resets a timer; flush fires
- *     `intervalMs` after the *last* edit.
- *   - Ceiling: a second timer is started on the *first* `markDirty` since the
- *     last flush and is **not reset** by subsequent edits. It forces a flush
- *     after `maxFlushMs`, so a burst of continuous edits cannot starve the
- *     debounce indefinitely.
- *   - When either fires, both timers are cleared and the next `markDirty`
- *     starts the cycle again.
+ *   - Trailing-edge debounce: every move of the history's position resets
+ *     a timer; the save runs `intervalMs` after the last one.
+ *   - Ceiling: the first move since the last save starts a second timer
+ *     that edits do not reset, so a burst of edits cannot hold a save off
+ *     for longer than `maxFlushMs`.
+ *   - A move back to the saved position (undo to it) cancels both: there is
+ *     nothing to save.
  *
- * Snapshot guard at flush time: capture `getDoc()` once and compare on resolve
- * — Zustand mutates state in place but rebuilds the doc reference on each
- * commit, so identity comparison is sufficient.
- *
- * Returns a disposer that clears both timers AND unsubscribes from the dirty
- * channel. Tests must call this to avoid leaking timers.
+ * The history position is read before the document, and a save marks the
+ * history saved at that position, so an edit made while a save is written
+ * stays dirty. A document `getDoc` does not give (a room's: the relay
+ * keeps it) is not saved, and the history stays dirty.
  */
 export function startAutoSave(
   store: PersistenceStore,
+  history: History,
   /** The document to save; null when there is nothing to save here. */
   getDoc: () => AtlasdrawDocument | null,
-  intervalMs = 5000,
-  maxFlushMs = 30000,
-  onSaved?: () => void,
-  onSaveError?: (err: unknown) => void,
-  /** The slot held a newer copy; nothing was written. */
-  onConflict?: (conflict: Conflict, doc: AtlasdrawDocument) => void,
-): () => void {
+  options: AutoSaveOptions = {},
+): AutoSave {
+  const {
+    intervalMs = 5000,
+    maxFlushMs = 30000,
+    onSaved,
+    onSaveError,
+    onConflict,
+  } = options;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastPosition = history.position;
 
   const clearTimers = (): void => {
     if (debounceTimer !== null) {
@@ -771,22 +757,31 @@ export function startAutoSave(
     }
   };
 
-  const flush = (): void => {
+  const saveNow = (): Promise<AutoSaved> | null => {
     clearTimers();
-    const snapshot = getDoc();
-    if (!snapshot) {
-      onSaved?.();
+    const at = history.position;
+    const doc = getDoc();
+    if (!doc) {
+      return null;
+    }
+    // The store's write chain serializes writes. The history is marked only
+    // after the IDB write commits: "saved" before durability is dishonest.
+    return store.save(doc).then((result) => {
+      if (result.kind === "saved") {
+        history.markSaved(at);
+      }
+      return { result, doc, at };
+    });
+  };
+
+  const flush = (): void => {
+    if (!history.dirty) {
+      clearTimers();
       return;
     }
-    // The store's internal write chain serializes writes, so an in-flight
-    // save before the next flush still completes in order. We DO await the
-    // promise here (via .then) so the onSaved callback fires only after the
-    // IDB write commits — otherwise the "unsaved" indicator would clear
-    // before durability, which is dishonest.
-    void store
-      .save(snapshot)
-      .then((result) =>
-        result.kind === "saved" ? onSaved?.() : onConflict?.(result, snapshot),
+    void saveNow()
+      ?.then(({ result, doc, at }) =>
+        result.kind === "saved" ? onSaved?.() : onConflict?.(result, doc, at),
       )
       .catch((err) => {
         // eslint-disable-next-line no-console
@@ -795,20 +790,31 @@ export function startAutoSave(
       });
   };
 
-  const unsubscribe = store.onDirty(() => {
-    // Reset the trailing-edge debounce on every edit.
+  const unsubscribe = history.subscribe(() => {
+    const position = history.position;
+    if (position === lastPosition) {
+      // A save, or a step that changed nothing (a selection).
+      return;
+    }
+    lastPosition = position;
+    if (!history.dirty) {
+      clearTimers();
+      return;
+    }
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer);
     }
     debounceTimer = setTimeout(flush, intervalMs);
-    // Start the ceiling timer once on the first edit since the last flush.
     if (ceilingTimer === null) {
       ceilingTimer = setTimeout(flush, maxFlushMs);
     }
   });
 
-  return () => {
-    clearTimers();
-    unsubscribe();
+  return {
+    saveNow,
+    stop: () => {
+      clearTimers();
+      unsubscribe();
+    },
   };
 }

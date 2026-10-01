@@ -216,6 +216,7 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
             excalidrawAPI={api}
             map={map}
             persistence={session.persistence}
+            history={session.history}
             notify={session.notify}
             onClose={close}
             server={getAppConfig().enableBackendPersistence ? storage : null}
