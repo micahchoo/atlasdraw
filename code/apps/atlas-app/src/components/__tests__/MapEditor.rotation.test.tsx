@@ -160,8 +160,8 @@ vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
 }));
 vi.mock("../../hooks/useGeoAnchor", () => ({ useGeoAnchor: vi.fn() }));
-vi.mock("../../hooks/useLayerRegistrySync", () => ({
-  useLayerRegistrySync: vi.fn(),
+vi.mock("../../hooks/useMapOverlays", () => ({
+  useMapOverlays: vi.fn(),
 }));
 vi.mock("../../hooks/useAtlasdrawTool", () => ({
   useAtlasdrawTool: () => ({

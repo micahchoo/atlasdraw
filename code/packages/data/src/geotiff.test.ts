@@ -36,6 +36,14 @@ interface TiffOpts {
   projectedCrs?: number;
   /** Drop georeferencing entirely — a plain TIFF wearing a .tif name. */
   bare?: boolean;
+  /** The grey level of each pixel row, top row first. */
+  rowValue?: (row: number) => number;
+  /** Write the extent with the first row at the south edge. */
+  southUp?: boolean;
+  /** Keep the geo keys but write no tiepoint and no scale. */
+  noTiepoint?: boolean;
+  /** A ModelTransformation in place of the tiepoint and scale. */
+  transformation?: number[];
 }
 
 /** A solid-grey RGB GeoTIFF with the geography the case is about. */
@@ -46,9 +54,16 @@ function makeTiff({
   geographicCrs,
   projectedCrs,
   bare = false,
+  rowValue = () => 128,
+  southUp = false,
+  noTiepoint = false,
+  transformation,
 }: TiffOpts = {}): ArrayBuffer {
   const [west, south, east, north] = bbox;
-  const values = new Uint8Array(width * height * 3).fill(128);
+  const values = new Uint8Array(width * height * 3);
+  for (let row = 0; row < height; row++) {
+    values.fill(rowValue(row), row * width * 3, (row + 1) * width * 3);
+  }
 
   const metadata: Record<string, unknown> = {
     width,
@@ -60,12 +75,17 @@ function makeTiff({
   if (!bare) {
     // Tiepoint pins raster (0,0) to the NW corner; pixel scale carries the
     // rest, which together is how a north-up GeoTIFF states its extent.
-    metadata.ModelTiepoint = [0, 0, 0, west, north, 0];
-    metadata.ModelPixelScale = [
-      (east - west) / width,
-      (north - south) / height,
-      0,
-    ];
+    // South-up pins (0,0) to the SW corner and gives a negative y scale.
+    if (transformation) {
+      metadata.ModelTransformation = transformation;
+    } else if (!noTiepoint) {
+      metadata.ModelTiepoint = [0, 0, 0, west, southUp ? south : north, 0];
+      metadata.ModelPixelScale = [
+        (east - west) / width,
+        ((north - south) / height) * (southUp ? -1 : 1),
+        0,
+      ];
+    }
     if (projectedCrs !== undefined) {
       metadata.ProjectedCSTypeGeoKey = projectedCrs;
     } else {
@@ -218,5 +238,81 @@ describe("decodeGeoTiff — refusing clearly", () => {
     ).catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(RasterDecodeError);
+  });
+});
+
+describe("decodeGeoTiff — EPSG:4326 in Web Mercator", () => {
+  /** Web Mercator y of a latitude, in radians of the unit sphere. */
+  const mercY = (lat: number) =>
+    Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const latOf = (y: number) =>
+    (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * (180 / Math.PI);
+
+  it("resamples the rows so each latitude lands where the map draws it", async () => {
+    // 30 rows, one degree each, from 60N (row 0) to 30N (row 29). Each row's
+    // grey level is its row number.
+    const decoded = await decodeGeoTiff(
+      makeTiff({
+        width: 2,
+        height: 30,
+        bbox: [10, 30, 12, 60],
+        rowValue: (row) => row,
+      }),
+    );
+
+    // MapLibre stretches an image linearly between its corners in Mercator,
+    // so output row 15 is drawn centred at 15.5/30 of the way down in
+    // Mercator y, about 46.6N. It must show the source row of 46.6N (13), not
+    // source row 15 (44.5N), which a linear stretch would show.
+    const row = 15;
+    const lat = latOf(
+      mercY(60) + ((row + 0.5) / decoded.height) * (mercY(30) - mercY(60)),
+    );
+    const grey = decoded.rgba[row * decoded.width * 4];
+    expect(grey).toBe(Math.floor(60 - lat));
+    expect(grey).not.toBe(row);
+    expect(decoded.corners).toEqual([
+      [10, 60],
+      [12, 60],
+      [12, 30],
+      [10, 30],
+    ]);
+    expect(decoded.crs).toMatch(/EPSG:4326/);
+  });
+
+  it("refuses an image that reaches past the Web Mercator limit", async () => {
+    await expect(
+      decodeGeoTiff(makeTiff({ bbox: [0, 80, 10, 89] })),
+    ).rejects.toThrow(/85/);
+  });
+});
+
+describe("decodeGeoTiff — orientation", () => {
+  it("refuses a rotated image and names the fix", async () => {
+    const err = await decodeGeoTiff(
+      makeTiff({
+        transformation: [
+          0.1, 0.05, 0, 10, 0.05, -0.1, 0, 21, 0, 0, 0, 0, 0, 0, 0, 1,
+        ],
+      }),
+    ).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RasterDecodeError);
+    expect((err as Error).message).toMatch(/rotated/);
+    expect((err as Error).message).toMatch(/gdalwarp/);
+  });
+
+  it("refuses a south-up image and names the fix", async () => {
+    const err = await decodeGeoTiff(makeTiff({ southUp: true })).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(RasterDecodeError);
+    expect((err as Error).message).toMatch(/south/);
+    expect((err as Error).message).toMatch(/gdalwarp/);
+  });
+
+  it("says a file with geo keys but no position cannot be placed", async () => {
+    await expect(
+      decodeGeoTiff(makeTiff({ noTiepoint: true })),
+    ).rejects.toBeInstanceOf(RasterDecodeError);
   });
 });

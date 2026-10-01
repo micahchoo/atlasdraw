@@ -18,17 +18,19 @@
 // raises `revision` by one and tells subscribers; a command that changes
 // nothing does neither. A pan is not a command, so it never raises it.
 //
-// The reducer keeps every entry it did not change, object for object. The
-// map bridge (useLayerRegistrySync) depends on that: it finds a restyle by
-// comparing style objects.
+// The reducer keeps every entry it did not change, object for object, and a
+// FeatureCollection is replaced, never edited. The map overlays
+// (lib/mapOverlays) depend on that: they find a changed payload by identity.
 
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { ulid } from "ulid";
 
+import { geometryKindOf } from "@atlasdraw/data";
+
 import type { LayerStyle } from "@atlasdraw/basemap";
 
-import type { Camera } from "@atlasdraw/data";
+import type { AtlasGeometryKind, Camera } from "@atlasdraw/data";
 
 import { editorScene, type SceneAccess } from "./scene";
 
@@ -85,6 +87,12 @@ export type DataLayerEntry = {
   /** Position within the data-layer stack, 0 at the bottom. */
   order: number;
   featureCount: number;
+  /**
+   * The kind of geometry the layer draws, decided once when the layer is
+   * added. It picks the MapLibre layer type, the paint properties and the
+   * legend swatch.
+   */
+  geometryKind: AtlasGeometryKind;
   style: LayerStyle;
   provenance?: LayerProvenance;
 };
@@ -153,6 +161,8 @@ export type DocumentCommand =
       fc: FeatureCollection;
       label: string;
       style: LayerStyle;
+      /** Omitted: taken from the first feature that has a geometry. */
+      geometryKind?: AtlasGeometryKind;
       provenance?: LayerProvenance;
     }
   | {
@@ -263,6 +273,7 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
         visible: true,
         order: 0,
         featureCount: command.fc.features.length,
+        geometryKind: command.geometryKind ?? geometryKindOf(command.fc),
         style: command.style,
         ...(command.provenance ? { provenance: command.provenance } : {}),
       };

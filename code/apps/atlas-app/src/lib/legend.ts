@@ -149,6 +149,15 @@ export function visibleRasterIds(
   return visible;
 }
 
+/** The colour a data layer draws in: a line has no fill, only a stroke. */
+function swatchOf(entry: Extract<LegendSource, { kind: "data" }>): string {
+  const color =
+    entry.geometryKind === "line"
+      ? entry.style.strokeColor
+      : entry.style.fillColor;
+  return color ?? NEUTRAL_SWATCH;
+}
+
 export interface LegendContext {
   renderedDataLayerIds: ReadonlySet<string>;
   visibleAnnotationIds: ReadonlySet<string>;
@@ -177,10 +186,7 @@ export function buildLegendEntries(
     .map<LayerLegendEntry>((e) => ({
       id: e.id,
       name: e.label,
-      color:
-        e.kind === "data"
-          ? e.style.fillColor ?? NEUTRAL_SWATCH
-          : NEUTRAL_SWATCH,
+      color: e.kind === "data" ? swatchOf(e) : NEUTRAL_SWATCH,
     }));
 }
 

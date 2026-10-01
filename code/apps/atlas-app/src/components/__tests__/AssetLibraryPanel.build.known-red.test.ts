@@ -1,15 +1,15 @@
 // @vitest-environment node
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Known-red build-output check for the Asset Library (audit-04, U3/M7).
+// Build-output check for the Asset Library (audit-04, U3/M7).
 //
 // AssetLibraryPanel.test.tsx passes in Node because asset-library.ts falls
 // back to `require("node:fs")` there. A browser has no `fs`, so the shipped
 // panel depends on Vite rewriting `import.meta.glob(...)` into fixture
-// imports. Vite rewrites only a LITERAL `import.meta.glob(...)` call;
-// asset-library.ts reads it through a cast variable, so the bundle keeps the
-// bare `import.meta.glob` and no fixture. Only a Vite build can see this, so
-// this test runs one (about 70 ms) on the real module and reads its output.
+// imports. Vite rewrites only a LITERAL `import.meta.glob(...)` call; read
+// through a variable, the bundle keeps the bare `import.meta.glob` and no
+// fixture. Only a Vite build can see this, so this test runs one (about
+// 70 ms) on the real module and reads its output.
 
 import path from "path";
 
@@ -43,8 +43,7 @@ async function bundle(entry: string): Promise<string> {
 }
 
 describe("asset library in a Vite build", () => {
-  // KNOWN-RED (W5 map overlays): the production bundle of asset-library.ts contains none of its fixtures, because import.meta.glob is read through a variable and Vite only rewrites a literal call. Flip to it() when fixed.
-  it.fails("bundles the built-in library fixtures", async () => {
+  it("bundles the built-in library fixtures", async () => {
     const code = await bundle(ASSET_LIBRARY);
     expect({
       hazard: code.includes("atlasdraw:hazard-markers"),

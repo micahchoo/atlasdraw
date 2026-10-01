@@ -177,6 +177,22 @@ export function requireHomogeneousGeometry(fc: FeatureCollection): void {
 /** Atlas's MapLibre layer-kind taxonomy. */
 export type AtlasGeometryKind = "fill" | "line" | "circle";
 
+/**
+ * The layer kind of a FeatureCollection: the kind of its first feature that
+ * has a geometry. A `null` geometry is skipped, so a leading null feature
+ * does not turn a polygon layer into vertex dots. An empty collection, or one
+ * with no supported geometry, gives "circle", which draws nothing.
+ */
+export function geometryKindOf(fc: FeatureCollection): AtlasGeometryKind {
+  for (const feature of fc.features) {
+    const kind = feature.geometry ? atlasKindOf(feature.geometry.type) : null;
+    if (kind) {
+      return kind;
+    }
+  }
+  return "circle";
+}
+
 /** One part of a FeatureCollection, with features of one geometry kind. */
 export interface GeometryKindPart {
   kind: AtlasGeometryKind;

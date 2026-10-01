@@ -39,30 +39,25 @@ import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import { PinTool } from "@atlasdraw/tools";
 
-import {
-  cameraRotation,
-  computeSceneBounds,
-  isGeoCustomData,
-} from "@atlasdraw/geo";
+import { cameraRotation, isGeoCustomData } from "@atlasdraw/geo";
 
 import type {
   ExcalidrawElement,
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import type { ExcalidrawElementLike, GeoAnchor } from "@atlasdraw/geo";
+import type { GeoAnchor } from "@atlasdraw/geo";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
 import { useMapRef } from "../hooks/useMapRef";
-import { useCollabDataLayer } from "../hooks/useCollabDataLayer";
 import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
 import { useMapEditorKeyboard } from "../hooks/useMapEditorKeyboard";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
-import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
+import { useMapOverlays } from "../hooks/useMapOverlays";
 import { useToolState } from "../hooks/useToolState";
 import { useCameraRotation } from "../hooks/useCameraRotation";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
@@ -98,11 +93,7 @@ import {
   toFile,
 } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
-import {
-  fitMapToContent,
-  fitMapToBox,
-  fitMapToLayer,
-} from "../lib/fitMapToContent";
+import { fitMapToContent } from "../lib/fitMapToContent";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -141,7 +132,7 @@ import { OnboardingTips, useOnboarding } from "./OnboardingTips";
 import type { ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
-import type { DocumentCommand, RasterCorners } from "../state/document";
+import type { DocumentCommand, RasterLayerEntry } from "../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -617,28 +608,24 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, excalidrawAPI]); // onMount excluded: fire-once-per-tuple semantics
 
-  // Bidirectional selection: store → Excalidraw (annotations)
-  // Subscribes to the shared selection store and pushes annotation selection
-  // into the Excalidraw scene, zooming the map when a data/raster layer is
-  // selected from the panel. The key-set comparison against the live
-  // Excalidraw selection makes this a no-op for changes that originated on
-  // the canvas (their ids already match), which is what breaks the feedback
-  // loop with the onChange mirror in useExcalidrawChangeHandler.
+  // Selection: store → Excalidraw. Annotation ids in the shared selection
+  // store are pushed into the Excalidraw scene. The key-set comparison with
+  // the live Excalidraw selection makes this a no-op for a change that came
+  // from the canvas, which breaks the loop with the onChange mirror in
+  // useExcalidrawChangeHandler. A selection never moves the camera; only
+  // "Zoom to layer" does.
   useEffect(() => {
     const unsub = useSelectedLayerStore.subscribe((state) => {
       if (!excalidrawAPI) {
         return;
       }
-      // Annotation ids are Excalidraw element ids; data and raster ids are
-      // not, and Excalidraw must not be asked to select them.
-      const registryEntries = currentDocument().snapshot().overlays;
+      // Data and raster ids are not Excalidraw element ids.
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(state.selectedLayerIds)) {
         if (!isOverlayId(id)) {
           annotationIds[id] = true;
         }
       }
-      // Guard: compare against current Excalidraw selection
       const currentIds = excalidrawAPI.getAppState()?.selectedElementIds ?? {};
       const currentKeys = Object.keys(currentIds).sort().join(",");
       const nextKeys = Object.keys(annotationIds).sort().join(",");
@@ -646,49 +633,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         excalidrawAPI.updateScene({
           appState: { selectedElementIds: annotationIds },
         });
-      }
-
-      // For data layer selection → zoom to layer
-      for (const id of Object.keys(state.selectedLayerIds)) {
-        const entry = registryEntries.find((e) => e.id === id);
-        if (entry?.kind === "data") {
-          const fc = currentDocument().snapshot().featureCollections[id];
-          const m = useMapInstanceStore.getState().map;
-          if (m) {
-            // fitMapToLayer returns false (camera untouched) when the FC is
-            // missing or has no framable geometry.
-            fitMapToLayer(m, fc);
-          }
-        }
-        // For raster → zoom to bounds from corners
-        if (entry?.kind === "raster") {
-          const m = useMapInstanceStore.getState().map;
-          if (m && entry.corners) {
-            const box = {
-              west: entry.corners[0][0],
-              south: entry.corners[2][1],
-              east: entry.corners[1][0],
-              north: entry.corners[0][1],
-            };
-            fitMapToBox(m, box);
-          }
-        }
-        // For annotation → zoom to its geo-anchor bounds
-        if (!isOverlayId(id)) {
-          const m = useMapInstanceStore.getState().map;
-          if (m) {
-            const elements = excalidrawAPI.getSceneElements();
-            const element = elements.find((e) => e.id === id);
-            if (element && isGeoCustomData(element.customData)) {
-              const box = computeSceneBounds([
-                element as ExcalidrawElementLike,
-              ]);
-              if (box) {
-                fitMapToBox(m, box);
-              }
-            }
-          }
-        }
       }
     });
     return unsub;
@@ -706,31 +650,34 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         return;
       }
 
-      const registryEntries = currentDocument().snapshot().overlays;
-      const dataLayerIds = registryEntries
-        .filter((e) => e.kind === "data")
-        .map((e) => e.id);
+      const overlays = currentDocument().snapshot().overlays;
 
-      // Check data layer hits via queryRenderedFeatures
-      const features = map.queryRenderedFeatures(e.point, {
-        layers: dataLayerIds,
-      });
-      if (features.length > 0) {
-        const hitId = features[0].layer.id;
-        useSelectedLayerStore.getState().selectLayer(hitId);
-        return;
-      }
-
-      // Check raster hits via point-in-polygon on projected corners
-      const rasters = registryEntries.filter((e) => e.kind === "raster");
-      for (const r of rasters) {
-        if (!("corners" in r) || !r.corners) {
+      // One query per layer, top of the stack first. MapLibre answers a
+      // query that names a layer missing from the style with [] for every
+      // layer, so one rejected overlay must not blank the others.
+      const dataLayers = overlays
+        .filter((e) => e.kind === "data" && e.visible)
+        .sort((a, b) => b.order - a.order);
+      for (const entry of dataLayers) {
+        if (!map.getLayer(entry.id)) {
           continue;
         }
-        const corners = r.corners as RasterCorners;
-        const screenCorners = corners.map((c) =>
-          map.project(c as [number, number]),
-        );
+        const hit = map.queryRenderedFeatures(e.point, {
+          layers: [entry.id],
+        });
+        if (hit.length > 0) {
+          useSelectedLayerStore.getState().selectLayer(entry.id);
+          return;
+        }
+      }
+
+      // Rasters draw no features: test the point against the projected
+      // corners, top raster first, visible ones only.
+      const rasters = overlays
+        .filter((e): e is RasterLayerEntry => e.kind === "raster" && e.visible)
+        .sort((a, b) => b.order - a.order);
+      for (const r of rasters) {
+        const screenCorners = r.corners.map((c) => map.project(c));
         if (pointInPolygon(e.point, screenCorners)) {
           useSelectedLayerStore.getState().selectLayer(r.id);
           return;
@@ -786,8 +733,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
   useGeoAnchor(map, excalidrawAPI);
 
-  // Draw the open document's data and raster layers on the map.
-  useLayerRegistrySync(map);
+  // Draw the open document's overlays, and the live collaboration layer, on
+  // the map. This is the only writer of the overlay part of the style.
+  useMapOverlays(map, yjsLayer.features);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
@@ -938,7 +886,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   }, [excalidrawAPI]);
   const { importFile } = useDataFileImport(
     rootRef,
-    map,
     addDataLayer,
     openSheetPanelForImport,
     addRasterLayer,
@@ -958,7 +905,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     input.type = "file";
     // FU-1: .tif/.tiff/.geotiff added with the raster importer. A format
     // missing here is invisible in the picker even though a drop would work.
-    input.accept = ".geojson,.csv,.zip,.kml,.kmz,.gpx,.tif,.tiff,.geotiff";
+    input.accept =
+      ".geojson,.json,.csv,.zip,.kml,.kmz,.gpx,.tif,.tiff,.geotiff";
     input.style.display = "none";
     let settled = false;
     const settle = () => {
@@ -982,15 +930,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     input.click();
   }, [importFile]);
 
-  // Phase 5 Task 9 — Collab data layer: renders the live Yjs FeatureCollection
-  // as a MapLibre source+layer (extracted to useCollabDataLayer hook).
-  useCollabDataLayer(map, yjsLayer.features);
-
   // W-C — Convert annotation → data layer, via the element right-click
   // context menu (registered internally). Extracted to useConvertToDataLayer
   // hook; its returned currentConvertibleSelection/handleConvert pair has no
   // consumer here today (no MainMenu item wires it — see the hook's header).
-  useConvertToDataLayer(map, excalidrawAPI, addDataLayer, toast);
+  useConvertToDataLayer(excalidrawAPI, addDataLayer, toast);
 
   // Register the LayerPanel as a tab inside Excalidraw's DefaultSidebar
   // (the sidebar that hosts Library + canvas Search). Replaces the

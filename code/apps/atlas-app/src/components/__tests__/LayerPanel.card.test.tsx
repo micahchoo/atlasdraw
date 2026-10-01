@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -29,6 +30,14 @@ import {
   currentDocument,
   openDocument,
 } from "../../state/document";
+
+import { bindScene } from "../../state/scene";
+import { useOverlayReport } from "../../hooks/useMapOverlays";
+import { useSelectedLayerStore } from "../../state/selectedLayer";
+import {
+  geoRect,
+  makeFakeExcalidraw,
+} from "../../state/__tests__/fixtures/documentWorld";
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
 
@@ -304,6 +313,32 @@ describe("data layer card — the three missing actions", () => {
       [-122.6, 47.5],
       [-122.1, 47.9],
     ]);
+  });
+
+  it("zoom to layer on an annotation fits the map to the shape and leaves the selection alone", () => {
+    const fx = makeFakeExcalidraw([geoRect("g1")]);
+    let unbind = () => {};
+    act(() => {
+      unbind = bindScene(fx.api);
+    });
+    const fitBounds = vi.fn();
+    useMapInstanceStore.setState({
+      map: { fitBounds } as unknown as maplibregl.Map,
+    });
+    useSelectedLayerStore.getState().clearSelection();
+
+    render(<LayerPanel />);
+    fireEvent.click(screen.getByTestId("layer-menu-g1"));
+    fireEvent.click(screen.getByTestId("layer-zoom-g1"));
+
+    expect(fitBounds).toHaveBeenCalledTimes(1);
+    const [[west, south], [east, north]] = fitBounds.mock.calls[0][0];
+    expect(west).toBeLessThanOrEqual(13.4);
+    expect(east).toBeGreaterThanOrEqual(13.4);
+    expect(south).toBeLessThanOrEqual(52.5);
+    expect(north).toBeGreaterThanOrEqual(52.5);
+    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({});
+    unbind();
   });
 
   it("zoom to layer is a no-op — not a crash — with no map yet", () => {
@@ -609,7 +644,8 @@ describe("scale (step 6)", () => {
       .slice()
       .sort((a, b) => a.order - b.order)
       .map((e) => e.label);
-    expect(order.slice(3, 7)).toEqual(["Road 3", "Road 5", "Road 4", "Road 6"]);
+    // "Up" is up the map's stack: Road 5 now draws over Road 6.
+    expect(order.slice(3, 7)).toEqual(["Road 3", "Road 4", "Road 6", "Road 5"]);
   });
 });
 
@@ -756,5 +792,26 @@ describe("annotations are not data layers", () => {
     expect(screen.getByTestId("layer-menu-el-1")).toBeTruthy();
     expect(screen.queryByTestId("style-panel")).toBeNull();
     expect(screen.getByText("MyShape")).toBeTruthy();
+  });
+});
+
+describe("an overlay the map did not draw", () => {
+  it("shows a badge with MapLibre's reason, and only for that layer", () => {
+    const id = seedParcels();
+    seedParcels("dl:other");
+    useOverlayReport.setState({
+      report: new Map([
+        [id, { status: "rejected", reason: "Branch labels must be unique." }],
+        ["dl:other", { status: "landed" }],
+      ]),
+    });
+
+    render(<LayerPanel />);
+
+    expect(
+      screen.getByTestId(`layer-rejected-${id}`).getAttribute("aria-label"),
+    ).toBe("Not drawn: Branch labels must be unique.");
+    expect(screen.queryByTestId("layer-rejected-dl:other")).toBeNull();
+    useOverlayReport.setState({ report: new Map() });
   });
 });

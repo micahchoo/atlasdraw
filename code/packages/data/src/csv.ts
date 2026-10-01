@@ -17,6 +17,9 @@
 // THRESHOLD: 0.8 (≥10 rows) / 1.0 (<10 rows). Small datasets get the strict
 // 100% bar because the law of small numbers makes 0.8-of-5 unstable.
 //
+// A column whose every non-empty value is a number becomes numbers; see
+// `numericColumns`.
+//
 // Address column detection is name-only (address|location|street|addr,
 // case-insensitive) and feeds the `_addressColumn_v1` property hint that
 // downstream geocoding consumes.
@@ -61,6 +64,8 @@ export interface CsvReadOptions {
    * instead of the user discovering the gap by counting dots.
    */
   onStats?: (stats: CsvImportStats) => void;
+  /** Called after each geocoded address, with the count done and the total. */
+  onGeocodeProgress?: (done: number, total: number) => void;
 }
 
 /** Row accounting for one `parseCSV` call. `read = emitted + dropped`. */
@@ -168,6 +173,7 @@ export async function parseCSV(
   }
   const features: Feature[] = [];
   const pending: PendingRow[] = [];
+  const numberColumns = numericColumns(headers, rows);
 
   for (const row of rows) {
     const lat = hasCoordCols ? toFiniteNumber(row[latCol!]) : null;
@@ -180,7 +186,9 @@ export async function parseCSV(
       if (hasCoordCols && (key === latCol || key === lngCol)) {
         continue;
       }
-      properties[key] = row[key];
+      properties[key] = numberColumns.has(key)
+        ? toFiniteNumber(row[key])
+        : row[key];
     }
     if (addressCol !== undefined) {
       properties._addressColumn_v1 = addressCol;
@@ -211,12 +219,15 @@ export async function parseCSV(
   // courtesy too. Null geocoder results drop the row (do NOT throw).
   // Per-row network errors also drop the row to keep imports resilient.
   if (opts?.geocoder && pending.length > 0) {
+    let geocoded = 0;
+    opts.onGeocodeProgress?.(0, pending.length);
     const resolved = await runWithConcurrency(
       pending,
       GEOCODE_MAX_CONCURRENCY,
       async (p) => {
         try {
           const r = await opts.geocoder!.geocode(p.address);
+          opts.onGeocodeProgress?.(++geocoded, pending.length);
           if (!r) {
             return null;
           }
@@ -232,6 +243,7 @@ export async function parseCSV(
           };
           return feat;
         } catch {
+          opts.onGeocodeProgress?.(++geocoded, pending.length);
           return null;
         }
       },
@@ -286,6 +298,39 @@ async function runWithConcurrency<T, R>(
 
 // ---------------------------------------------------------------------------
 // internal
+
+const NUMBER_LITERAL_RE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+/** "02134" is a code, not a number: the zero would be lost. */
+const LEADING_ZERO_RE = /^[-+]?0\d/;
+
+/**
+ * The columns whose every non-empty value is a number. Their values become
+ * numbers (an empty cell becomes null), so a graduated style can use them.
+ * A column with a code such as "02134" stays text.
+ */
+function numericColumns(headers: string[], rows: Row[]): Set<string> {
+  const out = new Set<string>();
+  for (const col of headers) {
+    let any = false;
+    let numeric = true;
+    for (const row of rows) {
+      const v = row[col];
+      const text = typeof v === "string" ? v.trim() : "";
+      if (text === "") {
+        continue;
+      }
+      if (!NUMBER_LITERAL_RE.test(text) || LEADING_ZERO_RE.test(text)) {
+        numeric = false;
+        break;
+      }
+      any = true;
+    }
+    if (any && numeric) {
+      out.add(col);
+    }
+  }
+  return out;
+}
 
 function pickColumnByValue(
   headers: string[],

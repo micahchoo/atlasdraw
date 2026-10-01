@@ -8,7 +8,7 @@
 // Everything here runs through the production composition: the real
 // usePersistenceWiring (load -> loadDocument -> autosave/forceSave through
 // toFile), the real PersistenceStore on fake-indexeddb, the real
-// layer registry, useLayerRegistrySync and useExcalidrawChangeHandler. Only
+// layer registry, useMapOverlays and useExcalidrawChangeHandler. Only
 // Excalidraw and MapLibre are stand-ins (fixtures/documentWorld.ts).
 //
 // If a fix moves a responsibility to a hook this file does not mount (for
@@ -30,7 +30,8 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { usePersistenceWiring } from "../../hooks/usePersistenceWiring";
-import { useLayerRegistrySync } from "../../hooks/useLayerRegistrySync";
+import { useMapOverlays } from "../../hooks/useMapOverlays";
+import { FakeMapLibre } from "../../lib/__tests__/fixtures/fakeMapLibre";
 import { useExcalidrawChangeHandler } from "../../hooks/useExcalidrawChangeHandler";
 import { FakeMercatorMap } from "../../hooks/geoOpFuzz.harness";
 import { useShareLink } from "../../hooks/useShareLink";
@@ -131,6 +132,29 @@ async function autosaveBytes(): Promise<Uint8Array> {
   return new Uint8Array(stored.bytes);
 }
 
+/**
+ * A camera fake that also holds a style, because the editor's map overlays
+ * write one. Camera calls go to FakeCameraMap, style calls to FakeMapLibre.
+ */
+function cameraMap(
+  camera: ConstructorParameters<typeof FakeCameraMap>[0],
+): FakeCameraMap {
+  const cam = new FakeCameraMap(camera);
+  const style = new FakeMapLibre() as unknown as Record<
+    string | symbol,
+    unknown
+  >;
+  return new Proxy(cam, {
+    get(target, key) {
+      if (key in target) {
+        return Reflect.get(target, key);
+      }
+      const value = style[key];
+      return typeof value === "function" ? value.bind(style) : value;
+    },
+  });
+}
+
 /** The document currently in the autosave slot, read by the real reader. */
 async function autosaveDocument(): Promise<AtlasdrawDocument> {
   const reader = createPersistenceStore();
@@ -153,7 +177,7 @@ function mountEditor(
   return renderHook(() => {
     usePersistenceWiring(api, NOTIFY);
     useSceneBinding(api);
-    useLayerRegistrySync(map);
+    useMapOverlays(map);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
       map,
@@ -287,7 +311,7 @@ describe("save determinism", () => {
 
 describe("camera and basemap persistence", () => {
   it("saves the live camera and the chosen basemap", async () => {
-    const map = new FakeCameraMap({
+    const map = cameraMap({
       center: [-74.0, 40.7],
       zoom: 12.5,
       bearing: 15,
@@ -314,7 +338,7 @@ describe("camera and basemap persistence", () => {
 
   it("restores the saved camera and basemap on reload", async () => {
     await seedAutosave(savedDocument()); // camera [13.4, 52.5] z11 b30, protomaps-dark
-    const map = new FakeCameraMap({ center: [0, 0], zoom: 2 });
+    const map = cameraMap({ center: [0, 0], zoom: 2 });
     useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
     const fx = makeFakeExcalidraw();
     mountEditor(fx.api, map as unknown as maplibregl.Map);

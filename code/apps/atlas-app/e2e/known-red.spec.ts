@@ -103,10 +103,6 @@ test.describe("known-red", () => {
   test("W5/W7: clicking a shape with the selection tool leaves the camera alone", async ({
     page,
   }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W5/W7 select zooms): clicking a shape with the selection tool zooms the map (4 -> ~6.2). Remove when fixed.",
-    );
     await openEditor(page);
     await drawRectangle(page, RECT);
     await setTool(page, "selection");

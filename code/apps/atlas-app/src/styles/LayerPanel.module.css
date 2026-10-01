@@ -404,6 +404,12 @@
   color: #92400e;
 }
 
+/* The map did not draw this overlay. The reason is in the title. */
+.kindBadgeRejected {
+  background: var(--ad-danger);
+  color: #ffffff;
+}
+
 /* Icon button — atlasdraw-ui-conventions §Buttons type 2 (32px square).
  * width/height fall through to the Excalidraw `--default-button-size` token
  * inside the .excalidraw scope; the literal is a defensive fallback so the

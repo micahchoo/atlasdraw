@@ -5,7 +5,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { compileLayer, compilePaint } from "../style-compiler";
+import {
+  compileLayer,
+  compileLayers,
+  compilePaint,
+  outlineLayerId,
+} from "../style-compiler";
 
 import type { LayerStyle } from "../style";
 
@@ -82,17 +87,22 @@ describe("compileLayer — expressions (A6)", () => {
     const paint = (spec as any).paint;
 
     expect(paint["fill-color"]).toEqual([
-      "interpolate",
-      ["linear"],
-      ["get", "population"],
-      0,
-      "#fef0d9",
-      100,
-      "#fdcc8a",
-      500,
-      "#fc8d59",
-      1000,
-      "#d7301f",
+      "case",
+      ["==", ["typeof", ["get", "population"]], "number"],
+      [
+        "interpolate",
+        ["linear"],
+        ["get", "population"],
+        0,
+        "#fef0d9",
+        100,
+        "#fdcc8a",
+        500,
+        "#fc8d59",
+        1000,
+        "#d7301f",
+      ],
+      "#cccccc",
     ]);
   });
 
@@ -165,13 +175,10 @@ describe("compileLayer — expressions (A6)", () => {
 
     expect(spec.type).toBe("circle");
     expect(paint["circle-color"]).toEqual([
-      "interpolate",
-      ["linear"],
-      ["get", "score"],
-      0,
-      "#000000",
-      1,
-      "#ffffff",
+      "case",
+      ["==", ["typeof", ["get", "score"]], "number"],
+      ["interpolate", ["linear"], ["get", "score"], 0, "#000000", 1, "#ffffff"],
+      "#888888",
     ]);
   });
 
@@ -223,7 +230,42 @@ describe("compilePaint — single source of paint truth", () => {
     expect(Object.keys(compilePaint({}, "fill"))).toEqual([
       "fill-color",
       "fill-opacity",
-      "fill-outline-color",
+    ]);
+  });
+});
+
+describe("compileLayers — every layer of one data layer", () => {
+  const STYLE: LayerStyle = {
+    fillColor: "#0aa",
+    strokeColor: "#123456",
+    strokeWidth: 3,
+    opacity: 0.4,
+  };
+
+  it("gives a polygon layer an outline line in the stroke colour and width", () => {
+    const layers = compileLayers("dl:p", STYLE, "fill");
+    expect(layers.map((l) => [l.id, l.type])).toEqual([
+      ["dl:p", "fill"],
+      [outlineLayerId("dl:p"), "line"],
+    ]);
+    expect(layers[1]).toMatchObject({
+      source: "dl:p",
+      paint: { "line-color": "#123456", "line-width": 3, "line-opacity": 1 },
+    });
+  });
+
+  it("draws a line layer in the stroke colour", () => {
+    const layers = compileLayers("dl:l", STYLE, "line");
+    expect(layers).toHaveLength(1);
+    expect(layers[0]).toMatchObject({
+      type: "line",
+      paint: { "line-color": "#123456", "line-width": 3 },
+    });
+  });
+
+  it("gives a point layer one circle layer", () => {
+    expect(compileLayers("dl:c", STYLE, "circle").map((l) => l.type)).toEqual([
+      "circle",
     ]);
   });
 });

@@ -37,11 +37,32 @@ interface ToastItem {
   message: string;
   /** True during exit animation; removed after animation completes. */
   exiting: boolean;
+  /** A button beside the message, for example Cancel on a running import. */
+  action?: ToastAction;
+}
+
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface ToastOptions {
+  /** Stays until dismissed in code; for work that is still running. */
+  sticky?: boolean;
+  action?: ToastAction;
+}
+
+/** A sticky toast for work in progress. */
+export interface ProgressToast {
+  update: (message: string) => void;
+  close: () => void;
 }
 
 interface ToastContextValue {
   /** Queue a toast. Returns the id for early dismissal. */
-  add: (kind: ToastKind, message: string) => number;
+  add: (kind: ToastKind, message: string, options?: ToastOptions) => number;
+  /** Change the message of a toast that is shown. */
+  update: (id: number, message: string) => void;
   dismiss: (id: number) => void;
 }
 
@@ -62,6 +83,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const exitTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Work that ends after an unmount (an import, for example) can still close
+  // its toast. It must not start a timer that outlives the provider.
+  const mountedRef = useRef(true);
 
   const dismiss = useCallback((id: number) => {
     // Clear any pending auto-dismiss timer.
@@ -71,36 +96,61 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       timersRef.current.delete(id);
     }
 
+    if (!mountedRef.current) {
+      return;
+    }
     setToasts((prev) =>
       prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)),
     );
 
-    // Remove after exit animation.
-    setTimeout(() => {
+    // Remove after exit animation. Kept with the other timers, so an
+    // unmount cancels it.
+    const exit = setTimeout(() => {
+      exitTimersRef.current.delete(exit);
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 160);
+    exitTimersRef.current.add(exit);
   }, []);
 
   const add = useCallback(
-    (kind: ToastKind, message: string): number => {
+    (kind: ToastKind, message: string, options: ToastOptions = {}): number => {
       const id = nextId++;
+      if (!mountedRef.current) {
+        return id;
+      }
 
-      setToasts((prev) => [...prev, { id, kind, message, exiting: false }]);
+      setToasts((prev) => [
+        ...prev,
+        { id, kind, message, exiting: false, action: options.action },
+      ]);
 
-      // Auto-dismiss after 4 seconds.
-      const timer = setTimeout(() => dismiss(id), 4000);
-      timersRef.current.set(id, timer);
+      // Auto-dismiss after 4 seconds, unless the work is still running.
+      if (!options.sticky) {
+        const timer = setTimeout(() => dismiss(id), 4000);
+        timersRef.current.set(id, timer);
+      }
 
       return id;
     },
     [dismiss],
   );
 
+  const update = useCallback((id: number, message: string) => {
+    if (!mountedRef.current) {
+      return;
+    }
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, message } : t)));
+  }, []);
+
   // Cleanup timers on unmount.
   useEffect(() => {
     const timers = timersRef.current;
+    const exitTimers = exitTimersRef.current;
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       timers.forEach((t) => clearTimeout(t));
+      exitTimers.forEach((t) => clearTimeout(t));
     };
   }, []);
 
@@ -117,7 +167,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   // Stable context identity: consumers hang effects off useToast()'s
   // callbacks (e.g. MapEditor's persistence wiring) — a fresh value object
   // per render would re-fire all of them on every toast.
-  const contextValue = React.useMemo(() => ({ add, dismiss }), [add, dismiss]);
+  const contextValue = React.useMemo(
+    () => ({ add, update, dismiss }),
+    [add, update, dismiss],
+  );
 
   return (
     <ToastContext.Provider value={contextValue}>
@@ -149,6 +202,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   .join(" ")}
               />
               <span className={styles.message}>{t.message}</span>
+              {t.action && (
+                <button
+                  type="button"
+                  className={styles.action}
+                  data-testid="toast-action"
+                  onClick={t.action.onClick}
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
                 type="button"
                 className={styles.dismiss}
@@ -180,6 +243,20 @@ export function useToast() {
     error: useCallback((msg: string) => ctx.add("error", msg), [ctx]),
     info: useCallback((msg: string) => ctx.add("info", msg), [ctx]),
     warning: useCallback((msg: string) => ctx.add("warning", msg), [ctx]),
+    /** A sticky info toast with a Cancel button, until `close`. */
+    progress: useCallback(
+      (msg: string, onCancel: () => void): ProgressToast => {
+        const id = ctx.add("info", msg, {
+          sticky: true,
+          action: { label: "Cancel", onClick: onCancel },
+        });
+        return {
+          update: (next) => ctx.update(id, next),
+          close: () => ctx.dismiss(id),
+        };
+      },
+      [ctx],
+    ),
     dismiss: ctx.dismiss,
   };
 }

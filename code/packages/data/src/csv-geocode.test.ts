@@ -206,3 +206,26 @@ describe("parseCSV — geocoder ON", () => {
     ).resolves.toBeDefined();
   });
 });
+
+describe("parseCSV — geocoding progress", () => {
+  it("reports each address done, against the total", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(photonOk([10, 20]))
+      .mockResolvedValueOnce(photonEmpty());
+    const g = new PhotonGeocoder(
+      { endpoint: "https://photon.example" },
+      fetchMock as unknown as typeof fetch,
+    );
+    const seen: Array<[number, number]> = [];
+    await parseCSV(csvBlob("address,name\n1 Main St,Foo\n2 Other St,Bar"), {
+      geocoder: g,
+      onGeocodeProgress: (done, total) => seen.push([done, total]),
+    });
+    expect(seen).toEqual([
+      [0, 2],
+      [1, 2],
+      [2, 2],
+    ]);
+  });
+});

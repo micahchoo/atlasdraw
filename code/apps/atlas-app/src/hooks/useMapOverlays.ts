@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// useMapOverlays — draw the open document's overlays on a map.
+//
+// The document is the input; lib/mapOverlays is the only writer. This hook
+// builds the spec from the open document (and the live collaboration layer),
+// hands it to the map's reconciler, and publishes what landed for the layer
+// panel. It applies again:
+//   - after every document change and when another document opens;
+//   - when the collaboration layer changes;
+//   - on every "styledata", so a new basemap style, which drops every custom
+//     layer, gets the overlays back. The reconciler is level-triggered, so an
+//     apply with nothing to change writes nothing.
+
+import { useEffect, useRef } from "react";
+import { create } from "zustand";
+
+import { currentDocument, followDocument } from "../state/document";
+import {
+  createMapOverlays,
+  overlaySpec,
+  type ApplyReport,
+  type LayerOutcome,
+  type MapOverlays,
+  type OverlaySpec,
+  type StyleTarget,
+} from "../lib/mapOverlays";
+
+import type maplibregl from "maplibre-gl";
+import type { FeatureCollection } from "geojson";
+
+/** One reconciler per map, so a remount does not lose what is on the map. */
+const reconcilers = new WeakMap<object, MapOverlays>();
+
+function overlaysFor(map: maplibregl.Map): MapOverlays {
+  let overlays = reconcilers.get(map);
+  if (!overlays) {
+    overlays = createMapOverlays(map as unknown as StyleTarget);
+    reconcilers.set(map, overlays);
+  }
+  return overlays;
+}
+
+/** What the last apply did to each overlay, for the layer panel. */
+export const useOverlayReport = create<{ report: ApplyReport }>(() => ({
+  report: new Map(),
+}));
+
+/** The outcome for one overlay, or undefined before it was applied. */
+export function useOverlayOutcome(id: string): LayerOutcome | undefined {
+  return useOverlayReport((s) => s.report.get(id));
+}
+
+export function useMapOverlays(
+  map: maplibregl.Map | null,
+  collab: FeatureCollection | null = null,
+): void {
+  const collabRef = useRef(collab);
+  collabRef.current = collab;
+  const lastSpec = useRef<OverlaySpec | null>(null);
+
+  const apply = (target: maplibregl.Map, spec: OverlaySpec): void => {
+    lastSpec.current = spec;
+    useOverlayReport.setState({ report: overlaysFor(target).apply(spec) });
+  };
+  const applyRef = useRef(apply);
+  applyRef.current = apply;
+
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const unfollow = followDocument((doc) =>
+      applyRef.current(
+        map,
+        overlaySpec(doc.snapshot(), { collab: collabRef.current }),
+      ),
+    );
+    const onStyleData = () => {
+      if (lastSpec.current) {
+        applyRef.current(map, lastSpec.current);
+      }
+    };
+    map.on("styledata", onStyleData);
+    return () => {
+      unfollow();
+      map.off("styledata", onStyleData);
+    };
+  }, [map]);
+
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    applyRef.current(
+      map,
+      overlaySpec(currentDocument().snapshot(), { collab }),
+    );
+  }, [map, collab]);
+}

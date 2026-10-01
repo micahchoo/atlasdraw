@@ -209,7 +209,7 @@ describe("parseCSV — properties + address column", () => {
     );
     expect(fc.features[0]!.properties).toEqual({
       name: "NYC",
-      population: "8000000",
+      population: 8000000,
       country: "US",
     });
   });
@@ -316,5 +316,36 @@ describe("parseCSV — onStats row accounting", () => {
   it("is optional — omitting it is the pre-existing behaviour", async () => {
     const fc = await parseCSV(csvBlob("name,lat,lng\na,1,2\n"));
     expect(fc.features).toHaveLength(1);
+  });
+});
+
+describe("parseCSV — number columns", () => {
+  it("makes a column of numeric values numbers, so it can be graduated", async () => {
+    const fc = await parseCSV(
+      csvBlob(
+        "lat,lng,population,name\n10,20,1500,a\n11,21,2.5e3,b\n12,22,,c\n",
+      ),
+    );
+    expect(fc.features.map((f) => f.properties?.population)).toEqual([
+      1500,
+      2500,
+      null,
+    ]);
+    expect(fc.features.map((f) => f.properties?.name)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps a column as text when one value is not a number", async () => {
+    const fc = await parseCSV(csvBlob("lat,lng,code\n10,20,12\n11,21,12b\n"));
+    expect(fc.features.map((f) => f.properties?.code)).toEqual(["12", "12b"]);
+  });
+
+  it("keeps codes with leading zeros as text", async () => {
+    const fc = await parseCSV(
+      csvBlob("lat,lng,zip\n10,20,02134\n11,21,10001\n"),
+    );
+    expect(fc.features.map((f) => f.properties?.zip)).toEqual([
+      "02134",
+      "10001",
+    ]);
   });
 });

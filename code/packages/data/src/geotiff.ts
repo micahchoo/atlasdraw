@@ -7,12 +7,19 @@
 // clearly.
 //
 // SCOPE, and it is narrow on purpose. This reads north-up GeoTIFFs in WGS84 or
-// Web Mercator and rejects everything else by name. It does not warp pixels.
-// Reprojecting a raster properly means resampling every pixel through an
-// inverse transform, which needs proj4 and a real decision about quality; a
-// half version that stretches a UTM extent to fit a lng/lat box would put the
-// image in roughly the right place and quietly wrong everywhere inside it,
-// which is worse than saying no.
+// Web Mercator and rejects everything else by name. A raster in another CRS
+// needs a real reprojection (proj4 and a quality decision); a half version
+// that stretches a UTM extent into a lng/lat box would be wrong everywhere
+// inside it, which is worse than saying no.
+//
+// MapLibre's image source stretches the picture linearly between its four
+// corners in Web Mercator. A Web Mercator file already has that spacing. A
+// WGS84 file has rows equally spaced in latitude, so this module moves its
+// rows to Mercator spacing (`toMercatorRows`). Columns need nothing: both
+// projections space longitude equally.
+//
+// A rotated, sheared or south-up file is refused with the command that fixes
+// it, because a north-up envelope of a rotated grid draws in the wrong place.
 
 import { fromArrayBuffer } from "geotiff";
 
@@ -31,7 +38,13 @@ import { fromArrayBuffer } from "geotiff";
  */
 export const RASTER_MAX_DIM = 2048;
 
-/** EPSG codes this can place without warping any pixels. */
+/** The command that warps a GeoTIFF north-up, for the refusal messages. */
+const WARP_HINT = "gdalwarp -t_srs EPSG:3857 in.tif out.tif";
+
+/** Web Mercator shows latitudes up to this value, and no further. */
+const MERCATOR_MAX_LAT = 85.051129;
+
+/** EPSG codes this can place. */
 const EPSG_WGS84 = 4326;
 const EPSG_WEB_MERCATOR = 3857;
 /**
@@ -202,7 +215,36 @@ export async function decodeGeoTiff(
     throw new UnsupportedRasterCrsError(label);
   }
 
-  const bbox = image.getBoundingBox();
+  const directory = image.getFileDirectory() as {
+    getValue?: (name: string) => unknown;
+  };
+  const transformation = directory.getValue?.("ModelTransformation") as
+    | ArrayLike<number>
+    | undefined;
+  if (transformation && (transformation[1] !== 0 || transformation[4] !== 0)) {
+    throw new RasterDecodeError(
+      "this GeoTIFF is rotated or sheared, so it would draw in the wrong " +
+        `place. Warp it north-up first, for example: ${WARP_HINT}`,
+    );
+  }
+
+  let bbox: number[];
+  let resolution: number[];
+  try {
+    bbox = image.getBoundingBox();
+    resolution = image.getResolution();
+  } catch {
+    throw new RasterDecodeError(
+      "this GeoTIFF has a CRS but no position (no tiepoint and no " +
+        "transformation), so its corners cannot be placed",
+    );
+  }
+  if (resolution[0] < 0 || resolution[1] > 0) {
+    throw new RasterDecodeError(
+      "this GeoTIFF is stored south-up or mirrored, so it would draw upside " +
+        `down. Warp it north-up first, for example: ${WARP_HINT}`,
+    );
+  }
   if (bbox.length < 4 || bbox.some((n) => !Number.isFinite(n))) {
     throw new RasterDecodeError(
       "this GeoTIFF's bounding box is missing or not finite, so its corners cannot be placed",
@@ -225,6 +267,13 @@ export async function decodeGeoTiff(
   const [east, north] = isWebMercator
     ? webMercatorToLngLat(maxX, maxY)
     : [maxX, maxY];
+  if (north > MERCATOR_MAX_LAT || south < -MERCATOR_MAX_LAT) {
+    throw new RasterDecodeError(
+      `this image reaches latitude ${Math.max(north, -south).toFixed(1)}°, ` +
+        "but the map ends at 85.05°. Crop it to latitudes between -85 and 85 " +
+        "and try again.",
+    );
+  }
 
   const srcWidth = image.getWidth();
   const srcHeight = image.getHeight();
@@ -269,7 +318,7 @@ export async function decodeGeoTiff(
   }
 
   return {
-    rgba,
+    rgba: isWgs84 ? toMercatorRows(rgba, width, height, north, south) : rgba,
     width,
     height,
     // TL, TR, BR, BL.
@@ -281,6 +330,43 @@ export async function decodeGeoTiff(
     ],
     crs: label,
   };
+}
+
+/** Web Mercator y of a latitude, on the unit sphere. */
+function mercatorY(lat: number): number {
+  return Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+}
+
+/**
+ * Move the rows of an image whose rows are equally spaced in latitude so
+ * that they are equally spaced in Web Mercator y, which is how MapLibre
+ * draws an image source. Each output row takes the source row at its
+ * latitude (nearest row). Size and corners do not change.
+ */
+function toMercatorRows(
+  rgba: Uint8ClampedArray<ArrayBuffer>,
+  width: number,
+  height: number,
+  north: number,
+  south: number,
+): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(rgba.length);
+  const rowBytes = width * 4;
+  const yNorth = mercatorY(north);
+  const ySouth = mercatorY(south);
+  for (let row = 0; row < height; row++) {
+    const y = yNorth + ((row + 0.5) / height) * (ySouth - yNorth);
+    const lat = (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * (180 / Math.PI);
+    const source = Math.min(
+      height - 1,
+      Math.max(0, Math.floor(((north - lat) / (north - south)) * height)),
+    );
+    out.set(
+      rgba.subarray(source * rowBytes, (source + 1) * rowBytes),
+      row * rowBytes,
+    );
+  }
+  return out;
 }
 
 /**

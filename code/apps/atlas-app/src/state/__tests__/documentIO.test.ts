@@ -152,6 +152,7 @@ describe("toFile", () => {
         label: "Wells",
         visible: true,
         featureCount: 1,
+        geometryKind: "circle",
         style: { fillColor: "#0aa" },
         source: "data/layer-dl:wells.geojson",
         provenance: { sourceFile: "wells.csv", droppedCount: 2 },
@@ -264,6 +265,57 @@ describe("fromFile", () => {
     }
     return result.file;
   }
+
+  it("keeps a saved geometry kind, and decides it for a file without one", async () => {
+    const polygons: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: null },
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [0, 0],
+                [1, 0],
+                [1, 1],
+                [0, 0],
+              ],
+            ],
+          },
+        },
+      ],
+    } as unknown as FeatureCollection;
+    const layer = (id: string, extra: Record<string, unknown> = {}) => ({
+      kind: "data" as const,
+      id,
+      label: id,
+      visible: true,
+      featureCount: 2,
+      style: {},
+      source: `data/layer-${id}.geojson`,
+      ...extra,
+    });
+    const file = await v2File(
+      [layer("dl:old"), layer("dl:saved", { geometryKind: "line" })],
+      {
+        layers: new Map([
+          ["dl:old", polygons],
+          ["dl:saved", polygons],
+        ]),
+      },
+    );
+
+    const kinds = fromFile(file).overlays?.map((e) =>
+      e.kind === "data" ? [e.id, e.geometryKind] : [],
+    );
+    expect(kinds).toEqual([
+      ["dl:old", "fill"],
+      ["dl:saved", "line"],
+    ]);
+  });
 
   it("rebuilds layers with their payloads, visibility and provenance", async () => {
     const image = new Blob(["png"], { type: "image/png" });
