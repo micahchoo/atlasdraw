@@ -26,7 +26,7 @@ const ROOTS = [
 const ALLOWED = new Set(["apps/atlas-app/src/lib/mapOverlays.ts"]);
 
 const WRITE =
-  /\.(addLayer|addSource|removeLayer|removeSource|moveLayer|setPaintProperty|setLayoutProperty)\(/;
+  /\.(addLayer|addSource|removeLayer|removeSource|moveLayer|setPaintProperty|setLayoutProperty|setFilter)\(/;
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -54,7 +54,7 @@ function codeLines(text: string): string[] {
 }
 
 describe("map style writers", () => {
-  it("only lib/mapOverlays.ts adds, removes, moves or restyles map layers", () => {
+  it("only lib/mapOverlays.ts adds, removes, moves, restyles or filters map layers", () => {
     const writers: string[] = [];
     for (const root of ROOTS) {
       for (const file of sourceFiles(path.join(CODE, root))) {

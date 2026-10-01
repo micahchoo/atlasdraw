@@ -19,6 +19,8 @@ import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 type LayerState = {
   spec: Record<string, unknown>;
+  /** The live filter (setFilter changes it), or undefined. */
+  filter?: unknown;
   paint: Record<string, unknown>;
   layout: Record<string, unknown>;
 };
@@ -38,6 +40,15 @@ export class FakeMapLibre {
   /** Bottom-first, like Style#_order. */
   readonly order: string[] = [];
   readonly errors: string[] = [];
+  /**
+   * The style's glyphs URL. A symbol layer with text needs it: MapLibre's
+   * validator refuses `text-field` in a style without `glyphs`.
+   */
+  glyphs: string | null = null;
+
+  getGlyphs(): string | null {
+    return this.glyphs;
+  }
   private readonly errorListeners = new Set<ErrorListener>();
 
   on(type: string, fn: ErrorListener): this {
@@ -64,6 +75,7 @@ export class FakeMapLibre {
   private validateLayer(spec: Record<string, unknown>): string[] {
     const style = {
       version: 8,
+      ...(this.glyphs ? { glyphs: this.glyphs } : {}),
       sources: Object.fromEntries(this.sources),
       layers: [spec],
     } as unknown as StyleSpecification;
@@ -126,6 +138,7 @@ export class FakeMapLibre {
     this.order.splice(index, 0, id);
     this.layers.set(id, {
       spec,
+      filter: spec.filter,
       paint: { ...((spec.paint as Record<string, unknown>) ?? {}) },
       layout: { ...((spec.layout as Record<string, unknown>) ?? {}) },
     });
@@ -192,6 +205,34 @@ export class FakeMapLibre {
       return;
     }
     layer[bucket][name] = value;
+  }
+
+  setFilter(layerId: string, filter: unknown): void {
+    const layer = this.layers.get(layerId);
+    if (!layer) {
+      this.fire(`Cannot filter non-existing layer "${layerId}".`);
+      return;
+    }
+    const candidate: Record<string, unknown> = {
+      ...layer.spec,
+      paint: layer.paint,
+      layout: layer.layout,
+    };
+    if (filter === null || filter === undefined) {
+      delete candidate.filter;
+    } else {
+      candidate.filter = filter;
+    }
+    const errs = this.validateLayer(candidate);
+    if (errs.length > 0) {
+      errs.forEach((m) => this.fire(m));
+      return;
+    }
+    layer.filter = filter ?? undefined;
+  }
+
+  getFilter(layerId: string): unknown {
+    return this.layers.get(layerId)?.filter;
   }
 
   setPaintProperty(layerId: string, name: string, value: unknown): void {

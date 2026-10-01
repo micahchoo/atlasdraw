@@ -31,6 +31,31 @@ export type StyleExpression =
       fallback: string;
     };
 
+/**
+ * W9d — labels from one property of each feature. `size` is in pixels
+ * (6..48); `halo` draws a white outline round the text so it reads over any
+ * colour. Labels need the basemap's glyphs: the compiler draws none without
+ * a font (see `compileLayers`).
+ */
+export interface LabelStyle {
+  property: string;
+  size: number;
+  halo: boolean;
+}
+
+/** The comparisons a filter offers: =, ≠, <, >, contains. */
+export type FilterOp = "==" | "!=" | "<" | ">" | "contains";
+
+/**
+ * W9d — draw only the features whose `property` passes the comparison.
+ * `value` is kept as the user typed it; < and > read it as a number.
+ */
+export interface FilterStyle {
+  property: string;
+  op: FilterOp;
+  value: string;
+}
+
 export interface LayerStyle {
   fillColor?: string;
   strokeColor?: string;
@@ -41,4 +66,7 @@ export interface LayerStyle {
   // LayerStyle shape with optional fields is the project's forward-compat
   // convention; absent `expression` preserves Phase 2 literal-color behavior.
   expression?: StyleExpression;
+  // W9d — optional, same convention: absent means no labels, no filter.
+  label?: LabelStyle;
+  filter?: FilterStyle;
 }
