@@ -2,8 +2,9 @@
 // Phase 2 Wave 2b T12 — LayerPanel.
 //
 // Annotation rows are computed from the Excalidraw scene (state/annotations.ts)
-// and their commands write the element. Data and raster rows come from the
-// LayerRegistry Zustand store. Renders the panel BODY only — no Sidebar wrapper. The
+// and their commands write the element. Data and raster rows are the open
+// document's layers (state/document.ts) and their commands are document
+// commands. Renders the panel BODY only — no Sidebar wrapper. The
 // parent surface (DefaultSidebar via the atlasdraw fork's
 // `excalidrawAPI.registerSidebarTab` API) provides the dockable shell,
 // trigger button, and tab routing. MapEditor registers this component
@@ -50,11 +51,10 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
-import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
 import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { currentDocument, dispatch, useDocument } from "../state/document";
 import { useSelectedLayerStore } from "../state/selectedLayer";
 import { useAnnotationRows, useSceneStore } from "../state/scene";
 import {
@@ -72,11 +72,11 @@ import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
 
 import type {
-  LayerRegistryEntry,
   DataLayerEntry,
-  RasterLayerEntry,
   LayerStyle,
-} from "../state/layerRegistry";
+  OverlayEntry,
+  RasterLayerEntry,
+} from "../state/document";
 import type { AnnotationRow } from "../state/annotations";
 import type { FeatureCollection } from "geojson";
 
@@ -295,7 +295,7 @@ type LayerActions = {
 };
 
 /** A row in any section: a registry layer, or an annotation from the scene. */
-type PanelEntry = LayerRegistryEntry | AnnotationRow;
+type PanelEntry = OverlayEntry | AnnotationRow;
 
 interface LayerRowProps {
   entry: PanelEntry;
@@ -1066,7 +1066,7 @@ function DataLayerCard({
 }) {
   const { setVisibility, updateStyle } = mutators;
   const { id, label, visible, featureCount } = entry;
-  const fc = useDataLayerFCStore((s) => s.fcs[id]);
+  const fc = useDocument((s) => s.featureCollections[id]);
   const [renaming, setRenaming] = useState(false);
   const bodyId = `layer-card-body-${id}`;
 
@@ -1462,21 +1462,17 @@ function BasemapSection() {
 // LayerPanel
 // ---------------------------------------------------------------------------
 
-const byOrder = (a: LayerRegistryEntry, b: LayerRegistryEntry) =>
-  a.order - b.order;
+const byOrder = (a: OverlayEntry, b: OverlayEntry) => a.order - b.order;
 
 export function LayerPanel() {
-  const {
-    entries,
-    setVisibility,
-    reorder,
-    updateStyle,
-    remove,
-    // The user-typed-label path. Not updateAnnotationLabel, which is the
-    // generator's — going through that one would leave the rename open to
-    // being overwritten by the next scene change. See layerRegistry.ts.
-    renameLayer,
-  } = useLayerRegistry();
+  const entries = useDocument((s) => s.overlays);
+  const reorder = (id: string, order: number) =>
+    dispatch({ type: "reorder", id, order });
+  const updateStyle = (id: string, patch: Partial<LayerStyle>) =>
+    dispatch({ type: "restyle", id, patch });
+  const remove = (id: string) => dispatch({ type: "remove-layer", id });
+  const renameLayer = (id: string, label: string) =>
+    dispatch({ type: "rename-layer", id, label });
 
   const annotations = useAnnotationRows();
   const isAnnotation = (id: string) => annotations.some((r) => r.id === id);
@@ -1494,18 +1490,17 @@ export function LayerPanel() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
-  // Phase 6 A14b — aria-live announcements on layer-visibility toggles. We
-  // wrap setVisibility (not the underlying store) so the registry stays
-  // pure; the panel is the surface that decides when to announce.
+  // aria-live announcements on layer-visibility toggles. The panel is the
+  // surface that decides when to announce; the document only records.
   const announce = useAnnounce();
   const announcingSetVisibility = React.useCallback(
     (id: string, visible: boolean) => {
       const entry = entries.find((e) => e.id === id);
       const name = entry?.label ?? id;
-      setVisibility(id, visible);
+      dispatch({ type: "set-visibility", id, visible });
       announce(`Layer "${name}" ${visible ? "shown" : "hidden"}`);
     },
-    [entries, setVisibility, announce],
+    [entries, announce],
   );
 
   const mutators: Mutators = {
@@ -1566,7 +1561,7 @@ export function LayerPanel() {
       const map = useMapInstanceStore.getState().map;
 
       if (entry?.kind === "data") {
-        const fc = useDataLayerFCStore.getState().fcs[id];
+        const fc = currentDocument().snapshot().featureCollections[id];
         // Read both through getState() rather than subscribing: the panel does
         // not render differently because a map exists, and subscribing to every
         // FC would re-render all 25 cards on any import.

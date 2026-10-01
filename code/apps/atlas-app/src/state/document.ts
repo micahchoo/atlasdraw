@@ -22,6 +22,7 @@
 // map bridge (useLayerRegistrySync) depends on that: it finds a restyle by
 // comparing style objects.
 
+import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { ulid } from "ulid";
 
@@ -466,4 +467,38 @@ export function followDocument(listener: (doc: Document) => void): () => void {
     unsubscribeStore();
     unsubscribeDoc();
   };
+}
+
+/** Run a command on the open document. */
+export function dispatch(command: DocumentCommand): void {
+  currentDocument().dispatch(command);
+}
+
+/** Tell `onChange` about every change of the open document, or a swap. */
+function subscribeOpenDocument(onChange: () => void): () => void {
+  let doc = currentDocument();
+  let unsubscribeDoc = doc.subscribe(onChange);
+  const unsubscribeStore = useDocumentStore.subscribe((state) => {
+    if (state.doc !== doc) {
+      unsubscribeDoc();
+      doc = state.doc;
+      unsubscribeDoc = doc.subscribe(onChange);
+      onChange();
+    }
+  });
+  return () => {
+    unsubscribeStore();
+    unsubscribeDoc();
+  };
+}
+
+/**
+ * Read the open document in a component. The component renders again when
+ * the selected value changes. The selector must return a value the state
+ * already holds (a field, an entry), not a new object on each call.
+ */
+export function useDocument<T>(selector: (state: DocumentState) => T): T {
+  return useSyncExternalStore(subscribeOpenDocument, () =>
+    selector(currentDocument().snapshot()),
+  );
 }

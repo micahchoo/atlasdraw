@@ -6,8 +6,8 @@
 // `style.expression` (compiled by @atlasdraw/basemap's compileLayer — see A6).
 //
 // Reads the layer + first-feature properties via the existing
-// `useLayerRegistry` hook and `useDataLayerFCStore`. Writes through
-// `layerRegistry.updateStyle(id, patch)` — never mutates `style` directly.
+// open document (`useDocument`). Writes through a `restyle` command — never
+// mutates `style` directly.
 //
 // Sheet-panel step 4 (2026-07-30) — this stopped being a floating dialog and
 // became the symbology section of LayerPanel's expanded layer card. It used to
@@ -33,15 +33,13 @@ import React, { useMemo, useState } from "react";
 
 import type { StyleExpression } from "@atlasdraw/basemap";
 
-import { useLayerRegistry } from "../hooks/useLayerRegistry";
-
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { dispatch, useDocument } from "../state/document";
 
 import styles from "../styles/StylePanel.module.css";
 
 import { ColorRampPicker } from "./ColorRampPicker";
 
-import type { DataLayerEntry } from "../state/layerRegistry";
+import type { DataLayerEntry, LayerStyle } from "../state/document";
 
 // ---- stop-computation helpers (kept inline per Phase 6 constraint) ----------
 
@@ -121,11 +119,13 @@ const DEFAULT_RAMP = ["#fef0d9", "#fdcc8a", "#fc8d59", "#e34a33", "#b30000"];
 // ---- component --------------------------------------------------------------
 
 export function StylePanel({ layerId }: StylePanelProps) {
-  const registry = useLayerRegistry();
-  const entry = registry.entries.find(
+  const overlays = useDocument((s) => s.overlays);
+  const entry = overlays.find(
     (e): e is DataLayerEntry => e.kind === "data" && e.id === layerId,
   );
-  const fc = useDataLayerFCStore((s) => s.fcs[layerId]);
+  const fc = useDocument((s) => s.featureCollections[layerId]);
+  const restyle = (patch: Partial<LayerStyle>) =>
+    dispatch({ type: "restyle", id: layerId, patch });
 
   // Initial tab: derive from the existing style.expression (if any).
   const initialTab: Tab = entry?.style.expression
@@ -187,7 +187,7 @@ export function StylePanel({ layerId }: StylePanelProps) {
           <SingleColorTab
             entry={entry}
             onApply={(hex) =>
-              registry.updateStyle(layerId, {
+              restyle({
                 fillColor: hex,
                 expression: undefined,
               })
@@ -198,9 +198,7 @@ export function StylePanel({ layerId }: StylePanelProps) {
           <CategoricalTab
             entry={entry}
             allProps={allProps}
-            onApply={(expr) =>
-              registry.updateStyle(layerId, { expression: expr })
-            }
+            onApply={(expr) => restyle({ expression: expr })}
           />
         )}
         {tab === "graduated" && (
@@ -212,9 +210,7 @@ export function StylePanel({ layerId }: StylePanelProps) {
                 .map((f) => f.properties?.[prop])
                 .filter((v): v is number => typeof v === "number")
             }
-            onApply={(expr) =>
-              registry.updateStyle(layerId, { expression: expr })
-            }
+            onApply={(expr) => restyle({ expression: expr })}
           />
         )}
       </div>
