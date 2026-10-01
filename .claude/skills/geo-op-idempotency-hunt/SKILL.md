@@ -196,8 +196,9 @@ Ordered by preference:
 
 Hard constraints:
 - `CoordinateSync._projectElement` and `useGeoAnchor`'s reanchor logic are
-  **deliberately separate** (different direction, different lifecycle). Do
-  not merge them — see `.claude/rules/canonicalization-verify-first.md`.
+  **deliberately separate** (forward vs. reverse projection, live camera vs.
+  drawn element). Their shared layer is `projection.ts` + `scaleMode.ts`;
+  keep the two switches apart.
 - Never make screen coordinates authoritative to "simplify" — that inverts
   the source of truth.
 - Don't widen epsilons to make a drift test pass. An epsilon change needs a

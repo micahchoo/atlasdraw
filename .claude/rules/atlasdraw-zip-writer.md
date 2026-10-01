@@ -1,5 +1,5 @@
 ---
-scope: code/packages/data/src/atlasdraw.ts
+paths: code/packages/data/src/atlasdraw.ts
 tags: [file-format, perf, invariant]
 priority: high
 source: hand-written

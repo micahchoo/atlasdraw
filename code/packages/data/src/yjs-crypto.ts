@@ -6,9 +6,12 @@
 // See ADR-0010 for the threat model:
 //   docs/architecture/adr/0010-yjs-e2ee-threat-model.md
 //
-// Escalation E-01 (docs/decisions/escalations.md) documents the structural
+// Escalation E-01 (code/decisions/escalations.md) documents the structural
 // conflict between setupWSConnection and payload encryption. Option C was
 // selected on 2026-05-11: this module ships as a tested but unwired stub.
+// It is not dead code — ADR-0010 considered deleting it and kept it. Nor is it
+// a copy of scene-crypto.ts: that one encrypts JSON scenes for Socket.IO, this
+// one raw Yjs update bytes for y-websocket.
 
 import { uint8ArrayToBase64Url, base64UrlToUint8Array } from "./base64url.js";
 

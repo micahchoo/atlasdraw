@@ -28,7 +28,7 @@
     {
       "id": 5,
       "prompt": "Refactor CoordinateSync and useGeoAnchor — they both have the same point/bbox/polyline switch, looks like copy-paste. Merge them into one shared reprojection function.",
-      "expected_output": "NEGATIVE-ISH: the canonicalization-verify-first rule governs (the two switches are deliberately separate — different direction and lifecycle; do not merge). If geo-op-idempotency-hunt loads via path triggers, it must reinforce the do-not-merge constraint, not perform the merge.",
+      "expected_output": "NEGATIVE-ISH: the skill's hard constraint governs (the two switches are deliberately separate — different direction and lifecycle; do not merge). If geo-op-idempotency-hunt loads via path triggers, it must reinforce the do-not-merge constraint, not perform the merge.",
       "files": []
     }
   ]
