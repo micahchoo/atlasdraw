@@ -1,10 +1,16 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { CODES, FONT_SIZES, STROKE_WIDTH } from "@atlasdraw/common";
+import {
+  CODES,
+  FONT_SIZES,
+  MAX_CANVAS_FONT_SIZE,
+  STROKE_WIDTH,
+} from "@atlasdraw/common";
 
 import { Excalidraw } from "../index";
 import { pickerStyleValue, scaleForeignElements } from "../atlasStyleScale";
+import { exportToSvg } from "../scene/export";
 
 import { API } from "./helpers/api";
 import { Keyboard, Pointer, UI } from "./helpers/ui";
@@ -358,5 +364,60 @@ describe("touch pinch with a host camera", () => {
     });
     pinch();
     expect(h.state.zoom.value).toBe(0.1);
+  });
+});
+
+describe("SVG text above the browser's font clamp", () => {
+  // Chromium clamps an SVG text's font-size to 10000px, as it does a canvas
+  // font: measured 2026-10-01, a 20480px <text> drew at 10000px. A
+  // font-size of at most MAX_CANVAS_FONT_SIZE in a scaled <text> draws at
+  // the full size. Library previews, copy-as-SVG in the embed and the
+  // publish dialog all export atlas text this way.
+  const textLines = async (fontSize: number) => {
+    const text = API.createElement({
+      type: "text",
+      text: "Ward 3\nnorth",
+      fontSize,
+      x: 0,
+      y: 0,
+    });
+    const svg = await exportToSvg(
+      [text],
+      { exportBackground: false, viewBackgroundColor: "#fff" },
+      null,
+      { skipInliningFonts: true },
+    );
+    return Array.from(svg.querySelectorAll("text")).map((t) => {
+      const scale = Number(
+        /scale\(([^)]+)\)/.exec(t.getAttribute("transform") ?? "")?.[1] ?? 1,
+      );
+      return {
+        fontSize: parseFloat(t.getAttribute("font-size")!),
+        // What the browser draws: the attributes times the scale.
+        drawn: {
+          fontSize: parseFloat(t.getAttribute("font-size")!) * scale,
+          x: Number(t.getAttribute("x")) * scale,
+          y: Number(t.getAttribute("y")) * scale,
+        },
+      };
+    });
+  };
+
+  it("writes the font at the clamp and scales it to the full size", async () => {
+    const big = 20 * 1024;
+    const lines = await textLines(big);
+    const reference = await textLines(20);
+    expect(lines).toHaveLength(2);
+    lines.forEach((line, i) => {
+      expect(line.fontSize).toBeLessThanOrEqual(MAX_CANVAS_FONT_SIZE);
+      expect(line.drawn.fontSize).toBeCloseTo(big, 6);
+      expect(line.drawn.x).toBeCloseTo(reference[i].drawn.x * 1024, 6);
+      expect(line.drawn.y).toBeCloseTo(reference[i].drawn.y * 1024, 6);
+    });
+  });
+
+  it("leaves a font below the clamp as upstream writes it", async () => {
+    const lines = await textLines(20);
+    expect(lines.map((l) => l.fontSize)).toEqual([20, 20]);
   });
 });
