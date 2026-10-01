@@ -87,25 +87,44 @@ export function renderedDataLayerIds(
  *
  * The export composites the live viewport at `width` x `height` CSS px, so an
  * element is in the image exactly when its screen box overlaps that rect.
- * Screen from scene is Excalidraw's own transform: `(scene + scroll) * zoom`.
+ * Screen from scene is Excalidraw's own transform: `(scene + scroll) * zoom`,
+ * then the turn of a map with a `bearing`: -bearing about the frame's centre,
+ * as the live drawing layer and the export (lib/mapView#renderDrawing) turn
+ * it. The turned box's bounding box is tested, so an element just beyond a
+ * corner can count as visible; a legend row too many is the safe error.
  */
 export function visibleAnnotationIds(
   elements: readonly ElementBounds[],
   appState: ViewportState,
   width: number,
   height: number,
+  bearing = 0,
 ): Set<string> {
   const { scrollX, scrollY } = appState;
   const zoom = appState.zoom.value;
+  const t = (-bearing * Math.PI) / 180;
+  const cos = Math.cos(t);
+  const sin = Math.sin(t);
+  const cx = width / 2;
+  const cy = height / 2;
+  const turn = (x: number, y: number) => ({
+    x: cx + (x - cx) * cos - (y - cy) * sin,
+    y: cy + (x - cx) * sin + (y - cy) * cos,
+  });
   const visible = new Set<string>();
   for (const el of elements) {
     if (el.isDeleted) {
       continue;
     }
-    const left = (el.x + scrollX) * zoom;
-    const top = (el.y + scrollY) * zoom;
-    const right = (el.x + el.width + scrollX) * zoom;
-    const bottom = (el.y + el.height + scrollY) * zoom;
+    const x0 = (el.x + scrollX) * zoom;
+    const y0 = (el.y + scrollY) * zoom;
+    const x1 = (el.x + el.width + scrollX) * zoom;
+    const y1 = (el.y + el.height + scrollY) * zoom;
+    const corners = [turn(x0, y0), turn(x1, y0), turn(x1, y1), turn(x0, y1)];
+    const left = Math.min(...corners.map((p) => p.x));
+    const right = Math.max(...corners.map((p) => p.x));
+    const top = Math.min(...corners.map((p) => p.y));
+    const bottom = Math.max(...corners.map((p) => p.y));
     // Touching the edge counts as visible: a zero-width element on the border
     // still puts ink on the page.
     if (right >= 0 && left <= width && bottom >= 0 && top <= height) {
@@ -213,6 +232,7 @@ export function exportLegendEntries(
       excalidrawAPI.getAppState(),
       width,
       height,
+      map.getBearing(),
     ),
     visibleRasterIds: visibleRasterIds(
       entries,
