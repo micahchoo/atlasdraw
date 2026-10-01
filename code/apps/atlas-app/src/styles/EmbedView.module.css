@@ -28,6 +28,25 @@
   display: none !important;
 }
 
+/* The map's credit line (basemap and tile layers), where MapLibre puts its
+ * own control. Above the drawing layer; selectable, so a credit can be
+ * copied. */
+.credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-top-left-radius: var(--ad-radius-sm);
+  background: var(--ad-surface);
+  color: var(--ad-ink-secondary);
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
 /* --- share page: a head bar like the editor's collar, then the map ------- */
 
 .shareRoot {

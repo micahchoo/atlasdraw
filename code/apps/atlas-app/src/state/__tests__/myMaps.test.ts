@@ -99,9 +99,9 @@ beforeEach(async () => {
   store = createPersistenceStore({ dbName: `my-maps-${++n}-${Date.now()}` });
   persistence = createPersistenceState();
   persistence.getState().setPersistenceStore(store);
-  persistence
-    .getState()
-    .setForceSave(() => store.save(toFile(currentDocument())));
+  persistence.getState().setForceSave(async () => {
+    await store.save(toFile(currentDocument()));
+  });
   notify.success.mockClear();
   notify.error.mockClear();
   const remote = await openDB("atlasdraw-autosave", 1, {

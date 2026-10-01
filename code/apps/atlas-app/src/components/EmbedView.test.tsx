@@ -25,7 +25,10 @@ vi.mock("@atlasdraw/excalidraw", () => ({
   Excalidraw: () => null,
 }));
 
-vi.mock("@atlasdraw/basemap", () => ({
+vi.mock("@atlasdraw/basemap", async () => ({
+  // The real basemap definitions: the credit is data on them.
+  getBasemap: (await import("@atlasdraw/basemap/src/BasemapRegistry"))
+    .getBasemap,
   MapCanvas: () =>
     React.createElement("div", { "data-testid": "map-canvas-stub" }),
   registerPmtilesProtocol: vi.fn(),
@@ -75,6 +78,45 @@ describe("EmbedView", () => {
     render(<EmbedView chrome="minimal" map={hashMap(mapDoc)} />);
     expect(await screen.findByTestId("viewer-canvas")).toBeTruthy();
     expect(screen.getByTestId("map-canvas-stub")).toBeTruthy();
+  });
+
+  it("prints the basemap's credit and each visible tile layer's credit, as the editor does", async () => {
+    // ODbL: the OpenStreetMap credit must be on every map that shows its
+    // data, an embed on another site included (audit2-05 H5).
+    const withTiles = {
+      ...mapDoc,
+      manifest: {
+        ...mapDoc.manifest,
+        tileLayers: [
+          {
+            kind: "tile",
+            id: "tl:a",
+            label: "Aerial",
+            visible: true,
+            opacity: 1,
+            url: "https://tiles.example/{z}/{x}/{y}.png",
+            attribution: "© Aerial Co",
+          },
+          {
+            kind: "tile",
+            id: "tl:b",
+            label: "Hidden",
+            visible: false,
+            opacity: 1,
+            url: "https://tiles.example/{z}/{x}/{y}.png",
+            attribution: "© Hidden Co",
+          },
+        ],
+      },
+    };
+    for (const chrome of ["minimal", "share"] as const) {
+      render(<EmbedView chrome={chrome} map={hashMap(withTiles)} />);
+      const credit = await screen.findByTestId("viewer-credit");
+      expect(credit.textContent).toBe(
+        "© OpenFreeMap © OpenMapTiles © OpenStreetMap · © Aerial Co",
+      );
+      cleanup();
+    }
   });
 
   it("minimal chrome shows the map alone", async () => {

@@ -28,8 +28,10 @@ import {
   hasUnsavedWork,
   liveCamera,
   loadDocument,
+  refusedMessage,
   type CameraSource,
 } from "./documentIO";
+import { isNewerBuildError } from "./persistence";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 
 import type { PersistenceStateStore } from "./persistenceState";
@@ -90,7 +92,10 @@ export async function openSavedMap(
       ctx.notify?.error("This map is not saved in this browser now.");
       return false;
     }
-    const opened = await loadDocument(file, ctx.api, { map: ctx.map });
+    const opened = await loadDocument(file, ctx.api, {
+      map: ctx.map,
+      onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+    });
     if (!opened) {
       return false;
     }
@@ -99,7 +104,11 @@ export async function openSavedMap(
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not open a saved map", err);
-    ctx.notify?.error("This map is damaged and cannot open.");
+    ctx.notify?.error(
+      isNewerBuildError(err)
+        ? "A newer version of Atlasdraw saved this map. Update Atlasdraw to open it; the map is kept."
+        : "This map is damaged and cannot open.",
+    );
     return false;
   }
 }
@@ -282,7 +291,10 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
     ctx.notify?.error("The server backup is damaged. Your map did not change.");
     return;
   }
-  const opened = await loadDocument(decoded.file, ctx.api, { map: ctx.map });
+  const opened = await loadDocument(decoded.file, ctx.api, {
+    map: ctx.map,
+    onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+  });
   if (!opened) {
     return;
   }

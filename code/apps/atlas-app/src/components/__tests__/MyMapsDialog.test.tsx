@@ -79,9 +79,9 @@ beforeEach(() => {
   store = createPersistenceStore({ dbName: `my-maps-ui-${++n}` });
   persistence = createPersistenceState();
   persistence.getState().setPersistenceStore(store);
-  persistence
-    .getState()
-    .setForceSave(() => store.save(toFile(currentDocument())));
+  persistence.getState().setForceSave(async () => {
+    await store.save(toFile(currentDocument()));
+  });
   fx = makeFakeExcalidraw();
   openDocument(createDocument({ title: "Blank" }, sceneOf(fx.api)));
 });
@@ -127,6 +127,25 @@ async function seedTwoMaps() {
 }
 
 describe("MyMapsDialog", () => {
+  it("lists a map from a newer Atlasdraw as needing it, and does not offer to open it", async () => {
+    await seedTwoMaps();
+    // What a newer build writes beside its bytes.
+    const { openDB } = await import("idb");
+    const db = await openDB(`my-maps-ui-${n}`, 1);
+    const summary = await db.get("state", `summary:${A}`);
+    await db.put("state", { ...summary, version: 99 }, `summary:${A}`);
+    db.close();
+    renderDialog();
+
+    const rows = await screen.findAllByTestId("my-maps-row");
+    const newer = rows.find((r) => r.textContent?.includes("Harbour walk"))!;
+    expect(newer.textContent).toContain("Needs a newer Atlasdraw");
+    const open = within(newer).getByRole("button", {
+      name: "Open Harbour walk",
+    }) as HTMLButtonElement;
+    expect(open.disabled).toBe(true);
+  });
+
   it("is a labelled dialog that lists the maps, the last changed first", async () => {
     await seedTwoMaps();
     renderDialog();

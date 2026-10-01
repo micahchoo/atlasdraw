@@ -20,6 +20,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   MapCanvas,
   disableCameraRotation,
+  getBasemap,
   type MapCanvasInitialView,
 } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
@@ -36,7 +37,8 @@ import {
   usePopupOnClick,
   type PopupMap,
 } from "../hooks/useFeaturePopup";
-import { loadDocument } from "../state/documentIO";
+import { creditLine } from "../lib/tileLayers";
+import { fromFile, loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import { buildRoute, type SharedMap } from "../routes";
 import {
@@ -177,6 +179,18 @@ const EmbedCanvas: React.FC<{
   const basemapId = doc.manifest?.basemap?.id ?? "blank";
   useBasemapStyle(map, basemapId, getAppConfig().allowRemoteBasemaps);
 
+  // The credit line, as the editor's collar prints it: the basemap's credit
+  // (data on its definition) and each visible tile layer's. MapLibre's own
+  // control reads the style's sources, which carry none.
+  const credit = useMemo(
+    () =>
+      creditLine(
+        getBasemap(basemapId)?.attribution,
+        fromFile(doc).overlays ?? [],
+      ),
+    [doc, basemapId],
+  );
+
   // Excalidraw's viewport follows the map camera.
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const { bridge, onZoomAction } = useCameraBridge(map, api, layer);
@@ -246,6 +260,8 @@ const EmbedCanvas: React.FC<{
           initialView={initialView}
           onMapReady={onMapReady}
           className={mapStyles.fullSize}
+          // The credit line below replaces MapLibre's control.
+          hideAttribution
         />
       </div>
       {/* Top layer: transparent, read-only Excalidraw. pointer-events:none
@@ -262,6 +278,11 @@ const EmbedCanvas: React.FC<{
         />
       </div>
       <FeaturePopup popup={featurePopup.popup} onClose={featurePopup.close} />
+      {credit && (
+        <div className={styles.credit} data-testid="viewer-credit">
+          {credit}
+        </div>
+      )}
     </div>
   );
 };

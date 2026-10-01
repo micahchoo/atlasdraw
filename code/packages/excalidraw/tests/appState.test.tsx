@@ -1,4 +1,5 @@
 import React from "react";
+import { vi } from "vitest";
 
 import { EXPORT_DATA_TYPES, MIME_TYPES } from "@atlasdraw/common";
 
@@ -14,9 +15,10 @@ import { fireEvent, queryByTestId, render, waitFor } from "./test-utils";
 const { h } = window;
 
 describe("appState", () => {
-  it("drag&drop file doesn't reset non-persisted appState", async () => {
-    const defaultAppState = getDefaultAppState();
-    const exportBackground = !defaultAppState.exportBackground;
+  it("drag&drop of a scene file changes no appState and hands the file to the host", async () => {
+    // Atlasdraw (ADR-0010): upstream loaded the file's appState here.
+    const exportBackground = !getDefaultAppState().exportBackground;
+    const onSceneFileDrop = vi.fn();
 
     await render(
       <Excalidraw
@@ -26,6 +28,7 @@ describe("appState", () => {
             viewBackgroundColor: "#F00",
           },
         }}
+        onSceneFileDrop={onSceneFileDrop}
       />,
       {},
     );
@@ -53,13 +56,10 @@ describe("appState", () => {
       },
     ]);
 
-    await waitFor(() => {
-      expect(h.elements).toEqual([expect.objectContaining({ id: "A" })]);
-      // non-imported prop → retain
-      expect(h.state.exportBackground).toBe(exportBackground);
-      // imported prop → overwrite
-      expect(h.state.viewBackgroundColor).toBe("#000");
-    });
+    await waitFor(() => expect(onSceneFileDrop).toHaveBeenCalledTimes(1));
+    expect(h.elements).toEqual([]);
+    expect(h.state.exportBackground).toBe(exportBackground);
+    expect(h.state.viewBackgroundColor).toBe("#F00");
   });
 
   it("changing fontSize with text tool selected (no element created yet)", async () => {

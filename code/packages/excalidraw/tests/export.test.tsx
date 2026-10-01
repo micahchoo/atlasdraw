@@ -5,7 +5,7 @@ import { SVG_NS } from "@atlasdraw/common";
 import type { FileId } from "@atlasdraw/element/types";
 
 import { getDefaultAppState } from "../appState";
-import { getDataURL } from "../data/blob";
+import { getDataURL, loadFromBlob } from "../data/blob";
 import { encodePngMetadata } from "../data/image";
 import { serializeAsJSON } from "../data/json";
 import { Excalidraw } from "../index";
@@ -16,7 +16,7 @@ import {
 } from "../scene/export";
 
 import { API } from "./helpers/api";
-import { render, waitFor } from "./test-utils";
+import { render } from "./test-utils";
 
 const { h } = window;
 
@@ -51,19 +51,18 @@ describe("export", () => {
     await render(<Excalidraw />);
   });
 
+  // Atlasdraw (ADR-0010): a dropped scene file goes to the host, not into
+  // the canvas (atlasClosedLoadDoors.test.tsx). The decode is still the
+  // fork's, so these cases read the files through loadFromBlob.
   it("export embedded png and reimport", async () => {
     const pngBlob = await API.loadFile("./fixtures/smiley.png");
     const pngBlobEmbedded = await encodePngMetadata({
       blob: pngBlob,
       metadata: serializeAsJSON(testElements, h.state, {}, "local"),
     });
-    await API.drop([{ kind: "file", file: pngBlobEmbedded }]);
-
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
-      ]);
-    });
+    expect((await loadFromBlob(pngBlobEmbedded, null, null)).elements).toEqual([
+      expect.objectContaining({ type: "text", text: "😀" }),
+    ]);
   });
 
   it("test encoding/decoding scene for SVG export", async () => {
@@ -94,59 +93,31 @@ describe("export", () => {
   });
 
   it("import embedded png (legacy v1)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/test_embedded_v1.png"),
-      },
+    const file = await API.loadFile("./fixtures/test_embedded_v1.png");
+    expect((await loadFromBlob(file, null, null)).elements).toEqual([
+      expect.objectContaining({ type: "text", text: "test" }),
     ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "test" }),
-      ]);
-    });
   });
 
   it("import embedded png (v2)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/smiley_embedded_v2.png"),
-      },
+    const file = await API.loadFile("./fixtures/smiley_embedded_v2.png");
+    expect((await loadFromBlob(file, null, null)).elements).toEqual([
+      expect.objectContaining({ type: "text", text: "😀" }),
     ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
-      ]);
-    });
   });
 
   it("import embedded svg (legacy v1)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/test_embedded_v1.svg"),
-      },
+    const file = await API.loadFile("./fixtures/test_embedded_v1.svg");
+    expect((await loadFromBlob(file, null, null)).elements).toEqual([
+      expect.objectContaining({ type: "text", text: "test" }),
     ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "test" }),
-      ]);
-    });
   });
 
   it("import embedded svg (v2)", async () => {
-    await API.drop([
-      {
-        kind: "file",
-        file: await API.loadFile("./fixtures/smiley_embedded_v2.svg"),
-      },
+    const file = await API.loadFile("./fixtures/smiley_embedded_v2.svg");
+    expect((await loadFromBlob(file, null, null)).elements).toEqual([
+      expect.objectContaining({ type: "text", text: "😀" }),
     ]);
-    await waitFor(() => {
-      expect(h.elements).toEqual([
-        expect.objectContaining({ type: "text", text: "😀" }),
-      ]);
-    });
   });
 
   it("exporting svg containing transformed images", async () => {

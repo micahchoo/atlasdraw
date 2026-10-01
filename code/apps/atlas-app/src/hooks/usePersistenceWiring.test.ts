@@ -62,7 +62,13 @@ const FAKE_DOC = {
 function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
   const dirtyListeners = new Set<() => void>();
   const store: PersistenceStore = {
-    save: vi.fn(async () => {}),
+    save: vi.fn(async () => ({ kind: "saved" as const, revision: 1 })),
+    claim: vi.fn(async (id: string) => ({
+      kind: "lease" as const,
+      id,
+      release: () => {},
+      lost: new Promise<void>(() => {}),
+    })),
     load: vi.fn(async () => null),
     list: vi.fn(async () => []),
     open: vi.fn(async () => null),
@@ -165,6 +171,30 @@ describe("usePersistenceWiring — closing the tab", () => {
 
     expect(store.save).not.toHaveBeenCalled();
     expect(getDoc()).toBeNull();
+  });
+
+  it("saves unsaved changes when the editor unmounts (a crash), before the store closes", async () => {
+    const store = makeFakeStore({ isDirty: vi.fn(() => true) });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    const dispose = vi.fn();
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(dispose);
+    const { unmount } = renderHook(() =>
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    unmount();
+
+    expect(store.save).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalled();
+    // The connection closes only after the last save is written.
+    await waitFor(() => expect(store.close).toHaveBeenCalled());
+    const saved = (store.save as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const closed = (store.close as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(saved).toBeLessThan(closed);
   });
 
   it("writes nothing when nothing changed", () => {
@@ -395,7 +425,7 @@ describe("usePersistenceWiring", () => {
     expect(session.persistence.getState().remoteSaveFailed).toBe(true);
   });
 
-  it("disposes the store and clears it from the session on unmount", () => {
+  it("disposes the store and clears it from the session on unmount", async () => {
     const store = makeFakeStore();
     const dispose = vi.fn();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
@@ -411,8 +441,9 @@ describe("usePersistenceWiring", () => {
     unmount();
 
     expect(dispose).toHaveBeenCalled();
-    expect(store.close).toHaveBeenCalled();
     expect(session.persistence.getState().persistenceStore).toBeNull();
+    // Closed after any save the unmount made.
+    await waitFor(() => expect(store.close).toHaveBeenCalled());
   });
 
   it("builds a remote-save callback only when enableBackendPersistence is true", () => {

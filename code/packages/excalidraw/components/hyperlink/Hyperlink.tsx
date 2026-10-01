@@ -16,8 +16,6 @@ import { hitElementBoundingBox } from "@atlasdraw/element";
 
 import { isElementLink } from "@atlasdraw/element";
 
-import { getEmbedLink, embeddableURLValidator } from "@atlasdraw/element";
-
 import {
   sceneCoordsToViewportCoords,
   viewportCoordsToSceneCoords,
@@ -32,7 +30,6 @@ import type { Scene } from "@atlasdraw/element";
 
 import type {
   ElementsMap,
-  ExcalidrawEmbeddableElement,
   NonDeletedExcalidrawElement,
 } from "@atlasdraw/element/types";
 
@@ -41,7 +38,7 @@ import { getTooltipDiv, updateTooltipPosition } from "../../components/Tooltip";
 
 import { t } from "../../i18n";
 
-import { useAppProps, useEditorInterface, useExcalidrawAppState } from "../App";
+import { useEditorInterface, useExcalidrawAppState } from "../App";
 import { ToolButton } from "../ToolButton";
 import { FreedrawIcon, TrashIcon, elementLinkIcon } from "../icons";
 import { getSelectedElements } from "../../scene";
@@ -60,18 +57,12 @@ const AUTO_HIDE_TIMEOUT = 500;
 
 let IS_HYPERLINK_TOOLTIP_VISIBLE = false;
 
-const embeddableLinkCache = new Map<
-  ExcalidrawEmbeddableElement["id"],
-  string
->();
-
 export const Hyperlink = ({
   element,
   scene,
   setAppState,
   onLinkOpen,
   setToast,
-  updateEmbedValidationStatus,
 }: {
   element: NonDeletedExcalidrawElement;
   scene: Scene;
@@ -80,14 +71,9 @@ export const Hyperlink = ({
   setToast: (
     toast: { message: string; closable?: boolean; duration?: number } | null,
   ) => void;
-  updateEmbedValidationStatus: (
-    element: ExcalidrawEmbeddableElement,
-    status: boolean,
-  ) => void;
 }) => {
   const elementsMap = scene.getNonDeletedElementsMap();
   const appState = useExcalidrawAppState();
-  const appProps = useAppProps();
   const editorInterface = useEditorInterface();
 
   const linkVal = element.link || "";
@@ -107,77 +93,10 @@ export const Hyperlink = ({
       trackEvent("hyperlink", "create");
     }
 
-    if (isEmbeddableElement(element)) {
-      if (appState.activeEmbeddable?.element === element) {
-        setAppState({ activeEmbeddable: null });
-      }
-      if (!link) {
-        scene.mutateElement(element, {
-          link: null,
-        });
-        updateEmbedValidationStatus(element, false);
-        return;
-      }
-
-      if (!embeddableURLValidator(link, appProps.validateEmbeddable)) {
-        if (link) {
-          setToast({ message: t("toast.unableToEmbed"), closable: true });
-        }
-        element.link && embeddableLinkCache.set(element.id, element.link);
-        scene.mutateElement(element, {
-          link,
-        });
-        updateEmbedValidationStatus(element, false);
-      } else {
-        const { width, height } = element;
-        const embedLink = getEmbedLink(link);
-        if (embedLink?.error instanceof URIError) {
-          setToast({
-            message: t("toast.unrecognizedLinkFormat"),
-            closable: true,
-          });
-        }
-        const ar = embedLink
-          ? embedLink.intrinsicSize.w / embedLink.intrinsicSize.h
-          : 1;
-        const hasLinkChanged =
-          embeddableLinkCache.get(element.id) !== element.link;
-        scene.mutateElement(element, {
-          ...(hasLinkChanged
-            ? {
-                width:
-                  embedLink?.type === "video"
-                    ? width > height
-                      ? width
-                      : height * ar
-                    : width,
-                height:
-                  embedLink?.type === "video"
-                    ? width > height
-                      ? width / ar
-                      : height
-                    : height,
-              }
-            : {}),
-          link,
-        });
-        updateEmbedValidationStatus(element, true);
-        if (embeddableLinkCache.has(element.id)) {
-          embeddableLinkCache.delete(element.id);
-        }
-      }
-    } else {
-      scene.mutateElement(element, { link });
-    }
-  }, [
-    element,
-    scene,
-    setToast,
-    appProps.validateEmbeddable,
-    appState.activeEmbeddable,
-    setAppState,
-    updateEmbedValidationStatus,
-  ]);
+    // Atlasdraw (ADR-0010): a link is only a link. Upstream resized an
+    // `embeddable` to the linked video and marked it valid to render.
+    scene.mutateElement(element, { link });
+  }, [element, scene]);
 
   useLayoutEffect(() => {
     return () => {

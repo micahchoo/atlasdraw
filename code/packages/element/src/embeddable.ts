@@ -5,7 +5,6 @@ import {
   getFontString,
 } from "@atlasdraw/common";
 
-import type { ExcalidrawProps } from "@atlasdraw/excalidraw/types";
 import type { MarkRequired } from "@atlasdraw/common/utility-types";
 
 import { newTextElement } from "./newElement";
@@ -499,9 +498,18 @@ export const maybeParseEmbedSrc = (str: string): string => {
   return str;
 };
 
+/** Atlasdraw: upstream's `validateEmbeddable` prop type; the prop is gone. */
+export type EmbeddableValidator =
+  | boolean
+  | string[]
+  | RegExp
+  | RegExp[]
+  | ((link: string) => boolean | undefined)
+  | undefined;
+
 export const embeddableURLValidator = (
   url: string | null | undefined,
-  validateEmbeddable: ExcalidrawProps["validateEmbeddable"],
+  validateEmbeddable: EmbeddableValidator,
 ): boolean => {
   if (!url) {
     return false;

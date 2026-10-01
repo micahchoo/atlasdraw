@@ -468,6 +468,40 @@ describe("tile layers in the file (W9d)", () => {
 });
 
 describe("loadDocument", () => {
+  it("drops iframe and embeddable elements, opens the rest, and says how many", async () => {
+    // ADR-0010: a file, a share link and the autosave are data from a
+    // stranger; these two types rendered live web pages.
+    const fx = makeFakeExcalidraw();
+    const planted = (id: string, type: string) => ({
+      ...geoRect(id),
+      type,
+      customData: {
+        generationData: { status: "done", html: "<script>1</script>" },
+      },
+    });
+    const file = savedDocument({
+      scene: [
+        geoRect("rect-1"),
+        planted("evil-1", "iframe"),
+        planted("evil-2", "embeddable"),
+      ] as unknown as AtlasdrawDocument["scene"],
+    });
+    const onRefused = vi.fn();
+
+    const doc = await loadDocument(file, fx.api, { onRefused });
+
+    expect(doc).not.toBeNull();
+    expect(fx.api.getSceneElements().map((e) => e.id)).toEqual(["rect-1"]);
+    expect(onRefused).toHaveBeenCalledWith(2);
+  });
+
+  it("reports nothing when the file has no refused element", async () => {
+    const fx = makeFakeExcalidraw();
+    const onRefused = vi.fn();
+    await loadDocument(savedDocument(), fx.api, { onRefused });
+    expect(onRefused).not.toHaveBeenCalled();
+  });
+
   it("opens a new document with the file's identity and layers, at revision 0", async () => {
     const fx = makeFakeExcalidraw();
     const before = currentDocument();

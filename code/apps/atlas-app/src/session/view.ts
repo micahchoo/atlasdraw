@@ -35,6 +35,10 @@ export interface Question {
   title: string;
   body: string;
   confirmLabel: string;
+  /** The other answer; "Cancel" when unset. Escape gives it too. */
+  cancelLabel?: string;
+  /** "destructive": the confirm button is red. */
+  tone?: "default" | "destructive";
 }
 
 /** A dialog that needs nothing but its name. */

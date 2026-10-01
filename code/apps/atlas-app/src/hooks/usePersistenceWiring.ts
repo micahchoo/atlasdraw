@@ -9,17 +9,22 @@
 // (its layers, payloads, title, basemap), and, from
 // useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
-import { createPersistenceStore, startAutoSave } from "../state/persistence";
+import {
+  createPersistenceStore,
+  isNewerBuildError,
+  startAutoSave,
+} from "../state/persistence";
 import { currentDocument, followDocument } from "../state/document";
 import {
   liveCamera,
   loadDocument,
+  refusedMessage,
   restoreCamera,
   toFile,
 } from "../state/documentIO";
@@ -32,9 +37,12 @@ import {
   type ShareLoadResult,
 } from "../state/loadShareDocument";
 import { copyOfSharedMap } from "../state/myMaps";
+import { answerConflict, holdOpenMaps } from "../session/mapOwnership";
 import { buildRoute, type SharedMap } from "../routes";
+import { trackSave } from "../state/lastSave";
 
 import type { EditorSession } from "../session/EditorSession";
+import type { Conflict } from "../state/documentStore";
 
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
@@ -75,6 +83,35 @@ export function usePersistenceWiring(
   const { view, persistence } = session;
   // Read once: the link is consumed by the first open.
   const openRef = useRef(open);
+  // Save what is unsaved, now. Set by the effect below; called when the
+  // editor goes away (unmountSave).
+  const flushRef = useRef<(() => Promise<unknown> | null) | null>(null);
+  // That save, so the store closes only after it.
+  const unmountSave = useRef<Promise<unknown> | null>(null);
+
+  // The editor is going away: an error took it down, or the route changed.
+  // A layout effect's cleanup runs before the children unmount, while
+  // Excalidraw still holds the drawing; after that its scene is empty, and
+  // the passive cleanup below would save an empty map.
+  useLayoutEffect(
+    () => () => {
+      let save: Promise<unknown> | null;
+      try {
+        save = flushRef.current?.() ?? null;
+      } catch (err) {
+        // A cleanup must not throw: the crash screen says the save failed.
+        // eslint-disable-next-line no-console
+        console.error("[persistence] save on unmount failed", err);
+        save = Promise.reject(err);
+        save.catch(() => undefined);
+      }
+      unmountSave.current = save;
+      if (save) {
+        trackSave(save);
+      }
+    },
+    [excalidrawAPI],
+  );
 
   useEffect(() => {
     if (!excalidrawAPI) {
@@ -111,18 +148,45 @@ export function usePersistenceWiring(
     // `forceSave` saves now, past the autosave delay: My maps and a room
     // call it before the open map leaves the editor. A room's document is the
     // relay's to keep (docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md):
-    // the autosave writes only the user's own maps.
+    // the autosave writes only the user's own maps. A tab that does not hold
+    // the map (session/mapOwnership.ts) writes nothing either.
     const getDoc = () => {
       const doc = currentDocument();
-      return isRoomDocument(doc)
+      return isRoomDocument(doc) || persistence.getState().readOnly
         ? null
         : toFile(doc, undefined, liveCamera(view.getState().map));
     };
+    // A save that met a newer copy asks the user, once at a time; the
+    // autosave's later saves of the same map wait for the answer.
+    const ownership = {
+      view,
+      persistence,
+      notify: {
+        success: documentNotify.success ?? (() => {}),
+        error: documentNotify.error,
+      },
+    };
+    let answering: Promise<void> | null = null;
+    const onConflict = (conflict: Conflict, doc: AtlasdrawDocument) => {
+      answering ??= answerConflict(ownership, store, conflict, doc)
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn("[atlasdraw] could not settle a save conflict", err);
+        })
+        .finally(() => {
+          answering = null;
+        });
+      return answering;
+    };
+    const unholdMaps = holdOpenMaps(ownership, store);
     persistence.getState().setForceSave(async () => {
       try {
         const doc = getDoc();
         if (doc) {
-          await store.save(doc);
+          const result = await store.save(doc);
+          if (result.kind === "conflict") {
+            await onConflict(result, doc);
+          }
         }
         persistence.getState().setLastSavedAt(Date.now());
         persistence.getState().setDraining(false);
@@ -167,6 +231,7 @@ export function usePersistenceWiring(
           const opened = await loadDocument(loaded, excalidrawAPI, {
             signal: abort.signal,
             map: view.getState().map,
+            onRefused: (n) => documentNotify.error(refusedMessage(n)),
           });
           if (!opened) {
             return;
@@ -205,7 +270,9 @@ export function usePersistenceWiring(
         // eslint-disable-next-line no-console
         console.warn("[atlasdraw] persistence.load() failed", err);
         documentNotify.error(
-          "Couldn't load your saved map — starting from a blank canvas",
+          isNewerBuildError(err)
+            ? "A newer version of Atlasdraw saved your last map. It is kept in My maps; update Atlasdraw to open it."
+            : "Couldn't load your saved map — starting from a blank canvas",
         );
       } finally {
         persistence.getState().setOwnMapLoaded(true);
@@ -251,40 +318,51 @@ export function usePersistenceWiring(
           "Auto-save failed — recent changes may not be saved",
         );
       },
+      (conflict, doc) => void onConflict(conflict, doc),
     );
 
     // Closing or leaving the tab: write unsaved changes now, not after the
     // autosave delay. 'visibilitychange' to hidden comes first and leaves the
     // most time; 'pagehide' covers a close that skips it.
-    const flushOnLeave = () => {
+    const flushOnLeave = (): Promise<unknown> | null => {
       const doc = store.isDirty() ? getDoc() : null;
-      if (doc) {
-        void store.save(doc).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error("[persistence] save on leave failed", err);
-        });
+      if (!doc) {
+        return null;
       }
+      const save = store.save(doc);
+      save.catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[persistence] save on leave failed", err);
+      });
+      return save;
     };
+    flushRef.current = flushOnLeave;
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         flushOnLeave();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pagehide", flushOnLeave);
+    const onPageHide = () => void flushOnLeave();
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       cancelled = true;
       abort.abort();
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pagehide", flushOnLeave);
+      window.removeEventListener("pagehide", onPageHide);
       unsubDirty();
       unsubDocument();
       unsubCamera();
+      unholdMaps();
       persistence.getState().setOwnMapLoaded(true);
       dispose();
+      flushRef.current = null;
       persistence.getState().setPersistenceStore(null);
-      void store.close();
+      // The unmount's save (above) still writes through this connection.
+      const pending = unmountSave.current ?? Promise.resolve();
+      unmountSave.current = null;
+      void pending.catch(() => undefined).then(() => store.close());
     };
   }, [excalidrawAPI, documentNotify, view, persistence]);
 }

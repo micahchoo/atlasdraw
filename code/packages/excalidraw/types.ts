@@ -24,7 +24,6 @@ import type {
   FileId,
   Theme,
   StrokeRoundness,
-  ExcalidrawEmbeddableElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawElementType,
@@ -858,16 +857,18 @@ export interface ExcalidrawProps {
   onScrollChange?: (scrollX: number, scrollY: number, zoom: Zoom) => void;
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
-  validateEmbeddable?:
-    | boolean
-    | string[]
-    | RegExp
-    | RegExp[]
-    | ((link: string) => boolean | undefined);
-  renderEmbeddable?: (
-    element: NonDeleted<ExcalidrawEmbeddableElement>,
-    appState: AppState,
-  ) => JSX.Element | null;
+  /**
+   * Atlasdraw addition (ADR-0010). A scene file dropped on the editor: an
+   * `.excalidraw` file, or a PNG or SVG that carries a scene. The editor
+   * never loads one into the open drawing; it hands the file here, and the
+   * host opens it on its own terms (the atlas app: as a new map in world
+   * coordinates, after asking about unsaved work). Without it, nothing
+   * happens.
+   *
+   * Upstream's `validateEmbeddable` and `renderEmbeddable` are gone: the
+   * editor renders no `iframe` or `embeddable` element as live HTML.
+   */
+  onSceneFileDrop?: (file: File) => void;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;
   /**
@@ -1018,7 +1019,6 @@ export type AppClassProperties = {
   toggleLock: App["toggleLock"];
   setActiveTool: App["setActiveTool"];
   setOpenDialog: App["setOpenDialog"];
-  insertEmbeddableElement: App["insertEmbeddableElement"];
   getName: App["getName"];
   dismissLinearEditor: App["dismissLinearEditor"];
   flowChartCreator: App["flowChartCreator"];

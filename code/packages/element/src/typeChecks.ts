@@ -49,6 +49,20 @@ export const isEmbeddableElement = (
   return !!element && element.type === "embeddable";
 };
 
+/**
+ * Atlasdraw (ADR-0010): element types no input may bring into a scene. An
+ * `iframe` rendered its `customData` HTML with scripts; an `embeddable`, a
+ * third-party page. `restoreElements` drops them, and a host that applies a
+ * scene without restoring it (the atlas app's document open) checks here.
+ */
+export const REFUSED_ELEMENT_TYPES: readonly string[] = [
+  "iframe",
+  "embeddable",
+];
+
+export const isRefusedElementType = (type: unknown): boolean =>
+  typeof type === "string" && REFUSED_ELEMENT_TYPES.includes(type);
+
 export const isIframeElement = (
   element: ExcalidrawElement | null,
 ): element is ExcalidrawIframeElement => {

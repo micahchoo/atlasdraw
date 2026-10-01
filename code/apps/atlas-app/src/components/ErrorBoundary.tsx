@@ -6,11 +6,16 @@
  *
  * Design: calm drafting-room fallback — brief message, technical details
  * in mono, blueprint accent on the recovery action.
+ *
+ * As the editor unmounts, usePersistenceWiring saves the open map's
+ * unsaved changes (state/lastSave.ts). The message says what that save did,
+ * and Reload waits for it, so the promise on screen is true.
  */
 
 import React, { Component } from "react";
 
 import { dismissBootShell } from "../bootShell";
+import { lastSave } from "../state/lastSave";
 import styles from "../styles/ErrorBoundary.module.css";
 
 // ---------------------------------------------------------------------------
@@ -23,7 +28,20 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   error: Error | null;
+  /** What the save made as the editor went away did. */
+  saved: "pending" | "saved" | "failed";
 }
+
+/** Reload does not wait longer than this for the last save. */
+const SAVE_WAIT_MS = 5000;
+
+const waitForSave = (): Promise<boolean> =>
+  Promise.race([
+    lastSave(),
+    new Promise<boolean>((resolve) =>
+      setTimeout(() => resolve(false), SAVE_WAIT_MS),
+    ),
+  ]);
 
 // ---------------------------------------------------------------------------
 
@@ -33,10 +51,12 @@ export class ErrorBoundary extends Component<
 > {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, saved: "pending" };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Pick<ErrorBoundaryState, "error"> {
     return { error };
   }
 
@@ -47,10 +67,14 @@ export class ErrorBoundary extends Component<
     // crash screen — a frozen silhouette, the white-screen-of-death repainted
     // in vellum. Clear it here so the error is actually visible.
     dismissBootShell();
+    // The editor's unmount save started in this same commit, before this.
+    void waitForSave().then((ok) =>
+      this.setState({ saved: ok ? "saved" : "failed" }),
+    );
   }
 
   handleReload = () => {
-    window.location.reload();
+    void waitForSave().then(() => window.location.reload());
   };
 
   render() {
@@ -60,9 +84,12 @@ export class ErrorBoundary extends Component<
         <div className={styles.root} data-testid="error-boundary">
           <div className={styles.card}>
             <h1 className={styles.heading}>Something went wrong</h1>
-            <p className={styles.message}>
-              Atlasdraw encountered an unexpected error. Your work is saved
-              locally — reloading will restore it.
+            <p className={styles.message} data-testid="error-boundary-save">
+              {this.state.saved === "pending"
+                ? "Atlasdraw stopped because of an unexpected error. Saving your changes in this browser…"
+                : this.state.saved === "saved"
+                ? "Atlasdraw stopped because of an unexpected error. Your changes are saved in this browser; Reload opens the map again."
+                : "Atlasdraw stopped because of an unexpected error. Your last changes could not be saved; Reload opens the map as it was last saved."}
             </p>
             {error.message && (
               <pre className={styles.details}>

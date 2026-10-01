@@ -18,6 +18,8 @@ export interface ConfirmDialogProps {
   title: string;
   body: string;
   confirmLabel: string;
+  /** The cancel button's text; "Cancel" when unset. */
+  cancelLabel?: string;
   /** "destructive": the confirm button is red. */
   tone?: "default" | "destructive";
   /** A checkbox that goes with the answer, below the body. */
@@ -34,6 +36,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
   body,
   confirmLabel,
+  cancelLabel = "Cancel",
   tone = "default",
   option,
   onConfirm,
@@ -85,7 +88,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               data-testid="confirm-dialog-cancel"
               autoFocus
             >
-              Cancel
+              {cancelLabel}
             </button>
             <button
               type="button"

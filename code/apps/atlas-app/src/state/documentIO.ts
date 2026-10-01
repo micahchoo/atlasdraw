@@ -21,7 +21,11 @@ import {
   type CommentAnchor,
 } from "@atlasdraw/protocol";
 
-import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
+import {
+  CaptureUpdateAction,
+  isRefusedElementType,
+  syncInvalidIndices,
+} from "@atlasdraw/element";
 import {
   CURRENT_MANIFEST_VERSION,
   geometryKindOf,
@@ -401,6 +405,13 @@ export function restoreCamera(
   return true;
 }
 
+/** What the editor tells the user when loadDocument refused elements. */
+export function refusedMessage(count: number): string {
+  return count === 1
+    ? "Removed 1 embedded web page from this map. Atlasdraw does not show them."
+    : `Removed ${count} embedded web pages from this map. Atlasdraw does not show them.`;
+}
+
 /** Rises with each loadDocument; only the latest one may open its file. */
 let loadTicket = 0;
 
@@ -424,6 +435,10 @@ async function blobToDataURL(blob: Blob): Promise<string> {
  * back, nor reach into the previous document. Raster PNGs are not given to
  * Excalidraw; they are the document's, not the drawing's.
  *
+ * An `iframe` or `embeddable` element is dropped, and `onRefused` hears how
+ * many: they rendered live web pages, and a file, a share link and a saved
+ * map are all data from a stranger (ADR-0010). The rest of the file opens.
+ *
  * The new Document settles on the loaded content, so a save with no edit
  * keeps the file's updatedAt. The result is null, and nothing changes, when
  * the open is overtaken while the files are read: `signal` was aborted, a
@@ -437,6 +452,8 @@ export async function loadDocument(
     signal?: AbortSignal;
     /** The map to move to the file's camera, when there is one. */
     map?: Pick<maplibregl.Map, "jumpTo"> | null;
+    /** Told how many elements were refused, when there were any. */
+    onRefused?: (count: number) => void;
   } = {},
 ): Promise<Document | null> {
   const ticket = ++loadTicket;
@@ -473,11 +490,18 @@ export async function loadDocument(
   openDocument(doc);
   restoreCamera(options.map ?? null, file.manifest.camera);
 
+  const scene = file.scene.filter((el) => !isRefusedElementType(el.type));
+  const refused = file.scene.length - scene.length;
+  if (refused > 0) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] embedded web page elements refused", refused);
+    options.onRefused?.(refused);
+  }
   // syncInvalidIndices repairs missing fractional indices in older files; it
   // is a no-op when they are valid.
   api.updateScene({
     elements: syncInvalidIndices(
-      file.scene as unknown as Parameters<typeof syncInvalidIndices>[0],
+      scene as unknown as Parameters<typeof syncInvalidIndices>[0],
     ) as unknown as Parameters<typeof api.updateScene>[0]["elements"],
     captureUpdate: CaptureUpdateAction.NEVER,
   });
@@ -511,15 +535,31 @@ export function documentFromExcalidrawJson(
   const obj = parsed as {
     type?: unknown;
     elements?: unknown;
-    files?: Record<string, { dataURL?: string; mimeType?: string }>;
+    files?: unknown;
   };
   if (obj?.type !== "excalidraw" || !Array.isArray(obj.elements)) {
     throw new Error("not a valid .excalidraw file (missing type/elements)");
   }
+  return documentFromExcalidrawScene(
+    { elements: obj.elements, files: obj.files },
+    camera,
+  );
+}
 
+/**
+ * An Excalidraw scene (its elements and files) as a new document; see
+ * documentFromExcalidrawJson. A dropped PNG or SVG that carries a scene
+ * comes in here once the fork has read it.
+ */
+export function documentFromExcalidrawScene(
+  scene: { elements: readonly unknown[]; files?: unknown },
+  camera: Camera | null = null,
+): AtlasdrawDocument {
   const files: Map<string, Blob> = new Map();
-  if (obj.files && typeof obj.files === "object") {
-    for (const [id, file] of Object.entries(obj.files)) {
+  if (scene.files && typeof scene.files === "object") {
+    for (const [id, file] of Object.entries(
+      scene.files as Record<string, { dataURL?: unknown; mimeType?: unknown }>,
+    )) {
       if (
         !file ||
         typeof file.dataURL !== "string" ||
@@ -553,7 +593,7 @@ export function documentFromExcalidrawJson(
       permissions: { publicView: false },
     },
     scene: placeDrawing(
-      obj.elements as PlaceableElement[],
+      scene.elements as PlaceableElement[],
       world,
       at,
     ) as unknown as AtlasdrawDocument["scene"],

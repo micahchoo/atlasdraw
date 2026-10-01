@@ -42,6 +42,7 @@ import {
   isElbowArrow,
   isLinearElement,
   isLineElement,
+  isRefusedElementType,
   isTextElement,
   isUsingAdaptiveRadius,
 } from "@atlasdraw/element";
@@ -110,7 +111,8 @@ export const AllowedExcalidrawActiveTools: Record<
   eraser: false,
   custom: true,
   frame: true,
-  embeddable: true,
+  // Atlasdraw (ADR-0010): the embeddable tool is closed.
+  embeddable: false,
   hand: true,
   laser: false,
   magicframe: false,
@@ -555,9 +557,12 @@ export const restoreElement = (
     case "ellipse":
     case "rectangle":
     case "diamond":
+      return restoreElementWithProperties(element, {});
+    // Atlasdraw (ADR-0010): refused. Nothing in the editor makes them, and
+    // upstream rendered them as live third-party or scripted HTML.
     case "iframe":
     case "embeddable":
-      return restoreElementWithProperties(element, {});
+      return null;
     case "magicframe":
     case "frame":
       return restoreElementWithProperties(element, {
@@ -697,11 +702,16 @@ export const restoreElements = <T extends ExcalidrawElement>(
     ? arrayToMap(existingElements)
     : null;
 
+  let refused = 0;
   const restoredElements = syncInvalidIndices(
     (targetElements || []).reduce((elements, element) => {
       // filtering out selection, which is legacy, no longer kept in elements,
       // and causing issues if retained
       if (element.type === "selection") {
+        return elements;
+      }
+      if (isRefusedElementType(element.type)) {
+        refused++;
         return elements;
       }
       let migratedElement: ExcalidrawElement | null;
@@ -743,6 +753,10 @@ export const restoreElements = <T extends ExcalidrawElement>(
       return elements;
     }, [] as ExcalidrawElement[]),
   );
+
+  if (refused > 0) {
+    console.warn(`[atlasdraw] ${refused} embedded web page element(s) refused`);
+  }
 
   if (!opts?.repairBindings) {
     return restoredElements as CombineBrandsIfNeeded<
