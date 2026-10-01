@@ -25,6 +25,13 @@ type LayerState = {
 
 type ErrorListener = (e: { error: Error }) => void;
 
+/** What queryRenderedFeatures returns for one feature. */
+export type RenderedFeature = {
+  type: "Feature";
+  properties: Record<string, unknown>;
+  layer: { id: string };
+};
+
 export class FakeMapLibre {
   readonly sources = new Map<string, Record<string, unknown>>();
   readonly layers = new Map<string, LayerState>();
@@ -197,6 +204,64 @@ export class FakeMapLibre {
 
   getLayoutProperty(layerId: string, name: string): unknown {
     return this.layers.get(layerId)?.layout[name];
+  }
+
+  // -------------------------------------------------------------------------
+  // Queries. The fake has no geometry and no renderer, so a test says what a
+  // layer draws under the pointer (`drawUnderPointer`). The answer follows
+  // the style state like MapLibre's: a layer that is not in the style, or
+  // whose visibility is "none", draws nothing. A query that names a layer
+  // missing from the style fires "error" and returns [] (Style#
+  // queryRenderedFeatures, 4.7.1).
+  // -------------------------------------------------------------------------
+
+  private readonly underPointer = new Map<
+    string,
+    Array<{ properties: Record<string, unknown> }>
+  >();
+
+  /** Say which features `layerId` draws at every point. */
+  drawUnderPointer(
+    layerId: string,
+    features: Array<{ properties: Record<string, unknown> }>,
+  ): void {
+    this.underPointer.set(layerId, features);
+  }
+
+  queryRenderedFeatures(
+    _point: unknown,
+    options: { layers?: string[] } = {},
+  ): RenderedFeature[] {
+    const ids = options.layers ?? [...this.order].reverse();
+    for (const id of ids) {
+      if (!this.layers.has(id)) {
+        this.fire(
+          `The layer '${id}' does not exist in the map's style and cannot be queried for features.`,
+        );
+        return [];
+      }
+    }
+    const out: RenderedFeature[] = [];
+    for (const id of ids) {
+      if (this.layers.get(id)?.layout.visibility === "none") {
+        continue;
+      }
+      for (const f of this.underPointer.get(id) ?? []) {
+        out.push({ type: "Feature", properties: f.properties, layer: { id } });
+      }
+    }
+    return out;
+  }
+
+  /** A flat projection: one pixel per degree, y down. */
+  project(lngLat: [number, number] | { lng: number; lat: number }): {
+    x: number;
+    y: number;
+  } {
+    const [lng, lat] = Array.isArray(lngLat)
+      ? lngLat
+      : [lngLat.lng, lngLat.lat];
+    return { x: lng, y: -lat };
   }
 
   /** True when a layer AND its source are in the style. */

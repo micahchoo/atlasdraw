@@ -58,6 +58,8 @@ import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler"
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useMapOverlays } from "../hooks/useMapOverlays";
+import { useFeaturePopup, type PopupMap } from "../hooks/useFeaturePopup";
+import { useCanvasClickThrough } from "../hooks/useCanvasClickThrough";
 import { useToolState } from "../hooks/useToolState";
 import { useCameraRotation } from "../hooks/useCameraRotation";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
@@ -94,6 +96,7 @@ import {
 } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import { fitMapToContent } from "../lib/fitMapToContent";
+import { featureAt } from "../lib/featureHit";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -115,6 +118,7 @@ import { ShareDialog } from "./ShareDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
+import { FeaturePopup } from "./FeaturePopup";
 import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
@@ -638,7 +642,47 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return unsub;
   }, [excalidrawAPI]);
 
-  // Map-click → panel selection for data/raster layers
+  // Map-click → panel selection for data/raster layers, and the attribute
+  // popup for the feature under the pointer. The hand tool lets the click
+  // through to MapLibre; with the selection tool Excalidraw takes the press,
+  // and a click on empty canvas reaches the same handler
+  // (useCanvasClickThrough).
+  const featurePopup = useFeaturePopup(map as unknown as PopupMap | null);
+  const { show: showFeaturePopup, close: closeFeaturePopup } = featurePopup;
+  const handleMapClick = useCallback(
+    (point: maplibregl.Point, lngLat: maplibregl.LngLat) => {
+      if (!map) {
+        return;
+      }
+      const overlays = currentDocument().snapshot().overlays;
+
+      // The topmost visible data layer under the pointer wins (featureAt).
+      const hit = featureAt(map, overlays, point);
+      if (hit) {
+        useSelectedLayerStore.getState().selectLayer(hit.overlayId);
+        showFeaturePopup(hit, lngLat);
+        return;
+      }
+      closeFeaturePopup();
+
+      // Rasters draw no features: test the point against the projected
+      // corners, top raster first, visible ones only.
+      const rasters = overlays
+        .filter((e): e is RasterLayerEntry => e.kind === "raster" && e.visible)
+        .sort((a, b) => b.order - a.order);
+      for (const r of rasters) {
+        const screenCorners = r.corners.map((c) => map.project(c));
+        if (pointInPolygon(point, screenCorners)) {
+          useSelectedLayerStore.getState().selectLayer(r.id);
+          return;
+        }
+      }
+
+      // Click on empty area → clear selection
+      useSelectedLayerStore.getState().clearSelection();
+    },
+    [map, showFeaturePopup, closeFeaturePopup],
+  );
   useEffect(() => {
     if (!map) {
       return;
@@ -649,50 +693,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (activeTool && activeTool !== "selection" && activeTool !== "hand") {
         return;
       }
-
-      const overlays = currentDocument().snapshot().overlays;
-
-      // One query per layer, top of the stack first. MapLibre answers a
-      // query that names a layer missing from the style with [] for every
-      // layer, so one rejected overlay must not blank the others.
-      const dataLayers = overlays
-        .filter((e) => e.kind === "data" && e.visible)
-        .sort((a, b) => b.order - a.order);
-      for (const entry of dataLayers) {
-        if (!map.getLayer(entry.id)) {
-          continue;
-        }
-        const hit = map.queryRenderedFeatures(e.point, {
-          layers: [entry.id],
-        });
-        if (hit.length > 0) {
-          useSelectedLayerStore.getState().selectLayer(entry.id);
-          return;
-        }
-      }
-
-      // Rasters draw no features: test the point against the projected
-      // corners, top raster first, visible ones only.
-      const rasters = overlays
-        .filter((e): e is RasterLayerEntry => e.kind === "raster" && e.visible)
-        .sort((a, b) => b.order - a.order);
-      for (const r of rasters) {
-        const screenCorners = r.corners.map((c) => map.project(c));
-        if (pointInPolygon(e.point, screenCorners)) {
-          useSelectedLayerStore.getState().selectLayer(r.id);
-          return;
-        }
-      }
-
-      // Click on empty area → clear selection
-      useSelectedLayerStore.getState().clearSelection();
+      handleMapClick(e.point, e.lngLat);
     };
 
     map.on("click", handler);
     return () => {
       map.off("click", handler);
     };
-  }, [map, excalidrawAPI]);
+  }, [map, excalidrawAPI, handleMapClick]);
+  useCanvasClickThrough(excalidrawAPI, map, handleMapClick);
 
   // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
   useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);
@@ -1269,6 +1278,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               </MainMenu>
             </Excalidraw>
           </div>
+
+          {/* The attributes of the feature the last map click opened. */}
+          <FeaturePopup
+            popup={featurePopup.popup}
+            onClose={featurePopup.close}
+          />
 
           {/* Phase 6 A3 — anchored comment overlay. Iterates the live
           CommentsLayer and renders one bubble per unresolved comment,
