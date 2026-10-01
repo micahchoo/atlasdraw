@@ -326,9 +326,10 @@ Any server that speaks the S3 API can work:
   source or already run. Run it on a different host or disk from Postgres,
   so that one failure does not take both.
 
-The adapter has been run against MinIO only. CI tests it against an
-in-memory stand-in, not a real S3 server. Before you go live, check your
-provider: save a map, then open its share link in a private window.
+CI runs the adapter's contract tests against SeaweedFS's S3 gateway, and the
+adapter has also run against MinIO. Providers differ in small ways, so before
+you go live, check yours: save a map, then open its share link in a private
+window.
 
 ### Set the variables
 

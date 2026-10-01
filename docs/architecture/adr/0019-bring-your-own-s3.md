@@ -70,8 +70,8 @@ Bring your own S3 (choice 3).
   bucket before the volume goes.
 - **The storage server makes outbound calls** to `BLOB_ENDPOINT` when it is
   outside the host. The egress note in the guide names it.
-- **Open: CI has no real-S3 job.** The contract tests
-  (`adapter-contract.test.ts`) run against real S3 only when
-  `ATLASDRAW_TEST_S3_URL` is set. CI does not set it, so the S3 half runs
-  against an in-memory stand-in. A real-S3 CI job needs an S3-compatible
-  test server image that CI can pull. That server is not chosen yet.
+- **CI tests against a real S3 server: SeaweedFS** (decided 2026-10-01).
+  The storage job starts `chrislusf/seaweedfs` with its S3 gateway and sets
+  `ATLASDRAW_TEST_S3_URL`, so the adapter contract tests run against real
+  S3 together with real Postgres. SeaweedFS is Apache-2.0, one container,
+  and its images pull without an account.

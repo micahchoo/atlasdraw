@@ -39,7 +39,7 @@ jobs:
       - run: yarn test:app --watch=false
 
   storage-postgres:
-    name: Storage adapter and migrations against real Postgres
+    name: Storage adapter and migrations against real Postgres and S3
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -55,8 +55,9 @@ jobs:
           --health-timeout 5s
           --health-retries 15
     env:
-      # The Postgres tests in apps/storage run only when this is set.
+      # The Postgres and S3 tests in apps/storage run only when these are set.
       ATLASDRAW_TEST_PG_URL: postgres://postgres:test@localhost:5432/atlasdraw_test
+      ATLASDRAW_TEST_S3_URL: http://testkey:testsecret@localhost:8333
     defaults:
       run:
         working-directory: code
@@ -70,6 +71,18 @@ jobs:
           cache: yarn
           cache-dependency-path: code/yarn.lock
       - run: yarn install --immutable
+      # An S3-compatible server, as an operator's own bucket would be
+      # (docs/architecture/adr/0019-bring-your-own-s3.md). SeaweedFS needs an
+      # identity file, which a `services:` container cannot mount, so it
+      # starts here.
+      - name: Start SeaweedFS S3
+        run: |
+          mkdir -p "$RUNNER_TEMP/s3"
+          echo '{"identities":[{"name":"ci","credentials":[{"accessKey":"testkey","secretKey":"testsecret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > "$RUNNER_TEMP/s3/s3.json"
+          docker run -d --name s3 -p 8333:8333 -v "$RUNNER_TEMP/s3/s3.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:3.97 server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0
+          for i in $(seq 1 60); do curl -s -o /dev/null localhost:8333 && exit 0; sleep 1; done
+          docker logs s3; exit 1
       - run: yarn vitest run apps/storage
 
   bench:
