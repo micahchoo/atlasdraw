@@ -153,8 +153,8 @@ export function createPostgresMinioAdapter(opts: {
     logger.warn({ err }, "postgres schema setup failed; will retry");
   });
 
-  // HeadBucket first: an app user that may not create buckets (the compose
-  // stack's MinIO user) still works with a bucket made for it. A bucket that
+  // HeadBucket first: a key that may not create buckets (the recommended
+  // key, limited to one bucket) still works with a bucket made for it. A bucket that
   // exists but is not ours is an error: on AWS, BucketAlreadyExists means
   // another account owns the name.
   async function headOrCreateBucket(): Promise<void> {
