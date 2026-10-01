@@ -227,9 +227,12 @@ a thousandth of their size, and elbow arrows were clamped to ±1e6. Fixed in
 the fork:
 
 - Each element records its pixel unit, `customData.atlas.unit` (scene units
-  per screen pixel at the zoom it was drawn at), from every creation path:
-  the editor, pins and seeds, imports, library items and pastes from
-  outside, and the v1 migration. Arrowhead size, dash lengths, rough jitter
+  per screen pixel at the zoom it was drawn at). The fork's creation paths
+  set it through one seam, `stampNewElements(elements, how)`
+  (`packages/element/src/atlasStamp.ts`); the app's own creators (pins,
+  seeds, tools) and the v1 migration set it themselves. Until 2026-10-01
+  the text tool, text paste, image insert and wrap-in-container set none,
+  and pasted text came back about 1024 times too large. Arrowhead size, dash lengths, rough jitter
   and bowing, the adaptive corner radius and cache-canvas padding are
   multiplied by it (`packages/element/src/atlasStyleUnit.ts`). An element
   without a unit is drawn as upstream draws it.
@@ -296,7 +299,9 @@ Kept in scene units, on purpose:
 
 - `DEDUP_TRESHOLD` (elbow arrows, 1 unit): it only drops shorter segments;
   smaller keeps more points and changes nothing visible.
-- `DEFAULT_GRID_SIZE`, `DEFAULT_GRID_STEP`: the atlas has no grid.
+- `DEFAULT_GRID_STEP`: the atlas has no grid. `DEFAULT_GRID_SIZE` is kept
+  as a grid size, but its other use, the duplicate offset, is now in screen
+  pixels (`actionDuplicateSelection.tsx`, multiplied by the editor unit).
 - `INVISIBLY_SMALL_ELEMENT_SIZE` (0.1): a click with no drag is still 0.
 - `MINIMAL_CROP_SIZE` (10, image crop): a crop can go smaller than 10 px.
   Not seen as a problem; change it with the image's unit if it is.
