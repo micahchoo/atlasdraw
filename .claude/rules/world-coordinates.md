@@ -1,7 +1,8 @@
 ---
-scope:
+paths:
   - code/packages/geo/**
   - code/packages/basemap/src/CameraBridge.ts
+  - code/packages/tools/src/convert.ts
   - code/packages/element/src/atlasStyleUnit.ts
   - code/packages/excalidraw/atlasStyleScale.ts
   - code/apps/atlas-app/src/hooks/useCameraBridge.ts

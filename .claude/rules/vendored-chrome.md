@@ -1,5 +1,5 @@
 ---
-scope:
+paths:
   - code/packages/excalidraw/components/**
   - code/packages/excalidraw/css/**
   - code/apps/atlas-app/src/styles/excalidraw-theme.css
@@ -25,7 +25,7 @@ is now a legacy mechanism, not a rule to follow.
    component looks wrong, fix its source.
 
 The theme file shrinks monotonically. When it's empty, delete it and this
-rule's third scope entry.
+rule's third `paths` entry.
 
 Migration state: new vendored-component styling uses `--ad-*` tokens
 directly (pattern B); the override layer is pattern A — don't extend it.

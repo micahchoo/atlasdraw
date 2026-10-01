@@ -1,5 +1,5 @@
 ---
-scope:
+paths:
   - code/apps/atlas-app/nginx.conf
   - code/vercel.json
   - code/Dockerfile
