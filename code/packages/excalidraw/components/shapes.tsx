@@ -11,7 +11,6 @@ import {
   TextIcon,
   ImageIcon,
   EraserIcon,
-  laserPointerToolIcon,
   handIcon,
 } from "./icons";
 
@@ -105,14 +104,6 @@ export const SHAPES = [
     numericKey: KEYS["0"],
     fillable: false,
     toolbar: true,
-  },
-  {
-    icon: laserPointerToolIcon,
-    value: "laser",
-    key: KEYS.K,
-    numericKey: null,
-    fillable: false,
-    toolbar: false,
   },
 ] as const;
 

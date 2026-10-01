@@ -8,8 +8,6 @@ import {
 } from "@atlasdraw/element";
 import { getFrameChildren } from "@atlasdraw/element";
 
-import { KEYS, updateActiveTool } from "@atlasdraw/common";
-
 import { getElementsInGroup } from "@atlasdraw/element";
 
 import { getCommonBounds } from "@atlasdraw/element";
@@ -18,8 +16,6 @@ import { CaptureUpdateAction } from "@atlasdraw/element";
 
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import { setCursorForShape } from "../cursor";
-import { frameToolIcon } from "../components/icons";
 import { getSelectedElements } from "../scene";
 
 import { register } from "./register";
@@ -124,40 +120,6 @@ export const actionupdateFrameRendering = register({
     };
   },
   checked: (appState: AppState) => appState.frameRendering.enabled,
-});
-
-export const actionSetFrameAsActiveTool = register({
-  name: "setFrameAsActiveTool",
-  label: "toolBar.frame",
-  trackEvent: { category: "toolbar" },
-  icon: frameToolIcon,
-  viewMode: false,
-  perform: (elements, appState, _, app) => {
-    const nextActiveTool = updateActiveTool(appState, {
-      type: "frame",
-    });
-
-    setCursorForShape(app.interactiveCanvas, {
-      ...appState,
-      activeTool: nextActiveTool,
-    });
-
-    return {
-      elements,
-      appState: {
-        ...appState,
-        activeTool: updateActiveTool(appState, {
-          type: "frame",
-        }),
-      },
-      captureUpdate: CaptureUpdateAction.EVENTUALLY,
-    };
-  },
-  keyTest: (event) =>
-    !event[KEYS.CTRL_OR_CMD] &&
-    !event.shiftKey &&
-    !event.altKey &&
-    event.key.toLocaleLowerCase() === KEYS.F,
 });
 
 export const actionWrapSelectionInFrame = register({

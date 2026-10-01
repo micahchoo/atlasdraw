@@ -47,8 +47,6 @@ import {
   boltIcon,
   bucketFillIcon,
   ExportImageIcon,
-  mermaidLogoIcon,
-  brainIconThin,
   LibraryIcon,
   historyCommandIcon,
 } from "../icons";
@@ -357,7 +355,6 @@ function CommandPaletteInner({
       );
       const toolCommands: CommandPaletteItem[] = [
         actionManager.actions.toggleHandTool,
-        actionManager.actions.setFrameAsActiveTool,
         actionManager.actions.toggleLassoTool,
       ].map((action) => actionToCommand(action, DEFAULT_CATEGORIES.tools));
 
@@ -564,48 +561,6 @@ function CommandPaletteInner({
             app.toggleLock();
           },
         },
-        {
-          label: `${t("labels.textToDiagram")}...`,
-          category: DEFAULT_CATEGORIES.tools,
-          icon: brainIconThin,
-          viewMode: false,
-          predicate: appProps.aiEnabled,
-          perform: () => {
-            setAppState((state) => ({
-              ...state,
-              openDialog: {
-                name: "ttd",
-                tab: "text-to-diagram",
-              },
-            }));
-          },
-        },
-        {
-          label: `${t("toolBar.mermaidToExcalidraw")}...`,
-          category: DEFAULT_CATEGORIES.tools,
-          icon: mermaidLogoIcon,
-          viewMode: false,
-          predicate: appProps.aiEnabled,
-          perform: () => {
-            setAppState((state) => ({
-              ...state,
-              openDialog: {
-                name: "ttd",
-                tab: "mermaid",
-              },
-            }));
-          },
-        },
-        // {
-        //   label: `${t("toolBar.magicframe")}...`,
-        //   category: DEFAULT_CATEGORIES.tools,
-        //   icon: MagicIconThin,
-        //   viewMode: false,
-        //   predicate: appProps.aiEnabled,
-        //   perform: () => {
-        //     app.onMagicframeToolSelect();
-        //   },
-        // },
       ];
 
       const allCommands = [
