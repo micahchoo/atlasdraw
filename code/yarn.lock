@@ -8047,6 +8047,7 @@ __metadata:
     "@vitest/coverage-v8": "npm:3.2.7"
     "@vitest/ui": "npm:3.2.7"
     chai: "npm:4.3.6"
+    eslint: "npm:^7.32.0"
     eslint-config-prettier: "npm:8.5.0"
     eslint-config-react-app: "npm:7.0.1"
     eslint-plugin-import: "npm:2.31.0"

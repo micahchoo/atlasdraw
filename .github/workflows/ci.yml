@@ -73,8 +73,12 @@ jobs:
       - run: yarn vitest run apps/storage
 
   bench:
-    name: Bench regression gate
+    name: Bench (report only)
     runs-on: ubuntu-latest
+    # The committed baseline was timed on a developer machine, so comparing a
+    # CI runner against it says nothing about a regression. Report only until
+    # the gate compares two runs on the same runner.
+    continue-on-error: true
     defaults:
       run:
         working-directory: code
