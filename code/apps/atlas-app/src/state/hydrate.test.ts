@@ -161,7 +161,7 @@ describe("hydrate", () => {
     });
   });
 
-  it("replays renamedByUser so a reopened rename still beats the generator", async () => {
+  it("moves a v1 annotation entry's user label onto its element", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -175,7 +175,7 @@ describe("hydrate", () => {
           },
         ],
       }),
-      scene: [],
+      scene: [sceneEl("anno-1")],
       layers: new Map(),
       styleRef: {},
       files: new Map(),
@@ -183,14 +183,32 @@ describe("hydrate", () => {
 
     await hydrate(loaded, api);
 
-    const registry = useLayerRegistryStore.getState();
-    expect(registry.entries[0]).toMatchObject({ renamedByUser: true });
+    const [el] = api.getSceneElements();
+    expect(el.customData).toEqual({ atlas: { label: "Ward 3" } });
+  });
 
-    // The behaviour the flag exists for, exercised end to end after a reopen.
-    registry.updateAnnotationLabel("anno-1", "Rectangle near 40.7°N, 74.0°W");
-    expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
-      label: "Ward 3",
-    });
+  it("does not store a generated label on the element", async () => {
+    const { api } = makeAPI();
+    const loaded: AtlasdrawDocument = {
+      manifest: baseManifest({
+        layers: [
+          {
+            kind: "annotation",
+            id: "anno-1",
+            label: "Rectangle",
+            visible: true,
+          },
+        ],
+      }),
+      scene: [sceneEl("anno-1")],
+      layers: new Map(),
+      styleRef: {},
+      files: new Map(),
+    };
+
+    await hydrate(loaded, api);
+
+    expect(api.getSceneElements()[0].customData).toEqual({ atlas: {} });
   });
 
   it("registers data layers and seeds the FC store", async () => {
@@ -294,7 +312,7 @@ describe("hydrate", () => {
     });
   });
 
-  it("preserves visible=false from the manifest after register stamps true", async () => {
+  it("hides an element through customData.atlas.hidden and gives back the opacity an old hide took", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -302,7 +320,13 @@ describe("hydrate", () => {
           { kind: "annotation", id: "hidden", label: "h", visible: false },
         ],
       }),
-      scene: [],
+      scene: [
+        {
+          ...sceneEl("hidden"),
+          opacity: 0,
+          customData: { atlasOriginalOpacity: 60 },
+        },
+      ],
       layers: new Map(),
       styleRef: {},
       files: new Map(),
@@ -310,8 +334,9 @@ describe("hydrate", () => {
 
     await hydrate(loaded, api);
 
-    const entry = useLayerRegistryStore.getState().entries[0];
-    expect(entry?.visible).toBe(false);
+    const [el] = api.getSceneElements();
+    expect(el.opacity).toBe(60);
+    expect(el.customData).toEqual({ atlas: { hidden: true } });
   });
 
   it("clears prior registry + FC entries before applying the loaded doc", async () => {

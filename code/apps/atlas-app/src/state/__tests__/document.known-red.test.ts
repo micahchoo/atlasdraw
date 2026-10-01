@@ -43,6 +43,12 @@ import { useDataLayerFCStore } from "../useDataLayerFCStore";
 import { useRasterImageStore } from "../useRasterImageStore";
 import { useMapInstanceStore } from "../mapInstance";
 import { useBasemapStore } from "../basemap";
+import { useSceneBinding, useSceneStore } from "../scene";
+import {
+  annotationRows,
+  renameAnnotation,
+  setAnnotationVisible,
+} from "../annotations";
 
 import {
   FakeCameraMap,
@@ -143,6 +149,7 @@ function mountEditor(
 ) {
   return renderHook(() => {
     usePersistenceWiring(api, NOTIFY);
+    useSceneBinding(api);
     useLayerRegistrySync(map, api);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
@@ -413,12 +420,22 @@ describe("dirty tracking", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether the canvas shows an element. Today a hidden annotation is drawn at
- * opacity 0. If the fix hides through a renderer filter instead, read that
- * mechanism here; the assertions that use this stay as they are.
+ * Whether the canvas shows an element. A hidden annotation carries
+ * customData.atlas.hidden, which the fork's renderer does not draw
+ * (packages/element/src/atlasHidden.ts).
  */
-function shownOnCanvas(el: { isDeleted?: boolean; opacity?: number }): boolean {
-  return !el.isDeleted && (el.opacity ?? 100) > 0;
+function shownOnCanvas(el: {
+  isDeleted?: boolean;
+  opacity?: number;
+  customData?: Record<string, unknown>;
+}): boolean {
+  const atlas = el.customData?.atlas as { hidden?: boolean } | undefined;
+  return !el.isDeleted && (el.opacity ?? 100) > 0 && atlas?.hidden !== true;
+}
+
+/** The annotation rows the layer panel shows. */
+function panelRows() {
+  return annotationRows(useSceneStore.getState().elements);
 }
 
 describe("annotation rows after reload and undo", () => {
@@ -427,17 +444,13 @@ describe("annotation rows after reload and undo", () => {
     const fx = makeFakeExcalidraw();
     mountEditor(fx.api);
     await waitForHydrate(fx.api);
-    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual([
-      "rect-1",
-    ]);
+    expect(panelRows().map((r) => r.id)).toEqual(["rect-1"]);
 
     act(() =>
       fx.setElements(fx.all().map((el) => ({ ...el, isDeleted: true }))),
     );
 
-    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
-      [],
-    );
+    expect(panelRows().map((r) => r.id)).toEqual([]);
     await act(async () => {
       await usePersistenceStore.getState().forceSave();
     });
@@ -445,36 +458,30 @@ describe("annotation rows after reload and undo", () => {
     expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);
   });
 
-  // KNOWN-RED (W3 document owner): the registry is not under Excalidraw's undo, so delete-then-undo re-registers the shape with a generated label and visible:true while the element itself comes back at opacity 0. Flip to it() when fixed.
-  it.fails(
-    "undo of a delete restores the user's label and hidden state, and the canvas agrees with the panel",
-    async () => {
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      act(() => fx.setElements([geoRect("rect-9")]));
-      act(() => {
-        useLayerRegistryStore.getState().renameLayer("rect-9", "Ward 3");
-        useLayerRegistryStore.getState().setVisibility("rect-9", false);
-      });
-      const hidden = fx.all()[0];
-      expect(shownOnCanvas(hidden)).toBe(false); // the hide reached the canvas
+  it("undo of a delete restores the user's label and hidden state, and the canvas agrees with the panel", async () => {
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    act(() => fx.setElements([geoRect("rect-9")]));
+    act(() => {
+      renameAnnotation(fx.api, "rect-9", "Ward 3");
+      setAnnotationVisible(fx.api, "rect-9", false);
+    });
+    const hidden = fx.all()[0];
+    expect(shownOnCanvas(hidden)).toBe(false); // the hide reached the canvas
 
-      // Delete, then undo: Excalidraw's history puts back the element exactly
-      // as it was before the delete.
-      act(() => fx.setElements([{ ...hidden, isDeleted: true }]));
-      act(() => fx.setElements([{ ...hidden, isDeleted: false }]));
+    // Delete, then undo: Excalidraw's history puts back the element exactly
+    // as it was before the delete.
+    act(() => fx.setElements([{ ...hidden, isDeleted: true }]));
+    act(() => fx.setElements([{ ...hidden, isDeleted: false }]));
 
-      const entry = useLayerRegistryStore
-        .getState()
-        .entries.find((e) => e.id === "rect-9");
-      expect(entry).toMatchObject({
-        label: "Ward 3",
-        renamedByUser: true,
-        visible: false,
-      });
-      expect(shownOnCanvas(fx.api.getSceneElements()[0])).toBe(entry?.visible);
-    },
-  );
+    const entry = panelRows().find((r) => r.id === "rect-9");
+    expect(entry).toMatchObject({
+      label: "Ward 3",
+      renamedByUser: true,
+      visible: false,
+    });
+    expect(shownOnCanvas(fx.api.getSceneElements()[0])).toBe(entry?.visible);
+  });
 });
 
 // ---------------------------------------------------------------------------

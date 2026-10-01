@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Phase 2 Wave 2b T12 — LayerPanel.
 //
-// Two sections (data layers + annotations) sourced from the LayerRegistry
-// Zustand store. Renders the panel BODY only — no Sidebar wrapper. The
+// Annotation rows are computed from the Excalidraw scene (state/annotations.ts)
+// and their commands write the element. Data and raster rows come from the
+// LayerRegistry Zustand store. Renders the panel BODY only — no Sidebar wrapper. The
 // parent surface (DefaultSidebar via the atlasdraw fork's
 // `excalidrawAPI.registerSidebarTab` API) provides the dockable shell,
 // trigger button, and tab routing. MapEditor registers this component
@@ -29,9 +30,9 @@
 //     the move cost). It is no longer a floating dialog clipped by this
 //     panel's own overflow.
 //
-// Annotation entries are NOT data layers: no style, no FeatureCollection, no
-// attributes. They keep the plain row they always had rather than a card with
-// four empty sections.
+// Annotation rows are NOT data layers: no style, no FeatureCollection, no
+// attributes. They keep a plain row rather than a card with four empty
+// sections.
 //
 // Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T12
 // Design: PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §2, §4
@@ -55,6 +56,13 @@ import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { useSelectedLayerStore } from "../state/selectedLayer";
+import { useAnnotationRows, useSceneStore } from "../state/scene";
+import {
+  deleteAnnotation,
+  moveAnnotation,
+  renameAnnotation,
+  setAnnotationVisible,
+} from "../state/annotations";
 import { fitMapToBox, fitMapToLayer } from "../lib/fitMapToContent";
 
 import styles from "../styles/LayerPanel.module.css";
@@ -65,11 +73,11 @@ import { StylePanel } from "./StylePanel";
 
 import type {
   LayerRegistryEntry,
-  AnnotationLayerEntry,
   DataLayerEntry,
   RasterLayerEntry,
   LayerStyle,
 } from "../state/layerRegistry";
+import type { AnnotationRow } from "../state/annotations";
 import type { FeatureCollection } from "geojson";
 
 /**
@@ -286,8 +294,11 @@ type LayerActions = {
   zoomTo: (id: string) => void;
 };
 
+/** A row in any section: a registry layer, or an annotation from the scene. */
+type PanelEntry = LayerRegistryEntry | AnnotationRow;
+
 interface LayerRowProps {
-  entry: LayerRegistryEntry;
+  entry: PanelEntry;
   mutators: Mutators;
   allIds: string[];
 }
@@ -632,7 +643,7 @@ function OverflowMenu({
   actions,
   onStartRename,
 }: {
-  entry: LayerRegistryEntry;
+  entry: PanelEntry;
   actions: LayerActions;
   onStartRename: () => void;
 }) {
@@ -1178,7 +1189,7 @@ function AnnotationLayerRow({
   selected = false,
   onSelect,
 }: {
-  entry: AnnotationLayerEntry;
+  entry: AnnotationRow;
   mutators: Mutators;
   actions: LayerActions;
   allIds: string[];
@@ -1191,9 +1202,7 @@ function AnnotationLayerRow({
 
   // An annotation has no style, no FeatureCollection and no attributes, so it
   // gets a row rather than a card — four empty sections would be worse than
-  // none. TODO(T14-adjacent): registry-only visibility flip lands here today.
-  // Mutating the actual Excalidraw element via excalidrawAPI.updateScene
-  // is deferred until Wave 2c — see plan §844.
+  // none. Its mutators write the scene element.
   return (
     <SortableRow entry={entry} mutators={mutators} allIds={allIds}>
       <div
@@ -1469,6 +1478,14 @@ export function LayerPanel() {
     renameLayer,
   } = useLayerRegistry();
 
+  const annotations = useAnnotationRows();
+  const isAnnotation = (id: string) => annotations.some((r) => r.id === id);
+  const labelOf = (id: string) =>
+    (entries.find((e) => e.id === id) ?? annotations.find((r) => r.id === id))
+      ?.label ?? id;
+  /** The scene, for the annotation commands. Null before Excalidraw mounts. */
+  const scene = () => useSceneStore.getState().api;
+
   const selectedLayerIds = useSelectedLayerStore((s) => s.selectedLayerIds);
   const selectLayer = useSelectedLayerStore((s) => s.selectLayer);
 
@@ -1497,21 +1514,54 @@ export function LayerPanel() {
     updateStyle,
   };
 
+  // An annotation row writes its scene element. The element's version rises
+  // and Excalidraw records an undo step for each command.
+  const annotationMutators: Mutators = {
+    setVisibility: (id, visible) => {
+      const api = scene();
+      if (api) {
+        setAnnotationVisible(api, id, visible);
+        announce(`Layer "${labelOf(id)}" ${visible ? "shown" : "hidden"}`);
+      }
+    },
+    reorder: (id, newOrder) => {
+      const api = scene();
+      if (api) {
+        moveAnnotation(api, id, newOrder);
+      }
+    },
+    updateStyle: () => {},
+  };
+
   const actions: LayerActions = {
     rename: (id, label) => {
-      renameLayer(id, label);
+      const api = scene();
+      if (isAnnotation(id)) {
+        if (api) {
+          renameAnnotation(api, id, label);
+        }
+      } else {
+        renameLayer(id, label);
+      }
       announce(`Layer renamed to "${label}"`);
     },
     remove: (id) => {
-      const name = entries.find((e) => e.id === id)?.label ?? id;
+      const name = labelOf(id);
       // Collapse first: a card left "expanded" by id would re-open the next
       // layer that happens to reuse the slot.
       setExpandedId((cur) => (cur === id ? null : cur));
-      remove(id);
+      const api = scene();
+      if (isAnnotation(id)) {
+        if (api) {
+          deleteAnnotation(api, id);
+        }
+      } else {
+        remove(id);
+      }
       announce(`Layer "${name}" deleted`);
     },
     zoomTo: (id) => {
-      const name = entries.find((e) => e.id === id)?.label ?? id;
+      const name = labelOf(id);
       const entry = entries.find((e) => e.id === id);
       const map = useMapInstanceStore.getState().map;
 
@@ -1563,10 +1613,6 @@ export function LayerPanel() {
     .filter((e): e is DataLayerEntry => e.kind === "data")
     .slice()
     .sort(byOrder);
-  const annotations = entries
-    .filter((e): e is AnnotationLayerEntry => e.kind === "annotation")
-    .slice()
-    .sort(byOrder);
   const rasters = entries
     .filter((e): e is RasterLayerEntry => e.kind === "raster")
     .slice()
@@ -1597,7 +1643,7 @@ export function LayerPanel() {
             <AnnotationLayerRow
               key={entry.id}
               entry={entry}
-              mutators={mutators}
+              mutators={annotationMutators}
               actions={actions}
               allIds={annotationIds}
               selected={!!selectedLayerIds[entry.id]}

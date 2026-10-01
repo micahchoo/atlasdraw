@@ -17,6 +17,13 @@ import { LayerPanel } from "../LayerPanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useSelectedLayerStore } from "../../state/selectedLayer";
 
+import {
+  sceneAnnotationIds,
+  sceneRow,
+  seedScene,
+  unbindPanelScene,
+} from "./fixtures/panelScene";
+
 import type { FeatureCollection } from "geojson";
 
 const emptyFc = (count: number): FeatureCollection => ({
@@ -37,12 +44,12 @@ beforeEach(() => {
 // and getByLabelText collides with stale rows.
 afterEach(() => {
   cleanup();
+  unbindPanelScene();
 });
 
-/** Seed two annotation layers so we can test reorder interactions. */
+/** Seed two annotations so we can test reorder interactions. */
 function seedTwo() {
-  useLayerRegistryStore.getState().registerAnnotation("el-1", "First");
-  useLayerRegistryStore.getState().registerAnnotation("el-2", "Second");
+  seedScene(["el-1", "First"], ["el-2", "Second"]);
 }
 
 describe("LayerPanel", () => {
@@ -67,7 +74,7 @@ describe("LayerPanel", () => {
   });
 
   it("renders an AnnotationLayerRow with the 'Annotation' badge", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "MyShape");
+    seedScene(["el-1", "MyShape"]);
 
     render(<LayerPanel />);
 
@@ -158,11 +165,9 @@ describe("LayerPanel", () => {
       const downBtn = screen.getByTestId("layer-down-el-1");
       fireEvent.click(downBtn);
 
-      const entries = useLayerRegistryStore.getState().entries;
-      expect(entries[0].id).toBe("el-2");
-      expect(entries[0].order).toBe(0);
-      expect(entries[1].id).toBe("el-1");
-      expect(entries[1].order).toBe(1);
+      expect(sceneAnnotationIds()).toEqual(["el-2", "el-1"]);
+      expect(sceneRow("el-2")?.order).toBe(0);
+      expect(sceneRow("el-1")?.order).toBe(1);
     });
 
     // FU-4. The grip is the only drag source. `draggable` on the row made every
@@ -203,9 +208,7 @@ describe("LayerPanel", () => {
       fireEvent.dragOver(target, { dataTransfer, clientY: 1000 });
       fireEvent.drop(target, { dataTransfer });
 
-      const entries = useLayerRegistryStore.getState().entries;
-      expect(entries[0].id).toBe("el-2");
-      expect(entries[1].id).toBe("el-1");
+      expect(sceneAnnotationIds()).toEqual(["el-2", "el-1"]);
     });
   });
 
@@ -228,19 +231,11 @@ describe("LayerPanel", () => {
         label: "D2",
         style: {},
       });
-      store.registerAnnotation("a1", "A1");
-      store.registerAnnotation("a2", "A2");
-      store.registerAnnotation("a3", "A3");
+      seedScene(["a1", "A1"], ["a2", "A2"], ["a3", "A3"]);
     }
 
     const ids = () => useLayerRegistryStore.getState().entries.map((e) => e.id);
-    const annotationIds = () =>
-      useLayerRegistryStore
-        .getState()
-        .entries.filter((e) => e.kind === "annotation")
-        .slice()
-        .sort((a, b) => a.order - b.order)
-        .map((e) => e.id);
+    const annotationIds = sceneAnnotationIds;
 
     /**
      * jsdom implements no DragEvent, so RTL falls back to a bare Event and
@@ -402,11 +397,8 @@ describe("LayerPanel", () => {
       expect(ids()).toEqual(["dl:only-2", "dl:only-1"]);
     });
 
-    it("works on an annotation-only registry", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("s1", "S1");
-      store.registerAnnotation("s2", "S2");
-      store.registerAnnotation("s3", "S3");
+    it("works on an annotation-only document", () => {
+      seedScene(["s1", "S1"], ["s2", "S2"], ["s3", "S3"]);
       render(<LayerPanel />);
 
       dragOnto("s1", "s3", "below");
@@ -417,7 +409,7 @@ describe("LayerPanel", () => {
     });
 
     it("a single-row section has both arrows disabled", () => {
-      useLayerRegistryStore.getState().registerAnnotation("solo", "Solo");
+      seedScene(["solo", "Solo"]);
       render(<LayerPanel />);
 
       expect(
@@ -476,7 +468,7 @@ describe("LayerPanel — Threads section (Step 5)", () => {
 
 describe("LayerPanel — rename via the ⋯ menu", () => {
   it("opens the rename editor from an annotation's ⋯ menu and commits on Enter", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
@@ -485,14 +477,15 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     fireEvent.change(input, { target: { value: "Ward 3" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1"),
-    ).toMatchObject({ label: "Ward 3", renamedByUser: true });
+    expect(sceneRow("el-1")).toMatchObject({
+      label: "Ward 3",
+      renamedByUser: true,
+    });
     expect(screen.getByText("Ward 3")).toBeTruthy();
   });
 
   it("commits an annotation rename on blur", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
@@ -501,14 +494,11 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     fireEvent.change(input, { target: { value: "Ward 3" } });
     fireEvent.blur(input);
 
-    expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1")
-        ?.label,
-    ).toBe("Ward 3");
+    expect(sceneRow("el-1")?.label).toBe("Ward 3");
   });
 
   it("Escape abandons an annotation rename and leaves no flag behind", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
@@ -517,9 +507,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     fireEvent.change(input, { target: { value: "oops" } });
     fireEvent.keyDown(input, { key: "Escape" });
 
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "el-1");
+    const entry = sceneRow("el-1");
     expect(entry?.label).toBe("Rectangle");
     // An abandoned rename must not retire automatic naming for the shape.
     expect(entry).not.toHaveProperty("renamedByUser", true);
@@ -527,7 +515,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
   });
 
   it("treats a cleared box as a cancel, not as a blank name", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
@@ -536,10 +524,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     fireEvent.change(input, { target: { value: "   " } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === "el-1")
-        ?.label,
-    ).toBe("Rectangle");
+    expect(sceneRow("el-1")?.label).toBe("Rectangle");
   });
 
   it("opens the same editor from a data layer's ⋯ menu", () => {
@@ -564,7 +549,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
   });
 
   it("leaves the open rename box with no draggable ancestor", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     // A draggable ancestor turns a press-and-sweep over the input's text into a
@@ -608,7 +593,7 @@ describe("LayerPanel — raster layers", () => {
   }
 
   it("hides the section entirely when there is no imagery", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     // Most documents have no raster. An empty section in a 294px column is a
@@ -650,7 +635,7 @@ describe("LayerPanel — raster layers", () => {
     // Annotations (topmost) → Data Layers (vectors) → Images (rasters)
     // → Basemap (foundation). Threads is a review surface, not a layer.
     seedRaster();
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Note");
+    seedScene(["el-1", "Note"]);
     useLayerRegistryStore.getState().registerDataLayer({
       id: "dl:parcels",
       fc: { type: "FeatureCollection", features: [] },
@@ -674,7 +659,7 @@ describe("LayerPanel — raster layers", () => {
     // reindexByKind numbers per kind, so the first raster is "first" even with
     // annotations above it. If the two shared a counter this up button would
     // be enabled and moving it would address the wrong stack.
-    useLayerRegistryStore.getState().registerAnnotation("el-1");
+    seedScene(["el-1"]);
     const id = seedRaster();
     render(<LayerPanel />);
 
@@ -758,7 +743,7 @@ describe("LayerPanel — row selection", () => {
   });
 
   it("selects an annotation row by clicking its name label", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "Rectangle");
+    seedScene(["el-1"]);
     render(<LayerPanel />);
 
     fireEvent.click(screen.getByTestId("layer-name-el-1"));

@@ -35,8 +35,7 @@ import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { sceneSignature } from "../state/sceneSignature";
-import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useSelectedLayerStore } from "../state/selectedLayer";
+import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type maplibregl from "maplibre-gl";
@@ -229,25 +228,17 @@ export function useExcalidrawChangeHandler({
       // data/raster selections made from the panel are preserved. The
       // key-set comparison before writing breaks the feedback loop with
       // MapEditor's store→scene subscriber (a no-op write still notifies).
+      // Every selected canvas id is an annotation: annotations are the
+      // scene's elements. Data and raster ids carry a dl:/rl: prefix and are
+      // selected only from the panel, so they are kept.
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(appState.selectedElementIds ?? {})) {
-        // Check if this id belongs to a registered annotation
-        const entry = useLayerRegistryStore
-          .getState()
-          .entries.find((e) => e.id === id && e.kind === "annotation");
-        if (entry) {
-          annotationIds[id] = true;
-        }
+        annotationIds[id] = true;
       }
-      // Merge with existing non-annotation selections from the store
       const storeState = useSelectedLayerStore.getState();
       const existing = { ...storeState.selectedLayerIds };
-      // Remove stale annotation keys, add current ones
       for (const key of Object.keys(existing)) {
-        const isAnnotation = useLayerRegistryStore
-          .getState()
-          .entries.some((e) => e.id === key && e.kind === "annotation");
-        if (isAnnotation && !annotationIds[key]) {
+        if (!isOverlayId(key) && !annotationIds[key]) {
           delete existing[key];
         }
       }

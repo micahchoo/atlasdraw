@@ -15,14 +15,20 @@
 
 import { create } from "zustand";
 
+/**
+ * True for a data-layer or raster id. Every other selectable id is an
+ * Excalidraw element id, which is an annotation.
+ */
+export function isOverlayId(id: string): boolean {
+  return id.startsWith("dl:") || id.startsWith("rl:");
+}
+
 export type SelectedLayerState = {
   selectedLayerIds: Record<string, true>;
   /** Replace the entire selection set. */
   setSelectedLayerIds: (ids: Record<string, true>) => void;
   /** Single-select: replace selection with exactly this id. */
   selectLayer: (id: string) => void;
-  /** Toggle one id in/out of the current set. */
-  toggleLayerSelection: (id: string) => void;
   /** Deselect everything. */
   clearSelection: () => void;
 };
@@ -31,15 +37,5 @@ export const useSelectedLayerStore = create<SelectedLayerState>()((set) => ({
   selectedLayerIds: {},
   setSelectedLayerIds: (ids) => set({ selectedLayerIds: ids }),
   selectLayer: (id) => set({ selectedLayerIds: { [id]: true } }),
-  toggleLayerSelection: (id) =>
-    set((s) => {
-      const next = { ...s.selectedLayerIds };
-      if (next[id]) {
-        delete next[id];
-      } else {
-        next[id] = true;
-      }
-      return { selectedLayerIds: next };
-    }),
   clearSelection: () => set({ selectedLayerIds: {} }),
 }));

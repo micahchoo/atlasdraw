@@ -82,6 +82,7 @@ const EMPTY_SIDEBAR_TABS: never[] = [];
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
+  getSceneElementsIncludingDeleted: () => [],
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
   toggleSidebar: vi.fn(),

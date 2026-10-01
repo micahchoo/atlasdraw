@@ -36,6 +36,8 @@ import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
 import { useRasterImageStore } from "../../state/useRasterImageStore";
 import { hydrate } from "../../state/hydrate";
+import { useSceneBinding, useSceneStore } from "../../state/scene";
+import { annotationRows } from "../../state/annotations";
 import { reconcileDataLayers } from "../../lib/dataLayerRender";
 import { LayerPanel } from "../../components/LayerPanel";
 import { StylePanel } from "../../components/StylePanel";
@@ -421,10 +423,10 @@ describe("raster layers follow the registry onto the map", () => {
 // ---------------------------------------------------------------------------
 
 describe("annotation rows act on the scene", () => {
-  // KNOWN-RED (W5 map overlays): confirming Delete on an annotation row removes the registry entry and leaves the Excalidraw element live in the scene. Flip to it() when fixed.
-  it.fails("Delete on an annotation row deletes the shape", () => {
+  it("Delete on an annotation row deletes the shape", () => {
     const scene = fakeExcalidraw();
-    renderHook(() => useLayerRegistrySync(null, scene.api));
+    // Annotation rows are computed from the scene the panel is bound to.
+    renderHook(() => useSceneBinding(scene.api));
     act(() =>
       scene.api.updateScene({
         elements: [
@@ -434,9 +436,9 @@ describe("annotation rows act on the scene", () => {
         >[0]["elements"],
       }),
     );
-    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual([
-      "el-1",
-    ]);
+    expect(
+      annotationRows(useSceneStore.getState().elements).map((r) => r.id),
+    ).toEqual(["el-1"]);
 
     render(<LayerPanel />);
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));

@@ -26,6 +26,8 @@ import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
 import { useMapInstanceStore } from "../../state/mapInstance";
 
+import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
+
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 
@@ -122,6 +124,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  unbindPanelScene();
 });
 
 describe("data layer card — disclosure", () => {
@@ -559,7 +562,7 @@ describe("scale (step 6)", () => {
 
   it("annotations are unaffected by the data-layer filter", () => {
     seedMany(12, "Road");
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "A note");
+    seedScene(["el-1", "A note"]);
     render(<LayerPanel />);
 
     fireEvent.change(screen.getByTestId("layer-filter"), {
@@ -731,7 +734,7 @@ describe("the panel is its own scroll port (step 6)", () => {
 
 describe("annotations are not data layers", () => {
   it("renders a row — no disclosure, no card body, no symbology", () => {
-    useLayerRegistryStore.getState().registerAnnotation("el-1", "MyShape");
+    seedScene(["el-1", "MyShape"]);
     render(<LayerPanel />);
 
     expect(screen.queryByTestId("layer-disclosure-el-1")).toBeNull();

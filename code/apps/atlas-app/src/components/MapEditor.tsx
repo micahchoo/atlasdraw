@@ -95,7 +95,8 @@ import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useSelectedLayerStore } from "../state/selectedLayer";
+import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
+import { useSceneBinding } from "../state/scene";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -640,12 +641,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (!excalidrawAPI) {
         return;
       }
-      // Filter to only annotation IDs (these are Excalidraw element ids)
+      // Annotation ids are Excalidraw element ids; data and raster ids are
+      // not, and Excalidraw must not be asked to select them.
       const registryEntries = useLayerRegistryStore.getState().entries;
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(state.selectedLayerIds)) {
-        const entry = registryEntries.find((e) => e.id === id);
-        if (entry?.kind === "annotation") {
+        if (!isOverlayId(id)) {
           annotationIds[id] = true;
         }
       }
@@ -685,7 +686,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           }
         }
         // For annotation → zoom to its geo-anchor bounds
-        if (entry?.kind === "annotation") {
+        if (!isOverlayId(id)) {
           const m = useMapInstanceStore.getState().map;
           if (m) {
             const elements = excalidrawAPI.getSceneElements();
@@ -793,6 +794,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // the PersistenceStore, loads + hydrates any previously-persisted document,
   // starts auto-save, and mirrors dirty/drain state into Zustand.
   usePersistenceWiring(excalidrawAPI, documentNotify);
+  // Publish the scene for the layer panel's annotation rows and commands.
+  useSceneBinding(excalidrawAPI);
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).

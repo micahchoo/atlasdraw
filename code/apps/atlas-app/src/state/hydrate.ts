@@ -53,6 +53,48 @@ export function restoreCamera(camera: Camera): boolean {
   return true;
 }
 
+type SceneElement = AtlasdrawDocument["scene"][number];
+
+/**
+ * Move what a manifest's annotation entries say onto their elements: a label
+ * the user typed becomes `customData.atlas.label`, a hidden entry becomes
+ * `customData.atlas.hidden`. An element hidden the old way (opacity 0, the
+ * real opacity kept in `customData.atlasOriginalOpacity`) gets its opacity
+ * back. The element is then the one place that holds these facts.
+ */
+function liftAnnotations(
+  scene: AtlasdrawDocument["scene"],
+  layers: AtlasdrawDocument["manifest"]["layers"],
+): SceneElement[] {
+  const entries = new Map(
+    layers.flatMap((l) => (l.kind === "annotation" ? [[l.id, l]] : [])),
+  );
+  return scene.map((el) => {
+    const entry = entries.get(el.id);
+    const customData = (el.customData ?? {}) as Record<string, unknown>;
+    const stash = customData.atlasOriginalOpacity;
+    if (!entry && stash === undefined) {
+      return el;
+    }
+    const { atlasOriginalOpacity: _stash, ...rest } = customData;
+    const atlas = { ...((rest.atlas as object | undefined) ?? {}) } as {
+      label?: string;
+      hidden?: boolean;
+    };
+    if (entry?.renamedByUser) {
+      atlas.label = entry.label;
+    }
+    if (entry && !entry.visible) {
+      atlas.hidden = true;
+    }
+    return {
+      ...el,
+      ...(typeof stash === "number" ? { opacity: stash } : {}),
+      customData: { ...rest, atlas },
+    };
+  });
+}
+
 /**
  * Apply a loaded `AtlasdrawDocument` to the live editor state.
  *
@@ -115,14 +157,10 @@ export async function hydrate(
   // Step 2 — replay manifest layer entries.
   for (const entry of loaded.manifest.layers) {
     if (entry.kind === "annotation") {
+      // The label and visibility now live on the element (liftAnnotations
+      // below); the registry row only mirrors it.
       registry.registerAnnotation(entry.id, entry.label);
-      if (entry.renamedByUser) {
-        // Same label, second call: registerAnnotation has no slot for the
-        // flag, and renameLayer is the action that owns setting it. Follows
-        // the setVisibility follow-up below rather than widening register's
-        // signature with a positional boolean.
-        registry.renameLayer(entry.id, entry.label);
-      }
+      continue;
     } else if (entry.kind === "raster") {
       // FU-1. This branch exists before anything can write a raster into a
       // manifest, on purpose. What used to be here was a bare `else` that
@@ -204,7 +242,10 @@ export async function hydrate(
   // future recurrence of atlasdraw-27d8 on doc load).
   excalidrawAPI.updateScene({
     elements: syncInvalidIndices(
-      loaded.scene as unknown as Parameters<typeof syncInvalidIndices>[0],
+      liftAnnotations(
+        loaded.scene,
+        loaded.manifest.layers,
+      ) as unknown as Parameters<typeof syncInvalidIndices>[0],
     ) as unknown as Parameters<typeof excalidrawAPI.updateScene>[0]["elements"],
   });
 
