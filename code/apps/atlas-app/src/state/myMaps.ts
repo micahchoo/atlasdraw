@@ -28,6 +28,7 @@ import {
   hasUnsavedWork,
   liveCamera,
   loadDocument,
+  refusedMessage,
   type CameraSource,
 } from "./documentIO";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
@@ -90,7 +91,10 @@ export async function openSavedMap(
       ctx.notify?.error("This map is not saved in this browser now.");
       return false;
     }
-    const opened = await loadDocument(file, ctx.api, { map: ctx.map });
+    const opened = await loadDocument(file, ctx.api, {
+      map: ctx.map,
+      onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+    });
     if (!opened) {
       return false;
     }
@@ -281,7 +285,10 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
     ctx.notify?.error("The server backup is damaged. Your map did not change.");
     return;
   }
-  const opened = await loadDocument(decoded.file, ctx.api, { map: ctx.map });
+  const opened = await loadDocument(decoded.file, ctx.api, {
+    map: ctx.map,
+    onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+  });
   if (!opened) {
     return;
   }

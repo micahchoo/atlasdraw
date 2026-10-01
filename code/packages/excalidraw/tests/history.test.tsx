@@ -11,8 +11,6 @@ import { pointFrom } from "@atlasdraw/math";
 import { newElementWith } from "@atlasdraw/element";
 
 import {
-  EXPORT_DATA_TYPES,
-  MIME_TYPES,
   ORIG_ID,
   KEYS,
   arrayToMap,
@@ -552,124 +550,6 @@ describe("history", () => {
       expect(API.getUndoStack().length).toBe(1);
     });
 
-    it("should create new history entry on scene import via drag&drop", async () => {
-      await render(
-        <Excalidraw
-          initialData={{
-            elements: [API.createElement({ type: "rectangle", id: "A" })],
-            appState: {
-              viewBackgroundColor: "#FFF",
-            },
-          }}
-        />,
-      );
-
-      await waitFor(() => expect(h.state.viewBackgroundColor).toBe("#FFF"));
-      await waitFor(() =>
-        expect(h.elements).toEqual([expect.objectContaining({ id: "A" })]),
-      );
-
-      await API.drop([
-        {
-          kind: "file",
-          file: new Blob(
-            [
-              JSON.stringify({
-                type: EXPORT_DATA_TYPES.excalidraw,
-                appState: {
-                  ...getDefaultAppState(),
-                  viewBackgroundColor: "#000",
-                },
-                elements: [API.createElement({ type: "rectangle", id: "B" })],
-              }),
-            ],
-            { type: MIME_TYPES.json },
-          ),
-        },
-      ]);
-
-      await waitFor(() => expect(API.getUndoStack().length).toBe(1));
-      expect(h.state.viewBackgroundColor).toBe("#000");
-      expect(API.getSnapshot()).toEqual([
-        expect.objectContaining({ id: "A", isDeleted: true }),
-        expect.objectContaining({ id: "B", isDeleted: false }),
-      ]);
-      expect(h.elements).toEqual([
-        expect.objectContaining({ id: "B", isDeleted: false }),
-      ]);
-
-      const undoAction = createUndoAction(h.history);
-      const redoAction = createRedoAction(h.history);
-      API.executeAction(undoAction);
-
-      expect(API.getSnapshot()).toEqual([
-        expect.objectContaining({ id: "A", isDeleted: false }),
-        expect.objectContaining({ id: "B", isDeleted: true }),
-      ]);
-      expect(h.elements).toEqual([
-        expect.objectContaining({ id: "A", isDeleted: false }),
-        expect.objectContaining({ id: "B", isDeleted: true }),
-      ]);
-      expect(h.state.viewBackgroundColor).toBe("#FFF");
-
-      API.executeAction(redoAction);
-      expect(h.state.viewBackgroundColor).toBe("#000");
-      expect(API.getSnapshot()).toEqual([
-        expect.objectContaining({ id: "A", isDeleted: true }),
-        expect.objectContaining({ id: "B", isDeleted: false }),
-      ]);
-      expect(h.elements).toEqual([
-        expect.objectContaining({ id: "A", isDeleted: true }),
-        expect.objectContaining({ id: "B", isDeleted: false }),
-      ]);
-    });
-
-    it("should create new history entry on embeddable link drag&drop", async () => {
-      await render(<Excalidraw handleKeyboardGlobally={true} />);
-
-      const link = "https://www.youtube.com/watch?v=gkGMXY0wekg";
-      await API.drop([
-        {
-          kind: "string",
-          value: link,
-          type: MIME_TYPES.text,
-        },
-      ]);
-
-      await waitFor(() => {
-        expect(API.getUndoStack().length).toBe(1);
-        expect(API.getRedoStack().length).toBe(0);
-        expect(h.elements).toEqual([
-          expect.objectContaining({
-            type: "embeddable",
-            link,
-          }),
-        ]);
-      });
-
-      Keyboard.undo();
-      expect(API.getUndoStack().length).toBe(0);
-      expect(API.getRedoStack().length).toBe(1);
-      expect(h.elements).toEqual([
-        expect.objectContaining({
-          type: "embeddable",
-          link,
-          isDeleted: true,
-        }),
-      ]);
-
-      Keyboard.redo();
-      expect(API.getUndoStack().length).toBe(1);
-      expect(API.getRedoStack().length).toBe(0);
-      expect(h.elements).toEqual([
-        expect.objectContaining({
-          type: "embeddable",
-          link,
-          isDeleted: false,
-        }),
-      ]);
-    });
-
     const setupImageTest = () =>
       _setupImageTest([DEER_IMAGE_DIMENSIONS, SMILEY_IMAGE_DIMENSIONS]);
 
@@ -759,55 +639,6 @@ describe("history", () => {
       );
 
       await assertImageTest();
-    });
-
-    it("should create new history entry on embeddable link paste", async () => {
-      await render(
-        <Excalidraw autoFocus={true} handleKeyboardGlobally={true} />,
-      );
-
-      const link = "https://www.youtube.com/watch?v=gkGMXY0wekg";
-
-      document.dispatchEvent(
-        createPasteEvent({
-          types: {
-            "text/plain": link,
-          },
-        }),
-      );
-
-      await waitFor(() => {
-        expect(API.getUndoStack().length).toBe(1);
-        expect(API.getRedoStack().length).toBe(0);
-        expect(h.elements).toEqual([
-          expect.objectContaining({
-            type: "embeddable",
-            link,
-          }),
-        ]);
-      });
-
-      Keyboard.undo();
-      expect(API.getUndoStack().length).toBe(0);
-      expect(API.getRedoStack().length).toBe(1);
-      expect(h.elements).toEqual([
-        expect.objectContaining({
-          type: "embeddable",
-          link,
-          isDeleted: true,
-        }),
-      ]);
-
-      Keyboard.redo();
-      expect(API.getUndoStack().length).toBe(1);
-      expect(API.getRedoStack().length).toBe(0);
-      expect(h.elements).toEqual([
-        expect.objectContaining({
-          type: "embeddable",
-          link,
-          isDeleted: false,
-        }),
-      ]);
     });
 
     it("should support appstate name or viewBackgroundColor change", async () => {

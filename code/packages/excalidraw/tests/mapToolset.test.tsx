@@ -73,7 +73,9 @@ describe("map toolset", () => {
     }
   });
 
-  it("a document with frame, magic frame, embeddable and iframe elements still loads", async () => {
+  it("a document with frame, magic frame, embeddable and iframe elements still loads, without the embeds", async () => {
+    // Atlasdraw (ADR-0010): `embeddable` and `iframe` are refused on load
+    // (atlasClosedLoadDoors.test.tsx); the rest of the document opens.
     const elements = [
       API.createElement({ type: "frame", id: "frame" }),
       API.createElement({ type: "magicframe", id: "magicframe" }),
@@ -90,8 +92,6 @@ describe("map toolset", () => {
     ).toEqual([
       ["frame", "frame"],
       ["magicframe", "magicframe"],
-      ["embeddable", "embeddable"],
-      ["iframe", "iframe"],
     ]);
   });
 });

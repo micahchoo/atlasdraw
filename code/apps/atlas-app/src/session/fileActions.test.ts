@@ -22,7 +22,7 @@ import {
 } from "../state/__tests__/fixtures/documentWorld";
 
 import { createSession, type EditorSession } from "./EditorSession";
-import { openMap, saveMap } from "./fileActions";
+import { openMap, openSceneFile, saveMap } from "./fileActions";
 
 import type { PersistenceStore } from "../state/persistence";
 import type maplibregl from "maplibre-gl";
@@ -214,5 +214,106 @@ describe("a saved map opens again as it was", () => {
 
     expect(currentDocument().snapshot().title).toBe("Field notes");
     expect(currentDocument().snapshot().basemap).toBe("protomaps-dark");
+  });
+});
+
+describe("openSceneFile: a scene file dropped on the canvas", () => {
+  const excalidrawFile = () =>
+    new File(
+      [
+        JSON.stringify({
+          type: "excalidraw",
+          version: 2,
+          elements: [
+            {
+              id: "dropped",
+              type: "rectangle",
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 50,
+              angle: 0,
+              version: 1,
+              versionNonce: 1,
+              isDeleted: false,
+            },
+          ],
+          appState: { zoom: { value: 1 }, viewBackgroundColor: "#ffffff" },
+        }),
+      ],
+      "drawing.excalidraw",
+      { type: "application/json" },
+    );
+
+  it("opens as a new map where the user looks, and leaves the open map alone", async () => {
+    const { session, map } = editorSession();
+    fakeDisk(session);
+    const before = currentDocument();
+    const n = notify();
+
+    await openSceneFile(session, excalidrawFile(), n, async () => true);
+
+    const opened = currentDocument();
+    expect(opened).not.toBe(before);
+    // A new id: the open map's saved copy is never written over.
+    expect(opened.id).not.toBe(before.id);
+    // The camera stays where it was: the new map starts at the user's view,
+    // not at Excalidraw's zoom 1 (map zoom 22) in the mid-Atlantic.
+    expect(opened.snapshot().camera.center).toEqual([2.35, 48.85]);
+    expect(map.getZoom()).toBe(9);
+    expect(n.success).toHaveBeenCalledTimes(1);
+    expect(n.error).not.toHaveBeenCalled();
+  });
+
+  it("saves the open map's pending changes before the new map replaces it", async () => {
+    const { session } = editorSession();
+    fakeDisk(session);
+    const store = session.persistence.getState().persistenceStore!;
+    (store as { isDirty: () => boolean }).isDirty = () => true;
+    const kept: string[] = [];
+    session.persistence.getState().setForceSave(async () => {
+      kept.push(currentDocument().id);
+    });
+    const before = currentDocument();
+
+    await openSceneFile(session, excalidrawFile(), notify(), async () => true);
+
+    expect(kept).toEqual([before.id]);
+    expect(currentDocument()).not.toBe(before);
+  });
+
+  it("asks before it replaces unsaved work, and opens nothing on No", async () => {
+    const { session } = editorSession();
+    fakeDisk(session);
+    const before = currentDocument();
+    before.dispatch({
+      type: "add-tile-layer",
+      id: "tl:a",
+      label: "A",
+      url: "https://tiles.example/{z}/{x}/{y}.png",
+    });
+    const confirm = vi.fn(async () => false);
+
+    await openSceneFile(session, excalidrawFile(), notify(), confirm);
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(currentDocument()).toBe(before);
+  });
+
+  it("a file that does not read says so and changes nothing", async () => {
+    const { session } = editorSession();
+    fakeDisk(session);
+    const before = currentDocument();
+    const n = notify();
+
+    await openSceneFile(
+      session,
+      new File(["{not json"], "bad.excalidraw"),
+      n,
+      async () => true,
+    );
+
+    expect(n.error).toHaveBeenCalledTimes(1);
+    expect(currentDocument()).toBe(before);
   });
 });

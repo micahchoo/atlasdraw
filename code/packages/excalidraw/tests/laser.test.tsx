@@ -8,7 +8,7 @@ import { getLinkHandleFromCoords } from "../components/hyperlink/helpers";
 
 import { API } from "./helpers/api";
 import { Pointer } from "./helpers/ui";
-import { act, GlobalTestState, render, waitFor } from "./test-utils";
+import { act, GlobalTestState, render } from "./test-utils";
 
 import type { ExcalidrawProps } from "../types";
 
@@ -60,51 +60,6 @@ describe("laser tool interactions", () => {
 
     mouse.clickAt(iconCenterX, iconCenterY);
     expect(onLinkOpenSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("activates embeddables on center click while using the laser tool", async () => {
-    await render(<Excalidraw />);
-
-    const embeddable = API.createElement({
-      type: "embeddable",
-      x: 40,
-      y: 40,
-      width: 300,
-      height: 180,
-    });
-    API.setElements([embeddable]);
-    API.updateElement(embeddable, {
-      link: "https://www.youtube.com/watch?v=gkGMXY0wekg",
-    });
-
-    act(() => {
-      h.app.setActiveTool({ type: "laser" });
-    });
-
-    const handleIframeLikeCenterClickSpy = vi.spyOn(
-      h.app as unknown as {
-        handleIframeLikeCenterClick: () => void;
-      },
-      "handleIframeLikeCenterClick",
-    );
-
-    const centerX = embeddable.x + embeddable.width / 2;
-    const centerY = embeddable.y + embeddable.height / 2;
-
-    mouse.moveTo(centerX, centerY);
-    expect(GlobalTestState.interactiveCanvas.style.cursor).toBe(
-      CURSOR_TYPE.POINTER,
-    );
-    mouse.clickAt(centerX, centerY);
-
-    expect(handleIframeLikeCenterClickSpy).toHaveBeenCalled();
-
-    await waitFor(() => {
-      expect(h.state.activeEmbeddable?.element.id).toBe(embeddable.id);
-      expect(h.state.activeEmbeddable?.state).toBe("active");
-    });
-
-    handleIframeLikeCenterClickSpy.mockRestore();
   });
 
   it("doesn't pan in view mode when laser tool is active", async () => {

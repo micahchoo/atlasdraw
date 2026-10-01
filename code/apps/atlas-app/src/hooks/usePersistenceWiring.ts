@@ -20,6 +20,7 @@ import { currentDocument, followDocument } from "../state/document";
 import {
   liveCamera,
   loadDocument,
+  refusedMessage,
   restoreCamera,
   toFile,
 } from "../state/documentIO";
@@ -166,6 +167,7 @@ export function usePersistenceWiring(
           const opened = await loadDocument(loaded, excalidrawAPI, {
             signal: abort.signal,
             map: view.getState().map,
+            onRefused: (n) => documentNotify.error(refusedMessage(n)),
           });
           if (!opened) {
             return;

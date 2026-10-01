@@ -12,13 +12,10 @@ import {
   applyDarkModeFilter,
   MIME_TYPES,
 } from "@atlasdraw/common";
-import { normalizeLink, toValidURL } from "@atlasdraw/common";
+import { normalizeLink } from "@atlasdraw/common";
 import { hashString } from "@atlasdraw/element";
 import { getUncroppedWidthAndHeight } from "@atlasdraw/element";
-import {
-  createPlaceholderEmbeddableLabel,
-  getEmbedLink,
-} from "@atlasdraw/element";
+import { createPlaceholderEmbeddableLabel } from "@atlasdraw/element";
 import { LinearElementEditor } from "@atlasdraw/element";
 import { getBoundTextElement, getContainerElement } from "@atlasdraw/element";
 import { getLineHeightInPx } from "@atlasdraw/element";
@@ -214,70 +211,8 @@ const renderElementToSvg = (
         renderConfig,
       );
 
-      // render embeddable element + iframe
-      const embeddableNode = roughSVGDrawWithPrecision(
-        rsvg,
-        shape,
-        MAX_DECIMALS_FOR_SVG_EXPORT,
-      );
-      embeddableNode.setAttribute("stroke-linecap", "round");
-      embeddableNode.setAttribute(
-        "transform",
-        `translate(${offsetX || 0} ${
-          offsetY || 0
-        }) rotate(${degree} ${cx} ${cy})`,
-      );
-      while (embeddableNode.firstChild) {
-        embeddableNode.removeChild(embeddableNode.firstChild);
-      }
-      const radius = getCornerRadius(
-        Math.min(element.width, element.height),
-        element,
-      );
-
-      const embedLink = getEmbedLink(toValidURL(element.link || ""));
-
-      // if rendering embeddables explicitly disabled or
-      // embedding documents via srcdoc (which doesn't seem to work for SVGs)
-      // replace with a link instead
-      if (
-        renderConfig.renderEmbeddables === false ||
-        embedLink?.type === "document"
-      ) {
-        const anchorTag = svgRoot.ownerDocument.createElementNS(SVG_NS, "a");
-        anchorTag.setAttribute("href", normalizeLink(element.link || ""));
-        anchorTag.setAttribute("target", "_blank");
-        anchorTag.setAttribute("rel", "noopener noreferrer");
-        anchorTag.style.borderRadius = `${radius}px`;
-
-        embeddableNode.appendChild(anchorTag);
-      } else {
-        const foreignObject = svgRoot.ownerDocument.createElementNS(
-          SVG_NS,
-          "foreignObject",
-        );
-        foreignObject.style.width = `${element.width}px`;
-        foreignObject.style.height = `${element.height}px`;
-        foreignObject.style.border = "none";
-        const div = foreignObject.ownerDocument.createElementNS(SVG_NS, "div");
-        div.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-        div.style.width = "100%";
-        div.style.height = "100%";
-        const iframe = div.ownerDocument.createElement("iframe");
-        iframe.src = embedLink?.link ?? "";
-        iframe.style.width = "100%";
-        iframe.style.height = "100%";
-        iframe.style.border = "none";
-        iframe.style.borderRadius = `${radius}px`;
-        iframe.style.top = "0";
-        iframe.style.left = "0";
-        iframe.allowFullscreen = true;
-        div.appendChild(iframe);
-        foreignObject.appendChild(div);
-
-        embeddableNode.appendChild(foreignObject);
-      }
-      addToRoot(embeddableNode, element);
+      // Atlasdraw (ADR-0010): an export writes no iframe and no link for
+      // an `iframe` or `embeddable` element; the placeholder above is all.
       break;
     }
     case "line":

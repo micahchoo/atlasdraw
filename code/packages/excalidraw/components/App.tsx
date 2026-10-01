@@ -18,7 +18,6 @@ import {
 } from "@atlasdraw/math";
 
 import {
-  COLOR_PALETTE,
   CODES,
   shouldResizeFromCenter,
   shouldMaintainAspectRatio,
@@ -50,7 +49,6 @@ import {
   THEME,
   TOUCH_CTX_MENU_TIMEOUT,
   VERTICAL_ALIGN,
-  YOUTUBE_STATES,
   ZOOM_STEP,
   POINTER_EVENTS,
   TOOL_TYPE,
@@ -58,10 +56,8 @@ import {
   DEFAULT_COLLISION_THRESHOLD,
   DEFAULT_TEXT_ALIGN,
   ARROW_TYPE,
-  DEFAULT_REDUCED_GLOBAL_ALPHA,
   isLocalLink,
   normalizeLink,
-  toValidURL,
   getGridPoint,
   getLineHeight,
   debounce,
@@ -85,7 +81,6 @@ import {
   easeOut,
   updateStable,
   addEventListener,
-  normalizeEOL,
   getDateTime,
   isShallowEqual,
   arrayToMap,
@@ -111,7 +106,6 @@ import {
   loadDesktopUIModePreference,
   setDesktopUIMode,
   isSelectionLikeTool,
-  oneOf,
 } from "@atlasdraw/common";
 
 import {
@@ -149,8 +143,6 @@ import {
   isLinearElement,
   isLinearElementType,
   isUsingAdaptiveRadius,
-  isIframeElement,
-  isIframeLikeElement,
   isTextBindableContainer,
   isElbowArrow,
   isFlowchartNodeElement,
@@ -160,12 +152,7 @@ import {
   isElementCompletelyInViewport,
   isElementInViewport,
   isInvisiblySmallElement,
-  getCornerRadius,
   isPathALoop,
-  createSrcDoc,
-  embeddableURLValidator,
-  maybeParseEmbedSrc,
-  getEmbedLink,
   getInitializedImageElements,
   normalizeSVG,
   updateImageCache as _updateImageCache,
@@ -207,7 +194,6 @@ import {
   getApproxMinLineHeight,
   getMinTextElementWidth,
   ShapeCache,
-  getRenderOpacity,
   editGroupForSelectedElement,
   getElementsInGroup,
   getSelectedGroupIdForElement,
@@ -277,19 +263,13 @@ import type {
   NonDeletedExcalidrawElement,
   ExcalidrawTextContainer,
   ExcalidrawFrameLikeElement,
-  ExcalidrawIframeLikeElement,
-  IframeData,
-  ExcalidrawIframeElement,
-  ExcalidrawEmbeddableElement,
-  Ordered,
-  MagicGenerationData,
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
   SceneElementsMap,
   ExcalidrawBindableElement,
 } from "@atlasdraw/element/types";
 
-import type { Mutable, ValueOf } from "@atlasdraw/common/utility-types";
+import type { Mutable } from "@atlasdraw/common/utility-types";
 
 import {
   actionAddToLibrary,
@@ -351,7 +331,6 @@ import {
   isHandToolActive,
 } from "../appState";
 import {
-  copyTextToSystemClipboard,
   parseClipboard,
   parseDataTransferEvent,
   type ParsedDataTransferFile,
@@ -417,10 +396,7 @@ import {
   resetCursor,
   setCursorForShape,
 } from "../cursor";
-import {
-  ElementCanvasButton,
-  ElementCanvasButtons,
-} from "../components/ElementCanvasButtons";
+import {} from "../components/ElementCanvasButtons";
 import { LaserTrails } from "../laser-trails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
@@ -457,7 +433,6 @@ import {
 import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
-import { copyIcon, fullscreenIcon } from "./icons";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
 import { findShapeByKey } from "./shapes";
@@ -632,16 +607,6 @@ let currentScrollBars: ScrollBars = { horizontal: null, vertical: null };
 let touchTimeout = 0;
 let invalidateContextMenu = false;
 
-/**
- * Map of youtube embed video states
- */
-const YOUTUBE_VIDEO_STATES = new Map<
-  ExcalidrawElement["id"],
-  ValueOf<typeof YOUTUBE_STATES>
->();
-
-const MAX_EMBEDDABLE_VIEWPORT_SCALE = 4;
-
 let IS_PLAIN_PASTE = false;
 let IS_PLAIN_PASTE_TIMER = 0;
 let PLAIN_PASTE_TOAST_SHOWN = false;
@@ -685,17 +650,12 @@ class App extends React.Component<AppProps, AppState> {
 
   public files: BinaryFiles = {};
   public imageCache: AppClassProperties["imageCache"] = new Map();
-  private iFrameRefs = new Map<ExcalidrawElement["id"], HTMLIFrameElement>();
   /**
-   * Indicates whether the embeddable's url has been validated for rendering.
-   * If value not set, indicates that the validation is pending.
-   * Initially or on url change the flag is not reset so that we can guarantee
-   * the validation came from a trusted source (the editor).
-   **/
+   * Atlasdraw (ADR-0010): always empty. The editor renders no `iframe` or
+   * `embeddable` element as live HTML, so no embed is ever "validated";
+   * the static renderers draw one that reaches the scene as a plain box.
+   */
   private embedsValidationStatus: EmbedsValidationStatus = new Map();
-  /** embeds that have been inserted to DOM (as a perf optim, we don't want to
-   * insert to DOM before user initially scrolls to them) */
-  private initializedEmbeds = new Set<ExcalidrawIframeLikeElement["id"]>();
 
   private elementsPendingErasure: ElementsPendingErasure = new Set();
 
@@ -1014,69 +974,6 @@ class App extends React.Component<AppProps, AppState> {
     return result;
   };
 
-  private onWindowMessage(event: MessageEvent) {
-    if (
-      event.origin !== "https://player.vimeo.com" &&
-      event.origin !== "https://www.youtube.com"
-    ) {
-      return;
-    }
-
-    let data = null;
-    try {
-      data = JSON.parse(event.data);
-    } catch (e) {}
-    if (!data) {
-      return;
-    }
-
-    switch (event.origin) {
-      case "https://player.vimeo.com":
-        //Allowing for multiple instances of Excalidraw running in the window
-        if (data.method === "paused") {
-          let source: Window | null = null;
-          const iframes = document.body.querySelectorAll(
-            "iframe.excalidraw__embeddable",
-          );
-          if (!iframes) {
-            break;
-          }
-          for (const iframe of iframes as NodeListOf<HTMLIFrameElement>) {
-            if (iframe.contentWindow === event.source) {
-              source = iframe.contentWindow;
-            }
-          }
-          source?.postMessage(
-            JSON.stringify({
-              method: data.value ? "play" : "pause",
-              value: true,
-            }),
-            "*",
-          );
-        }
-        break;
-      case "https://www.youtube.com":
-        if (
-          data.event === "infoDelivery" &&
-          data.info &&
-          data.id &&
-          typeof data.info.playerState === "number"
-        ) {
-          const id = data.id;
-          const playerState = data.info.playerState as number;
-          if (
-            (Object.values(YOUTUBE_STATES) as number[]).includes(playerState)
-          ) {
-            YOUTUBE_VIDEO_STATES.set(
-              id,
-              playerState as ValueOf<typeof YOUTUBE_STATES>,
-            );
-          }
-        }
-        break;
-    }
-  }
-
   private handleSkipBindMode() {
     if (
       this.state.selectedLinearElement?.initialState &&
@@ -1391,15 +1288,6 @@ class App extends React.Component<AppProps, AppState> {
     this.previousHoveredBindableElement = hoveredElement;
   }
 
-  private cacheEmbeddableRef(
-    element: ExcalidrawIframeLikeElement,
-    ref: HTMLIFrameElement | null,
-  ) {
-    if (ref) {
-      this.iFrameRefs.set(element.id, ref);
-    }
-  }
-
   /**
    * Returns gridSize taking into account `gridModeEnabled`.
    * If disabled, returns null.
@@ -1430,196 +1318,6 @@ class App extends React.Component<AppProps, AppState> {
     };
   };
 
-  private getHTMLIFrameElement(
-    element: ExcalidrawIframeLikeElement,
-  ): HTMLIFrameElement | undefined {
-    return this.iFrameRefs.get(element.id);
-  }
-
-  private handleIframeLikeElementHover = ({
-    hitElement,
-    scenePointer,
-    moveEvent,
-  }: {
-    hitElement: NonDeleted<ExcalidrawElement> | null;
-    scenePointer: { x: number; y: number };
-    moveEvent: React.PointerEvent<HTMLCanvasElement>;
-  }): boolean => {
-    if (
-      hitElement &&
-      isIframeLikeElement(hitElement) &&
-      (this.state.viewModeEnabled ||
-        this.state.activeTool.type === "laser" ||
-        this.isIframeLikeElementCenter(
-          hitElement,
-          moveEvent,
-          scenePointer.x,
-          scenePointer.y,
-        ))
-    ) {
-      setCursor(this.interactiveCanvas, CURSOR_TYPE.POINTER);
-      this.setState({
-        activeEmbeddable: { element: hitElement, state: "hover" },
-      });
-      return true;
-    } else if (this.state.activeEmbeddable?.state === "hover") {
-      this.setState({ activeEmbeddable: null });
-    }
-    return false;
-  };
-
-  /** @returns true if iframe-like element click handled */
-  private handleIframeLikeCenterClick(): boolean {
-    if (
-      !this.lastPointerDownEvent ||
-      !this.lastPointerUpEvent ||
-      // middle-click or something other than primary
-      this.lastPointerDownEvent.button !== POINTER_BUTTON.MAIN ||
-      // panning
-      isHoldingSpace ||
-      // wrong tool
-      !oneOf(this.state.activeTool.type, ["laser", "selection", "lasso"])
-    ) {
-      return false;
-    }
-
-    const viewportClickStart_scenePoint = pointFrom(
-      viewportCoordsToSceneCoords(
-        {
-          clientX: this.lastPointerDownEvent.clientX,
-          clientY: this.lastPointerDownEvent.clientY,
-        },
-        this.state,
-      ),
-    );
-    const viewportClickEnd_scenePoint = pointFrom(
-      viewportCoordsToSceneCoords(
-        {
-          clientX: this.lastPointerUpEvent.clientX,
-          clientY: this.lastPointerUpEvent.clientY,
-        },
-        this.state,
-      ),
-    );
-
-    const draggedDistance = pointDistance(
-      viewportClickStart_scenePoint,
-      viewportClickEnd_scenePoint,
-    );
-
-    if (draggedDistance > DRAGGING_THRESHOLD) {
-      return false;
-    }
-
-    const hitElement = this.getElementAtPosition(
-      viewportClickStart_scenePoint[0],
-      viewportClickStart_scenePoint[1],
-    );
-
-    const shouldActivate =
-      hitElement &&
-      this.lastPointerUpEvent.timeStamp - this.lastPointerDownEvent.timeStamp <=
-        300 &&
-      gesture.pointers.size < 2 &&
-      isIframeLikeElement(hitElement) &&
-      (this.state.viewModeEnabled ||
-        this.state.activeTool.type === "laser" ||
-        this.isIframeLikeElementCenter(
-          hitElement,
-          this.lastPointerUpEvent,
-          viewportClickEnd_scenePoint[0],
-          viewportClickEnd_scenePoint[1],
-        ));
-
-    if (!shouldActivate) {
-      return false;
-    }
-
-    const iframeLikeElement = hitElement;
-
-    if (
-      this.state.activeEmbeddable?.element === iframeLikeElement &&
-      this.state.activeEmbeddable?.state === "active"
-    ) {
-      return true;
-    }
-
-    // The delay serves two purposes
-    // 1. To prevent first click propagating to iframe on mobile,
-    //    else the click will immediately start and stop the video
-    // 2. If the user double clicks the frame center to activate it
-    //    without the delay youtube will immediately open the video
-    //    in fullscreen mode
-    setTimeout(() => {
-      this.setState({
-        activeEmbeddable: { element: iframeLikeElement, state: "active" },
-        selectedElementIds: { [iframeLikeElement.id]: true },
-        newElement: null,
-        selectionElement: null,
-      });
-    }, 100);
-
-    if (isIframeElement(iframeLikeElement)) {
-      return true;
-    }
-
-    const iframe = this.getHTMLIFrameElement(iframeLikeElement);
-
-    if (!iframe?.contentWindow) {
-      return true;
-    }
-
-    if (iframe.src.includes("youtube")) {
-      const state = YOUTUBE_VIDEO_STATES.get(iframeLikeElement.id);
-      if (!state) {
-        YOUTUBE_VIDEO_STATES.set(
-          iframeLikeElement.id,
-          YOUTUBE_STATES.UNSTARTED,
-        );
-        iframe.contentWindow.postMessage(
-          JSON.stringify({
-            event: "listening",
-            id: iframeLikeElement.id,
-          }),
-          "*",
-        );
-      }
-      switch (state) {
-        case YOUTUBE_STATES.PLAYING:
-        case YOUTUBE_STATES.BUFFERING:
-          iframe.contentWindow?.postMessage(
-            JSON.stringify({
-              event: "command",
-              func: "pauseVideo",
-              args: "",
-            }),
-            "*",
-          );
-          break;
-        default:
-          iframe.contentWindow?.postMessage(
-            JSON.stringify({
-              event: "command",
-              func: "playVideo",
-              args: "",
-            }),
-            "*",
-          );
-      }
-    }
-
-    if (iframe.src.includes("player.vimeo.com")) {
-      iframe.contentWindow.postMessage(
-        JSON.stringify({
-          method: "paused", //video play/pause in onWindowMessage handler
-        }),
-        "*",
-      );
-    }
-
-    return true;
-  }
-
   private isDoubleClick = (
     lastPointerEvent:
       | PointerEvent
@@ -1634,381 +1332,6 @@ class App extends React.Component<AppProps, AppState> {
         TAP_TWICE_TIMEOUT
     );
   };
-
-  private isIframeLikeElementCenter(
-    el: ExcalidrawIframeLikeElement | null,
-    event: React.PointerEvent<HTMLElement> | PointerEvent,
-    sceneX: number,
-    sceneY: number,
-  ) {
-    return (
-      el &&
-      !event.altKey &&
-      !event.shiftKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      (this.state.activeEmbeddable?.element !== el ||
-        this.state.activeEmbeddable?.state === "hover" ||
-        !this.state.activeEmbeddable) &&
-      sceneX >= el.x + el.width / 3 &&
-      sceneX <= el.x + (2 * el.width) / 3 &&
-      sceneY >= el.y + el.height / 3 &&
-      sceneY <= el.y + (2 * el.height) / 3
-    );
-  }
-
-  private updateEmbedValidationStatus = (
-    element: ExcalidrawEmbeddableElement,
-    status: boolean,
-  ) => {
-    this.embedsValidationStatus.set(element.id, status);
-    ShapeCache.delete(element);
-  };
-
-  private updateEmbeddables = () => {
-    const iframeLikes = new Set<ExcalidrawIframeLikeElement["id"]>();
-
-    let updated = false;
-    this.scene.getNonDeletedElements().filter((element) => {
-      if (isEmbeddableElement(element)) {
-        iframeLikes.add(element.id);
-        if (!this.embedsValidationStatus.has(element.id)) {
-          updated = true;
-
-          const validated = embeddableURLValidator(
-            element.link,
-            this.props.validateEmbeddable,
-          );
-
-          this.updateEmbedValidationStatus(element, validated);
-        }
-      } else if (isIframeElement(element)) {
-        iframeLikes.add(element.id);
-      }
-      return false;
-    });
-
-    if (updated) {
-      this.scene.triggerUpdate();
-    }
-
-    // GC
-    this.iFrameRefs.forEach((ref, id) => {
-      if (!iframeLikes.has(id)) {
-        this.iFrameRefs.delete(id);
-      }
-    });
-  };
-
-  private renderEmbeddables() {
-    const scale = this.state.zoom.value;
-    const normalizedWidth = this.state.width;
-    const normalizedHeight = this.state.height;
-
-    const embeddableElements = this.scene
-      .getNonDeletedElements()
-      .filter(
-        (el): el is Ordered<NonDeleted<ExcalidrawIframeLikeElement>> =>
-          (isEmbeddableElement(el) &&
-            this.embedsValidationStatus.get(el.id) === true) ||
-          isIframeElement(el),
-      );
-
-    return (
-      <>
-        {embeddableElements.map((el) => {
-          const { x, y } = sceneCoordsToViewportCoords(
-            { sceneX: el.x, sceneY: el.y },
-            this.state,
-          );
-
-          const isVisible = isElementInViewport(
-            el,
-            normalizedWidth,
-            normalizedHeight,
-            this.state,
-            this.scene.getNonDeletedElementsMap(),
-          );
-          const hasBeenInitialized = this.initializedEmbeds.has(el.id);
-
-          if (isVisible && !hasBeenInitialized) {
-            this.initializedEmbeds.add(el.id);
-          }
-          const shouldRender = isVisible || hasBeenInitialized;
-
-          if (!shouldRender) {
-            return null;
-          }
-
-          let src: IframeData | null;
-
-          if (isIframeElement(el)) {
-            src = null;
-
-            const data: MagicGenerationData = el.customData?.generationData || {
-              status: "error",
-              message: "No generation data",
-              code: "ERR_NO_GENERATION_DATA",
-            };
-
-            if (data.status === "done") {
-              const html = data.html;
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return html;
-                },
-              } as const;
-            } else if (data.status === "pending") {
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return createSrcDoc(`
-                    <style>
-                      html, body {
-                        width: 100%;
-                        height: 100%;
-                        color: ${
-                          this.state.theme === THEME.DARK ? "white" : "black"
-                        };
-                      }
-                      body {
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        flex-direction: column;
-                        gap: 1rem;
-                      }
-
-                      .Spinner {
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        margin-left: auto;
-                        margin-right: auto;
-                      }
-
-                      .Spinner svg {
-                        animation: rotate 1.6s linear infinite;
-                        transform-origin: center center;
-                        width: 40px;
-                        height: 40px;
-                      }
-
-                      .Spinner circle {
-                        stroke: currentColor;
-                        animation: dash 1.6s linear 0s infinite;
-                        stroke-linecap: round;
-                      }
-
-                      @keyframes rotate {
-                        100% {
-                          transform: rotate(360deg);
-                        }
-                      }
-
-                      @keyframes dash {
-                        0% {
-                          stroke-dasharray: 1, 300;
-                          stroke-dashoffset: 0;
-                        }
-                        50% {
-                          stroke-dasharray: 150, 300;
-                          stroke-dashoffset: -200;
-                        }
-                        100% {
-                          stroke-dasharray: 1, 300;
-                          stroke-dashoffset: -280;
-                        }
-                      }
-                    </style>
-                    <div class="Spinner">
-                      <svg
-                        viewBox="0 0 100 100"
-                      >
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="46"
-                          stroke-width="8"
-                          fill="none"
-                          stroke-miter-limit="10"
-                        />
-                      </svg>
-                    </div>
-                    <div>Generating...</div>
-                  `);
-                },
-              } as const;
-            } else {
-              let message: string;
-              if (data.code === "ERR_GENERATION_INTERRUPTED") {
-                message = "Generation was interrupted...";
-              } else {
-                message = data.message || "Generation failed";
-              }
-              src = {
-                intrinsicSize: { w: el.width, h: el.height },
-                type: "document",
-                srcdoc: () => {
-                  return createSrcDoc(`
-                    <style>
-                    html, body {
-                      height: 100%;
-                    }
-                      body {
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        color: ${COLOR_PALETTE.red[3]};
-                      }
-                      h1, h3 {
-                        margin-top: 0;
-                        margin-bottom: 0.5rem;
-                      }
-                    </style>
-                    <h1>Error!</h1>
-                    <h3>${message}</h3>
-                  `);
-                },
-              } as const;
-            }
-          } else {
-            src = getEmbedLink(toValidURL(el.link || ""));
-          }
-
-          const isActive =
-            this.state.activeEmbeddable?.element === el &&
-            this.state.activeEmbeddable?.state === "active";
-          const isHovered =
-            this.state.activeEmbeddable?.element === el &&
-            this.state.activeEmbeddable?.state === "hover";
-
-          // scale video embeds based on zoom (capped) so that smaller embeds
-          // on canvas when zoomed are still of legible quality
-          // (note: for some embed types like gdrive, the quality is poor when
-          // scaling mid playback and works only when you initially start the
-          // playback at the higher zoom level)
-          const shouldScaleEmbeddableViewport = src?.type === "video";
-          const embeddableViewportScale = clamp(
-            shouldScaleEmbeddableViewport ? scale : 1,
-            0.75,
-            MAX_EMBEDDABLE_VIEWPORT_SCALE,
-          );
-
-          return (
-            <div
-              key={el.id}
-              className={clsx("excalidraw__embeddable-container", {
-                "is-hovered": isHovered,
-              })}
-              style={{
-                transform: isVisible
-                  ? `translate(${x - this.state.offsetLeft}px, ${
-                      y - this.state.offsetTop
-                    }px) scale(${scale})`
-                  : "none",
-                display: isVisible ? "block" : "none",
-                opacity: getRenderOpacity(
-                  el,
-                  getContainingFrame(el, this.scene.getNonDeletedElementsMap()),
-                  this.elementsPendingErasure,
-                  null,
-                  this.state.openDialog?.name === "elementLinkSelector"
-                    ? DEFAULT_REDUCED_GLOBAL_ALPHA
-                    : 1,
-                ),
-                ["--embeddable-radius" as string]: `${getCornerRadius(
-                  Math.min(el.width, el.height),
-                  el,
-                )}px`,
-              }}
-            >
-              <div
-                //this is a hack that addresses isse with embedded excalidraw.com embeddable
-                //https://github.com/excalidraw/excalidraw/pull/6691#issuecomment-1607383938
-                /*ref={(ref) => {
-                  if (!this.excalidrawContainerRef.current) {
-                    return;
-                  }
-                  const container = this.excalidrawContainerRef.current;
-                  const sh = container.scrollHeight;
-                  const ch = container.clientHeight;
-                  if (sh !== ch) {
-                    container.style.height = `${sh}px`;
-                    setTimeout(() => {
-                      container.style.height = `100%`;
-                    });
-                  }
-                }}*/
-                className="excalidraw__embeddable-container__inner"
-                style={{
-                  width: isVisible ? `${el.width}px` : 0,
-                  height: isVisible ? `${el.height}px` : 0,
-                  transform: isVisible ? `rotate(${el.angle}rad)` : "none",
-                  pointerEvents: isActive
-                    ? POINTER_EVENTS.enabled
-                    : POINTER_EVENTS.disabled,
-                }}
-              >
-                {isHovered && (
-                  <div className="excalidraw__embeddable-hint">
-                    {t("buttons.embeddableInteractionButton")}
-                  </div>
-                )}
-                <div
-                  className="excalidraw__embeddable__outer"
-                  style={{
-                    padding: `${el.strokeWidth}px`,
-                  }}
-                >
-                  <div
-                    className="excalidraw__embeddable__content"
-                    style={{
-                      width: `${embeddableViewportScale * 100}%`,
-                      height: `${embeddableViewportScale * 100}%`,
-                      transform: `scale(${1 / embeddableViewportScale})`,
-                    }}
-                  >
-                    {(isEmbeddableElement(el)
-                      ? this.props.renderEmbeddable?.(el, this.state)
-                      : null) ?? (
-                      <iframe
-                        ref={(ref) => this.cacheEmbeddableRef(el, ref)}
-                        className="excalidraw__embeddable"
-                        srcDoc={
-                          src?.type === "document"
-                            ? src.srcdoc(this.state.theme)
-                            : undefined
-                        }
-                        src={
-                          src?.type !== "document" ? src?.link ?? "" : undefined
-                        }
-                        // https://stackoverflow.com/q/18470015
-                        scrolling="no"
-                        referrerPolicy="no-referrer-when-downgrade"
-                        title="Excalidraw Embedded Content"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen={true}
-                        sandbox={`${
-                          src?.sandbox?.allowSameOrigin
-                            ? "allow-same-origin"
-                            : ""
-                        } allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads`}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </>
-    );
-  }
 
   private getFrameNameDOMId = (frameElement: ExcalidrawElement) => {
     return `${this.id}-frame-name-${frameElement.id}`;
@@ -2411,61 +1734,7 @@ class App extends React.Component<AppProps, AppState> {
                                   setAppState={this.setAppState}
                                   onLinkOpen={this.props.onLinkOpen}
                                   setToast={this.setToast}
-                                  updateEmbedValidationStatus={
-                                    this.updateEmbedValidationStatus
-                                  }
                                 />
-                              )}
-                            {selectedElements.length === 1 &&
-                              isIframeElement(firstSelectedElement) &&
-                              firstSelectedElement.customData?.generationData
-                                ?.status === "done" && (
-                                <ElementCanvasButtons
-                                  element={firstSelectedElement}
-                                  elementsMap={elementsMap}
-                                >
-                                  <ElementCanvasButton
-                                    title={t("labels.copySource")}
-                                    icon={copyIcon}
-                                    checked={false}
-                                    onChange={() =>
-                                      this.onIframeSrcCopy(firstSelectedElement)
-                                    }
-                                  />
-                                  <ElementCanvasButton
-                                    title="Enter fullscreen"
-                                    icon={fullscreenIcon}
-                                    checked={false}
-                                    onChange={() => {
-                                      const iframe =
-                                        this.getHTMLIFrameElement(
-                                          firstSelectedElement,
-                                        );
-                                      if (iframe) {
-                                        try {
-                                          iframe.requestFullscreen();
-                                          this.setState({
-                                            activeEmbeddable: {
-                                              element: firstSelectedElement,
-                                              state: "active",
-                                            },
-                                            selectedElementIds: {
-                                              [firstSelectedElement.id]: true,
-                                            },
-                                            newElement: null,
-                                            selectionElement: null,
-                                          });
-                                        } catch (err: any) {
-                                          console.warn(err);
-                                          this.setState({
-                                            errorMessage:
-                                              "Couldn't enter fullscreen",
-                                          });
-                                        }
-                                      }
-                                    }}
-                                  />
-                                </ElementCanvasButtons>
                               )}
 
                             {this.state.contextMenu && (
@@ -2581,7 +1850,6 @@ class App extends React.Component<AppProps, AppState> {
                               <ConvertElementTypePopup app={this} />
                             )}
                           </ExcalidrawActionManagerContext.Provider>
-                          {this.renderEmbeddables()}
                         </ExcalidrawElementsContext.Provider>
                       </ExcalidrawAppStateContext.Provider>
                     </ExcalidrawSetAppStateContext.Provider>
@@ -2651,17 +1919,6 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ fileHandle });
     }
   };
-
-  private onIframeSrcCopy(element: ExcalidrawIframeElement) {
-    if (element.customData?.generationData?.status === "done") {
-      copyTextToSystemClipboard(element.customData.generationData.html);
-      this.setToast({
-        message: "copied to clipboard",
-        closable: false,
-        duration: 1500,
-      });
-    }
-  }
 
   private openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
     this.updateEditorAtom(activeEyeDropperAtom, {
@@ -2854,7 +2111,7 @@ class App extends React.Component<AppProps, AppState> {
           }
           const fileHandle = launchParams.files[0];
           const blob: Blob = await fileHandle.getFile();
-          this.loadFileToCanvas(
+          this.openDroppedFile(
             new File([blob], blob.name || "", { type: blob.type }),
             fileHandle,
           );
@@ -3198,18 +2455,6 @@ class App extends React.Component<AppProps, AppState> {
   });
 
   /** generally invoked only if fullscreen was invoked programmatically */
-  private onFullscreenChange = () => {
-    if (
-      // points to the iframe element we fullscreened
-      !document.fullscreenElement &&
-      this.state.activeEmbeddable?.state === "active"
-    ) {
-      this.setState({
-        activeEmbeddable: null,
-      });
-    }
-  };
-
   private removeEventListeners() {
     this.onRemoveEventListenersEmitter.trigger();
   }
@@ -3235,7 +2480,6 @@ class App extends React.Component<AppProps, AppState> {
         this.handleWheel,
         { passive: false },
       ),
-      addEventListener(window, EVENT.MESSAGE, this.onWindowMessage, false),
       addEventListener(document, EVENT.POINTER_UP, this.removePointer, {
         passive: false,
       }), // #3553
@@ -3298,12 +2542,6 @@ class App extends React.Component<AppProps, AppState> {
     // -------------------------------------------------------------------------
 
     this.onRemoveEventListenersEmitter.once(
-      addEventListener(
-        document,
-        EVENT.FULLSCREENCHANGE,
-        this.onFullscreenChange,
-        { passive: false },
-      ),
       addEventListener(document, EVENT.PASTE, this.pasteFromClipboard, {
         passive: false,
       }),
@@ -3353,7 +2591,6 @@ class App extends React.Component<AppProps, AppState> {
 
     this.appStateObserver.flush(prevState);
 
-    this.updateEmbeddables();
     const elements = this.scene.getElementsIncludingDeleted();
     const elementsMap = this.scene.getElementsMapIncludingDeleted();
 
@@ -3740,50 +2977,8 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
-    // ------------------- Pure embeddable URLs -------------------
-    const nonEmptyLines = normalizeEOL(data.text)
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const embbeddableUrls = nonEmptyLines
-      .map((str) => maybeParseEmbedSrc(str))
-      .filter(
-        (string) =>
-          embeddableURLValidator(string, this.props.validateEmbeddable) &&
-          (/^(http|https):\/\/[^\s/$.?#].[^\s]*$/.test(string) ||
-            getEmbedLink(string)?.type === "video"),
-      );
-
-    if (
-      !isPlainPaste &&
-      embbeddableUrls.length > 0 &&
-      embbeddableUrls.length === nonEmptyLines.length
-    ) {
-      const embeddables: NonDeleted<ExcalidrawEmbeddableElement>[] = [];
-      for (const url of embbeddableUrls) {
-        const prevEmbeddable: ExcalidrawEmbeddableElement | undefined =
-          embeddables[embeddables.length - 1];
-        const embeddable = this.insertEmbeddableElement({
-          sceneX: prevEmbeddable
-            ? prevEmbeddable.x + prevEmbeddable.width + 20
-            : sceneX,
-          sceneY,
-          link: normalizeLink(url),
-        });
-        if (embeddable) {
-          embeddables.push(embeddable);
-        }
-      }
-      if (embeddables.length) {
-        this.store.scheduleCapture();
-        this.setState({
-          selectedElementIds: Object.fromEntries(
-            embeddables.map((embeddable) => [embeddable.id, true]),
-          ),
-        });
-      }
-      return;
-    }
+    // Atlasdraw (ADR-0010): a pasted URL is text. Upstream made an
+    // `embeddable` (a live third-party iframe) from it.
 
     // ------------------- Text -------------------
     this.addTextFromPaste(data.text, isPlainPaste);
@@ -4472,7 +3667,7 @@ class App extends React.Component<AppProps, AppState> {
       if (response) {
         const blob = await response.blob();
         const file = new File([blob], blob.name || "", { type: blob.type });
-        this.loadFileToCanvas(file, null);
+        this.openDroppedFile(file, null);
         await webShareTargetCache.delete("shared-file");
         window.history.replaceState(null, APP_NAME, window.location.pathname);
       }
@@ -6023,8 +5218,6 @@ class App extends React.Component<AppProps, AppState> {
       includeLockedElements?: boolean;
     },
   ): NonDeleted<ExcalidrawElement>[] {
-    const iframeLikes: Ordered<ExcalidrawIframeElement>[] = [];
-
     const elementsMap = this.scene.getNonDeletedElementsMap();
 
     const elements = (
@@ -6050,19 +5243,7 @@ class App extends React.Component<AppProps, AppState> {
           this.state.frameRendering.clip
           ? isCursorInFrame({ x, y }, containingFrame, elementsMap)
           : true;
-      })
-      .filter((el) => {
-        // The parameter elements comes ordered from lower z-index to higher.
-        // We want to preserve that order on the returned array.
-        // Exception being embeddables which should be on top of everything else in
-        // terms of hit testing.
-        if (isIframeElement(el)) {
-          iframeLikes.push(el);
-          return false;
-        }
-        return true;
-      })
-      .concat(iframeLikes) as NonDeleted<ExcalidrawElement>[];
+      }) as NonDeleted<ExcalidrawElement>[];
 
     return elements;
   }
@@ -6536,15 +5717,6 @@ class App extends React.Component<AppProps, AppState> {
 
     resetCursor(this.interactiveCanvas);
     if (!event[KEYS.CTRL_OR_CMD] && !this.state.viewModeEnabled) {
-      const hitElement = this.getElementAtPosition(sceneX, sceneY);
-
-      if (isIframeLikeElement(hitElement)) {
-        this.setState({
-          activeEmbeddable: { element: hitElement, state: "active" },
-        });
-        return;
-      }
-
       // shouldn't edit/create text when inside line editor (often false positive)
 
       if (!this.state.selectedLinearElement?.isEditing) {
@@ -7232,18 +6404,10 @@ class App extends React.Component<AppProps, AppState> {
       hitElement = hitElementMightBeLocked;
     }
 
-    if (
-      !this.handleIframeLikeElementHover({
-        hitElement,
-        scenePointer,
-        moveEvent: event,
-      })
-    ) {
-      this.hitLinkElement = this.getElementLinkAtPosition(
-        scenePointer,
-        hitElementMightBeLocked,
-      );
-    }
+    this.hitLinkElement = this.getElementLinkAtPosition(
+      scenePointer,
+      hitElementMightBeLocked,
+    );
 
     if (
       this.hitLinkElement &&
@@ -8000,10 +7164,6 @@ class App extends React.Component<AppProps, AppState> {
       x: scenePointerX,
       y: scenePointerY,
     };
-
-    if (this.handleIframeLikeCenterClick()) {
-      return;
-    }
 
     if (this.editorInterface.isTouchScreen) {
       const hitElement = this.getElementAtPosition(
@@ -8891,60 +8051,6 @@ class App extends React.Component<AppProps, AppState> {
       newElement: element,
       suggestedBinding: null,
     });
-  };
-
-  //create rectangle element with youtube top left on nearest grid point width / hight 640/360
-  public insertEmbeddableElement = ({
-    sceneX,
-    sceneY,
-    link,
-  }: {
-    sceneX: number;
-    sceneY: number;
-    link: string;
-  }) => {
-    const [gridX, gridY] = getGridPoint(
-      sceneX,
-      sceneY,
-      this.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
-        ? null
-        : this.getEffectiveGridSize(),
-    );
-
-    const embedLink = getEmbedLink(link);
-
-    if (!embedLink) {
-      return;
-    }
-
-    if (embedLink.error instanceof URIError) {
-      this.setToast({
-        message: t("toast.unrecognizedLinkFormat"),
-        closable: true,
-      });
-    }
-
-    const element = newEmbeddableElement({
-      type: "embeddable",
-      x: gridX,
-      y: gridY,
-      strokeColor: "transparent",
-      backgroundColor: "transparent",
-      fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
-      strokeStyle: this.state.currentItemStrokeStyle,
-      roughness: this.state.currentItemRoughness,
-      roundness: this.getCurrentItemRoundness("embeddable"),
-      opacity: this.state.currentItemOpacity,
-      locked: false,
-      width: embedLink.intrinsicSize.w,
-      height: embedLink.intrinsicSize.h,
-      link,
-    });
-
-    this.scene.insertElement(element);
-
-    return element;
   };
 
   private newImagePlaceholder = ({
@@ -11856,28 +10962,17 @@ class App extends React.Component<AppProps, AppState> {
     const fileItems = dataTransferList.getFiles();
 
     if (fileItems.length === 1) {
-      const { file, fileHandle } = fileItems[0];
+      const { file } = fileItems[0];
 
       if (
         file &&
         (file.type === MIME_TYPES.png || file.type === MIME_TYPES.svg)
       ) {
         try {
-          const scene = await loadFromBlob(
-            file,
-            this.state,
-            this.scene.getElementsIncludingDeleted(),
-            fileHandle,
-          );
-          this.syncActionResult({
-            ...scene,
-            appState: {
-              ...(scene.appState || this.state),
-              isLoading: false,
-            },
-            replaceFiles: true,
-            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-          });
+          // Atlasdraw (ADR-0010): an image that carries a scene is a scene
+          // file. The host opens it; the open drawing is not replaced.
+          await loadFromBlob(file, null, null);
+          this.props.onSceneFileDrop?.(file);
           return;
         } catch (error: any) {
           if (error.name !== "EncodingError") {
@@ -11943,48 +11038,27 @@ class App extends React.Component<AppProps, AppState> {
       const { file, fileHandle } = fileItems[0];
       if (file) {
         // Attempt to parse an excalidraw/excalidrawlib file
-        await this.loadFileToCanvas(file, fileHandle);
-      }
-    }
-
-    const textItem = dataTransferList.findByType(MIME_TYPES.text);
-
-    if (textItem) {
-      const text = textItem.value;
-      if (
-        text &&
-        embeddableURLValidator(text, this.props.validateEmbeddable) &&
-        (/^(http|https):\/\/[^\s/$.?#].[^\s]*$/.test(text) ||
-          getEmbedLink(text)?.type === "video")
-      ) {
-        const embeddable = this.insertEmbeddableElement({
-          sceneX,
-          sceneY,
-          link: normalizeLink(text),
-        });
-        if (embeddable) {
-          this.store.scheduleCapture();
-          this.setState({ selectedElementIds: { [embeddable.id]: true } });
-        }
+        await this.openDroppedFile(file, fileHandle);
       }
     }
   };
 
-  loadFileToCanvas = async (
+  /**
+   * Atlasdraw (ADR-0010): a file dropped on, or launched into, the editor.
+   * A scene (.excalidraw) goes to the host's `onSceneFileDrop`, and nothing
+   * changes when there is none: upstream replaced the open drawing and its
+   * camera here, outside the host's own open path. A library file still goes
+   * to the library.
+   */
+  openDroppedFile = async (
     file: File,
     fileHandle: FileSystemFileHandle | null,
   ) => {
     file = await normalizeFile(file);
     try {
-      const elements = this.scene.getElementsIncludingDeleted();
       let ret;
       try {
-        ret = await loadSceneOrLibraryFromBlob(
-          file,
-          this.state,
-          elements,
-          fileHandle,
-        );
+        ret = await loadSceneOrLibraryFromBlob(file, null, null, fileHandle);
       } catch (error: any) {
         const imageSceneDataError = error instanceof ImageSceneDataError;
         if (
@@ -12011,27 +11085,7 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (ret.type === MIME_TYPES.excalidraw) {
-        // restore the fractional indices by mutating elements
-        syncInvalidIndices(elements.concat(ret.data.elements));
-
-        // don't capture and only update the store snapshot for old elements,
-        // otherwise we would end up with duplicated fractional indices on undo
-        this.store.scheduleMicroAction({
-          action: CaptureUpdateAction.NEVER,
-          elements,
-          appState: undefined,
-        });
-
-        this.setState({ isLoading: true });
-        this.syncActionResult({
-          ...ret.data,
-          appState: {
-            ...(ret.data.appState || this.state),
-            isLoading: false,
-          },
-          replaceFiles: true,
-          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-        });
+        this.props.onSceneFileDrop?.(file);
       } else if (ret.type === MIME_TYPES.excalidrawlib) {
         await this.library
           .updateLibrary({

@@ -53,6 +53,7 @@ import { useToolState } from "../hooks/useToolState";
 import { LayersIcon } from "../lib/icons";
 import { createSession } from "../session/EditorSession";
 import { SessionProvider } from "../session/SessionContext";
+import { openSceneFile } from "../session/fileActions";
 import {
   useDocument,
   useDocumentStore,
@@ -141,6 +142,10 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
     }),
   );
   const { view } = session;
+  const onSceneFileDrop = useCallback(
+    (file: File) => void openSceneFile(session, file),
+    [session],
+  );
   const { map, onMapReady } = useMapRef();
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   useEffect(() => {
@@ -329,6 +334,9 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               onChange={onDrawingChange}
               onScrollChange={bridge?.onScrollChange}
               onZoomAction={onZoomAction}
+              // A dropped .excalidraw file (or an image that carries one)
+              // opens as Open does, never into the open map.
+              onSceneFileDrop={onSceneFileDrop}
               screenSizedStyles
               // Its fixed gaps and unitless arrows do not fit world
               // coordinates (packages/excalidraw/tests/flowchartOff.test.tsx).

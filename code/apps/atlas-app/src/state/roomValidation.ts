@@ -229,8 +229,8 @@ const ElementSchema = z.discriminatedUnion("type", [
   base.extend({ type: z.literal("rectangle") }),
   base.extend({ type: z.literal("diamond") }),
   base.extend({ type: z.literal("ellipse") }),
-  base.extend({ type: z.literal("embeddable") }),
-  base.extend({ type: z.literal("iframe") }),
+  // `iframe` and `embeddable` are refused: they rendered live web pages
+  // (ADR-0010). A type that is not listed fails the check.
   base.extend({
     type: z.literal("frame"),
     name: short.nullable().optional().catch(null),

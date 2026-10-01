@@ -5,11 +5,16 @@
 // closed (MapEditor's UIOptions), so the menu, the palette and the keys all
 // reach these two.
 
+import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
+
 import {
+  documentFromExcalidrawJson,
+  documentFromExcalidrawScene,
   hasUnsavedWork,
   liveCamera,
   loadDocument,
   markSavedToFile,
+  refusedMessage,
   toFile,
 } from "../state/documentIO";
 import { restoreServerBackup } from "../state/myMaps";
@@ -72,23 +77,101 @@ export async function openMap(
   confirmReplace: () => Promise<boolean> = () =>
     s.view.getState().ask(REPLACE_QUESTION),
 ): Promise<void> {
-  const { api, map } = s.view.getState();
   const store = s.persistence.getState().persistenceStore;
-  if (!api || !store) {
+  if (!store) {
+    return;
+  }
+  await openInPlace(s, notify, confirmReplace, (camera) =>
+    store.openFromDisk(camera),
+  );
+}
+
+/**
+ * Open a scene file dropped on the canvas: an `.excalidraw` file, or a PNG
+ * or SVG that carries one (the fork hands it over, `onSceneFileDrop`). It
+ * opens as Open does: a question first when the open map holds unsaved
+ * work, then a new map with a new id, placed where the user is looking. The
+ * open map is never written over.
+ */
+export async function openSceneFile(
+  s: EditorSession,
+  file: File,
+  notify: Notify = s.notify,
+  confirmReplace: () => Promise<boolean> = () =>
+    s.view.getState().ask(REPLACE_QUESTION),
+): Promise<void> {
+  await openInPlace(s, notify, confirmReplace, (camera) =>
+    sceneFileDocument(file, camera),
+  );
+}
+
+/** A scene file as a new document at `camera`. Throws on malformed input. */
+async function sceneFileDocument(
+  file: File,
+  camera: Camera | null,
+): Promise<AtlasdrawDocument> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".excalidraw") || file.type === "application/json") {
+    return documentFromExcalidrawJson(await textOf(file), camera);
+  }
+  // Only the fork reads a scene out of PNG or SVG metadata. It is loaded
+  // here, on demand, so the document code does not depend on it.
+  const { loadFromBlob } = await import("@atlasdraw/excalidraw");
+  const scene = await loadFromBlob(file, null, null);
+  return documentFromExcalidrawScene(
+    { elements: scene.elements, files: scene.files },
+    camera,
+  );
+}
+
+/** A file's text. FileReader, because not every runtime has Blob.text. */
+function textOf(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsText(file);
+  });
+}
+
+/**
+ * The one way Open replaces the open map: ask about unsaved work, read the
+ * new document, open it, report.
+ */
+async function openInPlace(
+  s: EditorSession,
+  notify: Notify | undefined,
+  confirmReplace: () => Promise<boolean>,
+  produce: (camera: Camera | null) => Promise<AtlasdrawDocument | null>,
+): Promise<void> {
+  const { api, map } = s.view.getState();
+  if (!api || !s.persistence.getState().persistenceStore) {
     return;
   }
   try {
     if (hasUnsavedWork(s.store.getState().doc) && !(await confirmReplace())) {
       return;
     }
-    const loaded = await store.openFromDisk(liveCamera(map));
+    const loaded = await produce(liveCamera(map));
     if (!loaded) {
       return;
     }
-    const opened = await loadDocument(loaded, api, { map });
-    if (opened) {
-      markSavedToFile(opened);
+    // The open map's last edits may still wait for the autosave delay. Keep
+    // them in its own slot before the new map takes the editor; a failure
+    // throws, and nothing opens.
+    const persistence = s.persistence.getState();
+    if (persistence.persistenceStore?.isDirty()) {
+      await persistence.forceSave();
     }
+    const opened = await loadDocument(loaded, api, {
+      map,
+      onRefused: (n) => notify?.error(refusedMessage(n)),
+    });
+    if (!opened) {
+      return;
+    }
+    markSavedToFile(opened);
     // The opened file becomes the autosaved map.
     s.persistence.getState().markDirty();
     const n = loaded.manifest.layers.length;
@@ -100,7 +183,7 @@ export async function openMap(
       return;
     }
     // eslint-disable-next-line no-console
-    console.warn("[atlasdraw] openFromDisk failed", err);
+    console.warn("[atlasdraw] open failed", err);
     notify?.error(
       "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
     );

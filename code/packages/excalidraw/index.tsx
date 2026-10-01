@@ -103,8 +103,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onScrollChange,
     onDuplicate,
     children,
-    validateEmbeddable,
-    renderEmbeddable,
+    onSceneFileDrop,
     showDeprecatedFonts,
     renderScrollbars,
   } = props;
@@ -222,8 +221,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onPointerUp={onPointerUp}
           onScrollChange={onScrollChange}
           onDuplicate={onDuplicate}
-          validateEmbeddable={validateEmbeddable}
-          renderEmbeddable={renderEmbeddable}
+          onSceneFileDrop={onSceneFileDrop}
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}
         >
