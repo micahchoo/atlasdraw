@@ -2,23 +2,21 @@
 
 ## `code/` — Excalidraw fork (inlined)
 
-Atlasdraw is built on a fork of [Excalidraw](https://github.com/excalidraw/excalidraw). The fork lives inlined under `code/` as plain files (no embedded git repo, no submodule). Atlasdraw-specific packages (`apps/atlas-app/`, `packages/{atlasdraw-*,basemap,data,geo,tools,sdk,cli}`) sit alongside the original Excalidraw monorepo packages.
+Atlasdraw is built on a fork of [Excalidraw](https://github.com/excalidraw/excalidraw). The fork lives inlined under `code/` as plain files, with no embedded git repo and no submodule. The forked packages are `code/packages/{excalidraw,element,math,common,utils}`. The Atlasdraw packages (`apps/*`, `packages/{basemap,data,geo,tools,protocol,sdk,cli}`) sit beside them.
 
-**Upstream pin (initial fork point):**
+**Upstream pin (the one fork point):**
 - Repo: `https://github.com/excalidraw/excalidraw.git`
-- Commit: `2dfcc6f0ce4ce007e0360324e63f02ffc7b7fc1a`
+- Commit: `2dfcc6f0ce4ce007e0360324e63f02ffc7b7fc1a` (master, 2026-05-02)
 - Title: `chore: Remove startBoundElement from state (#11264)`
 
-**Syncing upstream changes** (manual, since there's no embedded git):
+The packages still say `0.18.0`, but this commit is 14 months past the 0.18.0 tag. A security advisory against 0.18.x does not map onto this code line for line.
+
+**The fork is owned, not tracked** (`code/decisions/0010-own-the-fork.md`). Nothing syncs upstream. Port a security fix by hand: read the upstream diff from the pin forward, apply it, and run the gates.
+
 ```bash
 git clone https://github.com/excalidraw/excalidraw.git /tmp/excalidraw-upstream
 cd /tmp/excalidraw-upstream
-git log --oneline 2dfcc6f..HEAD -- packages/excalidraw packages/element packages/common
-# review diffs, copy relevant changes into atlasdraw's code/ tree, run gates
+git log --oneline 2dfcc6f..HEAD -- packages/excalidraw packages/element packages/common packages/math packages/utils
 ```
 
-**Atlasdraw additions on top of the fork** are documented in:
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-1-geo-foundation.md` (Phase 1)
-- `docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md` (Phase 2)
-
-If a future maintainer wants to re-establish a clean upstream-tracking workflow, the recommended migration is to convert `code/` to a git submodule pointing at a long-lived `excalidraw-atlasdraw-fork` repo. See [git submodule docs](https://git-scm.com/book/en/v2/Git-Tools-Submodules).
+**What Atlasdraw changed in the fork.** The comments in the fork mark each extension point (sidebar tabs, context-menu items, collar mode, toolbar extras, search sources, sidebar width, viewport export). Atlasdraw also removed upstream features that mean nothing on a map: the frame, embeddable, laser and magic-frame tools, Mermaid and text-to-diagram, every locale except English, and the upstream image-export and `.excalidraw` save doors. The element types stay, so old documents still load. `git log -- code/packages` holds the full record.

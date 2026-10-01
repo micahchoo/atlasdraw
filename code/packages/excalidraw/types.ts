@@ -398,7 +398,6 @@ export interface AppState {
   openDialog:
     | null
     | { name: "imageExport" | "help" | "jsonExport" }
-    | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
     | { name: "commandPalette" }
     | { name: "settings" }
     | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] }
@@ -845,7 +844,6 @@ export interface ExcalidrawProps {
     element: NonDeleted<ExcalidrawEmbeddableElement>,
     appState: AppState,
   ) => JSX.Element | null;
-  aiEnabled?: boolean;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;
   /**
@@ -874,15 +872,6 @@ export interface ExcalidrawProps {
       signal: AbortSignal;
     },
   ) => MaybePromise<void> | AsyncGenerator<OnExportProgress, void>;
-  /**
-   * Called at PNG / clipboard-PNG export time to obtain a background canvas
-   * (e.g. a MapLibre basemap) composited under the Excalidraw annotations.
-   * Export switches to viewport mode so background and annotations share the
-   * same coordinate space. Return null to fall back to standard export.
-   * Frame exports bypass compositing regardless (frame has its own bounds).
-   * SVG export is unaffected — SVG cannot embed raster backgrounds natively.
-   */
-  getBackgroundCanvas?: () => HTMLCanvasElement | null;
 }
 
 export type SceneData = {
@@ -952,7 +941,6 @@ export type AppProps = Merge<
     handleKeyboardGlobally: boolean;
     isCollaborating: boolean;
     children?: React.ReactNode;
-    aiEnabled: boolean;
   }
 >;
 
@@ -993,13 +981,10 @@ export type AppClassProperties = {
   setActiveTool: App["setActiveTool"];
   setOpenDialog: App["setOpenDialog"];
   insertEmbeddableElement: App["insertEmbeddableElement"];
-  onMagicframeToolSelect: App["onMagicframeToolSelect"];
   getName: App["getName"];
   dismissLinearEditor: App["dismissLinearEditor"];
   flowChartCreator: App["flowChartCreator"];
   getEffectiveGridSize: App["getEffectiveGridSize"];
-  setPlugins: App["setPlugins"];
-  plugins: App["plugins"];
   getEditorUIOffsets: App["getEditorUIOffsets"];
   visibleElements: App["visibleElements"];
   excalidrawContainerValue: App["excalidrawContainerValue"];
@@ -1383,11 +1368,6 @@ export type PendingExcalidrawElements = ExcalidrawElement[];
 export type NullableGridSize =
   | (AppState["gridSize"] & MakeBrand<"NullableGridSize">)
   | null;
-
-export type GenerateDiagramToCode = (props: {
-  frame: ExcalidrawMagicFrameElement;
-  children: readonly ExcalidrawElement[];
-}) => MaybePromise<{ html: string }>;
 
 export type Offsets = Partial<{
   top: number;

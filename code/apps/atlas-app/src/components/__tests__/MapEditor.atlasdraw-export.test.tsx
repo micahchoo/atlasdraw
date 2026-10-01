@@ -31,10 +31,8 @@ import { saveAtlasDocument, openAtlasDocument } from "../MapEditor";
 // ---------------------------------------------------------------------------
 
 vi.mock("@atlasdraw/excalidraw", async () => {
-  // Pass through the type-only import; provide minimal runtime stubs for
-  // anything MapEditor.tsx evaluates at module load (setExportElementTransformer
-  // is called in a useEffect, but MapEditor isn't rendered here so this is
-  // purely about getting the import to succeed).
+  // Minimal runtime stubs for what MapEditor.tsx imports. MapEditor is not
+  // rendered here, so these only let the import succeed.
   return {
     Excalidraw: () => null,
     MainMenu: Object.assign(() => null, {
@@ -42,7 +40,6 @@ vi.mock("@atlasdraw/excalidraw", async () => {
       Separator: () => null,
       DefaultItems: new Proxy({}, { get: () => () => null }),
     }),
-    setExportElementTransformer: vi.fn(),
     exportToCanvas: vi.fn(),
   };
 });
@@ -106,7 +103,6 @@ vi.mock("@atlasdraw/tools", () => ({
 
 vi.mock("@atlasdraw/geo", () => ({
   isGeoCustomData: () => false,
-  normalizeElementsForExport: vi.fn(),
 }));
 
 // hydrate is called from openAtlasDocument. Spy on it.

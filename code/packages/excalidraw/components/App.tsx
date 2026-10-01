@@ -129,7 +129,6 @@ import {
   newFreeDrawElement,
   newEmbeddableElement,
   newMagicFrameElement,
-  newIframeElement,
   newArrowElement,
   newElement,
   newImageElement,
@@ -152,7 +151,6 @@ import {
   isUsingAdaptiveRadius,
   isIframeElement,
   isIframeLikeElement,
-  isMagicFrameElement,
   isTextBindableContainer,
   isElbowArrow,
   isFlowchartNodeElement,
@@ -189,7 +187,6 @@ import {
   updateFrameMembershipOfSelectedElements,
   isElementInFrame,
   getFrameLikeTitle,
-  getElementsOverlappingFrame,
   filterElementsEligibleAsFrameChildren,
   hitElementBoundText,
   hitElementBoundingBoxOnly,
@@ -277,7 +274,6 @@ import type {
   NonDeletedExcalidrawElement,
   ExcalidrawTextContainer,
   ExcalidrawFrameLikeElement,
-  ExcalidrawMagicFrameElement,
   ExcalidrawIframeLikeElement,
   IframeData,
   ExcalidrawIframeElement,
@@ -417,14 +413,15 @@ import {
   resetCursor,
   setCursorForShape,
 } from "../cursor";
-import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
+import {
+  ElementCanvasButton,
+  ElementCanvasButtons,
+} from "../components/ElementCanvasButtons";
 import { LaserTrails } from "../laser-trails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { isPointHittingTextAutoResizeHandle } from "../textAutoResizeHandle";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
 import { isOverScrollBars } from "../scene/scrollbars";
-
-import { isMaybeMermaidDefinition } from "../mermaid";
 
 import { LassoTrail } from "../lasso";
 
@@ -446,7 +443,6 @@ import { ContextMenu, CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
 import { activeEyeDropperAtom } from "./EyeDropper";
 import FollowMode from "./FollowMode/FollowMode";
 import LayerUI from "./LayerUI";
-import { ElementCanvasButton } from "./MagicButton";
 import { SVGLayer } from "./SVGLayer";
 import { searchItemInFocusAtom } from "./SearchMenu";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
@@ -457,7 +453,7 @@ import {
 import { StaticCanvas, InteractiveCanvas } from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import { isPointHittingLink } from "./hyperlink/helpers";
-import { MagicIcon, copyIcon, fullscreenIcon } from "./icons";
+import { copyIcon, fullscreenIcon } from "./icons";
 import { AppStateObserver, type OnStateChange } from "./AppStateObserver";
 
 import { findShapeByKey } from "./shapes";
@@ -498,7 +494,6 @@ import type {
   EmbedsValidationStatus,
   ElementsPendingErasure,
   ExcalidrawImperativeAPIEventMap,
-  GenerateDiagramToCode,
   NullableGridSize,
   Offsets,
   ProjectContextMenuItem,
@@ -1743,8 +1738,7 @@ class App extends React.Component<AppProps, AppState> {
           if (isIframeElement(el)) {
             src = null;
 
-            const data: MagicGenerationData = (el.customData?.generationData ??
-              this.magicGenerations.get(el.id)) || {
+            const data: MagicGenerationData = el.customData?.generationData || {
               status: "error",
               message: "No generation data",
               code: "ERR_NO_GENERATION_DATA",
@@ -2384,7 +2378,6 @@ class App extends React.Component<AppProps, AppState> {
                                 !this.scene.getElementsIncludingDeleted().length
                               }
                               app={this}
-                              isCollaborating={this.props.isCollaborating}
                               generateLinkForSelection={
                                 this.props.generateLinkForSelection
                               }
@@ -2417,26 +2410,6 @@ class App extends React.Component<AppProps, AppState> {
                                     this.updateEmbedValidationStatus
                                   }
                                 />
-                              )}
-                            {this.props.aiEnabled !== false &&
-                              selectedElements.length === 1 &&
-                              isMagicFrameElement(firstSelectedElement) && (
-                                <ElementCanvasButtons
-                                  element={firstSelectedElement}
-                                  elementsMap={elementsMap}
-                                >
-                                  <ElementCanvasButton
-                                    title={t("labels.convertToCode")}
-                                    icon={MagicIcon}
-                                    checked={false}
-                                    onChange={() =>
-                                      this.onMagicFrameGenerate(
-                                        firstSelectedElement,
-                                        "button",
-                                      )
-                                    }
-                                  />
-                                </ElementCanvasButtons>
                               )}
                             {selectedElements.length === 1 &&
                               isIframeElement(firstSelectedElement) &&
@@ -2657,7 +2630,6 @@ class App extends React.Component<AppProps, AppState> {
         name: this.getName(),
         viewBackgroundColor: this.state.viewBackgroundColor,
         exportingFrame: opts.exportingFrame,
-        backgroundCanvas: this.props.getBackgroundCanvas?.() ?? null,
       },
     )
       .catch(muteFSAbortError)
@@ -2675,148 +2647,6 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private magicGenerations = new Map<
-    ExcalidrawIframeElement["id"],
-    MagicGenerationData
-  >();
-
-  private updateMagicGeneration = ({
-    frameElement,
-    data,
-  }: {
-    frameElement: ExcalidrawIframeElement;
-    data: MagicGenerationData;
-  }) => {
-    if (data.status === "pending") {
-      // We don't wanna persist pending state to storage. It should be in-app
-      // state only.
-      // Thus reset so that we prefer local cache (if there was some
-      // generationData set previously)
-      this.scene.mutateElement(
-        frameElement,
-        {
-          customData: { generationData: undefined },
-        },
-        { informMutation: false, isDragging: false },
-      );
-    } else {
-      this.scene.mutateElement(
-        frameElement,
-        {
-          customData: { generationData: data },
-        },
-        { informMutation: false, isDragging: false },
-      );
-    }
-    this.magicGenerations.set(frameElement.id, data);
-    this.triggerRender();
-  };
-
-  public plugins: {
-    diagramToCode?: {
-      generate: GenerateDiagramToCode;
-    };
-  } = {};
-
-  public setPlugins(plugins: Partial<App["plugins"]>) {
-    Object.assign(this.plugins, plugins);
-  }
-
-  private async onMagicFrameGenerate(
-    magicFrame: ExcalidrawMagicFrameElement,
-    source: "button" | "upstream",
-  ) {
-    const generateDiagramToCode = this.plugins.diagramToCode?.generate;
-
-    if (!generateDiagramToCode) {
-      this.setState({
-        errorMessage: "No diagram to code plugin found",
-      });
-      return;
-    }
-
-    const magicFrameChildren = getElementsOverlappingFrame(
-      this.scene.getNonDeletedElements(),
-      magicFrame,
-      this.scene.getNonDeletedElementsMap(),
-    ).filter((el) => !isMagicFrameElement(el));
-
-    if (!magicFrameChildren.length) {
-      if (source === "button") {
-        this.setState({ errorMessage: "Cannot generate from an empty frame" });
-        trackEvent("ai", "generate (no-children)", "d2c");
-      } else {
-        this.setActiveTool({ type: "magicframe" });
-      }
-      return;
-    }
-
-    const frameElement = this.insertIframeElement({
-      sceneX: magicFrame.x + magicFrame.width + 30,
-      sceneY: magicFrame.y,
-      width: magicFrame.width,
-      height: magicFrame.height,
-    });
-
-    if (!frameElement) {
-      return;
-    }
-
-    this.updateMagicGeneration({
-      frameElement,
-      data: { status: "pending" },
-    });
-
-    this.setState({
-      selectedElementIds: { [frameElement.id]: true },
-    });
-
-    trackEvent("ai", "generate (start)", "d2c");
-    try {
-      const { html } = await generateDiagramToCode({
-        frame: magicFrame,
-        children: magicFrameChildren,
-      });
-
-      trackEvent("ai", "generate (success)", "d2c");
-
-      if (!html.trim()) {
-        this.updateMagicGeneration({
-          frameElement,
-          data: {
-            status: "error",
-            code: "ERR_OAI",
-            message: "Nothing genereated :(",
-          },
-        });
-        return;
-      }
-
-      const parsedHtml =
-        html.includes("<!DOCTYPE html>") && html.includes("</html>")
-          ? html.slice(
-              html.indexOf("<!DOCTYPE html>"),
-              html.indexOf("</html>") + "</html>".length,
-            )
-          : html;
-
-      this.updateMagicGeneration({
-        frameElement,
-        data: { status: "done", html: parsedHtml },
-      });
-    } catch (error: any) {
-      trackEvent("ai", "generate (failed)", "d2c");
-      this.updateMagicGeneration({
-        frameElement,
-        data: {
-          status: "error",
-          code: "ERR_OAI",
-          message: error.message || "Unknown error during generation",
-        },
-      });
-    }
-  }
-
   private onIframeSrcCopy(element: ExcalidrawIframeElement) {
     if (element.customData?.generationData?.status === "done") {
       copyTextToSystemClipboard(element.customData.generationData.html);
@@ -2827,68 +2657,6 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
   }
-
-  public onMagicframeToolSelect = () => {
-    const selectedElements = this.scene.getSelectedElements({
-      selectedElementIds: this.state.selectedElementIds,
-    });
-
-    if (selectedElements.length === 0) {
-      this.setActiveTool({ type: TOOL_TYPE.magicframe });
-      trackEvent("ai", "tool-select (empty-selection)", "d2c");
-    } else {
-      const selectedMagicFrame: ExcalidrawMagicFrameElement | false =
-        selectedElements.length === 1 &&
-        isMagicFrameElement(selectedElements[0]) &&
-        selectedElements[0];
-
-      // case: user selected elements containing frame-like(s) or are frame
-      // members, we don't want to wrap into another magicframe
-      // (unless the only selected element is a magic frame which we reuse)
-      if (
-        !selectedMagicFrame &&
-        selectedElements.some((el) => isFrameLikeElement(el) || el.frameId)
-      ) {
-        this.setActiveTool({ type: TOOL_TYPE.magicframe });
-        return;
-      }
-
-      trackEvent("ai", "tool-select (existing selection)", "d2c");
-
-      let frame: ExcalidrawMagicFrameElement;
-      if (selectedMagicFrame) {
-        // a single magicframe already selected -> use it
-        frame = selectedMagicFrame;
-      } else {
-        // selected elements aren't wrapped in magic frame yet -> wrap now
-
-        const [minX, minY, maxX, maxY] = getCommonBounds(selectedElements);
-        const padding = 50;
-
-        frame = newMagicFrameElement({
-          ...FRAME_STYLE,
-          x: minX - padding,
-          y: minY - padding,
-          width: maxX - minX + padding * 2,
-          height: maxY - minY + padding * 2,
-          opacity: 100,
-          locked: false,
-        });
-
-        this.scene.insertElement(frame);
-
-        for (const child of selectedElements) {
-          this.scene.mutateElement(child, { frameId: frame.id });
-        }
-
-        this.setState({
-          selectedElementIds: { [frame.id]: true },
-        });
-      }
-
-      this.onMagicFrameGenerate(frame, "upstream");
-    }
-  };
 
   private openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
     this.updateEditorAtom(activeEyeDropperAtom, {
@@ -3960,32 +3728,6 @@ class App extends React.Component<AppProps, AppState> {
     // ------------------- Only textual stuff remaining -------------------
     if (!data.text) {
       return;
-    }
-
-    // ------------------- Successful Mermaid -------------------
-    if (!isPlainPaste && isMaybeMermaidDefinition(data.text)) {
-      const api = await import("@excalidraw/mermaid-to-excalidraw");
-      try {
-        const { elements: skeletonElements, files = {} } =
-          await api.parseMermaidToExcalidraw(data.text);
-
-        const elements = convertToExcalidrawElements(skeletonElements, {
-          regenerateIds: true,
-        });
-
-        this.addElementsFromPasteOrLibrary({
-          elements,
-          files,
-          position:
-            this.editorInterface.formFactor === "desktop" ? "cursor" : "center",
-        });
-
-        return;
-      } catch (err: any) {
-        console.warn(
-          `parsing pasted text as mermaid definition failed: ${err.message}`,
-        );
-      }
     }
 
     // ------------------- Pure embeddable URLs -------------------
@@ -5174,7 +4916,8 @@ class App extends React.Component<AppProps, AppState> {
       } else if (
         event.key.toLowerCase() === KEYS.E &&
         event.shiftKey &&
-        event[KEYS.CTRL_OR_CMD]
+        event[KEYS.CTRL_OR_CMD] &&
+        this.props.UIOptions.canvasActions.saveAsImage
       ) {
         event.preventDefault();
         this.setState({ openDialog: { name: "imageExport" } });
@@ -5239,7 +4982,7 @@ class App extends React.Component<AppProps, AppState> {
       ) {
         const shape = findShapeByKey(event.key, this);
 
-        if (this.state.viewModeEnabled && !oneOf(shape, ["laser", "hand"])) {
+        if (this.state.viewModeEnabled && shape !== "hand") {
           return;
         }
 
@@ -9070,47 +8813,6 @@ class App extends React.Component<AppProps, AppState> {
       newElement: element,
       suggestedBinding: null,
     });
-  };
-
-  public insertIframeElement = ({
-    sceneX,
-    sceneY,
-    width,
-    height,
-  }: {
-    sceneX: number;
-    sceneY: number;
-    width: number;
-    height: number;
-  }) => {
-    const [gridX, gridY] = getGridPoint(
-      sceneX,
-      sceneY,
-      this.lastPointerDownEvent?.[KEYS.CTRL_OR_CMD]
-        ? null
-        : this.getEffectiveGridSize(),
-    );
-
-    const element = newIframeElement({
-      type: "iframe",
-      x: gridX,
-      y: gridY,
-      strokeColor: "transparent",
-      backgroundColor: "transparent",
-      fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
-      strokeStyle: this.state.currentItemStrokeStyle,
-      roughness: this.state.currentItemRoughness,
-      roundness: this.getCurrentItemRoundness("iframe"),
-      opacity: this.state.currentItemOpacity,
-      locked: false,
-      width,
-      height,
-    });
-
-    this.scene.insertElement(element);
-
-    return element;
   };
 
   //create rectangle element with youtube top left on nearest grid point width / hight 640/360

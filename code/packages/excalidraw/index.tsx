@@ -103,10 +103,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     children,
     validateEmbeddable,
     renderEmbeddable,
-    aiEnabled,
     showDeprecatedFonts,
     renderScrollbars,
-    getBackgroundCanvas,
   } = props;
 
   const canvasActions = props.UIOptions?.canvasActions;
@@ -222,10 +220,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onDuplicate={onDuplicate}
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
-          aiEnabled={aiEnabled !== false}
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}
-          getBackgroundCanvas={getBackgroundCanvas}
         >
           {children}
         </App>
@@ -376,17 +372,8 @@ export { Stats } from "./components/Stats";
 export { DefaultSidebar } from "./components/DefaultSidebar";
 export { Dialog } from "./components/Dialog";
 export type { DialogProps, DialogSize } from "./components/Dialog";
-export { TTDDialog } from "./components/TTDDialog/TTDDialog";
-export { TTDDialogTrigger } from "./components/TTDDialog/TTDDialogTrigger";
-export { TTDStreamFetch } from "./components/TTDDialog/utils/TTDStreamFetch";
-export type {
-  TTDPersistenceAdapter,
-  SavedChat,
-  SavedChats,
-} from "./components/TTDDialog/types";
 
 export { zoomToFitBounds } from "./actions/actionCanvas";
-export { setExportElementTransformer } from "./actions/actionExport";
 export {
   getCommonBounds,
   getVisibleSceneBounds,
@@ -399,7 +386,6 @@ export {
   elementPartiallyOverlapsWithOrContainsBBox,
 } from "@atlasdraw/utils/withinBounds";
 
-export { DiagramToCodePlugin } from "./components/DiagramToCodePlugin/DiagramToCodePlugin";
 export { getDataURL } from "./data/blob";
 export { isElementLink } from "@atlasdraw/element";
 

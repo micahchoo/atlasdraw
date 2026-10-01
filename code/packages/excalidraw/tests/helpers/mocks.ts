@@ -1,10 +1,6 @@
-import * as MermaidToExcalidraw from "@excalidraw/mermaid-to-excalidraw";
-import React from "react";
 import { vi } from "vitest";
 
 import type { throttleRAF as throttleRAFType } from "@atlasdraw/common";
-
-import type { parseMermaidToExcalidraw } from "@excalidraw/mermaid-to-excalidraw";
 
 type ThrottledFn<T extends unknown[]> = ((...args: T) => void) & {
   flush: () => void;
@@ -22,34 +18,6 @@ export const mockThrottleRAF: typeof throttleRAFType = <T extends unknown[]>(
   ret.cancel = () => {};
 
   return ret;
-};
-
-export const mockMermaidToExcalidraw = (opts: {
-  parseMermaidToExcalidraw: typeof parseMermaidToExcalidraw;
-  mockRef?: boolean;
-}) => {
-  vi.mock("@excalidraw/mermaid-to-excalidraw", async (importActual) => {
-    const module = (await importActual()) as any;
-
-    return {
-      __esModule: true,
-      ...module,
-    };
-  });
-  const parseMermaidToExcalidrawSpy = vi.spyOn(
-    MermaidToExcalidraw,
-    "parseMermaidToExcalidraw",
-  );
-
-  parseMermaidToExcalidrawSpy.mockImplementation(opts.parseMermaidToExcalidraw);
-
-  if (opts.mockRef) {
-    vi.spyOn(React, "useRef").mockReturnValue({
-      current: {
-        parseMermaidToExcalidraw: parseMermaidToExcalidrawSpy,
-      },
-    });
-  }
 };
 
 // Mock for HTMLImageElement (use with `vi.unstubAllGlobals()`)
