@@ -802,6 +802,14 @@ export interface ExcalidrawProps {
    */
   screenSizedStyles?: boolean;
   /**
+   * Atlasdraw addition (ADR-0015). False turns off flowchart creation with
+   * Ctrl/Cmd+Arrow: its gaps are fixed scene units and its arrow has no
+   * style unit, so on a world map the new node lands on the shape and the
+   * arrow has no head. The key then moves the selection like an arrow key.
+   * Default true.
+   */
+  flowchart?: boolean;
+  /**
    * Atlasdraw addition (ADR-0015). Called before a zoom action (zoom in, out,
    * reset, fit) changes the viewport. Return true when the host moved its own
    * camera instead; the action then does nothing. The atlas app's map owns

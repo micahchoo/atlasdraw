@@ -48,13 +48,15 @@ import styles from "../styles/EmbedView.module.css";
 
 import { FeaturePopup } from "./FeaturePopup";
 
-// Read-only: disable Excalidraw's own persistence actions. The background is
-// transparent (initialData below), so the map shows through.
+// Read-only: disable Excalidraw's own persistence actions, and its help:
+// the viewer has no editing keys to explain, so `?` opens nothing. The
+// background is transparent (initialData below), so the map shows through.
 const EMBED_UI_OPTIONS = {
   canvasActions: {
     loadScene: false,
     saveToActiveFile: false,
     export: false as const,
+    toggleShortcuts: false,
   },
 } as const;
 

@@ -33,31 +33,61 @@
       /* Boot shell — painted before any JS runs. See src/bootShell.ts for the
          lifecycle and why it sits outside #root. Colours are literals, not
          var(--ad-*): tokens.css arrives in the 315 KB CSS bundle, and a shell
-         that waits for that bundle is not a shell. Source of truth for these
-         three values is src/styles/tokens.css (--ad-surface, --ad-surface-
-         raised, --ad-surface-inset) — change them together. */
+         that waits for that bundle is not a shell. Source of truth for the
+         colours is src/styles/tokens.css (--ad-surface, --ad-surface-inset,
+         --ad-hairline, --ad-rule), and for the grid
+         src/styles/CollarShell.module.css. Change them together;
+         e2e/boot-shell.spec.ts compares the two frames. */
       #boot-shell {
         position: absolute;
         inset: 0;
+        display: grid;
+        grid-template-rows: 40px 42px 18px 1fr 34px;
+        grid-template-columns: 46px 1fr 40px;
+        grid-template-areas:
+          "head head head"
+          "tools tools tools"
+          ".    .    ."
+          ".    map  tabs"
+          "foot foot foot";
         background: #f2e8d5;
       }
-      #boot-shell .rail {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: 48px;
+      #boot-shell .head {
+        grid-area: head;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      #boot-shell .tools {
+        grid-area: tools;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.11);
+      }
+      #boot-shell .map {
+        grid-area: map;
         background: #e8ddc8;
       }
-      #boot-shell .toolbar {
-        position: absolute;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(420px, 60vw);
-        height: 44px;
-        border-radius: 10px;
-        background: #faf6ee;
+      #boot-shell .tabs {
+        grid-area: tabs;
+      }
+      #boot-shell .foot {
+        grid-area: foot;
+        border-top: 1px solid rgba(0, 0, 0, 0.11);
+      }
+      /* The share viewer (/m) has a head bar over the map; the embed has
+         the map only (src/styles/EmbedView.module.css). */
+      [data-boot="viewer"] #boot-shell {
+        grid-template-rows: 40px 1fr;
+        grid-template-columns: 1fr;
+        grid-template-areas: "head" "map";
+      }
+      [data-boot="embed"] #boot-shell {
+        grid-template-rows: 1fr;
+        grid-template-columns: 1fr;
+        grid-template-areas: "map";
+      }
+      [data-boot] #boot-shell .tools,
+      [data-boot] #boot-shell .tabs,
+      [data-boot] #boot-shell .foot,
+      [data-boot="embed"] #boot-shell .head {
+        display: none;
       }
     </style>
   </head>
@@ -65,9 +95,25 @@
     <!-- Removed by dismissBootShell() once the route mounts, or when
          ErrorBoundary catches. aria-hidden: it is decoration, and a screen
          reader announcing an empty silhouette would be noise. -->
+    <script>
+      // Before the first paint: the viewer routes (src/routes.ts) have no
+      // collar, so the shell takes their frame instead.
+      (function () {
+        var page = /\/(m|embed)(\/[^/]*)?\/?$/.exec(location.pathname);
+        if (page) {
+          document.documentElement.setAttribute(
+            "data-boot",
+            page[1] === "m" ? "viewer" : "embed",
+          );
+        }
+      })();
+    </script>
     <div id="boot-shell" aria-hidden="true">
-      <div class="rail"></div>
-      <div class="toolbar"></div>
+      <div class="head"></div>
+      <div class="tools"></div>
+      <div class="map"></div>
+      <div class="tabs"></div>
+      <div class="foot"></div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

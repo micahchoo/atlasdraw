@@ -330,6 +330,9 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               onScrollChange={bridge?.onScrollChange}
               onZoomAction={onZoomAction}
               screenSizedStyles
+              // Its fixed gaps and unitless arrows do not fit world
+              // coordinates (packages/excalidraw/tests/flowchartOff.test.tsx).
+              flowchart={false}
               UIOptions={EXCALIDRAW_UI_OPTIONS}
               collarToolbarTarget={toolStripHost}
               collarMenuTarget={menuHost}

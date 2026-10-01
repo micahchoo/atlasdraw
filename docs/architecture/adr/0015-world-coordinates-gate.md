@@ -337,9 +337,10 @@ does not close `saveAsImage`. `staticSvgScene.ts` writes text above
 `MAX_CANVAS_FONT_SIZE` at that size in a scaled `<text>`. Test:
 `atlasWorldScale.test.tsx`.
 
-Still open: `ShareView` mounts a bare Excalidraw with no map and no camera
-bridge, so a world-coordinate document opens there at zoom 1 (map zoom 22)
-and shows Excalidraw's percentage. It predates W4.
+The share viewer (`/m`) and the embed (`/embed`) are one viewer,
+`EmbedView`, with the map and the camera bridge, so a world-coordinate
+document opens there at its saved camera. `ShareView`, which mounted a bare
+Excalidraw with no map, is deleted.
 
 ### Production measurements (W4)
 

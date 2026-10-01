@@ -4,8 +4,8 @@
 // Ranks 6 and 38 of docs/performance/boot-payload-audit.md. index.html used to
 // ship an empty <div id="root">, so the screen stayed blank for the whole time
 // the entry chunk spent downloading, parsing and mounting. The shell is a
-// static silhouette of the editor — surface, rail, toolbar — with no content
-// it could get wrong.
+// static silhouette of the page's frame — the editor's collar, or the
+// viewer's head bar — with no content it could get wrong.
 //
 // It lives OUTSIDE #root on purpose. createRoot() replaces the children of
 // #root on mount, which would wipe a shell placed inside it at the exact
