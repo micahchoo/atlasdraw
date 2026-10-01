@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/cli/src/index.ts
-// Phase 3 Wave 2 T10 — programmatic entry point.
+// Programmatic entry point.
 //
 // `package.json#main` and `#types` point at this file so consumers can import
 // CLI internals (e.g. for testing or embedding). The executable entry with

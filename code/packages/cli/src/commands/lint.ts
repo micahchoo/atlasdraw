@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/cli/src/commands/lint.ts
-// Phase 3 Wave 2 T10 — `atlasdraw lint <file>` subcommand.
+// `atlasdraw lint <file>` subcommand.
 //
 // Validates a `.atlasdraw` file end-to-end:
 //   1. Reads the file from disk.

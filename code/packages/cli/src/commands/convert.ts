@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/cli/src/commands/convert.ts
-// Phase 3 Wave 2 T11 — `atlasdraw convert <in> <out>` subcommand.
+// `atlasdraw convert <in> <out>` subcommand.
 //
 // Dispatches by extension pair (`<inExt>→<outExt>`) into a small table of
 // converters. Each entry takes the input bytes, hands them to a parser /
@@ -143,9 +143,6 @@ function flattenLayers(doc: AtlasdrawDocument): FeatureCollection {
  * containing one data layer. The shape mirrors `apps/atlas-app`'s persistence
  * conventions: ULID id, the current manifest version, registry basemap
  * `default`, zero camera.
- *
- * Exposed as a named helper so T12 (round-trip tests, Wave 3) can call it
- * directly when constructing fresh test fixtures.
  */
 export function buildCLIManifest(opts: {
   title: string;

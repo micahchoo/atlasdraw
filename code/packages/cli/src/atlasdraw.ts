@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: MIT
 // packages/cli/src/atlasdraw.ts
-// Phase 3 Wave 2 T10 — Commander entry point for the atlasdraw CLI.
+// Commander entry point for the atlasdraw CLI.
 //
-// Subcommands register themselves by exporting a `Command` instance and being
-// added here via `program.addCommand(...)`. Today: `lint`. Round 2 will add
-// `convert` (T11) and `render` (T12) — they should follow the same pattern.
+// Each subcommand exports a `Command` instance, added here with
+// `program.addCommand(...)`: `lint` and `convert`. A new subcommand follows
+// the same pattern.
 
 import { Command } from "commander";
 
