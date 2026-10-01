@@ -17,6 +17,16 @@ export type {
 } from "./realtime-events.js";
 
 export type { AwarenessState } from "./realtime-events.js";
+export type { RoomLink } from "./room-link.js";
+export {
+  newRoomLink,
+  parseRoomLink,
+  readRoomTokenMessage,
+  roomFragment,
+  roomToken,
+  roomTokenMessage,
+  withRoomToken,
+} from "./room-link.js";
 export type { RoomKey } from "./room-key.js";
 export {
   parseRoomFragment,
