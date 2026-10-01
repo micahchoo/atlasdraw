@@ -2,7 +2,11 @@
 //
 // useRoom — the editor in a room (state/room.ts).
 //
-// A `#room:` link in the URL joins that room when the editor mounts.
+// A `#room:` link in the URL joins that room when the editor mounts. A room
+// link that arrives later in the same tab (pasted into the address bar, or
+// a link clicked) joins too: at once when the editor is in no room, after a
+// question when it would leave another room. A "no" puts the room's own
+// link back in the URL. A link that is not valid says so.
 // `start()` makes a room from the open map (Share → Collaborate) and puts
 // its link in the URL, so a reload stays in the room.
 //
@@ -47,6 +51,7 @@ import {
 import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
 
+import type { ViewStore } from "../session/view";
 import type { PersistenceStateStore } from "../state/persistenceState";
 import type maplibregl from "maplibre-gl";
 
@@ -86,15 +91,17 @@ export function useRoom(
   api: ExcalidrawImperativeAPI | null,
   map: maplibregl.Map | null,
   /**
-   * The session's room transport (null: this editor has no rooms) and its
-   * autosave state, which a room waits for.
+   * The session's room transport (null: this editor has no rooms), its
+   * autosave state, which a room waits for, and its view, which asks before
+   * a link moves the editor from one room to another.
    */
   session: {
     transport: RoomTransport | null;
     persistence: PersistenceStateStore;
+    view: ViewStore;
   },
 ): RoomSession {
-  const { transport, persistence } = session;
+  const { transport, persistence, view } = session;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [reason, setReason] = useState<string | null>(null);
@@ -119,28 +126,64 @@ export function useRoom(
     [transport],
   );
 
-  // A room link in the URL, read once when the editor is ready.
+  // A room link in the URL: read when the editor is ready, and again each
+  // time the hash changes in this tab.
   useEffect(() => {
-    if (!api || roomRef.current) {
+    if (!api) {
       return;
     }
-    const hash = window.location.hash;
-    if (!hash.startsWith("#room:")) {
-      return;
+    const follow = (): void => {
+      const hash = window.location.hash;
+      if (!hash.startsWith("#room:")) {
+        return;
+      }
+      if (!transport) {
+        setError("This editor is not set up for shared maps.");
+        return;
+      }
+      const link = parseRoomLink(hash);
+      if (!link) {
+        setError("This shared map link is not valid.");
+        return;
+      }
+      setError(null);
+      const current = roomRef.current;
+      if (!current) {
+        join(link);
+        return;
+      }
+      if (roomFragment(current.link) === roomFragment(link)) {
+        return;
+      }
+      void view
+        .getState()
+        .ask({
+          title: "Open the other shared map?",
+          body: "The link opens another shared map. You leave this one. Your own map stays saved and unchanged.",
+          confirmLabel: "Open the other shared map",
+          cancelLabel: "Stay here",
+        })
+        .then((yes) => {
+          if (yes && roomRef.current === current) {
+            join(link);
+            return;
+          }
+          // Stayed: the URL names the room the editor is in.
+          const { pathname, search } = window.location;
+          const stay = roomRef.current;
+          window.history.replaceState(
+            window.history.state,
+            "",
+            pathname + search + (stay ? roomFragment(stay.link) : ""),
+          );
+        });
+    };
+    if (!roomRef.current) {
+      follow();
     }
-    if (!transport) {
-      setError("This editor is not set up for shared maps.");
-      return;
-    }
-    const link = parseRoomLink(hash);
-    if (!link) {
-      setError("This shared map link is not valid.");
-      return;
-    }
-    join(link);
-    // Once per editor: a hash change later does not move it to another room.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [api, transport, join, view]);
 
   // In the room: the room's document and drawing in the editor.
   useEffect(() => {

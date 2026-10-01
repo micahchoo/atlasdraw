@@ -38,6 +38,11 @@
   margin: 0 0 6px 0;
 }
 
+/* Empty, it takes no room; it stays in the page as a live region. */
+.connection:empty {
+  margin: 0;
+}
+
 .peerList {
   display: flex;
   flex-direction: column;

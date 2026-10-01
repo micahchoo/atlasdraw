@@ -55,19 +55,39 @@ describe("PresenceList", () => {
     expect(onRename).not.toHaveBeenCalled();
   });
 
-  it("says how the room's connection stands, as a status line", () => {
+  it("says how the room's connection stands, in a status line that is there before it speaks", () => {
+    // In a room the name field is always there, so the list is too. A live
+    // region added together with its text is often not read out.
     const { rerender } = render(
       <PresenceList
         peers={[]}
         self={self}
+        onRename={() => {}}
+        connection={null}
+      />,
+    );
+    const line = screen.getByRole("status");
+    expect(line.textContent).toBe("");
+
+    rerender(
+      <PresenceList
+        peers={[]}
+        self={self}
+        onRename={() => {}}
         connection="Offline. Reconnecting…"
       />,
     );
-    expect(screen.getByRole("status").textContent).toBe(
-      "Offline. Reconnecting…",
-    );
+    expect(screen.getByRole("status")).toBe(line);
+    expect(line.textContent).toBe("Offline. Reconnecting…");
 
-    rerender(<PresenceList peers={[]} self={self} connection={null} />);
-    expect(screen.queryByRole("status")).toBeNull();
+    rerender(
+      <PresenceList
+        peers={[]}
+        self={self}
+        onRename={() => {}}
+        connection={null}
+      />,
+    );
+    expect(line.textContent).toBe("");
   });
 });

@@ -128,15 +128,15 @@ export function PresenceList({
       <h3 className={styles.header} data-testid="presence-list-header">
         {headerText}
       </h3>
-      {connection && (
-        <p
-          className={styles.connection}
-          role="status"
-          data-testid="presence-connection"
-        >
-          {connection}
-        </p>
-      )}
+      {/* Always in the list, so a screen reader hears "Offline" when the
+          text arrives: a live region added with its text is often not read. */}
+      <p
+        className={styles.connection}
+        role="status"
+        data-testid="presence-connection"
+      >
+        {connection}
+      </p>
       {editable && <NameField {...editable} />}
       {compact ? (
         <div className={styles.dotRow} data-testid="presence-list-compact">
