@@ -4,7 +4,7 @@ Coordinate math for Atlasdraw: plain functions, no React, no MapLibre.
 
 A drawing's scene coordinates are Web Mercator world pixels at a reference zoom (22), measured from the document's origin (ADR-0015). This package maps between scene coordinates, lng/lat and the map camera.
 
-Workspace-internal package (not published). Consumed by `@atlasdraw/basemap`, `@atlasdraw/tools`, `@atlasdraw/data` and `apps/atlas-app`.
+Workspace-internal package (not published). Consumed by `@atlasdraw/basemap`, `@atlasdraw/tools`, `@atlasdraw/data`, `@atlasdraw/cli` and `apps/atlas-app`.
 
 ## Capabilities
 

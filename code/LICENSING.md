@@ -12,12 +12,14 @@ This project ships under three open-source licenses. The split balances protecti
 | `packages/cli` | MIT | Headless tooling — must run in any pipeline |
 | `packages/geo` | MIT | Pure math/types — maximum reuse |
 | `packages/data` | MIT | File format I/O — maximum reuse, ecosystem leverage |
+| `packages/protocol` | MIT | Room-link and comment types — maximum reuse |
 | `packages/basemap` | MPL-2.0 | MapLibre wrapper — file-level copyleft, library-friendly |
 | `packages/tools` | MPL-2.0 | Drawing tools — file-level copyleft |
 | `packages/excalidraw` (vendored) | MIT | Upstream Excalidraw remains MIT |
 | `packages/element` (vendored) | MIT | Upstream — MIT |
 | `packages/math` (vendored) | MIT | Upstream — MIT |
 | `packages/common` (vendored) | MIT | Upstream — MIT |
+| `packages/utils` (vendored) | MIT | Upstream — MIT |
 
 ## Worked examples
 
@@ -49,9 +51,9 @@ By submitting a contribution to this repository, you agree your changes are lice
 
 Single-AGPL would deter MIT-licensed projects from depending on our libraries or CLI (license incompatibility on linking). Single-MIT would let any cloud provider resell our editor as a managed service contributing nothing back. The split is deliberate and load-bearing.
 
-## CI enforcement
+## Enforcement
 
-Every `package.json` MUST declare `"license"` matching the table above. CI fails the build if any package is missing the field or declares the wrong value. See `scripts/check-license.sh`.
+Every `package.json` must declare `"license"` with the value in the table above. `bash scripts/check-license.sh` fails if a package has no `license` field or a wrong one. CI does not run it yet, and it does not list `apps/storage` or `packages/protocol`; run it by hand after you add a package.
 
 ## Questions
 

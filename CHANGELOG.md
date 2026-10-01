@@ -6,86 +6,156 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+The 2026-10 roadmap. It closes a write hole in share links, makes links and
+rooms durable, moves drawings to world coordinates, and adds the map basics
+that 1.0 lacked. Read "Upgrade" before you deploy it.
+
+### Upgrade
+
+Back up the storage volume and, if you run it, the relay before you start
+the new images. Then:
+
+1. **Remove old environment variables.** The servers ignore them:
+   `MANAGED_MODE`, `QUOTA_FREE_MAPS`, `QUOTA_PRO_MAPS`, `STRIPE_*`,
+   `SITE_URL`, `VITE_MANAGED_MODE` (managed mode), and `CORS_ORIGIN` and
+   `REDIS_URL` (the old Socket.IO relay).
+2. **Minimal stack: use port 3000 only.** The storage server is no longer
+   published on `4000`. The web container's nginx serves it on the same
+   origin at `/api`, so the health check is
+   `curl http://localhost:3000/api/health`.
+3. **Full stack with the relay: add the `roomsdata` volume.** The relay now
+   saves rooms to SQLite at `/data/rooms.sqlite`. The new
+   `infra/docker-compose.yml` declares the volume.
+4. **On a server that faces the internet,** set `MAX_TOTAL_BYTES` on the
+   storage server. `POST /maps` is open to anyone who reaches the API. The
+   relay has its own caps with defaults (`docs/self-host/production.md`,
+   "Realtime relay").
+
+What happens by itself:
+
+- **Files move to format version 2.** A version 1 `.atlasdraw` file, autosave
+  or hash link is migrated when it opens: each drawn element moves from
+  screen pixels to world coordinates. The next save writes version 2. An older
+  build cannot open a version 2 file.
+- **Maps saved on the server before write keys become read-only.** Migration
+  `003_write_keys_and_lasting_links` gives them no key, so nobody can write
+  them. Their share links work until their 7-day expiry, then the sweep
+  deletes the map and its blob. The owner's browser creates a new map with a
+  key at its next save. The server does not let anyone claim a key for an old
+  map, because its id may have leaked (SECURITY.md row 10).
+- **The storage schema migrates at start.** It drops the `workspace_id`
+  columns and the `workspaces` table, and records each step in
+  `schema_migrations`. Maps and share links stay.
+- **The browser's autosave moves to one slot per map.** The old single slot
+  opens on the next reload and moves at the next save.
+- **Rooms start empty.** The old relay kept nothing after the last person
+  left, so there is nothing to carry over.
+
+A script that calls the storage API must now keep the `write_key` from
+`POST /maps` and send it as `Authorization: Bearer <key>`.
+`infra/smoke-minimal.sh` shows the flow.
+
+### Security
+
+- **A share link no longer gives write access.** `GET /share/:token`
+  returned the map id, and the id was enough to overwrite the map. The route
+  is deleted (SECURITY.md row 10).
+- **Maps carry a write key** (ADR-0017). `POST /maps` returns `write_key`
+  once; the server stores its SHA-256. `PUT /maps/:id`, `DELETE /maps/:id`,
+  `GET /maps/:id/blob`, `POST /maps/:id/share` and
+  `DELETE /maps/:id/share/:token` need `Authorization: Bearer <key>`. No key
+  is 401; a wrong key is 403 (row 12).
+- **A room link's key is the capability** (ADR-0014). The client derives a
+  room token from the link secret and sends it as the first WebSocket
+  message. The relay keeps SHA-256 of the first token per room and closes any
+  other with 4403. The room id must be a UUID (row 3).
+- **The editor checks every record it reads from a room.** Anyone with the
+  link can write the room doc, so each record is validated before the editor
+  uses it (`state/roomValidation.ts`).
+- **Abuse limits.** Storage: `MAX_TOTAL_BYTES` (507 past it), and
+  `TRUST_PROXY` (default off), so a client cannot forge its address past the
+  per-IP rate limit (rows 11, 13). Relay: total stored bytes, new rooms per IP per hour,
+  connections per IP, connections per room, message and room size, and room
+  expiry (row 14).
+
+### Added
+
+- **World coordinates** (ADR-0015). A drawing is stored in Web Mercator pixels
+  at zoom 22 from the document's origin. A camera move writes no element, so
+  undo after a pan, autosave and collaboration no longer see false changes.
+  Pinch zoom on touch screens drives the map; Ctrl+0 frames the drawing.
+- **Live rooms on one Y.Doc per room** (ADR-0014, ADR-0018). The drawing,
+  layers, title, comments and presence sync through the relay over
+  y-websocket. The relay saves each room to SQLite and deletes a room nobody
+  opened for `ROOM_EXPIRY_DAYS` (90). A person can set a display name in the
+  presence list.
+- **Share links last and follow the map.** A server link lives until its
+  owner chooses "Stop sharing", unless the owner chose a 7- or 30-day expiry.
+  It shows the map's latest save, so an edit updates every link and embed.
+  The client shares the document's own server map instead of a new copy.
+- **One read-only viewer** for `/m` (with a title and an "open a copy" link)
+  and `/embed` (no chrome). It shows the basemap, data, raster and tile
+  layers and the drawing at the saved camera.
+- **My maps**: the maps saved in this browser, to open or remove, and
+  **Restore from server backup**.
+- **Import KML, KMZ and GPX.** A file with mixed geometry becomes one layer
+  per kind. `.json` GeoJSON is accepted.
+- **Measure** distance and area on the ellipsoid, and a readout of the
+  selected shape's length, area and radius.
+- **Feature popups**: a click on a feature shows its attributes, in the
+  editor and in an unlocked embed.
+- **Tile layers** from an XYZ URL, with a credit in the status bar and in
+  exports.
+- **Labels from a property and a filter by property** for data layers.
+- **Export a data layer** as GeoJSON or CSV from its menu; the GeoJSON export
+  can include data layers. CSV text never starts a spreadsheet formula.
+- **PNG export at 1x, 2x or 3x.**
+- **`DELETE /maps/:id`** removes a map, its links and its bytes (write key).
+- **Storage:** `MAX_TOTAL_BYTES`, `SWEEP_INTERVAL_MS`, `TRUST_PROXY`.
+  **Relay:** `ROOMS_DB`, `MAX_ROOMS`, `MAX_ROOM_SIZE`, `MAX_MESSAGE_BYTES`,
+  `MAX_ROOM_BYTES`, `MAX_TOTAL_ROOM_BYTES`, `MAX_NEW_ROOMS_PER_IP`,
+  `MAX_CONNECTIONS_PER_IP`, `ROOM_EXPIRY_DAYS`, `ROOM_SWEEP_INTERVAL_MS`,
+  `TRUST_PROXY`.
+- **CI gates**: typecheck, ESLint, Prettier, a check that every test can
+  fail, Vitest, the storage adapter against a real Postgres, a benchmark
+  regression gate and chromium end-to-end tests.
+
+### Changed
+
+- **The editor reads every `VITE_*` variable through one schema**
+  (`config/app-config.ts`). A bad value stops the app at boot and names the
+  variable. Every link the app makes works under the build's base path.
+- **Blob writes are atomic.** The SQLite and file adapter writes a temporary
+  file, flushes it and renames it.
+- **One owner for the storage schema.** Both adapters apply
+  `apps/storage/src/db/migrations.ts` at start. The Postgres adapter retries a
+  failed schema setup instead of failing every request until a restart.
+- **The PDF and PNG panes say what the file holds.** The PDF is a page with a
+  map image, a legend and a scale; it was called a "vector document".
+
 ### Removed
 
-- **`GET /maps/:id`.** Nothing used the map record. The owner reads the
-  bytes with `GET /maps/:id/blob`.
-- **Managed (hosted) mode.** Atlasdraw is self-host only, one trusted
-  tenant per deployment (ADR-0013). The storage server loses the
-  `/api/workspaces` and `/api/billing/*` routes, the `X-Workspace-ID`
-  middleware, the map quota, Stripe, and the `MANAGED_MODE`,
-  `QUOTA_*`, `STRIPE_*` and `SITE_URL` env vars. The atlas-app loses the
-  workspace switcher, the `/billing` page, the Settings "Workspace" tab
-  and `VITE_MANAGED_MODE`. No managed-mode user flow worked end to end,
-  and the mode enforced no tenant isolation. The 1.0.0 entry below
-  describes it as it shipped.
-- **`packages/sdk`.** It was a stub that nothing imported (ADR-0016). A
-  read-only map embeds through the `/embed` route.
+- **Managed (hosted) mode** (ADR-0013): workspaces, quotas, Stripe billing,
+  `/api/workspaces`, `/api/billing/*`, the `X-Workspace-ID` header, the
+  workspace switcher and the `/billing` page. No managed-mode flow worked end
+  to end, and the mode enforced no tenant isolation. Atlasdraw is self-host
+  only, one trusted tenant per deployment.
+- **The Socket.IO relay**, its Redis adapter and the end-to-end encrypted
+  scene channel. Rooms are not end-to-end encrypted: the relay can read them
+  (ADR-0014, "What the relay can see").
+- **`GET /maps/:id` and `GET /share/:token`.** The owner reads the bytes with
+  `GET /maps/:id/blob`; a link holder with `GET /share/:token/blob`.
+- **`packages/sdk`**, a stub that nothing imported (ADR-0016).
+- **Upstream Excalidraw features that mean nothing on a map**: the frame,
+  embeddable, laser and magic-frame tools, Mermaid and text-to-diagram, every
+  locale except English, and the upstream image export and `.excalidraw`
+  save. Old documents with those element types still load (`VENDOR.md`).
+- **The `ShareView` component.** `/m` uses the same viewer as `/embed`.
 - **"Edit style" (Maputnik) and `VITE_MAPUTNIK_URL`.** The dialog sent
   Maputnik a `/styles/…` URL that no server serves, and Maputnik could not
   send an edit back. The basemap is chosen in the Layers panel.
 - **The Settings "Basemap" tab.** The Layers panel is the one basemap
-  picker. The basemap is now part of the document: it is saved with the
-  map, it follows a room, and your own map keeps its basemap when you
-  leave a room.
-
-### Added
-
-- **Maps carry a write key** (ADR-0017). `POST /maps` returns
-  `write_key` once. `PUT /maps/:id`, `POST /maps/:id/share` and the new
-  `DELETE /maps/:id/share/:token` and `GET /maps/:id/blob` need
-  `Authorization: Bearer <write_key>`: none is 401, a wrong one is 403.
-  A share token never opens a write.
-- **Restore from the server.** `GET /maps/:id/blob` returns a map's
-  latest bytes to its key holder. The client has
-  `restoreFromServer(client, documentId)`; no menu item calls it yet.
-- **Stop sharing.** The Share dialog has "Stop sharing this link", which
-  revokes the token.
-- **`MAX_TOTAL_BYTES`** caps the total stored size (507 past it), and
-  **`SWEEP_INTERVAL_MS`** sets how often expired links and unreachable
-  maps are deleted.
-
-### Changed
-
-- **Share links last, and follow the map.** A link lives until its owner
-  stops it, unless the owner chose a 7- or 30-day expiry. It serves the
-  map's latest saved bytes, so a save updates every link and embed. The
-  Share dialog says so. The client shares the document's own server map
-  instead of making a new map for every share.
-- **Blob writes are atomic.** The SQLite/filesystem adapter writes to a
-  flushed temp file and renames it, with async I/O.
-- **One owner for the storage schema.** Both storage adapters apply the
-  migrations in `apps/storage/src/db/migrations.ts` at startup, and record
-  them in a `schema_migrations` table. The Postgres adapter now retries a
-  schema setup that failed at a cold start, instead of failing every
-  request until a restart.
-
-### Migration notes for self-hosters
-
-- Back up the storage volume before you upgrade. At first start the
-  server drops the `workspace_id` columns and the `workspaces` table.
-  Maps and share links are kept.
-- Remove `MANAGED_MODE`, `QUOTA_FREE_MAPS`, `QUOTA_PRO_MAPS`, `STRIPE_*`,
-  `SITE_URL` and `VITE_MANAGED_MODE` from your environment. The server
-  ignores them.
-- **Existing maps become read-only.** Migration
-  `003_write_keys_and_lasting_links` adds `maps.write_key_hash` and makes
-  `share_tokens.expires_at` nullable. A map stored before it has no write
-  key, so nobody can write it. Its share links work until their 7-day
-  expiry; then the sweep deletes the map and its blob. Each browser makes
-  a new map with a key at its next save, so you do nothing. The id that
-  old clients hold may have leaked through share links (SECURITY.md row
-  10), so the server does not let anyone claim a key with it.
-- A script that calls the storage API must keep the `write_key` from
-  `POST /maps` and send it as `Authorization: Bearer <key>`.
-  `infra/smoke-minimal.sh` shows the flow.
-- Set `MAX_TOTAL_BYTES` on a server that faces the internet.
-
-- **"Pro+" billing tier.** `pro_25` was a separate `WorkspacePlan` with its
-  own Stripe price ID but an identical map quota to `pro` — no code ever
-  read a difference between the two (ISSUES.md Direction 5, headroom audit,
-  verdict: reject). Folded back into `pro`; `STRIPE_PRICE_PRO_25` is no
-  longer a recognized env var.
+  picker.
 
 ## [1.0.0] — 2026-05-15
 

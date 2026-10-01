@@ -45,6 +45,7 @@ Each `package.json` declares `"license"` field. CI fails if omitted. Plain-Engli
 
 - ADR-0013 (`docs/architecture/adr/0013-self-host-only.md`): Atlasdraw is self-host only. There is no official hosted offering.
 - ADR-0016 (`docs/architecture/adr/0016-sdk-removed-cli-deferred.md`): `packages/sdk` is deleted. Read-only embedding uses the `/embed` route.
+- 2026-10-01: `packages/protocol` (MIT) and the vendored `packages/utils` (MIT) are in `LICENSING.md`. `scripts/check-license.sh` checks the license fields, but CI does not run it; the Consequences above that say CI fails are not true yet.
 
 ## References
 

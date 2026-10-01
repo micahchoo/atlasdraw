@@ -1,19 +1,18 @@
-# SECURITY.md — Issue 1 trust-boundary sweep
+# SECURITY.md — trust-boundary findings
 
-Loop: `sweep-triage-fix-resweep`. Scope: `code/apps/storage/src`,
-`code/apps/realtime/src`, `infra/`. Secrets: full git history (`git log -p`).
+This file lists every trust-boundary finding in the servers and `infra/`, and
+how each one was closed. Scope: `code/apps/storage/src`,
+`code/apps/realtime/src`, `infra/`. Secrets: the full git history
+(`git log -p`).
 
-Phase: **FIX (partial)** — sweep complete (a second pass adds no rows).
-The managed-mode rows (1–4, 8, 9) are closed: managed mode is removed and
-Atlasdraw is self-host only, one trusted tenant per deployment (ADR-0013,
-`docs/architecture/adr/0013-self-host-only.md`). Rows **5, 6, 7** are
-mode-independent: they harden a single-tenant self-host that faces the
-internet.
+**State on 2026-10-01: all 14 rows are closed.** Rows 1–4, 8 and 9 closed
+when managed mode was deleted: Atlasdraw is self-host only, one trusted
+tenant per deployment (`docs/architecture/adr/0013-self-host-only.md`). The
+other rows harden a single-tenant server that faces the internet. What is
+left is accepted, not open: see "Accepted risks" below the table.
 
-Done when every finding at or above the agreed floor reads clean on re-audit
-AND a fresh full sweep of both directories adds no rows.
-
-Fix rule: one finding per commit, message references its row; re-audit each.
+Fix rule: one finding per commit, the commit message names its row, and a
+test re-checks it.
 
 | # | finding | file | severity | user trust broken | fix commit | re-audit |
 |---|---------|------|----------|-------------------|------------|----------|
@@ -23,7 +22,7 @@ Fix rule: one finding per commit, message references its row; re-audit each.
 | 4 | `GET /api/workspaces` returns every workspace row with no auth ("Phase 6 v1 has no user auth so this returns every row") | `routes/workspaces.ts:27-33` | **MED** | Full tenant enumeration in managed mode: workspace ids + plan tiers of all customers exposed to any managed-mode caller | removed with managed mode, ADR-0013 | no managed-mode code remains |
 | 5 | Socket.IO CORS `origin: "*"`, no auth on `JOIN_ROOM`; the `workspaceId` room-namespace is client-supplied and unvalidated | `realtime/index.ts:34`; `realtime/socket-io-server.ts:127-165` (both gone) | **MED** | Room-slot exhaustion and injection into any known room | W6 deleted the Socket.IO relay. The room server admits a connection only with the room's token (row 3); a full room closes new connections with 4409 | `apps/realtime/tests/rooms.test.ts` "refuses a connection over the room's limit as full" |
 | 6 | Relay published directly on host `4001:4001`, bypassing the Caddy/TLS front door; Caddyfile had no `/yjs` route | `infra/docker-compose.yml:113-114`; `infra/caddy/Caddyfile:16-22` | **MED** | Realtime traffic (the **plaintext** room docs and presence) rides unencrypted in transit in the documented full stack | Caddy now proxies `/yjs/*` → `realtime:4001` (WS upgrade auto-proxied, TLS-terminated); compose changed `ports: 4001:4001` → `expose: 4001` so the relay is internal-only, reachable only through Caddy | `docker compose config` valid (base + realtime profile); `caddy validate` = Valid configuration |
-| 7 | No per-IP / per-client rate limiting on any storage HTTP route — only a 50 MiB body cap; storage throttles nothing | `storage/index.ts:53-56` (no rate-limit plugin) | **MED** | Abuse / brute-force of the internet-facing storage API: unbounded `POST /maps`, share-token guessing attempts, blob-storage fill | added `middleware/rate-limit.ts` — hand-rolled per-IP fixed-window limiter (no new dep), wired in `index.ts` with `trustProxy` so `request.ip` is the real client behind Caddy; `/health` exempt; `RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW_MS` config (0 disables). Incidentally cut storage typecheck errors 13→6 by asserting the Fastify instance type | 4 new unit tests (cap→429, `/health` exempt, per-IP scoping, disabled); 114 storage tests green |
+| 7 | No per-IP / per-client rate limiting on any storage HTTP route — only a 50 MiB body cap; storage throttles nothing | `storage/index.ts:53-56` (no rate-limit plugin) | **MED** | Abuse / brute-force of the internet-facing storage API: unbounded `POST /maps`, share-token guessing attempts, blob-storage fill | added `middleware/rate-limit.ts` — hand-rolled per-IP fixed-window limiter (no new dep), wired in `index.ts` with `trustProxy` so `request.ip` is the real client behind Caddy; `/health` exempt; `RATE_LIMIT_MAX`/`RATE_LIMIT_WINDOW_MS` config (0 disables). Since row 11, `trustProxy` follows `TRUST_PROXY` | 4 new unit tests (cap→429, `/health` exempt, per-IP scoping, disabled); 114 storage tests green |
 | 8 | `POST /api/billing/checkout` trusts `workspaceId` from the request body and never checks it matches the caller's `X-Workspace-ID` | `routes/billing.ts:168-207` | LOW | A tenant can open a Stripe checkout that credits/upgrades a different `workspaceId` (payment still required, so impact is limited) | removed with managed mode, ADR-0013 | no managed-mode code remains |
 | 9 | Stripe webhook idempotency + replay protection is in-memory only — lost on restart, not shared across instances (acknowledged in-code) | `routes/billing.ts:63-98` | LOW | A webhook replayed during the restart window (or against another instance) reprocesses; single-instance v1 accepts this per the module docstring | removed with managed mode, ADR-0013 | no managed-mode code remains |
 | 10 | `GET /share/:token` returned the full map record, including its id, and `PUT /maps/:id` needs only the id — so a read-only share link gave write access. Self-host, not managed-only (audit 2026-10-01) | `routes/share.ts` (route removed) | **HIGH** | Anyone with a read link could overwrite the map every other recipient sees, and mint fresh 7-day links without limit | route deleted (no client called it); map responses no longer carry `blob_ref`; test: a token holder never sees the map id | `share.test.ts` "a share token holder…", `maps.test.ts` "never exposes where the blob is stored" |
@@ -32,13 +31,23 @@ Fix rule: one finding per commit, message references its row; re-audit each.
 | 13 | `POST /maps` takes 50 MiB from anyone, and nothing was ever deleted: every upload share made a new map that outlived its token (audit S3, H6) | `storage/routes/maps.ts`, `hooks/useShareLink.ts` | **MED** | Disk fill by anyone who reaches the API, and unbounded growth from normal sharing | `MAX_TOTAL_BYTES` caps the sum of map sizes (507 past it; default 0 = no cap, set it on an internet-facing server). The client shares the document's own map instead of a new one. A sweep at start and every `SWEEP_INTERVAL_MS` deletes expired tokens and keyless maps no live token reads. A map with a key is never collected: its owner may return | `maps.test.ts` "the total-size cap"; `adapter-contract.test.ts` "sweep deletes…" on SQLite and Postgres |
 | 14 | Anyone who reaches the relay can make rooms: the first token for a new room id claims it, and a room is never deleted. There is no per-IP limit on new rooms and no cap on the SQLite file (W6, 2026-10-01) | `realtime/rooms.ts`, `realtime/room-store.ts` | **MED** | Disk fill on an internet-facing relay; `MAX_ROOMS` bounds memory, not disk | W6b: a cap on all stored rooms together (`MAX_TOTAL_ROOM_BYTES`, default 2 GiB; a new room or a growing save past it is closed with 4507 "relay storage full"); per client address, new rooms per hour (`MAX_NEW_ROOMS_PER_IP`, 30) and open connections (`MAX_CONNECTIONS_PER_IP`, 64), both closed with 4429; the address comes from `X-Forwarded-For` only with `TRUST_PROXY` (compose sets `1` for Caddy). Rooms nobody was in for `ROOM_EXPIRY_DAYS` (90) are deleted by a sweep at start and every `ROOM_SWEEP_INTERVAL_MS`. Knobs: `docs/self-host/production.md` "Realtime relay". Residual: people behind one NAT share the per-address limits | `apps/realtime/tests/rooms.test.ts` "abuse limits" (new rooms per hour and the next hour; forged header ignored without trust, read with it; connections per address; total cap refuses a new room and a growing save; expiry at start and on the interval, a live room kept); `collab.known-red.test.ts` "a client over the relay's new-room limit is told so and stops trying" |
 
-Accepted with row 12: the write key lives in the owner's browser (IndexedDB database `atlasdraw-autosave`). A script running on the app's origin can read it. A share link holder cannot. Losing it loses write access to that server map, not the map: links still read it, and the next save makes a new map.
+## Accepted risks
+
+- **The relay reads every room** (ADR-0014). The room token decides who may
+  connect; it does not hide the content from the operator or from anyone who
+  reads `rooms.sqlite`. A user who must hide a map from the operator runs
+  their own deployment.
+- **People behind one address share the relay's per-address limits** (row 14).
+- **`POST /maps` is open** to anyone who reaches the storage API. The write
+  key protects existing maps, not the disk: set `MAX_TOTAL_BYTES`, or put the
+  site behind your own authentication.
+- **The write key lives in the owner's browser** (IndexedDB database `atlasdraw-autosave`). A script running on the app's origin can read it. A share link holder cannot. Losing it loses write access to that server map, not the map: links still read it, and the next save makes a new map (row 12).
 
 ## Non-findings (verified clean during the sweep)
 
 - **Client-id validation** — `ID_RE` (`^[A-Za-z0-9_-]{21}$`) checked at every id/token entry point in `maps.ts`/`share.ts` and defensively again in both adapters. Share tokens are 21-char nanoids with an optional expiry and orphan checks.
 - **Git-history secret `4b07cca33ff2d2919bc95ff98f148e9e`** — upstream Excalidraw's public Firebase **web** `apiKey` (non-secret by design; enforcement is via Firebase security rules, not key secrecy). Already removed from the working tree in `2912fad`. Nothing to rotate. Other history hits (`tokentokentoken…`, `abcdefghij…`, `__PMTILES_PATH__`, `excalidraw-oai-api-key`) are test fixtures / placeholders.
-- **Sentry `beforeSend`** scrubs Authorization headers and request IPs (`index.ts:36-45`).
+- **Sentry `beforeSend`** scrubs Authorization headers and request IPs (`storage/src/index.ts`).
 - **Graceful shutdown** exists on storage and on the relay (SIGTERM/SIGINT: the relay saves every room, then closes).
 
 ## Resolution of the managed-mode rows
@@ -48,10 +57,3 @@ Rows 1–4, 8 and 9 had one root: managed mode shipped tenant-isolation surface
 but no code path enforced ownership. The maintainer chose self-host only and
 removed managed mode (ADR-0013). A future hosted tier is a new decision that
 starts from tenant isolation and authentication.
-
-## Running log
-
-- Sweep phase: read all of `storage/src` routes + middleware + index + billing,
-  all of `realtime/src`, `infra/caddy/Caddyfile`, `infra/docker-compose.yml`,
-  and ran a `git log -p` secret scan across all history. 9 findings, 5 clean
-  areas. Ledger complete; holding at the sweep→fix boundary for the triage call.

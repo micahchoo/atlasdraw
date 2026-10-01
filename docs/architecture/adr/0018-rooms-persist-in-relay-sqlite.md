@@ -2,7 +2,7 @@
 
 # ADR-0018: The Relay Keeps Rooms in Its Own SQLite File
 
-- **Status:** Accepted
+- **Status:** Accepted. Implemented in roadmap waves W6 and W6b (2026-10-01).
 - **Date:** 2026-10-01
 - **Relates to:** ADR-0014 (the relay is trusted; rooms persist), ADR-0017
   (maps carry a write key)

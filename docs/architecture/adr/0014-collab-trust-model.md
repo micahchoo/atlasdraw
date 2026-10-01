@@ -2,8 +2,10 @@
 
 # ADR-0014: Collaboration Trusts the Relay — Option C Made Permanent
 
-- **Status:** Accepted
+- **Status:** Accepted. Implemented in roadmap waves W6 and W6b (2026-10-01); see "Implementation".
 - **Date:** 2026-10-01
+- **Supersedes:** ADR-0010's tables of what the relay can see, and its claim
+  that comments are end-to-end encrypted. Also decides `code/decisions/0007-yjs-e2ee-threat-model.md`.
 - **Amends:** ADR-0010 (Yjs E2EE threat model). This is the "Option C made
   permanent" decision block that ADR-0010's Phase 6 obligations asked for. It
   closes escalation E-01.
@@ -48,7 +50,8 @@ The relay is trusted. Option C is permanent.
    the token that matches the room. A room id alone, seen in a log or a URL
    path, grants nothing.
 4. **The server may persist rooms.** Room docs, including comments, persist to
-   storage, so a review that runs over days keeps its comments.
+   storage, so a review that runs over days keeps its comments. (As built, the
+   relay keeps them in its own SQLite file, not the storage server: ADR-0018.)
 5. **Delete what Option B kept alive.** When W6 lands, delete the Socket.IO
    relay, `apps/atlas-app/src/collab/scene-crypto.ts` and the unused stub
    `packages/data/src/yjs-crypto.ts`.
@@ -60,9 +63,9 @@ The relay is trusted. Option C is permanent.
 - Privacy against the operator depends on who runs the relay. A user who needs
   it runs their own deployment, which is the self-host posture (ADR-0013).
 - ADR-0010's tables "What the Phase 5 relay can see" and its claim that comments
-  are end-to-end encrypted are superseded by this ADR. Until W6 ships, the
-  accurate statement is: comments are plaintext to the relay and readable by
-  anyone who knows the room id.
+  are end-to-end encrypted are superseded by this ADR. Before W6, comments
+  were plaintext to the relay and readable by anyone who knew the room id; W6
+  closed that (see "Implementation").
 
 ## Alternatives considered
 

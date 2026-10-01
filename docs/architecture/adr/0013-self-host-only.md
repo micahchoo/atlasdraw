@@ -2,11 +2,11 @@
 
 # ADR-0013: Self-Host Only — Delete Managed Mode
 
-- **Status:** Accepted
+- **Status:** Accepted. Done in roadmap wave W8 (2026-10-01); see "As built".
 - **Date:** 2026-10-01
 - **Supersedes:** ADR-0011 (hosted-mode telemetry)
 - **Amends:** ADR-0007 (storage dual mode): the Postgres/S3 adapter stays; its managed-mode surface goes.
-- **Relates to:** `docs/security/managed-mode-trust-boundary.md`, `.claude/rules/managed-mode-tenancy.md`
+- **Relates to:** ADR-0017 (maps carry a write key), `SECURITY.md` rows 1–4, 8, 9
 
 ## Context
 
@@ -73,3 +73,16 @@ adapter contract, then the client. Each phase keeps `yarn test:typecheck` and
 the four route mismatches and the webhook order.** Rejected: it keeps a surface
 that is unsafe by design and that nobody runs, and every change to storage
 must still reason about it.
+
+## As built (W8, 2026-10-01)
+
+- Storage and the editor lost every item in the Decision's list. Migration
+  `002` drops the `workspace_id` columns and the `workspaces` table at start
+  (`apps/storage/src/db/migrations.ts`).
+- `docs/security/managed-mode-trust-boundary.md` and
+  `.claude/rules/managed-mode-tenancy.md` are deleted: nothing matched them.
+- The relay has no workspace prefixes left. W6 replaced the relay: a room id
+  is a UUID and nothing else (ADR-0014).
+- The share-link write hole was closed first, as planned (SECURITY.md row 10),
+  and maps then got a write key (ADR-0017).
+

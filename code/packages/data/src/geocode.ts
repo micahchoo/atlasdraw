@@ -5,13 +5,12 @@
 // Pure module. Single dependency surface is the global `fetch`. No SDK,
 // no node-fetch polyfill — Vite/jsdom/Node 18+ all provide native fetch.
 //
-// CALL-HOME POLICY (ADR-0006 telemetry, ADR-0011 hosted-mode telemetry):
+// CALL-HOME POLICY (ADR-0006 telemetry):
 //   The Photon endpoint is OPERATOR-CONFIGURED and OPT-IN. There is NO
 //   default endpoint. Constructing a `PhotonGeocoder` requires the caller
 //   to supply an endpoint URL — there's nowhere for atlasdraw itself to
 //   "phone home" because no URL is baked into this module. Self-hosters
-//   opt in by setting `VITE_GEOCODER_ENDPOINT` (atlas-app build) or the
-//   `[geocoder] endpoint = "..."` stanza in `config.toml` (compose).
+//   opt in by setting `VITE_GEOCODER_ENDPOINT` when they build atlas-app.
 //
 // Photon API shape (https://photon.komoot.io/):
 //   GET ${endpoint}/api?q=<encoded>&limit=<n>

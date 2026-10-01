@@ -6,7 +6,7 @@
 - **Date:** 2026-05-15
 - **Phase:** 6 (Wave 0 — gate for Wave 3 Stripe / hosted-mode work)
 - **Supersedes:** none
-- **Superseded by:** none
+- **Superseded by:** ADR-0013 (`docs/architecture/adr/0013-self-host-only.md`): managed mode is deleted, so hosted-mode telemetry has nothing to describe. ADR-0006 alone governs telemetry.
 - **Extends:** ADR-0006 (telemetry policy — zero call-home) per its §Follow-ups deferral
 
 ## Context

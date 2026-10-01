@@ -1,41 +1,49 @@
 # CLAUDE.md
 
-## Project Structure
+## Project structure
 
-Atlasdraw is a **yarn workspaces monorepo**: a collaborative map-drawing product built on a fork of Excalidraw (canvas engine) merged with MapLibre (map rendering), plus product-specific services.
+Atlasdraw is a Yarn 4 workspace: a map studio built on a fork of Excalidraw (the drawing engine) and MapLibre (the map), plus two servers.
 
-- **`apps/atlas-app/`** - The product: the Atlasdraw editor SPA (MapLibre + Excalidraw stacked), hosted at app.atlasdraw.org. This is where atlasdraw-specific feature work happens.
-- **`apps/realtime/`** - Collaboration server (Socket.IO + Yjs sync).
-- **`apps/storage/`** - Backend API (Fastify; SQLite + filesystem, or Postgres + S3).
-- **`packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/`** - The forked Excalidraw core, owned outright per ADR 0010 and scoped `@atlasdraw/*` like everything else (renamed from `@excalidraw/*` 2026-07-04; all five are `private: true`, never published). Grep the vendored source before trusting any plan that names an Excalidraw API — see `.claude/rules/excalidraw-api.md`.
-- **`packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/`** - Atlasdraw-native packages, also `@atlasdraw/*`.
+- **`apps/atlas-app/`** — the product: the editor, the read-only viewer (`/m`) and the embed (`/embed`). `src/routes.ts` decides what a URL opens. `src/config/app-config.ts` reads every `VITE_*` variable through one schema.
+- **`apps/storage/`** — the HTTP API (Fastify; SQLite and files, or Postgres and S3). Maps carry a write key; share tokens are read-only (ADR-0017).
+- **`apps/realtime/`** — the relay: one Y.Doc per room over the y-websocket protocol, saved to SQLite (ADR-0014, ADR-0018).
+- **`packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/`** — the Excalidraw fork. Atlasdraw owns it outright (`decisions/0010-own-the-fork.md`). All five are `@atlasdraw/*` and `private: true`. Grep the fork before you trust a plan that names an Excalidraw API (`.claude/rules/excalidraw-api.md`).
+- **`packages/geo/`, `packages/basemap/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/`** — the Atlasdraw packages, also `@atlasdraw/*`. `cli` is frozen (ADR-0016).
 
-## Development Workflow
+ADRs are in two series whose numbers collide: `decisions/` (0001–0010) and `../docs/architecture/adr/` (0006 and later). Cite an ADR by its file path.
 
-1. **Product feature work**: `apps/atlas-app/` (editor UI), `apps/realtime/` (collab), `apps/storage/` (backend).
-2. **Forked-engine work**: `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/` — fully owned per ADR 0010; upstream Excalidraw is a one-time vendor (master at commit `2dfcc6f`, 2026-05-02 — newer than the 0.18.0 tag, so a 0.18.x advisory does not map line for line) and only security fixes get manually backported.
-3. **Testing**: `yarn test:typecheck`, `yarn test` (vitest), `yarn workspace @atlasdraw/atlas-app e2e` (Playwright) as relevant to the workspace touched.
-4. **Type Safety**: `yarn test:typecheck` before committing.
+## Workflow
 
-## Development Commands
+1. **Product work**: `apps/atlas-app/`, `apps/realtime/`, `apps/storage/`.
+2. **Fork work**: the five fork packages. The fork point is upstream master `2dfcc6f` (2026-05-02), newer than the 0.18.0 tag, so a 0.18.x advisory does not map onto this code line for line. Port only security fixes, by hand (`../VENDOR.md`).
+3. **Before you commit**: `yarn test:typecheck`, then the tests of the workspace you touched.
+
+## Commands
+
+Run every command from this folder.
 
 ```bash
-yarn test:typecheck              # TypeScript type checking, all workspaces
-yarn test                        # vitest, all workspaces
-yarn fix                         # Auto-fix formatting and linting issues
-yarn workspace @atlasdraw/atlas-app dev     # run the product locally
-yarn workspace @atlasdraw/atlas-app build   # production build (apps/atlas-app/dist)
+yarn start                                   # editor dev server, port 5174
+yarn build                                   # editor production build (apps/atlas-app/dist)
+yarn test:typecheck                          # builds the fork's types, then tsc in every workspace
+yarn test --watch=false                      # Vitest, all workspaces
+npx vitest run apps/storage                  # Vitest, one folder
+yarn test:code                               # ESLint
+yarn test:other                              # Prettier check (css, scss, json, md, html, yml)
+yarn test:all                                # all of the above, plus test:falsifiable
+yarn fix                                     # Prettier and ESLint fixes
+yarn workspace @atlasdraw/atlas-app e2e      # Playwright, chromium
 ```
 
-## Architecture Notes
+## Architecture notes
 
-### Package System
+### Packages
 
-- Uses Yarn 4 workspaces for monorepo management (`packageManager: yarn@4.15.0` — corepack must be enabled before `setup-node`'s yarn cache step, see CI workflow comments).
-- Single package scope: everything internal is `@atlasdraw/*` (ADR 0010). The only `@excalidraw/*` names left are genuine external npm deps (`eslint-config`, `prettier-config`, `laser-pointer`, `random-username`) — never rename those.
-- Build system uses esbuild for packages, Vite for `apps/atlas-app`.
-- TypeScript throughout with strict configuration.
+- `packageManager: yarn@4.15.0`. In CI, `corepack enable` runs before `setup-node`'s yarn cache step.
+- One scope: everything internal is `@atlasdraw/*` (ADR 0010). The only `@excalidraw/*` names left are real npm dependencies (`eslint-config`, `prettier-config`, `laser-pointer`, `random-username`). Never rename them.
+- The fork packages build with esbuild (`scripts/buildPackage.js`); the editor builds with Vite. The editor reads the fork's built types, so `yarn test:typecheck` runs `build:types` first.
+- TypeScript is strict everywhere.
 
-### Known seams (tracked, not yet resolved)
+### Known seams
 
-- The editor ships English only: `packages/excalidraw/locales/en.json` is the one locale, and `i18n.ts#languages` lists only English. A `langCode` prop for another language falls back to English. Adding a language is a product decision, not a file drop.
+- The editor ships English only: `packages/excalidraw/locales/en.json` is the one locale. A `langCode` prop for another language falls back to English. Adding a language is a product decision, not a file drop.

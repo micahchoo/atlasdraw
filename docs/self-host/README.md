@@ -1,38 +1,35 @@
 # Atlasdraw — Self-Host Guide (First Run)
 
-Run Atlasdraw on your own infrastructure in under five minutes. This guide
-covers the **minimal stack** — a single VPS, sqlite + filesystem storage,
-no external services.
+This guide runs Atlasdraw on one computer in about five minutes, with the
+**minimal stack**: SQLite and files, no other services.
 
-For production-grade deployments (Postgres, MinIO/S3, TLS, custom domain),
-see [`production.md`](production.md).
+For a server on the internet (Postgres, MinIO or S3, TLS, a domain, live
+rooms), read [`production.md`](production.md).
 
 ---
 
 ## What you get
 
-A two-service Docker Compose stack:
+A Docker Compose stack with two services:
 
-- **`web`** — the Atlasdraw app (atlas-app) served by nginx on port `3000`.
-- **`storage`** — the Atlasdraw storage API (Fastify, sqlite-fs mode) on
-  port `4000`.
+- **`web`** — the Atlasdraw editor, served by nginx on port `3000`. nginx
+  also passes `/api/*` to the storage server, so the browser talks to one
+  origin only.
+- **`storage`** — the storage API (Fastify, `sqlite-fs` mode). It is on the
+  compose network only; the host cannot reach it directly.
 
-Plus one named Docker volume, `atlas-storage-data`, holding the SQLite
-database (`atlas.db`) and uploaded map blobs (`blobs/*.atlasdraw`).
+One Docker volume, `atlas-storage-data`, holds the SQLite database
+(`atlas.db`) and the saved maps (`blobs/<id>.atlasdraw`).
 
-The bundled basemap (`world-low-zoom.pmtiles`, ~43 MB) is baked into the
-web image — no runtime download. Optional offline-friendly: no outbound
-network calls in the default config beyond the user-initiated share
-endpoint and basemap tiles served locally.
+The basemap file (`world-low-zoom.pmtiles`, about 43 MB) is inside the web
+image, so nothing downloads at run time. The minimal stack has no relay, so
+the Share dialog offers no live rooms.
 
 ## Prerequisites
 
-- **Docker** (with `docker compose` v2 — modern Docker Desktop / Engine 24+).
-- **~3 GB free disk** for the built images + volume.
-- **Ports 3000 and 4000** free on the host (or remap in compose).
-
-No `pmtiles` CLI, no `make`, no `go install`, no manual download — the
-basemap ships with the image.
+- Docker with `docker compose` v2 (Docker Engine 24 or later).
+- About 3 GB of free disk for the images and the volume.
+- Port 3000 free on the host.
 
 ## First run
 
@@ -42,32 +39,38 @@ cd atlasdraw
 docker compose -f infra/docker-compose.minimal.yml up --build
 ```
 
-Wait for `Storage started in sqlite-fs mode on :4000` in the logs.
-
-First-time build: ~3–5 min (pulls Node + nginx base images, installs
-workspace deps, builds atlas-app dist, compiles storage). Subsequent
-`docker compose up` runs cold-start in ~5 seconds.
+Wait for `Storage started in sqlite-fs mode on :4000` in the log. The first
+build takes 3–5 minutes. Later starts take seconds.
 
 Open <http://localhost:3000>.
 
 ## What to try
 
-1. **Draw something.** Click on the map; draw a freehand stroke or a
-   rectangle. Autosave writes to `atlas-storage-data` after a 5-second
-   debounce.
-2. **Share it.** Open the hamburger menu → **🔗 Share map**. The dialog
-   generates a copyable link.
-   - Tiny maps (<32 KB): the link is fully self-contained — paste it
-     into a fresh incognito window and the recipient sees the same
-     thing. No server round-trip.
-   - Large maps: the dialog uploads to your storage server; the link
-     resolves through it. Default link TTL is 7 days
-     (see [ADR-0008](../architecture/adr/0008-share-link-encoding.md)).
-3. **About / telemetry.** Hamburger → **ℹ About Atlasdraw** shows
-   version, license, build hash, and the
-   [zero-call-home telemetry policy](../architecture/adr/0006-telemetry.md).
+1. **Draw something.** Pick a tool and draw on the map. The browser saves
+   your map to IndexedDB about 5 seconds after you stop, and also backs it up
+   to the storage server.
+2. **Share it.** Open the main menu and choose **Share map**, then **Share
+   read-only**.
+   - A small map goes inside the link. It needs no server and never
+     expires.
+   - A larger map goes to your storage server, and the link reads it there.
+     That link lasts until you choose **Stop sharing this link**, unless you
+     chose a 7- or 30-day expiry. It always shows your latest save.
+   - The dialog also gives an `<iframe>` snippet that embeds the map.
+3. **Open another map.** Main menu → **My maps…** lists the maps saved in
+   this browser.
 
-## Stopping and starting
+## Health check
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+It returns `{"status":"ok","uptime":<seconds>,"storageMode":"sqlite-fs"}`.
+`infra/smoke-minimal.sh` checks the whole flow: health, create, write key,
+share link.
+
+## Stop and start
 
 ```bash
 # Stop, keep data
@@ -76,45 +79,70 @@ docker compose -f infra/docker-compose.minimal.yml stop
 # Start again
 docker compose -f infra/docker-compose.minimal.yml start
 
-# Stop and remove containers (data volume survives)
+# Remove the containers; the data volume stays
 docker compose -f infra/docker-compose.minimal.yml down
 
-# Delete everything including saved maps (irreversible)
+# Delete everything, including saved maps (you cannot undo this)
 docker compose -f infra/docker-compose.minimal.yml down -v
 ```
 
-## Health check
+## Settings
 
-```bash
-curl http://localhost:4000/health
-```
+### Storage server (at run time)
 
-Returns `{"status":"ok","uptime":<seconds>,"storageMode":"sqlite-fs"}`.
+The minimal compose file reads two variables from `.env` or the shell:
 
-## Operator overrides
-
-The minimal compose reads two env vars from `.env` or the shell:
-
-- `PUBLIC_URL` — prefix for share URLs returned by the API. Default
-  empty (relative URLs `/m/<token>`). Set to `https://atlas.example.com`
-  if Atlasdraw lives behind your own reverse proxy.
-- `LOG_LEVEL` — pino log level. Default `info`. Try `debug` to see every
-  request, `silent` to mute startup logs.
-
-Set them inline:
+- `PUBLIC_URL` — the prefix of the share URLs that the API returns. Default
+  empty: relative URLs (`/m/<token>`). Set it, for example to
+  `https://atlas.example.com`, when Atlasdraw is behind your own proxy.
+- `LOG_LEVEL` — the pino log level. Default `info`; `debug` logs every
+  request.
 
 ```bash
 LOG_LEVEL=debug docker compose -f infra/docker-compose.minimal.yml up
 ```
 
-Or via an `.env` file at repo root.
+The storage server reads more variables (`MAX_TOTAL_BYTES`,
+`SWEEP_INTERVAL_MS`, `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`, `TRUST_PROXY`).
+The minimal compose file does not pass them; add them to the `storage`
+service's `environment` to use them. [`production.md`](production.md)
+explains each one.
+
+### Editor (at build time)
+
+The editor reads `VITE_*` variables when it is built, not when it runs. A
+wrong value stops the editor at start with the name of the variable. The
+Docker image takes five of them as build arguments: `VITE_BUILD_TARGET`,
+`VITE_STORAGE_BASE_URL`, `VITE_PMTILES_PATH`, `VITE_REALTIME_ENABLED` and
+`VITE_REALTIME_WS_URL`. For the others, write them into
+`code/apps/atlas-app/.env.production.local` (git ignores it) before you build.
+Vite reads that file during the image build.
+
+| Variable                     | Default                              | Effect                                       |
+| ---------------------------- | ------------------------------------ | -------------------------------------------- |
+| `VITE_ALLOW_REMOTE_BASEMAPS` | `true`                               | `false` removes "Bright", "OSM" and the USGS tile preset |
+| `VITE_MAPUTNIK_URL`          | `https://maputnik.github.io/editor/` | The style editor that "Edit basemap style" opens |
+| `VITE_GEOCODER_ENDPOINT`     | empty (off)                          | A Photon server for CSV address columns      |
+| `VITE_EMBED_ENABLED`         | `true`                               | `false` makes `/embed` open the editor       |
+
+## What the browser fetches from other servers
+
+The editor sends no telemetry. These requests leave your server:
+
+- **Label fonts of the default basemaps.** The Light and Dark styles load
+  their glyphs from `protomaps.github.io`. There is no setting for this yet.
+- **The "Bright" and "OSM" basemaps**, when a user picks one. Turn them off
+  with `VITE_ALLOW_REMOTE_BASEMAPS=false`.
+- **Maputnik**, when a user opens the style editor. Point
+  `VITE_MAPUTNIK_URL` at your own copy.
+- **Tile layers** that a user adds (next section).
+- **The geocoder**, only if you set `VITE_GEOCODER_ENDPOINT`.
 
 ## Aerial imagery and other tile layers
 
-A user can add map tiles from a URL: open the layer panel, go to
-**Tile layers**, and click **Add tile layer…**. Atlasdraw ships no tile URL
-and no key. The browser does not call a tile server until a user adds a
-layer.
+A user can add map tiles from a URL: open the layer panel, go to **Tile
+layers**, and click **Add tile layer…**. Atlasdraw ships no tile URL and no
+key. The browser does not call a tile server until a user adds a layer.
 
 The URL must:
 
@@ -126,13 +154,12 @@ The URL must:
 Type the provider's credit in **Credit**. Atlasdraw prints it in the status
 bar, in the PNG export and on the PDF page.
 
-The form has one preset: USGS aerial imagery of the United States
-(public domain, no key). Set `VITE_ALLOW_REMOTE_BASEMAPS=false` to remove
-it.
+The form has one preset: USGS aerial imagery of the United States (public
+domain, no key). `VITE_ALLOW_REMOTE_BASEMAPS=false` removes it.
 
 To give users aerial imagery for other areas, run a tile server or use a
-provider that permits your use, and give users its URL. Example with a
-local server:
+provider that permits your use, and give users its URL. Example with a local
+server:
 
 ```text
 http://localhost:8080/tiles/{z}/{x}/{y}.png
@@ -142,63 +169,52 @@ Do not put a provider key in a URL that you share. Every person who opens
 the map sees the URL, because it is saved in the `.atlasdraw` file
 (`tileLayers` in `manifest.json`).
 
-## Updating
+## Update
 
 ```bash
 git pull
 docker compose -f infra/docker-compose.minimal.yml up --build -d
 ```
 
-The `atlas-storage-data` volume survives image rebuilds. Backup before
-major version bumps: copy the volume contents (see
-[`production.md`](production.md) for the full backup procedure).
+The `atlas-storage-data` volume stays when the images change. The storage
+server migrates its schema at start, so copy the volume before an update.
+Read the "Upgrade" part of [`CHANGELOG.md`](../../CHANGELOG.md) first.
 
-## Limitations of the minimal stack
+## Limits of the minimal stack
 
-- **Single writer.** SQLite handles concurrent reads but only one
-  writer at a time. Fine for personal use or a small team; production
-  multi-tenant deployments should use the full Postgres + MinIO stack
-  ([`production.md`](production.md)).
-- **No TLS.** This stack listens on plain HTTP on `localhost`. Don't
-  expose it directly to the internet. Production: see `production.md`.
-- **Backups are manual.** Volume snapshots only. No automated S3 sync.
-- **No multi-user authentication.** All visitors can read and write the
-  same map state. Multi-user comes in Phase 5+.
+- **One writer.** SQLite takes one write at a time. This is enough for one
+  person or a small team.
+- **No TLS.** The stack serves plain HTTP. Do not put it on the internet as
+  it is; use [`production.md`](production.md).
+- **No live rooms.** The relay is in the full stack only.
+- **Manual backups.** Copy the volume.
+- **No accounts.** Each browser keeps its own maps. A map on the server can
+  be changed only with its write key, which only the browser that made it
+  holds. Anyone who can reach the server can create maps.
 
 ## Troubleshooting
 
-**"Storage server not reachable" in atlas-app.** The web container
-expects storage on `http://localhost:4000`. From a browser pointed at
-`localhost:3000`, this works as long as port 4000 is also bound on the
-host. If you remapped the storage port, rebuild with
-`VITE_STORAGE_BASE_URL` pointing at the new URL:
+**"Couldn't sync to the server".** The editor saved your map in the browser
+but could not reach `/api`. Check that the `storage` container is healthy:
+`docker compose -f infra/docker-compose.minimal.yml ps`.
 
-```bash
-docker compose -f infra/docker-compose.minimal.yml build \
-  --build-arg VITE_STORAGE_BASE_URL=http://localhost:9000 web
-```
-
-**Build fails on `better-sqlite3`.** The storage image needs Python +
-C++ build tools for the native module. The provided Dockerfile installs
-them; if you've forked it and removed the apt layer, restore it:
+**The build fails on `better-sqlite3`.** The storage image needs Python and
+C++ build tools for this native module. The Dockerfile installs them; if you
+changed it, put this layer back:
 
 ```dockerfile
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
 ```
 
-**Image rebuild is huge / slow.** The atlas-app build pulls a large npm
-graph. After the first build, layer caching kicks in — subsequent
-rebuilds touch only the source layer. To clear the cache:
+**The image build is slow.** The editor build installs a large dependency
+tree. Later builds reuse the cached layers. To build from nothing:
 `docker compose -f infra/docker-compose.minimal.yml build --no-cache`.
 
 ## Next steps
 
-- **[Production deployment guide](production.md)** — full stack with
-  Postgres, MinIO, Caddy TLS, custom domain.
-- **[Architecture decisions](../architecture/adr/)** — six ADRs covering
-  telemetry, storage modes, share-link encoding, error capture.
-- **[Plan document](../superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md)**
-  — the implementation specification this self-host guide is built from.
+- [Production guide](production.md) — Postgres, MinIO, Caddy TLS, a domain
+  and the relay.
+- [Architecture decisions](../architecture/adr/) — the product ADRs.
 
-License: [AGPL-3.0-only](../../LICENSE).
+Licence: [AGPL-3.0-only](../../code/LICENSE-AGPL).

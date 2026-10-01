@@ -2,9 +2,9 @@
 
 # ADR-0017: Maps Carry a Write Key; Share Links Last and Follow the Map
 
-- **Status:** Accepted
+- **Status:** Accepted. Implemented in roadmap wave W8 (2026-10-01).
 - **Date:** 2026-10-01
-- **Amends:** `code/decisions/0008-share-token-ttl.md` (the 7-day TTL)
+- **Supersedes:** the TTL in `code/decisions/0008-share-token-ttl.md` (7 days as built)
 - **Relates to:** ADR-0013 (self-host only), `SECURITY.md` rows 10–13
 
 ## Context
@@ -59,3 +59,16 @@ working until they expire.
   caps the total stored size. A map with a key is never collected, because
   its owner may return.
 - `infra/smoke-minimal.sh` walks the key flow.
+
+## As built
+
+- `apps/storage/src/routes/write-key.ts` reads the key; `routes/maps.ts` and
+  `routes/share.ts` use it. Migration `003_write_keys_and_lasting_links` adds
+  `maps.write_key_hash` and makes `share_tokens.expires_at` nullable.
+- W7a added `DELETE /maps/:id` (write key): it removes the map, its links and
+  its bytes.
+- The client keeps the key in IndexedDB (`atlasdraw-autosave`), beside the
+  server map id (`apps/atlas-app/src/state/remoteMapIdCache.ts`). The main
+  menu offers **Restore from server backup**, which reads `GET /maps/:id/blob`.
+- The Share dialog offers "Until you stop it", 7 days or 30 days, and
+  **Stop sharing this link**.

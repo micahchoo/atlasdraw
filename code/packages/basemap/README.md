@@ -8,9 +8,10 @@ Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 
 - **`<MapCanvas>`** — the MapLibre host component (`MapCanvas.tsx`).
 - **`CameraBridge`** — drives Excalidraw's scroll and zoom from the map camera, and sends Excalidraw's own viewport changes back to the map (ADR-0015). A camera move writes no element.
-- **`BasemapRegistry`** — `BASEMAPS` static registry + `getBasemap(id)` (protomaps light/dark, OpenFreeMap bright, OSM standard). No runtime `register()` API today — extending it means editing the array (plugin registration is a Phase 7 roadmap item).
+- **`BasemapRegistry`** — `BASEMAPS` and `getBasemap(id)`: Light and Dark (Protomaps, from the bundled PMTiles file), Bright (OpenFreeMap) and OSM (remote). `registerBasemap` / `listBasemaps` add and list entries at run time.
 - **PMTiles** — `registerPmtilesProtocol` for the bundled low-zoom world tiles used by self-host.
-- **Styles** — `buildStyle` / `resolveStyle` for basemap style resolution (including the remote-gated error path), and `compileLayer` / `defaultLayerStyle` compiling `LayerStyle` (categorical + graduated expressions) into deterministic MapLibre expressions.
+- **Styles** — `buildStyle` / `resolveStyle` for basemap style resolution (including the remote-gated error path), and `compileLayer` / `compileLayers` / `defaultLayerStyle`, which compile a `LayerStyle` (categorical and graduated colour, labels from a property, a filter by property) into MapLibre layers.
+- **Camera rotation** — `applyRotationPolicy` and its helpers: rotation gestures stay off unless the view has a way back to north.
 
 ## Usage
 
@@ -28,8 +29,6 @@ import {
 yarn workspace @atlasdraw/basemap test     # vitest
 yarn test:typecheck
 ```
-
-Architecture notes: [`docs/architecture/subsystems/basemap/`](../../../docs/architecture/subsystems/basemap/).
 
 ## License
 
