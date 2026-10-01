@@ -52,7 +52,6 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
-import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { currentDocument, dispatch, useDocument } from "../state/document";
 import { useSelectedLayerStore } from "../state/selectedLayer";
@@ -1604,17 +1603,14 @@ function ThreadsSection() {
   );
 }
 
-// Basemap section — IA restructure (2026-07-18): the basemap IS a layer, the
-// bottom of the stack, so it's managed here — not from the MainMenu (which
-// previously held a "Basemap: …" item + standalone BasemapPickerDialog) and
-// not only from the Settings tab. Reads/writes the shared basemap store;
-// "Edit style" raises the store flag that mounts MaputnikDialog in MapEditor.
+// Basemap section: the basemap is the bottom of the layer stack, and this is
+// the one place to choose it. The choice is part of the document.
 // ---------------------------------------------------------------------------
 
 function BasemapSection() {
-  const activeBasemapId = useBasemapStore((s) => s.activeBasemapId);
-  const setActiveBasemapId = useBasemapStore((s) => s.setActiveBasemapId);
-  const setStyleEditorOpen = useBasemapStore((s) => s.setStyleEditorOpen);
+  const activeBasemapId = useDocument((s) => s.basemap);
+  const setActiveBasemapId = (id: string) =>
+    dispatch({ type: "set-basemap", id });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const active = getBasemap(activeBasemapId);
@@ -1644,15 +1640,6 @@ function BasemapSection() {
             {active?.label ?? activeBasemapId}
           </span>
           {sourceBadge(active?.requiresRemote ?? false)}
-        </button>
-        <button
-          type="button"
-          className={styles.detailBtn}
-          onClick={() => setStyleEditorOpen(true)}
-          data-testid="layer-basemap-edit-style"
-          title="Open the Maputnik style editor"
-        >
-          Edit style
         </button>
       </div>
       {pickerOpen && (

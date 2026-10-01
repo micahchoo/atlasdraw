@@ -21,6 +21,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   describes it as it shipped.
 - **`packages/sdk`.** It was a stub that nothing imported (ADR-0016). A
   read-only map embeds through the `/embed` route.
+- **"Edit style" (Maputnik) and `VITE_MAPUTNIK_URL`.** The dialog sent
+  Maputnik a `/styles/…` URL that no server serves, and Maputnik could not
+  send an edit back. The basemap is chosen in the Layers panel.
+- **The Settings "Basemap" tab.** The Layers panel is the one basemap
+  picker. The basemap is now part of the document: it is saved with the
+  map, it follows a room, and your own map keeps its basemap when you
+  leave a room.
 
 ### Added
 

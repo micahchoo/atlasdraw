@@ -35,7 +35,6 @@ import {
   toFile,
 } from "../documentIO";
 import { sceneOf } from "../scene";
-import { useBasemapStore } from "../basemap";
 import { useMapInstanceStore } from "../mapInstance";
 
 import {
@@ -105,7 +104,6 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
   useMapInstanceStore.setState({ map: null });
 });
 
@@ -122,11 +120,11 @@ describe("toFile", () => {
           id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
           createdAt: "2026-05-06T00:00:00.000Z",
           title: "Field notes",
+          basemap: "protomaps-dark",
         },
         sceneOf(fx.api),
       ),
     );
-    useBasemapStore.setState({ activeBasemapId: "protomaps-dark" });
     useMapInstanceStore.setState({
       map: new FakeCameraMap({
         center: [-74, 40.7],
@@ -490,7 +488,7 @@ describe("loadDocument", () => {
     expect(doc?.id).toBe("01HZ8KQR5Z3MV7BJ4N6XPYD9TF");
     expect(doc?.revision).toBe(0);
     expect(doc?.snapshot().title).toBe("Field notes");
-    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(doc?.snapshot().basemap).toBe("protomaps-dark");
     expect(fx.api.getSceneElements().map((e) => e.id)).toEqual(["rect-1"]);
   });
 

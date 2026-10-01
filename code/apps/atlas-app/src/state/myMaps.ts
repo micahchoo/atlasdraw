@@ -18,7 +18,6 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
 
-import { useBasemapStore } from "./basemap";
 import {
   DEFAULT_CAMERA,
   DEFAULT_DOCUMENT_TITLE,
@@ -120,10 +119,7 @@ function blankFile(): AtlasdrawDocument {
       title: DEFAULT_DOCUMENT_TITLE,
       createdAt: now,
       updatedAt: now,
-      basemap: {
-        type: "registry",
-        id: useBasemapStore.getState().activeBasemapId,
-      },
+      basemap: { type: "registry", id: currentDocument().snapshot().basemap },
       camera,
       // The world frame starts where the user is looking (ADR-0015).
       world: documentFrame(camera.center[0], camera.center[1]),

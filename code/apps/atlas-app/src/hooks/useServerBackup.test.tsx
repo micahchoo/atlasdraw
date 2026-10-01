@@ -28,7 +28,6 @@ const config = (enableBackendPersistence: boolean): AppConfig => ({
   enableBackendPersistence,
   showDemoBadge: false,
   storageBaseUrl: "http://storage.test",
-  maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
   embedEnabled: true,

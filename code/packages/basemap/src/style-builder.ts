@@ -3,7 +3,7 @@
 // @atlasdraw/basemap — Phase 4 Wave 0 (T2428): style-builder.
 // Loads a vendored MapLibre style JSON for a given BasemapConfig and (for
 // pmtiles-backed basemaps) substitutes the `__PMTILES_PATH__` token with the
-// caller-provided path. Stub for Maputnik integration in Phase 6.
+// caller-provided path.
 //
 // TODO(Phase 4 Task 5 Steps 1-3): vendor the actual style JSON files at
 // packages/basemap/src/styles/{protomaps-light,protomaps-dark,openfreemap-bright}.json.

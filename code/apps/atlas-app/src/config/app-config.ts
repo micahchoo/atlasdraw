@@ -22,8 +22,6 @@ const EnvSchema = z.object({
   // Rooms, and the relay's WebSocket URL. Rooms need a hosted build too.
   VITE_REALTIME_ENABLED: Flag.default("false"),
   VITE_REALTIME_WS_URL: z.string().default(""),
-  // The Maputnik editor for "Edit basemap style".
-  VITE_MAPUTNIK_URL: z.string().default("https://maputnik.github.io/editor/"),
   // A Photon-compatible geocoder. Empty by default: no call-home
   // (ADR-0006, ADR-0011).
   VITE_GEOCODER_ENDPOINT: z.string().default(""),
@@ -55,8 +53,6 @@ export type AppConfig = {
   showDemoBadge: boolean;
   /** The storage HTTP API; empty means the same origin. Hosted builds only. */
   storageBaseUrl: string;
-  /** The Maputnik editor for "Edit basemap style". */
-  maputnikUrl: string;
   /** The geocoder; undefined means geocoding is off and nothing is fetched. */
   geocoder?: { endpoint: string };
   allowRemoteBasemaps: boolean;
@@ -101,7 +97,6 @@ export function loadAppConfig(env: Env = import.meta.env): AppConfig {
     enableBackendPersistence: buildTarget === "hosted",
     showDemoBadge: buildTarget === "pages",
     storageBaseUrl: e.VITE_STORAGE_BASE_URL,
-    maputnikUrl: e.VITE_MAPUTNIK_URL,
     geocoder:
       geocoderEndpoint === "" ? undefined : { endpoint: geocoderEndpoint },
     allowRemoteBasemaps: e.VITE_ALLOW_REMOTE_BASEMAPS === "true",

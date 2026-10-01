@@ -6,7 +6,7 @@
 // usePersistenceStore for the "Unsaved" indicator and the share flush.
 //
 // What marks the document dirty: a change of the open Document's revision
-// (its layers, payloads, title), a change of the basemap, and, from
+// (its layers, payloads, title, basemap), and, from
 // useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
 import { useEffect, useRef } from "react";
@@ -17,7 +17,6 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useBasemapStore } from "../state/basemap";
 import { currentDocument, followDocument } from "../state/document";
 import { loadDocument, restoreCamera, toFile } from "../state/documentIO";
 import { useMapInstanceStore } from "../state/mapInstance";
@@ -224,13 +223,6 @@ export function usePersistenceWiring(
       followed = doc;
       followedRevision = doc.revision;
     });
-    // The basemap is saved in the manifest, so choosing another one is an
-    // edit too.
-    const unsubBasemap = useBasemapStore.subscribe((state, prev) => {
-      if (state.activeBasemapId !== prev.activeBasemapId) {
-        usePersistenceStore.getState().markDirty();
-      }
-    });
 
     const dispose = startAutoSave(
       store,
@@ -282,7 +274,6 @@ export function usePersistenceWiring(
       window.removeEventListener("pagehide", flushOnLeave);
       unsubDirty();
       unsubDocument();
-      unsubBasemap();
       unsubCamera();
       usePersistenceStore.getState().setOwnMapLoaded(true);
       dispose();

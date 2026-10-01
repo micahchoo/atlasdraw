@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createDocument,
+  DEFAULT_BASEMAP_ID,
   DEFAULT_DOCUMENT_TITLE,
   type Document,
   type RasterCorners,
@@ -223,6 +224,32 @@ describe("layer commands", () => {
     doc.dispatch({ type: "rename-document", title: "   " });
     expect(doc.snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
     expect(DEFAULT_DOCUMENT_TITLE).toBe("Untitled map");
+  });
+});
+
+describe("basemap", () => {
+  it("a new document has the default basemap; a loaded one keeps its own", () => {
+    expect(createDocument().snapshot().basemap).toBe(DEFAULT_BASEMAP_ID);
+    expect(
+      createDocument({ basemap: "protomaps-dark" }).snapshot().basemap,
+    ).toBe("protomaps-dark");
+  });
+
+  it("set-basemap is a change; choosing the basemap it has is not", () => {
+    const doc = createDocument();
+    doc.dispatch({ type: "set-basemap", id: "protomaps-dark" });
+    expect(doc.snapshot().basemap).toBe("protomaps-dark");
+    expect(doc.revision).toBe(1);
+
+    doc.dispatch({ type: "set-basemap", id: "protomaps-dark" });
+    expect(doc.revision).toBe(1);
+  });
+
+  it("two documents keep two basemaps", () => {
+    const own = createDocument();
+    const room = createDocument();
+    room.dispatch({ type: "set-basemap", id: "protomaps-dark" });
+    expect(own.snapshot().basemap).toBe(DEFAULT_BASEMAP_ID);
   });
 });
 

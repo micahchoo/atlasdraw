@@ -143,7 +143,6 @@ Server (`apps/storage`): Fastify, optional Postgres / SQLite, optional MinIO / S
 - **Real-time collaboration.** WebSocket relay with Socket.IO presence +
   y-websocket CRDT. Cursor presence, `MAP_CAMERA_UPDATE` events, anchored
   comments on a per-room second `Y.Doc`.
-- **Maputnik style editing** — modal round-tripping edits into `@atlasdraw/basemap`.
 - **Categorical + graduated layer styling** with deterministic MapLibre
   expression output.
 - **Print-to-PDF** layout panel built on `pdf-lib`.

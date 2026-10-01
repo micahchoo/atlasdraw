@@ -41,7 +41,6 @@ import { loadShareDocument } from "../loadShareDocument";
 import { parseRoute } from "../../routes";
 import { usePersistenceStore } from "../usePersistenceStore";
 import { useMapInstanceStore } from "../mapInstance";
-import { useBasemapStore } from "../basemap";
 import { useSceneBinding, useSceneStore } from "../scene";
 import {
   annotationRows,
@@ -234,7 +233,6 @@ beforeEach(async () => {
   openDocument(createDocument());
   usePersistenceStore.setState({ isDirty: false, isDraining: false });
   useMapInstanceStore.setState({ map: null });
-  useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
 });
 
 afterEach(() => {
@@ -316,7 +314,7 @@ describe("camera and basemap persistence", () => {
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
     mountEditor(fx.api);
     act(() => {
-      useBasemapStore.getState().setActiveBasemapId("protomaps-dark");
+      currentDocument().dispatch({ type: "set-basemap", id: "protomaps-dark" });
     });
 
     await act(async () => {
@@ -339,7 +337,7 @@ describe("camera and basemap persistence", () => {
     mountEditor(fx.api, map as unknown as maplibregl.Map);
     await waitForHydrate(fx.api);
 
-    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(currentDocument().snapshot().basemap).toBe("protomaps-dark");
     expect(map.getCenter().lng).toBeCloseTo(13.4, 6);
     expect(map.getCenter().lat).toBeCloseTo(52.5, 6);
     expect(map.getZoom()).toBeCloseTo(11, 6);

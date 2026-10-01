@@ -69,13 +69,17 @@ import { useServerBackup } from "../hooks/useServerBackup";
 import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
-import { currentDocument, dispatch, useDocumentStore } from "../state/document";
+import {
+  currentDocument,
+  dispatch,
+  useDocument,
+  useDocumentStore,
+} from "../state/document";
 import {
   hasUnsavedWork,
   loadDocument,
@@ -145,9 +149,6 @@ import type maplibregl from "maplibre-gl";
 // would be worse than nothing.
 const AboutDialog = lazy(() =>
   import("./AboutDialog").then((m) => ({ default: m.AboutDialog })),
-);
-const MaputnikDialog = lazy(() =>
-  import("./MaputnikDialog").then((m) => ({ default: m.MaputnikDialog })),
 );
 const SettingsDialog = lazy(() =>
   import("./SettingsDialog").then((m) => ({ default: m.SettingsDialog })),
@@ -420,14 +421,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   // sufficient for now because the composite export (lib/export.ts) takes
   // `backgroundColor` and paints it under the map canvas.
   const [mapBg, setMapBg] = useState("transparent");
-  // Basemap state lives in the shared store (state/basemap.ts) — the picker
-  // and Maputnik trigger moved into LayerPanel's Basemap section (basemap =
-  // bottom of the layer stack, IA restructure), which mounts as a sidebar
-  // tab and therefore can't take props from here.
-  const activeBasemapId = useBasemapStore((s) => s.activeBasemapId);
-  const setActiveBasemapId = useBasemapStore((s) => s.setActiveBasemapId);
-  const maputnikOpen = useBasemapStore((s) => s.styleEditorOpen);
-  const setMaputnikOpen = useBasemapStore((s) => s.setStyleEditorOpen);
+  const activeBasemapId = useDocument((s) => s.basemap);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showShareDialog, setShowShareDialog] = useState(false);
   // Phase 6 A12 — Asset library info panel + dialog. Pushes the 3 bundled
@@ -1336,28 +1330,6 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
             />
           )}
 
-          {/* Phase 6 A4 — Maputnik "Edit basemap style" modal. Hosted at the root
-          level (same pattern as the basemap picker) so MainMenu auto-close
-          doesn't unmount it. Iframe sandbox is intentionally restrictive —
-          see MaputnikDialog header comment for security posture. */}
-          {maputnikOpen &&
-            (() => {
-              const active = getBasemap(activeBasemapId);
-              const styleFile = active?.styleFile ?? "protomaps-light.json";
-              const origin =
-                typeof window !== "undefined" ? window.location.origin : "";
-              const activeStyleUrl = `${origin}/styles/${styleFile}`;
-              return (
-                <Suspense fallback={null}>
-                  <MaputnikDialog
-                    activeStyleUrl={activeStyleUrl}
-                    maputnikUrl={getAppConfig().maputnikUrl}
-                    onCloseRequest={() => setMaputnikOpen(false)}
-                  />
-                </Suspense>
-              );
-            })()}
-
           {/* Phase 4 T14 — AboutDialog. Same root-level pattern as the basemap
           picker so MainMenu auto-close doesn't unmount it. */}
           {showAboutDialog && (
@@ -1369,11 +1341,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
           {/* Settings — tabbed modal replacing standalone BasemapPickerDialog. */}
           {showSettings && (
             <Suspense fallback={null}>
-              <SettingsDialog
-                activeBasemapId={activeBasemapId}
-                onBasemapChange={setActiveBasemapId}
-                onCloseRequest={() => setShowSettings(false)}
-              />
+              <SettingsDialog onCloseRequest={() => setShowSettings(false)} />
             </Suspense>
           )}
 

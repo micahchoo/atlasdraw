@@ -58,7 +58,6 @@ import {
 
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
-import { useBasemapStore } from "./basemap";
 import { useMapInstanceStore } from "./mapInstance";
 
 import type { FeatureCollection } from "geojson";
@@ -92,15 +91,11 @@ export function liveCamera(): Camera | null {
 
 /**
  * A key that changes when the saved content changes: the document's revision
- * (layers, payloads, title), the drawing's signature and the basemap. The
- * camera is not in it: a pan is not an edit, so it must not move updatedAt.
+ * (layers, payloads, title, basemap) and the drawing's signature. The camera
+ * is not in it: a pan is not an edit, so it must not move updatedAt.
  */
 export function contentKey(doc: Document): string {
-  return [
-    doc.revision,
-    sceneSignature(doc.scene.elements()),
-    useBasemapStore.getState().activeBasemapId,
-  ].join("|");
+  return [doc.revision, sceneSignature(doc.scene.elements())].join("|");
 }
 
 type ManifestTileLayer = NonNullable<Manifest["tileLayers"]>[number];
@@ -213,10 +208,7 @@ export function toFile(
       title: state.title,
       createdAt: state.createdAt,
       updatedAt,
-      basemap: {
-        type: "registry",
-        id: useBasemapStore.getState().activeBasemapId,
-      },
+      basemap: { type: "registry", id: state.basemap },
       camera: liveCamera() ?? state.camera,
       world: state.world,
       layers: state.overlays
@@ -371,6 +363,7 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
     createdAt: file.manifest.createdAt,
     updatedAt: file.manifest.updatedAt,
     title: file.manifest.title,
+    basemap: file.manifest.basemap.id,
     camera: file.manifest.camera,
     world: file.manifest.world,
     overlays,
@@ -469,7 +462,6 @@ export async function loadDocument(
   }
   // From here the open is one synchronous step.
   openDocument(doc);
-  useBasemapStore.getState().setActiveBasemapId(file.manifest.basemap.id);
   restoreCamera(file.manifest.camera);
 
   // syncInvalidIndices repairs missing fractional indices in older files; it
@@ -541,10 +533,7 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
       title: DEFAULT_DOCUMENT_TITLE,
       createdAt: now,
       updatedAt: now,
-      basemap: {
-        type: "registry",
-        id: useBasemapStore.getState().activeBasemapId,
-      },
+      basemap: { type: "registry", id: currentDocument().snapshot().basemap },
       camera,
       world,
       layers: [],

@@ -19,7 +19,6 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useBasemapStore } from "../../state/basemap";
 
 import { createDocument, openDocument } from "../../state/document";
 
@@ -187,10 +186,6 @@ beforeEach(() => {
   rotationState.degrees = 0;
   rotationState.isRotated = false;
   openDocument(createDocument());
-  useBasemapStore.setState({
-    activeBasemapId: "protomaps-light",
-    styleEditorOpen: false,
-  });
 });
 
 afterEach(() => {

@@ -1,17 +1,13 @@
 /**
- * SettingsDialog — tabbed settings modal.
- *
- * Consolidates basemap selection + storage config + collaboration defaults
- * into a single surface. Replaces the standalone
- * BasemapPickerDialog as the primary basemap selection UI.
+ * SettingsDialog — tabbed settings modal: the storage backend and the
+ * collaboration server this build uses. The basemap is chosen in the Layers
+ * panel, as the bottom of the layer stack.
  *
  * Design: drafting-room settings card — tabs for categorization, vellum
  * surface, blueprint accent on active tab. Clean, instrumental, quick.
  */
 
 import React, { useEffect, useState } from "react";
-
-import { listBasemaps, type BasemapConfig } from "@atlasdraw/basemap";
 
 import styles from "../styles/SettingsDialog.module.css";
 
@@ -24,8 +20,6 @@ import { FocusTrap } from "./FocusTrap";
 // ---------------------------------------------------------------------------
 
 interface SettingsDialogProps {
-  activeBasemapId: string;
-  onBasemapChange: (id: BasemapConfig["id"]) => void;
   onCloseRequest: () => void;
 }
 
@@ -33,22 +27,17 @@ interface SettingsDialogProps {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "basemap" | "storage" | "collaboration";
+type Tab = "storage" | "collaboration";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "basemap", label: "Basemap" },
   { id: "storage", label: "Storage" },
   { id: "collaboration", label: "Collab" },
 ];
 
 // ---------------------------------------------------------------------------
 
-export function SettingsDialog({
-  activeBasemapId,
-  onBasemapChange,
-  onCloseRequest,
-}: SettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("basemap");
+export function SettingsDialog({ onCloseRequest }: SettingsDialogProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("storage");
 
   return (
     <FocusTrap>
@@ -104,12 +93,6 @@ export function SettingsDialog({
 
           {/* Body */}
           <div className={styles.body}>
-            {activeTab === "basemap" && (
-              <BasemapTab
-                activeId={activeBasemapId}
-                onSelect={onBasemapChange}
-              />
-            )}
             {activeTab === "storage" && <StorageTab />}
             {activeTab === "collaboration" && <CollaborationTab />}
           </div>
@@ -134,53 +117,6 @@ export function SettingsDialog({
 // ---------------------------------------------------------------------------
 // Tab bodies
 // ---------------------------------------------------------------------------
-
-function BasemapTab({
-  activeId,
-  onSelect,
-}: {
-  activeId: string;
-  onSelect: (id: BasemapConfig["id"]) => void;
-}) {
-  // ISSUES.md Direction 4: was `getBasemap("__all__") as unknown as
-  // BasemapConfig[]` — a sentinel-string hack exploiting the pre-widening
-  // closed id union (double-cast required to bypass the type error).
-  // listBasemaps() is the real, typed replacement.
-  const basemaps = listBasemaps();
-
-  if (!Array.isArray(basemaps) || basemaps.length === 0) {
-    return <p className={styles.fieldLabel}>No basemaps registered.</p>;
-  }
-
-  return (
-    <div>
-      <h3 className={styles.sectionTitle}>Active basemap</h3>
-      <div className={styles.basemapList}>
-        {(basemaps as BasemapConfig[]).map((b) => {
-          const isActive = b.id === activeId;
-          return (
-            <div
-              key={b.id}
-              className={[
-                styles.basemapItem,
-                isActive ? styles.basemapItemActive : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              onClick={() => onSelect(b.id)}
-              data-testid={`basemap-item-${b.id}`}
-            >
-              <span className={styles.basemapLabel}>{b.label}</span>
-              <span className={styles.basemapSource}>
-                {b.requiresRemote ? "Remote" : "Local"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 type StorageStatus = "checking" | "connected" | "unreachable";
 

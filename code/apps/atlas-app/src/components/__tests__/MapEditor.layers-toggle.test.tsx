@@ -21,9 +21,12 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useBasemapStore } from "../../state/basemap";
 
-import { createDocument, openDocument } from "../../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -251,10 +254,6 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   openDocument(createDocument());
-  useBasemapStore.setState({
-    activeBasemapId: "protomaps-light",
-    styleEditorOpen: false,
-  });
 });
 
 afterEach(() => {
@@ -380,18 +379,12 @@ describe("LayerPanel Basemap section (IA restructure)", () => {
     expect(utils.getByTestId("basemap-option-openfreemap-bright")).toBeTruthy();
   });
 
-  it("selecting a basemap updates the shared store and collapses the picker", async () => {
+  it("selecting a basemap sets the document's basemap and collapses the picker", async () => {
     const utils = await renderLayersTabContent();
     fireEvent.click(utils.getByTestId("layer-basemap-toggle"));
     fireEvent.click(utils.getByTestId("basemap-option-protomaps-dark"));
 
-    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(currentDocument().snapshot().basemap).toBe("protomaps-dark");
     expect(utils.queryByTestId("basemap-option-protomaps-light")).toBeNull();
-  });
-
-  it("'Edit style' raises the style-editor flag (MapEditor mounts Maputnik)", async () => {
-    const utils = await renderLayersTabContent();
-    fireEvent.click(utils.getByTestId("layer-basemap-edit-style"));
-    expect(useBasemapStore.getState().styleEditorOpen).toBe(true);
   });
 });

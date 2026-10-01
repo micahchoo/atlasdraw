@@ -124,46 +124,6 @@
   color: var(--ad-ink);
 }
 
-/* Basemap list */
-.basemapList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ad-space-1);
-}
-
-.basemapItem {
-  display: flex;
-  align-items: center;
-  gap: var(--ad-space-2);
-  padding: var(--ad-space-2);
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  cursor: pointer;
-}
-
-.basemapItem:hover {
-  border-color: var(--ad-accent);
-}
-
-.basemapItemActive {
-  border-color: var(--ad-accent);
-  background: var(--ad-accent-subtle);
-}
-
-.basemapLabel {
-  flex: 1;
-  font-family: var(--ad-font-sans);
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--ad-ink);
-}
-
-.basemapSource {
-  font-family: var(--ad-font-mono);
-  font-size: 10px;
-  color: var(--ad-ink-tertiary);
-}
-
 .footer {
   display: flex;
   justify-content: flex-end;

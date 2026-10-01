@@ -46,7 +46,6 @@ const BASE_CONFIG: AppConfig = {
   enableBackendPersistence: false,
   showDemoBadge: false,
   storageBaseUrl: "",
-  maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
   embedEnabled: true,

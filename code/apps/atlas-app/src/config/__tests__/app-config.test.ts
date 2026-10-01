@@ -120,19 +120,6 @@ describe("loadAppConfig", () => {
     expect(cfg.enableBackendPersistence).toBe(false);
   });
 
-  it("defaults maputnikUrl to the public Maputnik instance", () => {
-    expect(loadAppConfig({}).maputnikUrl).toBe(
-      "https://maputnik.github.io/editor/",
-    );
-  });
-
-  it("propagates VITE_MAPUTNIK_URL when provided", () => {
-    const cfg = loadAppConfig({
-      VITE_MAPUTNIK_URL: "https://maputnik.example.org/editor/",
-    });
-    expect(cfg.maputnikUrl).toBe("https://maputnik.example.org/editor/");
-  });
-
   it("leaves geocoder undefined when VITE_GEOCODER_ENDPOINT is unset or blank", () => {
     expect(loadAppConfig(target("hosted")).geocoder).toBeUndefined();
     expect(
