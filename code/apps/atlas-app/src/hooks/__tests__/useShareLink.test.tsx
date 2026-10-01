@@ -95,8 +95,6 @@ function makeMockClient(): HttpStorageClient & {
     updateMap: vi.fn(),
     createShareToken: createShareTokenSpy,
     getShareBlob: vi.fn(async () => null),
-    listWorkspaces: vi.fn(),
-    createCheckoutSession: vi.fn(),
     createMapSpy,
     createShareTokenSpy,
   };

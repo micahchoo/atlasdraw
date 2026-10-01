@@ -69,3 +69,18 @@ Both adapters implement all 5 methods of `StorageClient`. Share-token methods (`
 - `STORAGE_MODE=sqlite-fs DATA_DIR=/tmp/x node code/apps/storage/dist/index.js` starts the server and serves the full API without any Postgres or MinIO running.
 - `code/apps/storage/src/config.ts` Zod-validates the per-mode env shape: the server fails at boot with a named error if `DATABASE_URL` is missing in `postgres-minio` mode or `DATA_DIR` is missing in `sqlite-fs` mode.
 - Adapter unit-test suites: `sqlite-fs.test.ts` (9 tests, real I/O), `postgres-minio.test.ts` (8 tests, mocked I/O).
+
+## Amended by ADR-0013 (2026-10-01)
+
+`docs/architecture/adr/0013-self-host-only.md` removes managed mode. Both
+adapters stay; the workspace and billing methods leave `StorageClient`, which
+now has maps, share tokens, `getBlob`, `ping` and `close`. Three statements
+above no longer hold:
+
+- The schema is not ad-hoc DDL in each adapter. `apps/storage/src/db/
+  migrations.ts` is the one schema definition, and both adapters apply it at
+  startup through `db/migrate.ts`.
+- `postgres-minio` is not tested with mocks only. With `ATLASDRAW_TEST_PG_URL`
+  set, the adapter contract and the migrations run against real Postgres; the
+  CI job `storage-postgres` does this with a `postgres:16` service container.
+- The interface is not at `types.ts:44-50` with 5 methods. Read `types.ts`.

@@ -23,7 +23,6 @@ const BASE_CONFIG: AppConfig = {
   storageBaseUrl: "",
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
-  managed: false,
   allowRemoteBasemaps: false,
 };
 
@@ -144,5 +143,28 @@ describe("SettingsDialog — CollaborationTab", () => {
       "wss://realtime.example.test",
     );
     expect(screen.getByText("Cursor + viewport sharing enabled")).toBeTruthy();
+  });
+});
+
+describe("SettingsDialog — tabs", () => {
+  it("offers basemap, storage and collaboration, and no workspace tab", () => {
+    vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue(BASE_CONFIG);
+    render(
+      <SettingsDialog
+        activeBasemapId="protomaps-light"
+        onBasemapChange={() => {}}
+        onCloseRequest={() => {}}
+      />,
+    );
+
+    const tabs = screen
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("data-testid"))
+      .filter((id) => id?.startsWith("settings-tab-"));
+    expect(tabs).toEqual([
+      "settings-tab-basemap",
+      "settings-tab-storage",
+      "settings-tab-collaboration",
+    ]);
   });
 });

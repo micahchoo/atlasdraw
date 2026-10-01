@@ -12,21 +12,19 @@
 //
 // docName = url.pathname.slice("/yjs/".length) — verbatim, no parsing. So
 // `comments/foo` and `foo` are different documents on the relay's `docs` map.
-// Workspace scoping is achieved at the URL-path layer (Phase 6 A2): clients
-// that pass `workspaceId` to `buildCommentsDocPath` get a workspace-namespaced
-// docName, so cross-workspace leakage is impossible at the relay layer.
+// A client that passes `workspaceId` to `buildCommentsDocPath` gets a
+// prefixed docName. The client chooses the prefix and the relay checks
+// nothing, so it separates names, not tenants.
 //
 // Under ADR-0010 Option C the relay sees plaintext Yjs ops for both Y.Doc
 // families — by design. Comment text is NOT encrypted; the trust posture is
 // relay-trusted single-tenant self-host.
 //
-// SECURITY (managed mode): the "workspace ACL at the path-routing boundary"
-// that SaaS deployments would need DOES NOT EXIST. The upgrade handler below
-// takes the whole path suffix verbatim as the docName with no auth, and the
-// Caddy front door has no /yjs route. Any client that knows a roomId can
-// connect to /yjs/${roomId} and read/write another room's PLAINTEXT data
-// layers and comments. Not multi-tenant-safe — see
-// docs/security/managed-mode-trust-boundary.md (SECURITY.md row 3).
+// SECURITY: the upgrade handler below takes the whole path suffix verbatim
+// as the docName, with no auth. Any client that knows a roomId can connect
+// to /yjs/${roomId} and read and write that room's PLAINTEXT data layers and
+// comments. The room id is the capability; see ADR-0014
+// (docs/architecture/adr/0014-collab-trust-model.md).
 //
 // See docs/superpowers/plans/2026-05-03-atlasdraw-phase-5-realtime.md § Task 6
 //     docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A2

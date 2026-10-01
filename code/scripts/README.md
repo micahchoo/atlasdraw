@@ -9,14 +9,14 @@ Validates that every workspace `package.json` declares the correct `"license"` f
 Expected values:
 
 - Root + `apps/*`: `AGPL-3.0-only`
-- `packages/sdk`, `packages/cli`, `packages/geo`, `packages/data`, vendored packages: `MIT`
+- `packages/cli`, `packages/geo`, `packages/data`, vendored packages: `MIT`
 - `packages/basemap`, `packages/tools`: `MPL-2.0`
 
 Exits 1 and prints `FAIL: <path> license=<actual> expected=<expected>` on any mismatch.
 
 ## check-telemetry.sh
 
-Scans `apps/atlas-app/src/`, `apps/realtime/src/`, and `packages/sdk/src/` for forbidden telemetry imports (`@sentry/`, `firebase`, `mixpanel`, `amplitude`, `google-analytics`, `posthog`) per ADR 0006. The embed SDK and user-facing apps must never call home.
+Scans `apps/atlas-app/src/` and `apps/realtime/src/` for forbidden telemetry imports (`@sentry/`, `firebase`, `mixpanel`, `amplitude`, `google-analytics`, `posthog`) per ADR 0006. The user-facing apps must never call home.
 
 Lines annotated with `// telemetry-allowed: opt-in (ADR 0006)` are exempt (intended for `apps/storage` only, which is not in the scan paths).
 

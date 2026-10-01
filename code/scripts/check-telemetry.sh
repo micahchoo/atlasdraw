@@ -15,7 +15,7 @@ FORBIDDEN_PATTERN='@sentry/|firebase|mixpanel|amplitude|google-analytics|posthog
 
 # Paths to scan (user-facing — must never call home)
 SCAN_PATHS=()
-for dir in apps/atlas-app/src apps/realtime/src packages/sdk/src; do
+for dir in apps/atlas-app/src apps/realtime/src; do
   if [ -d "${dir}" ]; then
     SCAN_PATHS+=("${dir}")
   fi

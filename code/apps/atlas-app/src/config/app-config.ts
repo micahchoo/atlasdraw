@@ -24,12 +24,6 @@ const EnvSchema = z.object({
   //   https://photon.self-host.lan  (their own instance)
   // See ADR-0006 / ADR-0011 (zero call-home, telemetry posture).
   VITE_GEOCODER_ENDPOINT: z.string().default(""),
-  // Phase 6 A13a: managed-mode (hosted multi-tenant SaaS) flag. When "true"
-  // the client surfaces the workspace switcher, the billing page, and other
-  // managed-only UI. Defaults to "false" so self-hosters and the local-only
-  // / pages tiers never see them. Cites ADR-0011 (hosted-mode telemetry,
-  // server-side only) — the *client* surface is gated here.
-  VITE_MANAGED_MODE: z.enum(["true", "false"]).default("false"),
   // T14/T15: allow remote basemap tile sources (e.g. OpenFreeMap, OSM).
   // Default TRUE as of 2026-06-13 (user decision) so the Bright/OSM basemaps
   // render out of the box. Operators opt OUT by setting this to "false".
@@ -68,13 +62,6 @@ export type AppConfig = {
    * URL. Operator-configured; ADR-0006 / ADR-0011 (zero call-home).
    */
   geocoder?: { endpoint: string };
-  /**
-   * Phase 6 A13a: managed-mode flag. True only on the multi-tenant SaaS
-   * deploy; gates the workspace switcher, billing page, and other hosted-
-   * only client UI. Self-host and local-only / pages tiers always see
-   * `false` regardless of `buildTarget`. Cites ADR-0011.
-   */
-  managed: boolean;
   /** T14/T15: gate for remote basemap tile sources. Default true as of
    *  2026-06-13 (user decision); opt out with VITE_ALLOW_REMOTE_BASEMAPS=false. */
   allowRemoteBasemaps: boolean;
@@ -89,7 +76,6 @@ export function loadAppConfig(
   rawMaputnikUrl: string | undefined = import.meta.env.VITE_MAPUTNIK_URL,
   rawGeocoderEndpoint: string | undefined = import.meta.env
     .VITE_GEOCODER_ENDPOINT,
-  rawManagedMode: string | undefined = import.meta.env.VITE_MANAGED_MODE,
   rawAllowRemoteBasemaps: string | undefined = import.meta.env
     .VITE_ALLOW_REMOTE_BASEMAPS,
 ): AppConfig {
@@ -100,7 +86,6 @@ export function loadAppConfig(
     VITE_REALTIME_WS_URL: rawRealtimeWsUrl,
     VITE_MAPUTNIK_URL: rawMaputnikUrl,
     VITE_GEOCODER_ENDPOINT: rawGeocoderEndpoint,
-    VITE_MANAGED_MODE: rawManagedMode,
     VITE_ALLOW_REMOTE_BASEMAPS: rawAllowRemoteBasemaps,
   });
   if (!parsed.success) {
@@ -124,12 +109,6 @@ export function loadAppConfig(
   // the CSV-import path makes no network calls. ADR-0006 / ADR-0011.
   const geocoder =
     geocoderEndpoint === "" ? undefined : { endpoint: geocoderEndpoint };
-  // Managed-mode is hosted-only AND opt-in (operator sets VITE_MANAGED_MODE).
-  // Self-host (`hosted` + managed off) gets the same backend persistence and
-  // share UI but no workspace-switcher / billing surface — matches ADR-0011's
-  // server-side `MANAGED_MODE=true` posture.
-  const managed =
-    buildTarget === "hosted" && parsed.data.VITE_MANAGED_MODE === "true";
   const allowRemoteBasemaps = parsed.data.VITE_ALLOW_REMOTE_BASEMAPS === "true";
   return {
     buildTarget,
@@ -140,7 +119,6 @@ export function loadAppConfig(
     storageBaseUrl: parsed.data.VITE_STORAGE_BASE_URL,
     maputnikUrl: parsed.data.VITE_MAPUTNIK_URL,
     geocoder,
-    managed,
     allowRemoteBasemaps,
   };
 }

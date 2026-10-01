@@ -1,9 +1,9 @@
 /* MapCompass — RT-3. Bottom-left of the plate.
  *
  * Placement: the plate's other furniture is bottom-centre (.commentModeHint),
- * top-centre (.collabRoomError) and top-right (WorkspaceSwitcher /
- * PresenceList). Bottom-left is the one corner nothing else claims, and it is
- * where a printed sheet puts its compass rose anyway.
+ * top-centre (.collabRoomError) and top-right (PresenceList). Bottom-left is
+ * the one corner nothing else claims, and it is where a printed sheet puts
+ * its compass rose anyway.
  *
  * z-index 10 — the "toolbar / banners" band in the MapEditor.module.css
  * ladder. It has to sit above .atlasToolOverlay (z-index 5), which covers the

@@ -82,7 +82,6 @@ import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { CollabState } from "../state/collab";
 
-import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -121,7 +120,6 @@ import { CollarShell } from "./CollarShell";
 import { SheetRail } from "./SheetRail";
 import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
@@ -480,17 +478,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // PrintDialog modal is gone.
   const [exportDialogFormat, setExportDialogFormat] =
     useState<ExportFormat | null>(null);
-  // Phase 6 A13a — active workspace (managed mode only). Seeded from the
-  // A9 env resolver so the boot path still works; the WorkspaceSwitcher
-  // updates this when the user picks one. Self-host: stays at the env-
-  // resolved value (typically null) and the switcher renders nothing.
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
-    () =>
-      resolveWorkspaceFromEnv(
-        import.meta.env as Record<string, string | undefined>,
-      ).id,
-  );
-
   // Phase 5 collab integration (Step 6) — a single CollabState instance owned
   // by MapEditor. The lifecycle is component-scoped: instantiated on mount,
   // disconnected on unmount. Both useCollabRoom (URL → connect) and
@@ -575,20 +562,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
-  // Phase 6 A13a: thread `getWorkspaceId` so storage requests carry the
-  // X-Workspace-ID header for the currently-selected workspace. We use a
-  // ref to the active id so re-renders don't rebuild the client.
-  const activeWorkspaceIdRef = useRef<string | null>(activeWorkspaceId);
-  useEffect(() => {
-    activeWorkspaceIdRef.current = activeWorkspaceId;
-  }, [activeWorkspaceId]);
   const shareClientRef = useRef<HttpStorageClient | null>(null);
   function getShareClient(): HttpStorageClient {
     if (!shareClientRef.current) {
       const cfg = getAppConfig();
       shareClientRef.current = createHttpStorageClient({
         baseUrl: cfg.storageBaseUrl ?? "",
-        getWorkspaceId: () => activeWorkspaceIdRef.current,
       });
     }
     return shareClientRef.current;
@@ -1354,25 +1333,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           {collabValue.active && (
             <>
               <CursorOverlay />
-              {/* PresenceList shares WorkspaceSwitcher's top-right z:10 slot
-              (top:12/right:12) — offset below it in managed mode so the two
-              don't overlap when both are showing (hosted collab session). */}
-              <PresenceList
-                topOffset={getAppConfig().managed ? 56 : undefined}
-              />
+              <PresenceList />
             </>
           )}
-
-          {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
-          renders null; managed-mode renders a top-right dropdown that
-          lists workspaces and routes free-tier users to /billing for an
-          upgrade. The HTTP client is the same shared instance used by
-          ShareDialog so X-Workspace-ID flows through autosave too. */}
-          <WorkspaceSwitcher
-            client={getShareClient()}
-            activeId={activeWorkspaceId}
-            onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
-          />
 
           {/* Sheet-panel resize handle, at the panel's left edge. Mounted only
           while the panel is open — its whole position is "the panel's edge",
@@ -1475,7 +1438,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 activeBasemapId={activeBasemapId}
                 onBasemapChange={setActiveBasemapId}
                 onCloseRequest={() => setShowSettings(false)}
-                workspaceId={activeWorkspaceId ?? undefined}
               />
             </Suspense>
           )}

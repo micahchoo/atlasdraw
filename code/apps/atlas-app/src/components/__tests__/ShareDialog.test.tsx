@@ -53,8 +53,6 @@ function stubClient(): HttpStorageClient {
     updateMap: vi.fn(),
     createShareToken: vi.fn(),
     getShareBlob: vi.fn(),
-    listWorkspaces: vi.fn(),
-    createCheckoutSession: vi.fn(),
   };
 }
 
