@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Cover the data-driven expression branch of compileLayer, plus the determinism + fallback guarantees the compiler owes
-// callers (StylePanel writes a LayerStyle; map render reads compileLayer output).
+// Cover the data-driven expression branch of compileLayer, plus the determinism
+// + fallback guarantees the compiler owes callers (StylePanel writes a
+// LayerStyle; map render reads compileLayer output).
 
 import { describe, expect, it } from "vitest";
 
