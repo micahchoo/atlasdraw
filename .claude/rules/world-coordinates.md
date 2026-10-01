@@ -4,7 +4,12 @@ paths:
   - code/packages/basemap/src/CameraBridge.ts
   - code/packages/tools/src/convert.ts
   - code/packages/element/src/atlasStyleUnit.ts
+  - code/packages/element/src/atlasStamp.ts
   - code/packages/excalidraw/atlasStyleScale.ts
+  - code/packages/excalidraw/components/App.tsx
+  - code/packages/excalidraw/actions/**
+  - code/packages/excalidraw/clipboard.ts
+  - code/apps/atlas-app/src/lib/placeDrawing.ts
   - code/apps/atlas-app/src/hooks/useCameraBridge.ts
   - code/apps/atlas-app/src/tools/**
   - code/apps/atlas-app/src/state/annotations.ts
@@ -43,6 +48,16 @@ scrollX / scrollY / zoom from each map `move`. Keep these true:
   jitter, the adaptive corner radius and cache padding in it
   (`element/src/atlasStyleUnit.ts`). A creation path that skips the unit
   gives arrows without heads and invisible dashes.
+- **One creation seam.** Every fork path that puts a new element in the
+  scene calls `App.stampNewElements(elements, how)`, which calls the
+  `stampNewElements` prop. The atlas passes `atlasStampNewElements`
+  (`element/src/atlasStamp.ts`). `how` decides the rule, never a missing
+  unit: draw, text and insert-image record `1 / zoom`; paste (a clipboard
+  marked `worldUnits`) and duplicate keep their size; import (another
+  Excalidraw's clipboard, a .excalidraw file through `placeDrawing`, a
+  chart) and library come in at their screen size. A new creation path calls
+  the seam and gets a case in `excalidraw/tests/atlasSceneUnits.test.tsx`.
+  App-side creators (pins, seeds, tools) write the unit themselves.
 - **Every upstream distance in scene units takes a unit** (W4b, ADR-0015
   "Leftovers fixed"). Part of the drawing (a gap, a padding, a route
   spacing): the element's `styleUnit`. Part of the interaction (a reach, a
@@ -58,7 +73,9 @@ scrollX / scrollY / zoom from each map `move`. Keep these true:
   and steps by 0.1, which at zoom value 2^-10 jumps the map many levels.
   Ctrl+0 (Excalidraw's 100%, map zoom 22) frames the drawing instead.
 - **Bearing is a CSS turn of the canvases only** (`--world-rotate`), and
-  drawing stays blocked while turned. Hit tests that must work turned go
+  drawing stays blocked while turned: `MapEditor#drawingBlocked` turns off
+  the pointer (CSS) and the keyboard (the fork's `placementBlocked` prop
+  stops paste and arrow-key nudges). Hit tests that must work turned go
   through `map.unproject` and the frame, not Excalidraw's viewport math.
 
 Scene numbers reach 2^31. Upstream had 1e6 limits (elbow arrows,

@@ -1,4 +1,4 @@
-import { isTextElement } from "@atlasdraw/element";
+import { isAtlasHidden, isTextElement } from "@atlasdraw/element";
 import { getTextFromElements } from "@atlasdraw/element";
 
 import { CODES, KEYS, isFirefox } from "@atlasdraw/common";
@@ -28,14 +28,24 @@ export const actionCopy = register<ClipboardEvent | null>({
   icon: DuplicateIcon,
   trackEvent: { category: "element" },
   perform: async (elements, appState, event, app) => {
-    const elementsToCopy = app.scene.getSelectedElements({
-      selectedElementIds: appState.selectedElementIds,
-      includeBoundTextElement: true,
-      includeElementsInFrames: true,
-    });
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const elementsToCopy = app.scene
+      .getSelectedElements({
+        selectedElementIds: appState.selectedElementIds,
+        includeBoundTextElement: true,
+        includeElementsInFrames: true,
+      })
+      // Atlasdraw: a hidden group member is not copied (atlasHidden.ts).
+      .filter((el) => !isAtlasHidden(el, elementsMap));
 
     try {
-      await copyToClipboard(elementsToCopy, app.files, event);
+      // Atlasdraw: the clipboard says whether its units are world units.
+      await copyToClipboard(
+        elementsToCopy,
+        app.files,
+        event,
+        app.props.screenSizedStyles,
+      );
     } catch (error: any) {
       return {
         captureUpdate: CaptureUpdateAction.EVENTUALLY,

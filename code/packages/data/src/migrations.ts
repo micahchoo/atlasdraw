@@ -16,7 +16,9 @@ import {
   documentFrame,
   isGeoCustomData,
   migrateElementV1,
+  placeUnanchoredV1,
   savedCameraTurn,
+  v1Screen,
   type V1Element,
   type WorldFrame,
 } from "@atlasdraw/geo";
@@ -135,19 +137,36 @@ function v1Origin(
  * `customData._lastSync`. Version 2 stores it in world coordinates: Web
  * Mercator pixels at the reference zoom, from the origin in `manifest.world`
  * (docs/architecture/adr/0015-world-coordinates-gate.md). Each anchored element is moved there from its anchor; an
- * element without one is kept as it is.
+ * element without one is placed where v1 drew it at the save camera
+ * (`placeUnanchoredV1`), not left in screen pixels beside the origin.
  */
 const worldCoordinates: MigrationStep = ({ manifest, scene }) => {
   const { lng, lat } = v1Origin(scene, manifest);
   const world: WorldFrame = documentFrame(lng, lat);
   const turn = savedCameraTurn(scene);
+  const camera = isRecord(manifest.camera) ? manifest.camera : {};
+  const center = Array.isArray(camera.center) ? camera.center : [];
+  const screen = v1Screen(scene, world, {
+    center: [
+      typeof center[0] === "number" ? center[0] : lng,
+      typeof center[1] === "number" ? center[1] : lat,
+    ],
+    zoom: typeof camera.zoom === "number" ? camera.zoom : world.z0,
+  });
   return {
     manifest: { ...manifest, world },
-    scene: scene.map((el) =>
-      isRecord(el) && isGeoCustomData(el.customData)
+    scene: scene.map((el) => {
+      if (
+        !isRecord(el) ||
+        typeof el.x !== "number" ||
+        typeof el.y !== "number"
+      ) {
+        return el;
+      }
+      return isGeoCustomData(el.customData)
         ? migrateElementV1(el as unknown as V1Element, world, turn)
-        : el,
-    ),
+        : placeUnanchoredV1(el as unknown as V1Element, screen);
+    }),
   };
 };
 

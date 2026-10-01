@@ -8,12 +8,18 @@
 // arrives through the `onScrollChange` prop and goes back to `map.jumpTo` once.
 //
 // Loop suppression: the bridge remembers the viewport it last
-// wrote. A scroll change equal to it is the echo of its own write and is
+// wrote. A scroll change near it is the echo of its own write and is
 // dropped; any other value is Excalidraw's own and is forwarded. `jumpTo`
 // fires `move` synchronously, which writes the map's answer back — that write
 // echoes, is dropped, and the exchange ends.
 //
-// A container resize needs nothing extra: MapLibre's resize() fires `move`.
+// "Near", not equal: Excalidraw can hand back a value it changed a little.
+// getNormalizedZoom rounds the zoom to 6 decimals, about 5e-6 of a zoom value
+// of 0.1, and float arithmetic changes a scroll by far less than a pixel. An
+// exact test took such an echo for a move, jumped the map, and could loop.
+//
+// A container resize: MapLibre's resize() fires `move`, and the caller also
+// pushes after a resize, because it caches the size (useCameraBridge.ts).
 
 import { cameraFor, viewportFor } from "@atlasdraw/geo";
 
@@ -41,6 +47,22 @@ export interface CameraBridgeStats {
   /** Scroll changes recognised as the echo of the bridge's own write. */
   suppressed: number;
 }
+
+/** A zoom within this part of the written one is the echo. */
+const ECHO_ZOOM = 1e-5;
+/** A scroll within this many screen pixels of the written one is the echo. */
+const ECHO_PIXELS = 1e-3;
+
+/** True when the reported viewport is the bridge's own write, `w`. */
+export const isEcho = (
+  w: SceneViewport,
+  scrollX: number,
+  scrollY: number,
+  zoom: number,
+): boolean =>
+  Math.abs(zoom - w.zoom) <= ECHO_ZOOM * w.zoom &&
+  Math.abs(scrollX - w.scrollX) * w.zoom <= ECHO_PIXELS &&
+  Math.abs(scrollY - w.scrollY) * w.zoom <= ECHO_PIXELS;
 
 export class CameraBridge {
   private readonly getFrame: () => WorldFrame;
@@ -128,12 +150,7 @@ export class CameraBridge {
       return;
     }
     const w = this.written;
-    if (
-      w &&
-      w.scrollX === scrollX &&
-      w.scrollY === scrollY &&
-      w.zoom === zoom.value
-    ) {
+    if (w && isEcho(w, scrollX, scrollY, zoom.value)) {
       this.stats.suppressed++;
       return;
     }

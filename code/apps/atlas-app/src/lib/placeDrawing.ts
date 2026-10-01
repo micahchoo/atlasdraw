@@ -9,6 +9,7 @@
 // and centred on the camera: it opens where the user is looking, at the size
 // it had in Excalidraw.
 
+import { atlasStampNewElements } from "@atlasdraw/element";
 import { sceneUnitsPerPixel, toScene, type WorldFrame } from "@atlasdraw/geo";
 
 /** The element fields a placement reads and scales. */
@@ -23,20 +24,39 @@ export interface PlaceableElement {
   readonly [key: string]: unknown;
 }
 
-/** customData with `atlas.unit` multiplied by `s` (a missing unit is 1). */
-function withUnit(customData: unknown, s: number): Record<string, unknown> {
-  const cd =
-    typeof customData === "object" && customData !== null
-      ? (customData as Record<string, unknown>)
-      : {};
-  const atlas =
-    typeof cd.atlas === "object" && cd.atlas !== null
-      ? (cd.atlas as Record<string, unknown>)
-      : {};
-  const unit = typeof atlas.unit === "number" ? atlas.unit : 1;
-  return { ...cd, atlas: { ...atlas, unit: unit * s } };
+/**
+ * The box of the elements. A linear element's box comes from its points,
+ * which can run left of or above its `x` and `y`.
+ */
+function boundsOf(elements: readonly PlaceableElement[]) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const add = (x: number, y: number) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  };
+  for (const el of elements) {
+    if (el.points && el.points.length > 0) {
+      for (const [px, py] of el.points) {
+        add(el.x + px, el.y + py);
+      }
+    } else {
+      add(el.x, el.y);
+      add(el.x + (el.width ?? 0), el.y + (el.height ?? 0));
+    }
+  }
+  return { minX, minY, maxX, maxY };
 }
 
+/**
+ * The drawing scaled by the fork's creation seam as an import (one unit of
+ * the file is one screen pixel at the camera's zoom), then moved so its box
+ * is centred on the camera.
+ */
 export function placeDrawing<T extends PlaceableElement>(
   elements: readonly T[],
   frame: WorldFrame,
@@ -45,39 +65,20 @@ export function placeDrawing<T extends PlaceableElement>(
   if (elements.length === 0) {
     return [];
   }
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const el of elements) {
-    minX = Math.min(minX, el.x);
-    minY = Math.min(minY, el.y);
-    maxX = Math.max(maxX, el.x + (el.width ?? 0));
-    maxY = Math.max(maxY, el.y + (el.height ?? 0));
-  }
   const s = sceneUnitsPerPixel(frame, camera.zoom);
+  const scaled = atlasStampNewElements(
+    elements as unknown as (T & { customData?: Record<string, unknown> })[],
+    "import",
+    { zoom: 1 / s },
+  );
+  const b = boundsOf(scaled);
   const c = toScene(frame, camera.center[0], camera.center[1]);
-  const mx = (minX + maxX) / 2;
-  const my = (minY + maxY) / 2;
-  const scale = (v: number | undefined) => (v === undefined ? v : v * s);
-  return elements.map((el) => ({
+  const dx = c.x - (b.minX + b.maxX) / 2;
+  const dy = c.y - (b.minY + b.maxY) / 2;
+  return scaled.map((el) => ({
     ...el,
-    // The drawing's pixel-sized details (arrowheads, dashes) scale with it.
-    customData: withUnit(el.customData, s),
-    x: c.x + (el.x - mx) * s,
-    y: c.y + (el.y - my) * s,
-    ...(el.width !== undefined ? { width: scale(el.width) } : {}),
-    ...(el.height !== undefined ? { height: scale(el.height) } : {}),
-    ...(el.strokeWidth !== undefined
-      ? { strokeWidth: scale(el.strokeWidth) }
-      : {}),
-    ...(el.fontSize !== undefined ? { fontSize: scale(el.fontSize) } : {}),
-    ...(el.points
-      ? {
-          points: el.points.map(
-            ([px, py]) => [px * s, py * s] as [number, number],
-          ),
-        }
-      : {}),
+    customData: el.customData ?? {},
+    x: el.x + dx,
+    y: el.y + dy,
   }));
 }

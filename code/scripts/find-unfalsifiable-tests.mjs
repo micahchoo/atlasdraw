@@ -43,10 +43,12 @@
 // testing it.
 //
 // Usage:  node scripts/find-unfalsifiable-tests.mjs [--all]
-//   default   atlasdraw-owned code only
-//   --all     include the vendored fork (packages/excalidraw and friends),
-//             which asserts through deep helper chains this cannot follow and
-//             so reports a large number of false positives
+//   default   atlasdraw-owned tests only, including the Atlasdraw tests
+//             inside the fork packages: every test file not in
+//             scripts/upstream-fork-tests.txt
+//   --all     include upstream's own fork tests too, which assert through
+//             deep helper chains this cannot follow and so report a large
+//             number of false positives
 //
 // Exits 1 if anything is found in the scanned scope.
 
@@ -56,14 +58,18 @@ import path from "node:path";
 
 const includeVendored = process.argv.includes("--all");
 
-/** The vendored upstream fork. Ours to build on, not ours to hold to this. */
-const VENDORED = [
-  "packages/excalidraw/",
-  "packages/element/",
-  "packages/common/",
-  "packages/math/",
-  "packages/utils/",
-];
+/**
+ * Upstream's own tests in the fork. Ours to build on, not ours to hold to
+ * this. Skipped by file, not by package: the Atlasdraw tests in the same
+ * packages are ours and are held to it.
+ */
+const UPSTREAM_TESTS = new Set(
+  fs
+    .readFileSync(new URL("./upstream-fork-tests.txt", import.meta.url), "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#")),
+);
 
 const files = [];
 function walk(dir) {
@@ -74,7 +80,7 @@ function walk(dir) {
       walk(p);
     } else if (/\.test\.tsx?$/.test(entry.name)) {
       const rel = p.split(path.sep).join("/");
-      if (!includeVendored && VENDORED.some((v) => rel.startsWith(v))) continue;
+      if (!includeVendored && UPSTREAM_TESTS.has(rel)) continue;
       files.push(rel);
     }
   }

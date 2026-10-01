@@ -237,6 +237,7 @@ function CommandPaletteInner({
           perform: () => {
             app.onInsertElements(
               distributeLibraryItemsOnSquareGrid([libraryItem]),
+              "library",
             );
           },
         })) || []

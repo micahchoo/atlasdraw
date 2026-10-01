@@ -235,6 +235,7 @@ import {
   maxBindingDistance_simple,
   editorUnit,
   styleUnit,
+  type NewElementHow,
   convertToExcalidrawElements,
   type ExcalidrawElementSkeleton,
   getSnapOutlineMidPoint,
@@ -323,7 +324,7 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
-import { scaleForeignElements, styleScale } from "../atlasStyleScale";
+import { styleScale } from "../atlasStyleScale";
 import { isCollarMode } from "../collar";
 import {
   getDefaultAppState,
@@ -1882,11 +1883,16 @@ class App extends React.Component<AppProps, AppState> {
     return this.scene.getNonDeletedElements();
   };
 
-  public onInsertElements = (elements: readonly ExcalidrawElement[]) => {
+  public onInsertElements = (
+    elements: readonly ExcalidrawElement[],
+    /** Atlasdraw: a library item, or content made here for scene = screen. */
+    how: "library" | "import",
+  ) => {
     this.addElementsFromPasteOrLibrary({
       elements,
       position: "center",
       files: null,
+      how,
     });
   };
 
@@ -2972,6 +2978,8 @@ class App extends React.Component<AppProps, AppState> {
         position:
           this.editorInterface.formFactor === "desktop" ? "cursor" : "center",
         retainSeed: isPlainPaste,
+        // Atlasdraw: a clipboard written in world units is this app's own.
+        how: data.worldUnits && !data.programmaticAPI ? "paste" : "import",
       });
       return;
     }
@@ -3012,6 +3020,13 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
+      // Atlasdraw: the cursor's scene point is wrong while the host turns
+      // the canvas (`placementBlocked`).
+      if (this.props.placementBlocked) {
+        event?.preventDefault();
+        return;
+      }
+
       // must be called in the same frame (thus before any awaits) as the paste
       // event else some browsers (FF...) will clear the clipboardData
       // (something something security)
@@ -3047,19 +3062,15 @@ class App extends React.Component<AppProps, AppState> {
     position: { clientX: number; clientY: number } | "cursor" | "center";
     retainSeed?: boolean;
     fitToContent?: boolean;
+    /** Atlasdraw: how the elements came in (`stampNewElements`). */
+    how: Extract<NewElementHow, "paste" | "library" | "import">;
   }) => {
     const restored = restoreElements(opts.elements, null, {
       deleteInvisibleElements: true,
     });
-    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
-    // elements from outside go in at screen size.
-    const [rx, ry] = getCommonBounds(restored);
-    const elements = scaleForeignElements(
-      restored,
-      styleScale(this.props.screenSizedStyles, this.state.zoom.value),
-      rx,
-      ry,
-    );
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // creation seam decides their size from where they came from.
+    const elements = this.stampNewElements(restored, opts.how);
     const [minX, minY, maxX, maxY] = getCommonBounds(elements);
 
     const elementsCenterX = distance(minX, maxX) / 2;
@@ -3287,9 +3298,14 @@ class App extends React.Component<AppProps, AppState> {
     });
     const lineHeight = getLineHeight(textElementProps.fontFamily);
     const [x1, , x2] = getVisibleSceneBounds(this.state);
+    // Atlasdraw: 800, 200 and 10 are pixels, in the editor's unit.
+    const unit = editorUnit(this.state);
     // long texts should not go beyond 800 pixels in width nor should it go below 200 px
-    const maxTextWidth = Math.max(Math.min((x2 - x1) * 0.5, 800), 200);
-    const LINE_GAP = 10;
+    const maxTextWidth = Math.max(
+      Math.min((x2 - x1) * 0.5, 800 * unit),
+      200 * unit,
+    );
+    const LINE_GAP = 10 * unit;
     let currentY = y;
 
     const lines = isPlainPaste ? [text] : text.split("\n");
@@ -3316,16 +3332,19 @@ class App extends React.Component<AppProps, AppState> {
           const startX = x - metrics.width / 2;
           const startY = currentY - metrics.height / 2;
 
-          const element = newTextElement({
-            ...textElementProps,
-            x: startX,
-            y: startY,
-            text,
-            originalText,
-            lineHeight,
-            autoResize: !isTextUnwrapped,
-            frameId: topLayerFrame ? topLayerFrame.id : null,
-          });
+          const element = this.stampNewElement(
+            newTextElement({
+              ...textElementProps,
+              x: startX,
+              y: startY,
+              text,
+              originalText,
+              lineHeight,
+              autoResize: !isTextUnwrapped,
+              frameId: topLayerFrame ? topLayerFrame.id : null,
+            }),
+            "text",
+          );
           acc.push(element);
           currentY += element.height + LINE_GAP;
         } else {
@@ -3482,16 +3501,26 @@ class App extends React.Component<AppProps, AppState> {
     size * styleScale(this.props.screenSizedStyles, this.state.zoom.value);
 
   /**
-   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): with
-   * `screenSizedStyles`, a new shape records its pixel unit (scene units per
-   * screen pixel now) in `customData.atlas.unit`, so its arrowheads, dashes and
-   * jitter look as upstream draws them at the zoom where it is drawn
-   * (element/src/atlasStyleUnit.ts).
+   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the one
+   * creation seam. Every path that puts a new element in the scene passes it
+   * through here, with how it came in, before it goes in. Without the
+   * `stampNewElements` prop the elements are returned as they are.
    */
-  private atlasUnitData = (): { customData?: Record<string, unknown> } =>
-    this.props.screenSizedStyles
-      ? { customData: { atlas: { unit: 1 / this.state.zoom.value } } }
-      : {};
+  public stampNewElements = <T extends ExcalidrawElement>(
+    elements: readonly T[],
+    how: NewElementHow,
+  ): T[] =>
+    this.props.stampNewElements
+      ? this.props.stampNewElements(elements, how, {
+          zoom: this.state.zoom.value,
+        })
+      : elements.slice();
+
+  /** `stampNewElements` for one element. */
+  private stampNewElement = <T extends ExcalidrawElement>(
+    element: T,
+    how: NewElementHow,
+  ): T => this.stampNewElements([element], how)[0];
 
   scrollToContent = (
     /**
@@ -3973,27 +4002,31 @@ class App extends React.Component<AppProps, AppState> {
               CLASSES.CONVERT_ELEMENT_TYPE_POPUP,
             ))
         ) {
-          event.preventDefault();
-
           const conversionType =
             getConversionTypeFromElements(selectedElements);
+          const panelOpen =
+            editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
-          if (
-            editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel"
-          ) {
-            if (
-              convertElementTypes(this, {
-                conversionType,
-                direction: event.shiftKey ? "left" : "right",
-              })
-            ) {
-              this.store.scheduleCapture();
+          // Atlasdraw (WCAG 2.1.2, no keyboard trap): Tab is taken only when
+          // a shape conversion applies. Otherwise focus moves on.
+          if (conversionType || panelOpen) {
+            event.preventDefault();
+
+            if (panelOpen) {
+              if (
+                convertElementTypes(this, {
+                  conversionType,
+                  direction: event.shiftKey ? "left" : "right",
+                })
+              ) {
+                this.store.scheduleCapture();
+              }
             }
-          }
-          if (conversionType) {
-            this.updateEditorAtom(convertElementTypePopupAtom, {
-              type: "panel",
-            });
+            if (conversionType) {
+              this.updateEditorAtom(convertElementTypePopupAtom, {
+                type: "panel",
+              });
+            }
           }
         }
 
@@ -4306,6 +4339,11 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (isArrowKey(event.key)) {
+        // Atlasdraw: a nudge moves along the scene's axes, which are not the
+        // screen's while the host turns the canvas (`placementBlocked`).
+        if (this.props.placementBlocked) {
+          return;
+        }
         let selectedElements = this.scene.getSelectedElements({
           selectedElementIds: this.state.selectedElementIds,
           includeBoundTextElement: true,
@@ -4649,7 +4687,10 @@ class App extends React.Component<AppProps, AppState> {
     if (!event[KEYS.CTRL_OR_CMD]) {
       if (this.flowChartCreator.isCreatingChart) {
         if (this.flowChartCreator.pendingNodes?.length) {
-          this.scene.insertElements(this.flowChartCreator.pendingNodes);
+          // Atlasdraw: the creation seam (the atlas turns flowcharts off).
+          this.scene.insertElements(
+            this.stampNewElements(this.flowChartCreator.pendingNodes, "draw"),
+          );
         }
 
         const firstNode = this.flowChartCreator.pendingNodes?.[0];
@@ -5466,35 +5507,38 @@ class App extends React.Component<AppProps, AppState> {
 
     const element =
       existingTextElement ||
-      newTextElement({
-        x: newTextElementPosition.x,
-        y: newTextElementPosition.y,
-        strokeColor: this.state.currentItemStrokeColor,
-        backgroundColor: this.state.currentItemBackgroundColor,
-        fillStyle: this.state.currentItemFillStyle,
-        strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
-        strokeStyle: this.state.currentItemStrokeStyle,
-        roughness: this.state.currentItemRoughness,
-        opacity: this.state.currentItemOpacity,
-        text: "",
-        fontSize,
-        fontFamily,
-        textAlign: parentCenterPosition
-          ? "center"
-          : this.state.currentItemTextAlign,
-        verticalAlign: parentCenterPosition
-          ? VERTICAL_ALIGN.MIDDLE
-          : DEFAULT_VERTICAL_ALIGN,
-        containerId: shouldBindToContainer ? container?.id : undefined,
-        groupIds: container?.groupIds ?? [],
-        lineHeight,
-        angle: container
-          ? isArrowElement(container)
-            ? (0 as Radians)
-            : container.angle
-          : (0 as Radians),
-        frameId: topLayerFrame ? topLayerFrame.id : null,
-      });
+      this.stampNewElement(
+        newTextElement({
+          x: newTextElementPosition.x,
+          y: newTextElementPosition.y,
+          strokeColor: this.state.currentItemStrokeColor,
+          backgroundColor: this.state.currentItemBackgroundColor,
+          fillStyle: this.state.currentItemFillStyle,
+          strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
+          strokeStyle: this.state.currentItemStrokeStyle,
+          roughness: this.state.currentItemRoughness,
+          opacity: this.state.currentItemOpacity,
+          text: "",
+          fontSize,
+          fontFamily,
+          textAlign: parentCenterPosition
+            ? "center"
+            : this.state.currentItemTextAlign,
+          verticalAlign: parentCenterPosition
+            ? VERTICAL_ALIGN.MIDDLE
+            : DEFAULT_VERTICAL_ALIGN,
+          containerId: shouldBindToContainer ? container?.id : undefined,
+          groupIds: container?.groupIds ?? [],
+          lineHeight,
+          angle: container
+            ? isArrowElement(container)
+              ? (0 as Radians)
+              : container.angle
+            : (0 as Radians),
+          frameId: topLayerFrame ? topLayerFrame.id : null,
+        }),
+        "text",
+      );
 
     if (!existingTextElement && shouldBindToContainer && container) {
       this.scene.mutateElement(container, {
@@ -8021,25 +8065,27 @@ class App extends React.Component<AppProps, AppState> {
 
     const simulatePressure = event.pressure === 0.5;
 
-    const element = newFreeDrawElement({
-      type: elementType,
-      x: gridX,
-      y: gridY,
-      strokeColor: this.state.currentItemStrokeColor,
-      backgroundColor: this.state.currentItemBackgroundColor,
-      fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
-      ...this.atlasUnitData(),
-      strokeStyle: this.state.currentItemStrokeStyle,
-      roughness: this.state.currentItemRoughness,
-      opacity: this.state.currentItemOpacity,
-      roundness: null,
-      simulatePressure,
-      locked: false,
-      frameId: topLayerFrame ? topLayerFrame.id : null,
-      points: [pointFrom<LocalPoint>(0, 0)],
-      pressures: simulatePressure ? [] : [event.pressure],
-    });
+    const element = this.stampNewElement(
+      newFreeDrawElement({
+        type: elementType,
+        x: gridX,
+        y: gridY,
+        strokeColor: this.state.currentItemStrokeColor,
+        backgroundColor: this.state.currentItemBackgroundColor,
+        fillStyle: this.state.currentItemFillStyle,
+        strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
+        strokeStyle: this.state.currentItemStrokeStyle,
+        roughness: this.state.currentItemRoughness,
+        opacity: this.state.currentItemOpacity,
+        roundness: null,
+        simulatePressure,
+        locked: false,
+        frameId: topLayerFrame ? topLayerFrame.id : null,
+        points: [pointFrom<LocalPoint>(0, 0)],
+        pressures: simulatePressure ? [] : [event.pressure],
+      }),
+      "draw",
+    );
 
     this.scene.insertElement(element);
 
@@ -8088,7 +8134,7 @@ class App extends React.Component<AppProps, AppState> {
 
     const placeholderSize = 100 / this.state.zoom.value;
 
-    return newImageElement({
+    const placeholder = newImageElement({
       type: "image",
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
@@ -8105,6 +8151,7 @@ class App extends React.Component<AppProps, AppState> {
       width: placeholderSize,
       height: placeholderSize,
     });
+    return this.stampNewElement(placeholder, "insert-image");
   };
 
   private handleLinearElementOnPointerDown = (
@@ -8236,7 +8283,7 @@ class App extends React.Component<AppProps, AppState> {
           ? [currentItemStartArrowhead, currentItemEndArrowhead]
           : [null, null];
 
-      const element =
+      const element = this.stampNewElement(
         elementType === "arrow"
           ? newArrowElement({
               type: elementType,
@@ -8248,7 +8295,6 @@ class App extends React.Component<AppProps, AppState> {
               strokeWidth: this.sceneStyleSize(
                 this.state.currentItemStrokeWidth,
               ),
-              ...this.atlasUnitData(),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -8278,7 +8324,6 @@ class App extends React.Component<AppProps, AppState> {
               strokeWidth: this.sceneStyleSize(
                 this.state.currentItemStrokeWidth,
               ),
-              ...this.atlasUnitData(),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -8288,7 +8333,9 @@ class App extends React.Component<AppProps, AppState> {
                   : null,
               locked: false,
               frameId: topLayerFrame ? topLayerFrame.id : null,
-            });
+            }),
+        "draw",
+      );
 
       const point = pointFrom<GlobalPoint>(
         pointerDownState.origin.x,
@@ -8439,7 +8486,6 @@ class App extends React.Component<AppProps, AppState> {
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
       strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
-      ...this.atlasUnitData(),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,
@@ -8466,6 +8512,7 @@ class App extends React.Component<AppProps, AppState> {
         selectionElement: element,
       });
     } else {
+      element = this.stampNewElement(element, "draw");
       this.scene.insertElement(element);
       this.setState({
         multiElement: null,
@@ -9134,6 +9181,11 @@ class App extends React.Component<AppProps, AppState> {
                 };
               },
             });
+            // Atlasdraw: the creation seam. The copies are new objects that
+            // three collections share, so the stamp is written into them.
+            this.stampNewElements(duplicatedElements, "duplicate").forEach(
+              (stamped, i) => Object.assign(duplicatedElements[i], stamped),
+            );
             duplicatedElements.forEach((element) => {
               pointerDownState.originalElements.set(
                 element.id,
@@ -10755,14 +10807,17 @@ class App extends React.Component<AppProps, AppState> {
     imageElement: ExcalidrawImageElement,
     imageHTML: HTMLImageElement,
   ) => {
-    const minHeight = Math.max(this.state.height - 120, 160);
+    // Atlasdraw: the pixel sizes here are scene units at zoom 1 upstream, so
+    // they take the editor's unit (element/src/atlasStyleUnit.ts).
+    const unit = editorUnit(this.state);
+    const minHeight = Math.max(this.state.height - 120, 160) * unit;
     // max 65% of canvas height, clamped to <300px, vh - 120px>
     const maxHeight = Math.min(
       minHeight,
       Math.floor(this.state.height * 0.5) / this.state.zoom.value,
     );
 
-    const height = Math.min(imageHTML.naturalHeight, maxHeight);
+    const height = Math.min(imageHTML.naturalHeight * unit, maxHeight);
     const width = height * (imageHTML.naturalWidth / imageHTML.naturalHeight);
 
     // add current imageElement width/height to account for previous centering
@@ -11035,6 +11090,7 @@ class App extends React.Component<AppProps, AppState> {
             elements: distributeLibraryItemsOnSquareGrid(libraryItems),
             position: event,
             files: null,
+            how: "library",
           });
         }
       } catch (error: any) {

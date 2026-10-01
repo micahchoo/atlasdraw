@@ -196,7 +196,8 @@ export const PasteChartDialog = ({
   }, [onClose]);
 
   const handleChartClick = (chartType: ChartType, elements: ChartElements) => {
-    onInsertElements(elements);
+    // Atlasdraw: a chart is made for scene = screen.
+    onInsertElements(elements, "import");
     trackEvent("paste", "chart", chartType);
     onClose();
     focusContainer();
@@ -208,7 +209,7 @@ export const PasteChartDialog = ({
       x: 0,
       y: 0,
     });
-    onInsertElements([textElement]);
+    onInsertElements([textElement], "import");
     trackEvent("paste", "chart", "plaintext");
     onClose();
     focusContainer();

@@ -5,7 +5,7 @@ import {
   arrayToMap,
 } from "@atlasdraw/common";
 
-import { getNonDeletedElements } from "@atlasdraw/element";
+import { editorUnit, getNonDeletedElements } from "@atlasdraw/element";
 
 import { LinearElementEditor } from "@atlasdraw/element";
 
@@ -74,13 +74,22 @@ export const actionDuplicateSelection = register({
       overrides: ({ origElement, origIdToDuplicateId }) => {
         const duplicateFrameId =
           origElement.frameId && origIdToDuplicateId.get(origElement.frameId);
+        // Atlasdraw: the offset is 10 screen pixels, in the editor's unit
+        // (element/src/atlasStyleUnit.ts). It is not a grid.
+        const offset = (DEFAULT_GRID_SIZE / 2) * editorUnit(appState);
         return {
-          x: origElement.x + DEFAULT_GRID_SIZE / 2,
-          y: origElement.y + DEFAULT_GRID_SIZE / 2,
+          x: origElement.x + offset,
+          y: origElement.y + offset,
           frameId: duplicateFrameId ?? origElement.frameId,
         };
       },
     });
+
+    // Atlasdraw: the creation seam. The copies are new objects that both
+    // returned lists share, so the stamp is written into them.
+    app
+      .stampNewElements(duplicatedElements, "duplicate")
+      .forEach((stamped, i) => Object.assign(duplicatedElements[i], stamped));
 
     if (app.props.onDuplicate && elementsWithDuplicates) {
       const mappedElements = app.props.onDuplicate(

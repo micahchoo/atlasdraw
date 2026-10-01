@@ -12,13 +12,18 @@ import { editorUnit, styleUnit } from "../src/atlasStyleUnit";
 import { getBindingGap, maxBindingDistance_simple } from "../src/binding";
 import { computeContainerDimensionForBoundText } from "../src/textElement";
 import { getArrowheadPoints } from "../src/bounds";
-import { newArrowElement, newElement } from "../src/newElement";
+import {
+  newArrowElement,
+  newElement,
+  newLinearElement,
+} from "../src/newElement";
 import {
   ShapeCache,
   generateRoughOptions,
   toggleLinePolygonState,
 } from "../src/shape";
 import { getCornerRadius } from "../src/utils";
+import { getCanvasPadding } from "../src/renderElement";
 
 import type { ExcalidrawLinearElement } from "../src/types";
 
@@ -170,7 +175,7 @@ describe("distances in the element's and the editor's unit", () => {
   it("a line's ends 10 px apart merge when it becomes a polygon", () => {
     const pointsAfter = (unit?: number) => {
       const u = unit ?? 1;
-      const line = newElement({
+      const line = newLinearElement({
         type: "line",
         x: 0,
         y: 0,
@@ -192,5 +197,32 @@ describe("distances in the element's and the editor's unit", () => {
     expect(
       computeContainerDimensionForBoundText(100 * UNIT, "rectangle", UNIT),
     ).toBe(computeContainerDimensionForBoundText(100, "rectangle") * UNIT);
+  });
+
+  it("cache padding covers a stroke widened at another zoom", () => {
+    // Drawn at map zoom 16 (unit 64), then given the 4 px stroke at map
+    // zoom 10: 4 * 4096 scene units, far more than 20 of its own pixels.
+    const rect = newElement({
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      strokeWidth: 4 * 4096,
+      ...withUnit(64),
+    });
+    expect(getCanvasPadding(rect)).toBeGreaterThanOrEqual(rect.strokeWidth);
+  });
+
+  it("cache padding is upstream's for upstream's strokes", () => {
+    for (const strokeWidth of [1, 2, 4]) {
+      const rect = newElement({ type: "rectangle", x: 0, y: 0, strokeWidth });
+      expect(getCanvasPadding(rect)).toBe(20);
+      expect(
+        getCanvasPadding({
+          ...rect,
+          strokeWidth: strokeWidth * UNIT,
+          ...withUnit(UNIT),
+        }),
+      ).toBe(20 * UNIT);
+    }
   });
 });

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "declaration": false,
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
+  },
+  "include": ["common/**/*", "element/**/*", "excalidraw/**/*", "math/**/*", "utils/**/*"],
+  "exclude": ["**/node_modules", "**/dist"]
+}

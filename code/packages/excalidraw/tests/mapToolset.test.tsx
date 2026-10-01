@@ -79,11 +79,10 @@ describe("map toolset", () => {
     const elements = [
       API.createElement({ type: "frame", id: "frame" }),
       API.createElement({ type: "magicframe", id: "magicframe" }),
-      API.createElement({
-        type: "embeddable",
-        id: "embeddable",
+      {
+        ...API.createElement({ type: "embeddable", id: "embeddable" }),
         link: "https://example.com",
-      }),
+      },
       API.createElement({ type: "iframe", id: "iframe" }),
     ];
     await render(<Excalidraw initialData={{ elements }} />);

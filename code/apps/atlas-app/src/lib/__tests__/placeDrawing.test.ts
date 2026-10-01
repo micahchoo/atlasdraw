@@ -78,6 +78,60 @@ describe("placeDrawing", () => {
     expect(text.text).toBe("Ward 3");
   });
 
+  it("scales an elbow arrow's fixed segments with its points", () => {
+    const [arrow] = placeDrawing(
+      [
+        {
+          id: "a",
+          type: "arrow",
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 30,
+          strokeWidth: 1,
+          elbowed: true,
+          points: [
+            [0, 0],
+            [40, 30],
+          ],
+          fixedSegments: [{ index: 1, start: [0, 10], end: [40, 10] }],
+        },
+      ],
+      frame,
+      { center: [77.2, 28.6], zoom: 20 },
+    );
+    expect(arrow.fixedSegments).toEqual([
+      { index: 1, start: [0, 40], end: [160, 40] },
+    ]);
+  });
+
+  it("centres a line drawn up and to the left by its points, not its width", () => {
+    // The line runs from (100, 100) to (0, 0): its box is (0, 0)-(100, 100).
+    const [line] = placeDrawing(
+      [
+        {
+          id: "l",
+          type: "line",
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          strokeWidth: 1,
+          points: [
+            [0, 0],
+            [-100, -100],
+          ],
+        },
+      ],
+      frame,
+      { center: [77.3, 28.7], zoom: 12 },
+    );
+    const s = sceneUnitsPerPixel(frame, 12);
+    const c = toScene(frame, 77.3, 28.7);
+    expect(line.x).toBeCloseTo(c.x + 50 * s, 6);
+    expect(line.y).toBeCloseTo(c.y + 50 * s, 6);
+  });
+
   it("returns an empty drawing unchanged", () => {
     expect(placeDrawing([], frame, { center: [0, 0], zoom: 4 })).toEqual([]);
   });

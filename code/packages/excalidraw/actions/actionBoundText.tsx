@@ -241,49 +241,55 @@ export const actionWrapTextInContainer = register({
 
     for (const textElement of selectedElements) {
       if (isTextElement(textElement) && !isBoundToContainer(textElement)) {
-        const container = newElement({
-          type: "rectangle",
-          backgroundColor: appState.currentItemBackgroundColor,
-          boundElements: [
-            ...(textElement.boundElements || []),
-            { id: textElement.id, type: "text" },
+        // Atlasdraw: the creation seam (`stampNewElements`).
+        const container = app.stampNewElements(
+          [
+            newElement({
+              type: "rectangle",
+              backgroundColor: appState.currentItemBackgroundColor,
+              boundElements: [
+                ...(textElement.boundElements || []),
+                { id: textElement.id, type: "text" },
+              ],
+              angle: textElement.angle,
+              fillStyle: appState.currentItemFillStyle,
+              strokeColor: appState.currentItemStrokeColor,
+              roughness: appState.currentItemRoughness,
+              // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
+              // screen pixels to scene units.
+              strokeWidth:
+                appState.currentItemStrokeWidth *
+                styleScale(app.props.screenSizedStyles, appState.zoom.value),
+              strokeStyle: appState.currentItemStrokeStyle,
+              roundness:
+                appState.currentItemRoundness === "round"
+                  ? {
+                      type: isUsingAdaptiveRadius("rectangle")
+                        ? ROUNDNESS.ADAPTIVE_RADIUS
+                        : ROUNDNESS.PROPORTIONAL_RADIUS,
+                    }
+                  : null,
+              opacity: 100,
+              locked: false,
+              // Atlasdraw: padding in the text's pixel unit (atlasStyleUnit.ts).
+              x: textElement.x - BOUND_TEXT_PADDING * styleUnit(textElement),
+              y: textElement.y - BOUND_TEXT_PADDING * styleUnit(textElement),
+              width: computeContainerDimensionForBoundText(
+                textElement.width,
+                "rectangle",
+                styleUnit(textElement),
+              ),
+              height: computeContainerDimensionForBoundText(
+                textElement.height,
+                "rectangle",
+                styleUnit(textElement),
+              ),
+              groupIds: textElement.groupIds,
+              frameId: textElement.frameId,
+            }),
           ],
-          angle: textElement.angle,
-          fillStyle: appState.currentItemFillStyle,
-          strokeColor: appState.currentItemStrokeColor,
-          roughness: appState.currentItemRoughness,
-          // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
-          // screen pixels to scene units.
-          strokeWidth:
-            appState.currentItemStrokeWidth *
-            styleScale(app.props.screenSizedStyles, appState.zoom.value),
-          strokeStyle: appState.currentItemStrokeStyle,
-          roundness:
-            appState.currentItemRoundness === "round"
-              ? {
-                  type: isUsingAdaptiveRadius("rectangle")
-                    ? ROUNDNESS.ADAPTIVE_RADIUS
-                    : ROUNDNESS.PROPORTIONAL_RADIUS,
-                }
-              : null,
-          opacity: 100,
-          locked: false,
-          // Atlasdraw: padding in the text's pixel unit (atlasStyleUnit.ts).
-          x: textElement.x - BOUND_TEXT_PADDING * styleUnit(textElement),
-          y: textElement.y - BOUND_TEXT_PADDING * styleUnit(textElement),
-          width: computeContainerDimensionForBoundText(
-            textElement.width,
-            "rectangle",
-            styleUnit(textElement),
-          ),
-          height: computeContainerDimensionForBoundText(
-            textElement.height,
-            "rectangle",
-            styleUnit(textElement),
-          ),
-          groupIds: textElement.groupIds,
-          frameId: textElement.frameId,
-        });
+          "draw",
+        )[0];
 
         // update bindings
         if (textElement.boundElements?.length) {

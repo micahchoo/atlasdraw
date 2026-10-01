@@ -1,4 +1,4 @@
-import { getNonDeletedElements } from "@atlasdraw/element";
+import { getNonDeletedElements, isAtlasHidden } from "@atlasdraw/element";
 import { LinearElementEditor } from "@atlasdraw/element";
 import { isLinearElement, isTextElement } from "@atlasdraw/element";
 
@@ -25,12 +25,15 @@ export const actionSelectAll = register({
       return false;
     }
 
+    const elementsMap = arrayToMap(elements);
     const selectedElementIds = elements
       .filter(
         (element) =>
           !element.isDeleted &&
           !(isTextElement(element) && element.containerId) &&
-          !element.locked,
+          !element.locked &&
+          // Atlasdraw: hidden from the layer panel (element/src/atlasHidden.ts).
+          !isAtlasHidden(element, elementsMap),
       )
       .reduce((map: Record<ExcalidrawElement["id"], true>, element) => {
         map[element.id] = true;
