@@ -20,6 +20,8 @@ import { ToolButton } from "./ToolButton";
 import Trans from "./Trans";
 import { CloseIcon } from "./icons";
 
+import { libraryBackendUrl } from "./libraryLinks";
+
 import "./PublishLibrary.scss";
 
 import type { ReactNode } from "react";
@@ -298,7 +300,7 @@ const PublishLibrary = ({
     formData.append("twitterHandle", libraryData.twitterHandle);
     formData.append("website", libraryData.website);
 
-    fetch(`${import.meta.env.VITE_APP_LIBRARY_BACKEND}/submit`, {
+    fetch(`${libraryBackendUrl()}/submit`, {
       method: "post",
       body: formData,
     })

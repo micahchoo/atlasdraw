@@ -16,6 +16,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { isLibraryMenuOpenAtom } from "./LibraryMenu";
 import PublishLibrary from "./PublishLibrary";
+import { libraryBackendUrl } from "./libraryLinks";
 import { ToolButton } from "./ToolButton";
 import Trans from "./Trans";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
@@ -220,7 +221,7 @@ export const LibraryDropdownMenuButton: React.FC<{
               {t("buttons.export")}
             </DropdownMenu.Item>
           )}
-          {itemsSelected && (
+          {itemsSelected && libraryBackendUrl() && (
             <DropdownMenu.Item
               icon={publishIcon}
               onSelect={() => setShowPublishLibraryDialog(true)}

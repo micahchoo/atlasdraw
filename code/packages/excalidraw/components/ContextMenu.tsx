@@ -84,20 +84,11 @@ export const ContextMenu = React.memo(
             const actionName = item.name;
             let label = "";
             if (item.label) {
-              if (typeof item.label === "function") {
-                const raw = item.label(elements, appState, actionManager.app);
-                try {
-                  label = t(raw as unknown as TranslationKeys);
-                } catch {
-                  label = raw;
-                }
-              } else {
-                try {
-                  label = t(item.label as unknown as TranslationKeys);
-                } catch {
-                  label = item.label;
-                }
-              }
+              label = menuItemLabel(
+                typeof item.label === "function"
+                  ? item.label(elements, appState, actionManager.app)
+                  : item.label,
+              );
             }
 
             return (
@@ -135,3 +126,11 @@ export const ContextMenu = React.memo(
     );
   },
 );
+
+/**
+ * A menu label is either a translation key (upstream actions) or literal text
+ * (items a host app registers). Fall back to the text itself: `t()` throws on
+ * a missing key only in development, and returns "" in production.
+ */
+export const menuItemLabel = (raw: string): string =>
+  t(raw as unknown as TranslationKeys, null, raw);

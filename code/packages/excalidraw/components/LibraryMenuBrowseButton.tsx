@@ -2,6 +2,8 @@ import { VERSIONS } from "@atlasdraw/common";
 
 import { t } from "../i18n";
 
+import { libraryBrowseUrl } from "./libraryLinks";
+
 import type { ExcalidrawProps, UIAppState } from "../types";
 
 const LibraryMenuBrowseButton = ({
@@ -13,12 +15,16 @@ const LibraryMenuBrowseButton = ({
   theme: UIAppState["theme"];
   id: string;
 }) => {
+  const browseUrl = libraryBrowseUrl();
+  if (!browseUrl) {
+    return null;
+  }
   const referrer =
     libraryReturnUrl || window.location.origin + window.location.pathname;
   return (
     <a
       className="library-menu-browse-button"
-      href={`${import.meta.env.VITE_APP_LIBRARY_URL}?target=${
+      href={`${browseUrl}?target=${
         window.name || "_blank"
       }&referrer=${referrer}&useHash=true&token=${id}&theme=${theme}&version=${
         VERSIONS.excalidrawLibrary
