@@ -2,12 +2,10 @@
 //
 // `CommentModeButton` — the comment-mode toggle on the drawing-tools toolbar.
 //
-// Inherited from the "SheetRail — comment mode" block, which pinned this
-// contract while the toggle lived on the right icon rail. The assertions came
-// with it because they were never about the rail: a mode toggle must read as
-// pressed rather than expanded, and the open-thread count must reach a screen
-// reader rather than being a coloured dot — the failure mode the design doc
-// warns about now that comments have no permanent surface.
+// A mode toggle must read as pressed rather than expanded, and the
+// open-thread count must reach a screen reader rather than being a coloured
+// dot: comments have no permanent surface, so the count is how a user knows
+// there is something to read.
 //
 // `globals: false` in `apps/atlas-app/vitest.config.ts` is why describe/it/
 // expect are imported, and why jest-dom matchers are unavailable (hence plain

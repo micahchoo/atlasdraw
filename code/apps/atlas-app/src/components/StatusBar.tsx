@@ -3,9 +3,7 @@
  *
  * Printed in the collar foot row: segmented scale bar, live center
  * coordinates, datum/projection, basemap attribution, live zoom and the
- * 1:ratio representative fraction. Subscribes to map move events; the
- * scale/ratio math is ported from the collar-shell prototype
- * (prototypes/collar-shell/index.html: niceScale / update).
+ * 1:ratio representative fraction. Subscribes to map move events.
  *
  * Design: printed marginalia, not chrome — mono for data, quiet labels,
  * nothing floats over the plate.

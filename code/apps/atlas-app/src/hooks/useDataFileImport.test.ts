@@ -561,8 +561,8 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
   // A format with no import path yet is a gap in this app, not a mistake by
   // the person holding the file — and "unsupported file type" sends them off
   // to convert a file that was already correct. The list holds only formats
-  // that genuinely have no path; `detectExt` claims every importable
-  // extension (GeoTIFF included) before this message is reached.
+  // that genuinely have no path; every importable extension (GeoTIFF
+  // included) is claimed before this message is reached.
   it.each([["wards.gpkg", "GeoPackage"]])(
     "names the format and says 'not yet' for %s, rather than blaming the file",
     async (fileName, label) => {
@@ -766,7 +766,7 @@ describe("useDataFileImport — GeoTIFF", () => {
     expect(args.id).toMatch(/^rl:/);
 
     expect(args.image).toBeInstanceOf(Blob);
-    // Never the vector path: a .tif that reached parseDroppedFile would be
+    // Never the vector path: a .tif that reached the vector parser would be
     // read as JSON and fail with a message about GeoJSON.
     expect(registerDataLayer).not.toHaveBeenCalled();
     expect(parseMock).not.toHaveBeenCalled();

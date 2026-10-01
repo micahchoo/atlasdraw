@@ -12,10 +12,10 @@
 .root {
   display: flex;
   flex-direction: column;
-  /* WAS `height: 100%`. Inside an auto-height <section> that resolves to
-   * auto anyway for layout purposes but still let the composer paint outside
-   * the section's box — the compose hint landed on top of the "Annotations"
-   * heading below it. Explicit `auto` so the section grows to fit. */
+  /* Not `height: 100%`. Inside an auto-height <section> that resolves to
+   * auto for layout but still lets the composer paint outside the section's
+   * box — the compose hint lands on top of the "Annotations" heading below
+   * it. Explicit `auto` so the section grows to fit. */
   height: auto;
   font-family: system-ui, sans-serif;
   font-size: 12px;

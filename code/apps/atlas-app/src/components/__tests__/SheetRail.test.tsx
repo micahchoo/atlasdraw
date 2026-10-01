@@ -4,11 +4,9 @@
 // column — and its relationship to the real
 // `registerSidebarTab → getSidebarTabs → DefaultSidebar` seam.
 //
-// Descended from `CollarSheetTabs.test.tsx`, the characterization suite
-// written before the redesign. Cases that pinned genuinely-correct behaviour
-// (addressing form, highlight derivation, the cross-seam open path) are kept.
-// Cases that pinned the drift the redesign deletes are INVERTED, and say so.
-// Two halves:
+// The cases pin the addressing form, highlight derivation, the cross-seam
+// open path, and that the rail is derived from the registered tabs (a
+// hardcoded tab list drifts). Two halves:
 //
 //  * "isolated" — `SheetRail` driven by a hand-rolled fake `excalidrawAPI`,
 //    which is all the component consumes (`getSidebarTabs` +
@@ -207,13 +205,11 @@ describe("SheetRail — driven by the API tab list", () => {
     const { api } = makeFakeAPI();
     const { container } = render(<SheetRail excalidrawAPI={api} />);
 
-    // WAS (CollarSheetTabs): `toEqual(["Layers", "Comments", "Library"])` plus
-    // an explicit assertion that no `search` trigger existed. That pinned the
-    // drift — `TABS` was a hardcoded 3-entry literal, so in collar mode (where
-    // LayerUI hides the floating sidebar trigger) canvas Search had no
-    // affordance at all. The rail is now derived from `getSidebarTabs()`, the
-    // same list `DefaultSidebar` renders, so every tab is reachable and
-    // stock tabs come first because the fork hardcodes them first.
+    // In collar mode LayerUI hides the floating sidebar trigger, so a tab
+    // missing from the rail (canvas Search, for one) has no affordance at
+    // all. The rail is derived from `getSidebarTabs()`, the same list
+    // `DefaultSidebar` renders, so every tab is reachable, and stock tabs
+    // come first because the fork hardcodes them first.
     expect(railNames(container)).toEqual([
       "Find on canvas",
       "Library",
@@ -299,11 +295,10 @@ describe("SheetRail — driven by the API tab list", () => {
       stock: false,
     });
 
-    // INVERTED. WAS: "is blind to tabs registered through the API" — the old
-    // rail subscribed to `onChange` (appState) only, and
+    // `onChange` (appState) does not report a registration, and
     // `useProjectSidebarTabs` is context-backed and unreachable from outside
-    // the editor tree, so a registration was invisible to it. The rail now
-    // subscribes to the same listener set `DefaultSidebar` does.
+    // the editor tree. So the rail subscribes to the same listener set
+    // `DefaultSidebar` does, and sees a tab registered through the API.
     await waitFor(() => {
       expect(railNames(container)).toEqual([
         "Find on canvas",
@@ -321,14 +316,13 @@ describe("SheetRail — keyboard + ARIA", () => {
     const { api } = makeFakeAPI();
     const { container } = render(<SheetRail excalidrawAPI={api} />);
 
-    // DELIBERATELY still not `role="tab"`. The old suite pinned that as a
-    // defect ("the rail should BE the sidebar's tablist"), which is not
-    // achievable honestly: the rail renders in the app's React tree
+    // DELIBERATELY not `role="tab"`. "The rail should BE the sidebar's
+    // tablist" is not achievable honestly: the rail renders in the app's React tree
     // (CollarShell's `tabs` slot) and the panels render inside the editor's, so
     // no tablist can own both. A `role="toolbar"` of toggle buttons is the
-    // truthful widget — and the duplicate-tablist problem is gone for real,
-    // because the sidebar's own trigger row is now suppressed rather than
-    // competing (see cross-seam below).
+    // truthful widget — and there is no duplicate tablist, because the
+    // sidebar's own trigger row is suppressed rather than competing (see
+    // cross-seam below).
     const toolbar = container.querySelector<HTMLElement>("[role=toolbar]")!;
     expect(toolbar).not.toBe(null);
     expect(toolbar.getAttribute("aria-orientation")).toBe("vertical");
@@ -336,10 +330,10 @@ describe("SheetRail — keyboard + ARIA", () => {
     expect(container.querySelector("[role=tablist]")).toBe(null);
     expect(container.querySelector("[role=tab]")).toBe(null);
 
-    // Every rail item is a `tab` item now — comment mode moved to the
-    // drawing-tools toolbar (see CommentModeButton.test.tsx). The selector
-    // stays scoped so a future non-tab occupant fails loudly rather than
-    // silently inheriting the disclosure contract asserted below.
+    // Every rail item is a `tab` item — comment mode is on the drawing-tools
+    // toolbar (see CommentModeButton.test.tsx). The selector stays scoped so
+    // a future non-tab occupant fails loudly rather than silently inheriting
+    // the disclosure contract asserted below.
     const buttons = Array.from(
       container.querySelectorAll<HTMLElement>("[data-rail-item=tab]"),
     );
@@ -417,10 +411,9 @@ describe("SheetRail — keyboard + ARIA", () => {
       container.querySelectorAll<HTMLElement>("[data-rail-item]"),
     );
 
-    // INVERTED. WAS: "puts all three triggers in the tab order (no roving
-    // tabindex) and ignores arrow keys" — plain buttons with no `tabindex`, so
-    // an N-tab rail was N tab stops and arrows did nothing, the opposite
-    // keyboard model from the sidebar's own trigger row 34px away.
+    // Roving tabindex: one tab stop for the whole rail, and arrows move
+    // within it — the same keyboard model as the sidebar's own trigger row.
+    // Plain buttons would make an N-tab rail N tab stops with dead arrows.
     expect(
       buttons.filter((b) => b.getAttribute("tabindex") === "0"),
     ).toHaveLength(1);
@@ -571,12 +564,10 @@ describe("SheetRail × real DefaultSidebar (unmocked cross-seam)", () => {
         container.querySelector(".default-sidebar"),
       );
 
-      // WAS: "both rails agree about which tab is active", asserting
-      // `aria-selected="true"` on `sidebar-tab-trigger-layers`. There is no
-      // second rail to agree with any more — `hideDefaultSidebarTabTriggers`
-      // removes the sidebar's own trigger row, which is what makes four tabs
-      // fit at all (that row is `repeat(auto-fit, minmax(0, 1fr))` inside a
-      // 294px header and rendered "Layersomments" with four labelled tabs).
+      // There is no second rail: `hideDefaultSidebarTabTriggers` removes the
+      // sidebar's own trigger row, which is what makes four tabs fit at all
+      // (that row is `repeat(auto-fit, minmax(0, 1fr))` inside a 294px
+      // header and renders "Layersomments" with four labelled tabs).
       expect(container.querySelector("[role=tablist]")).toBe(null);
       expect(
         container.querySelector('[data-testid="sidebar-tab-trigger-layers"]'),
@@ -623,10 +614,10 @@ describe("SheetRail × real DefaultSidebar (unmocked cross-seam)", () => {
         },
       ]);
 
-      // NEW. The old rail omitted `search` entirely and, with the floating
-      // trigger hidden in collar mode, canvas Search was reachable only by ⌘F
-      // or the ⌘K palette. The rail is the full tab list now — the stock
-      // labels come from the fork's own i18n, not from atlas-side literals.
+      // With the floating trigger hidden in collar mode, a rail without
+      // `search` leaves canvas Search reachable only by ⌘F or the ⌘K palette.
+      // The rail is the full tab list — the stock labels come from the fork's
+      // own i18n, not from atlas-side literals.
       expect(railNames(container)).toEqual([
         "Find on canvas",
         "Library",
@@ -674,10 +665,8 @@ describe("SheetRail × real DefaultSidebar (unmocked cross-seam)", () => {
         });
       });
 
-      // INVERTED. WAS: "a tab registered after mount appears in the sidebar's
-      // tablist but NOT in the collar rail" — the whole point of the redesign.
-      // The rail and the sidebar now read the same list off the same listener
-      // set, so a late registration is reachable from the frame.
+      // The rail and the sidebar read the same list off the same listener
+      // set, so a tab registered after mount is reachable from the frame.
       await waitFor(() => {
         expect(screen.getByTestId("sheet-rail-sheet")).toBeTruthy();
       });
@@ -704,10 +693,8 @@ describe("SheetRail × real DefaultSidebar (unmocked cross-seam)", () => {
     try {
       const { container } = await renderCrossSeam([]);
 
-      // INVERTED. WAS: "a collar trigger for an unregistered tab opens the
-      // sidebar on an empty tab" — the old rail's truth was a source literal,
-      // so `collar-tab-layers` existed with nothing behind it and opened a
-      // blank sidebar. Its own `// Expected:` note asked for exactly this.
+      // No trigger for an unregistered tab: a trigger with nothing behind it
+      // opens a blank sidebar.
       expect(screen.queryByTestId("sheet-rail-layers")).toBe(null);
       expect(railNames(container)).toEqual(["Find on canvas", "Library"]);
     } finally {

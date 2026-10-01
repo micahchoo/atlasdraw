@@ -160,9 +160,9 @@ describe("useMapWheelRouter", () => {
   // Chrome that scrolls itself keeps its own wheel.
   //
   // The listener is capture-phase on the editor root, which is an ancestor of
-  // the sidebar. Before this guard it preventDefaulted every wheel in the app,
-  // so nothing in the app could scroll: at 25 data layers the layer panel
-  // clipped 11 rows and no gesture could reach them.
+  // the sidebar. Without this guard it preventDefaults every wheel in the
+  // app, so nothing in the app can scroll: at 25 data layers the layer panel
+  // clips 11 rows and no gesture reaches them.
   // -------------------------------------------------------------------------
 
   /** jsdom reports 0 for both, so a scroll port has to be declared. */

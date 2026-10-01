@@ -496,7 +496,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 };
 
 // ---------------------------------------------------------------------------
-// Embed snippet (D1) — a read-only share URL doubles as a map embed. The embed
+// Embed snippet — a read-only share URL doubles as a map embed. The embed
 // route (`/embed…`) mounts the same document chromeless for cross-origin
 // <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
 // ---------------------------------------------------------------------------

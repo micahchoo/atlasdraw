@@ -119,8 +119,8 @@ export function visibleAnnotationIds(
  * Raster ids whose four corners, projected to the screen, overlap the
  * exported frame. Rasters paint no features, so `queryRenderedFeatures`
  * cannot answer for them; their corners are the whole of their footprint.
- * Before this, rasters were tested against the annotation set and never
- * reached the legend.
+ * Tested against the annotation set instead, a raster never reaches the
+ * legend.
  */
 export function visibleRasterIds(
   entries: readonly LegendSource[],

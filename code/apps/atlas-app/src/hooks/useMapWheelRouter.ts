@@ -46,10 +46,10 @@ const LINE_HEIGHT_PX = 25; // when deltaMode === DOM_DELTA_LINE
  *
  * The listener below is capture-phase on the whole editor root, which is an
  * ancestor of the sidebar, the ⌘K palette and every other bit of chrome. It
- * preventDefaults unconditionally, so before this guard a wheel anywhere in
- * the app zoomed the map and nothing in the app could ever scroll — the layer
- * panel at 25 layers and the stock library tab's own `overflow-y: auto` were
- * both unreachable by mouse.
+ * preventDefaults unconditionally, so without this guard a wheel anywhere in
+ * the app zooms the map and nothing in the app can scroll — the layer panel
+ * at 25 layers and the stock library tab's own `overflow-y: auto` are both
+ * unreachable by mouse.
  *
  * The rule is "a scroll port claims the wheel", not an allowlist of chrome:
  * chrome gets added, allowlists rot, and a scroll port is exactly the thing

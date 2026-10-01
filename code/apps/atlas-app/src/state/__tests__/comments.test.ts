@@ -6,8 +6,8 @@
 // through a shared Y.Doc update channel converge — the same wire-level
 // semantics a real y-websocket connection enforces.
 //
-// We do NOT mock y-websocket internals here (per advisor guidance). The
-// realtime-side test `comments-yjs.test.ts` owns wire-level integration.
+// We do NOT mock y-websocket internals here. collab.known-red.test.ts owns
+// wire-level integration, through a real relay.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import * as Y from "yjs";

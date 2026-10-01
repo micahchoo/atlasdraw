@@ -1,10 +1,9 @@
 /* SheetRail — persistent icon rail in the Collar frame's right column.
  *
  * Icons only (labels in aria-label + .tooltip), so the rail grows downward
- * and can never clip the way the 294px horizontal text tab strip it replaces
- * did. Sheet-edge treatment carried over from CollarSheetTabs: a raised paper
- * edge peeking from under the plate, hairline elevation, no drop shadow —
- * per .interface-design/system.md "Elevation Model".
+ * and can never clip the way a 294px horizontal text tab strip does.
+ * Sheet-edge treatment: a raised paper edge peeking from under the plate,
+ * hairline elevation, no drop shadow.
  *
  * Z-index: the rail itself is unpositioned and needs no band. .tooltip does:
  * it opens leftward, over the plate, so it has to out-rank everything the

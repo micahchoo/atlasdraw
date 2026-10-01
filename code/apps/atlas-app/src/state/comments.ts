@@ -149,7 +149,7 @@ export class CommentsLayer {
 
   /**
    * Append a new comment. The id is generated client-side (uuid-shaped slug,
-   * no auth in v1 per Q-P6-1). Returns the generated id.
+   * no auth). Returns the generated id.
    */
   addComment(input: {
     text: string;

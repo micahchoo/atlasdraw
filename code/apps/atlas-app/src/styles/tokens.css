@@ -1,7 +1,7 @@
-/* Atlasdraw Design Tokens — .interface-design/system.md is the canonical reference.
+/* Atlasdraw Design Tokens.
  *
- * Adopted incrementally: new components use these custom properties. Existing
- * hex literals in older CSS Modules stay until they're touched for other reasons.
+ * New components use these custom properties. Some CSS Modules still carry
+ * hex literals; replace them when the module is touched for other reasons.
  * Prefix --ad- (atlasdraw) avoids collisions with Excalidraw's --color-* namespace.
  * ------------------------------------------------------------------------- */
 

@@ -124,7 +124,7 @@ describe("LayerPanel", () => {
 
     render(withSession(<LayerPanel />));
 
-    // Symbology lives in the card body now, so it has to be opened first.
+    // Symbology lives in the card body, so it has to be opened first.
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:test-3"));
 
     const fillInput = screen.getByLabelText("Fill") as HTMLInputElement;
@@ -223,7 +223,7 @@ describe("LayerPanel", () => {
   });
 
   // -------------------------------------------------------------------------
-  // P3 — reorder with BOTH layer kinds present.
+  // Reorder with BOTH layer kinds present.
   // -------------------------------------------------------------------------
   describe("reorder with mixed layer kinds", () => {
     /** 2 data layers + 3 annotations, registered data-first. */
@@ -478,7 +478,7 @@ describe("LayerPanel — Threads section", () => {
 // Renaming a layer via the ⋯ overflow menu
 // ---------------------------------------------------------------------------
 //
-// The layer name is a read-only label now — a row click is the select gesture,
+// The layer name is a read-only label — a row click is the select gesture,
 // so the name must not fight it. Rename is behind the ⋯ menu's "Rename…" item
 // for every layer kind; these cases pin the menu path for annotations and for
 // a data layer (the expanded card's Rename button is covered in
@@ -678,7 +678,7 @@ describe("LayerPanel — raster layers", () => {
   });
 
   it("gives each raster its own reorder bounds, not the annotations'", () => {
-    // reindexByKind numbers per kind, so the first raster is "first" even with
+    // Reorder numbers per kind, so the first raster is "first" even with
     // annotations above it. If the two shared a counter this up button would
     // be enabled and moving it would address the wrong stack.
     seedScene(["el-1"]);

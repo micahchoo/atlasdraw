@@ -210,13 +210,11 @@ describe("StylePanel", () => {
     }
   });
 
-  // Replaces the two former dialog tests ("closes on ×" / "closes on Escape").
-  // Sheet-panel step 4 folded this component into the layer card, so there is
-  // no dialog to close and nothing to trap focus in — the card's disclosure
-  // owns open/closed now (see LayerPanel.card.test.tsx). What remains to pin
-  // here is that the surface is genuinely NOT a dialog any more, because the
-  // defect it caused (a 280px absolutely-positioned box inside a 294px
-  // overflow:hidden sidebar) came straight from that framing.
+  // This component is a section of the layer card: there is no dialog to
+  // close and nothing to trap focus in — the card's disclosure owns
+  // open/closed (see LayerPanel.card.test.tsx). Pin that the surface is NOT a
+  // dialog, because dialog framing (a 280px absolutely-positioned box inside
+  // a 294px overflow:hidden sidebar) is clipped and occluded at once.
   it("renders in normal flow — no dialog role, no fixed width, no z-index", () => {
     render(<StylePanel layerId="dl:t1" />);
 

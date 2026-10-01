@@ -242,8 +242,8 @@ function joinClass(...names: Array<string | false | null | undefined>): string {
 /**
  * GeoJSON geometry type of the layer, as the user would name it ("Polygon").
  *
- * Deliberately the raw GeoJSON name and not `inferGeometryType`'s MapLibre
- * kind ("fill"): provenance answers "what did I import?", and nobody imports a
+ * Deliberately the raw GeoJSON name and not the layer's MapLibre kind
+ * ("fill"): provenance answers "what did I import?", and nobody imports a
  * fill. Reads the first feature that actually has geometry — a leading
  * `geometry: null` feature is legal and would otherwise report "unknown" for a
  * layer full of polygons.
@@ -1013,8 +1013,8 @@ function SymbologySection({
           onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
-      {/* Was a floating dialog clipped by this panel's own overflow; now the
-          rest of this section. See StylePanel.tsx's header. */}
+      {/* In normal flow, the rest of this section: a floating dialog is
+          clipped by this panel's own overflow. See StylePanel.tsx's header. */}
       <StylePanel layerId={id} />
     </div>
   );
@@ -1322,9 +1322,8 @@ function AnnotationLayerRow({
  *
  * A row, not a card, for the same reason an annotation gets one: a card's four
  * sections are provenance, symbology, attributes and actions, and a raster has
- * exactly one of those. Symbology for a picture is an opacity slider, and that
- * is RA-7, after MIXI has seen a sheet on screen and can say what fading should
- * feel like.
+ * exactly one of those. Symbology for a picture is an opacity slider, and the
+ * raster row has none yet (`opacity` is stored).
  *
  * Delete lives in the ⋯ overflow menu with the same two-step confirm every
  * layer gets — a scanned sheet may be the only digital copy of the drawing,

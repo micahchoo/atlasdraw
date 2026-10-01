@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // GraticuleTicks — live longitude/latitude tick labels printed in the Collar
-// frame (shell direction: "The Collar", .interface-design/system.md).
+// frame ("The Collar").
 //
 // One component, two axes:
 //   axis="lon" — horizontal row above the plate; labels west → east.
 //   axis="lat" — vertical column left of the plate; labels north → south,
 //                rotated like a printed quad's margin.
 //
-// Subscribes to the MapLibre `move` event and reads map.getBounds() — the
-// same tick/format logic validated in the collar-shell prototype
-// (prototypes/collar-shell/index.html, fillTicks/fmt).
+// Subscribes to the MapLibre `move` event and reads map.getBounds().
 
 import { useEffect, useState } from "react";
 

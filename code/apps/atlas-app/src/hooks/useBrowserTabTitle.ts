@@ -2,9 +2,9 @@
 //
 // useBrowserTabTitle — mirrors the document name into `document.title`.
 //
-// Before this hook the tab always read "Atlasdraw" (index.html:6), so a user
-// with three maps open had three identical tabs. The suffix is kept so the
-// app is still identifiable when the sheet name is generic.
+// Without it the tab reads "Atlasdraw" (index.html), so a user with three
+// maps open has three identical tabs. The suffix is kept so the app is
+// still identifiable when the sheet name is generic.
 
 import { useEffect } from "react";
 
