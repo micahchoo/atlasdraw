@@ -8,26 +8,40 @@
 //   upscaled.
 // - The fake map renderer returns a canvas of the size a real MapLibre map
 //   would give at that pixel ratio (or a smaller one, to model the GPU limit).
-// - The fake `exportToCanvas` sizes its canvas through `getDimensions`, as
-//   the vendored implementation does, and falls back to 1 px per CSS px.
+// - The drawing layer is `renderDrawing` (lib/mapView.ts), whose geometry,
+//   the bearing included, is tested in mapView.test.ts. Here it is a canvas
+//   of the size it would return, so the test sees what the composite does
+//   with it.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+import { documentFrame } from "@atlasdraw/geo";
+
 import type { MapRenderer } from "../export";
+import type { MapView } from "../mapView";
 
 type Sized = { width: number; height: number; label: string };
 
-vi.mock("@atlasdraw/excalidraw", () => ({
-  exportToCanvas: async (opts: {
-    viewport: { width: number; height: number };
-    getDimensions?: (
-      w: number,
-      h: number,
-    ) => { width: number; height: number; scale?: number };
-  }): Promise<Sized> => {
-    const { width, height } = opts.viewport;
-    const dims = opts.getDimensions?.(width, height) ?? { width, height };
-    return { width: dims.width, height: dims.height, label: "drawings" };
+vi.mock("@atlasdraw/excalidraw", () => ({ exportToCanvas: vi.fn() }));
+
+/** The drawings each export asked for, with the view and ratio it gave. */
+const { drawingCalls } = vi.hoisted(() => ({
+  drawingCalls: [] as { view: MapView; pixelRatio: number }[],
+}));
+
+vi.mock("../mapView", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mapView")>()),
+  renderDrawing: async (
+    view: MapView,
+    _scene: unknown,
+    pixelRatio: number,
+  ): Promise<Sized> => {
+    drawingCalls.push({ view, pixelRatio });
+    return {
+      width: Math.floor(view.size.width * pixelRatio),
+      height: Math.floor(view.size.height * pixelRatio),
+      label: "drawings",
+    };
   },
 }));
 
@@ -89,11 +103,25 @@ class FakeOffscreenCanvas {
   }
 }
 
-/** The live map: only its CSS size is read; the renderer does the drawing. */
-function liveMap(width: number, height: number) {
+/** The live map: the fake renderer reads nothing off it. */
+function liveMap() {
+  return {} as unknown as import("maplibre-gl").Map;
+}
+
+/** The view an export is made for. */
+function viewOf(
+  width: number,
+  height: number,
+  credits: string[] = [],
+): MapView {
   return {
-    getCanvas: () => ({ clientWidth: width, clientHeight: height }),
-  } as unknown as import("maplibre-gl").Map;
+    center: { lng: 88.6, lat: 29.3 },
+    zoom: 9,
+    bearing: 30,
+    size: { width, height },
+    frame: documentFrame(88.6, 29.3),
+    credits,
+  };
 }
 
 const excalidrawAPI = {
@@ -106,8 +134,8 @@ let disposed = 0;
 
 /** Renders like MapLibre: floor(css × ratio), capped at `maxPixels` a side. */
 function mapRenderer(maxPixels = Infinity): MapRenderer {
-  return async (map, pixelRatio) => {
-    const { clientWidth, clientHeight } = map.getCanvas();
+  return async (_map, view, pixelRatio) => {
+    const { width: clientWidth, height: clientHeight } = view.size;
     const cap = Math.min(
       1,
       maxPixels / (clientWidth * pixelRatio),
@@ -130,6 +158,7 @@ beforeEach(() => {
   FakeOffscreenCanvas.last = null;
   FakeOffscreenCanvas.contextAvailable = true;
   disposed = 0;
+  drawingCalls.length = 0;
   vi.stubGlobal("OffscreenCanvas", FakeOffscreenCanvas);
 });
 
@@ -141,10 +170,15 @@ describe("exportPNG", () => {
   for (const ratio of [1, 2, 3]) {
     it(`at ${ratio}x is the view times ${ratio}, every layer drawn at that size`, async () => {
       const { exportPNG } = await import("../export");
-      const blob = await exportPNG(liveMap(1440, 900), excalidrawAPI, {
-        pixelRatio: ratio,
-        renderMap: mapRenderer(),
-      });
+      const blob = await exportPNG(
+        liveMap(),
+        excalidrawAPI,
+        viewOf(1440, 900),
+        {
+          pixelRatio: ratio,
+          renderMap: mapRenderer(),
+        },
+      );
       expect(blob.type).toBe("image/png");
       const out = FakeOffscreenCanvas.last!;
       expect(out.width).toBe(1440 * ratio);
@@ -165,7 +199,7 @@ describe("exportPNG", () => {
   it("fails, and says why, when the map cannot be drawn that large", async () => {
     const { exportPNG } = await import("../export");
     await expect(
-      exportPNG(liveMap(2560, 1440), excalidrawAPI, {
+      exportPNG(liveMap(), excalidrawAPI, viewOf(2560, 1440), {
         pixelRatio: 3,
         renderMap: mapRenderer(4096),
       }),
@@ -176,7 +210,7 @@ describe("exportPNG", () => {
 
   it("releases the offscreen map after a good export", async () => {
     const { exportPNG } = await import("../export");
-    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+    await exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600), {
       pixelRatio: 2,
       renderMap: mapRenderer(),
     });
@@ -185,7 +219,7 @@ describe("exportPNG", () => {
 
   it("fills the background colour across the whole output", async () => {
     const { exportPNG } = await import("../export");
-    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+    await exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600), {
       pixelRatio: 2,
       backgroundColor: "#102030",
       renderMap: mapRenderer(),
@@ -195,13 +229,33 @@ describe("exportPNG", () => {
     ]);
   });
 
-  it("prints the credit line in the bottom-right corner, at the export's scale", async () => {
+  it("draws the map and the drawing for the one view it is given", async () => {
     const { exportPNG } = await import("../export");
-    await exportPNG(liveMap(800, 600), excalidrawAPI, {
-      pixelRatio: 2,
-      renderMap: mapRenderer(),
-      credit: "© OpenStreetMap · © Example Aerials",
+    const view = viewOf(800, 600);
+    const seen: MapView[] = [];
+    const render = mapRenderer();
+    await exportPNG(liveMap(), excalidrawAPI, view, {
+      pixelRatio: 3,
+      renderMap: (map, v, ratio) => {
+        seen.push(v);
+        return render(map, v, ratio);
+      },
     });
+    expect(seen).toEqual([view]);
+    expect(drawingCalls).toEqual([{ view, pixelRatio: 3 }]);
+  });
+
+  it("prints the view's credits in the bottom-right corner, at the export's scale", async () => {
+    const { exportPNG } = await import("../export");
+    await exportPNG(
+      liveMap(),
+      excalidrawAPI,
+      viewOf(800, 600, ["© OpenStreetMap", "© Example Aerials"]),
+      {
+        pixelRatio: 2,
+        renderMap: mapRenderer(),
+      },
+    );
     const out = FakeOffscreenCanvas.last!;
     expect(out.texts).toHaveLength(1);
     const [t] = out.texts;
@@ -213,9 +267,18 @@ describe("exportPNG", () => {
     expect(t.y).toBeGreaterThan(out.height * 0.9);
   });
 
-  it("prints no credit when it is given none", async () => {
+  it("prints no credit when the caller prints it elsewhere", async () => {
     const { exportPNG } = await import("../export");
-    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+    await exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600, ["© OSM"]), {
+      renderMap: mapRenderer(),
+      credit: false,
+    });
+    expect(FakeOffscreenCanvas.last!.texts).toEqual([]);
+  });
+
+  it("prints no credit when the view has none", async () => {
+    const { exportPNG } = await import("../export");
+    await exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600), {
       renderMap: mapRenderer(),
     });
     expect(FakeOffscreenCanvas.last!.texts).toEqual([]);
@@ -223,7 +286,7 @@ describe("exportPNG", () => {
 
   it("leaves a transparent background transparent", async () => {
     const { exportPNG } = await import("../export");
-    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+    await exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600), {
       renderMap: mapRenderer(),
     });
     expect(FakeOffscreenCanvas.last!.fills).toEqual([]);
@@ -233,7 +296,7 @@ describe("exportPNG", () => {
     FakeOffscreenCanvas.contextAvailable = false;
     const { exportPNG } = await import("../export");
     await expect(
-      exportPNG(liveMap(800, 600), excalidrawAPI, {
+      exportPNG(liveMap(), excalidrawAPI, viewOf(800, 600), {
         renderMap: mapRenderer(),
       }),
     ).rejects.toThrow(/context unavailable/i);
@@ -253,36 +316,19 @@ describe("exportSize", () => {
 describe("exportCompositeDataURL", () => {
   it("is a high-quality JPEG of the same composite", async () => {
     const { exportCompositeDataURL } = await import("../export");
-    const url = await exportCompositeDataURL(liveMap(800, 600), excalidrawAPI, {
-      pixelRatio: 2.5,
-      renderMap: mapRenderer(),
-    });
+    const url = await exportCompositeDataURL(
+      liveMap(),
+      excalidrawAPI,
+      viewOf(800, 600),
+      {
+        pixelRatio: 2.5,
+        renderMap: mapRenderer(),
+      },
+    );
     expect(url.startsWith("data:image/jpeg;base64,")).toBe(true);
     const out = FakeOffscreenCanvas.last!;
     expect(out.encoded).toEqual({ type: "image/jpeg", quality: 0.92 });
     expect([out.width, out.height]).toEqual([2000, 1500]);
     expect(out.layers.map((l) => l.label)).toEqual(["map", "drawings"]);
-  });
-});
-
-describe("measureView", () => {
-  it("measures ground metres per CSS pixel across the centre of the view", async () => {
-    const { measureView } = await import("../export");
-    // A view at 60° N where each CSS px is 0.0001° of longitude. Along a
-    // parallel that is R · cos(lat) · 0.0001° in radians.
-    const degPerPx = 0.0001;
-    const map = {
-      getCanvas: () => ({ clientWidth: 1000, clientHeight: 500 }),
-      unproject: ([x]: [number, number]) => ({
-        lng: 10 + x * degPerPx,
-        lat: 60,
-      }),
-    } as unknown as import("maplibre-gl").Map;
-    const view = measureView(map);
-    const expected =
-      6371008.8 * Math.cos((60 * Math.PI) / 180) * ((degPerPx * Math.PI) / 180);
-    expect(view.width).toBe(1000);
-    expect(view.height).toBe(500);
-    expect(view.metersPerPixel / expected).toBeCloseTo(1, 4);
   });
 });

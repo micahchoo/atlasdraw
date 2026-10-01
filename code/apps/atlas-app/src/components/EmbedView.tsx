@@ -20,7 +20,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   MapCanvas,
   disableCameraRotation,
-  getBasemap,
   type MapCanvasInitialView,
 } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
@@ -37,7 +36,7 @@ import {
   usePopupOnClick,
   type PopupMap,
 } from "../hooks/useFeaturePopup";
-import { creditLine } from "../lib/tileLayers";
+import { creditText, documentCredits } from "../lib/mapView";
 import { fromFile, loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import { buildRoute, type SharedMap } from "../routes";
@@ -184,9 +183,11 @@ const EmbedCanvas: React.FC<{
   // control reads the style's sources, which carry none.
   const credit = useMemo(
     () =>
-      creditLine(
-        getBasemap(basemapId)?.attribution,
-        fromFile(doc).overlays ?? [],
+      creditText(
+        documentCredits({
+          basemap: basemapId,
+          overlays: fromFile(doc).overlays ?? [],
+        }),
       ),
     [doc, basemapId],
   );
