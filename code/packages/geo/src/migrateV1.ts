@@ -3,8 +3,8 @@
 // Version 1 elements (screen pixels + customData.geo) → world coordinates.
 //
 // A v1 element's truth is its anchor plus the `_lastSync` baselines, read the
-// way `CoordinateSync._projectElement` reads them (the fallbacks included), so
-// the migrated element draws where v1 draws it. Its screen x/y are ignored:
+// way the v1 editor's projection read them (the fallbacks included), so the
+// migrated element draws where v1 drew it. Its screen x/y are ignored:
 // they belong to whichever camera last saved the file.
 //
 // Every size in v1 is "the baseline at zRef, scaled by 2^(zoom − zRef)". In
@@ -102,8 +102,8 @@ export function savedCameraTurn(elements: readonly unknown[]): number {
  * Migrate one v1 element. An element without an anchor is returned as it is:
  * v1 draws it fixed to the screen, which no world position reproduces.
  *
- * `screen` and `hybrid` scale modes are migrated as geographic. No creation
- * path has stamped them since 2026-07-19 and no saved document uses them.
+ * `screen` and `hybrid` scale modes are migrated as geographic. The last v1
+ * releases stamped them on no new element, and no saved document uses them.
  *
  * `savedTurn` is `savedCameraTurn` of the element's file.
  *

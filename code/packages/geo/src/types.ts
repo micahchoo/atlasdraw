@@ -26,7 +26,7 @@ export type GeoAnchor =
 /** `customData` of an anchored element in a version 1 document. */
 export type GeoCustomData = {
   geo: GeoAnchor;
-  /** "geographic", "screen" or "hybrid". All migrate as geographic. */
+  /** v1 wrote "geographic", "screen" or "hybrid". All migrate as geographic. */
   scaleMode: string;
   projection: "mercator";
   schemaVersion: 1;
