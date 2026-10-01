@@ -21,6 +21,7 @@ import {
   CLOSE_FULL,
   CLOSE_LIMITED,
   CLOSE_NO_SPACE,
+  CLOSE_TOO_LARGE,
   registerRoomServer,
   type RoomServer,
   type RoomServerOptions,
@@ -259,6 +260,73 @@ describe("room server", () => {
     });
     expect(status).toBe(400);
     expect(relay.rooms.rooms()).toBe(0);
+  });
+
+  it("refuses a wrong token without reading the room's state", async () => {
+    const store = memoryStore();
+    const room = randomUUID();
+    store.save(room, {
+      verifier: "00".repeat(32),
+      state: new Uint8Array(1 << 20),
+    });
+    let loads = 0;
+    const counted: RoomStore = {
+      ...store,
+      load: (name) => {
+        loads += 1;
+        return store.load(name);
+      },
+    };
+    const relay = await startRelay(counted);
+    const outsider = connect(relay, room, token());
+    await until("the outsider is denied", () =>
+      outsider.closeCodes.includes(CLOSE_DENIED),
+    );
+    expect(loads).toBe(0);
+  });
+
+  it("answers an upgrade to a path that is not /yjs/ with 404", async () => {
+    const relay = await startRelay(memoryStore());
+    const status = await new Promise<number>((resolve) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/elsewhere`);
+      ws.on("unexpected-response", (_req, res) => resolve(res.statusCode ?? 0));
+      ws.on("error", () => resolve(-1));
+    });
+    expect(status).toBe(404);
+  });
+
+  it("refuses an update that would take the room past its cap, before it is in memory", async () => {
+    const cap = 64 * 1024;
+    const relay = await startRelay(memoryStore(), {
+      maxRoomBytes: cap,
+      saveDelayMs: 60_000,
+    });
+    const room = randomUUID();
+    const tok = token();
+    const a = connect(relay, room, tok);
+    const b = connect(relay, room, tok);
+    await until("both synced", () => a.provider.synced && b.provider.synced);
+
+    a.doc.getMap("meta").set("first", "x".repeat(40 * 1024));
+    await until("B sees the first value", () =>
+      b.doc.getMap("meta").has("first"),
+    );
+    a.doc.getMap("meta").set("second", "y".repeat(40 * 1024));
+    await until("A is closed as too large", () =>
+      a.closeCodes.includes(CLOSE_TOO_LARGE),
+    );
+    a.provider.destroy();
+    expect(a.closeReasons.find((r) => r.startsWith("room too large"))).toMatch(
+      new RegExp(`^room too large: \\d+ > ${cap}$`),
+    );
+
+    // The relay's copy never took the second value: a late joiner and B
+    // both lack it, while B keeps the room open.
+    const c = connect(relay, room, tok);
+    await until("C is synced", () => c.provider.synced);
+    expect(c.doc.getMap("meta").has("first")).toBe(true);
+    expect(c.doc.getMap("meta").has("second")).toBe(false);
+    expect(b.doc.getMap("meta").has("second")).toBe(false);
   });
 
   it("answers /health with the room and connection counts", async () => {
