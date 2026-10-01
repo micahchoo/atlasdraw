@@ -57,6 +57,32 @@ jobs:
       - run: yarn workspace @atlasdraw/bench bench
       - run: yarn workspace @atlasdraw/bench ci-gate
 
+  e2e:
+    name: Browser tests (chromium)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn workspace @atlasdraw/atlas-app exec playwright install --with-deps chromium
+      - run: yarn workspace @atlasdraw/atlas-app exec playwright test --project=chromium
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: code/apps/atlas-app/test-results
+
   self-host:
     name: Self-host images build and run
     runs-on: ubuntu-latest
