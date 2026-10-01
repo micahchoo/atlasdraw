@@ -278,7 +278,8 @@ describe("openSceneFile: a scene file dropped on the canvas", () => {
 
     await openSceneFile(session, excalidrawFile(), notify(), async () => true);
 
-    expect(kept).toEqual([before.id]);
+    // First the open map; then the new map, saved at once.
+    expect(kept[0]).toBe(before.id);
     expect(currentDocument()).not.toBe(before);
   });
 

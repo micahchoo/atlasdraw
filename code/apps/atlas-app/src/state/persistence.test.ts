@@ -8,7 +8,7 @@ import "fake-indexeddb/auto";
 import { openDB } from "idb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
+import { write, type AtlasdrawDocument } from "@atlasdraw/data";
 
 import {
   createPersistenceStore,
@@ -239,7 +239,10 @@ describe("createPersistenceStore — remoteSave callback (T13)", () => {
     const doc = makeDoc();
     store.markDirty();
     // The promise must NOT reject.
-    await expect(store.save(doc)).resolves.toBeUndefined();
+    await expect(store.save(doc)).resolves.toEqual({
+      kind: "saved",
+      revision: 1,
+    });
     expect(store.isDirty()).toBe(false);
     expect(remoteSave).toHaveBeenCalledTimes(1);
     expect(errSpy).toHaveBeenCalledWith(
@@ -443,5 +446,173 @@ describe("saveToDisk / openFromDisk — fallback path", () => {
         delete urlAny.revokeObjectURL;
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Never an older copy over a newer one (audit2-03 F1), one tab per map (F2),
+// a newer build's map kept and listed (F4)
+// ---------------------------------------------------------------------------
+
+describe("createPersistenceStore — the stored copy is never replaced by an older one", () => {
+  const NEWER = "2026-06-01T00:00:00.000Z";
+  // makeDoc's createdAt is 2026-05-06.
+  const OLDER = "2026-05-10T00:00:00.000Z";
+
+  it("an older copy that was not read from the slot is refused, and nothing reaches the server", async () => {
+    const dbName = freshDb();
+    const remoteSave = vi.fn(async () => {});
+    const tab = createPersistenceStore({ dbName });
+    const edited = makeDoc(NEWER);
+    await tab.save({
+      ...edited,
+      manifest: { ...edited.manifest, title: "Week of edits" },
+    });
+    await tab.close();
+
+    // A store that never read the slot: an opened file of the same map.
+    const other = createPersistenceStore({ dbName, remoteSave });
+    other.markDirty();
+    const result = await other.save(makeDoc(OLDER));
+
+    expect(result).toEqual({
+      kind: "conflict",
+      stored: { revision: 1, updatedAt: NEWER },
+    });
+    expect(remoteSave).not.toHaveBeenCalled();
+    expect(other.isDirty()).toBe(true);
+    expect((await other.load())?.manifest.title).toBe("Week of edits");
+    await other.close();
+  });
+
+  it("Open from disk forgets what the slot was read at", async () => {
+    const store = createPersistenceStore({ dbName: freshDb() });
+    await store.save(makeDoc(NEWER));
+    const input = vi.spyOn(document, "createElement");
+    // The fallback picker hands back a month-old copy of the same map.
+    const old = await write(makeDoc(OLDER));
+    input.mockImplementationOnce(((tag: string) => {
+      const el = document.createElementNS(
+        "http://www.w3.org/1999/xhtml",
+        tag,
+      ) as HTMLInputElement;
+      Object.defineProperty(el, "files", {
+        value: [Object.assign(old, { name: "plan.atlasdraw" })],
+      });
+      el.click = () => el.dispatchEvent(new Event("change"));
+      return el;
+    }) as typeof document.createElement);
+
+    const opened = await store.openFromDisk();
+    input.mockRestore();
+
+    expect(opened?.manifest.updatedAt).toBe(OLDER);
+    expect((await store.save(opened!)).kind).toBe("conflict");
+    await store.close();
+  });
+
+  it("replace: a save over the stored revision writes", async () => {
+    const dbName = freshDb();
+    const first = createPersistenceStore({ dbName });
+    await first.save(makeDoc(NEWER));
+    await first.close();
+    const store = createPersistenceStore({ dbName });
+    const conflict = await store.save(makeDoc(OLDER));
+    if (conflict.kind !== "conflict") {
+      throw new Error("expected a conflict");
+    }
+
+    const replaced = await store.save(makeDoc(OLDER), {
+      over: conflict.stored.revision,
+    });
+
+    expect(replaced).toEqual({ kind: "saved", revision: 2 });
+    expect((await store.load())?.manifest.updatedAt).toBe(OLDER);
+    await store.close();
+  });
+
+  it("a tab that read the slot saves on top of it, again and again", async () => {
+    const store = createPersistenceStore({ dbName: freshDb() });
+    expect((await store.save(makeDoc(NEWER))).kind).toBe("saved");
+    // Its own later save has an older timestamp only if the clock moved
+    // back; the revision it read is what counts.
+    expect((await store.save(makeDoc(OLDER))).kind).toBe("saved");
+    await store.close();
+  });
+});
+
+describe("createPersistenceStore — two tabs", () => {
+  const A = "01J0000000000000000000000A";
+  const B = "01J0000000000000000000000B";
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("a reload opens the map this tab had open, not the one another tab saved last", async () => {
+    const dbName = freshDb();
+    const tabA = createPersistenceStore({ dbName });
+    await tabA.save(makeDoc(undefined, A));
+    // Tab B saves later, from its own session.
+    const own = new Map<string, string>();
+    const tabB = createPersistenceStore({
+      dbName,
+      tabStorage: {
+        getItem: (k) => own.get(k) ?? null,
+        setItem: (k, v) => void own.set(k, v),
+      },
+    });
+    await tabB.save(makeDoc(undefined, B));
+
+    expect((await tabA.load())?.manifest.id).toBe(A);
+    await tabA.close();
+    await tabB.close();
+  });
+
+  it("a fresh tab opens the map saved last in this browser", async () => {
+    const dbName = freshDb();
+    const tabA = createPersistenceStore({ dbName });
+    await tabA.save(makeDoc(undefined, A));
+    sessionStorage.clear();
+    const fresh = createPersistenceStore({ dbName });
+    expect((await fresh.load())?.manifest.id).toBe(A);
+    await tabA.close();
+    await fresh.close();
+  });
+});
+
+describe("createPersistenceStore — a map from a newer build", () => {
+  it("is kept and listed as needing a newer Atlasdraw, never moved aside", async () => {
+    const dbName = freshDb();
+    const store = createPersistenceStore({ dbName });
+    await store.save(makeDoc());
+    // What a newer build writes: manifest version 99 in the bytes and the
+    // summary.
+    const db = await openDB(dbName, 1);
+    const JSZip = (await import("jszip")).default;
+    const stored = (await db.get("state", `doc:${ULID}`)) as {
+      bytes: Uint8Array;
+    };
+    const zip = await JSZip.loadAsync(stored.bytes);
+    const manifest = JSON.parse(
+      await zip.file("manifest.json")!.async("string"),
+    );
+    zip.file("manifest.json", JSON.stringify({ ...manifest, version: 99 }));
+    const bytes = await zip.generateAsync({ type: "uint8array" });
+    await db.put("state", { bytes, type: "x" }, `doc:${ULID}`);
+    const summary = await db.get("state", `summary:${ULID}`);
+    await db.put("state", { ...summary, version: 99 }, `summary:${ULID}`);
+
+    await expect(store.open(ULID)).rejects.toThrow();
+    await expect(store.load()).rejects.toThrow();
+
+    const keys = (await db.getAllKeys("state")).map(String);
+    db.close();
+    expect(keys).toContain(`doc:${ULID}`);
+    expect(keys.some((k) => k.startsWith("quarantine:"))).toBe(false);
+    expect(await store.list()).toEqual([
+      expect.objectContaining({ id: ULID, needsNewerBuild: true }),
+    ]);
+    await store.close();
   });
 });

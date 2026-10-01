@@ -178,6 +178,15 @@ async function openInPlace(
     notify?.success(
       `Opened "${loaded.manifest.title}" — ${n} layer${n === 1 ? "" : "s"}`,
     );
+    // Save now, not after the autosave delay: when this browser holds a
+    // newer copy of the same map, the user is asked while the open is fresh
+    // (session/mapOwnership.ts).
+    void s.persistence
+      .getState()
+      .forceSave()
+      .catch(() => {
+        /* the autosave reports a failed save */
+      });
   } catch (err) {
     if (isPickerCancel(err)) {
       return;

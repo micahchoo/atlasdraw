@@ -182,6 +182,8 @@ export function MyMapsDialog({
               >
                 {maps.map((map) => {
                   const isOpen = map.id === openId;
+                  // Written by a newer Atlasdraw: kept, not openable here.
+                  const newer = map.needsNewerBuild === true;
                   const title = titles.get(map.id) ?? map.title;
                   return (
                     <li
@@ -199,15 +201,26 @@ export function MyMapsDialog({
                           {isOpen && (
                             <span className={styles.openBadge}>Open now</span>
                           )}
+                          {newer && (
+                            <span className={styles.openBadge}>
+                              Needs a newer Atlasdraw
+                            </span>
+                          )}
                         </span>
                       </div>
                       <button
                         type="button"
                         className={styles.button}
                         onClick={() => void open(map.id)}
-                        disabled={isOpen}
-                        aria-disabled={isOpen ? "true" : undefined}
-                        title={isOpen ? "This map is open" : undefined}
+                        disabled={isOpen || newer}
+                        aria-disabled={isOpen || newer ? "true" : undefined}
+                        title={
+                          isOpen
+                            ? "This map is open"
+                            : newer
+                            ? "A newer version of Atlasdraw saved this map. Update Atlasdraw to open it."
+                            : undefined
+                        }
                         aria-label={`Open ${title}`}
                         data-testid="my-maps-open"
                       >

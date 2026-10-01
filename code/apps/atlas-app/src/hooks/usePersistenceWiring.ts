@@ -15,7 +15,11 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
-import { createPersistenceStore, startAutoSave } from "../state/persistence";
+import {
+  createPersistenceStore,
+  isNewerBuildError,
+  startAutoSave,
+} from "../state/persistence";
 import { currentDocument, followDocument } from "../state/document";
 import {
   liveCamera,
@@ -33,9 +37,11 @@ import {
   type ShareLoadResult,
 } from "../state/loadShareDocument";
 import { copyOfSharedMap } from "../state/myMaps";
+import { answerConflict, holdOpenMaps } from "../session/mapOwnership";
 import { buildRoute, type SharedMap } from "../routes";
 
 import type { EditorSession } from "../session/EditorSession";
+import type { Conflict } from "../state/documentStore";
 
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
@@ -112,17 +118,45 @@ export function usePersistenceWiring(
     // `forceSave` saves now, past the autosave delay: My maps and a room
     // call it before the open map leaves the editor. A room's document is the relay's to keep (ADR-0018): the autosave
     // writes only the user's own maps.
+    // A tab that does not hold the map (session/mapOwnership.ts) writes
+    // nothing either.
     const getDoc = () => {
       const doc = currentDocument();
-      return isRoomDocument(doc)
+      return isRoomDocument(doc) || persistence.getState().readOnly
         ? null
         : toFile(doc, undefined, liveCamera(view.getState().map));
     };
+    // A save that met a newer copy asks the user, once at a time; the
+    // autosave's later saves of the same map wait for the answer.
+    const ownership = {
+      view,
+      persistence,
+      notify: {
+        success: documentNotify.success ?? (() => {}),
+        error: documentNotify.error,
+      },
+    };
+    let answering: Promise<void> | null = null;
+    const onConflict = (conflict: Conflict, doc: AtlasdrawDocument) => {
+      answering ??= answerConflict(ownership, store, conflict, doc)
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn("[atlasdraw] could not settle a save conflict", err);
+        })
+        .finally(() => {
+          answering = null;
+        });
+      return answering;
+    };
+    const unholdMaps = holdOpenMaps(ownership, store);
     persistence.getState().setForceSave(async () => {
       try {
         const doc = getDoc();
         if (doc) {
-          await store.save(doc);
+          const result = await store.save(doc);
+          if (result.kind === "conflict") {
+            await onConflict(result, doc);
+          }
         }
         persistence.getState().setLastSavedAt(Date.now());
         persistence.getState().setDraining(false);
@@ -206,7 +240,9 @@ export function usePersistenceWiring(
         // eslint-disable-next-line no-console
         console.warn("[atlasdraw] persistence.load() failed", err);
         documentNotify.error(
-          "Couldn't load your saved map — starting from a blank canvas",
+          isNewerBuildError(err)
+            ? "A newer version of Atlasdraw saved your last map. It is kept in My maps; update Atlasdraw to open it."
+            : "Couldn't load your saved map — starting from a blank canvas",
         );
       } finally {
         persistence.getState().setOwnMapLoaded(true);
@@ -252,6 +288,7 @@ export function usePersistenceWiring(
           "Auto-save failed — recent changes may not be saved",
         );
       },
+      (conflict, doc) => void onConflict(conflict, doc),
     );
 
     // Closing or leaving the tab: write unsaved changes now, not after the
@@ -282,6 +319,7 @@ export function usePersistenceWiring(
       unsubDirty();
       unsubDocument();
       unsubCamera();
+      unholdMaps();
       persistence.getState().setOwnMapLoaded(true);
       dispose();
       persistence.getState().setPersistenceStore(null);

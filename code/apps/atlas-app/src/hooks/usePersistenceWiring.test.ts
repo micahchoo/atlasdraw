@@ -62,7 +62,13 @@ const FAKE_DOC = {
 function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
   const dirtyListeners = new Set<() => void>();
   const store: PersistenceStore = {
-    save: vi.fn(async () => {}),
+    save: vi.fn(async () => ({ kind: "saved" as const, revision: 1 })),
+    claim: vi.fn(async (id: string) => ({
+      kind: "lease" as const,
+      id,
+      release: () => {},
+      lost: new Promise<void>(() => {}),
+    })),
     load: vi.fn(async () => null),
     list: vi.fn(async () => []),
     open: vi.fn(async () => null),

@@ -151,6 +151,8 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
           title={dialog.title}
           body={dialog.body}
           confirmLabel={dialog.confirmLabel}
+          cancelLabel={dialog.cancelLabel}
+          tone={dialog.tone}
           onConfirm={() => dialog.answer(true)}
           onCancel={() => dialog.answer(false)}
         />

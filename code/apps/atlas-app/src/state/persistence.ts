@@ -13,7 +13,9 @@
 
 import { openDB, type IDBPDatabase } from "idb";
 import {
+  AtlasdrawFormatError,
   AtlasdrawWriteCache,
+  CURRENT_MANIFEST_VERSION,
   read,
   write,
   type AtlasdrawDocument,
@@ -23,6 +25,20 @@ import {
 import { safeFileName } from "../lib/safeFileName";
 
 import { documentFromExcalidrawJson } from "./documentIO";
+import {
+  STORE,
+  createDocumentStore,
+  docKey,
+  storedToBlob,
+  summaryKey,
+  type Conflict,
+  type HeldElsewhere,
+  type Lease,
+  type Locks,
+  type SaveResult,
+  type StoredBlob,
+  type StoredSummary,
+} from "./documentStore";
 
 // ---------------------------------------------------------------------------
 // IndexedDB schema
@@ -30,87 +46,20 @@ import { documentFromExcalidrawJson } from "./documentIO";
 
 const DB_NAME = "atlasdraw-autosave";
 const DB_VERSION = 1;
-const STORE = "state";
-/** Each document's bytes live under `doc:<manifest id>`. */
-const docKey = (id: string): string => `doc:${id}`;
-/**
- * What My maps shows of each document, written beside its bytes on every
- * save so the list never decodes a bundle: `summary:<manifest id>`.
- */
-const summaryKey = (id: string): string => `summary:${id}`;
 const DOC_PREFIX = "doc:";
-/** The id of the document saved last: the one a reload opens. */
+/**
+ * The id of the document saved or opened last in this browser. A tab keeps
+ * its own copy in sessionStorage (TAB_LAST_OPENED) and reloads into that;
+ * this key is only what a fresh tab opens.
+ */
 const KEY_LAST_OPENED = "lastOpened";
+const TAB_LAST_OPENED = "atlasdraw:lastOpened";
 /** The one slot an older build wrote every document into. Read, then moved. */
 const KEY_LEGACY_CURRENT = "current";
 /** A document's File System Access handle: `fileHandle:<manifest id>`. */
 const handleKey = (id: string): string => `fileHandle:${id}`;
 /** Prefix for stored copies that could not be read. Never overwritten. */
 const KEY_QUARANTINE_PREFIX = "quarantine:";
-
-// Some IndexedDB implementations (notably the polyfill that backs Node test
-// environments) cannot structured-clone a Blob without a working
-// URL.createObjectURL. We round-trip via {bytes, type} — ArrayBuffers and
-// typed arrays are universally cloneable.
-interface StoredBlob {
-  readonly bytes: Uint8Array;
-  readonly type: string;
-}
-
-// `Blob.prototype.arrayBuffer` is universal in real browsers since 2018, but
-// jsdom 22 (the test environment) ships a stub Blob without it. FileReader
-// is present in both, so we use it as a portable fallback.
-const blobToBytes = (blob: Blob): Promise<Uint8Array> => {
-  if (
-    typeof (blob as { arrayBuffer?: () => Promise<ArrayBuffer> })
-      .arrayBuffer === "function"
-  ) {
-    return blob.arrayBuffer().then((buf) => new Uint8Array(buf));
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (result instanceof ArrayBuffer) {
-        resolve(new Uint8Array(result));
-      } else {
-        reject(new Error("FileReader returned non-ArrayBuffer result"));
-      }
-    };
-    reader.onerror = () =>
-      reject(reader.error ?? new Error("FileReader failed"));
-    reader.readAsArrayBuffer(blob);
-  });
-};
-
-const blobToStored = async (blob: Blob): Promise<StoredBlob> => {
-  const bytes = await blobToBytes(blob);
-  return { bytes, type: blob.type };
-};
-
-const storedToBlob = (stored: StoredBlob): Blob => {
-  const blob = new Blob([stored.bytes as unknown as BlobPart], {
-    type: stored.type,
-  });
-  // jsdom 22's Blob lacks `.arrayBuffer()`. Downstream consumers (notably
-  // `@atlasdraw/data`'s `read()`) call it. We own these bytes, so attach a
-  // working method when the env's Blob doesn't ship one. No-op in real
-  // browsers / Node, where arrayBuffer is native.
-  if (
-    typeof (blob as { arrayBuffer?: () => Promise<ArrayBuffer> })
-      .arrayBuffer !== "function"
-  ) {
-    Object.defineProperty(blob, "arrayBuffer", {
-      value: async () => {
-        const copy = new Uint8Array(stored.bytes);
-        return copy.buffer;
-      },
-      writable: true,
-      configurable: true,
-    });
-  }
-  return blob;
-};
 
 // File System Access API types are not in TS lib.dom for every TS target the
 // monorepo touches; declare the *minimum* surface we use rather than depend on
@@ -158,6 +107,18 @@ export interface DocumentSummary {
   readonly title: string;
   /** ISO time of the last change to the map's content. */
   readonly updatedAt: string;
+  /**
+   * Written by a newer Atlasdraw, in a format this build cannot read. Kept
+   * and listed, never moved aside: the newer build still opens it.
+   */
+  readonly needsNewerBuild?: boolean;
+}
+
+/** True when `err` says the bytes are from a newer build. */
+export function isNewerBuildError(err: unknown): boolean {
+  return (
+    err instanceof AtlasdrawFormatError && err.code === "UNSUPPORTED_VERSION"
+  );
 }
 
 function isSummary(v: unknown): v is DocumentSummary {
@@ -174,10 +135,25 @@ function isSummary(v: unknown): v is DocumentSummary {
 export interface PersistenceStore {
   /**
    * Serialize doc into its own IndexedDB slot (by manifest id) and make it
-   * the one a reload opens; clears dirty if no edits raced.
+   * the one a reload opens; clears dirty if no edits raced. A Conflict, and
+   * no write, when the slot holds a newer copy (DocumentStore.save): the
+   * caller asks the user, then saves with `over` the stored revision to
+   * replace it, or saves a copy under a new id. The server gets only what
+   * was saved here.
    */
-  save(doc: AtlasdrawDocument): Promise<void>;
-  /** Read the document saved last; null on an empty DB. */
+  save(
+    doc: AtlasdrawDocument,
+    options?: { over?: number },
+  ): Promise<SaveResult>;
+  /** Hold the map for this tab (DocumentStore.claim). */
+  claim(
+    id: string,
+    options?: { steal?: boolean },
+  ): Promise<Lease | HeldElsewhere>;
+  /**
+   * Read the document this tab had open, or for a fresh tab the one saved
+   * last in this browser; null on an empty DB.
+   */
   load(): Promise<AtlasdrawDocument | null>;
   /** Every saved document, the last changed first. Unreadable ones are left out. */
   list(): Promise<DocumentSummary[]>;
@@ -218,6 +194,19 @@ export interface CreatePersistenceStoreOptions {
   remoteSave?: (blob: Blob, documentId: string) => Promise<void>;
   /** Callback when remoteSave fails (IDB ok, server not). */
   onRemoteSaveFailed?: () => void;
+  /** Where this tab keeps its own last-opened map; null for none. */
+  tabStorage?: Pick<Storage, "getItem" | "setItem"> | null;
+  /** Web Locks for one tab per map; the browser's by default. */
+  locks?: Locks | null;
+}
+
+function sessionStore(): Pick<Storage, "getItem" | "setItem"> | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    // A sandboxed frame may refuse the access itself.
+    return null;
+  }
 }
 
 /**
@@ -245,6 +234,30 @@ export function createPersistenceStore(
     }
     return dbPromise;
   };
+
+  const documents = createDocumentStore(
+    db,
+    options.locks === undefined ? undefined : options.locks,
+  );
+  const tab =
+    options.tabStorage === undefined ? sessionStore() : options.tabStorage;
+  const rememberOpen = async (
+    database: IDBPDatabase,
+    id: string,
+  ): Promise<void> => {
+    await database.put(STORE, id, KEY_LAST_OPENED);
+    try {
+      tab?.setItem(TAB_LAST_OPENED, id);
+    } catch {
+      /* storage full or refused: the IDB key still holds it */
+    }
+  };
+  /**
+   * The slot revision each map was read or last saved at, in this tab. A map
+   * not here (opened from a file, a link, new) has no base: its save is
+   * compared by updatedAt.
+   */
+  const bases = new Map<string, number>();
 
   // Dirty bit + listener set.
   let dirty = false;
@@ -293,7 +306,10 @@ export function createPersistenceStore(
     }
   };
 
-  const save = (doc: AtlasdrawDocument): Promise<void> => {
+  const save = (
+    doc: AtlasdrawDocument,
+    saveOptions: { over?: number } = {},
+  ): Promise<SaveResult> => {
     // Capture dirtySeq SYNCHRONOUSLY at call-time. If we deferred this into
     // the enqueueWrite microtask, any `markDirty()` issued by the caller
     // immediately after `save(doc)` (before awaiting) would land BEFORE the
@@ -301,17 +317,24 @@ export function createPersistenceStore(
     const seqAtStart = dirtySeq;
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
-      const stored = await blobToStored(blob);
-      const database = await db();
       const id = doc.manifest.id;
-      await database.put(STORE, stored, docKey(id));
-      const summary: DocumentSummary = {
+      const result = await documents.save(
         id,
-        title: doc.manifest.title,
-        updatedAt: doc.manifest.updatedAt,
-      };
-      await database.put(STORE, summary, summaryKey(id));
-      await database.put(STORE, id, KEY_LAST_OPENED);
+        blob,
+        saveOptions.over ?? bases.get(id) ?? null,
+        {
+          title: doc.manifest.title,
+          updatedAt: doc.manifest.updatedAt,
+          version: doc.manifest.version,
+        },
+      );
+      if (result.kind === "conflict") {
+        // Nothing written, here or on the server; the map stays dirty.
+        return result;
+      }
+      bases.set(id, result.revision);
+      const database = await db();
+      await rememberOpen(database, id);
       // The older single slot held this document or an earlier one; either
       // way its content now has a slot of its own.
       await database.delete(STORE, KEY_LEGACY_CURRENT);
@@ -337,6 +360,7 @@ export function createPersistenceStore(
           options.onRemoteSaveFailed?.();
         }
       }
+      return result;
     });
   };
 
@@ -352,6 +376,10 @@ export function createPersistenceStore(
     try {
       return await read(storedToBlob(stored));
     } catch (err) {
+      if (isNewerBuildError(err)) {
+        // Not damaged: a newer Atlasdraw wrote it. Leave it where it is.
+        throw err;
+      }
       // Move the unreadable copy aside before anything can save over it. A
       // later release, or a person, may still recover it.
       await database.put(
@@ -365,12 +393,36 @@ export function createPersistenceStore(
     }
   };
 
+  /** Read a map's slot and note the revision it was read at. */
+  const readMap = async (
+    database: IDBPDatabase,
+    id: string,
+  ): Promise<AtlasdrawDocument | null> => {
+    const revision = await documents.revision(id);
+    const doc = await readSlot(database, docKey(id));
+    if (doc && revision !== null) {
+      bases.set(id, revision);
+    }
+    return doc;
+  };
+
   const load = async (): Promise<AtlasdrawDocument | null> => {
     const database = await db();
+    let ownId: string | null = null;
+    try {
+      ownId = tab?.getItem(TAB_LAST_OPENED) ?? null;
+    } catch {
+      ownId = null;
+    }
+    if (ownId && (await database.getKey(STORE, docKey(ownId))) !== undefined) {
+      return readMap(database, ownId);
+    }
     const lastId = (await database.get(STORE, KEY_LAST_OPENED)) as
       | string
       | undefined;
-    return readSlot(database, lastId ? docKey(lastId) : KEY_LEGACY_CURRENT);
+    return lastId
+      ? readMap(database, lastId)
+      : readSlot(database, KEY_LEGACY_CURRENT);
   };
 
   const list = async (): Promise<DocumentSummary[]> => {
@@ -383,10 +435,14 @@ export function createPersistenceStore(
       const id = key.slice(DOC_PREFIX.length);
       const summary: unknown = await database.get(STORE, summaryKey(id));
       if (isSummary(summary)) {
+        const version = (summary as Partial<StoredSummary>).version;
         summaries.push({
           id: summary.id,
           title: summary.title,
           updatedAt: summary.updatedAt,
+          ...(typeof version === "number" && version > CURRENT_MANIFEST_VERSION
+            ? { needsNewerBuild: true }
+            : {}),
         });
         continue;
       }
@@ -400,8 +456,17 @@ export function createPersistenceStore(
           title: manifest.title,
           updatedAt: manifest.updatedAt,
         });
-      } catch {
-        // Not listed. open() and load() are where a bad copy is moved aside.
+      } catch (err) {
+        if (isNewerBuildError(err)) {
+          summaries.push({
+            id,
+            title: id,
+            updatedAt: "",
+            needsNewerBuild: true,
+          });
+        }
+        // Otherwise not listed. open() and load() are where a bad copy is
+        // moved aside.
       }
     }
     return summaries.sort((a, b) =>
@@ -411,9 +476,9 @@ export function createPersistenceStore(
 
   const open = async (id: string): Promise<AtlasdrawDocument | null> => {
     const database = await db();
-    const doc = await readSlot(database, docKey(id));
+    const doc = await readMap(database, id);
     if (doc) {
-      await database.put(STORE, id, KEY_LAST_OPENED);
+      await rememberOpen(database, id);
     }
     return doc;
   };
@@ -425,6 +490,7 @@ export function createPersistenceStore(
       await database.delete(STORE, summaryKey(id));
       await database.delete(STORE, handleKey(id));
       handles.delete(id);
+      bases.delete(id);
       if ((await database.get(STORE, KEY_LAST_OPENED)) === id) {
         await database.delete(STORE, KEY_LAST_OPENED);
       }
@@ -610,6 +676,9 @@ export function createPersistenceStore(
       return documentFromExcalidrawJson(await blob.text(), camera);
     }
     const doc = await read(blob);
+    // A file is not the slot: its first save is compared by updatedAt, so an
+    // older file of the same map cannot replace the newer browser copy.
+    bases.delete(doc.manifest.id);
     if (openedHandle) {
       await setStoredFileHandle(doc.manifest.id, openedHandle);
     }
@@ -639,6 +708,7 @@ export function createPersistenceStore(
 
   return {
     save,
+    claim: (id, claimOptions) => documents.claim(id, claimOptions),
     load,
     list,
     open,
@@ -685,6 +755,8 @@ export function startAutoSave(
   maxFlushMs = 30000,
   onSaved?: () => void,
   onSaveError?: (err: unknown) => void,
+  /** The slot held a newer copy; nothing was written. */
+  onConflict?: (conflict: Conflict, doc: AtlasdrawDocument) => void,
 ): () => void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let ceilingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -714,7 +786,9 @@ export function startAutoSave(
     // before durability, which is dishonest.
     void store
       .save(snapshot)
-      .then(() => onSaved?.())
+      .then((result) =>
+        result.kind === "saved" ? onSaved?.() : onConflict?.(result, snapshot),
+      )
       .catch((err) => {
         // eslint-disable-next-line no-console
         console.error("[persistence] auto-save failed", err);

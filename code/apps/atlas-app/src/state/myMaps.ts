@@ -31,6 +31,7 @@ import {
   refusedMessage,
   type CameraSource,
 } from "./documentIO";
+import { isNewerBuildError } from "./persistence";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 
 import type { PersistenceStateStore } from "./persistenceState";
@@ -103,7 +104,11 @@ export async function openSavedMap(
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not open a saved map", err);
-    ctx.notify?.error("This map is damaged and cannot open.");
+    ctx.notify?.error(
+      isNewerBuildError(err)
+        ? "A newer version of Atlasdraw saved this map. Update Atlasdraw to open it; the map is kept."
+        : "This map is damaged and cannot open.",
+    );
     return false;
   }
 }

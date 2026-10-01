@@ -247,6 +247,8 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
     excalidrawAPI: api,
   });
   const isDirty = useStore(session.persistence, (s) => s.isDirty);
+  // Another tab holds the open map (session/mapOwnership.ts).
+  const readOnly = useStore(session.persistence, (s) => s.readOnly);
   const onboarding = useOnboarding();
   const announce = useAnnounce();
   const onDrawingChange = useExcalidrawChangeHandler({
@@ -330,6 +332,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
             <Excalidraw
               initialData={EXCALIDRAW_INITIAL_DATA}
               gridModeEnabled={false}
+              viewModeEnabled={readOnly}
               onExcalidrawAPI={setApi}
               onChange={onDrawingChange}
               onScrollChange={bridge?.onScrollChange}

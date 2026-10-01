@@ -219,6 +219,14 @@ describe("useRoom", () => {
         }),
       save: vi.fn(async (doc: AtlasdrawDocument) => {
         saved.push(doc.manifest.title);
+        return { kind: "saved" as const, revision: 1 };
+      }),
+      // One tab per map (session/mapOwnership.ts): this tab holds every map.
+      claim: async (id: string) => ({
+        kind: "lease" as const,
+        id,
+        release: () => {},
+        lost: new Promise<void>(() => {}),
       }),
       onDirty: () => () => {},
       markDirty: () => {},

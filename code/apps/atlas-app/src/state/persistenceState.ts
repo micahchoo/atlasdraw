@@ -40,6 +40,12 @@ export type PersistenceState = {
    */
   ownMapLoaded: boolean;
   /**
+   * True when this tab must not write the open map: another tab holds it
+   * (session/mapOwnership.ts). The autosave saves nothing and the drawing
+   * is in view mode.
+   */
+  readOnly: boolean;
+  /**
    * Save now, set by usePersistenceWiring when it makes the persistence
    * store. Calls `store.save(getDoc())` directly, bypassing the
    * debounce timer. Returns a promise that resolves when the IDB write (and
@@ -54,6 +60,7 @@ export type PersistenceState = {
   setForceSave: (fn: () => Promise<void>) => void;
   setRemoteSaveFailed: (v: boolean) => void;
   setOwnMapLoaded: (v: boolean) => void;
+  setReadOnly: (v: boolean) => void;
 };
 
 export type PersistenceStateStore = StoreApi<PersistenceState>;
@@ -67,6 +74,7 @@ export function createPersistenceState(): PersistenceStateStore {
       lastSavedAt: null,
       remoteSaveFailed: false,
       ownMapLoaded: true,
+      readOnly: false,
       // A no-op until usePersistenceWiring sets it, so an early call is safe.
       forceSave: () => Promise.resolve(),
 
@@ -120,6 +128,11 @@ export function createPersistenceState(): PersistenceStateStore {
       setOwnMapLoaded: (v) =>
         set((s) => {
           s.ownMapLoaded = v;
+        }),
+
+      setReadOnly: (v) =>
+        set((s) => {
+          s.readOnly = v;
         }),
     })),
   );
