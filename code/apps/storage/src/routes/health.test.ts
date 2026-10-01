@@ -1,6 +1,6 @@
 // @atlasdraw/storage — Phase 4 T18: /health endpoint tests.
-// ISSUES.md Issue 8: /health now pings the adapter's real dependencies
-// instead of returning an unconditional 200.
+// /health pings the adapter's real dependencies instead of returning an
+// unconditional 200, and a failure carries no detail (it goes to the log).
 
 import Fastify from "fastify";
 import { describe, it, expect, vi } from "vitest";
@@ -43,7 +43,7 @@ describe("registerHealthRoute", () => {
     await app.close();
   });
 
-  it("returns 503 (not a fake 200) when the dependency ping rejects — ISSUES.md Issue 8", async () => {
+  it("returns 503 (not a fake 200) and no error text when the dependency ping rejects", async () => {
     const app = Fastify();
     registerHealthRoute(
       app,
@@ -54,7 +54,7 @@ describe("registerHealthRoute", () => {
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.status).toBe("error");
-    expect(body.error).toContain("ECONNREFUSED");
+    expect(res.body).not.toContain("ECONNREFUSED");
     await app.close();
   });
 });

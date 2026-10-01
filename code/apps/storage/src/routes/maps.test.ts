@@ -6,40 +6,27 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import Database from "better-sqlite3";
-import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
-import { createMapService } from "../service/maps";
+import { OCTETS, bearer, makeTestApp } from "../test-support";
 
-import { registerMapRoutes } from "./maps";
+import type { FastifyInstance } from "fastify";
 
-const OCTETS = { "content-type": "application/octet-stream" };
 const UNKNOWN_ID = "a".repeat(21);
-
-function bearer(key: string): Record<string, string> {
-  return { authorization: `Bearer ${key}` };
-}
 
 function makeApp(
   dataDir: string,
   opts: { bodyLimit?: number; maxTotalBytes?: number } = {},
 ): FastifyInstance {
-  const app = Fastify({
-    logger: false,
-    bodyLimit: opts.bodyLimit ?? 50 * 1024 * 1024,
-  });
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
-  );
-  const service = createMapService(createSqliteFsAdapter({ dataDir }), {
-    maxTotalBytes: opts.maxTotalBytes ?? 0,
-  });
-  registerMapRoutes(app, service);
-  return app;
+  const env: Record<string, string> = {};
+  if (opts.bodyLimit !== undefined) {
+    env.MAX_MAP_BYTES = String(opts.bodyLimit);
+  }
+  if (opts.maxTotalBytes !== undefined) {
+    env.MAX_TOTAL_BYTES = String(opts.maxTotalBytes);
+  }
+  return makeTestApp(env, { dataDir }).app;
 }
 
 describe("/maps routes", () => {

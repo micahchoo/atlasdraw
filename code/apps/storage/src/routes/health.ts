@@ -1,10 +1,11 @@
-// @atlasdraw/storage — Phase 4 T18: /health endpoint.
+// @atlasdraw/storage — /health.
 //
-// Readiness probe for compose stacks, load balancers, and the Show HN demo
-// "is the server up" check. Pings the storage adapter's actual dependencies
-// (DB, and blob store for postgres-minio) — a stopped postgres/minio
-// container now surfaces as a 503 here instead of a fake 200 (ISSUES.md
-// Issue 8; NEGSPACE.md).
+// Readiness probe for compose, load balancers and operators. It pings the
+// adapter's real dependencies (the database, and the blob store for
+// postgres-minio), so a stopped dependency shows as 503, not a false 200.
+//
+// The probe is open to anyone who reaches the API, so a failure answers with
+// no detail. The cause goes to the log.
 
 import type { FastifyInstance } from "fastify";
 import type { StorageClient, StorageMode } from "../types";
@@ -14,18 +15,14 @@ export function registerHealthRoute(
   storageMode: StorageMode,
   client: StorageClient,
 ): void {
-  app.get("/health", async (_request, reply) => {
+  app.get("/health", async (request, reply) => {
     try {
       await client.ping();
       return { status: "ok", uptime: process.uptime(), storageMode };
     } catch (err) {
+      request.log.error({ err }, "health check failed");
       reply.status(503);
-      return {
-        status: "error",
-        uptime: process.uptime(),
-        storageMode,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return { status: "error", uptime: process.uptime(), storageMode };
     }
   });
 }

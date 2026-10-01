@@ -7,37 +7,17 @@
 import * as path from "node:path";
 
 import Database from "better-sqlite3";
-import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
-import { createMapService } from "../service/maps";
+import { OCTETS, bearer, makeTestApp } from "../test-support";
 
-import { registerMapRoutes } from "./maps";
-import { registerShareRoutes } from "./share";
+import type { FastifyInstance } from "fastify";
 
-const OCTETS = { "content-type": "application/octet-stream" };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function bearer(key: string): Record<string, string> {
-  return { authorization: `Bearer ${key}` };
-}
-
 function makeApp(scratchDir: string, publicUrl: string): FastifyInstance {
-  const app = Fastify({ logger: false, bodyLimit: 50 * 1024 * 1024 });
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
-  );
-  const service = createMapService(
-    createSqliteFsAdapter({ dataDir: scratchDir }),
-    { maxTotalBytes: 0 },
-  );
-  registerMapRoutes(app, service);
-  registerShareRoutes(app, service, publicUrl);
-  return app;
+  return makeTestApp({ PUBLIC_URL: publicUrl }, { dataDir: scratchDir }).app;
 }
 
 describe("share routes", () => {
