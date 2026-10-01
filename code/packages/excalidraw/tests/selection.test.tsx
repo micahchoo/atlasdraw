@@ -1038,8 +1038,8 @@ describe("tool locking & selection", () => {
         value !== "selection" &&
         value !== "eraser" &&
         value !== "arrow" &&
-        value !== "hand" &&
-        value !== "laser"
+        // Atlasdraw: the laser tool is removed, so SHAPES has none.
+        value !== "hand"
       ) {
         const element = UI.createElement(value);
         expect(h.state.selectedElementIds[element.id]).not.toBe(true);

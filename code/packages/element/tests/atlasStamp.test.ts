@@ -17,7 +17,16 @@ const VIEW = { zoom: ZOOM };
 const unitOf = (el: ExcalidrawElement) =>
   (el.customData as { atlas?: { unit?: number } } | undefined)?.atlas?.unit;
 
-const rect = (props: Partial<ExcalidrawElement> = {}) =>
+const rect = (
+  props: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    strokeWidth?: number;
+    customData?: Record<string, any>;
+  } = {},
+) =>
   newElement({
     type: "rectangle",
     x: 10,

@@ -225,7 +225,7 @@ describe("onZoomAction", () => {
   it.each(keys)(
     "%s goes to the host, and the editor's zoom stays",
     async (_name, press, type) => {
-      const onZoomAction = vi.fn(() => true);
+      const onZoomAction = vi.fn((_: ZoomAction) => true);
       await render(
         <Excalidraw onZoomAction={onZoomAction} handleKeyboardGlobally />,
       );

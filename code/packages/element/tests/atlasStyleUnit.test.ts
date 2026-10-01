@@ -12,7 +12,11 @@ import { editorUnit, styleUnit } from "../src/atlasStyleUnit";
 import { getBindingGap, maxBindingDistance_simple } from "../src/binding";
 import { computeContainerDimensionForBoundText } from "../src/textElement";
 import { getArrowheadPoints } from "../src/bounds";
-import { newArrowElement, newElement } from "../src/newElement";
+import {
+  newArrowElement,
+  newElement,
+  newLinearElement,
+} from "../src/newElement";
 import {
   ShapeCache,
   generateRoughOptions,
@@ -171,7 +175,7 @@ describe("distances in the element's and the editor's unit", () => {
   it("a line's ends 10 px apart merge when it becomes a polygon", () => {
     const pointsAfter = (unit?: number) => {
       const u = unit ?? 1;
-      const line = newElement({
+      const line = newLinearElement({
         type: "line",
         x: 0,
         y: 0,
