@@ -32,6 +32,8 @@ const DB_VERSION = 1;
 const STORE = "state";
 const KEY_CURRENT = "current";
 const KEY_FILE_HANDLE = "fileHandle";
+/** Prefix for stored copies that could not be read. Never overwritten. */
+const KEY_QUARANTINE_PREFIX = "quarantine:";
 
 // Some IndexedDB implementations (notably the polyfill that backs Node test
 // environments) cannot structured-clone a Blob without a working
@@ -154,6 +156,12 @@ export interface PersistenceStore {
   isDirty(): boolean;
   /** True if the last remoteSave failed (IDB succeeded, server did not). */
   remoteSaveFailed(): boolean;
+  /**
+   * Stop writing the autosave slot for the rest of this session. Used when
+   * the scene stops being the user's own map (a shared room replaced it).
+   * Disk saves the user asks for are unaffected.
+   */
+  suspendWrites(): void;
   /** Internal: dispose IDB connection + clear listeners (test helper). */
   close(): Promise<void>;
 }
@@ -244,12 +252,18 @@ export function createPersistenceStore(
     }
   };
 
+  let writesSuspended = false;
+
   const save = (doc: AtlasdrawDocument): Promise<void> => {
     // Capture dirtySeq SYNCHRONOUSLY at call-time. If we deferred this into
     // the enqueueWrite microtask, any `markDirty()` issued by the caller
     // immediately after `save(doc)` (before awaiting) would land BEFORE the
     // capture and we'd never observe the race.
     const seqAtStart = dirtySeq;
+    if (writesSuspended) {
+      dirty = false;
+      return Promise.resolve();
+    }
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
       const stored = await blobToStored(blob);
@@ -288,7 +302,19 @@ export function createPersistenceStore(
     if (!stored) {
       return null;
     }
-    return read(storedToBlob(stored));
+    try {
+      return await read(storedToBlob(stored));
+    } catch (err) {
+      // Move the unreadable copy aside before anything can save over it. A
+      // later release, or a person, may still recover it.
+      await database.put(
+        STORE,
+        stored,
+        `${KEY_QUARANTINE_PREFIX}${Date.now()}`,
+      );
+      await database.delete(STORE, KEY_CURRENT);
+      throw err;
+    }
   };
 
   // ----- File System Access API path -------------------------------------
@@ -494,6 +520,9 @@ export function createPersistenceStore(
     isDirty,
     remoteSaveFailed,
     close,
+    suspendWrites: () => {
+      writesSuspended = true;
+    },
   };
 }
 

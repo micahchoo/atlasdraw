@@ -78,6 +78,7 @@ function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
     }),
     isDirty: vi.fn(() => false),
     remoteSaveFailed: vi.fn(() => false),
+    suspendWrites: vi.fn(),
     close: vi.fn(async () => {}),
     ...overrides,
   };

@@ -86,6 +86,9 @@ export class SceneChannel {
   private _snapshotRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private _snapshotAttempts: number = 0;
   private _snapshotApplied: boolean = false;
+  // One pull per session. A reconnect must not replace the scene the user
+  // has kept editing with a peer's copy.
+  private _snapshotPullStarted: boolean = false;
   private static readonly _SNAPSHOT_JOINING_WINDOW_MS = 5000;
   private static readonly _SNAPSHOT_RETRY_INTERVAL_MS = 2000;
   private static readonly _SNAPSHOT_MAX_ATTEMPTS = 3;
@@ -161,6 +164,7 @@ export class SceneChannel {
   ): void {
     this._roomKey = key ?? null;
     this._currentRoomId = roomId;
+    this._snapshotPullStarted = false;
 
     this._socket = io(wsUrl, {
       transports: ["websocket"],
@@ -171,6 +175,10 @@ export class SceneChannel {
 
       onSocketConnect(this._socket?.id);
 
+      if (this._snapshotPullStarted) {
+        return;
+      }
+      this._snapshotPullStarted = true;
       // Q-P5-1: open the 5 s joining window and pull a SCENE_SNAPSHOT from
       // the relay-elected peer. Retries up to 3 times total on a 2 s
       // interval; relay re-elects on each retry if the prior peer is gone.
@@ -244,8 +252,8 @@ export class SceneChannel {
     );
 
     // PEER_LEFT — remove the disconnecting peer from the presence map.
-    this._socket.on("PEER_LEFT", (data: { senderId: string }) => {
-      this._peers.delete(data.senderId);
+    this._socket.on("PEER_LEFT", (data: { peerId: string }) => {
+      this._peers.delete(data.peerId);
       this._onChange?.();
     });
 

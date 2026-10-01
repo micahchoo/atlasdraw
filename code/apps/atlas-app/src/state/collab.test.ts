@@ -243,6 +243,20 @@ describe("CollabState — joiner-side REQUEST_SNAPSHOT pull", () => {
     });
   });
 
+  it("does not pull a snapshot again when the socket reconnects", () => {
+    const collab = new CollabState();
+    collab.connect(ROOM_ID);
+    currentFakeSocket._trigger("connect");
+    vi.advanceTimersByTime(10_000); // initial pull and its retries are over
+    const pulls = countEmits("REQUEST_SNAPSHOT");
+
+    // A reconnect must not replace the scene the user has kept editing.
+    currentFakeSocket._trigger("connect");
+    vi.advanceTimersByTime(10_000);
+
+    expect(countEmits("REQUEST_SNAPSHOT")).toBe(pulls);
+  });
+
   it("re-emits REQUEST_SNAPSHOT after 2 s timeout when no snapshot arrives", async () => {
     const collab = new CollabState();
     collab.connect(ROOM_ID);
@@ -580,7 +594,8 @@ describe("CollabState — subscribe/getSnapshot reactivity", () => {
 
     const listener = vi.fn();
     collab.subscribe(listener);
-    currentFakeSocket._trigger("PEER_LEFT", { senderId: "peer-1" });
+    // The relay sends {peerId} (socket-io-server.ts disconnect handler).
+    currentFakeSocket._trigger("PEER_LEFT", { peerId: "peer-1" });
 
     expect(listener).toHaveBeenCalled();
     expect(collab.getSnapshot().peers.has("peer-1")).toBe(false);

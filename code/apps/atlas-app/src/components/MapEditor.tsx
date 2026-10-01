@@ -544,10 +544,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     collabState.setSceneAccessor(
       () => excalidrawAPI.getSceneElements() as ExcalidrawElement[],
     );
-    collabState.setSceneReceiver((elements) =>
-      excalidrawAPI.updateScene({ elements }),
-    );
-  }, [collabState, excalidrawAPI]);
+    collabState.setSceneReceiver((elements) => {
+      // The scene is now the room's, not the user's own map. Stop autosave
+      // from writing it over their saved document for the rest of the
+      // session; their map comes back on the next visit without the room
+      // link.
+      usePersistenceStore.getState().persistenceStore?.suspendWrites();
+      excalidrawAPI.updateScene({ elements });
+      toast.success(
+        "You joined a shared map. Your own map stays saved and unchanged.",
+      );
+    });
+  }, [collabState, excalidrawAPI, toast]);
 
   // Unmount cleanup — close the live session if any. Safe when no connection
   // was ever opened (disconnect() is idempotent).

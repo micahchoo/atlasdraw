@@ -5,6 +5,7 @@
 // implementation so the `idb` package can run unmodified under jsdom.
 
 import "fake-indexeddb/auto";
+import { openDB } from "idb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
@@ -115,6 +116,41 @@ describe("createPersistenceStore — IDB", () => {
 // ---------------------------------------------------------------------------
 // T13 — remoteSave callback option
 // ---------------------------------------------------------------------------
+
+describe("createPersistenceStore — protecting the stored copy", () => {
+  it("keeps a stored copy it cannot read instead of letting a save overwrite it", async () => {
+    const dbName = freshDb();
+    const store = createPersistenceStore({ dbName });
+    await store.save(makeDoc());
+    const raw = await openDB(dbName);
+    const garbage = { type: "application/zip", buffer: new ArrayBuffer(8) };
+    await raw.put("state", garbage, "current");
+
+    await expect(store.load()).rejects.toThrow();
+    await store.save(makeDoc("2026-05-07T00:00:00.000Z"));
+
+    const kept = (await raw.getAllKeys("state"))
+      .map(String)
+      .filter((k) => k.startsWith("quarantine:"));
+    expect(kept).toHaveLength(1);
+    expect(await raw.get("state", kept[0])).toEqual(garbage);
+    raw.close();
+    await store.close();
+  });
+
+  it("writes nothing after suspendWrites(), so a shared room cannot overwrite the user's map", async () => {
+    const store = createPersistenceStore({ dbName: freshDb() });
+    await store.save(makeDoc("2026-05-06T00:00:00.000Z"));
+
+    store.suspendWrites();
+    await store.save(makeDoc("2026-09-09T00:00:00.000Z"));
+
+    expect((await store.load())?.manifest.updatedAt).toBe(
+      "2026-05-06T00:00:00.000Z",
+    );
+    await store.close();
+  });
+});
 
 describe("createPersistenceStore — remoteSave callback (T13)", () => {
   it("fires remoteSave after the IDB write resolves", async () => {
