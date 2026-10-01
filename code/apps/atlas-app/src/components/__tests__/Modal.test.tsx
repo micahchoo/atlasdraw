@@ -13,7 +13,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -254,5 +254,30 @@ describe("focus goes back", () => {
     expect(screen.queryByTestId("cancel")).toBeNull();
     expect(closeOuter).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(del);
+  });
+});
+
+describe("under StrictMode (the dev build runs every effect twice)", () => {
+  it("keeps focus in the dialog, and gives it back once on close", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const view = render(
+      <StrictMode>
+        <Modal label="Command palette" onClose={() => {}}>
+          <input data-testid="search" autoFocus />
+        </Modal>
+      </StrictMode>,
+    );
+
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByTestId("search")),
+    );
+    expect(opener.hasAttribute("inert")).toBe(true);
+
+    act(() => view.unmount());
+
+    expect(opener.hasAttribute("inert")).toBe(false);
+    expect(document.activeElement).toBe(opener);
   });
 });

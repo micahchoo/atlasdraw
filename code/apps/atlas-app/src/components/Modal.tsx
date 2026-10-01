@@ -163,10 +163,16 @@ export function Modal({
 
   const scrimRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const restore = scrimRef.current ? inertAround(scrimRef.current) : null;
+    const scrim = scrimRef.current;
+    const restore = scrim ? inertAround(scrim) : null;
     return () => {
       restore?.();
-      returnFocusTo(opener);
+      // Only a dialog that has left the page gives focus back. StrictMode
+      // runs this cleanup once with the dialog still in place; focus there
+      // stays in the dialog.
+      if (!scrim?.isConnected) {
+        returnFocusTo(opener);
+      }
     };
   }, [opener]);
 

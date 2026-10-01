@@ -12,16 +12,17 @@
 // expiry. Collaborate makes a room from the open map (hooks/useRoom.ts) and
 // shows its link; in a room it shows the link of that room.
 //
-// The dialog closes on a press on its backdrop, tested at mousedown on the
-// backdrop element itself. A document-level click test is wrong here: the
-// picker button unmounts while React handles its click, and a detached
-// target is "outside" every panel.
+// The dialog is a Modal: it closes on Escape and on a press on its backdrop
+// (tested at mousedown on the backdrop itself; a document-level click test
+// is wrong here, because the picker button unmounts while React handles its
+// click). "Stop sharing this link?" is a Modal inside it: Escape answers the
+// question and leaves the dialog open.
 //
 // A `#room:` link lets anyone who has it edit; the room id alone grants
 // nothing (docs/architecture/adr/0014-collab-trust-model.md). Read-only links (`/m#v2:`, `/m#v1:`, `/m/<token>`) stay
 // read-only. The hint in the collab success state says so.
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
@@ -30,7 +31,7 @@ import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 import { toEmbedUrl } from "../routes";
 
 import { ConfirmDialog } from "./ConfirmDialog";
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 
@@ -92,13 +93,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   client,
   startRoom,
 }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<DialogView>({ kind: "picker" });
   /** The link the user is asked about stopping; null when not asked. */
   const [confirmStop, setConfirmStop] = useState<string | null>(null);
-  const confirmStopRef = useRef(confirmStop);
-  confirmStopRef.current = confirmStop;
   const [copied, setCopied] = useState(false);
   const [expiry, setExpiry] = useState("");
   const {
@@ -109,23 +107,6 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     getDoc,
     client,
   });
-
-  // Escape to close.
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) {
-      return;
-    }
-    panel.querySelector<HTMLButtonElement>("button")?.focus();
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // An open question answers its own Escape.
-      if (e.key === "Escape" && confirmStopRef.current === null) {
-        onCloseRequest();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCloseRequest]);
 
   const startReadonly = async () => {
     setView({ kind: "readonly-loading" });
@@ -179,8 +160,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   return (
-    <div
-      style={{
+    <Modal
+      labelledBy="share-dialog-title"
+      onClose={onCloseRequest}
+      scrimStyle={{
         position: "fixed",
         inset: 0,
         background: "rgba(0,0,0,0.25)",
@@ -189,309 +172,288 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
         justifyContent: "center",
         zIndex: 999,
       }}
-      data-testid="share-dialog-overlay"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) {
-          onCloseRequest();
-        }
+      scrimTestId="share-dialog-overlay"
+      testId="share-dialog-panel"
+      style={{
+        background: "var(--ad-surface-raised, #fff)",
+        borderRadius: "0.5rem",
+        padding: "1.25rem 1.5rem",
+        maxWidth: "480px",
+        width: "calc(100% - 2rem)",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+        color: "var(--ad-ink, #212529)",
+        fontSize: "0.875rem",
+        lineHeight: 1.5,
       }}
     >
-      <FocusTrap>
+      <h2
+        id="share-dialog-title"
+        style={{
+          margin: "0 0 0.75rem 0",
+          fontSize: "1.125rem",
+          fontWeight: 600,
+        }}
+      >
+        Share map
+      </h2>
+
+      {view.kind === "picker" && (
         <div
-          ref={panelRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Share map"
+          data-testid="share-dialog-mode-picker"
           style={{
-            background: "var(--ad-surface-raised, #fff)",
-            borderRadius: "0.5rem",
-            padding: "1.25rem 1.5rem",
-            maxWidth: "480px",
-            width: "calc(100% - 2rem)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-            color: "var(--ad-ink, #212529)",
-            fontSize: "0.875rem",
-            lineHeight: 1.5,
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            margin: "0 0 0.75rem 0",
           }}
-          data-testid="share-dialog-panel"
         >
-          <h2
+          <button
+            type="button"
+            onClick={startReadonly}
+            data-testid="share-dialog-pick-readonly"
             style={{
-              margin: "0 0 0.75rem 0",
-              fontSize: "1.125rem",
+              padding: "10px 14px",
+              border: "1px solid #adb5bd",
+              borderRadius: "4px",
+              background: "var(--ad-surface-raised, #ffffff)",
+              color: "var(--ad-ink, #212529)",
+              fontSize: "0.875rem",
               fontWeight: 600,
+              cursor: "pointer",
+              textAlign: "left",
             }}
           >
-            Share map
-          </h2>
-
-          {view.kind === "picker" && (
+            Share read-only
             <div
-              data-testid="share-dialog-mode-picker"
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                margin: "0 0 0.75rem 0",
+                fontSize: "0.75rem",
+                fontWeight: 400,
+                color: "var(--ad-ink-secondary, #495057)",
+                marginTop: "2px",
               }}
             >
-              <button
-                type="button"
-                onClick={startReadonly}
-                data-testid="share-dialog-pick-readonly"
-                style={{
-                  padding: "10px 14px",
-                  border: "1px solid #adb5bd",
-                  borderRadius: "4px",
-                  background: "var(--ad-surface-raised, #ffffff)",
-                  color: "var(--ad-ink, #212529)",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                Share read-only
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 400,
-                    color: "var(--ad-ink-secondary, #495057)",
-                    marginTop: "2px",
-                  }}
-                >
-                  Recipients can view the map, not edit it.
-                </div>
-              </button>
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "0.75rem",
-                  color: "var(--ad-ink-secondary, #495057)",
-                }}
-              >
-                Read-only link works
-                <select
-                  value={expiry}
-                  onChange={(e) => setExpiry(e.target.value)}
-                  data-testid="share-dialog-expiry"
-                  style={{ fontSize: "0.75rem" }}
-                >
-                  {EXPIRY_CHOICES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {startRoom && (
-                <button
-                  type="button"
-                  onClick={startCollab}
-                  data-testid="share-dialog-pick-collab"
-                  style={{
-                    padding: "10px 14px",
-                    border: "1px solid var(--ad-accent, #1971c2)",
-                    borderRadius: "4px",
-                    background: "var(--ad-accent, #1971c2)",
-                    color: "var(--ad-ink-inverse, #ffffff)",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                >
-                  Collaborate
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 400,
-                      color: "#dbeafe",
-                      marginTop: "2px",
-                    }}
-                  >
-                    Live editing — anyone with the link can edit.
-                  </div>
-                </button>
-              )}
+              Recipients can view the map, not edit it.
             </div>
-          )}
-
-          {(view.kind === "readonly-loading" ||
-            view.kind === "collab-loading") && (
-            <div
-              data-testid="share-dialog-loading"
-              style={{ padding: "0.5rem 0" }}
+          </button>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.75rem",
+              color: "var(--ad-ink-secondary, #495057)",
+            }}
+          >
+            Read-only link works
+            <select
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              data-testid="share-dialog-expiry"
+              style={{ fontSize: "0.75rem" }}
             >
-              {view.kind === "collab-loading"
-                ? "Starting collaboration…"
-                : "Generating share link…"}
-            </div>
-          )}
-
-          {view.kind === "revoked" && (
-            <p
-              data-testid="share-dialog-revoked"
-              role="status"
-              style={{ margin: "0 0 0.75rem 0" }}
-            >
-              This link no longer works. Embeds made from it are blank.
-            </p>
-          )}
-
-          {view.kind === "error" && (
-            <div
-              data-testid="share-dialog-error"
-              role="alert"
-              style={{
-                background: "#fff5f5",
-                border: "1px solid #ffc9c9",
-                color: "#c92a2a",
-                padding: "0.5rem 0.75rem",
-                borderRadius: "4px",
-                margin: "0 0 0.75rem 0",
-                fontSize: "0.8125rem",
-              }}
-            >
-              {view.message ?? shareError ?? "Failed to generate share link."}
-            </div>
-          )}
-
-          {currentUrl && (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                <input
-                  ref={inputRef}
-                  type="text"
-                  readOnly
-                  value={currentUrl}
-                  data-testid="share-dialog-url"
-                  onFocus={(e) => e.currentTarget.select()}
-                  style={{
-                    flex: 1,
-                    padding: "6px 8px",
-                    border: "1px solid #ced4da",
-                    borderRadius: "4px",
-                    fontSize: "0.8125rem",
-                    fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
-                    background: "#f8f9fa",
-                    color: "var(--ad-ink, #212529)",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  data-testid="share-dialog-copy"
-                  style={{
-                    padding: "6px 14px",
-                    border: "1px solid var(--ad-accent, #1971c2)",
-                    borderRadius: "4px",
-                    background: copied
-                      ? "#37b24d"
-                      : "var(--ad-accent, #1971c2)",
-                    color: "var(--ad-ink-inverse, #fff)",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  {copied ? "Copied" : "Copy link"}
-                </button>
-              </div>
-              {view.kind === "readonly-success" && (
-                <p
-                  data-testid="share-dialog-mode-hint"
-                  data-mode={view.mode}
-                  style={{
-                    margin: "0 0 0.75rem 0",
-                    fontSize: "0.75rem",
-                    color: "var(--ad-ink-secondary, #495057)",
-                  }}
-                >
-                  {view.mode === "hash"
-                    ? HASH_HINT
-                    : uploadHint(view.expiresAt)}
-                </p>
-              )}
-              {view.kind === "readonly-success" && view.token !== null && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmStop(view.token)}
-                  data-testid="share-dialog-revoke"
-                  style={{
-                    margin: "0 0 0.75rem 0",
-                    padding: "5px 12px",
-                    border: "1px solid #c92a2a",
-                    borderRadius: "4px",
-                    background: "transparent",
-                    color: "#c92a2a",
-                    fontSize: "0.8125rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Stop sharing this link
-                </button>
-              )}
-              {view.kind === "readonly-success" && (
-                <EmbedSnippet shareUrl={currentUrl} />
-              )}
-              {view.kind === "collab-success" && (
-                <p
-                  data-testid="share-dialog-mode-hint"
-                  data-mode="collab"
-                  style={{
-                    margin: "0 0 0.75rem 0",
-                    fontSize: "0.75rem",
-                    color: "var(--ad-ink-secondary, #495057)",
-                  }}
-                >
-                  {COLLAB_HINT}
-                </p>
-              )}
-            </>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              {EXPIRY_CHOICES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {startRoom && (
             <button
               type="button"
-              onClick={onCloseRequest}
-              data-testid="share-dialog-close"
+              onClick={startCollab}
+              data-testid="share-dialog-pick-collab"
+              style={{
+                padding: "10px 14px",
+                border: "1px solid var(--ad-accent, #1971c2)",
+                borderRadius: "4px",
+                background: "var(--ad-accent, #1971c2)",
+                color: "var(--ad-ink-inverse, #ffffff)",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              Collaborate
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  fontWeight: 400,
+                  color: "#dbeafe",
+                  marginTop: "2px",
+                }}
+              >
+                Live editing — anyone with the link can edit.
+              </div>
+            </button>
+          )}
+        </div>
+      )}
+
+      {(view.kind === "readonly-loading" || view.kind === "collab-loading") && (
+        <div data-testid="share-dialog-loading" style={{ padding: "0.5rem 0" }}>
+          {view.kind === "collab-loading"
+            ? "Starting collaboration…"
+            : "Generating share link…"}
+        </div>
+      )}
+
+      {view.kind === "revoked" && (
+        <p
+          data-testid="share-dialog-revoked"
+          role="status"
+          style={{ margin: "0 0 0.75rem 0" }}
+        >
+          This link no longer works. Embeds made from it are blank.
+        </p>
+      )}
+
+      {view.kind === "error" && (
+        <div
+          data-testid="share-dialog-error"
+          role="alert"
+          style={{
+            background: "#fff5f5",
+            border: "1px solid #ffc9c9",
+            color: "#c92a2a",
+            padding: "0.5rem 0.75rem",
+            borderRadius: "4px",
+            margin: "0 0 0.75rem 0",
+            fontSize: "0.8125rem",
+          }}
+        >
+          {view.message ?? shareError ?? "Failed to generate share link."}
+        </div>
+      )}
+
+      {currentUrl && (
+        <>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="text"
+              readOnly
+              value={currentUrl}
+              data-testid="share-dialog-url"
+              onFocus={(e) => e.currentTarget.select()}
+              style={{
+                flex: 1,
+                padding: "6px 8px",
+                border: "1px solid #ced4da",
+                borderRadius: "4px",
+                fontSize: "0.8125rem",
+                fontFamily: "var(--ad-font-mono, ui-monospace, monospace)",
+                background: "#f8f9fa",
+                color: "var(--ad-ink, #212529)",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleCopy}
+              data-testid="share-dialog-copy"
               style={{
                 padding: "6px 14px",
-                border: "1px solid #adb5bd",
+                border: "1px solid var(--ad-accent, #1971c2)",
                 borderRadius: "4px",
-                background: "var(--ad-surface-raised, #fff)",
-                color: "var(--ad-ink, #212529)",
+                background: copied ? "#37b24d" : "var(--ad-accent, #1971c2)",
+                color: "var(--ad-ink-inverse, #fff)",
                 fontSize: "0.875rem",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
             >
-              Close
+              {copied ? "Copied" : "Copy link"}
             </button>
           </div>
-          {confirmStop !== null && (
-            <ConfirmDialog
-              title="Stop sharing this link?"
-              body="Everyone who has the link, and every embed made from it, loses the map. You cannot undo this."
-              confirmLabel="Stop sharing"
-              tone="destructive"
-              onConfirm={() => void stopSharing(confirmStop)}
-              onCancel={() => setConfirmStop(null)}
-            />
+          {view.kind === "readonly-success" && (
+            <p
+              data-testid="share-dialog-mode-hint"
+              data-mode={view.mode}
+              style={{
+                margin: "0 0 0.75rem 0",
+                fontSize: "0.75rem",
+                color: "var(--ad-ink-secondary, #495057)",
+              }}
+            >
+              {view.mode === "hash" ? HASH_HINT : uploadHint(view.expiresAt)}
+            </p>
           )}
-        </div>
-      </FocusTrap>
-    </div>
+          {view.kind === "readonly-success" && view.token !== null && (
+            <button
+              type="button"
+              onClick={() => setConfirmStop(view.token)}
+              data-testid="share-dialog-revoke"
+              style={{
+                margin: "0 0 0.75rem 0",
+                padding: "5px 12px",
+                border: "1px solid #c92a2a",
+                borderRadius: "4px",
+                background: "transparent",
+                color: "#c92a2a",
+                fontSize: "0.8125rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Stop sharing this link
+            </button>
+          )}
+          {view.kind === "readonly-success" && (
+            <EmbedSnippet shareUrl={currentUrl} />
+          )}
+          {view.kind === "collab-success" && (
+            <p
+              data-testid="share-dialog-mode-hint"
+              data-mode="collab"
+              style={{
+                margin: "0 0 0.75rem 0",
+                fontSize: "0.75rem",
+                color: "var(--ad-ink-secondary, #495057)",
+              }}
+            >
+              {COLLAB_HINT}
+            </p>
+          )}
+        </>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={onCloseRequest}
+          data-testid="share-dialog-close"
+          style={{
+            padding: "6px 14px",
+            border: "1px solid #adb5bd",
+            borderRadius: "4px",
+            background: "var(--ad-surface-raised, #fff)",
+            color: "var(--ad-ink, #212529)",
+            fontSize: "0.875rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Close
+        </button>
+      </div>
+      {confirmStop !== null && (
+        <ConfirmDialog
+          title="Stop sharing this link?"
+          body="Everyone who has the link, and every embed made from it, loses the map. You cannot undo this."
+          confirmLabel="Stop sharing"
+          tone="destructive"
+          onConfirm={() => void stopSharing(confirmStop)}
+          onCancel={() => setConfirmStop(null)}
+        />
+      )}
+    </Modal>
   );
 };
 

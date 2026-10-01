@@ -6,8 +6,18 @@
 //
 // A modal, because no existing surface lists documents: the MainMenu holds
 // actions, not lists, and the sidebar belongs to the open map's layers.
+//
+// Its two questions (delete, and open with unsaved changes lost) are Modals
+// inside it: Escape answers the question, not the dialog. A question still
+// open when the dialog goes is answered no, so the open waits for nothing.
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -24,7 +34,7 @@ import {
 import { hasServerMap } from "../state/remoteMapIdCache";
 
 import { ConfirmDialog } from "./ConfirmDialog";
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 
 import type { DocumentSummary } from "../state/persistence";
 import type { StorageClient } from "../services/createHttpStorageClient";
@@ -80,16 +90,18 @@ export function MyMapsDialog({
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      // A question that is open answers its own Escape.
-      if (e.key === "Escape" && !prompt) {
-        onClose();
+  // The dialog going (the slot closes or changes) answers an open question.
+  const promptRef = useRef(prompt);
+  promptRef.current = prompt;
+  useEffect(
+    () => () => {
+      const open = promptRef.current;
+      if (open?.kind === "loss") {
+        open.answer(false);
       }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose, prompt]);
+    },
+    [],
+  );
 
   const titles = useMemo(() => distinctTitles(maps ?? []), [maps]);
 
@@ -135,127 +147,114 @@ export function MyMapsDialog({
   };
 
   return (
-    <div
-      className={styles.scrim}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      data-testid="my-maps-scrim"
+    <Modal
+      labelledBy="my-maps-title"
+      onClose={onClose}
+      scrimClassName={styles.scrim}
+      scrimTestId="my-maps-scrim"
+      className={styles.dialog}
+      testId="my-maps-dialog"
     >
-      <FocusTrap>
-        <div
-          className={styles.dialog}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="my-maps-title"
-          data-testid="my-maps-dialog"
+      <div className={styles.header}>
+        <h2 id="my-maps-title" className={styles.title}>
+          My maps
+        </h2>
+        <button
+          type="button"
+          className={styles.closeBtn}
+          onClick={onClose}
+          aria-label="Close"
+          data-testid="my-maps-close"
         >
-          <div className={styles.header}>
-            <h2 id="my-maps-title" className={styles.title}>
-              My maps
-            </h2>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              onClick={onClose}
-              aria-label="Close"
-              data-testid="my-maps-close"
-            >
-              ×
-            </button>
-          </div>
+          ×
+        </button>
+      </div>
 
-          <div className={styles.body}>
-            {maps && maps.length === 0 && (
-              <p className={styles.empty} data-testid="my-maps-empty">
-                You have no saved maps. Draw on the map or import a file.
-                Atlasdraw then saves your map here.
-              </p>
-            )}
-            {maps && maps.length > 0 && (
-              <ul
-                className={styles.list}
-                aria-label="My maps"
-                data-testid="my-maps-list"
-              >
-                {maps.map((map) => {
-                  const isOpen = map.id === openId;
-                  // Written by a newer Atlasdraw: kept, not openable here.
-                  const newer = map.needsNewerBuild === true;
-                  const title = titles.get(map.id) ?? map.title;
-                  return (
-                    <li
-                      key={map.id}
-                      className={styles.row}
-                      data-testid="my-maps-row"
-                      data-map-id={map.id}
-                    >
-                      <div className={styles.meta}>
-                        <span className={styles.mapTitle}>{title}</span>
-                        <span className={styles.detail}>
-                          <time dateTime={map.updatedAt}>
-                            {relativeTime(map.updatedAt, now())}
-                          </time>
-                          {isOpen && (
-                            <span className={styles.openBadge}>Open now</span>
-                          )}
-                          {newer && (
-                            <span className={styles.openBadge}>
-                              Needs a newer Atlasdraw
-                            </span>
-                          )}
+      <div className={styles.body}>
+        {maps && maps.length === 0 && (
+          <p className={styles.empty} data-testid="my-maps-empty">
+            You have no saved maps. Draw on the map or import a file. Atlasdraw
+            then saves your map here.
+          </p>
+        )}
+        {maps && maps.length > 0 && (
+          <ul
+            className={styles.list}
+            aria-label="My maps"
+            data-testid="my-maps-list"
+          >
+            {maps.map((map) => {
+              const isOpen = map.id === openId;
+              // Written by a newer Atlasdraw: kept, not openable here.
+              const newer = map.needsNewerBuild === true;
+              const title = titles.get(map.id) ?? map.title;
+              return (
+                <li
+                  key={map.id}
+                  className={styles.row}
+                  data-testid="my-maps-row"
+                  data-map-id={map.id}
+                >
+                  <div className={styles.meta}>
+                    <span className={styles.mapTitle}>{title}</span>
+                    <span className={styles.detail}>
+                      <time dateTime={map.updatedAt}>
+                        {relativeTime(map.updatedAt, now())}
+                      </time>
+                      {isOpen && (
+                        <span className={styles.openBadge}>Open now</span>
+                      )}
+                      {newer && (
+                        <span className={styles.openBadge}>
+                          Needs a newer Atlasdraw
                         </span>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.button}
-                        onClick={() => void open(map.id)}
-                        disabled={isOpen || newer}
-                        aria-disabled={isOpen || newer ? "true" : undefined}
-                        title={
-                          isOpen
-                            ? "This map is open"
-                            : newer
-                            ? "A newer version of Atlasdraw saved this map. Update Atlasdraw to open it."
-                            : undefined
-                        }
-                        aria-label={`Open ${title}`}
-                        data-testid="my-maps-open"
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        className={[styles.button, styles.buttonDanger].join(
-                          " ",
-                        )}
-                        onClick={() => void askDelete(map)}
-                        aria-label={`Delete ${title}`}
-                        data-testid="my-maps-delete"
-                      >
-                        Delete
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.button}
+                    onClick={() => void open(map.id)}
+                    disabled={isOpen || newer}
+                    aria-disabled={isOpen || newer ? "true" : undefined}
+                    title={
+                      isOpen
+                        ? "This map is open"
+                        : newer
+                        ? "A newer version of Atlasdraw saved this map. Update Atlasdraw to open it."
+                        : undefined
+                    }
+                    aria-label={`Open ${title}`}
+                    data-testid="my-maps-open"
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    className={[styles.button, styles.buttonDanger].join(" ")}
+                    onClick={() => void askDelete(map)}
+                    aria-label={`Delete ${title}`}
+                    data-testid="my-maps-delete"
+                  >
+                    Delete
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
-          <div className={styles.footer}>
-            <button
-              type="button"
-              className={[styles.button, styles.buttonPrimary].join(" ")}
-              onClick={() => void startNew()}
-              data-testid="my-maps-new"
-            >
-              New map
-            </button>
-          </div>
-        </div>
-      </FocusTrap>
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={[styles.button, styles.buttonPrimary].join(" ")}
+          onClick={() => void startNew()}
+          data-testid="my-maps-new"
+        >
+          New map
+        </button>
+      </div>
 
       {prompt?.kind === "delete" && (
         <ConfirmDialog
@@ -288,6 +287,6 @@ export function MyMapsDialog({
           onCancel={() => prompt.answer(false)}
         />
       )}
-    </div>
+    </Modal>
   );
 }

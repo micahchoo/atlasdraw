@@ -3,7 +3,9 @@
 //
 // Cross-component assertions: modals auto-focus a sensible target on open,
 // Escape triggers onCloseRequest (which the calling parent uses to unmount),
-// and the FocusScope restores focus to the opener on unmount.
+// and the Modal gives focus back to the opener on unmount. The Modal's own
+// rules are in components/__tests__/Modal.test.tsx; focus order in a real
+// browser is e2e/keyboard.spec.ts.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -14,8 +16,7 @@ afterEach(() => {
   cleanup();
 });
 
-// ExportDialog is the modal under test: it wires FocusTrap and its own Escape
-// handler the way every modal does.
+// ExportDialog is the modal under test: it is a Modal, as every dialog is.
 function renderExportDialog(onClose: () => void = () => {}) {
   return render(
     <ExportDialog
@@ -33,7 +34,7 @@ function renderExportDialog(onClose: () => void = () => {}) {
 describe("keyboard nav — focus on open", () => {
   it("ExportDialog auto-focuses inside the dialog on mount", () => {
     renderExportDialog();
-    // FocusTrap (react-aria FocusScope, autoFocus) moves focus to the first
+    // Modal (react-aria FocusScope, autoFocus) moves focus to the first
     // focusable element. The active element should be inside the dialog.
     const dialog = screen.getByRole("dialog");
     expect(dialog.contains(document.activeElement)).toBe(true);
@@ -50,7 +51,7 @@ describe("keyboard nav — Escape closes", () => {
 });
 
 describe("keyboard nav — restore focus on unmount", () => {
-  it("FocusScope releases focus when a modal unmounts (returns to opener or body)", () => {
+  it("gives focus back to the opener when the modal unmounts", () => {
     const opener = document.createElement("button");
     opener.setAttribute("data-testid", "opener");
     document.body.appendChild(opener);
@@ -61,14 +62,7 @@ describe("keyboard nav — restore focus on unmount", () => {
     expect(document.activeElement).not.toBe(opener);
 
     unmount();
-    // jsdom's focus semantics differ from a real browser — FocusScope's
-    // restoreFocus may park focus on document.body if the opener's tab-order
-    // position is ambiguous. Both are valid "trap released" outcomes; the
-    // post-condition we care about is that focus is NOT inside the dialog.
-    const released =
-      document.activeElement === opener ||
-      document.activeElement === document.body;
-    expect(released).toBe(true);
+    expect(document.activeElement).toBe(opener);
     document.body.removeChild(opener);
   });
 });

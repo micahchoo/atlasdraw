@@ -89,6 +89,11 @@
   background: var(--ad-accent-subtle);
 }
 
+/* The active option is marked by a shape too, not by colour alone. */
+.itemSelected {
+  box-shadow: inset 3px 0 0 var(--ad-accent);
+}
+
 .itemLabel {
   font-family: var(--ad-font-sans);
   font-size: 13px;

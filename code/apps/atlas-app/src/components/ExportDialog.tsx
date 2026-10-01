@@ -16,7 +16,7 @@
  * the file contradicts ("vector" over a JPEG) or a row that cannot change.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 import {
   PNG_PIXEL_RATIOS,
@@ -42,7 +42,7 @@ import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
 
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 
 import type { GeoJsonExportOptions } from "../lib/dataLayerExport";
 
@@ -162,18 +162,6 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
 
-  // Escape to close (FocusTrap deliberately leaves Escape to each modal), as
-  // well as scrim click and the × button.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onCloseRequest();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCloseRequest]);
-
   // Read once on open: the dialog is modal, so the view cannot change under it.
   const [view] = useState(getView);
   const [pixelRatio, setPixelRatio] = useState<PngPixelRatio>(2);
@@ -274,252 +262,238 @@ export function ExportDialog({
   };
 
   return (
-    <FocusTrap>
-      <div
-        className={styles.scrim}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onCloseRequest();
-          }
-        }}
-        data-testid="export-dialog-scrim"
-      >
-        <div
-          className={styles.dialog}
-          role="dialog"
-          aria-label="Export"
-          data-testid="export-dialog"
+    // Escape, a press outside and the × button close it (Modal).
+    <Modal
+      label="Export"
+      onClose={onCloseRequest}
+      scrimClassName={styles.scrim}
+      scrimTestId="export-dialog-scrim"
+      className={styles.dialog}
+      testId="export-dialog"
+    >
+      {/* Header */}
+      <div className={styles.header}>
+        <span className={styles.title}>Export</span>
+        <button
+          type="button"
+          className={styles.closeBtn}
+          onClick={onCloseRequest}
+          aria-label="Close"
+          data-testid="export-dialog-close"
         >
-          {/* Header */}
-          <div className={styles.header}>
-            <span className={styles.title}>Export</span>
-            <button
-              type="button"
-              className={styles.closeBtn}
-              onClick={onCloseRequest}
-              aria-label="Close"
-              data-testid="export-dialog-close"
-            >
-              ×
-            </button>
-          </div>
+          ×
+        </button>
+      </div>
 
-          {/* Format cards */}
-          <div className={styles.formatRow}>
-            {FORMATS.map((f) => (
-              <div
-                key={f.id}
-                className={[
-                  styles.formatCard,
-                  format === f.id ? styles.formatCardActive : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={() => setFormat(f.id)}
-                data-testid={`export-format-${f.id}`}
+      {/* Format cards */}
+      <div className={styles.formatRow}>
+        {FORMATS.map((f) => (
+          <div
+            key={f.id}
+            className={[
+              styles.formatCard,
+              format === f.id ? styles.formatCardActive : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onClick={() => setFormat(f.id)}
+            data-testid={`export-format-${f.id}`}
+          >
+            <span className={styles.formatIcon}>{f.icon}</span>
+            <span className={styles.formatLabel}>{f.label}</span>
+            <span className={styles.formatHint}>{f.hint}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Format-specific settings */}
+      <div className={styles.settings}>
+        {format === "png" && (
+          <>
+            <div className={styles.settingRow}>
+              <label
+                className={styles.settingLabel}
+                htmlFor="export-png-pixel-ratio"
               >
-                <span className={styles.formatIcon}>{f.icon}</span>
-                <span className={styles.formatLabel}>{f.label}</span>
-                <span className={styles.formatHint}>{f.hint}</span>
+                Size
+              </label>
+              <select
+                id="export-png-pixel-ratio"
+                className={styles.settingControl}
+                value={pixelRatio}
+                onChange={(e) =>
+                  setPixelRatio(Number(e.target.value) as PngPixelRatio)
+                }
+                data-testid="export-png-pixel-ratio"
+              >
+                {PNG_PIXEL_RATIOS.map((ratio) => {
+                  const px = view && exportSize(view, ratio);
+                  return (
+                    <option key={ratio} value={ratio}>
+                      {px
+                        ? `${ratio}× — ${px.width} × ${px.height} px`
+                        : `${ratio}×`}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div className={styles.settingRow}>
+              <span className={styles.settingHint}>
+                The map and the drawings are drawn again at this size. They are
+                not enlarged from the screen.
+              </span>
+            </div>
+          </>
+        )}
+        {format === "pdf" && (
+          <>
+            <div className={styles.settingRow}>
+              <label
+                className={styles.settingLabel}
+                htmlFor="export-pdf-page-size"
+              >
+                Page size
+              </label>
+              <select
+                id="export-pdf-page-size"
+                className={styles.settingControl}
+                value={pageSize}
+                onChange={(e) => setPageSize(e.target.value as PageSize)}
+                data-testid="export-pdf-page-size"
+              >
+                {PAGE_SIZE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.settingRow}>
+              <label
+                className={styles.settingLabel}
+                htmlFor="export-pdf-orientation"
+              >
+                Orientation
+              </label>
+              <select
+                id="export-pdf-orientation"
+                className={styles.settingControl}
+                value={orientation}
+                onChange={(e) => setOrientation(e.target.value as Orientation)}
+                data-testid="export-pdf-orientation"
+              >
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel} htmlFor="export-pdf-title">
+                Title
+              </label>
+              <input
+                id="export-pdf-title"
+                type="text"
+                className={styles.settingInput}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                data-testid="export-pdf-title-input"
+              />
+            </div>
+            <div className={styles.settingRow}>
+              <span
+                className={styles.settingHint}
+                data-testid="export-pdf-note"
+              >
+                The map is an image at {PRINT_DPI} dpi, not vector shapes. The
+                page also has a legend, a scale bar, a north arrow and the
+                basemap credit.
+              </span>
+            </div>
+            {error && (
+              <div
+                role="alert"
+                className={styles.errorText}
+                data-testid="export-pdf-error"
+              >
+                {error}
               </div>
-            ))}
-          </div>
-
-          {/* Format-specific settings */}
-          <div className={styles.settings}>
-            {format === "png" && (
-              <>
-                <div className={styles.settingRow}>
-                  <label
-                    className={styles.settingLabel}
-                    htmlFor="export-png-pixel-ratio"
-                  >
-                    Size
-                  </label>
-                  <select
-                    id="export-png-pixel-ratio"
-                    className={styles.settingControl}
-                    value={pixelRatio}
-                    onChange={(e) =>
-                      setPixelRatio(Number(e.target.value) as PngPixelRatio)
-                    }
-                    data-testid="export-png-pixel-ratio"
-                  >
-                    {PNG_PIXEL_RATIOS.map((ratio) => {
-                      const px = view && exportSize(view, ratio);
-                      return (
-                        <option key={ratio} value={ratio}>
-                          {px
-                            ? `${ratio}× — ${px.width} × ${px.height} px`
-                            : `${ratio}×`}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div className={styles.settingRow}>
-                  <span className={styles.settingHint}>
-                    The map and the drawings are drawn again at this size. They
-                    are not enlarged from the screen.
-                  </span>
-                </div>
-              </>
             )}
-            {format === "pdf" && (
+          </>
+        )}
+        {format === "geojson" && (
+          <>
+            <div className={styles.settingRow}>
+              <span className={styles.settingLabel}>Content</span>
+              <span className={styles.settingHint}>
+                Drawn shapes that are fixed to the map
+              </span>
+            </div>
+            {hasDataLayers && (
               <>
                 <div className={styles.settingRow}>
                   <label
                     className={styles.settingLabel}
-                    htmlFor="export-pdf-page-size"
+                    htmlFor="export-geojson-include-data"
                   >
-                    Page size
-                  </label>
-                  <select
-                    id="export-pdf-page-size"
-                    className={styles.settingControl}
-                    value={pageSize}
-                    onChange={(e) => setPageSize(e.target.value as PageSize)}
-                    data-testid="export-pdf-page-size"
-                  >
-                    {PAGE_SIZE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className={styles.settingRow}>
-                  <label
-                    className={styles.settingLabel}
-                    htmlFor="export-pdf-orientation"
-                  >
-                    Orientation
-                  </label>
-                  <select
-                    id="export-pdf-orientation"
-                    className={styles.settingControl}
-                    value={orientation}
-                    onChange={(e) =>
-                      setOrientation(e.target.value as Orientation)
-                    }
-                    data-testid="export-pdf-orientation"
-                  >
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                  </select>
-                </div>
-                <div className={styles.settingRow}>
-                  <label
-                    className={styles.settingLabel}
-                    htmlFor="export-pdf-title"
-                  >
-                    Title
+                    Include imported data layers
                   </label>
                   <input
-                    id="export-pdf-title"
-                    type="text"
-                    className={styles.settingInput}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    data-testid="export-pdf-title-input"
+                    id="export-geojson-include-data"
+                    type="checkbox"
+                    checked={includeDataLayers}
+                    onChange={(e) => setIncludeDataLayers(e.target.checked)}
+                    data-testid="export-geojson-include-data"
                   />
                 </div>
                 <div className={styles.settingRow}>
-                  <span
-                    className={styles.settingHint}
-                    data-testid="export-pdf-note"
-                  >
-                    The map is an image at {PRINT_DPI} dpi, not vector shapes.
-                    The page also has a legend, a scale bar, a north arrow and
-                    the basemap credit.
-                  </span>
-                </div>
-                {error && (
-                  <div
-                    role="alert"
-                    className={styles.errorText}
-                    data-testid="export-pdf-error"
-                  >
-                    {error}
-                  </div>
-                )}
-              </>
-            )}
-            {format === "geojson" && (
-              <>
-                <div className={styles.settingRow}>
-                  <span className={styles.settingLabel}>Content</span>
                   <span className={styles.settingHint}>
-                    Drawn shapes that are fixed to the map
-                  </span>
-                </div>
-                {hasDataLayers && (
-                  <>
-                    <div className={styles.settingRow}>
-                      <label
-                        className={styles.settingLabel}
-                        htmlFor="export-geojson-include-data"
-                      >
-                        Include imported data layers
-                      </label>
-                      <input
-                        id="export-geojson-include-data"
-                        type="checkbox"
-                        checked={includeDataLayers}
-                        onChange={(e) => setIncludeDataLayers(e.target.checked)}
-                        data-testid="export-geojson-include-data"
-                      />
-                    </div>
-                    <div className={styles.settingRow}>
-                      <span className={styles.settingHint}>
-                        Adds all features of all data layers, also hidden
-                        layers. Each feature keeps its properties and gets a
-                        "layer" property with the layer name. Raster and tile
-                        layers are not vector data and are not included.
-                      </span>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-            {format === "atlasdraw" && (
-              <>
-                <div className={styles.settingRow}>
-                  <span className={styles.settingLabel}>Bundle</span>
-                  <span className={styles.settingHint}>
-                    Complete map document — drawing, data layers, and basemap
-                    style in one portable file
+                    Adds all features of all data layers, also hidden layers.
+                    Each feature keeps its properties and gets a "layer"
+                    property with the layer name. Raster and tile layers are not
+                    vector data and are not included.
                   </span>
                 </div>
               </>
             )}
-          </div>
-
-          {/* Footer */}
-          <div className={styles.footer}>
-            <button
-              type="button"
-              className={styles.cancelBtn}
-              onClick={onCloseRequest}
-              data-testid="export-dialog-cancel"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={styles.exportBtn}
-              onClick={handleExport}
-              disabled={exporting}
-              aria-disabled={exporting}
-              data-testid="export-dialog-export"
-            >
-              {exporting
-                ? "Exporting…"
-                : `Export ${FORMATS.find((f) => f.id === format)?.label}`}
-            </button>
-          </div>
-        </div>
+          </>
+        )}
+        {format === "atlasdraw" && (
+          <>
+            <div className={styles.settingRow}>
+              <span className={styles.settingLabel}>Bundle</span>
+              <span className={styles.settingHint}>
+                Complete map document — drawing, data layers, and basemap style
+                in one portable file
+              </span>
+            </div>
+          </>
+        )}
       </div>
-    </FocusTrap>
+
+      {/* Footer */}
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.cancelBtn}
+          onClick={onCloseRequest}
+          data-testid="export-dialog-cancel"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={styles.exportBtn}
+          onClick={handleExport}
+          disabled={exporting}
+          aria-disabled={exporting}
+          data-testid="export-dialog-export"
+        >
+          {exporting
+            ? "Exporting…"
+            : `Export ${FORMATS.find((f) => f.id === format)?.label}`}
+        </button>
+      </div>
+    </Modal>
   );
 }

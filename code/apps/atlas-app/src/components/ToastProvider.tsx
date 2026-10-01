@@ -5,6 +5,15 @@
  * 4 seconds. Types: success, error, info, warning. Each toast carries a
  * colored dot + message + dismiss button.
  *
+ * For a screen reader: two live regions are always in the page, so a toast
+ * is read when it arrives (a region added together with its text is often
+ * not read). An error goes to the `alert` region, which interrupts; the rest
+ * go to the polite `status` region. Both are marked `data-live-region`, so
+ * an open Modal does not make them inert.
+ *
+ * A toast stays while the pointer or the focus is on the stack (WCAG
+ * 2.2.1), and its time goes on from where it stopped.
+ *
  * Usage:
  *   const toast = useToast();
  *   toast.success("432 features imported");
@@ -74,15 +83,42 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 let nextId = 1;
 
+/** How long a toast stays, unless the pointer or the focus holds it. */
+const TOAST_MS = 4000;
+
+/** A toast's auto-dismiss: the time it has left, and its timer if running. */
+interface Countdown {
+  left: number;
+  startedAt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  done: () => void;
+}
+
+function start(c: Countdown): void {
+  if (c.timer === null) {
+    c.startedAt = Date.now();
+    c.timer = setTimeout(c.done, c.left);
+  }
+}
+
+function stop(c: Countdown): void {
+  if (c.timer !== null) {
+    clearTimeout(c.timer);
+    c.timer = null;
+    c.left = Math.max(0, c.left - (Date.now() - c.startedAt));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(
-    new Map(),
-  );
+  /** Each running toast's timer, and the time it has left. */
+  const timersRef = useRef<Map<number, Countdown>>(new Map());
+  /** True while the pointer or the focus is on the stack. */
+  const pausedRef = useRef({ hover: false, focus: false });
   const exitTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   // Work that ends after an unmount (an import, for example) can still close
   // its toast. It must not start a timer that outlives the provider.
@@ -90,9 +126,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const dismiss = useCallback((id: number) => {
     // Clear any pending auto-dismiss timer.
-    const timer = timersRef.current.get(id);
-    if (timer) {
-      clearTimeout(timer);
+    const countdown = timersRef.current.get(id);
+    if (countdown) {
+      stop(countdown);
       timersRef.current.delete(id);
     }
 
@@ -126,8 +162,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
       // Auto-dismiss after 4 seconds, unless the work is still running.
       if (!options.sticky) {
-        const timer = setTimeout(() => dismiss(id), 4000);
-        timersRef.current.set(id, timer);
+        const countdown: Countdown = {
+          left: TOAST_MS,
+          startedAt: 0,
+          timer: null,
+          done: () => dismiss(id),
+        };
+        timersRef.current.set(id, countdown);
+        const { hover, focus } = pausedRef.current;
+        if (!hover && !focus) {
+          start(countdown);
+        }
       }
 
       return id;
@@ -149,7 +194,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      timers.forEach((t) => clearTimeout(t));
+      timers.forEach(stop);
       exitTimers.forEach((t) => clearTimeout(t));
     };
   }, []);
@@ -164,6 +209,60 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toasts, dismiss]);
 
+  const setPaused = useCallback((part: "hover" | "focus", on: boolean) => {
+    const paused = pausedRef.current;
+    const was = paused.hover || paused.focus;
+    paused[part] = on;
+    const now = paused.hover || paused.focus;
+    if (was !== now) {
+      timersRef.current.forEach(now ? stop : start);
+    }
+  }, []);
+
+  const shown = (kind: "alert" | "status") =>
+    toasts
+      .filter((t) => (t.kind === "error") === (kind === "alert"))
+      .map((t) => (
+        <div
+          key={t.id}
+          className={[styles.toast, t.exiting ? styles.toastOut : ""]
+            .filter(Boolean)
+            .join(" ")}
+          data-testid={`toast-${t.kind}`}
+        >
+          <span
+            className={[
+              styles.dot,
+              t.kind === "success" ? styles.dotSuccess : "",
+              t.kind === "error" ? styles.dotError : "",
+              t.kind === "info" ? styles.dotInfo : "",
+              t.kind === "warning" ? styles.dotWarning : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          />
+          <span className={styles.message}>{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              className={styles.action}
+              data-testid="toast-action"
+              onClick={t.action.onClick}
+            >
+              {t.action.label}
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.dismiss}
+            onClick={() => dismiss(t.id)}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      ));
+
   // Stable context identity: consumers hang effects off useToast()'s
   // callbacks (e.g. MapEditor's persistence wiring) — a fresh value object
   // per render would re-fire all of them on every toast.
@@ -175,55 +274,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      {toasts.length > 0 && (
+      <div
+        className={styles.container}
+        data-testid="toast-container"
+        data-live-region
+        onMouseEnter={() => setPaused("hover", true)}
+        onMouseLeave={() => setPaused("hover", false)}
+        onFocus={() => setPaused("focus", true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setPaused("focus", false);
+          }
+        }}
+      >
         <div
-          className={styles.container}
+          className={styles.region}
           role="status"
           aria-live="polite"
-          data-testid="toast-container"
+          data-testid="toast-status"
         >
-          {toasts.map((t) => (
-            <div
-              key={t.id}
-              className={[styles.toast, t.exiting ? styles.toastOut : ""]
-                .filter(Boolean)
-                .join(" ")}
-              data-testid={`toast-${t.kind}`}
-            >
-              <span
-                className={[
-                  styles.dot,
-                  t.kind === "success" ? styles.dotSuccess : "",
-                  t.kind === "error" ? styles.dotError : "",
-                  t.kind === "info" ? styles.dotInfo : "",
-                  t.kind === "warning" ? styles.dotWarning : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
-              <span className={styles.message}>{t.message}</span>
-              {t.action && (
-                <button
-                  type="button"
-                  className={styles.action}
-                  data-testid="toast-action"
-                  onClick={t.action.onClick}
-                >
-                  {t.action.label}
-                </button>
-              )}
-              <button
-                type="button"
-                className={styles.dismiss}
-                onClick={() => dismiss(t.id)}
-                aria-label="Dismiss"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          {shown("status")}
         </div>
-      )}
+        <div
+          className={styles.region}
+          role="alert"
+          aria-live="assertive"
+          data-testid="toast-alert"
+        >
+          {shown("alert")}
+        </div>
+      </div>
     </ToastContext.Provider>
   );
 }

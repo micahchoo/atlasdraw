@@ -5,14 +5,16 @@
 // page and cannot be styled or tested; this can. `tone="destructive"` paints
 // the confirm button red, for an action that cannot be undone.
 //
-// Escape and the Cancel button cancel. Focus starts on Cancel, the answer
-// that loses nothing, and stays inside the dialog (FocusTrap).
+// Escape, a press outside and the Cancel button cancel. Focus starts on
+// Cancel, the answer that loses nothing, and stays inside the dialog
+// (Modal). Escape reaches only the newest dialog, so a question asked
+// inside another dialog cancels itself and leaves that dialog open.
 
-import React, { useEffect } from "react";
+import React, { useId } from "react";
 
 import styles from "../styles/ConfirmDialog.module.css";
 
-import { FocusTrap } from "./FocusTrap";
+import { Modal } from "./Modal";
 
 export interface ConfirmDialogProps {
   title: string;
@@ -42,71 +44,59 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onCancel();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
-
+  const id = useId();
   return (
-    <div className={styles.scrim} data-testid="confirm-dialog">
-      <FocusTrap>
-        <div
-          className={styles.dialog}
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="confirm-dialog-title"
-          aria-describedby="confirm-dialog-body"
+    <Modal
+      role="alertdialog"
+      labelledBy={`${id}-title`}
+      describedBy={`${id}-body`}
+      onClose={onCancel}
+      scrimClassName={styles.scrim}
+      scrimTestId="confirm-dialog"
+      className={styles.dialog}
+    >
+      <h2 id={`${id}-title`} className={styles.title}>
+        {title}
+      </h2>
+      <p id={`${id}-body`} className={styles.body}>
+        {body}
+      </p>
+      {option && (
+        <label className={styles.option}>
+          <input
+            type="checkbox"
+            checked={option.checked}
+            onChange={(e) => option.onChange(e.target.checked)}
+            data-testid="confirm-dialog-option"
+          />
+          <span>{option.label}</span>
+        </label>
+      )}
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={onCancel}
+          data-testid="confirm-dialog-cancel"
+          autoFocus
         >
-          <h2 id="confirm-dialog-title" className={styles.title}>
-            {title}
-          </h2>
-          <p id="confirm-dialog-body" className={styles.body}>
-            {body}
-          </p>
-          {option && (
-            <label className={styles.option}>
-              <input
-                type="checkbox"
-                checked={option.checked}
-                onChange={(e) => option.onChange(e.target.checked)}
-                data-testid="confirm-dialog-option"
-              />
-              <span>{option.label}</span>
-            </label>
-          )}
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.button}
-              onClick={onCancel}
-              data-testid="confirm-dialog-cancel"
-              autoFocus
-            >
-              {cancelLabel}
-            </button>
-            <button
-              type="button"
-              className={[
-                styles.button,
-                tone === "destructive"
-                  ? styles.buttonDestructive
-                  : styles.buttonPrimary,
-              ].join(" ")}
-              onClick={onConfirm}
-              data-testid="confirm-dialog-confirm"
-              data-tone={tone}
-            >
-              {confirmLabel}
-            </button>
-          </div>
-        </div>
-      </FocusTrap>
-    </div>
+          {cancelLabel}
+        </button>
+        <button
+          type="button"
+          className={[
+            styles.button,
+            tone === "destructive"
+              ? styles.buttonDestructive
+              : styles.buttonPrimary,
+          ].join(" ")}
+          onClick={onConfirm}
+          data-testid="confirm-dialog-confirm"
+          data-tone={tone}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </Modal>
   );
 };

@@ -10,7 +10,11 @@
 // one (commands.test.ts).
 
 import { CaptureUpdateAction, newElementWith } from "@atlasdraw/element";
-import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
+import {
+  CANVAS_SEARCH_TAB,
+  DEFAULT_SIDEBAR,
+  isDarwin,
+} from "@atlasdraw/common";
 import { PinTool } from "@atlasdraw/tools";
 
 import type { ZoomAction } from "@atlasdraw/excalidraw/types";
@@ -19,7 +23,7 @@ import { zoomActionOnMap } from "../hooks/useCameraBridge";
 import { pickFile } from "../lib/pickFile";
 import { openMap, restoreBackup, saveMap } from "../session/fileActions";
 
-import { keyLabels, type KeyBinding } from "./keys";
+import { keyLabels, keyText, type KeyBinding } from "./keys";
 
 import type { EditorSession } from "../session/EditorSession";
 
@@ -336,6 +340,12 @@ export const MAIN_MENU: readonly string[] = [
   "view.theme",
 ];
 
+/** The palette's key as this platform shows it: "Ctrl+K", or "⌘K" on macOS. */
+export function paletteKeyText(mac?: boolean): string {
+  const binding = commandById("app.palette")?.keys?.[0];
+  return binding ? keyText(binding, mac) : "";
+}
+
 /** What the palette offers now: every available command but itself. */
 export function paletteCommands(s: EditorSession): Command[] {
   return COMMANDS.filter((c) => c.id !== "app.palette" && c.available(s));
@@ -350,6 +360,13 @@ export interface EditorKey {
   /** The binding, when it is a key and not a gesture. */
   binding?: KeyBinding;
 }
+
+/** A key the drawing keeps, shown as this platform types it. */
+const bound = (
+  binding: KeyBinding,
+  label: string,
+  group: EditorKey["group"],
+): EditorKey => ({ keys: keyLabels(binding), label, group, binding });
 
 const digit = (n: string, label: string): EditorKey => ({
   keys: [n],
@@ -389,42 +406,12 @@ export const EDITOR_KEYS: readonly EditorKey[] = [
     group: "Editing",
     binding: { key: "Delete" },
   },
-  {
-    keys: ["Ctrl", "Z"],
-    label: "Undo",
-    group: "Editing",
-    binding: { key: "z", mod: true },
-  },
-  {
-    keys: ["Ctrl", "Shift", "Z"],
-    label: "Redo",
-    group: "Editing",
-    binding: { key: "z", mod: true, shift: true },
-  },
-  {
-    keys: ["Ctrl", "C"],
-    label: "Copy",
-    group: "Editing",
-    binding: { key: "c", mod: true },
-  },
-  {
-    keys: ["Ctrl", "V"],
-    label: "Paste",
-    group: "Editing",
-    binding: { key: "v", mod: true },
-  },
-  {
-    keys: ["Ctrl", "D"],
-    label: "Duplicate the selection",
-    group: "Editing",
-    binding: { key: "d", mod: true },
-  },
-  {
-    keys: ["Ctrl", "F"],
-    label: "Find on the drawing",
-    group: "Editing",
-    binding: { key: "f", mod: true },
-  },
+  bound({ key: "z", mod: true }, "Undo", "Editing"),
+  bound({ key: "z", mod: true, shift: true }, "Redo", "Editing"),
+  bound({ key: "c", mod: true }, "Copy", "Editing"),
+  bound({ key: "v", mod: true }, "Paste", "Editing"),
+  bound({ key: "d", mod: true }, "Duplicate the selection", "Editing"),
+  bound({ key: "f", mod: true }, "Find on the drawing", "Editing"),
   {
     keys: ["Escape"],
     label: "Leave the active tool or mode",
@@ -452,19 +439,22 @@ export const SHORTCUT_GROUPS: readonly string[] = [
   "Help",
 ];
 
-/** Every key the editor answers: the drawing's own, then each command's. */
-export function shortcutRows(): ShortcutRow[] {
+/**
+ * Every key the editor answers: the drawing's own, then each command's. A
+ * key is shown as the platform types it (`mac`: ⌘ for the modifier).
+ */
+export function shortcutRows(mac: boolean = isDarwin): ShortcutRow[] {
   return [
     ...EDITOR_KEYS.map((k) => ({
       group: k.group,
       label: k.label,
-      keys: k.keys,
+      keys: k.binding ? keyLabels(k.binding, mac) : k.keys,
     })),
     ...COMMANDS.flatMap((c) =>
       (c.keys ?? []).map((b) => ({
         group: c.group,
         label: c.label,
-        keys: keyLabels(b),
+        keys: keyLabels(b, mac),
       })),
     ),
   ];
