@@ -317,12 +317,14 @@ async function blobToDataURL(blob: Blob): Promise<string> {
  * Excalidraw; they are the document's, not the drawing's.
  *
  * The new Document settles on the loaded content, so a save with no edit
- * keeps the file's updatedAt.
+ * keeps the file's updatedAt. When `signal` is aborted before the apply,
+ * nothing changes and the result is null.
  */
 export async function loadDocument(
   file: AtlasdrawDocument,
   api: ExcalidrawImperativeAPI,
-): Promise<Document> {
+  options: { signal?: AbortSignal } = {},
+): Promise<Document | null> {
   // The document is bound to the Excalidraw it is opened into.
   const doc = createDocument(fromFile(file), sceneOf(api));
   const rasterKeys = new Set(
@@ -343,6 +345,11 @@ export async function loadDocument(
       })),
   );
 
+  // An editor that went away while the files were read must not be changed.
+  if (options.signal?.aborted) {
+    return null;
+  }
+  // From here the open is one synchronous step.
   openDocument(doc);
   useBasemapStore.getState().setActiveBasemapId(file.manifest.basemap.id);
   restoreCamera(file.manifest.camera);

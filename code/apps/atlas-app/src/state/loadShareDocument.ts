@@ -6,10 +6,9 @@
 //   - Hash mode  : `#v1:<lz-string base64>` — self-contained, no network.
 //   - Token mode : a 21-char id → `.atlasdraw` blob over HTTP.
 //
-// NOTE: hash-mode payloads are `JSON.stringify(doc)`, so the document's
-// `layers`/`files` Maps do not survive (Maps JSON-serialize to `{}`). Hash
-// docs therefore carry `scene` + `manifest` only; callers must not assume
-// `doc.layers.get` exists on a hash-loaded document.
+// A v1 hash payload is `JSON.stringify(doc)`. JSON has no Map, so such a
+// document carries `scene` and `manifest` only; it is returned with empty
+// `layers` and `files`.
 
 import LZString from "lz-string";
 import { read, type AtlasdrawDocument } from "@atlasdraw/data";
@@ -37,7 +36,13 @@ export function decodeHashDoc(hash: string): AtlasdrawDocument {
   if (!json) {
     throw new Error("Corrupted share-link payload.");
   }
-  return JSON.parse(json) as AtlasdrawDocument;
+  // JSON carries no Map, so a v1 payload has no layers and no files; give
+  // the document empty ones rather than the `{}` that JSON wrote.
+  const parsed = JSON.parse(json) as Omit<
+    AtlasdrawDocument,
+    "layers" | "files"
+  >;
+  return { ...parsed, layers: new Map(), files: new Map() };
 }
 
 /** Extract a 21-char share token from a `<prefix><token>` path; null if none. */

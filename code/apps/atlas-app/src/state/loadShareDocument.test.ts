@@ -29,7 +29,11 @@ const TOKEN = "abcdefghij_klmnop-qrs";
 
 describe("decodeHashDoc", () => {
   it("round-trips a v1 hash", () => {
-    expect(decodeHashDoc(hashFor(sampleDoc))).toEqual(sampleDoc);
+    expect(decodeHashDoc(hashFor(sampleDoc))).toEqual({
+      ...sampleDoc,
+      layers: new Map(),
+      files: new Map(),
+    });
   });
 
   it("rejects an unsupported version prefix", () => {
@@ -58,7 +62,10 @@ describe("tokenFromPath", () => {
 describe("loadShareDocument", () => {
   it("resolves a hash document (hash wins over token)", async () => {
     const r = await loadShareDocument(hashFor(sampleDoc), TOKEN);
-    expect(r).toEqual({ kind: "ready", doc: sampleDoc });
+    expect(r).toEqual({
+      kind: "ready",
+      doc: { ...sampleDoc, layers: new Map(), files: new Map() },
+    });
   });
 
   it("returns an error for a corrupt hash", async () => {

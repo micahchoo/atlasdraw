@@ -139,7 +139,11 @@ describe("usePersistenceWiring", () => {
     );
 
     await waitFor(() => {
-      expect(hydrateSpy).toHaveBeenCalledWith(FAKE_DOC, fakeExcalidrawAPI);
+      expect(hydrateSpy).toHaveBeenCalledWith(
+        FAKE_DOC,
+        fakeExcalidrawAPI,
+        expect.anything(),
+      );
     });
   });
 

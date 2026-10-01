@@ -340,11 +340,26 @@ describe("loadDocument", () => {
 
     expect(currentDocument()).toBe(doc);
     expect(doc).not.toBe(before);
-    expect(doc.id).toBe("01HZ8KQR5Z3MV7BJ4N6XPYD9TF");
-    expect(doc.revision).toBe(0);
-    expect(doc.snapshot().title).toBe("Field notes");
+    expect(doc?.id).toBe("01HZ8KQR5Z3MV7BJ4N6XPYD9TF");
+    expect(doc?.revision).toBe(0);
+    expect(doc?.snapshot().title).toBe("Field notes");
     expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
     expect(fx.api.getSceneElements().map((e) => e.id)).toEqual(["rect-1"]);
+  });
+
+  it("changes nothing when the editor went away before the apply", async () => {
+    const fx = makeFakeExcalidraw();
+    const before = currentDocument();
+    const abort = new AbortController();
+    abort.abort();
+
+    const doc = await loadDocument(savedDocument(), fx.api, {
+      signal: abort.signal,
+    });
+
+    expect(doc).toBeNull();
+    expect(currentDocument()).toBe(before);
+    expect(fx.api.getSceneElements()).toEqual([]);
   });
 
   it("hands Excalidraw the drawing as one step that undo does not take back", async () => {

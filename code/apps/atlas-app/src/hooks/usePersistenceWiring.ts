@@ -94,6 +94,7 @@ export function usePersistenceWiring(
     });
 
     let cancelled = false;
+    const abort = new AbortController();
     let unsubCamera: () => void = () => {};
     void (async () => {
       try {
@@ -102,7 +103,12 @@ export function usePersistenceWiring(
           return;
         }
         if (loaded) {
-          await loadDocument(loaded, excalidrawAPI);
+          const opened = await loadDocument(loaded, excalidrawAPI, {
+            signal: abort.signal,
+          });
+          if (!opened) {
+            return;
+          }
           // hydrate moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,
           // for as long as this editor is mounted.
@@ -181,6 +187,7 @@ export function usePersistenceWiring(
 
     return () => {
       cancelled = true;
+      abort.abort();
       unsubDirty();
       unsubDocument();
       unsubBasemap();

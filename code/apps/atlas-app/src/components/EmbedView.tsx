@@ -6,14 +6,13 @@
 // editor uses, chromeless, so a finished map embeds in a cross-origin
 // <iframe> as a live map:
 //   - MapLibre basemap (from manifest.basemap.id) at the authored camera
-//   - GeoJSON data layers (token-mode docs) rendered via the layer registry
+//   - the document's data and raster layers, opened with the editor's loader
+//     (documentIO.loadDocument)
 //   - geo-anchored Excalidraw annotations, reprojected via CoordinateSync
 //
 // Routes (App.tsx):
-//   /embed#v1:<lz>   — hash mode (self-contained; annotations only — hash
-//                       payloads lose their data-layer FeatureCollections to
-//                       JSON serialization)
-//   /embed/<token>   — token mode (full document, incl. data layers)
+//   /embed#<hash>    — hash mode (self-contained; see loadShareDocument)
+//   /embed/<token>   — token mode (the document over HTTP)
 //
 // URL params: ?lock=1 disables map pan/zoom (camera-locked presentation).
 //
@@ -29,17 +28,14 @@ import {
 } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawImperativeAPI,
-} from "@atlasdraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
-import { useLayerRegistryStore } from "../state/layerRegistry";
+import { loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
   loadShareDocument,
@@ -150,71 +146,24 @@ const EmbedCanvas: React.FC<{
   // Keep geo-anchored annotations pinned to the map on pan/zoom.
   const { syncNow } = useCoordinateSync(map, api);
 
-  // Render the document's GeoJSON data layers onto the map (registry → map).
+  // Draw the open document's data and raster layers on the map.
   useLayerRegistrySync(map);
 
-  // Register the document's data layers into the registry so the sync above
-  // draws them. Token-mode docs carry `layers` as a Map<id, FeatureCollection>;
-  // hash-mode payloads lose it to JSON serialization (plain object) → skipped.
+  // Open the document the way the editor opens a file (documentIO): its
+  // layers, rasters and drawing. One loader, so the embed shows what the
+  // editor shows.
   useEffect(() => {
-    const registry = useLayerRegistryStore.getState();
-    const clearAll = () => {
-      const r = useLayerRegistryStore.getState();
-      for (const id of r.entries.map((e) => e.id)) {
-        r.remove(id);
-      }
-    };
-    clearAll();
-    const layers = doc.layers;
-    if (layers instanceof Map) {
-      for (const entry of doc.manifest?.layers ?? []) {
-        if (entry.kind === "raster") {
-          // Registered here so a shared/embedded document shows the same
-          // backdrop the author saw. `doc.files` carries the decoded image
-          // alongside pasted canvas images; without it there is nothing to
-          // draw, and a panel-less embed has no way to explain an empty layer,
-          // so skip rather than register something unrenderable.
-          if (!doc.files?.has(entry.imageKey)) {
-            continue;
-          }
-          registry.registerRasterLayer({
-            id: entry.id,
-            label: entry.label,
-            corners: entry.corners,
-            imageKey: entry.imageKey,
-            opacity: entry.opacity,
-          });
-          if (entry.visible === false) {
-            registry.setVisibility(entry.id, false);
-          }
-          continue;
-        }
-        const fc = layers.get(entry.id);
-        if (!fc) {
-          continue;
-        }
-        registry.registerDataLayer({
-          id: entry.id,
-          fc,
-          label: entry.label,
-          style: entry.style as unknown as Parameters<
-            typeof registry.registerDataLayer
-          >[0]["style"],
-        });
-        if (entry.visible === false) {
-          registry.setVisibility(entry.id, false);
-        }
-      }
+    if (!api) {
+      return;
     }
-    return clearAll;
-  }, [doc]);
+    const abort = new AbortController();
+    void loadDocument(doc, api, { signal: abort.signal });
+    return () => abort.abort();
+  }, [doc, api]);
 
-  // Elements load via `initialData` below (Excalidraw runs them through
-  // `restore`, which fills the internal fields a raw `updateScene` assumes
-  // present — passing the scene straight to updateScene drops them). Once the
-  // map + api are up, project the geo-anchored elements onto the camera.
-  // Deferred a frame so getSceneElements() is settled (MapEditor drives the
-  // equivalent post-load sync from Excalidraw's onChange).
+  // Once the map and the API are up, project the geo-anchored elements onto
+  // the camera. Deferred a frame so getSceneElements() is settled (MapEditor
+  // drives the equivalent post-load sync from Excalidraw's onChange).
   useEffect(() => {
     if (!map || !api) {
       return;
@@ -251,11 +200,8 @@ const EmbedCanvas: React.FC<{
   }, [map, options.lock]);
 
   const initialData = useMemo(
-    () => ({
-      elements: (doc.scene ?? []) as unknown as readonly ExcalidrawElement[],
-      appState: { viewBackgroundColor: "transparent" },
-    }),
-    [doc],
+    () => ({ appState: { viewBackgroundColor: "transparent" } }),
+    [],
   );
 
   const camera = doc.manifest?.camera;
