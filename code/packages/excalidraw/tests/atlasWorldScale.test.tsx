@@ -286,6 +286,23 @@ describe("onZoomAction", () => {
     ).toEqual([rect.id]);
   });
 
+  it("scrollToContent with a fit goes to the host", async () => {
+    const onZoomAction = vi.fn((_: ZoomAction) => true);
+    await render(<Excalidraw onZoomAction={onZoomAction} />);
+    const rect = API.createElement({ type: "rectangle" });
+    API.setElements([rect]);
+    setZoom();
+    act(() => {
+      h.app.scrollToContent(rect, { fitToContent: true, animate: false });
+    });
+    expect(onZoomAction).toHaveBeenCalledTimes(1);
+    expect(onZoomAction.mock.calls[0][0]).toMatchObject({
+      type: "zoomToFit",
+      inViewport: true,
+    });
+    expect(h.state.zoom.value).toBe(ZOOM);
+  });
+
   it("without the prop, Ctrl+= zooms the editor", async () => {
     await render(<Excalidraw handleKeyboardGlobally />);
     const before = h.state.zoom.value;

@@ -1,18 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// ADR-0015 spike — measures criteria 1-5 in a real browser.
+// World coordinates in a real browser (ADR-0015): pan frame time and writes
+// at 0, 1,000 and 5,000 shapes, camera-bridge exchanges per input, and undo
+// after a pan.
 //
-//   cd code/apps/atlas-app && npx vite --port 5293 --strictPort &
-//   node scripts/spike-world-coords.mjs [--json out.json]
-//
-// Modes (all on the same dev server, chosen by query string):
-//   main  — scroll lock + CoordinateSync, the layer-registry gate OFF: main as it is
-//   lock  — scroll lock + CoordinateSync, with the registry gate (P0 applied)
-//   world — ?world=1: camera bridge, world coordinates
+//   cd code/apps/atlas-app && npx vite --port 5297 --strictPort &
+//   node scripts/bench-world-coords.mjs [--json out.json]
 //
 // Pan frame time is the requestAnimationFrame delta while every frame moves
 // the map by (4, 1) px with `panBy({animate:false})` — the same synchronous
-// `move` cascade a drag produces, without input-timing noise.
+// `move` cascade a drag produces, without input-timing noise. Shapes come
+// from the dev-only `__atlasdraw__.seed(n)` hook (lib/devSeedShapes.ts).
+//
+// Environment: BENCH_URL (default http://localhost:5297/), BENCH_SIZES,
+// BENCH_FRAMES, BENCH_RUNS, BENCH_ONLY (pan,bridge,undo), BENCH_UNCAPPED=1
+// (no vsync: a rAF delta is the frame's real cost).
 
 /* eslint-disable no-console -- a measurement script: its output is the console. */
 
@@ -20,19 +22,12 @@ import fs from "node:fs";
 
 import { chromium } from "playwright";
 
-const BASE = process.env.SPIKE_URL ?? "http://localhost:5293/";
-const SIZES = (process.env.SPIKE_SIZES ?? "0,1000,5000").split(",").map(Number);
-const FRAMES = Number(process.env.SPIKE_FRAMES ?? 300);
-const RUNS = Number(process.env.SPIKE_RUNS ?? 3);
-// A run stops early past this budget: main at 5,000 shapes takes seconds a frame.
-const BUDGET_MS = Number(process.env.SPIKE_BUDGET_MS ?? 30_000);
-
-const MODES = {
-  main: "?registryGate=0",
-  lock: "",
-  world: "?world=1",
-  world22: "?world=1&z0=22",
-};
+const BASE = process.env.BENCH_URL ?? "http://localhost:5297/";
+const SIZES = (process.env.BENCH_SIZES ?? "0,1000,5000").split(",").map(Number);
+const FRAMES = Number(process.env.BENCH_FRAMES ?? 300);
+const RUNS = Number(process.env.BENCH_RUNS ?? 3);
+// A run stops early past this budget.
+const BUDGET_MS = Number(process.env.BENCH_BUDGET_MS ?? 30_000);
 
 function pct(xs, p) {
   const s = [...xs].sort((a, b) => a - b);
@@ -50,29 +45,26 @@ function summary(xs) {
   };
 }
 
-async function open(browser, mode, extra = "") {
+async function open(browser) {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 800 },
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(BASE + MODES[mode] + extra);
+  await page.addInitScript(() =>
+    localStorage.setItem("atlasdraw-onboarding-dismissed", "1"),
+  );
+  await page.goto(BASE);
   await page.waitForFunction(
-    (world) =>
+    () =>
       window.__atlasdraw__ &&
-      (!world || window.__atlasdraw__.cameraBridge) &&
+      window.__atlasdraw__.cameraBridge &&
       window.__atlasdraw__.map.loaded(),
-    mode.startsWith("world"),
+    undefined,
     { timeout: 90_000 },
   );
   // Let boot-time onChange traffic settle.
   await page.waitForTimeout(1500);
-  // The first-run tour lays a scrim over the plate; dismiss it.
-  const skip = page.getByRole("button", { name: "Skip" });
-  if (await skip.isVisible().catch(() => false)) {
-    await skip.click();
-    await page.waitForTimeout(300);
-  }
   return { page, errors };
 }
 
@@ -148,9 +140,9 @@ function changed(before, after) {
   return { versions, geometry, total: Object.keys(before).length };
 }
 
-/** Criteria 1 and 2 for one mode and size. */
-async function panCase(browser, mode, n) {
-  const { page, errors } = await open(browser, mode);
+/** Pan and zoom at `n` shapes: frame time, element writes, dirty flag. */
+async function panCase(browser, n) {
+  const { page, errors } = await open(browser);
   const seeded = n
     ? await page.evaluate((n) => window.__atlasdraw__.seed(n), n)
     : 0;
@@ -180,7 +172,6 @@ async function panCase(browser, mode, n) {
   const dirty = await page.evaluate(() => window.__atlasdraw__.isDirty());
   await page.close();
   return {
-    mode,
     n: seeded,
     frame: summary(all),
     arrayChanges,
@@ -191,9 +182,9 @@ async function panCase(browser, mode, n) {
   };
 }
 
-/** Criterion 4: how many bridge updates one camera move costs. */
+/** How many bridge updates one camera move costs, by input. */
 async function bridgeCase(browser) {
-  const { page, errors } = await open(browser, "world");
+  const { page, errors } = await open(browser);
   await page.evaluate(() => window.__atlasdraw__.seed(1000));
   const out = {};
   const measure = async (label, fn) => {
@@ -277,7 +268,7 @@ async function bridgeCase(browser) {
   out.agreement = await page.evaluate(() => {
     const a = window.__atlasdraw__;
     const s = a.excalidrawAPI.getAppState();
-    const f = a.cameraBridge.frame;
+    const f = a.frame();
     let worst = 0;
     for (const [dx, dy] of [
       [0, 0],
@@ -300,9 +291,9 @@ async function bridgeCase(browser) {
   return out;
 }
 
-/** Criterion 3: draw, drag, pan, undo — where is the shape? */
-async function undoCase(browser, mode) {
-  const { page, errors } = await open(browser, mode);
+/** Draw, drag, pan, undo — where is the shape? */
+async function undoCase(browser) {
+  const { page, errors } = await open(browser);
   const place = () =>
     page.evaluate(() => {
       const a = window.__atlasdraw__;
@@ -312,11 +303,7 @@ async function undoCase(browser, mode) {
       if (!el) {
         return null;
       }
-      if (a.worldCoords) {
-        return a.toLngLat(a.cameraBridge.frame, { x: el.x, y: el.y });
-      }
-      const g = el.customData?.geo;
-      return g ? { lng: g.west, lat: g.north } : { noAnchor: true };
+      return a.toLngLat(a.frame(), { x: el.x, y: el.y });
     });
   // Draw a rectangle with the stock tool.
   await page.getByTestId("toolbar-rectangle").click({ force: true });
@@ -346,7 +333,7 @@ async function undoCase(browser, mode) {
   const undone = await place();
   const px = await page.evaluate(
     ([a, b]) => {
-      if (!a || !b || a.noAnchor || b.noAnchor) {
+      if (!a || !b) {
         return null;
       }
       const m = window.__atlasdraw__.map;
@@ -357,95 +344,7 @@ async function undoCase(browser, mode) {
     [drawn, undone],
   );
   await page.close();
-  return { mode, drawn, dragged, undone, pxFromDrawnAfterUndo: px, errors };
-}
-
-/** Criterion 5: every map zoom 0..22 under the bridge. */
-async function zoomCase(browser, z0) {
-  const { page, errors } = await open(browser, "world", `&z0=${z0}`);
-  const out = await page.evaluate(async () => {
-    const a = window.__atlasdraw__;
-    const f = a.cameraBridge.frame;
-    const rows = [];
-    const raf = () =>
-      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const canvas = document.querySelector("canvas.excalidraw__canvas.static");
-    const ctx = canvas.getContext("2d");
-    const dpr = window.devicePixelRatio || 1;
-    for (let z = 0; z <= 22; z++) {
-      a.map.jumpTo({ zoom: z, center: [78.5, 22] });
-      await raf();
-      const s = a.excalidrawAPI.getAppState();
-      const want = Math.pow(2, a.map.getZoom() - f.z0);
-      // A 200-px solid square at the map centre, made at this zoom.
-      const c = a.map.getContainer();
-      const cx = c.clientWidth / 2;
-      const cy = c.clientHeight / 2;
-      const ll = a.map.unproject([cx, cy]);
-      const p = a.toScene(f, ll.lng, ll.lat);
-      const size = 200 / s.zoom.value;
-      // A plain element literal: no constructor is on window.
-      const probe = {
-        id: `zoom-probe-${z}`,
-        type: "rectangle",
-        x: p.x - size / 2,
-        y: p.y - size / 2,
-        width: size,
-        height: size,
-        angle: 0,
-        strokeColor: "#000000",
-        backgroundColor: "#ff0000",
-        fillStyle: "solid",
-        strokeWidth: 1 / s.zoom.value,
-        strokeStyle: "solid",
-        roughness: 0,
-        opacity: 100,
-        groupIds: [],
-        frameId: null,
-        roundness: null,
-        seed: 1,
-        version: 1,
-        versionNonce: 1,
-        index: null,
-        isDeleted: false,
-        boundElements: null,
-        updated: 1,
-        link: null,
-        locked: false,
-      };
-      a.excalidrawAPI.updateScene({ elements: [probe] });
-      await raf();
-      await raf();
-      const alphaAt = (dx) =>
-        ctx.getImageData(
-          Math.round((cx + dx) * dpr),
-          Math.round(cy * dpr),
-          1,
-          1,
-        ).data[3];
-      const px = ctx.getImageData(
-        Math.round(cx * dpr),
-        Math.round(cy * dpr),
-        1,
-        1,
-      ).data;
-      // The square's right edge is at +100 px: sharp means opaque at +97 and
-      // clear at +103. A capped element canvas shows as a ramp across it.
-      const edge = [90, 97, 103, 110].map(alphaAt);
-      rows.push({
-        z: +a.map.getZoom().toFixed(3),
-        zoomValue: s.zoom.value,
-        exact: s.zoom.value === want,
-        centreRed: px[0] > 200 && px[1] < 60 && px[3] > 200,
-        edgeAlpha: edge,
-        sharp: edge[0] > 240 && edge[1] > 240 && edge[2] < 15 && edge[3] < 15,
-      });
-    }
-    return { z0: f.z0, rows };
-  });
-  out.errors = errors;
-  await page.close();
-  return out;
+  return { drawn, dragged, undone, pxFromDrawnAfterUndo: px, errors };
 }
 
 // The real GPU: SwiftShader puts MapLibre's own frame cost on the CPU and
@@ -455,26 +354,20 @@ const browser = await chromium.launch({
     "--enable-gpu",
     "--ignore-gpu-blocklist",
     "--use-angle=gl",
-    // SPIKE_UNCAPPED=1: no vsync, so a rAF delta is the frame's real cost
-    // rather than a multiple of 16.7 ms.
-    ...(process.env.SPIKE_UNCAPPED === "1"
+    ...(process.env.BENCH_UNCAPPED === "1"
       ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"]
       : []),
   ],
 });
 const results = { when: new Date().toISOString(), frames: FRAMES, runs: RUNS };
-const only = process.env.SPIKE_ONLY?.split(",");
+const only = process.env.BENCH_ONLY?.split(",");
 const want = (k) => !only || only.includes(k);
 if (want("pan")) {
   results.pan = [];
   for (const n of SIZES) {
-    for (const mode of (
-      process.env.SPIKE_MODES ?? "main,lock,world,world22"
-    ).split(",")) {
-      const r = await panCase(browser, mode, n);
-      console.log(JSON.stringify(r));
-      results.pan.push(r);
-    }
+    const r = await panCase(browser, n);
+    console.log(JSON.stringify(r));
+    results.pan.push(r);
   }
 }
 if (want("bridge")) {
@@ -482,32 +375,8 @@ if (want("bridge")) {
   console.log(JSON.stringify(results.bridge, null, 1));
 }
 if (want("undo")) {
-  results.undo = [];
-  for (const mode of ["lock", "world"]) {
-    const r = await undoCase(browser, mode);
-    console.log(JSON.stringify(r));
-    results.undo.push(r);
-  }
-}
-if (want("zoom")) {
-  results.zoom = [];
-  for (const z0 of (process.env.SPIKE_Z0 ?? "4,12,22").split(",").map(Number)) {
-    const r = await zoomCase(browser, z0);
-    console.log(
-      `z0=${r.z0} sharp at z: ${r.rows
-        .filter((x) => x.sharp)
-        .map((x) => x.z)
-        .join(",")}` +
-        ` | NOT sharp at z: ${r.rows
-          .filter((x) => !x.sharp)
-          .map((x) => `${x.z}${JSON.stringify(x.edgeAlpha)}`)
-          .join(" ")}` +
-        ` | zoom exact everywhere: ${r.rows.every((x) => x.exact)} errors=${
-          r.errors.length
-        }`,
-    );
-    results.zoom.push(r);
-  }
+  results.undo = await undoCase(browser);
+  console.log(JSON.stringify(results.undo));
 }
 await browser.close();
 const jsonAt = process.argv.indexOf("--json");

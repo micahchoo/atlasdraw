@@ -2,7 +2,8 @@
 
 # ADR-0015: World Coordinates — Decided by a Measured Spike
 
-- **Status:** Accepted (the gate). Outcome: GO with two conditions, recorded below.
+- **Status:** Accepted (the gate). Outcome: GO with two conditions. Shipped in
+  roadmap wave W4 (branch `w4/world`); world coordinates are the only path.
 - **Date:** 2026-10-01
 - **Relates to:** `code/decisions/0003-coordinate-system.md`
 
@@ -162,21 +163,115 @@ Pan frame time, ms (p95 / mean):
 - `isDirty` after a slow `main` run can read false because autosave cleared
   it; the element-array count is the reliable measure.
 
-### Production change (on go)
+### Decision
 
-- New: `packages/geo/src/world.ts`, `migrateV1.ts`;
-  `packages/basemap/src/CameraBridge.ts`;
-  `apps/atlas-app/src/hooks/useCameraBridge.ts`.
-- Change: `MapEditor.tsx` (flag removed), `useExcalidrawChangeHandler.ts`
-  (steps 2-3 deleted), `useLayerRegistrySync.ts`, `state/hydrate.ts` and
-  `state/selectDocument.ts` (migrate on load, store `z0` and origin in the
-  manifest, schema bump with W3), `tools/seedToElement.ts` and `PinTool`
-  (create on the frame), `MapEditor.buildGeoJsonExport`, `tools/convert.ts`,
-  `geo/bounds.ts`, `CommentAnchorsOverlay.tsx` (lng/lat from scene
-  coordinates), `useMapEditorKeyboard.ts` (route zoom keys to the map),
-  `useMapWheelRouter.ts`, `MapEditor.module.css`.
-- Fork (P4): `packages/excalidraw/components/App.tsx` creation sites and
-  `actions/actionProperties.tsx` stroke/font, in screen units.
-- Delete: `CoordinateSync.ts`, `useCoordinateSync.ts`, `useGeoAnchor.ts`,
-  `canonicalExport.ts`, `scaleMode.ts`, `cameraRotation` in projection,
-  `geoOpFuzz.harness.ts` and the fuzz and hazard tests, `_lastSync`.
+Made before W4 and carried out in it:
+
+1. **Reference zoom `z0 = 22` for every document**, with the floating origin
+   stored in the manifest (`manifest.world = { z0, origin }`). Stroke width
+   and font size are normalised at creation: the stroke and font pickers and
+   new elements work in screen pixels and store them divided by the zoom
+   value, so on-screen sizes at the zoom where the user draws are as before
+   (fork prop `screenSizedStyles`).
+2. **One owner for the camera.** Excalidraw's zoom keys, zoom buttons and
+   fit actions call the host (`onZoomAction`), which zooms the map;
+   `useMapEditorKeyboard` takes the zoom keys when focus is outside the
+   drawing; trackpad pinch goes to the map with the wheel.
+3. **Bearing** is a CSS rotation of the drawing layer's canvases about the
+   map centre, display only. Drawing stays blocked while the map is turned.
+
+### As built (W4)
+
+- `packages/geo`: `world.ts` (`documentFrame`, `REFERENCE_ZOOM`,
+  `sceneUnitsPerPixel`), `sceneGeometry.ts` (an element's drawn outline),
+  `bounds.ts` (lng/lat bounds through the frame), `migrateV1.ts`.
+- `packages/data`: the coordinate step is the second step of
+  `MIGRATIONS[1]`; the manifest gains `world`. The version stays 2.
+  `fixtures/v1-delhi.atlasdraw` was written by the v1 build; the migrated
+  file draws every element within 1e-6 px of where v1 drew it at the save
+  camera (zoom 13.3, bearing 25), rotated boxes, polylines, text, a pin and
+  the `screen` and `hybrid` modes included. v1 kept no `a0` for those two
+  modes, so their saved angle held the camera's turn; the migration takes it
+  out with the turn of a box that has both (`savedCameraTurn`).
+- `CameraBridge` reads the frame on every exchange (a newly opened document
+  applies at once) and attaches after Excalidraw initializes: its initial
+  `zoom: 1` would otherwise read as a user change and send the map to zoom 22.
+- Lng/lat for GeoJSON export, convert-to-data-layer (one converter,
+  `tools/convert.ts`, with the element's own turn), bounds and zoom-to,
+  comment anchors and their hit test, and the generated layer name ("Rectangle
+  near …") come from scene coordinates through the frame.
+- Pins and tool seeds are placed in the frame; a pin is centred on the
+  click. A bare `.excalidraw` import opens at the live camera, at the size it
+  had (`lib/placeDrawing.ts`).
+- Deleted: `CoordinateSync`, `useCoordinateSync`, `useGeoAnchor`,
+  `canonicalExport`, `scaleMode`, `cameraRotation`, `projection.ts`,
+  `parseGeoCustomData`, the scroll lock and drift check, `_lastSync`, the
+  fork's `onScrollBackToContent`, `geoOpFuzz.harness` with its fuzz and
+  hazard tests, `useAtlasdrawTool.updateElement`, the geo coord-sync bench.
+  Property tests on the frame, the scene geometry and the bridge replace
+  the fuzz harness.
+- The layer-registry `onChange` gate from the spike is gone with the
+  registry: W3 computes annotation rows from the scene store, which
+  publishes only when the scene signature changes.
+
+### Found in production, not by the spike
+
+`z0 = 22` makes one scene unit about a thousandth of a pixel where people
+draw. Upstream draws some details at fixed scene sizes, and has limits in
+scene units. In the browser: arrows had no heads, dashes were dust, strokes
+were drawn at half width (the cache canvas padding of 20 units clipped the
+outer half), rough shapes bowed by thousands of pixels, text drew at half
+size (Chromium clamps a canvas font to 10000px), library items went in at
+a thousandth of their size, and elbow arrows were clamped to ±1e6. Fixed in
+the fork:
+
+- Each element records its pixel unit, `customData.atlas.unit` (scene units
+  per screen pixel at the zoom it was drawn at), from every creation path:
+  the editor, pins and seeds, imports, library items and pastes from
+  outside, and the v1 migration. Arrowhead size, dash lengths, rough jitter
+  and bowing, the adaptive corner radius and cache-canvas padding are
+  multiplied by it (`packages/element/src/atlasStyleUnit.ts`). An element
+  without a unit is drawn as upstream draws it.
+- Library items and pastes from outside the atlas are scaled to the size
+  they had there (`scaleForeignElements`).
+- Canvas text above 1000px is measured and drawn at 1000px into a scaled
+  context (`MAX_CANVAS_FONT_SIZE`).
+- The 1e6 limits are `MAX_SCENE_EXTENT = 2^32`.
+
+Fork edits, all marked "Atlasdraw" and tested
+(`packages/excalidraw/tests/atlasWorldScale.test.tsx`,
+`packages/element/tests/atlasStyleUnit.test.ts`,
+`packages/element/tests/atlasCanvasFont.test.ts`): `types.ts` and
+`index.tsx` (the two props), `components/App.tsx` (creation sites, unit
+stamp, foreign elements, fitting `scrollToContent`),
+`actions/actionProperties.tsx` (stroke and font pickers),
+`actions/actionCanvas.tsx` (zoom actions), `actions/actionBoundText.tsx`,
+`components/LayerUI.tsx` (prop removed), `atlasStyleScale.ts`;
+`packages/element`: `atlasStyleUnit.ts`, `bounds.ts`, `shape.ts`,
+`renderElement.ts`, `utils.ts`, `textMeasurements.ts`, `elbowArrow.ts`,
+`newElement.ts`; `packages/common/src/constants.ts`.
+
+Not fixed: touch pinch while a drawing tool is active still zooms
+Excalidraw, which clamps; other upstream scene-unit constants (binding
+gaps, bound-text padding, elbow-arrow routing padding) scale with the map
+and are near zero where people draw.
+
+### Production measurements (W4)
+
+`code/apps/atlas-app/scripts/bench-world-coords.mjs` on `vite --port 5297`,
+the same machine and method as the spike (Playwright Chromium on the real
+GPU, 1280x800, 3 runs x 300 frames of `panBy([4,1])`), 2026-10-01:
+
+| shapes | uncapped p95 / mean (ms) | vsync p95 / mean (ms) | element writes during pan and zoom | dirty |
+| ------ | ------------------------ | --------------------- | ---------------------------------- | ----- |
+| 0      | 2.7 / 2.05               | 17.2 / 16.67          | 0                                  | no    |
+| 1,000  | 5.4 / 3.70               | 17.3 / 16.67          | 0 of 1,000                         | no    |
+| 5,000  | 18.6 / 11.61             | 19.2 / 16.72          | 0 of 5,000                         | no    |
+
+Bridge, per input: one `panBy` 1 write into the scene and 0 back; an
+animated `easeTo` 31 writes for 31 `move` events and 0 back; a mouse drag on
+the map 37 and 0; Excalidraw's `scrollToContent` 1 and 1; a fitting
+`scrollToContent` goes to the map (18 writes, 0 back); space-drag in
+Excalidraw 20 steps, 20 back and 23 in; 5 wheel notches 5 and 0. Scene and
+map agree to 4.2e-11 px afterwards. Undo after drag and pan: 0 px from the
+drawn place.

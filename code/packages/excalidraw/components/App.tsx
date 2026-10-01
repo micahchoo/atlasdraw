@@ -4349,6 +4349,18 @@ class App extends React.Component<AppProps, AppState> {
     // convert provided target into ExcalidrawElement[] if necessary
     const targetElements = Array.isArray(target) ? target : [target];
 
+    // Atlasdraw (ADR-0015): a fit is a zoom; the host's map may own it.
+    if (
+      (opts?.fitToContent || opts?.fitToViewport) &&
+      this.props.onZoomAction?.({
+        type: "zoomToFit",
+        elements: targetElements,
+        inViewport: !opts.fitToViewport,
+      })
+    ) {
+      return;
+    }
+
     let zoom = this.state.zoom;
     let scrollX = this.state.scrollX;
     let scrollY = this.state.scrollY;
