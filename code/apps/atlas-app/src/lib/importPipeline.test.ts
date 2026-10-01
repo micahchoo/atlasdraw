@@ -7,7 +7,8 @@ import { describe, expect, it } from "vitest";
 
 import { LIMITS } from "@atlasdraw/protocol";
 
-import { runImport, sizeRefusal } from "./importPipeline";
+import { sizeRefusal } from "./importFormat";
+import { runImport } from "./importPipeline";
 
 const MB = 1024 * 1024;
 

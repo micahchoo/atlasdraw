@@ -5,7 +5,9 @@
 // messages out, then one result. importClient.ts owns its lifetime and
 // terminates it to cancel.
 
-import { runImport, type ImportFormat } from "./importPipeline";
+import { runImport } from "./importPipeline";
+
+import type { ImportFormat } from "./importFormat";
 
 import type { ImportWorkerReply, ImportWorkerRequest } from "./importClient";
 
