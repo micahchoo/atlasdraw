@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // MapEditor keyboard shortcuts: Cmd+K quick actions, Cmd+S/Cmd+O document
-// save/open, `?` for the shortcuts panel, Escape to dismiss it, and the zoom
-// keys when focus is outside the drawing.
-//
-// Step 5 adds the comment-mode toggle on bare `c`, plus an Escape branch that
-// leaves the mode. See the `c` handler for the keybinding audit that cleared
-// the key.
+// save/open, `?` for the shortcuts panel, bare `c` for comment mode, Escape
+// to close the panel or leave comment mode, and the zoom keys when focus is
+// outside the drawing. See the `c` handler for the audit that cleared the key.
 
 import { useEffect } from "react";
 
@@ -50,6 +47,8 @@ export interface MapEditorKeyboardParams {
   onOpen: (excalidrawAPI: ExcalidrawImperativeAPI | null) => void;
   /** The map's zoom: the same handler Excalidraw's zoom actions call. */
   onZoomAction: (action: ZoomAction) => boolean;
+  /** The element that holds Excalidraw; null until it mounts. */
+  drawingLayer: HTMLElement | null;
 }
 
 /** Ctrl/Cmd + key → zoom action, by `KeyboardEvent.code`. */
@@ -70,6 +69,7 @@ export function useMapEditorKeyboard({
   onSave,
   onOpen,
   onZoomAction,
+  drawingLayer,
 }: MapEditorKeyboardParams): void {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -165,22 +165,46 @@ export function useMapEditorKeyboard({
         toggleCommentMode();
         return;
       }
-      // Escape dismisses open overlays.
       if (e.key === "Escape") {
-        if (showShortcuts) {
-          setShowShortcuts(false);
-          return;
-        }
-        // Leaving comment mode restores the atlas tool it dropped — see
-        // useCommentModeTool's cleanup. The Excalidraw tool is never touched.
-        if (isCommentModeActive()) {
-          setCommentMode(false);
-        }
+        closeAtlasState();
       }
     };
+    // Excalidraw takes Escape at the React root when any tool but selection
+    // is active (actionDeselect) and stops it there, so the window listener
+    // never hears it with focus in the drawing. A capture listener on the
+    // drawing's own element runs first. It runs after a dropdown's document
+    // capture listener, so an open menu still closes before the mode does.
+    const onDrawingEscape = (e: KeyboardEvent) => {
+      if (
+        e.key === "Escape" &&
+        !isTypingTarget(e.target) &&
+        closeAtlasState()
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    const closeAtlasState = (): boolean => {
+      if (showShortcuts) {
+        setShowShortcuts(false);
+        return true;
+      }
+      // Leaving comment mode restores the atlas tool it dropped (see
+      // useCommentModeTool's cleanup). The Excalidraw tool is never touched.
+      if (isCommentModeActive()) {
+        setCommentMode(false);
+        return true;
+      }
+      return false;
+    };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    drawingLayer?.addEventListener("keydown", onDrawingEscape, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      drawingLayer?.removeEventListener("keydown", onDrawingEscape, true);
+    };
   }, [
+    drawingLayer,
     showShortcuts,
     excalidrawAPI,
     setShowShortcuts,

@@ -1,6 +1,7 @@
 import clsx from "clsx";
 
 import { actionShortcuts } from "../../actions";
+import { useAppProps } from "../App";
 import { useTunnels } from "../../context/tunnels";
 import { ExitZenModeButton, UndoRedoActions, ZoomActions } from "../Actions";
 import { HelpButton } from "../HelpButton";
@@ -22,6 +23,7 @@ const Footer = ({
   renderWelcomeScreen: boolean;
 }) => {
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
+  const { toggleShortcuts } = useAppProps().UIOptions.canvasActions;
 
   return (
     <footer
@@ -61,9 +63,11 @@ const Footer = ({
       >
         <div style={{ position: "relative" }}>
           {renderWelcomeScreen && <WelcomeScreenHelpHintTunnel.Out />}
-          <HelpButton
-            onClick={() => actionManager.executeAction(actionShortcuts)}
-          />
+          {toggleShortcuts && (
+            <HelpButton
+              onClick={() => actionManager.executeAction(actionShortcuts)}
+            />
+          )}
         </div>
       </div>
       <ExitZenModeButton

@@ -318,7 +318,7 @@ const EXCALIDRAW_INITIAL_DATA = {
 // (.excalidraw load/save, the JSONExportDialog, the image export dialog).
 // These keys also close the matching shortcuts (Cmd+Shift+S, Cmd+Shift+E)
 // and command-palette entries, so Cmd+O / Cmd+S fall through to the atlas
-// handlers in MapEditor's own onKeyDown. Tested in the fork:
+// handlers in useMapEditorKeyboard. Tested in the fork:
 // packages/excalidraw/tests/closedExportDoors.test.tsx.
 const EXCALIDRAW_UI_OPTIONS = {
   canvasActions: {
@@ -326,6 +326,9 @@ const EXCALIDRAW_UI_OPTIONS = {
     saveToActiveFile: false,
     export: false as const,
     saveAsImage: false,
+    // One help surface: `?` reaches useMapEditorKeyboard, which opens
+    // KeyboardShortcuts. Tested in the fork: closedHelpDoor.test.tsx.
+    toggleShortcuts: false,
   },
 } as const;
 
@@ -742,6 +745,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
     onOpen: (api) =>
       void openAtlasDocument(api, documentNotify, confirmReplace),
     onZoomAction,
+    drawingLayer: excalidrawLayer,
   });
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
@@ -1153,10 +1157,9 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                 >
                   Settings…
                 </MainMenu.Item>
-                {/* Atlasdraw's own Help entry — not MainMenu.DefaultItems.Help,
-                which opens Excalidraw's vendored HelpDialog (links to
-                docs.excalidraw.com / github.com/excalidraw / Excalidraw+)
-                and collides with our own "?" shortcut binding above. */}
+                {/* Atlasdraw's own help, not MainMenu.DefaultItems.Help:
+                Excalidraw's HelpDialog lists upstream keys and links. `?`
+                opens this one too (EXCALIDRAW_UI_OPTIONS.toggleShortcuts). */}
                 <MainMenu.Item
                   onSelect={() => setShowShortcuts(true)}
                   data-testid="main-menu-shortcuts"

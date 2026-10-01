@@ -919,6 +919,8 @@ export type CanvasActions = Partial<{
   saveToActiveFile: boolean;
   toggleTheme: boolean | null;
   saveAsImage: boolean;
+  /** The help dialog: the `?` key and the help buttons. */
+  toggleShortcuts: boolean;
 }>;
 
 export type UIOptions = Partial<{

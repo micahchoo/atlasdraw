@@ -135,11 +135,8 @@ test.describe("known-red", () => {
     );
   });
 
+  // Fixed in W7a: the fork's help door is closed (toggleShortcuts: false).
   test("W7: pressing ? opens exactly one help surface", async ({ page }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W7 help): ? opens both the Atlasdraw shortcuts panel and Excalidraw's HelpDialog. Remove when fixed.",
-    );
     await openEditor(page);
     await page.mouse.click(300, 650);
     await page.keyboard.press("?");
