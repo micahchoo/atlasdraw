@@ -8,7 +8,7 @@
 //
 // Once the room has joined, the editor opens the room's Document and shows
 // the room's drawing; the user's own document waits in memory and comes
-// back when the editor leaves the room. Nothing in the room is written to
+// back when the editor unmounts. Opening another document leaves the room. Nothing in the room is written to
 // the user's own map: the autosave skips a room's document.
 //
 // Presence: the pointer's place on the map (map.unproject) and the camera
@@ -30,6 +30,7 @@ import { getAppConfig } from "../config/app-config";
 import {
   currentDocument,
   openDocument,
+  useDocumentStore,
   type Document,
 } from "../state/document";
 import { restoreCamera } from "../state/documentIO";
@@ -154,10 +155,26 @@ export function useRoom(
     const unsubscribePeers = room.presence.subscribe(() =>
       setPeers(room.presence.peers()),
     );
+    // Another document opened in the editor (a file, My maps, a new map):
+    // the editor leaves the room at once, before that document's drawing
+    // reaches Excalidraw, so none of it is written to the room.
+    const unsubscribeDocument = useDocumentStore.subscribe((state) => {
+      if (!previous || state.doc === room.document) {
+        return;
+      }
+      detach?.();
+      detach = null;
+      previous = null;
+      const { pathname, search } = window.location;
+      window.history.replaceState(window.history.state, "", pathname + search);
+      roomRef.current = null;
+      setRoom(null);
+    });
 
     return () => {
       unsubscribeStatus();
       unsubscribePeers();
+      unsubscribeDocument();
       detach?.();
       room.leave();
       if (roomRef.current === room) {

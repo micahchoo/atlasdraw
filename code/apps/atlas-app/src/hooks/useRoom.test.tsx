@@ -141,6 +141,35 @@ describe("useRoom", () => {
     expect(again).toBe(url);
   });
 
+  it("opening another document leaves the room, and nothing of it reaches the room", async () => {
+    const relay = memoryRelay();
+    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
+    const host = createDocument(
+      { title: "Shared survey" },
+      { elements: () => [rect("shared")] as never, files: () => ({}) },
+    );
+    await seedRoom(relay.server, host, "host");
+    const link = newRoomLink();
+    window.history.replaceState(null, "", `/${roomFragment(link)}`);
+    const fake = makeFakeExcalidraw();
+
+    const { result } = renderHook(() => useRoom(fake.api, null));
+    await waitFor(() => expect(result.current.status).toBe("joined"));
+
+    // What opening a file does: a new document, then its drawing.
+    act(() => {
+      openDocument(createDocument({ title: "From a file" }));
+      fake.setElements([rect("from-file")] as never);
+    });
+
+    expect(result.current.room).toBeNull();
+    expect(window.location.hash).toBe("");
+    expect(Array.from(relay.server.getMap("elements").keys())).toEqual([
+      "shared",
+    ]);
+    expect(currentDocument().snapshot().title).toBe("From a file");
+  });
+
   it("says why a link that is not a room link cannot be joined", () => {
     window.history.replaceState(null, "", "/#room:not-a-room");
     const fake = makeFakeExcalidraw();
