@@ -9,7 +9,7 @@
 // (its layers, payloads, title, basemap), and, from
 // useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -39,6 +39,7 @@ import {
 import { copyOfSharedMap } from "../state/myMaps";
 import { answerConflict, holdOpenMaps } from "../session/mapOwnership";
 import { buildRoute, type SharedMap } from "../routes";
+import { trackSave } from "../state/lastSave";
 
 import type { EditorSession } from "../session/EditorSession";
 import type { Conflict } from "../state/documentStore";
@@ -82,6 +83,35 @@ export function usePersistenceWiring(
   const { view, persistence } = session;
   // Read once: the link is consumed by the first open.
   const openRef = useRef(open);
+  // Save what is unsaved, now. Set by the effect below; called when the
+  // editor goes away (unmountSave).
+  const flushRef = useRef<(() => Promise<unknown> | null) | null>(null);
+  // That save, so the store closes only after it.
+  const unmountSave = useRef<Promise<unknown> | null>(null);
+
+  // The editor is going away: an error took it down, or the route changed.
+  // A layout effect's cleanup runs before the children unmount, while
+  // Excalidraw still holds the drawing; after that its scene is empty, and
+  // the passive cleanup below would save an empty map.
+  useLayoutEffect(
+    () => () => {
+      let save: Promise<unknown> | null;
+      try {
+        save = flushRef.current?.() ?? null;
+      } catch (err) {
+        // A cleanup must not throw: the crash screen says the save failed.
+        // eslint-disable-next-line no-console
+        console.error("[persistence] save on unmount failed", err);
+        save = Promise.reject(err);
+        save.catch(() => undefined);
+      }
+      unmountSave.current = save;
+      if (save) {
+        trackSave(save);
+      }
+    },
+    [excalidrawAPI],
+  );
 
   useEffect(() => {
     if (!excalidrawAPI) {
@@ -294,36 +324,45 @@ export function usePersistenceWiring(
     // Closing or leaving the tab: write unsaved changes now, not after the
     // autosave delay. 'visibilitychange' to hidden comes first and leaves the
     // most time; 'pagehide' covers a close that skips it.
-    const flushOnLeave = () => {
+    const flushOnLeave = (): Promise<unknown> | null => {
       const doc = store.isDirty() ? getDoc() : null;
-      if (doc) {
-        void store.save(doc).catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error("[persistence] save on leave failed", err);
-        });
+      if (!doc) {
+        return null;
       }
+      const save = store.save(doc);
+      save.catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[persistence] save on leave failed", err);
+      });
+      return save;
     };
+    flushRef.current = flushOnLeave;
     const onVisibility = () => {
       if (document.visibilityState === "hidden") {
         flushOnLeave();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("pagehide", flushOnLeave);
+    const onPageHide = () => void flushOnLeave();
+    window.addEventListener("pagehide", onPageHide);
 
     return () => {
       cancelled = true;
       abort.abort();
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("pagehide", flushOnLeave);
+      window.removeEventListener("pagehide", onPageHide);
       unsubDirty();
       unsubDocument();
       unsubCamera();
       unholdMaps();
       persistence.getState().setOwnMapLoaded(true);
       dispose();
+      flushRef.current = null;
       persistence.getState().setPersistenceStore(null);
-      void store.close();
+      // The unmount's save (above) still writes through this connection.
+      const pending = unmountSave.current ?? Promise.resolve();
+      unmountSave.current = null;
+      void pending.catch(() => undefined).then(() => store.close());
     };
   }, [excalidrawAPI, documentNotify, view, persistence]);
 }

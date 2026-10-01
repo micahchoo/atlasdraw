@@ -173,6 +173,30 @@ describe("usePersistenceWiring — closing the tab", () => {
     expect(getDoc()).toBeNull();
   });
 
+  it("saves unsaved changes when the editor unmounts (a crash), before the store closes", async () => {
+    const store = makeFakeStore({ isDirty: vi.fn(() => true) });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    const dispose = vi.fn();
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(dispose);
+    const { unmount } = renderHook(() =>
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    unmount();
+
+    expect(store.save).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalled();
+    // The connection closes only after the last save is written.
+    await waitFor(() => expect(store.close).toHaveBeenCalled());
+    const saved = (store.save as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    const closed = (store.close as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0]!;
+    expect(saved).toBeLessThan(closed);
+  });
+
   it("writes nothing when nothing changed", () => {
     const store = makeFakeStore();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
@@ -401,7 +425,7 @@ describe("usePersistenceWiring", () => {
     expect(session.persistence.getState().remoteSaveFailed).toBe(true);
   });
 
-  it("disposes the store and clears it from the session on unmount", () => {
+  it("disposes the store and clears it from the session on unmount", async () => {
     const store = makeFakeStore();
     const dispose = vi.fn();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
@@ -417,8 +441,9 @@ describe("usePersistenceWiring", () => {
     unmount();
 
     expect(dispose).toHaveBeenCalled();
-    expect(store.close).toHaveBeenCalled();
     expect(session.persistence.getState().persistenceStore).toBeNull();
+    // Closed after any save the unmount made.
+    await waitFor(() => expect(store.close).toHaveBeenCalled());
   });
 
   it("builds a remote-save callback only when enableBackendPersistence is true", () => {
