@@ -173,4 +173,54 @@ describe("ManifestSchema", () => {
       ManifestSchema.safeParse({ ...baseManifest, title: "" }).success,
     ).toBe(false);
   });
+
+  describe("tileLayers (optional)", () => {
+    const tile = {
+      kind: "tile" as const,
+      id: "tl:aerial",
+      label: "Aerial",
+      visible: true,
+      opacity: 0.8,
+      url: "https://tiles.example.org/{z}/{x}/{y}.png",
+      attribution: "© Example",
+    };
+
+    it("is absent from a manifest that has none, and stays absent", () => {
+      const parsed = ManifestSchema.parse(baseManifest);
+      expect("tileLayers" in parsed).toBe(false);
+    });
+
+    it("parses tile layers, in order, with or without attribution", () => {
+      const { attribution: _a, ...bare } = tile;
+      const parsed = ManifestSchema.parse({
+        ...baseManifest,
+        tileLayers: [tile, { ...bare, id: "tl:topo" }],
+      });
+      expect(parsed.tileLayers).toEqual([tile, { ...bare, id: "tl:topo" }]);
+    });
+
+    it("rejects an id without the tl: prefix", () => {
+      expect(
+        ManifestSchema.safeParse({
+          ...baseManifest,
+          tileLayers: [{ ...tile, id: "dl:aerial" }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("rejects an opacity outside 0..1 and an empty url", () => {
+      expect(
+        ManifestSchema.safeParse({
+          ...baseManifest,
+          tileLayers: [{ ...tile, opacity: 2 }],
+        }).success,
+      ).toBe(false);
+      expect(
+        ManifestSchema.safeParse({
+          ...baseManifest,
+          tileLayers: [{ ...tile, url: "" }],
+        }).success,
+      ).toBe(false);
+    });
+  });
 });

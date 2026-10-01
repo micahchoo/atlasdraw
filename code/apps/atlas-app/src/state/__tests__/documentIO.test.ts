@@ -387,6 +387,92 @@ describe("fromFile", () => {
   });
 });
 
+describe("tile layers in the file (W9d)", () => {
+  const URL_T = "https://tiles.example.org/{z}/{x}/{y}.png";
+  const withTiles = (doc: Document): Document => {
+    doc.dispatch({
+      type: "add-tile-layer",
+      id: "tl:aerial",
+      label: "Aerial",
+      url: URL_T,
+      attribution: "© Example",
+      opacity: 0.7,
+    });
+    doc.dispatch({
+      type: "add-tile-layer",
+      id: "tl:topo",
+      label: "Topo",
+      url: URL_T.replace(".png", ".jpg"),
+    });
+    doc.dispatch({ type: "set-visibility", id: "tl:topo", visible: false });
+    return doc;
+  };
+
+  it("a document without tile layers writes no tileLayers field", () => {
+    const fx = makeFakeExcalidraw([geoRect("rect-1")]);
+    const file = toFile(withLayers(createDocument({}, sceneOf(fx.api))));
+    expect("tileLayers" in file.manifest).toBe(false);
+  });
+
+  it("writes tile layers bottom first, apart from the other layers", () => {
+    const fx = makeFakeExcalidraw([]);
+    const file = toFile(withTiles(createDocument({}, sceneOf(fx.api))));
+
+    expect(file.manifest.layers).toEqual([]);
+    expect(file.manifest.tileLayers).toEqual([
+      {
+        kind: "tile",
+        id: "tl:aerial",
+        label: "Aerial",
+        visible: true,
+        opacity: 0.7,
+        url: URL_T,
+        attribution: "© Example",
+      },
+      {
+        kind: "tile",
+        id: "tl:topo",
+        label: "Topo",
+        visible: false,
+        opacity: 1,
+        url: URL_T.replace(".png", ".jpg"),
+      },
+    ]);
+  });
+
+  it("comes back from the bytes as the same tile layers", async () => {
+    const fx = makeFakeExcalidraw([]);
+    const doc = withTiles(createDocument({}, sceneOf(fx.api)));
+    const result = await decode(await encode(doc));
+    expect(result.ok).toBe(true);
+    const reopened = createDocument(
+      fromFile(result.ok ? result.file : savedDocument()),
+    );
+
+    expect(reopened.snapshot().overlays).toEqual(doc.snapshot().overlays);
+  });
+
+  it("skips a tile layer whose URL the editor would refuse", async () => {
+    const fx = makeFakeExcalidraw([]);
+    const file = toFile(withTiles(createDocument({}, sceneOf(fx.api))));
+    const tampered = {
+      ...file,
+      manifest: {
+        ...file.manifest,
+        tileLayers: file.manifest.tileLayers?.map((t) =>
+          t.id === "tl:topo"
+            ? { ...t, url: "http://tracker.example.org/{z}/{x}/{y}" }
+            : t,
+        ),
+      },
+    };
+    const result = await decode(await write(tampered));
+    const state = fromFile(result.ok ? result.file : savedDocument());
+
+    expect(state.overlays?.map((e) => e.id)).toEqual(["tl:aerial"]);
+  });
+});
+
 describe("loadDocument", () => {
   it("opens a new document with the file's identity and layers, at revision 0", async () => {
     const fx = makeFakeExcalidraw();

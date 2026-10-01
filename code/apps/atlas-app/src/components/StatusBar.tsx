@@ -13,6 +13,8 @@
 
 import React, { useEffect, useState } from "react";
 
+import { creditLine } from "../lib/tileLayers";
+import { useDocument } from "../state/document";
 import styles from "../styles/StatusBar.module.css";
 
 import type maplibregl from "maplibre-gl";
@@ -89,7 +91,8 @@ interface StatusBarProps {
    * credit matches what's actually rendered — the app ships a Protomaps vector
    * basemap, not raster OSM. Falls back to a conservative OSM-only credit
    * (never wrong, since all bundled basemaps derive from OSM data) when the
-   * active basemap can't be resolved.
+   * active basemap can't be resolved. The credit of each visible tile layer
+   * in the open document follows it (lib/tileLayers#creditLine).
    */
   attribution?: string;
 }
@@ -109,6 +112,7 @@ export function StatusBar({
   dirty = false,
   attribution = "© OpenStreetMap",
 }: StatusBarProps) {
+  const overlays = useDocument((s) => s.overlays);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [online, setOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true,
@@ -193,7 +197,7 @@ export function StatusBar({
       <span className={styles.spacer} />
 
       <span className={styles.attrib} data-testid="status-bar-attribution">
-        {attribution}
+        {creditLine(attribution, overlays)}
       </span>
 
       {readout && (

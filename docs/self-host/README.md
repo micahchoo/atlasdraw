@@ -102,11 +102,45 @@ The minimal compose reads two env vars from `.env` or the shell:
   request, `silent` to mute startup logs.
 
 Set them inline:
+
 ```bash
 LOG_LEVEL=debug docker compose -f infra/docker-compose.minimal.yml up
 ```
 
 Or via an `.env` file at repo root.
+
+## Aerial imagery and other tile layers
+
+A user can add map tiles from a URL: open the layer panel, go to
+**Tile layers**, and click **Add tile layer…**. Atlasdraw ships no tile URL
+and no key. The browser does not call a tile server until a user adds a
+layer.
+
+The URL must:
+
+- contain `{z}`, `{x}` and `{y}`. ArcGIS servers use `{z}/{y}/{x}`.
+- start with `https://`. Only a server on the same computer (`localhost`,
+  `127.0.0.1`) can use `http://`.
+- name one server. MapLibre does not fill in `{s}`; write `a` in its place.
+
+Type the provider's credit in **Credit**. Atlasdraw prints it in the status
+bar, in the PNG export and on the PDF page.
+
+The form has one preset: USGS aerial imagery of the United States
+(public domain, no key). Set `VITE_ALLOW_REMOTE_BASEMAPS=false` to remove
+it.
+
+To give users aerial imagery for other areas, run a tile server or use a
+provider that permits your use, and give users its URL. Example with a
+local server:
+
+```text
+http://localhost:8080/tiles/{z}/{x}/{y}.png
+```
+
+Do not put a provider key in a URL that you share. Every person who opens
+the map sees the URL, because it is saved in the `.atlasdraw` file
+(`tileLayers` in `manifest.json`).
 
 ## Updating
 
@@ -138,6 +172,7 @@ expects storage on `http://localhost:4000`. From a browser pointed at
 `localhost:3000`, this works as long as port 4000 is also bound on the
 host. If you remapped the storage port, rebuild with
 `VITE_STORAGE_BASE_URL` pointing at the new URL:
+
 ```bash
 docker compose -f infra/docker-compose.minimal.yml build \
   --build-arg VITE_STORAGE_BASE_URL=http://localhost:9000 web
@@ -146,6 +181,7 @@ docker compose -f infra/docker-compose.minimal.yml build \
 **Build fails on `better-sqlite3`.** The storage image needs Python +
 C++ build tools for the native module. The provided Dockerfile installs
 them; if you've forked it and removed the apt layer, restore it:
+
 ```dockerfile
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*

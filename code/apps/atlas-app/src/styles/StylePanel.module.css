@@ -240,3 +240,36 @@
   color: var(--ad-danger);
   overflow-wrap: anywhere;
 }
+
+/* --- labels and filter (W9d) ------------------------------------------------
+ * Two sections under the colour tabs. They combine with any colour mode, so
+ * they are sections, not tabs. */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: var(--ad-space-3, 12px);
+  padding-top: var(--ad-space-2, 8px);
+  border-top: 1px solid var(--ad-rule);
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.sectionActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ad-ink-secondary);
+}

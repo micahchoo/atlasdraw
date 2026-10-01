@@ -225,6 +225,80 @@ describe("layer commands", () => {
   });
 });
 
+describe("tile layers (W9d)", () => {
+  const URL_T = "https://tiles.example.org/{z}/{x}/{y}.png";
+  const addTile = (doc: Document, id: string, opacity?: number) =>
+    doc.dispatch({
+      type: "add-tile-layer",
+      id,
+      label: id,
+      url: URL_T,
+      attribution: "© Example",
+      ...(opacity !== undefined ? { opacity } : {}),
+    });
+
+  it("add-tile-layer stores the entry, visible and fully opaque by default", () => {
+    const doc = createDocument();
+    addTile(doc, "tl:aerial");
+
+    expect(doc.snapshot().overlays).toEqual([
+      {
+        kind: "tile",
+        id: "tl:aerial",
+        label: "tl:aerial",
+        visible: true,
+        order: 0,
+        opacity: 1,
+        url: URL_T,
+        attribution: "© Example",
+      },
+    ]);
+    expect(() => addTile(doc, "aerial")).toThrow(/tl:/);
+  });
+
+  it("tile layers are their own stack", () => {
+    const doc = createDocument();
+    addTile(doc, "tl:a");
+    addData(doc, "dl:x");
+    addTile(doc, "tl:b");
+
+    doc.dispatch({ type: "reorder", id: "tl:a", order: 5 });
+
+    const orderOf = (id: string) =>
+      doc.snapshot().overlays.find((e) => e.id === id)?.order;
+    expect([orderOf("tl:b"), orderOf("tl:a"), orderOf("dl:x")]).toEqual([
+      0, 1, 0,
+    ]);
+  });
+
+  it("set-opacity changes a tile layer's or a raster's opacity, clamped to 0..1", () => {
+    const doc = createDocument();
+    addTile(doc, "tl:a", 0.5);
+    addRaster(doc, "rl:x");
+    addData(doc, "dl:d");
+    const data = doc.snapshot().overlays[2];
+
+    doc.dispatch({ type: "set-opacity", id: "tl:a", opacity: 0.25 });
+    doc.dispatch({ type: "set-opacity", id: "rl:x", opacity: 7 });
+    const revision = doc.revision;
+    doc.dispatch({ type: "set-opacity", id: "dl:d", opacity: 0.1 });
+
+    const [a, x, d] = doc.snapshot().overlays;
+    expect(a).toMatchObject({ opacity: 0.25 });
+    expect(x).toMatchObject({ opacity: 1 });
+    // A data layer's opacity is its style: set-opacity does not apply.
+    expect(d).toBe(data);
+    expect(doc.revision).toBe(revision);
+  });
+
+  it("remove-layer drops a tile layer", () => {
+    const doc = createDocument();
+    addTile(doc, "tl:a");
+    doc.dispatch({ type: "remove-layer", id: "tl:a" });
+    expect(ids(doc)).toEqual([]);
+  });
+});
+
 describe("revision and subscribers", () => {
   it("rises by one on each real change and tells subscribers", () => {
     const doc = createDocument();

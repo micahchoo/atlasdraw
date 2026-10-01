@@ -10,8 +10,8 @@
 //                loaded, never minted again; updatedAt (see `stamp`)
 //   title      — the sheet name
 //   camera     — the camera the document was saved with
-//   overlays   — the data and raster layers, in order; each kind is its own
-//                z-order stack
+//   overlays   — the data, raster and tile layers, in order; each kind is
+//                its own z-order stack
 //   payloads   — each data layer's FeatureCollection and each raster's PNG
 //
 // Every change goes through `dispatch`. A command that changes something
@@ -130,7 +130,26 @@ export type RasterLayerEntry = {
   provenance?: LayerProvenance;
 };
 
-export type OverlayEntry = DataLayerEntry | RasterLayerEntry;
+/**
+ * W9d — an XYZ tile layer: map tiles fetched from `url`, a template with
+ * {z}, {x} and {y} (lib/tileLayers validates it). It has no payload in the
+ * document; the tiles stay on their server. `attribution` is the credit the
+ * provider asks for. The id is `tl:<uuid>`.
+ */
+export type TileLayerEntry = {
+  kind: "tile";
+  id: string;
+  label: string;
+  visible: boolean;
+  /** Position within the tile stack, 0 at the bottom. */
+  order: number;
+  /** 0..1. */
+  opacity: number;
+  url: string;
+  attribution?: string;
+};
+
+export type OverlayEntry = DataLayerEntry | RasterLayerEntry | TileLayerEntry;
 
 // ---------------------------------------------------------------------------
 // State and commands
@@ -175,11 +194,21 @@ export type DocumentCommand =
       opacity?: number;
       provenance?: LayerProvenance;
     }
+  | {
+      type: "add-tile-layer";
+      id: string;
+      label: string;
+      url: string;
+      attribution?: string;
+      opacity?: number;
+    }
   | { type: "rename-layer"; id: string; label: string }
   | { type: "set-visibility"; id: string; visible: boolean }
   /** Move to `order` within the entry's own kind. Out-of-range clamps. */
   | { type: "reorder"; id: string; order: number }
   | { type: "restyle"; id: string; patch: Partial<LayerStyle> }
+  /** A raster's or tile layer's opacity, clamped to 0..1. */
+  | { type: "set-opacity"; id: string; opacity: number }
   | { type: "remove-layer"; id: string };
 
 export interface Document {
@@ -210,11 +239,19 @@ export interface Document {
  * change is kept, object for object.
  */
 function reindex(entries: readonly OverlayEntry[]): OverlayEntry[] {
-  const next: Record<OverlayEntry["kind"], number> = { data: 0, raster: 0 };
+  const next: Record<OverlayEntry["kind"], number> = {
+    data: 0,
+    raster: 0,
+    tile: 0,
+  };
   return entries.map((e) => {
     const order = next[e.kind]++;
     return e.order === order ? e : { ...e, order };
   });
+}
+
+function clampOpacity(value: number): number {
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 }
 
 /** Replace one entry by id. Returns null when there is no such entry. */
@@ -311,6 +348,35 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
         overlays: reindex([...state.overlays, entry]),
         images: { ...state.images, [command.id]: command.image },
       };
+    }
+    case "add-tile-layer": {
+      if (!command.id.startsWith("tl:")) {
+        throw new Error(
+          `tile layer id must start with tl: prefix (received "${command.id}")`,
+        );
+      }
+      if (state.overlays.some((e) => e.id === command.id)) {
+        return state;
+      }
+      const attribution = command.attribution?.trim();
+      const entry: TileLayerEntry = {
+        kind: "tile",
+        id: command.id,
+        label: command.label,
+        visible: true,
+        order: 0,
+        opacity: clampOpacity(command.opacity ?? 1),
+        url: command.url,
+        ...(attribution ? { attribution } : {}),
+      };
+      return { ...state, overlays: reindex([...state.overlays, entry]) };
+    }
+    case "set-opacity": {
+      const opacity = clampOpacity(command.opacity);
+      const overlays = updateEntry(state.overlays, command.id, (e) =>
+        e.kind === "data" || e.opacity === opacity ? e : { ...e, opacity },
+      );
+      return overlays ? { ...state, overlays } : state;
     }
     case "rename-layer": {
       const overlays = updateEntry(state.overlays, command.id, (e) =>

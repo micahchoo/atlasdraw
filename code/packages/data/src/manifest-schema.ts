@@ -104,6 +104,30 @@ const RasterLayerEntrySchema = z.object({
 });
 
 /**
+ * W9d — an XYZ raster tile layer: map tiles fetched from a URL template
+ * (`{z}/{x}/{y}`), such as aerial imagery or a historic map. It has no
+ * payload in the file; the tiles stay on their server. `attribution` is the
+ * credit the tile provider asks for; it is printed with the basemap's.
+ *
+ * Kept out of `layers`, in the optional top-level `tileLayers`, so the
+ * manifest version does not change: a file without tile layers is byte for
+ * byte what it was, and an older reader drops the field instead of refusing
+ * the file over an unknown layer kind. Array order is stack order, bottom
+ * first, like `layers`.
+ */
+const TileLayerEntrySchema = z.object({
+  kind: z.literal("tile"),
+  id: z.string().regex(/^tl:/, "tile layer id must start with 'tl:'"),
+  label: z.string(),
+  visible: z.boolean(),
+  opacity: z.number().min(0).max(1),
+  /** The tile URL template, with {z}, {x} and {y}. */
+  url: z.string().min(1),
+  attribution: z.string().optional(),
+});
+export type TileLayerEntry = z.infer<typeof TileLayerEntrySchema>;
+
+/**
  * The manifest lists the map layers: data and raster. A drawn element is not
  * listed; what the layer panel adds to it (a user label, a hidden flag) is in
  * the element's `customData.atlas`. Version 1 listed elements too; the v1 → v2
@@ -132,6 +156,8 @@ export const ManifestSchema = z
     basemap: BasemapRefSchema,
     camera: CameraSchema,
     layers: z.array(LayerEntrySchema),
+    /** W9d. Optional: see TileLayerEntrySchema. */
+    tileLayers: z.array(TileLayerEntrySchema).optional(),
     permissions: PermissionsSchema,
   })
   .superRefine((m, ctx) => {

@@ -23,19 +23,27 @@
 // writes, and reads `getLayer` after each add, to know what landed.
 //
 // Overlays draw beneath the basemap's first symbol layer, so place names stay
-// readable over a filled area. Rasters are the bottom band, data layers are
-// above them, and the collaboration layer is on top.
+// readable over a filled area. The one exception is a data layer's labels
+// (a symbol layer, W9d): they go on top of everything, above the basemap's
+// own labels, because MapLibre gives the upper label the place when two
+// collide, and a label the user asked for must not lose to a street name. Tile layers (XYZ map tiles) are the bottom
+// band, rasters (georeferenced pictures) are above them, data layers above
+// those, and the collaboration layer is on top.
 
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 
 import {
   compileLayers,
   defaultLayerStyle,
+  filterProblem,
+  labelProblem,
   type LayerStyle,
 } from "@atlasdraw/basemap";
 import { geometryKindOf, type AtlasGeometryKind } from "@atlasdraw/data";
 
 import { rasterUrl } from "../state/rasterUrls";
+
+import { validateTileTemplate } from "./tileLayers";
 
 import type {
   DocumentState,
@@ -68,6 +76,15 @@ export type OverlaySource =
       url: string;
       coordinates: RasterCorners;
       version: string;
+    }
+  | {
+      id: string;
+      type: "raster";
+      /** One XYZ template. */
+      tiles: [string];
+      tileSize: number;
+      attribution?: string;
+      version: string;
     };
 
 /** One MapLibre layer, and the overlay (document layer) it draws. */
@@ -92,6 +109,11 @@ export interface OverlaySpecOptions {
   collab?: FeatureCollection | null;
   /** An object URL for a raster's image. */
   imageUrl?: (id: string, image: Blob) => string;
+  /**
+   * A font the basemap's glyphs serve (labelFontOf). Without one the
+   * basemap has no glyphs, and data layers draw without their labels.
+   */
+  labelFont?: string[] | null;
 }
 
 const payloadVersions = new WeakMap<object, number>();
@@ -111,7 +133,12 @@ function versionOf(payload: object): number {
 }
 
 /** A source of the right type with no payload, for validating a layer. */
-const EMPTY_SOURCES: Record<"geojson" | "image", SourceSpecification> = {
+const EMPTY_SOURCES: Record<OverlaySource["type"], SourceSpecification> = {
+  raster: {
+    type: "raster",
+    tiles: ["https://example.org/{z}/{x}/{y}.png"],
+    tileSize: 256,
+  },
   geojson: {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
@@ -134,7 +161,7 @@ const EMPTY_SOURCES: Record<"geojson" | "image", SourceSpecification> = {
  */
 function validateLayers(
   layers: readonly LayerSpecification[],
-  sourceType: "geojson" | "image",
+  sourceType: OverlaySource["type"],
 ): string[] {
   const sources: Record<string, SourceSpecification> = {};
   for (const layer of layers) {
@@ -142,24 +169,85 @@ function validateLayers(
       sources[layer.source] = EMPTY_SOURCES[sourceType];
     }
   }
+  // A symbol layer with text needs glyphs in the style. Whether the basemap
+  // has them is the caller's question (labelFont); this checks the layers.
+  const hasText = layers.some((l) => l.type === "symbol");
   const style: StyleSpecification = {
     version: 8,
+    ...(hasText ? { glyphs: CHECK_GLYPHS } : {}),
     sources,
     layers: [...layers],
   };
   return validateStyleMin(style).map((e) => e.message);
 }
 
+/** Glyphs and a font to validate a label layer with; never fetched. */
+const CHECK_GLYPHS = "https://example.org/{fontstack}/{range}.pbf";
+const CHECK_FONT = ["Check Regular"];
+
+/** Why a style's label or filter cannot be applied, or null. */
+function styleProblem(style: LayerStyle): string | null {
+  return (
+    (style.filter ? filterProblem(style.filter) : null) ??
+    (style.label ? labelProblem(style.label) : null)
+  );
+}
+
 /**
  * MapLibre's objections to a data-layer style, or an empty list. The style
  * panel asks before it commits a style, so a style MapLibre rejects is never
- * saved.
+ * saved. A label is checked as if the basemap had glyphs: whether it has is
+ * a different question, which the panel answers on its own.
  */
 export function validateLayerStyle(
   style: LayerStyle,
   geometryKind: AtlasGeometryKind,
 ): string[] {
-  return validateLayers(compileLayers("check", style, geometryKind), "geojson");
+  const problem = styleProblem(style);
+  if (problem) {
+    return [problem];
+  }
+  return validateLayers(
+    compileLayers("check", style, geometryKind, { labelFont: CHECK_FONT }),
+    "geojson",
+  );
+}
+
+/** The part of a map labelFontOf reads. */
+export interface FontSource {
+  getGlyphs(): string | null;
+  getLayersOrder(): string[];
+  getLayer(id: string): unknown;
+  getLayoutProperty(id: string, name: string): unknown;
+}
+
+/**
+ * A font for data-layer labels: one the basemap's own labels use, so its
+ * glyph server has it. A "Regular" face is preferred over italic or bold.
+ * Null when the basemap has no glyphs (no text can be drawn) or no label
+ * layer to learn a font from.
+ */
+export function labelFontOf(map: FontSource): string[] | null {
+  if (!map.getGlyphs()) {
+    return null;
+  }
+  const fonts: string[][] = [];
+  for (const id of map.getLayersOrder()) {
+    if (
+      (map.getLayer(id) as { type?: string } | undefined)?.type !== "symbol"
+    ) {
+      continue;
+    }
+    const font = map.getLayoutProperty(id, "text-font");
+    if (
+      Array.isArray(font) &&
+      font.length > 0 &&
+      font.every((f) => typeof f === "string")
+    ) {
+      fonts.push(font as string[]);
+    }
+  }
+  return fonts.find((f) => /regular/i.test(f[0])) ?? fonts[0] ?? null;
 }
 
 /** Add the visibility to a compiled layer, so it can be diffed like paint. */
@@ -176,10 +264,13 @@ function withVisibility(
   } as LayerSpecification;
 }
 
+/** XYZ tiles are 256 px squares: the OSM convention most servers follow. */
+const TILE_SIZE = 256;
+
 /**
- * The overlays the document asks for. Rasters first, then data layers, each
- * band in the document's order (0 at the bottom), then the collaboration
- * layer. An overlay whose layers MapLibre would reject, or whose payload is
+ * The overlays the document asks for. Tile layers first, then rasters, then
+ * data layers, each band in the document's order (0 at the bottom), then the
+ * collaboration layer. An overlay whose layers MapLibre would reject, or whose payload is
  * missing, is in `rejected` and has no layers.
  */
 export function overlaySpec(
@@ -212,6 +303,39 @@ export function overlaySpec(
       .filter((e) => e.kind === kind)
       .slice()
       .sort((a, b) => a.order - b.order);
+
+  for (const entry of band("tile")) {
+    if (entry.kind !== "tile") {
+      continue;
+    }
+    const check = validateTileTemplate(entry.url);
+    if (!check.ok) {
+      rejected.push({ overlayId: entry.id, reason: check.reason });
+      continue;
+    }
+    add(
+      entry.id,
+      {
+        id: entry.id,
+        type: "raster",
+        tiles: [check.url],
+        tileSize: TILE_SIZE,
+        ...(entry.attribution ? { attribution: entry.attribution } : {}),
+        version: `${check.url} ${entry.attribution ?? ""}`,
+      },
+      [
+        withVisibility(
+          {
+            id: entry.id,
+            type: "raster",
+            source: entry.id,
+            paint: { "raster-opacity": entry.opacity },
+          },
+          entry.visible,
+        ),
+      ],
+    );
+  }
 
   for (const entry of band("raster")) {
     if (entry.kind !== "raster") {
@@ -258,12 +382,17 @@ export function overlaySpec(
       });
       continue;
     }
+    const problem = styleProblem(entry.style);
+    if (problem) {
+      rejected.push({ overlayId: entry.id, reason: problem });
+      continue;
+    }
     add(
       entry.id,
       { id: entry.id, type: "geojson", data: fc, version: versionOf(fc) },
-      compileLayers(entry.id, entry.style, entry.geometryKind).map((l) =>
-        withVisibility(l, entry.visible),
-      ),
+      compileLayers(entry.id, entry.style, entry.geometryKind, {
+        labelFont: options.labelFont ?? undefined,
+      }).map((l) => withVisibility(l, entry.visible)),
     );
   }
 
@@ -310,6 +439,7 @@ export interface StyleTarget {
   getLayersOrder(): string[];
   setPaintProperty(layerId: string, name: string, value: unknown): void;
   setLayoutProperty(layerId: string, name: string, value: unknown): void;
+  setFilter(layerId: string, filter: unknown): void;
   on(type: "error", listener: ErrorListener): unknown;
   off(type: "error", listener: ErrorListener): unknown;
 }
@@ -326,9 +456,23 @@ export interface MapOverlays {
 }
 
 function sourceSpecOf(source: OverlaySource): SourceSpecification {
-  return source.type === "geojson"
-    ? { type: "geojson", data: source.data }
-    : { type: "image", url: source.url, coordinates: source.coordinates };
+  switch (source.type) {
+    case "geojson":
+      return { type: "geojson", data: source.data };
+    case "image":
+      return {
+        type: "image",
+        url: source.url,
+        coordinates: source.coordinates,
+      };
+    case "raster":
+      return {
+        type: "raster",
+        tiles: source.tiles,
+        tileSize: source.tileSize,
+        ...(source.attribution ? { attribution: source.attribution } : {}),
+      };
+  }
 }
 
 function sameValue(a: unknown, b: unknown): boolean {
@@ -519,7 +663,9 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
             if (map.getLayer(id)) {
               write(() => map.removeLayer(id));
             }
-            const failure = write(() => map.addLayer(wanted.spec, anchor));
+            const failure = write(() =>
+              map.addLayer(wanted.spec, onTop(wanted) ? undefined : anchor),
+            );
             if (failure || !map.getLayer(id)) {
               reject(
                 wanted.overlayId,
@@ -531,6 +677,12 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
             continue;
           }
           let failure: string | null = null;
+          const filterBefore = (held.spec as { filter?: unknown }).filter;
+          const filterAfter = (wanted.spec as { filter?: unknown }).filter;
+          if (!sameValue(filterBefore, filterAfter)) {
+            failure =
+              write(() => map.setFilter(id, filterAfter ?? null)) ?? failure;
+          }
           for (const bucket of ["paint", "layout"] as const) {
             const before = propertiesOf(held.spec, bucket);
             const after = propertiesOf(wanted.spec, bucket);
@@ -558,13 +710,18 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
           }
         }
 
-        // 4. Order: the spec's layers, bottom first, under the anchor.
+        // 4. Order: the spec's layers, bottom first, under the anchor; the
+        // labels, bottom first, on top of everything.
+        const placed = spec.layers.filter((l) => layers.has(l.spec.id));
+        const labels = placed.filter(onTop).map((l) => l.spec.id);
         restack(
           map,
-          spec.layers.map((l) => l.spec.id).filter((id) => layers.has(id)),
-          anchor,
+          placed.filter((l) => !onTop(l)).map((l) => l.spec.id),
+          // A basemap without labels: the overlays still go under ours.
+          anchor ?? labels[0],
           write,
         );
+        restackOnTop(map, labels, write);
 
         for (const l of spec.layers) {
           if (!report.has(l.overlayId)) {
@@ -579,6 +736,11 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
       return report;
     },
   };
+}
+
+/** A data layer's labels go on top of the basemap's (see the header). */
+function onTop(layer: OverlayLayer): boolean {
+  return layer.spec.type === "symbol";
 }
 
 /**
@@ -599,6 +761,26 @@ function labelAnchor(
     }
   }
   return undefined;
+}
+
+/**
+ * Put `wanted` (bottom first) at the very top of the style, in order.
+ * Issues no moveLayer when they already are.
+ */
+function restackOnTop(
+  map: StyleTarget,
+  wanted: readonly string[],
+  write: (fn: () => void) => string | null,
+): void {
+  if (wanted.length === 0) {
+    return;
+  }
+  if (sameSequence(map.getLayersOrder().slice(-wanted.length), wanted)) {
+    return;
+  }
+  for (const id of wanted) {
+    write(() => map.moveLayer(id));
+  }
 }
 
 /**

@@ -228,6 +228,29 @@ describe("buildLegendEntries", () => {
     visibleRasterIds: new Set(["rl:in"]),
   };
 
+  it("never lists a tile layer: it is a backdrop, credited in the attribution", () => {
+    const entries = buildLegendEntries(
+      [
+        {
+          kind: "tile",
+          id: "tl:aerial",
+          label: "Aerial",
+          visible: true,
+          order: 0,
+          opacity: 1,
+          url: "https://t.example.org/{z}/{x}/{y}.png",
+        },
+        dataLayer("dl:painted"),
+      ],
+      {
+        ...ctx,
+        // Even an id that some other set holds by mistake.
+        visibleAnnotationIds: new Set(["tl:aerial"]),
+      },
+    );
+    expect(entries.map((e) => e.id)).toEqual(["dl:painted"]);
+  });
+
   it("lists a visible raster in view and drops one out of view", () => {
     const entries = buildLegendEntries(
       [raster("rl:in"), raster("rl:out")],

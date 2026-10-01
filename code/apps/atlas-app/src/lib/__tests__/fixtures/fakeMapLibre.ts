@@ -19,11 +19,20 @@ import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 type LayerState = {
   spec: Record<string, unknown>;
+  /** The live filter (setFilter changes it), or undefined. */
+  filter?: unknown;
   paint: Record<string, unknown>;
   layout: Record<string, unknown>;
 };
 
 type ErrorListener = (e: { error: Error }) => void;
+
+/** What queryRenderedFeatures returns for one feature. */
+export type RenderedFeature = {
+  type: "Feature";
+  properties: Record<string, unknown>;
+  layer: { id: string };
+};
 
 export class FakeMapLibre {
   readonly sources = new Map<string, Record<string, unknown>>();
@@ -31,6 +40,15 @@ export class FakeMapLibre {
   /** Bottom-first, like Style#_order. */
   readonly order: string[] = [];
   readonly errors: string[] = [];
+  /**
+   * The style's glyphs URL. A symbol layer with text needs it: MapLibre's
+   * validator refuses `text-field` in a style without `glyphs`.
+   */
+  glyphs: string | null = null;
+
+  getGlyphs(): string | null {
+    return this.glyphs;
+  }
   private readonly errorListeners = new Set<ErrorListener>();
 
   on(type: string, fn: ErrorListener): this {
@@ -57,6 +75,7 @@ export class FakeMapLibre {
   private validateLayer(spec: Record<string, unknown>): string[] {
     const style = {
       version: 8,
+      ...(this.glyphs ? { glyphs: this.glyphs } : {}),
       sources: Object.fromEntries(this.sources),
       layers: [spec],
     } as unknown as StyleSpecification;
@@ -119,6 +138,7 @@ export class FakeMapLibre {
     this.order.splice(index, 0, id);
     this.layers.set(id, {
       spec,
+      filter: spec.filter,
       paint: { ...((spec.paint as Record<string, unknown>) ?? {}) },
       layout: { ...((spec.layout as Record<string, unknown>) ?? {}) },
     });
@@ -187,6 +207,34 @@ export class FakeMapLibre {
     layer[bucket][name] = value;
   }
 
+  setFilter(layerId: string, filter: unknown): void {
+    const layer = this.layers.get(layerId);
+    if (!layer) {
+      this.fire(`Cannot filter non-existing layer "${layerId}".`);
+      return;
+    }
+    const candidate: Record<string, unknown> = {
+      ...layer.spec,
+      paint: layer.paint,
+      layout: layer.layout,
+    };
+    if (filter === null || filter === undefined) {
+      delete candidate.filter;
+    } else {
+      candidate.filter = filter;
+    }
+    const errs = this.validateLayer(candidate);
+    if (errs.length > 0) {
+      errs.forEach((m) => this.fire(m));
+      return;
+    }
+    layer.filter = filter ?? undefined;
+  }
+
+  getFilter(layerId: string): unknown {
+    return this.layers.get(layerId)?.filter;
+  }
+
   setPaintProperty(layerId: string, name: string, value: unknown): void {
     this.setProperty("paint", layerId, name, value);
   }
@@ -197,6 +245,64 @@ export class FakeMapLibre {
 
   getLayoutProperty(layerId: string, name: string): unknown {
     return this.layers.get(layerId)?.layout[name];
+  }
+
+  // -------------------------------------------------------------------------
+  // Queries. The fake has no geometry and no renderer, so a test says what a
+  // layer draws under the pointer (`drawUnderPointer`). The answer follows
+  // the style state like MapLibre's: a layer that is not in the style, or
+  // whose visibility is "none", draws nothing. A query that names a layer
+  // missing from the style fires "error" and returns [] (Style#
+  // queryRenderedFeatures, 4.7.1).
+  // -------------------------------------------------------------------------
+
+  private readonly underPointer = new Map<
+    string,
+    Array<{ properties: Record<string, unknown> }>
+  >();
+
+  /** Say which features `layerId` draws at every point. */
+  drawUnderPointer(
+    layerId: string,
+    features: Array<{ properties: Record<string, unknown> }>,
+  ): void {
+    this.underPointer.set(layerId, features);
+  }
+
+  queryRenderedFeatures(
+    _point: unknown,
+    options: { layers?: string[] } = {},
+  ): RenderedFeature[] {
+    const ids = options.layers ?? [...this.order].reverse();
+    for (const id of ids) {
+      if (!this.layers.has(id)) {
+        this.fire(
+          `The layer '${id}' does not exist in the map's style and cannot be queried for features.`,
+        );
+        return [];
+      }
+    }
+    const out: RenderedFeature[] = [];
+    for (const id of ids) {
+      if (this.layers.get(id)?.layout.visibility === "none") {
+        continue;
+      }
+      for (const f of this.underPointer.get(id) ?? []) {
+        out.push({ type: "Feature", properties: f.properties, layer: { id } });
+      }
+    }
+    return out;
+  }
+
+  /** A flat projection: one pixel per degree, y down. */
+  project(lngLat: [number, number] | { lng: number; lat: number }): {
+    x: number;
+    y: number;
+  } {
+    const [lng, lat] = Array.isArray(lngLat)
+      ? lngLat
+      : [lngLat.lng, lngLat.lat];
+    return { x: lng, y: -lat };
   }
 
   /** True when a layer AND its source are in the style. */

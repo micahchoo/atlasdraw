@@ -45,6 +45,8 @@ class FakeOffscreenCanvas {
   static contextAvailable = true;
   layers: Layer[] = [];
   fills: { width: number; height: number; color: string }[] = [];
+  /** Text drawn into the output, with the font it was drawn in. */
+  texts: { text: string; font: string; x: number; y: number }[] = [];
   encoded: { type: string; quality?: number } | null = null;
   constructor(public width: number, public height: number) {
     FakeOffscreenCanvas.last = this;
@@ -57,6 +59,16 @@ class FakeOffscreenCanvas {
     // pixels, so a scale() call would be a defect and throws here.
     const ctx = {
       fillStyle: "",
+      font: "",
+      textAlign: "start",
+      textBaseline: "alphabetic",
+      // A fixed advance: half the font size per character.
+      measureText: (text: string) => ({
+        width: text.length * (parseFloat(ctx.font) / 2),
+      }),
+      fillText: (text: string, x: number, y: number) => {
+        this.texts.push({ text, font: ctx.font, x, y });
+      },
       fillRect: (_x: number, _y: number, width: number, height: number) => {
         this.fills.push({ width, height, color: ctx.fillStyle });
       },
@@ -181,6 +193,32 @@ describe("exportPNG", () => {
     expect(FakeOffscreenCanvas.last!.fills).toEqual([
       { width: 1600, height: 1200, color: "#102030" },
     ]);
+  });
+
+  it("prints the credit line in the bottom-right corner, at the export's scale", async () => {
+    const { exportPNG } = await import("../export");
+    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+      pixelRatio: 2,
+      renderMap: mapRenderer(),
+      credit: "© OpenStreetMap · © Example Aerials",
+    });
+    const out = FakeOffscreenCanvas.last!;
+    expect(out.texts).toHaveLength(1);
+    const [t] = out.texts;
+    expect(t.text).toBe("© OpenStreetMap · © Example Aerials");
+    // 11 px text at 2x.
+    expect(parseFloat(t.font)).toBe(22);
+    // Right-aligned against the right edge, on the bottom line.
+    expect(t.x).toBeGreaterThan(out.width * 0.9);
+    expect(t.y).toBeGreaterThan(out.height * 0.9);
+  });
+
+  it("prints no credit when it is given none", async () => {
+    const { exportPNG } = await import("../export");
+    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+      renderMap: mapRenderer(),
+    });
+    expect(FakeOffscreenCanvas.last!.texts).toEqual([]);
   });
 
   it("leaves a transparent background transparent", async () => {

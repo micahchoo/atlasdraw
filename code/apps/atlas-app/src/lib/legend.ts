@@ -168,14 +168,15 @@ export interface LegendContext {
  * Project the layers to legend entries, keeping only what the exported page
  * actually shows. `visible` is checked first because a hidden layer is not
  * painted regardless of where the camera is — and because that check needs no
- * map at all. A raster has no legend swatch and is left out.
+ * map at all. A tile layer is a backdrop, like the basemap: it is never a
+ * legend entry, and its credit is in the attribution line.
  */
 export function buildLegendEntries(
   entries: readonly LegendSource[],
   ctx: LegendContext,
 ): LayerLegendEntry[] {
   return entries
-    .filter((e) => e.visible)
+    .filter((e) => e.visible && e.kind !== "tile")
     .filter((e) =>
       e.kind === "data"
         ? ctx.renderedDataLayerIds.has(e.id)

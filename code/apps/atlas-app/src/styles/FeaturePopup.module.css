@@ -1,0 +1,148 @@
+/* FeaturePopup — a feature's attributes next to the click.
+ *
+ * z-index 10: the popups-and-banners band of the ladder in
+ * MapEditor.module.css. Above the Excalidraw layer (1), the cursor overlay
+ * (2) and the atlas tool overlay (5); a context menu (100) still covers it.
+ * `left` / `top` are set inline from the click; the transform keeps the
+ * popup clear of the point it describes. */
+
+.popup {
+  position: absolute;
+  z-index: 10;
+  transform: translate(8px, 8px);
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 160px;
+  max-width: min(320px, calc(100% - 32px));
+  max-height: min(360px, calc(100% - 32px));
+  background: var(--ad-surface-raised, #ffffff);
+  border: 1px solid var(--ad-rule, #adb5bd);
+  border-radius: 6px;
+  box-shadow: var(--ad-shadow-raised, 0 1px 3px rgba(0, 0, 0, 0.12));
+  font-family: var(--ad-font-sans, system-ui, sans-serif);
+  color: var(--ad-ink, #212529);
+}
+
+.popup:focus-visible {
+  outline: 2px solid #1971c2;
+  outline-offset: 1px;
+}
+
+.flipX {
+  transform: translate(calc(-100% - 8px), 8px);
+}
+
+.flipY {
+  transform: translate(8px, calc(-100% - 8px));
+}
+
+.flipX.flipY {
+  transform: translate(calc(-100% - 8px), calc(-100% - 8px));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+  border-bottom: 1px solid var(--ad-rule, #adb5bd);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.close {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.close:hover {
+  background: #f8f9fa;
+}
+
+.icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.scroll {
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 3px 8px;
+  vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.table th {
+  max-width: 120px;
+  font-weight: 400;
+  color: #868e96;
+}
+
+.table tr + tr th,
+.table tr + tr td {
+  border-top: 1px solid #f1f3f5;
+}
+
+.empty {
+  margin: 0;
+  padding: 8px;
+  font-size: 12px;
+  color: #868e96;
+}
+
+.showAll {
+  margin: 4px 8px 8px;
+  padding: 4px 8px;
+  align-self: flex-start;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.showAll:hover {
+  background: #f8f9fa;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

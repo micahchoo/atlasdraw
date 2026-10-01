@@ -75,12 +75,14 @@ import styles from "../styles/LayerPanel.module.css";
 import { useAnnounce } from "./AriaAnnouncer";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
+import { AddTileLayerForm } from "./AddTileLayerForm";
 
 import type {
   DataLayerEntry,
   LayerStyle,
   OverlayEntry,
   RasterLayerEntry,
+  TileLayerEntry,
 } from "../state/document";
 import type { AnnotationRow } from "../state/annotations";
 import type { FeatureCollection } from "geojson";
@@ -1361,6 +1363,156 @@ function RasterLayerRow({
   );
 }
 
+/**
+ * A tile layer row (W9d). A row like a raster's, plus its one style: an
+ * opacity slider, so a user can fade aerial imagery under their own data.
+ * No "Zoom to layer": tiles cover the whole world, so there is no extent.
+ */
+function TileLayerRow({
+  entry,
+  mutators,
+  actions,
+  allIds,
+  selected = false,
+  onSelect,
+}: {
+  entry: TileLayerEntry;
+  mutators: Mutators;
+  actions: LayerActions;
+  allIds: string[];
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
+  const { setVisibility } = mutators;
+  const { id, label, visible, opacity } = entry;
+  const [renaming, setRenaming] = useState(false);
+
+  return (
+    <SortableRow
+      entry={entry}
+      mutators={mutators}
+      allIds={allIds}
+      body={
+        <label className={styles.tileOpacity}>
+          <span className={styles.styleGridLabel}>Opacity</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={opacity}
+            aria-label={`Opacity of ${label}`}
+            data-testid={`layer-opacity-${id}`}
+            onChange={(e) =>
+              dispatch({
+                type: "set-opacity",
+                id,
+                opacity: Number(e.target.value),
+              })
+            }
+          />
+        </label>
+      }
+    >
+      <div
+        className={joinClass(
+          styles.rowAnnotation,
+          selected && styles.rowSelected,
+        )}
+        onClick={onSelect}
+      >
+        <button
+          type="button"
+          className={joinClass(
+            styles.iconButton,
+            visible && styles.iconButtonPressed,
+          )}
+          aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+          aria-pressed={visible}
+          data-testid={`layer-visibility-${id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setVisibility(id, !visible);
+          }}
+        >
+          {visible ? <IconEye /> : <IconEyeSlash />}
+        </button>
+        <span
+          aria-label="Tile layer"
+          className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
+        >
+          T
+        </span>
+        <RejectedBadge id={id} />
+        <LayerNameField
+          id={id}
+          label={label}
+          editing={renaming}
+          onEditingChange={setRenaming}
+          onCommit={(next) => actions.rename(id, next)}
+        />
+        <OverflowMenu
+          entry={entry}
+          actions={actions}
+          onStartRename={() => setRenaming(true)}
+        />
+      </div>
+    </SortableRow>
+  );
+}
+
+/**
+ * Tile layers: XYZ map tiles (aerial imagery, historic maps). The bottom
+ * band of the overlays, so the section sits just above the basemap. Always
+ * shown, because "Add tile layer…" is here.
+ */
+function TileLayersSection({
+  tiles,
+  mutators,
+  actions,
+  selectedLayerIds,
+  selectLayer,
+}: {
+  tiles: TileLayerEntry[];
+  mutators: Mutators;
+  actions: LayerActions;
+  selectedLayerIds: Record<string, true>;
+  selectLayer: (id: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const tileIds = tiles.map((e) => e.id);
+  return (
+    <section aria-label="Tile layers" className={styles.section}>
+      <h3 className={styles.heading}>Tile layers</h3>
+      {tiles.map((entry) => (
+        <TileLayerRow
+          key={entry.id}
+          entry={entry}
+          mutators={mutators}
+          actions={actions}
+          allIds={tileIds}
+          selected={!!selectedLayerIds[entry.id]}
+          onSelect={() => selectLayer(entry.id)}
+        />
+      ))}
+      {adding ? (
+        <AddTileLayerForm onDone={() => setAdding(false)} />
+      ) : (
+        <div className={styles.tileAddRow}>
+          <button
+            type="button"
+            className={styles.detailBtn}
+            data-testid="tile-add-open"
+            onClick={() => setAdding(true)}
+          >
+            Add tile layer…
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // Threads section — Step 5 (2026-07-30)
@@ -1656,6 +1808,10 @@ export function LayerPanel() {
     .filter((e): e is RasterLayerEntry => e.kind === "raster")
     .slice()
     .sort(topFirst);
+  const tiles = entries
+    .filter((e): e is TileLayerEntry => e.kind === "tile")
+    .slice()
+    .sort(topFirst);
 
   // Unfiltered — reorder indices address the real stack, not the visible
   // subset (see SortableRow).
@@ -1749,6 +1905,13 @@ export function LayerPanel() {
           ))}
         </section>
       )}
+      <TileLayersSection
+        tiles={tiles}
+        mutators={mutators}
+        actions={actions}
+        selectedLayerIds={selectedLayerIds}
+        selectLayer={selectLayer}
+      />
       <BasemapSection />
     </div>
   );

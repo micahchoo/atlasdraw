@@ -11,6 +11,10 @@
 //   - on every "styledata", so a new basemap style, which drops every custom
 //     layer, gets the overlays back. The reconciler is level-triggered, so an
 //     apply with nothing to change writes nothing.
+//
+// Labels need the basemap's glyphs. Each apply reads a label font from the
+// map (labelFontOf) and publishes it: null tells the style panel that this
+// basemap cannot draw labels.
 
 import { useEffect, useRef } from "react";
 import { create } from "zustand";
@@ -18,7 +22,9 @@ import { create } from "zustand";
 import { currentDocument, followDocument } from "../state/document";
 import {
   createMapOverlays,
+  labelFontOf,
   overlaySpec,
+  type FontSource,
   type ApplyReport,
   type LayerOutcome,
   type MapOverlays,
@@ -41,8 +47,15 @@ function overlaysFor(map: maplibregl.Map): MapOverlays {
   return overlays;
 }
 
-/** What the last apply did to each overlay, for the layer panel. */
-export const useOverlayReport = create<{ report: ApplyReport }>(() => ({
+/**
+ * What the last apply did to each overlay, for the layer panel, and the
+ * font labels are drawn in: undefined before a map has a style, null when
+ * the basemap has no glyphs.
+ */
+export const useOverlayReport = create<{
+  report: ApplyReport;
+  labelFont?: string[] | null;
+}>(() => ({
   report: new Map(),
 }));
 
@@ -63,22 +76,33 @@ export function useMapOverlays(
     lastSpec.current = spec;
     useOverlayReport.setState({ report: overlaysFor(target).apply(spec) });
   };
-  const applyRef = useRef(apply);
-  applyRef.current = apply;
+  /** Build the spec for the open document on this map's basemap, apply it. */
+  const applyDocument = (target: maplibregl.Map): void => {
+    const labelFont = labelFontOf(target as unknown as FontSource);
+    const before = useOverlayReport.getState().labelFont;
+    if (JSON.stringify(before) !== JSON.stringify(labelFont)) {
+      useOverlayReport.setState({ labelFont });
+    }
+    apply(
+      target,
+      overlaySpec(currentDocument().snapshot(), {
+        collab: collabRef.current,
+        labelFont,
+      }),
+    );
+  };
+  const applyRef = useRef(applyDocument);
+  applyRef.current = applyDocument;
 
   useEffect(() => {
     if (!map) {
       return;
     }
-    const unfollow = followDocument((doc) =>
-      applyRef.current(
-        map,
-        overlaySpec(doc.snapshot(), { collab: collabRef.current }),
-      ),
-    );
+    const unfollow = followDocument(() => applyRef.current(map));
+    // A new style can bring or take away glyphs: build the spec again.
     const onStyleData = () => {
       if (lastSpec.current) {
-        applyRef.current(map, lastSpec.current);
+        applyRef.current(map);
       }
     };
     map.on("styledata", onStyleData);
@@ -92,9 +116,6 @@ export function useMapOverlays(
     if (!map) {
       return;
     }
-    applyRef.current(
-      map,
-      overlaySpec(currentDocument().snapshot(), { collab }),
-    );
+    applyRef.current(map);
   }, [map, collab]);
 }
