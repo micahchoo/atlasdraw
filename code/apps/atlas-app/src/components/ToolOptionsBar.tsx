@@ -3,6 +3,8 @@
  *
  * Appears centered below Excalidraw's toolbar while an atlas tool (pin, …)
  * is active. Shows the tool label and an optional "Escape to cancel" hint.
+ * The Measure tool and the selection readout (MeasureLayer) put their values
+ * and controls in it as children.
  * (The Geo/Screen/Hybrid scale-mode toggle that briefly lived here was
  * removed 2026-07-19: "geographic" is the only creation mode.)
  *
@@ -23,6 +25,10 @@ interface ToolOptionsBarProps {
   label: string;
   /** Atlas tools cancel on Escape; native tools have their own lifecycle. */
   showEscapeHint?: boolean;
+  /** Values and controls after the label. */
+  children?: React.ReactNode;
+  /** Test id; the atlas tool bar keeps the default. */
+  testId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,18 +36,20 @@ interface ToolOptionsBarProps {
 export function ToolOptionsBar({
   label,
   showEscapeHint = false,
+  children,
+  testId = "tool-options-bar",
 }: ToolOptionsBarProps) {
   return (
     <div
       className={styles.bar}
       role="toolbar"
       aria-label={`${label} options`}
-      data-testid="tool-options-bar"
+      data-testid={testId}
     >
       {/* Tool identity */}
       <span className={styles.toolLabel}>{label}</span>
 
-      {/* Future: stroke width + fill color slots */}
+      {children}
       {showEscapeHint && (
         <>
           <span className={styles.separator} />

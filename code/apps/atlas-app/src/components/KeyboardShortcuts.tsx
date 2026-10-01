@@ -119,6 +119,13 @@ const SHORTCUTS: Shortcut[] = [
     category: "Atlas",
   },
   {
+    // W9. Bare `m` is unbound in Excalidraw: shapes.tsx binds
+    // h v r d o a l p x t e k and digits, and no action tests KEYS.M.
+    keys: ["M"],
+    label: "Measure distance (Esc to exit)",
+    category: "Atlas",
+  },
+  {
     keys: ["Escape"],
     label: "Cancel active atlas tool",
     category: "Atlas",

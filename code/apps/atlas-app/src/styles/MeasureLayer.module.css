@@ -1,0 +1,93 @@
+/* MeasureLayer — the Measure tool's overlay and path, and the values it puts
+ * in the tool-options bar. The overlay is in the atlas-tool band (z 5, see
+ * .atlasToolOverlay in MapEditor.module.css); the bar is ToolOptionsBar's
+ * (z 10). No new band. */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.path {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* A light halo under the line, so it reads on dark and light basemaps. */
+.halo {
+  fill: none;
+  stroke: var(--ad-surface-raised);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.line {
+  fill: none;
+  stroke: var(--ad-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vertex {
+  fill: var(--ad-surface-raised);
+  stroke: var(--ad-accent);
+  stroke-width: 2;
+}
+
+.value {
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ad-ink);
+  white-space: nowrap;
+}
+
+.separator {
+  width: 1px;
+  height: 20px;
+  background: var(--ad-hairline);
+}
+
+.hint {
+  font-family: var(--ad-font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ad-ink-tertiary);
+  white-space: nowrap;
+}
+
+.textButton,
+.unitsButton {
+  padding: 2px 8px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink-secondary);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.textButton:hover,
+.unitsButton:hover {
+  border-color: var(--ad-emphasis);
+  color: var(--ad-ink);
+}
+
+.textButton {
+  border-color: var(--ad-accent);
+  color: var(--ad-accent);
+}
