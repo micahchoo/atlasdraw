@@ -90,6 +90,16 @@ Every point of the decision is in the code:
 - **Rooms persist** in the relay's SQLite file (ADR-0018), comments with
   them.
 
+- **Undo stays Excalidraw's.** A collaborator's change reaches the editor
+  with `CaptureUpdateAction.NEVER`, so Excalidraw's history holds only this
+  user's own changes, as per-element deltas. An undo is then a new local
+  edit with a higher version, and it reaches the room like any other edit.
+  A `Y.UndoManager` would duplicate that history and would need Excalidraw's
+  undo actions rerouted inside the fork.
+- **Conflicts** resolve per element as Excalidraw's reconcile does: the
+  higher `version` wins, then the lower `versionNonce`
+  (`apps/atlas-app/src/state/roomScene.ts`).
+
 ### What the relay can see
 
 Everything in the room doc, in plaintext, and so can anyone who reads the
