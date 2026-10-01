@@ -80,6 +80,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     rightSidebarWidth,
     onSidebarLayoutChange,
     screenSizedStyles,
+    stampNewElements,
     flowchart,
     onZoomAction,
     langCode = defaultLang.code,
@@ -198,6 +199,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           rightSidebarWidth={rightSidebarWidth}
           onSidebarLayoutChange={onSidebarLayoutChange}
           screenSizedStyles={screenSizedStyles}
+          stampNewElements={stampNewElements}
           flowchart={flowchart}
           onZoomAction={onZoomAction}
           langCode={langCode}

@@ -57,6 +57,7 @@ export const isNonDeletedElement = <T extends ExcalidrawElement>(
 export * from "./align";
 export * from "./atlasHidden";
 export * from "./atlasStyleUnit";
+export * from "./atlasStamp";
 export * from "./binding";
 export * from "./bounds";
 export * from "./collision";

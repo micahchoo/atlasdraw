@@ -39,6 +39,12 @@ type ElementsClipboard = {
   type: typeof EXPORT_DATA_TYPES.excalidrawClipboard;
   elements: readonly NonDeletedExcalidrawElement[];
   files: BinaryFiles | undefined;
+  /**
+   * Atlasdraw: written by an editor with `screenSizedStyles`, whose scene
+   * units are world units. A paste reads it to tell its own content
+   * ("paste") from content made for scene = screen ("import").
+   */
+  worldUnits?: true;
 };
 
 export type PastedMixedContent = { type: "text" | "imageUrl"; value: string }[];
@@ -50,6 +56,8 @@ export interface ClipboardData {
   mixedContent?: PastedMixedContent;
   errorMessage?: string;
   programmaticAPI?: boolean;
+  /** Atlasdraw: the clipboard came from an editor with world units. */
+  worldUnits?: boolean;
 }
 
 type AllowedPasteMimeTypes = typeof ALLOWED_PASTE_MIME_TYPES[number];
@@ -72,7 +80,11 @@ export const probablySupportsClipboardBlob =
 
 const clipboardContainsElements = (
   contents: any,
-): contents is { elements: ExcalidrawElement[]; files?: BinaryFiles } => {
+): contents is {
+  elements: ExcalidrawElement[];
+  files?: BinaryFiles;
+  worldUnits?: unknown;
+} => {
   if (
     [
       EXPORT_DATA_TYPES.excalidraw,
@@ -142,9 +154,12 @@ export const createPasteEvent = ({
 export const serializeAsClipboardJSON = ({
   elements,
   files,
+  worldUnits,
 }: {
   elements: readonly NonDeletedExcalidrawElement[];
   files: BinaryFiles | null;
+  /** Atlasdraw: the copying editor has `screenSizedStyles`. */
+  worldUnits?: boolean;
 }) => {
   const elementsMap = arrayToMap(elements);
   const framesToCopy = new Set(
@@ -186,6 +201,7 @@ export const serializeAsClipboardJSON = ({
       return element;
     }),
     files: files ? _files : undefined,
+    ...(worldUnits ? { worldUnits: true as const } : {}),
   };
 
   return JSON.stringify(contents);
@@ -196,8 +212,10 @@ export const copyToClipboard = async (
   files: BinaryFiles | null,
   /** supply if available to make the operation more certain to succeed */
   clipboardEvent?: ClipboardEvent | null,
+  /** Atlasdraw: the copying editor has `screenSizedStyles`. */
+  worldUnits?: boolean,
 ) => {
-  const json = serializeAsClipboardJSON({ elements, files });
+  const json = serializeAsClipboardJSON({ elements, files, worldUnits });
 
   await copyTextToSystemClipboard(
     {
@@ -546,6 +564,7 @@ export const parseClipboard = async (
           ? JSON.stringify(systemClipboardData.elements, null, 2)
           : undefined,
         programmaticAPI,
+        worldUnits: systemClipboardData.worldUnits === true,
       };
     }
   } catch {}

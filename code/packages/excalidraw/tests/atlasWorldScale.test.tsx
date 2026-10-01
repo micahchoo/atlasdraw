@@ -1,6 +1,8 @@
 import React from "react";
 import { vi } from "vitest";
 
+import { atlasStampNewElements } from "@atlasdraw/element";
+
 import {
   CODES,
   FONT_SIZES,
@@ -9,7 +11,7 @@ import {
 } from "@atlasdraw/common";
 
 import { Excalidraw } from "../index";
-import { pickerStyleValue, scaleForeignElements } from "../atlasStyleScale";
+import { pickerStyleValue } from "../atlasStyleScale";
 import { exportToSvg } from "../scene/export";
 
 import { API } from "./helpers/api";
@@ -69,8 +71,10 @@ describe("screenSizedStyles", () => {
     );
   });
 
-  it("a new shape records its pixel unit in customData.atlas.unit", async () => {
-    await render(<Excalidraw screenSizedStyles />);
+  it("a new shape records its pixel unit through the atlas stamp", async () => {
+    await render(
+      <Excalidraw screenSizedStyles stampNewElements={atlasStampNewElements} />,
+    );
     setZoom();
     const rect = UI.createElement("rectangle", { x: 10, y: 10, size: 40 });
     const arrow = UI.createElement("arrow", { x: 60, y: 10, size: 40 });
@@ -131,7 +135,9 @@ describe("screenSizedStyles", () => {
 
 describe("elements from outside the atlas", () => {
   it("a library item goes in at screen size, with its pixel unit", async () => {
-    await render(<Excalidraw screenSizedStyles />);
+    await render(
+      <Excalidraw screenSizedStyles stampNewElements={atlasStampNewElements} />,
+    );
     setZoom();
     const item = API.createElement({
       type: "rectangle",
@@ -144,6 +150,7 @@ describe("elements from outside the atlas", () => {
         elements: [item],
         files: null,
         position: "center",
+        how: "library",
       });
     });
     const added = h.elements[h.elements.length - 1];
@@ -161,46 +168,10 @@ describe("elements from outside the atlas", () => {
         elements: [API.createElement({ type: "rectangle", width: 100 })],
         files: null,
         position: "center",
+        how: "library",
       });
     });
     expect(h.elements[h.elements.length - 1].width).toBe(100);
-  });
-});
-
-describe("scaleForeignElements", () => {
-  const base = {
-    x: 10,
-    y: 20,
-    width: 30,
-    height: 40,
-    strokeWidth: 2,
-  };
-
-  it("scales position about the origin, sizes, points and font", () => {
-    const [out] = scaleForeignElements(
-      [{ ...base, points: [[0, 0] as const, [5, 6] as const], fontSize: 20 }],
-      4,
-      10,
-      0,
-    );
-    expect(out).toMatchObject({
-      x: 10,
-      y: 80,
-      width: 120,
-      height: 160,
-      strokeWidth: 8,
-      points: [
-        [0, 0],
-        [20, 24],
-      ],
-      fontSize: 80,
-      customData: { atlas: { unit: 4 } },
-    });
-  });
-
-  it("leaves an element that has a unit alone: it is the atlas's own", () => {
-    const own = { ...base, customData: { atlas: { unit: 1024 } } };
-    expect(scaleForeignElements([own], 4, 0, 0)[0]).toBe(own);
   });
 });
 

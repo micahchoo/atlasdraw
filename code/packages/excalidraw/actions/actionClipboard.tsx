@@ -35,7 +35,13 @@ export const actionCopy = register<ClipboardEvent | null>({
     });
 
     try {
-      await copyToClipboard(elementsToCopy, app.files, event);
+      // Atlasdraw: the clipboard says whether its units are world units.
+      await copyToClipboard(
+        elementsToCopy,
+        app.files,
+        event,
+        app.props.screenSizedStyles,
+      );
     } catch (error: any) {
       return {
         captureUpdate: CaptureUpdateAction.EVENTUALLY,

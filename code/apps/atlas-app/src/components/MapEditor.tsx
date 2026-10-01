@@ -22,6 +22,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import { MapCanvas, getBasemap } from "@atlasdraw/basemap";
+import { atlasStampNewElements } from "@atlasdraw/element";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
@@ -342,6 +343,9 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               // opens as Open does, never into the open map.
               onSceneFileDrop={onSceneFileDrop}
               screenSizedStyles
+              // Every new element records its unit; foreign content comes
+              // in at its screen size (element/src/atlasStamp.ts).
+              stampNewElements={atlasStampNewElements}
               // Its fixed gaps and unitless arrows do not fit world
               // coordinates (packages/excalidraw/tests/flowchartOff.test.tsx).
               flowchart={false}

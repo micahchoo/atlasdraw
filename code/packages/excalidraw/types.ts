@@ -9,6 +9,7 @@ import type {
 import type { LinearElementEditor } from "@atlasdraw/element";
 
 import type { MaybeTransformHandleType } from "@atlasdraw/element";
+import type { StampNewElements } from "@atlasdraw/element";
 
 import type {
   PointerType,
@@ -806,6 +807,17 @@ export interface ExcalidrawProps {
   screenSizedStyles?: boolean;
   /**
    * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+   * The one creation seam. Every path that puts a new element in the scene
+   * calls it with how the element came in (`NewElementHow`: draw, text,
+   * insert-image, duplicate, paste, library, import) and the zoom, and puts
+   * in what it returns. Without it the elements go in as they are, as
+   * upstream's do. The atlas app passes `atlasStampNewElements`
+   * (element/src/atlasStamp.ts): the scene unit, and foreign content at its
+   * screen size.
+   */
+  stampNewElements?: StampNewElements;
+  /**
+   * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
    * False turns off flowchart creation with Ctrl/Cmd+Arrow: its gaps are fixed
    * scene units and its arrow has no style unit, so on a world map the new node
    * lands on the shape and the arrow has no head. The key then moves the
@@ -1010,6 +1022,7 @@ export type AppClassProperties = {
   pasteFromClipboard: App["pasteFromClipboard"];
   id: App["id"];
   onInsertElements: App["onInsertElements"];
+  stampNewElements: App["stampNewElements"];
   onExportImage: App["onExportImage"];
   lastViewportPosition: App["lastViewportPosition"];
   scrollToContent: App["scrollToContent"];

@@ -313,7 +313,10 @@ export const LibraryMenu = memo(() => {
 
   const onInsertLibraryItems = useCallback(
     (libraryItems: LibraryItems) => {
-      onInsertElements(distributeLibraryItemsOnSquareGrid(libraryItems));
+      onInsertElements(
+        distributeLibraryItemsOnSquareGrid(libraryItems),
+        "library",
+      );
       app.focusContainer();
     },
     [onInsertElements, app],
