@@ -29,3 +29,22 @@ export {
   HYBRID_FACTOR_MIN,
   HYBRID_FACTOR_MAX,
 } from "./scaleMode.js";
+// ADR-0015 spike — world coordinates.
+export {
+  WORLD_TILE_SIZE,
+  MAX_MERCATOR_LAT,
+  mercatorX,
+  mercatorY,
+  frameAt,
+  toScene,
+  toLngLat,
+  viewportFor,
+  cameraFor,
+} from "./world.js";
+export type {
+  WorldFrame,
+  MapCamera,
+  SceneViewport,
+  ScenePoint,
+} from "./world.js";
+export { migrateElementV1 } from "./migrateV1.js";

@@ -61,6 +61,11 @@ export interface ExcalidrawChangeHandlerParams {
   announceMapEditor: (msg: string) => void;
   setMapBg: Dispatch<SetStateAction<string>>;
   spaceHeldRef: RefObject<boolean>;
+  /**
+   * ADR-0015 spike: the camera bridge drives scrollX/scrollY/zoom, so the
+   * scroll lock (step 2) and the post-load drift check (step 3) must not run.
+   */
+  worldCoords?: boolean;
 }
 
 export function useExcalidrawChangeHandler({
@@ -71,6 +76,7 @@ export function useExcalidrawChangeHandler({
   announceMapEditor,
   setMapBg,
   spaceHeldRef,
+  worldCoords = false,
 }: ExcalidrawChangeHandlerParams): NonNullable<
   React.ComponentProps<typeof Excalidraw>["onChange"]
 > {
@@ -137,9 +143,10 @@ export function useExcalidrawChangeHandler({
       // elements are loaded — those are NOT user pans, so we skip bridging
       // when the delta exceeds a sane per-frame ceiling.
       if (
-        appState.scrollX !== 0 ||
-        appState.scrollY !== 0 ||
-        appState.zoom.value !== 1
+        !worldCoords &&
+        (appState.scrollX !== 0 ||
+          appState.scrollY !== 0 ||
+          appState.zoom.value !== 1)
       ) {
         if (
           spaceHeldRef.current &&
@@ -166,7 +173,7 @@ export function useExcalidrawChangeHandler({
       }
 
       // --- 3. Post-load geo sync (scroll is identity here) ---
-      if (map && syncNow && expectedOrigin) {
+      if (!worldCoords && map && syncNow && expectedOrigin) {
         for (const el of elements) {
           if (!isGeoCustomData((el as { customData?: unknown }).customData)) {
             continue;
@@ -282,6 +289,7 @@ export function useExcalidrawChangeHandler({
       announceMapEditor,
       setMapBg,
       spaceHeldRef,
+      worldCoords,
     ],
   );
 }

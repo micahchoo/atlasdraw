@@ -587,11 +587,43 @@ export function useLayerRegistrySync(
         useLayerRegistryStore.getState().entries.some((e) => e.id === id),
     });
 
+    // onChange also fires for viewport-only updates. Under world coordinates
+    // (ADR-0015 spike) a pan touches no element, so skip the O(n) diff — and
+    // its O(n) label writes — when no element version moved. Under the scroll
+    // lock every pan bumps nothing either, but rewrites x/y without a version
+    // bump, so labels there are refreshed by the next real edit.
+    let lastVersions = -1;
+    let lastCount = -1;
+    // Spike measurement switch: `?registryGate=0` restores today's behaviour
+    // so the benchmark can compare against main as it is.
+    const gateOff =
+      import.meta.env.DEV &&
+      new URLSearchParams(window.location.search).get("registryGate") === "0";
+    const gated = (elements: readonly SyncSceneElement[]) => {
+      if (gateOff) {
+        handler(elements);
+        return;
+      }
+      // Deletion counts too: the diff is about membership, and a caller that
+      // flips isDeleted without a version bump must still reach it.
+      let versions = 0;
+      for (const el of elements) {
+        versions += ((el as { version?: number }).version ?? 0) * 2;
+        versions += el.isDeleted ? 1 : 0;
+      }
+      if (versions === lastVersions && elements.length === lastCount) {
+        return;
+      }
+      lastVersions = versions;
+      lastCount = elements.length;
+      handler(elements);
+    };
+
     const unsub = excalidrawAPI.onChange(
       // The signature widens when typed against the canonical
       // ExcalidrawElement readonly array; our handler only reads the fields
       // declared on SyncSceneElement, so a structural cast is safe.
-      handler as Parameters<ExcalidrawImperativeAPI["onChange"]>[0],
+      gated as Parameters<ExcalidrawImperativeAPI["onChange"]>[0],
     );
     return unsub;
   }, [excalidrawAPI]);
