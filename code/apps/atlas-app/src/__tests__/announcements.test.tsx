@@ -24,6 +24,7 @@ import type { CommentAnchor } from "@atlasdraw/protocol";
 
 import { AriaAnnouncer, useAnnouncerStore } from "../components/AriaAnnouncer";
 import { LayerPanel } from "../components/LayerPanel";
+import { withSession } from "../session/__tests__/sessionFixture";
 import { CommentsLayer } from "../state/comments";
 
 import {
@@ -69,10 +70,12 @@ describe("aria-live: layer-visibility toggle", () => {
     });
 
     render(
-      <>
-        <LayerPanel />
-        <AriaAnnouncer />
-      </>,
+      withSession(
+        <>
+          <LayerPanel />
+          <AriaAnnouncer />
+        </>,
+      ),
     );
 
     // Pre-state: layer is visible. Click the eye → hide.

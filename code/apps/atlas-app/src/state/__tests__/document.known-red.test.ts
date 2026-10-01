@@ -40,7 +40,7 @@ import { sceneOf } from "../scene";
 import { loadShareDocument } from "../loadShareDocument";
 import { parseRoute } from "../../routes";
 import { usePersistenceStore } from "../usePersistenceStore";
-import { useMapInstanceStore } from "../mapInstance";
+import { createViewStore } from "../../session/view";
 import { useSceneBinding, useSceneStore } from "../scene";
 import {
   annotationRows,
@@ -172,8 +172,10 @@ function mountEditor(
   api: ExcalidrawImperativeAPI,
   map: maplibregl.Map | null = null,
 ) {
+  // The editor's view holds the map; a save reads its camera from there.
+  const view = createViewStore({ map });
   return renderHook(() => {
-    usePersistenceWiring(api, NOTIFY);
+    usePersistenceWiring(api, NOTIFY, null, view);
     useSceneBinding(api);
     useMapOverlays(map);
     const onChange = useExcalidrawChangeHandler({
@@ -232,7 +234,6 @@ beforeEach(async () => {
   // A new, empty open document for every case.
   openDocument(createDocument());
   usePersistenceStore.setState({ isDirty: false, isDraining: false });
-  useMapInstanceStore.setState({ map: null });
 });
 
 afterEach(() => {
@@ -310,9 +311,8 @@ describe("camera and basemap persistence", () => {
       bearing: 15,
       pitch: 0,
     });
-    useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
-    mountEditor(fx.api);
+    mountEditor(fx.api, map as unknown as maplibregl.Map);
     act(() => {
       currentDocument().dispatch({ type: "set-basemap", id: "protomaps-dark" });
     });
@@ -332,7 +332,6 @@ describe("camera and basemap persistence", () => {
   it("restores the saved camera and basemap on reload", async () => {
     await seedAutosave(savedDocument()); // camera [13.4, 52.5] z11 b30, protomaps-dark
     const map = cameraMap({ center: [0, 0], zoom: 2 });
-    useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
     const fx = makeFakeExcalidraw();
     mountEditor(fx.api, map as unknown as maplibregl.Map);
     await waitForHydrate(fx.api);

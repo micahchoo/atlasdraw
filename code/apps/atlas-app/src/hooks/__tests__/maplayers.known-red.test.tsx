@@ -33,6 +33,7 @@ import {
 } from "../../lib/mapOverlays";
 import { FakeMapLibre } from "../../lib/__tests__/fixtures/fakeMapLibre";
 import { LayerPanel } from "../../components/LayerPanel";
+import { withSession } from "../../session/__tests__/sessionFixture";
 import { StylePanel } from "../../components/StylePanel";
 import { ToastProvider } from "../../components/ToastProvider";
 import { AriaAnnouncer } from "../../components/AriaAnnouncer";
@@ -242,7 +243,7 @@ describe("annotation rows act on the scene", () => {
       ).map((r) => r.id),
     ).toEqual(["el-1"]);
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-delete-el-1"));
     fireEvent.click(screen.getByTestId("layer-delete-confirm-el-1"));
@@ -274,7 +275,7 @@ describe("data-layer panel order matches map z-order", () => {
     });
     expect(ids.every((id) => map.draws(id))).toBe(true);
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     const section = screen.getByLabelText("Data Layers");
     const panelTopFirst = Array.from(
       section.querySelectorAll<HTMLElement>('[data-testid^="layer-row-"]'),

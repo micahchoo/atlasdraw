@@ -18,8 +18,12 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { currentDocument, followDocument } from "../state/document";
-import { loadDocument, restoreCamera, toFile } from "../state/documentIO";
-import { useMapInstanceStore } from "../state/mapInstance";
+import {
+  liveCamera,
+  loadDocument,
+  restoreCamera,
+  toFile,
+} from "../state/documentIO";
 import { isRoomDocument } from "../state/room";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
@@ -30,6 +34,8 @@ import {
 } from "../state/loadShareDocument";
 import { copyOfSharedMap } from "../state/myMaps";
 import { buildRoute, type SharedMap } from "../routes";
+
+import type { ViewStore } from "../session/view";
 
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
@@ -62,6 +68,8 @@ export function usePersistenceWiring(
   documentNotify: PersistenceWiringNotify,
   /** A shared map to open as a copy in place of the autosave. */
   open: SharedMap | null = null,
+  /** The editor's view: a save reads the map's camera, a load moves it. */
+  view: ViewStore | null = null,
 ): void {
   // Read once: the link is consumed by the first open.
   const openRef = useRef(open);
@@ -109,7 +117,9 @@ export function usePersistenceWiring(
     // writes only the user's own maps.
     const getDoc = () => {
       const doc = currentDocument();
-      return isRoomDocument(doc) ? null : toFile(doc);
+      return isRoomDocument(doc)
+        ? null
+        : toFile(doc, undefined, liveCamera(view?.getState().map ?? null));
     };
     usePersistenceStore.getState().setForceSave(async () => {
       try {
@@ -159,6 +169,7 @@ export function usePersistenceWiring(
         if (loaded && !isRoomDocument(currentDocument())) {
           const opened = await loadDocument(loaded, excalidrawAPI, {
             signal: abort.signal,
+            map: view?.getState().map ?? null,
           });
           if (!opened) {
             return;
@@ -179,9 +190,9 @@ export function usePersistenceWiring(
           // loadDocument moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,
           // for as long as this editor is mounted.
-          if (!useMapInstanceStore.getState().map) {
-            unsubCamera = useMapInstanceStore.subscribe(() => {
-              if (restoreCamera(loaded.manifest.camera)) {
+          if (view && !view.getState().map) {
+            unsubCamera = view.subscribe((state) => {
+              if (restoreCamera(state.map, loaded.manifest.camera)) {
                 unsubCamera();
               }
             });
@@ -281,5 +292,5 @@ export function usePersistenceWiring(
       usePersistenceStore.getState().setPersistenceStore(null);
       void store.close();
     };
-  }, [excalidrawAPI, documentNotify]);
+  }, [excalidrawAPI, documentNotify, view]);
 }

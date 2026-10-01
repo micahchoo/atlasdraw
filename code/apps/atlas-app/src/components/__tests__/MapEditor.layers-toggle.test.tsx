@@ -20,6 +20,7 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 // ---------------------------------------------------------------------------
 
 import { MapEditor } from "../MapEditor";
+import { withSession } from "../../session/__tests__/sessionFixture";
 import { ToastProvider } from "../ToastProvider";
 
 import {
@@ -363,7 +364,7 @@ describe("LayerPanel Basemap section (IA restructure)", () => {
     const arg = (
       mockFakeExcalidrawAPI.registerSidebarTab as ReturnType<typeof vi.fn>
     ).mock.calls[0][0];
-    return render(arg.content as React.ReactElement);
+    return render(withSession(arg.content as React.ReactElement));
   }
 
   it("shows the active basemap row; picker options expand on toggle", async () => {

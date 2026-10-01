@@ -28,7 +28,6 @@ import {
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { getAppConfig } from "../config/app-config";
 import { routeUrl } from "../routes";
 import {
   currentDocument,
@@ -36,13 +35,13 @@ import {
   useDocumentStore,
   type Document,
 } from "../state/document";
-import { restoreCamera } from "../state/documentIO";
+import { liveCamera, restoreCamera } from "../state/documentIO";
 import {
   joinRoom,
-  relayTransport,
   type Peer,
   type Room,
   type RoomStatus,
+  type RoomTransport,
 } from "../state/room";
 import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
@@ -79,26 +78,33 @@ const NO_PEERS: readonly Peer[] = [];
 export function useRoom(
   api: ExcalidrawImperativeAPI | null,
   map: maplibregl.Map | null,
+  /** How rooms reach the relay; null when this editor has no rooms. */
+  transport: RoomTransport | null,
 ): RoomSession {
-  const realtime = getAppConfig().realtime;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
   const [self, setSelf] = useState<Identity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
+  const mapRef = useRef(map);
+  mapRef.current = map;
 
   const join = useCallback(
-    (link: RoomLink, seed?: Document): Room => {
-      const transport = relayTransport(
-        realtime.wsUrl || window.location.origin,
+    (link: RoomLink, seed?: Document): Room | null => {
+      if (!transport) {
+        return null;
+      }
+      const next = joinRoom(
+        link,
+        transport,
+        seed ? { seed, seedCamera: liveCamera(mapRef.current) } : {},
       );
-      const next = joinRoom(link, transport, seed ? { seed } : {});
       roomRef.current = next;
       setRoom(next);
       return next;
     },
-    [realtime.wsUrl],
+    [transport],
   );
 
   // A room link in the URL, read once when the editor is ready.
@@ -110,7 +116,7 @@ export function useRoom(
     if (!hash.startsWith("#room:")) {
       return;
     }
-    if (!realtime.enabled) {
+    if (!transport) {
       setError("This editor is not set up for shared maps.");
       return;
     }
@@ -163,7 +169,7 @@ export function useRoom(
         elements: api.getSceneElementsIncludingDeleted(),
       };
       openDocument(roomDocument);
-      restoreCamera(roomDocument.snapshot().camera);
+      restoreCamera(mapRef.current, roomDocument.snapshot().camera);
       detach = room.attach(editorOf(api));
       api.history?.clear();
     };
@@ -279,7 +285,7 @@ export function useRoom(
   );
 
   return {
-    available: realtime.enabled,
+    available: transport !== null,
     room,
     status,
     peers,

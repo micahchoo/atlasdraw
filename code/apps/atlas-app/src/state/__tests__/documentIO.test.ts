@@ -30,12 +30,12 @@ import {
   encode,
   fromFile,
   hasUnsavedWork,
+  liveCamera,
   loadDocument,
   markSavedToFile,
   toFile,
 } from "../documentIO";
 import { sceneOf } from "../scene";
-import { useMapInstanceStore } from "../mapInstance";
 
 import {
   FakeCameraMap,
@@ -46,7 +46,6 @@ import {
 } from "./fixtures/documentWorld";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
 
 const FC: FeatureCollection = {
   type: "FeatureCollection",
@@ -103,9 +102,7 @@ beforeAll(() => {
   }
 });
 
-beforeEach(() => {
-  useMapInstanceStore.setState({ map: null });
-});
+beforeEach(() => {});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -125,15 +122,13 @@ describe("toFile", () => {
         sceneOf(fx.api),
       ),
     );
-    useMapInstanceStore.setState({
-      map: new FakeCameraMap({
-        center: [-74, 40.7],
-        zoom: 12.5,
-        bearing: 15,
-      }) as unknown as maplibregl.Map,
+    const map = new FakeCameraMap({
+      center: [-74, 40.7],
+      zoom: 12.5,
+      bearing: 15,
     });
 
-    const file = toFile(doc, "2026-10-01T09:00:00.000Z");
+    const file = toFile(doc, "2026-10-01T09:00:00.000Z", liveCamera(map));
 
     expect(file.manifest).toMatchObject({
       id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",

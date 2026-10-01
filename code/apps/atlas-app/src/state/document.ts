@@ -27,6 +27,7 @@
 
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
+import { createStore, type StoreApi } from "zustand/vanilla";
 import { ulid } from "ulid";
 
 import { geometryKindOf } from "@atlasdraw/data";
@@ -633,9 +634,17 @@ export function createDocument(
 // ---------------------------------------------------------------------------
 
 /**
- * The document the editor has open. Opening a file replaces it with a new
- * Document; nothing edits the identity of the one that is open.
+ * Which document is open. Opening a file replaces the Document; nothing
+ * edits the identity of the one that is open.
  */
+export type DocumentStore = StoreApi<{ doc: Document }>;
+
+/** A store with a new, empty document open. */
+export function createDocumentStore(): DocumentStore {
+  return createStore<{ doc: Document }>()(() => ({ doc: createDocument() }));
+}
+
+/** The editor's open document. */
 export const useDocumentStore = create<{ doc: Document }>(() => ({
   doc: createDocument(),
 }));

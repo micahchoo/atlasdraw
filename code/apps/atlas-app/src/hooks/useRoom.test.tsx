@@ -19,7 +19,6 @@ import {
   currentDocument,
   openDocument,
 } from "../state/document";
-import * as roomModule from "../state/room";
 import { isRoomDocument, type RoomTransport } from "../state/room";
 import { seedRoom } from "../state/roomDocument";
 import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
@@ -88,7 +87,6 @@ afterEach(() => {
 describe("useRoom", () => {
   it("a room link shows the room; the user's own map is untouched and comes back on leaving", async () => {
     const relay = memoryRelay();
-    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
     const host = createDocument(
       { title: "Shared survey" },
       { elements: () => [rect("shared")] as never, files: () => ({}) },
@@ -101,7 +99,9 @@ describe("useRoom", () => {
     openDocument(own);
     const fake = makeFakeExcalidraw([rect("own")] as never);
 
-    const { result, unmount } = renderHook(() => useRoom(fake.api, null));
+    const { result, unmount } = renderHook(() =>
+      useRoom(fake.api, null, relay.transport),
+    );
     await waitFor(() => expect(result.current.status).toBe("joined"));
 
     expect(currentDocument().snapshot().title).toBe("Shared survey");
@@ -117,7 +117,6 @@ describe("useRoom", () => {
 
   it("start() makes a room from the open map and puts its link in the URL", async () => {
     const relay = memoryRelay();
-    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
     const fake = makeFakeExcalidraw([rect("own")] as never);
     openDocument(
       createDocument(
@@ -126,7 +125,9 @@ describe("useRoom", () => {
       ),
     );
 
-    const { result } = renderHook(() => useRoom(fake.api, null));
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, relay.transport),
+    );
     let url = "";
     await act(async () => {
       url = await result.current.start();
@@ -149,7 +150,6 @@ describe("useRoom", () => {
 
   it("opening another document leaves the room, and nothing of it reaches the room", async () => {
     const relay = memoryRelay();
-    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
     const host = createDocument(
       { title: "Shared survey" },
       { elements: () => [rect("shared")] as never, files: () => ({}) },
@@ -159,7 +159,9 @@ describe("useRoom", () => {
     window.history.replaceState(null, "", `/${roomFragment(link)}`);
     const fake = makeFakeExcalidraw();
 
-    const { result } = renderHook(() => useRoom(fake.api, null));
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, relay.transport),
+    );
     await waitFor(() => expect(result.current.status).toBe("joined"));
 
     // What opening a file does: a new document, then its drawing.
@@ -178,7 +180,6 @@ describe("useRoom", () => {
 
   it("a room link opened before the autosaved map loaded: leaving returns the user's own map, and it is never overwritten", async () => {
     const relay = memoryRelay();
-    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
     const host = createDocument(
       { title: "Shared survey" },
       { elements: () => [rect("shared")] as never, files: () => ({}) },
@@ -220,7 +221,7 @@ describe("useRoom", () => {
     const notify = { error: vi.fn() };
     const { result, unmount } = renderHook(() => {
       usePersistenceWiring(fake.api, notify);
-      return useRoom(fake.api, null);
+      return useRoom(fake.api, null, relay.transport);
     });
     await waitFor(() => expect(result.current.room).not.toBeNull());
     // The room is ready before the autosave is.
@@ -242,9 +243,22 @@ describe("useRoom", () => {
     window.history.replaceState(null, "", "/#room:not-a-room");
     const fake = makeFakeExcalidraw();
 
-    const { result } = renderHook(() => useRoom(fake.api, null));
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, memoryRelay().transport),
+    );
 
     expect(result.current.error).toMatch(/not valid/);
+    expect(result.current.room).toBeNull();
+  });
+
+  it("an editor without a transport offers no rooms and says so for a room link", () => {
+    window.history.replaceState(null, "", `/${roomFragment(newRoomLink())}`);
+    const fake = makeFakeExcalidraw();
+
+    const { result } = renderHook(() => useRoom(fake.api, null, null));
+
+    expect(result.current.available).toBe(false);
+    expect(result.current.error).toMatch(/not set up for shared maps/);
     expect(result.current.room).toBeNull();
   });
 });

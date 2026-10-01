@@ -37,7 +37,6 @@ import {
   type Document,
   type OverlayEntry,
 } from "./document";
-import { liveCamera } from "./documentIO";
 import { writeScene, type RoomEditor } from "./roomScene";
 
 import {
@@ -176,6 +175,7 @@ export async function seedRoom(
   doc: Y.Doc,
   seed: Document,
   origin: unknown,
+  camera: Camera | null = null,
 ): Promise<void> {
   const state = seed.snapshot();
   const rasters = await Promise.all(
@@ -190,7 +190,7 @@ export async function seedRoom(
     m.meta.set("id", ulid());
     m.meta.set("title", state.title);
     m.meta.set("world", state.world);
-    m.meta.set("camera", liveCamera() ?? state.camera);
+    m.meta.set("camera", camera ?? state.camera);
     m.meta.set("basemap", state.basemap);
     for (const [id, image] of rasters) {
       m.images.set(id, image);

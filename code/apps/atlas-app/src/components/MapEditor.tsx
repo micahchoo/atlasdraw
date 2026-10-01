@@ -15,6 +15,7 @@
  * `onMount` fires once when both the map and the Excalidraw API exist.
  */
 
+import { useStore } from "zustand";
 import React, {
   Suspense,
   lazy,
@@ -69,8 +70,6 @@ import { useServerBackup } from "../hooks/useServerBackup";
 import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useSheetPanelStore } from "../state/sheetPanel";
-import { useMapInstanceStore } from "../state/mapInstance";
 import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
@@ -80,12 +79,12 @@ import {
   useDocument,
   useDocumentStore,
 } from "../state/document";
-import {
-  hasUnsavedWork,
-  loadDocument,
-  markSavedToFile,
-  toFile,
-} from "../state/documentIO";
+import { liveCamera, toFile } from "../state/documentIO";
+import { configuredTransport } from "../state/room";
+import { editorScene } from "../state/scene";
+import { createSession } from "../session/EditorSession";
+import { SessionProvider } from "../session/SessionContext";
+import { openMap, saveMap, type Notify } from "../session/fileActions";
 import { getAppConfig } from "../config/app-config";
 import { type SharedMap } from "../routes";
 import { featureAt } from "../lib/featureHit";
@@ -182,119 +181,6 @@ function pointInPolygon(
   return inside;
 }
 
-// ---------------------------------------------------------------------------
-// Atlas document Save / Open (one format, one door — ADR 0010 cohesion work)
-//
-// The .atlasdraw bundle is the canonical format and these two handlers are
-// the ONLY save/open surfaces: the "Open…" / "Save" MainMenu items and the
-// Cmd+O / Cmd+S bindings all route here. Excalidraw's own persistence
-// actions (LoadScene, SaveToActiveFile, SaveFileToDisk, the image and JSON
-// export dialogs) are disabled via UIOptions.canvasActions — see
-// EXCALIDRAW_UI_OPTIONS below — which also disables their keyboard
-// shortcuts. Rendering/format export (PNG, PDF,
-// GeoJSON, .atlasdraw) lives in the atlas ExportDialog ("Export…" item).
-//
-// Exported for unit tests (MapEditor.atlasdraw-export.test.tsx) — the same
-// contract the old renderCustomUI cards carried before 9078's dialog was
-// itself replaced by this single door.
-// ---------------------------------------------------------------------------
-
-/** User-facing outcome channel for the document handlers (toast in the app;
- * omitted in tests and non-UI callers). */
-export interface DocumentNotify {
-  success: (msg: string) => void;
-  error: (msg: string) => void;
-}
-
-/** Picker dismissals are a user choice, not a failure — never report them. */
-function isPickerCancel(err: unknown): boolean {
-  return (
-    err instanceof DOMException &&
-    (err.name === "AbortError" || err.name === "NotAllowedError")
-  );
-}
-
-export async function saveAtlasDocument(
-  excalidrawAPI: ExcalidrawImperativeAPI | null,
-  notify?: DocumentNotify,
-): Promise<void> {
-  if (!excalidrawAPI) {
-    return;
-  }
-  const store = usePersistenceStore.getState().persistenceStore;
-  if (!store) {
-    return;
-  }
-  try {
-    const doc = currentDocument();
-    await store.saveToDisk(toFile(doc));
-    markSavedToFile(doc);
-    usePersistenceStore.getState().clearDirty();
-    notify?.success("Map saved as .atlasdraw");
-  } catch (err) {
-    if (isPickerCancel(err)) {
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.warn("[atlasdraw] saveToDisk failed", err);
-    notify?.error(
-      `Couldn't save the map${err instanceof Error ? ` — ${err.message}` : ""}`,
-    );
-  }
-}
-
-/**
- * Open a file in place of the open document. When the open document holds
- * work that is not in a file, `confirmReplace` is asked first (an in-page
- * question); without an answer of yes, nothing is opened.
- */
-export async function openAtlasDocument(
-  excalidrawAPI: ExcalidrawImperativeAPI | null,
-  notify?: DocumentNotify,
-  confirmReplace: () => Promise<boolean> = async () => false,
-): Promise<void> {
-  if (!excalidrawAPI) {
-    return;
-  }
-  const store = usePersistenceStore.getState().persistenceStore;
-  if (!store) {
-    return;
-  }
-  try {
-    if (hasUnsavedWork(currentDocument()) && !(await confirmReplace())) {
-      return;
-    }
-    const loaded = await store.openFromDisk();
-    if (loaded) {
-      const opened = await loadDocument(loaded, excalidrawAPI);
-      if (opened) {
-        markSavedToFile(opened);
-      }
-      // The opened file becomes the autosaved document.
-      usePersistenceStore.getState().markDirty();
-      // eslint-disable-next-line no-console
-      console.info("[atlasdraw] document opened", {
-        id: loaded.manifest.id,
-        layerCount: loaded.manifest.layers.length,
-        sceneLength: loaded.scene.length,
-      });
-      const n = loaded.manifest.layers.length;
-      notify?.success(
-        `Opened "${loaded.manifest.title}" — ${n} layer${n === 1 ? "" : "s"}`,
-      );
-    }
-  } catch (err) {
-    if (isPickerCancel(err)) {
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.warn("[atlasdraw] openFromDisk failed", err);
-    notify?.error(
-      "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
-    );
-  }
-}
-
 // Module-scoped so the Excalidraw mount sees a stable identity. Excalidraw
 // reads initialData once on mount; passing a fresh literal each render is
 // harmless today but brittle if a future Excalidraw version memoizes on it.
@@ -353,31 +239,37 @@ export interface MapEditorProps {
 // ---------------------------------------------------------------------------
 
 export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
+  const [session] = useState(() =>
+    createSession({
+      store: useDocumentStore,
+      scene: editorScene,
+      transport: configuredTransport(),
+    }),
+  );
   const { map, onMapReady } = useMapRef();
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
   const toast = useToast();
 
-  // Publish the map for components that render outside this tree — LayerPanel
-  // is handed to `registerSidebarTab` as an already-constructed element, so
-  // "zoom to layer" cannot reach the map by prop. See state/mapInstance.ts for
-  // why a store beats adding `map` to that effect's dependency list.
   useEffect(() => {
-    useMapInstanceStore.getState().setMap(map);
-    return () => useMapInstanceStore.getState().setMap(null);
-  }, [map]);
+    session.view.getState().setMap(map);
+    return () => session.view.getState().setMap(null);
+  }, [session, map]);
+  useEffect(() => {
+    session.view.getState().setApi(excalidrawAPI);
+    return () => session.view.getState().setApi(null);
+  }, [session, excalidrawAPI]);
 
   // --- sheet panel: width, and whether the plate reflows for it -------------
   //
-  // Width is the app's, persisted in state/sheetPanel.ts and published back
+  // Width is the app's, kept in the session view and published back
   // into the editor as `rightSidebarWidth` (which becomes
   // `--right-sidebar-width`). `sheetPanelLayout` comes the other way, from the
   // editor's own `isUIShrunkForSidebar` — the one expression that also drives
   // the UI-wrapper narrowing and the collar legend's offset, so the map's
   // reflow can't drift out of step with them the way a re-derived copy would.
-  const sheetPanelWidth = useSheetPanelStore((s) => s.width);
-  const setSheetPanelWidth = useSheetPanelStore((s) => s.setWidth);
-  const resetSheetPanelWidth = useSheetPanelStore((s) => s.resetWidth);
+  const sheetPanelWidth = useStore(session.view, (s) => s.sheetPanelWidth);
+  const { setSheetPanelWidth, resetSheetPanelWidth } = session.view.getState();
   const [sheetPanelLayout, setSheetPanelLayout] = useState({
     open: false,
     shrunk: false,
@@ -402,8 +294,8 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   // upstream Excalidraw does, and the map keeps its full width.
   const platePanelInset = sheetPanelLayout.shrunk ? sheetPanelWidth : 0;
 
-  // Stable outcome channel for save/open — see DocumentNotify above.
-  const documentNotify = useMemo<DocumentNotify>(
+  // Stable outcome channel for save/open.
+  const documentNotify = useMemo<Notify>(
     () => ({ success: toast.success, error: toast.error }),
     [toast.success, toast.error],
   );
@@ -437,7 +329,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
     useState<ExportFormat | null>(null);
   // Rooms (hooks/useRoom.ts): a `#room:` link joins one when the editor is
   // ready; Share → Collaborate makes one from this map.
-  const roomSession = useRoom(excalidrawAPI, map);
+  const roomSession = useRoom(excalidrawAPI, map, session.transport);
   useEffect(() => {
     if (roomSession.status === "joined") {
       toast.success(
@@ -631,7 +523,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
   // opens the last autosaved document,
   // starts auto-save, and mirrors dirty/drain state into Zustand.
-  usePersistenceWiring(excalidrawAPI, documentNotify, open);
+  usePersistenceWiring(excalidrawAPI, documentNotify, open, session.view);
   // Publish the scene for the layer panel's annotation rows and commands.
   useSceneBinding(excalidrawAPI);
 
@@ -734,9 +626,8 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
     showShortcuts,
     setShowShortcuts,
     setShowQuickActions,
-    onSave: (api) => void saveAtlasDocument(api, documentNotify),
-    onOpen: (api) =>
-      void openAtlasDocument(api, documentNotify, confirmReplace),
+    onSave: () => void saveMap(session, documentNotify),
+    onOpen: () => void openMap(session, documentNotify, confirmReplace),
     onZoomAction,
     drawingLayer: excalidrawLayer,
   });
@@ -896,8 +787,8 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   const handleExportAtlasdraw = useCallback(() => {
     // Same single door as the MainMenu "Save" item and Cmd+S — the
     // .atlasdraw card is just another entry point to it.
-    void saveAtlasDocument(excalidrawAPI, documentNotify);
-  }, [excalidrawAPI, documentNotify]);
+    void saveMap(session, documentNotify);
+  }, [session, documentNotify]);
 
   // Excalidraw onChange: background intercept + autosave markDirty +
   // aria-live selection announce — extracted to useExcalidrawChangeHandler.
@@ -962,7 +853,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   }, [map, excalidrawAPI]);
 
   return (
-    <>
+    <SessionProvider session={session}>
       {/* Collar shell (variant A) — the printed map-sheet frame. The plate
         (children) hosts the MapLibre + Excalidraw stack; head bar carries
         the wordmark, sheet name and geo-search; marginalia grows out of
@@ -1088,20 +979,14 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                 Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
                 <MainMenu.Item
                   onSelect={() =>
-                    void openAtlasDocument(
-                      excalidrawAPI,
-                      documentNotify,
-                      confirmReplace,
-                    )
+                    void openMap(session, documentNotify, confirmReplace)
                   }
                   data-testid="main-menu-open"
                 >
                   Open…
                 </MainMenu.Item>
                 <MainMenu.Item
-                  onSelect={() =>
-                    void saveAtlasDocument(excalidrawAPI, documentNotify)
-                  }
+                  onSelect={() => void saveMap(session, documentNotify)}
                   data-testid="main-menu-save"
                 >
                   Save
@@ -1380,6 +1265,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
           {showMyMaps && excalidrawAPI && (
             <MyMapsDialog
               excalidrawAPI={excalidrawAPI}
+              map={map}
               notify={documentNotify}
               onClose={() => setShowMyMaps(false)}
               server={
@@ -1397,7 +1283,9 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
           {showShareDialog && excalidrawAPI && (
             <ShareDialog
               onCloseRequest={() => setShowShareDialog(false)}
-              getDoc={() => toFile(currentDocument())}
+              getDoc={() =>
+                toFile(currentDocument(), undefined, liveCamera(map))
+              }
               client={getShareClient()}
               startRoom={roomSession.available ? roomSession.start : null}
             />
@@ -1508,11 +1396,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                     "import",
                   ],
                   onSelect: () =>
-                    void openAtlasDocument(
-                      excalidrawAPI,
-                      documentNotify,
-                      confirmReplace,
-                    ),
+                    void openMap(session, documentNotify, confirmReplace),
                 },
                 {
                   id: "save",
@@ -1520,8 +1404,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                   category: "File",
                   hint: "⌘S",
                   keywords: ["disk", "file", "atlasdraw"],
-                  onSelect: () =>
-                    void saveAtlasDocument(excalidrawAPI, documentNotify),
+                  onSelect: () => void saveMap(session, documentNotify),
                 },
                 {
                   id: "my-maps",
@@ -1570,6 +1453,6 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
           )}
         </div>
       </CollarShell>
-    </>
+    </SessionProvider>
   );
 }

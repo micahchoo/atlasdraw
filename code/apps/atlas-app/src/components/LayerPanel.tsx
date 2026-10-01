@@ -52,7 +52,7 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
-import { useMapInstanceStore } from "../state/mapInstance";
+import { useSession } from "../session/SessionContext";
 import { currentDocument, dispatch, useDocument } from "../state/document";
 import { useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneStore } from "../state/scene";
@@ -1684,6 +1684,7 @@ function BasemapSection() {
 const topFirst = (a: OverlayEntry, b: OverlayEntry) => b.order - a.order;
 
 export function LayerPanel() {
+  const session = useSession();
   const entries = useDocument((s) => s.overlays);
   /** `index` is the row's position in its top-first section. */
   const reorder = (id: string, index: number) => {
@@ -1788,12 +1789,12 @@ export function LayerPanel() {
     zoomTo: (id) => {
       const name = labelOf(id);
       const entry = entries.find((e) => e.id === id);
-      const map = useMapInstanceStore.getState().map;
+      const map = session.view.getState().map;
 
       if (entry?.kind === "data") {
         const fc = currentDocument().snapshot().featureCollections[id];
-        // Read both through getState() rather than subscribing: the panel does
-        // not render differently because a map exists, and subscribing to every
+        // Read both at the click rather than subscribing: the panel does not
+        // render differently because a map exists, and subscribing to every
         // FC would re-render all 25 cards on any import.
         if (fitMapToLayer(map, fc)) {
           announce(`Zoomed to "${name}"`);

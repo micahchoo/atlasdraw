@@ -32,6 +32,8 @@ import type { StorageClient } from "../services/createHttpStorageClient";
 
 export interface MyMapsDialogProps {
   excalidrawAPI: ExcalidrawImperativeAPI;
+  /** The editor's map; null while it loads. */
+  map?: MapActionContext["map"];
   notify: MapActionContext["notify"];
   onClose: () => void;
   /** The clock the relative times are read against. */
@@ -47,6 +49,7 @@ type Prompt =
 
 export function MyMapsDialog({
   excalidrawAPI,
+  map = null,
   notify,
   onClose,
   now = Date.now,
@@ -90,6 +93,7 @@ export function MyMapsDialog({
 
   const ctx: MapActionContext = {
     api: excalidrawAPI,
+    map,
     notify,
     confirmLoss: () =>
       new Promise<boolean>((resolve) =>

@@ -58,25 +58,24 @@ import {
 
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
-import { useMapInstanceStore } from "./mapInstance";
 
 import type { FeatureCollection } from "geojson";
+import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Save
 // ---------------------------------------------------------------------------
 
 /** The camera half of a MapLibre map: what a save reads. */
-interface CameraSource {
+export interface CameraSource {
   getCenter(): { lng: number; lat: number };
   getZoom(): number;
   getBearing(): number;
   getPitch(): number;
 }
 
-/** The live camera, or null when no map is mounted. */
-export function liveCamera(): Camera | null {
-  const map = useMapInstanceStore.getState().map as CameraSource | null;
+/** The camera of `map`, or null when there is no map. */
+export function liveCamera(map: CameraSource | null): Camera | null {
   if (!map) {
     return null;
   }
@@ -151,6 +150,7 @@ function manifestLayer(
 export function toFile(
   doc: Document,
   now: string = new Date().toISOString(),
+  camera: Camera | null = null,
 ): AtlasdrawDocument {
   const state = doc.snapshot();
   const elements = doc.scene.elements();
@@ -209,7 +209,7 @@ export function toFile(
       createdAt: state.createdAt,
       updatedAt,
       basemap: { type: "registry", id: state.basemap },
-      camera: liveCamera() ?? state.camera,
+      camera: camera ?? state.camera,
       world: state.world,
       layers: state.overlays
         .filter(
@@ -231,8 +231,11 @@ export function toFile(
  * The document as `.atlasdraw` bytes. Every zip entry is stamped with
  * updatedAt, so the same content gives the same bytes.
  */
-export function encode(doc: Document): Promise<Blob> {
-  return write(toFile(doc));
+export function encode(
+  doc: Document,
+  camera: Camera | null = null,
+): Promise<Blob> {
+  return write(toFile(doc, undefined, camera));
 }
 
 // ---------------------------------------------------------------------------
@@ -378,12 +381,14 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
 }
 
 /**
- * Move the map to a saved camera. Returns false when no map is mounted yet;
+ * Move the map to a saved camera. Returns false when there is no map yet;
  * the caller that owns the editor's lifetime then applies it when the map
  * arrives (see usePersistenceWiring).
  */
-export function restoreCamera(camera: Camera): boolean {
-  const map = useMapInstanceStore.getState().map;
+export function restoreCamera(
+  map: Pick<maplibregl.Map, "jumpTo"> | null,
+  camera: Camera,
+): boolean {
   if (!map) {
     return false;
   }
@@ -428,7 +433,11 @@ async function blobToDataURL(blob: Blob): Promise<string> {
 export async function loadDocument(
   file: AtlasdrawDocument,
   api: ExcalidrawImperativeAPI,
-  options: { signal?: AbortSignal } = {},
+  options: {
+    signal?: AbortSignal;
+    /** The map to move to the file's camera, when there is one. */
+    map?: Pick<maplibregl.Map, "jumpTo"> | null;
+  } = {},
 ): Promise<Document | null> {
   const ticket = ++loadTicket;
   const before = currentDocument();
@@ -462,7 +471,7 @@ export async function loadDocument(
   }
   // From here the open is one synchronous step.
   openDocument(doc);
-  restoreCamera(file.manifest.camera);
+  restoreCamera(options.map ?? null, file.manifest.camera);
 
   // syncInvalidIndices repairs missing fractional indices in older files; it
   // is a no-op when they are valid.
@@ -486,14 +495,18 @@ export async function loadDocument(
 // ---------------------------------------------------------------------------
 
 /**
- * A bare `.excalidraw` file as a new document: the drawing comes in at the
- * live camera (see placeDrawing), with no map layers and the current basemap. Import only: the
+ * A bare `.excalidraw` file as a new document: the drawing comes in at
+ * `camera`, where the user is looking (see placeDrawing), with no map layers
+ * and the open document's basemap. Import only: the
  * caller must not keep a writable handle to the source file, or a later save
  * would write zip bytes over it.
  *
  * Throws on malformed input; the caller reports it like any open failure.
  */
-export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
+export function documentFromExcalidrawJson(
+  text: string,
+  camera: Camera | null = null,
+): AtlasdrawDocument {
   const parsed: unknown = JSON.parse(text);
   const obj = parsed as {
     type?: unknown;
@@ -523,8 +536,8 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
 
   const now = new Date().toISOString();
   // The drawing opens where the user is looking, at the size it had.
-  const camera = liveCamera() ?? DEFAULT_CAMERA;
-  const world = documentFrame(camera.center[0], camera.center[1]);
+  const at = camera ?? DEFAULT_CAMERA;
+  const world = documentFrame(at.center[0], at.center[1]);
   return {
     manifest: {
       id: ulid(),
@@ -534,7 +547,7 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
       createdAt: now,
       updatedAt: now,
       basemap: { type: "registry", id: currentDocument().snapshot().basemap },
-      camera,
+      camera: at,
       world,
       layers: [],
       permissions: { publicView: false },
@@ -542,7 +555,7 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
     scene: placeDrawing(
       obj.elements as PlaceableElement[],
       world,
-      camera,
+      at,
     ) as unknown as AtlasdrawDocument["scene"],
     layers: new Map(),
     styleRef: {},

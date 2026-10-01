@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
+import { withSession } from "../../session/__tests__/sessionFixture";
 
 import {
   createDocument,
@@ -56,7 +57,7 @@ describe("LayerPanel — symbology inside the card", () => {
       style: { fillColor: "#111" },
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     // Collapsed: no symbology anywhere.
     expect(screen.queryByTestId("style-panel")).toBeNull();
@@ -77,7 +78,7 @@ describe("LayerPanel — symbology inside the card", () => {
       style: {},
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:row-c"));
     expect(screen.getByTestId("style-panel")).toBeTruthy();
 
@@ -94,7 +95,7 @@ describe("LayerPanel — symbology inside the card", () => {
       style: {},
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:row-d"));
 
     fireEvent.click(screen.getByTestId("style-tab-categorical"));
