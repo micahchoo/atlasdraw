@@ -1,24 +1,23 @@
 # Atlasdraw — full production-recommended self-host stack.
 #
-# Services: web (atlas-app) + storage (Fastify, postgres-minio mode)
-# + postgres + minio (+ minio-init, a one-shot setup job) + caddy (TLS and
-# reverse proxy). All traffic between services stays on the compose network;
-# only Caddy exposes 80/443.
+# Services: web (atlas-app) + storage (Fastify; Postgres for metadata, YOUR
+# S3-compatible bucket for map bytes) + postgres + caddy (TLS and reverse
+# proxy). All traffic between services stays on the compose network; only
+# Caddy exposes 80/443. Bring your own S3: this stack runs no object store.
 #
 # Run from the repository root. Compose does NOT read a `.env` in the root by
 # itself (it looks next to this file), so pass it:
 #   cp infra/.env.example .env
-#   # edit .env — set PUBLIC_DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD,
-#   # MINIO_ROOT_PASSWORD and MINIO_APP_PASSWORD
+#   # edit .env — set PUBLIC_DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD and the
+#   # BLOB_* settings of your S3 bucket
 #   docker compose --env-file .env -f infra/docker-compose.yml up -d --build
 #
 # What you get:
 #   - https://${PUBLIC_DOMAIN}/        → atlas-app (web)
 #   - https://${PUBLIC_DOMAIN}/api/*   → storage HTTP API (Caddy strips /api)
 #   - Postgres on the internal network, never exposed externally.
-#   - MinIO on the internal network. The storage server uses its own MinIO
-#     user (MINIO_APP_USER), limited to the maps bucket; the root user is
-#     only for minio-init and for you.
+#   - Map bytes in your S3 bucket. Give the storage server credentials that
+#     reach that bucket only (docs/self-host/production.md "Blob storage").
 #
 # Collaboration: the `realtime` service runs with the "realtime" profile:
 #   docker compose --profile realtime --env-file .env -f infra/docker-compose.yml up -d
@@ -32,12 +31,15 @@ services:
       STORAGE_MODE: postgres-minio
       PORT: "4000"
       DATABASE_URL: postgres://${POSTGRES_USER:-atlasdraw}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-atlasdraw}
-      BLOB_ENDPOINT: http://minio:9000
-      # The app's own MinIO user (minio-init makes it), not the root user.
-      BLOB_ACCESS_KEY: ${MINIO_APP_USER:-atlasdraw-app}
-      BLOB_SECRET_KEY: ${MINIO_APP_PASSWORD:?set MINIO_APP_PASSWORD in .env}
+      # Your S3-compatible bucket (AWS S3, Cloudflare R2, Backblaze B2,
+      # Garage, SeaweedFS, a MinIO you run...). Use credentials that reach
+      # this bucket only.
+      BLOB_ENDPOINT: ${BLOB_ENDPOINT:?set BLOB_ENDPOINT in .env}
+      BLOB_ACCESS_KEY: ${BLOB_ACCESS_KEY:?set BLOB_ACCESS_KEY in .env}
+      BLOB_SECRET_KEY: ${BLOB_SECRET_KEY:?set BLOB_SECRET_KEY in .env}
       BLOB_BUCKET: ${BLOB_BUCKET:-atlasdraw-maps}
       BLOB_REGION: ${BLOB_REGION:-us-east-1}
+      BLOB_FORCE_PATH_STYLE: ${BLOB_FORCE_PATH_STYLE:-true}
       PUBLIC_URL: https://${PUBLIC_DOMAIN}
       # One hop: Caddy. Lets the limiters see the real client address.
       TRUST_PROXY: "1"
@@ -57,8 +59,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     # A shutdown lets requests in flight finish (SHUTDOWN_TIMEOUT_MS, 25 s).
     stop_grace_period: 30s
     restart: unless-stopped
@@ -96,54 +96,6 @@ services:
       timeout: 5s
       retries: 30
     restart: unless-stopped
-
-  # MinIO's last community image, pinned by digest (RELEASE.2025-09-07).
-  # MinIO no longer publishes community images: on 2026-10-01 neither
-  # docker.io/minio/minio nor quay.io/minio/minio served it to an anonymous
-  # pull. If yours cannot pull it, point BLOB_ENDPOINT at any S3 server you
-  # run (docs/self-host/production.md "Blob storage").
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-atlasdraw}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes:
-      - miniodata:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 2s
-      timeout: 5s
-      retries: 30
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-    restart: unless-stopped
-
-  # One-shot setup, run on every `up`: the bucket, and an app user whose
-  # policy reaches only that bucket. It uses the `mc` in the MinIO image.
-  minio-init:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-atlasdraw}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      MINIO_APP_USER: ${MINIO_APP_USER:-atlasdraw-app}
-      MINIO_APP_PASSWORD: ${MINIO_APP_PASSWORD:?set MINIO_APP_PASSWORD in .env}
-      BLOB_BUCKET: ${BLOB_BUCKET:-atlasdraw-maps}
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        mc alias set root http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        mc mb --ignore-existing "root/$$BLOB_BUCKET"
-        printf '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Effect":"Allow","Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],"Resource":["arn:aws:s3:::%s/*"]}]}' "$$BLOB_BUCKET" "$$BLOB_BUCKET" > /tmp/atlasdraw-app.json
-        mc admin policy create root atlasdraw-app /tmp/atlasdraw-app.json
-        mc admin user add root "$$MINIO_APP_USER" "$$MINIO_APP_PASSWORD"
-        mc admin policy attach root atlasdraw-app --user "$$MINIO_APP_USER" || mc admin user info root "$$MINIO_APP_USER"
-    restart: "no"
 
   caddy:
     image: caddy:2-alpine
@@ -201,6 +153,5 @@ services:
 volumes:
   roomsdata: # the relay's rooms (SQLite)
   pgdata:
-  miniodata:
   caddy_data: # auto-renewed TLS certs persist across container restarts
   caddy_config:

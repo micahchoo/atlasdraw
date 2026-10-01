@@ -79,6 +79,28 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("BLOB_FORCE_PATH_STYLE", () => {
+    const s3 = {
+      STORAGE_MODE: "postgres-minio",
+      DATABASE_URL: "postgres://localhost/atlas",
+      BLOB_ENDPOINT: "https://s3.example.com",
+      BLOB_ACCESS_KEY: "k",
+      BLOB_SECRET_KEY: "s",
+    } as const;
+    it("uses path-style addressing by default, as most self-hosted S3 servers need", () => {
+      const cfg = loadConfig(s3);
+      expect(
+        cfg.STORAGE_MODE === "postgres-minio" && cfg.BLOB_FORCE_PATH_STYLE,
+      ).toBe(true);
+    });
+    it("can use virtual-hosted addressing, as AWS S3 prefers", () => {
+      const cfg = loadConfig({ ...s3, BLOB_FORCE_PATH_STYLE: "false" });
+      expect(
+        cfg.STORAGE_MODE === "postgres-minio" && cfg.BLOB_FORCE_PATH_STYLE,
+      ).toBe(false);
+    });
+  });
+
   it("throws a named-var error when STORAGE_MODE is invalid", () => {
     expect(() => loadConfig({ STORAGE_MODE: "redis" })).toThrow(
       /STORAGE_MODE.*"redis"/,

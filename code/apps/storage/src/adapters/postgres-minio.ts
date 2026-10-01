@@ -104,6 +104,8 @@ export function createPostgresMinioAdapter(opts: {
   blobSecretKey: string;
   blobBucket?: string;
   blobRegion?: string;
+  /** Path-style addressing; see BLOB_FORCE_PATH_STYLE in config.ts. */
+  blobForcePathStyle?: boolean;
 }): StorageClient {
   const BUCKET = opts.blobBucket ?? DEFAULT_BUCKET;
   const pool = new Pool({ connectionString: opts.databaseUrl });
@@ -128,7 +130,7 @@ export function createPostgresMinioAdapter(opts: {
       accessKeyId: opts.blobAccessKey,
       secretAccessKey: opts.blobSecretKey,
     },
-    forcePathStyle: true,
+    forcePathStyle: opts.blobForcePathStyle ?? true,
   });
 
   let bucketReady = false;

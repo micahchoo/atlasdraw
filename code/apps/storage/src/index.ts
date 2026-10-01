@@ -46,6 +46,7 @@ async function main(): Promise<void> {
           blobSecretKey: config.BLOB_SECRET_KEY,
           blobBucket: config.BLOB_BUCKET,
           blobRegion: config.BLOB_REGION,
+          blobForcePathStyle: config.BLOB_FORCE_PATH_STYLE,
         });
 
   const app = buildApp({ config, client });

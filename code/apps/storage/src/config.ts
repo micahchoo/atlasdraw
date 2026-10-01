@@ -97,6 +97,12 @@ const PostgresMinioSchema = BaseSchema.extend({
   // exist; a name another account owns is an error.
   BLOB_BUCKET: z.string().min(3).default("atlasdraw-maps"),
   BLOB_REGION: z.string().min(1).default("us-east-1"),
+  // Path-style URLs (endpoint/bucket/key) suit most self-hosted S3 servers.
+  // Set "false" for virtual-hosted URLs (bucket.endpoint/key), as AWS prefers.
+  BLOB_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
 });
 
 const SqliteFsSchema = BaseSchema.extend({
