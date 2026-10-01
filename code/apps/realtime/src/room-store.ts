@@ -3,7 +3,8 @@
 // Where rooms are kept between sessions: one SQLite table, one row per room.
 // A row holds the room's access verifier and the whole Y.Doc state as one
 // Yjs update. Writing the whole state each time is also the compaction.
-// ADR-0018 records why SQLite and not the storage server or LevelDB.
+// docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md records why
+// SQLite and not the storage server or LevelDB.
 //
 // `updated_at` is the time of the last save. The relay saves a room when its
 // last connection closes, so for a room not in memory it is also the last
@@ -76,7 +77,9 @@ export function sqliteRoomStore(
   const remove = db.prepare<[string]>("DELETE FROM rooms WHERE name = ?");
 
   const bytesOf = (room: string): number => selectBytes.get(room)?.bytes ?? 0;
-  // One relay process per file (ADR-0018), so a running total stays exact.
+  // One relay process per file
+  // (docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md), so a
+  // running total stays exact.
   let total =
     db
       .prepare<[], { total: number | null }>(

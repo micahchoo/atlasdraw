@@ -5,8 +5,9 @@
 //
 // A client connects to `/yjs/<roomId>` and sends a token message first
 // (@atlasdraw/protocol `roomTokenMessage`). The token is derived from the key
-// in the room link (ADR-0014), so the room id alone grants nothing. The first connection to a room id that the store does not know
-// claims it: the server stores SHA-256(token) as the room's verifier. Every
+// in the room link (docs/architecture/adr/0014-collab-trust-model.md), so
+// the room id alone grants nothing. The first connection to a room id that
+// the store does not know claims it: the server stores SHA-256(token) as the room's verifier. Every
 // later connection must present a token with the same hash.
 //
 // A refused connection is upgraded and then closed with a code, so the
