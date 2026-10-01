@@ -268,6 +268,16 @@ export function usePersistenceWiring(
           return;
         }
         const loaded = admitted?.doc ?? null;
+        // The user drew on the blank map while the saved one was read: keep
+        // that work. Opening the saved map now would replace it (audit F20);
+        // the saved map stays in My maps, and the new work saves as a map
+        // of its own.
+        if (admitted && loaded && history.dirty) {
+          documentNotify.success?.(
+            `You started drawing before "${loaded.manifest.title}" opened. It is in My maps.`,
+          );
+          return;
+        }
         // A room joined while the autosave was read: the room stays open.
         if (admitted && loaded && !isRoomDocument(currentDocument())) {
           const opened = await loadDocument(admitted, excalidrawAPI, {

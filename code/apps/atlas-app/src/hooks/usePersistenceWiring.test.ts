@@ -367,6 +367,39 @@ describe("usePersistenceWiring", () => {
     expect(store.save).not.toHaveBeenCalled();
   });
 
+  it("keeps what the user drew before the saved map loaded, and leaves that map in My maps", async () => {
+    let finishLoad: (doc: AtlasdrawDocument) => void = () => {};
+    const store = makeFakeStore({
+      load: vi.fn(
+        () => new Promise<AtlasdrawDocument>((r) => (finishLoad = r)),
+      ),
+    });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(
+      fakeAutoSave(),
+    );
+    const open = vi
+      .spyOn(documentIO, "loadDocument")
+      .mockResolvedValue({} as never);
+    const notify = { error: vi.fn(), success: vi.fn() };
+    renderHook(() => usePersistenceWiring(session, fakeExcalidrawAPI, notify));
+
+    // A stroke on the blank map while the saved one is still read.
+    await waitFor(() => expect(store.load).toHaveBeenCalled());
+    edit();
+    finishLoad(FAKE_DOC);
+
+    await waitFor(() =>
+      expect(session.persistence.getState().ownMapLoaded).toBe(true),
+    );
+    expect(open).not.toHaveBeenCalled();
+    expect(notify.success).toHaveBeenCalledWith(
+      expect.stringMatching(/My maps/),
+    );
+  });
+
   it("calls documentNotify.error when auto-save reports a failure", () => {
     const store = makeFakeStore();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(

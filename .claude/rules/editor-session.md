@@ -17,7 +17,8 @@ module store.
 
 - **New editor state goes in the session**, never in a module-level store:
   view state in `session/view.ts`, autosave state in
-  `state/persistenceState.ts`. A module store is shared by every editor and
+  `state/persistenceState.ts`, undo and "unsaved" in `session/history.ts`
+  (`one-history.md`). A module store is shared by every editor and
   every test, and needs a reset hook. Code that is not a component takes the
   session (or the store it needs) as a parameter.
 - **The session holds no logic.** It hands the same instances to everyone.
