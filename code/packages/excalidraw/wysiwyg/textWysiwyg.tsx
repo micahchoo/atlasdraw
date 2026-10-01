@@ -19,6 +19,7 @@ import {
   originalContainerCache,
   updateBoundElements,
   updateOriginalContainerCache,
+  styleUnit,
 } from "@atlasdraw/element";
 
 import { LinearElementEditor } from "@atlasdraw/element";
@@ -328,6 +329,7 @@ export const textWysiwyg = ({
           const targetContainerHeight = computeContainerDimensionForBoundText(
             height,
             container.type,
+            styleUnit(container), // Atlasdraw
           );
 
           app.scene.mutateElement(container, { height: targetContainerHeight });
@@ -343,6 +345,7 @@ export const textWysiwyg = ({
           const targetContainerHeight = computeContainerDimensionForBoundText(
             height,
             container.type,
+            styleUnit(container), // Atlasdraw
           );
           app.scene.mutateElement(container, { height: targetContainerHeight });
           updateBoundElements(container, app.scene);

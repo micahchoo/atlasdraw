@@ -253,6 +253,7 @@ const getRelevantAppStateProps = (
   newElement: appState.newElement,
   isBindingEnabled: appState.isBindingEnabled,
   isMidpointSnappingEnabled: appState.isMidpointSnappingEnabled,
+  screenSizedStyles: appState.screenSizedStyles, // Atlasdraw
   suggestedBinding: appState.suggestedBinding,
   isRotating: appState.isRotating,
   elementsToHighlight: appState.elementsToHighlight,

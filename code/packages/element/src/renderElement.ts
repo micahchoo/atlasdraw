@@ -307,19 +307,13 @@ const generateElementCanvas = (
       padding * scale;
     boundTextCanvasContext.translate(-shiftX, -shiftY);
     // Clear the bound text area
+    // Atlasdraw: padding in the arrow's pixel unit (atlasStyleUnit.ts).
+    const pad = BOUND_TEXT_PADDING * styleUnit(element);
     boundTextCanvasContext.clearRect(
-      -(boundTextElement.width / 2 + BOUND_TEXT_PADDING) *
-        window.devicePixelRatio *
-        scale,
-      -(boundTextElement.height / 2 + BOUND_TEXT_PADDING) *
-        window.devicePixelRatio *
-        scale,
-      (boundTextElement.width + BOUND_TEXT_PADDING * 2) *
-        window.devicePixelRatio *
-        scale,
-      (boundTextElement.height + BOUND_TEXT_PADDING * 2) *
-        window.devicePixelRatio *
-        scale,
+      -(boundTextElement.width / 2 + pad) * window.devicePixelRatio * scale,
+      -(boundTextElement.height / 2 + pad) * window.devicePixelRatio * scale,
+      (boundTextElement.width + pad * 2) * window.devicePixelRatio * scale,
+      (boundTextElement.height + pad * 2) * window.devicePixelRatio * scale,
     );
   }
 

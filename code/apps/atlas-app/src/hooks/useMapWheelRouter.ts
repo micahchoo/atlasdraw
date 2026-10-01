@@ -28,9 +28,10 @@
  *     and shift-wheel-zoom is harmless if surprising — revisit in Phase 4 if
  *     a stylus/keyboard combo proves disruptive).
  *
- * Touch pinch-zoom on tablet hits the same Excalidraw-captures-pointer issue
- * but goes through pointer events, not wheel — out of scope for this hook.
- * Tracked separately when Phase 4 mobile/touch matrix lands.
+ * Touch pinch-zoom goes through pointer events, not wheel. Excalidraw's own
+ * pinch handler takes it and the camera bridge moves the map; with
+ * `onZoomAction` set the fork leaves that zoom unclamped (W4b,
+ * `e2e/pinch-zoom-touch.spec.ts`).
  */
 
 import { useEffect } from "react";

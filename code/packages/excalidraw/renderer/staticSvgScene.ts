@@ -1,6 +1,7 @@
 import {
   FRAME_STYLE,
   MAX_DECIMALS_FOR_SVG_EXPORT,
+  MAX_CANVAS_FONT_SIZE,
   SVG_NS,
   THEME,
   DARK_THEME_FILTER,
@@ -668,13 +669,25 @@ const renderElementToSvg = (
             : element.textAlign === "right" || direction === "rtl"
             ? "end"
             : "start";
+        // Atlasdraw (ADR-0015): browsers clamp an SVG font-size to 10000px.
+        // A larger font is written at MAX_CANVAS_FONT_SIZE in a scaled <text>.
+        const fontScale =
+          element.fontSize > MAX_CANVAS_FONT_SIZE
+            ? element.fontSize / MAX_CANVAS_FONT_SIZE
+            : 1;
         for (let i = 0; i < lines.length; i++) {
           const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
           text.textContent = lines[i];
-          text.setAttribute("x", `${horizontalOffset}`);
-          text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
+          text.setAttribute("x", `${horizontalOffset / fontScale}`);
+          text.setAttribute(
+            "y",
+            `${(i * lineHeightPx + verticalOffset) / fontScale}`,
+          );
+          if (fontScale !== 1) {
+            text.setAttribute("transform", `scale(${fontScale})`);
+          }
           text.setAttribute("font-family", getFontFamilyString(element));
-          text.setAttribute("font-size", `${element.fontSize}px`);
+          text.setAttribute("font-size", `${element.fontSize / fontScale}px`);
           text.setAttribute(
             "fill",
             renderConfig.theme === THEME.DARK

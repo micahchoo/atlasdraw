@@ -359,7 +359,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         rect,
         "end",
         elementsMap,
-        h.state.zoom,
+        h.state, // Atlasdraw: the editor view, was h.state.zoom.
         true,
       );
       const snappedWithoutMidpoint = projectFixedPointOntoDiagonal(
@@ -368,7 +368,7 @@ describe("Arrow binding – non-default case (bindingPreference: disabled)", () 
         rect,
         "end",
         elementsMap,
-        h.state.zoom,
+        h.state, // Atlasdraw: the editor view, was h.state.zoom.
         false,
       );
 

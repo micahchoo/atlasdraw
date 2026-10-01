@@ -12,10 +12,18 @@
 // it, so they look as upstream draws them at that zoom, and scale with the
 // map like the rest of the element. Without it the unit is 1 and nothing
 // changes.
+//
+// Distances that belong to the element's geometry use the element's unit:
+// binding gaps, bound-text padding, elbow-arrow spacing. Distances that
+// belong to the editor's interaction use the editor's unit (`editorUnit`):
+// how near an arrow end must come to bind, the arrow-key nudge. Both make
+// the atlas editor behave at any map zoom as upstream does at zoom 1.
 
 import type { ExcalidrawElement } from "./types";
 
-export const styleUnit = (element: ExcalidrawElement): number => {
+export const styleUnit = (
+  element: Pick<ExcalidrawElement, "customData">,
+): number => {
   const unit = (
     element.customData as { atlas?: { unit?: unknown } } | undefined
   )?.atlas?.unit;
@@ -23,3 +31,17 @@ export const styleUnit = (element: ExcalidrawElement): number => {
     ? unit
     : 1;
 };
+
+/** What the editor's own distances depend on. `AppState` satisfies it. */
+export type EditorView = {
+  zoom: { value: number };
+  screenSizedStyles: boolean;
+};
+
+/**
+ * Scene units per screen pixel for the editor's own distances. With
+ * `screenSizedStyles` it is one pixel at the current zoom; without, 1, and
+ * upstream's zoom rules apply.
+ */
+export const editorUnit = (view: EditorView): number =>
+  view.screenSizedStyles ? 1 / view.zoom.value : 1;

@@ -239,7 +239,7 @@ export const handleFocusPointDrag = (
     arrow,
     scene.getNonDeletedElements(),
     elementsMap,
-    maxBindingDistance_simple(appState.zoom),
+    maxBindingDistance_simple(appState),
   );
 
   // Hovering a bindable element

@@ -510,7 +510,7 @@ const renderBindingHighlightForBindableElement_simple = (
 
       const midpointRadius = 4 / appState.zoom.value;
       const highlightThreshold =
-        maxBindingDistance_simple(appState.zoom) +
+        maxBindingDistance_simple(appState) +
         suggestedBinding.element.strokeWidth / 2;
 
       midpoints.forEach((midpoint, idx) => {

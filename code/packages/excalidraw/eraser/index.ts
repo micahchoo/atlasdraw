@@ -13,6 +13,7 @@ import {
   isFreeDrawElement,
   isLineElement,
   isPointInElement,
+  styleUnit,
 } from "@atlasdraw/element";
 import {
   lineSegment,
@@ -195,7 +196,8 @@ export class EraserTrail extends AnimatedTrail {
   }
 }
 
-const eraserTest = (
+// Atlasdraw: exported for tests (tests/atlasSceneUnits.test.tsx).
+export const eraserTest = (
   pathSegment: LineSegment<GlobalPoint>,
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
@@ -204,7 +206,11 @@ const eraserTest = (
   const lastPoint = pathSegment[1];
 
   // PERF: Do a quick bounds intersection test first because it's cheap
-  const threshold = isFreeDrawElement(element) ? 15 : element.strokeWidth / 2;
+  // Atlasdraw: in the element's pixel unit, and zoom relative to it (atlasStyleUnit.ts).
+  const unit = styleUnit(element);
+  const threshold = isFreeDrawElement(element)
+    ? 15 * unit
+    : element.strokeWidth / 2;
   const segmentBounds = [
     Math.min(pathSegment[0][0], pathSegment[1][0]) - threshold,
     Math.min(pathSegment[0][1], pathSegment[1][1]) - threshold,
@@ -243,7 +249,7 @@ const eraserTest = (
       outlinePoints,
       elementsMap,
     );
-    const tolerance = Math.max(2.25, 5 / zoom); // NOTE: Visually fine-tuned approximation
+    const tolerance = Math.max(2.25 * unit, 5 / zoom); // NOTE: Visually fine-tuned approximation
 
     for (const seg of strokeSegments) {
       if (lineSegmentsDistance(seg, pathSegment) <= tolerance) {
@@ -272,7 +278,7 @@ const eraserTest = (
   if (isArrowElement(element) || (isLineElement(element) && !element.polygon)) {
     const tolerance = Math.max(
       element.strokeWidth,
-      (element.strokeWidth * 2) / zoom,
+      (element.strokeWidth * 2) / (zoom * unit),
     );
 
     // If the eraser movement is so fast that a large distance is covered

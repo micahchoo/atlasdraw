@@ -426,7 +426,7 @@ export class LinearElementEditor {
                 startBindingElement,
                 "start",
                 elementsMap,
-                app.state.zoom,
+                app.state,
                 app.state.isMidpointSnappingEnabled,
               )
             : linearElementEditor.initialState.altFocusPoint,
@@ -660,7 +660,7 @@ export class LinearElementEditor {
                 altFocusPointBindableElement,
                 "start",
                 elementsMap,
-                app.state.zoom,
+                app.state,
                 app.state.isMidpointSnappingEnabled,
               )
             : linearElementEditor.initialState.altFocusPoint,
@@ -2305,7 +2305,7 @@ const pointDraggingUpdates = (
               ),
               start.element,
               elementsMap,
-              app.state.zoom,
+              app.state,
             ),
           }
         : null;
@@ -2344,7 +2344,7 @@ const pointDraggingUpdates = (
               ),
               end.element,
               elementsMap,
-              app.state.zoom,
+              app.state,
             ),
           }
         : null;

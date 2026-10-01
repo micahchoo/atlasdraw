@@ -31,16 +31,20 @@ import type maplibregl from "maplibre-gl";
 
 const frame = () => currentDocument().snapshot().world;
 
+type FitElements = Extract<ZoomAction, { type: "zoomToFit" }>["elements"];
+
 /**
  * Do an Excalidraw zoom action on the map. Returns true: the map owns the
  * camera, so the editor's own zoom never runs.
  *
  * "Reset zoom" (Ctrl+0) is Excalidraw's 100%, the reference zoom 22, which is
- * not a useful map view; it does nothing.
+ * not a useful map view. A map has no 100%, so it frames everything drawn
+ * (`drawn`), as zoom-to-fit does; with nothing drawn the camera stays.
  */
 export function zoomActionOnMap(
   map: Pick<maplibregl.Map, "zoomIn" | "zoomOut" | "fitBounds">,
   action: ZoomAction,
+  drawn: () => FitElements = () => [],
 ): boolean {
   switch (action.type) {
     case "zoomIn":
@@ -53,6 +57,7 @@ export function zoomActionOnMap(
       fitMapToContent(map, action.elements, frame());
       break;
     case "resetZoom":
+      fitMapToContent(map, drawn(), frame());
       break;
   }
   return true;
@@ -162,8 +167,15 @@ export function useCameraBridge(
   }, [map, layer]);
 
   const onZoomAction = useCallback(
-    (action: ZoomAction) => (map ? zoomActionOnMap(map, action) : false),
-    [map],
+    (action: ZoomAction) =>
+      map
+        ? zoomActionOnMap(
+            map,
+            action,
+            () => excalidrawAPI?.getSceneElements() ?? [],
+          )
+        : false,
+    [map, excalidrawAPI],
   );
 
   return { bridge, onZoomAction };

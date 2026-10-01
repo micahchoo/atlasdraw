@@ -11,6 +11,7 @@ import {
   isBoundToContainer,
   resetOriginalContainerCache,
   updateOriginalContainerCache,
+  styleUnit,
 } from "@atlasdraw/element";
 
 import {
@@ -266,15 +267,18 @@ export const actionWrapTextInContainer = register({
               : null,
           opacity: 100,
           locked: false,
-          x: textElement.x - BOUND_TEXT_PADDING,
-          y: textElement.y - BOUND_TEXT_PADDING,
+          // Atlasdraw: padding in the text's pixel unit (atlasStyleUnit.ts).
+          x: textElement.x - BOUND_TEXT_PADDING * styleUnit(textElement),
+          y: textElement.y - BOUND_TEXT_PADDING * styleUnit(textElement),
           width: computeContainerDimensionForBoundText(
             textElement.width,
             "rectangle",
+            styleUnit(textElement),
           ),
           height: computeContainerDimensionForBoundText(
             textElement.height,
             "rectangle",
+            styleUnit(textElement),
           ),
           groupIds: textElement.groupIds,
           frameId: textElement.frameId,

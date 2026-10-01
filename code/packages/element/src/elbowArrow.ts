@@ -54,6 +54,7 @@ import {
   type NonDeletedSceneElementsMap,
 } from "./types";
 import { aabbForElement, pointInsideBounds } from "./bounds";
+import { styleUnit } from "./atlasStyleUnit";
 import { getHoveredElementForBinding } from "./collision";
 
 import type { Heading } from "./heading";
@@ -63,6 +64,7 @@ import type {
   ExcalidrawBindableElement,
   FixedPointBinding,
   FixedSegment,
+  ExcalidrawElement,
   NonDeletedExcalidrawElement,
   Ordered,
 } from "./types";
@@ -326,6 +328,7 @@ const handleSegmentRelease = (
       startArrowhead: null,
       endArrowhead: null,
       points: arrow.points,
+      customData: arrow.customData, // Atlasdraw: for its unit.
     },
     elementsMap,
     [
@@ -471,6 +474,9 @@ const handleSegmentMove = (
   hoveredStartElement: ExcalidrawBindableElement | null,
   hoveredEndElement: ExcalidrawBindableElement | null,
 ): ElementUpdate<ExcalidrawElbowArrowElement> => {
+  // Atlasdraw: in the arrow's pixel unit (atlasStyleUnit.ts).
+  const unit = styleUnit(arrow);
+  const padding_ = BASE_PADDING * unit;
   const activelyModifiedSegmentIdx = fixedSegments
     .map((segment, i) => {
       if (
@@ -507,7 +513,7 @@ const handleSegmentMove = (
     fixedSegments[activelyModifiedSegmentIdx].start,
     fixedSegments[activelyModifiedSegmentIdx].end,
   );
-  const segmentIsTooShort = segmentLength < BASE_PADDING + 5;
+  const segmentIsTooShort = segmentLength < padding_ + 5 * unit;
   if (
     firstSegmentIdx === -1 &&
     fixedSegments[activelyModifiedSegmentIdx].index === 1 &&
@@ -520,10 +526,10 @@ const handleSegmentMove = (
     const padding = startIsPositive
       ? segmentIsTooShort
         ? segmentLength / 2
-        : BASE_PADDING
+        : padding_
       : segmentIsTooShort
       ? -segmentLength / 2
-      : -BASE_PADDING;
+      : -padding_;
     fixedSegments[activelyModifiedSegmentIdx].start = pointFrom<LocalPoint>(
       fixedSegments[activelyModifiedSegmentIdx].start[0] +
         (startIsHorizontal ? padding : 0),
@@ -546,10 +552,10 @@ const handleSegmentMove = (
     const padding = endIsPositive
       ? segmentIsTooShort
         ? segmentLength / 2
-        : BASE_PADDING
+        : padding_
       : segmentIsTooShort
       ? -segmentLength / 2
-      : -BASE_PADDING;
+      : -padding_;
     fixedSegments[activelyModifiedSegmentIdx].end = pointFrom<LocalPoint>(
       fixedSegments[activelyModifiedSegmentIdx].end[0] +
         (endIsHorizontal ? padding : 0),
@@ -715,6 +721,8 @@ const handleEndpointDrag = (
   hoveredStartElement: ExcalidrawBindableElement | null,
   hoveredEndElement: ExcalidrawBindableElement | null,
 ): ElementUpdate<ExcalidrawElbowArrowElement> => {
+  // Atlasdraw: in the arrow's pixel unit (atlasStyleUnit.ts).
+  const padding_ = BASE_PADDING * styleUnit(arrow);
   let startIsSpecial = arrow.startIsSpecial ?? null;
   let endIsSpecial = arrow.endIsSpecial ?? null;
   const globalUpdatedPoints = updatedPoints.map((p, i) =>
@@ -771,19 +779,19 @@ const handleEndpointDrag = (
         pointFrom<GlobalPoint>(
           !secondIsHorizontal
             ? thirdPoint[0]
-            : startGlobalPoint[0] + (positive ? BASE_PADDING : -BASE_PADDING),
+            : startGlobalPoint[0] + (positive ? padding_ : -padding_),
           secondIsHorizontal
             ? thirdPoint[1]
-            : startGlobalPoint[1] + (positive ? BASE_PADDING : -BASE_PADDING),
+            : startGlobalPoint[1] + (positive ? padding_ : -padding_),
         ),
       );
       newPoints.unshift(
         pointFrom<GlobalPoint>(
           startIsHorizontal
-            ? startGlobalPoint[0] + (positive ? BASE_PADDING : -BASE_PADDING)
+            ? startGlobalPoint[0] + (positive ? padding_ : -padding_)
             : startGlobalPoint[0],
           !startIsHorizontal
-            ? startGlobalPoint[1] + (positive ? BASE_PADDING : -BASE_PADDING)
+            ? startGlobalPoint[1] + (positive ? padding_ : -padding_)
             : startGlobalPoint[1],
         ),
       );
@@ -842,19 +850,19 @@ const handleEndpointDrag = (
         pointFrom<GlobalPoint>(
           !secondIsHorizontal
             ? thirdToLastPoint[0]
-            : endGlobalPoint[0] + (positive ? BASE_PADDING : -BASE_PADDING),
+            : endGlobalPoint[0] + (positive ? padding_ : -padding_),
           secondIsHorizontal
             ? thirdToLastPoint[1]
-            : endGlobalPoint[1] + (positive ? BASE_PADDING : -BASE_PADDING),
+            : endGlobalPoint[1] + (positive ? padding_ : -padding_),
         ),
       );
       newPoints.push(
         pointFrom<GlobalPoint>(
           endIsHorizontal
-            ? endGlobalPoint[0] + (positive ? BASE_PADDING : -BASE_PADDING)
+            ? endGlobalPoint[0] + (positive ? padding_ : -padding_)
             : endGlobalPoint[0],
           !endIsHorizontal
-            ? endGlobalPoint[1] + (positive ? BASE_PADDING : -BASE_PADDING)
+            ? endGlobalPoint[1] + (positive ? padding_ : -padding_)
             : endGlobalPoint[1],
         ),
       );
@@ -1049,6 +1057,7 @@ export const updateElbowArrowPoints = (
       startArrowhead: arrow.startArrowhead,
       endArrowhead: arrow.endArrowhead,
       points: arrow.points,
+      customData: arrow.customData, // Atlasdraw: for its unit.
     },
     elementsMap,
     updatedPoints,
@@ -1199,6 +1208,7 @@ const getElbowArrowData = (
     startArrowhead: Arrowhead | null;
     endArrowhead: Arrowhead | null;
     points: readonly LocalPoint[];
+    customData?: ExcalidrawElement["customData"]; // Atlasdraw: for its unit.
   },
   elementsMap: NonDeletedSceneElementsMap,
   nextPoints: readonly LocalPoint[],
@@ -1209,6 +1219,11 @@ const getElbowArrowData = (
     isMidpointSnappingEnabled?: boolean;
   },
 ) => {
+  // Atlasdraw: route spacing in the arrow's pixel unit (atlasStyleUnit.ts).
+  const unit = styleUnit(arrow);
+  const padding = BASE_PADDING * unit;
+  const gapElbow = BASE_BINDING_GAP_ELBOW * unit;
+  const arrowGap = { elbowed: true, customData: arrow.customData };
   const origStartGlobalPoint: GlobalPoint = pointTranslate<
     LocalPoint,
     GlobalPoint
@@ -1223,19 +1238,11 @@ const getElbowArrowData = (
   if (options?.isDragging && options?.isBindingEnabled !== false) {
     const elements = Array.from(elementsMap.values());
     hoveredStartElement =
-      getHoveredElement(
-        origStartGlobalPoint,
-        elementsMap,
-        elements,
-        options?.zoom,
-      ) || null;
+      getHoveredElement(origStartGlobalPoint, elementsMap, elements, unit) ||
+      null;
     hoveredEndElement =
-      getHoveredElement(
-        origEndGlobalPoint,
-        elementsMap,
-        elements,
-        options?.zoom,
-      ) || null;
+      getHoveredElement(origEndGlobalPoint, elementsMap, elements, unit) ||
+      null;
   } else {
     hoveredStartElement = arrow.startBinding
       ? getBindableElementForId(arrow.startBinding.elementId, elementsMap) ||
@@ -1286,7 +1293,7 @@ const getElbowArrowData = (
     hoveredStartElement,
     origStartGlobalPoint,
     elementsMap,
-    options?.zoom,
+    unit,
   );
   const endHeading = getBindPointHeading(
     endGlobalPoint,
@@ -1294,19 +1301,19 @@ const getElbowArrowData = (
     hoveredEndElement,
     origEndGlobalPoint,
     elementsMap,
-    options?.zoom,
+    unit,
   );
   const startPointBounds = [
-    startGlobalPoint[0] - 2,
-    startGlobalPoint[1] - 2,
-    startGlobalPoint[0] + 2,
-    startGlobalPoint[1] + 2,
+    startGlobalPoint[0] - 2 * unit,
+    startGlobalPoint[1] - 2 * unit,
+    startGlobalPoint[0] + 2 * unit,
+    startGlobalPoint[1] + 2 * unit,
   ] as Bounds;
   const endPointBounds = [
-    endGlobalPoint[0] - 2,
-    endGlobalPoint[1] - 2,
-    endGlobalPoint[0] + 2,
-    endGlobalPoint[1] + 2,
+    endGlobalPoint[0] - 2 * unit,
+    endGlobalPoint[1] - 2 * unit,
+    endGlobalPoint[0] + 2 * unit,
+    endGlobalPoint[1] + 2 * unit,
   ] as Bounds;
   const startElementBounds = hoveredStartElement
     ? aabbForElement(
@@ -1315,8 +1322,8 @@ const getElbowArrowData = (
         offsetFromHeading(
           startHeading,
           arrow.startArrowhead
-            ? getBindingGap(hoveredStartElement, { elbowed: true }) * 6
-            : getBindingGap(hoveredStartElement, { elbowed: true }) * 2,
+            ? getBindingGap(hoveredStartElement, arrowGap) * 6
+            : getBindingGap(hoveredStartElement, arrowGap) * 2,
           1,
         ),
       )
@@ -1328,8 +1335,8 @@ const getElbowArrowData = (
         offsetFromHeading(
           endHeading,
           arrow.endArrowhead
-            ? getBindingGap(hoveredEndElement, { elbowed: true }) * 6
-            : getBindingGap(hoveredEndElement, { elbowed: true }) * 2,
+            ? getBindingGap(hoveredEndElement, arrowGap) * 6
+            : getBindingGap(hoveredEndElement, arrowGap) * 2,
           1,
         ),
       )
@@ -1341,7 +1348,7 @@ const getElbowArrowData = (
         ? aabbForElement(
             hoveredEndElement,
             elementsMap,
-            offsetFromHeading(endHeading, BASE_PADDING, BASE_PADDING),
+            offsetFromHeading(endHeading, padding, padding),
           )
         : endPointBounds,
     ) ||
@@ -1351,7 +1358,7 @@ const getElbowArrowData = (
         ? aabbForElement(
             hoveredStartElement,
             elementsMap,
-            offsetFromHeading(startHeading, BASE_PADDING, BASE_PADDING),
+            offsetFromHeading(startHeading, padding, padding),
           )
         : startPointBounds,
     );
@@ -1367,34 +1374,28 @@ const getElbowArrowData = (
     boundsOverlap
       ? offsetFromHeading(
           startHeading,
-          !hoveredStartElement && !hoveredEndElement ? 0 : BASE_PADDING,
+          !hoveredStartElement && !hoveredEndElement ? 0 : padding,
           0,
         )
       : offsetFromHeading(
           startHeading,
           !hoveredStartElement && !hoveredEndElement
             ? 0
-            : BASE_PADDING -
-                (arrow.startArrowhead
-                  ? BASE_BINDING_GAP_ELBOW * 6
-                  : BASE_BINDING_GAP_ELBOW * 2),
-          BASE_PADDING,
+            : padding - (arrow.startArrowhead ? gapElbow * 6 : gapElbow * 2),
+          padding,
         ),
     boundsOverlap
       ? offsetFromHeading(
           endHeading,
-          !hoveredStartElement && !hoveredEndElement ? 0 : BASE_PADDING,
+          !hoveredStartElement && !hoveredEndElement ? 0 : padding,
           0,
         )
       : offsetFromHeading(
           endHeading,
           !hoveredStartElement && !hoveredEndElement
             ? 0
-            : BASE_PADDING -
-                (arrow.endArrowhead
-                  ? BASE_BINDING_GAP_ELBOW * 6
-                  : BASE_BINDING_GAP_ELBOW * 2),
-          BASE_PADDING,
+            : padding - (arrow.endArrowhead ? gapElbow * 6 : gapElbow * 2),
+          padding,
         ),
     boundsOverlap,
     hoveredStartElement && aabbForElement(hoveredStartElement, elementsMap),
@@ -2257,7 +2258,7 @@ const getBindPointHeading = (
   hoveredElement: ExcalidrawBindableElement | null | undefined,
   origPoint: GlobalPoint,
   elementsMap: ElementsMap,
-  zoom?: AppState["zoom"],
+  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
 ): Heading =>
   getHeadingForElbowArrowSnap(
     p,
@@ -2276,20 +2277,20 @@ const getBindPointHeading = (
       ),
     origPoint,
     elementsMap,
-    zoom,
+    unit,
   );
 
 const getHoveredElement = (
   origPoint: GlobalPoint,
   elementsMap: NonDeletedSceneElementsMap,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
-  zoom?: AppState["zoom"],
+  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
 ) => {
   return getHoveredElementForBinding(
     origPoint,
     elements,
     elementsMap,
-    maxBindingDistance_simple(zoom),
+    maxBindingDistance_simple(undefined, unit),
   );
 };
 

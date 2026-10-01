@@ -15,6 +15,7 @@ import type {
 
 import type { NonDeletedExcalidrawElement } from "@atlasdraw/element/types";
 
+import { styleUnit } from "./atlasStyleUnit";
 import { unbindBindingElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
 import { getPerfectElementSize } from "./sizeHelpers";
@@ -313,6 +314,7 @@ export const dragNewElement = ({
         fontFamily: newElement.fontFamily,
       }),
       newElement.lineHeight,
+      styleUnit(newElement), // Atlasdraw
     );
     width = Math.max(width, minWidth);
 
