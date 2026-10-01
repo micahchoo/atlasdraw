@@ -3,7 +3,7 @@
 **Status:** Accepted  
 **Date:** 2026-05-03
 
-> **Note (2026-10-01):** The code does not do what the Decision below says. It holds Excalidraw at scroll 0,0 and zoom 1 and rewrites every geo element on each camera event. The measured gate that decides between the two designs is `docs/architecture/adr/0015-world-coordinates-gate.md` (repository root). Read it before you change the coordinate code.
+> **Note (2026-10-01):** Reversed in part by `docs/architecture/adr/0015-world-coordinates-gate.md` (repository root), shipped in roadmap wave W4. The camera half of this Decision holds: MapLibre owns the camera, and `CameraBridge` derives Excalidraw's scroll and zoom from it. The anchor half does not: elements carry no `customData.geo`. They are stored in world coordinates (Web Mercator pixels at zoom 22 from the document's origin), so a camera move writes no element. Version 1 files that carry `customData.geo` are migrated when they open.
 
 ## Context
 

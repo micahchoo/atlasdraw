@@ -3,6 +3,8 @@
 **Status:** Proposed (maintainer decision required)  
 **Date:** 2026-05-03
 
+> **Note (2026-10-01):** Decided by `docs/architecture/adr/0014-collab-trust-model.md` (repository root): the relay is trusted and rooms are not end-to-end encrypted (Option C, made permanent). The Socket.IO relay, `scene-crypto.ts` and `packages/data/src/yjs-crypto.ts` are deleted. A room is one Y.Doc over y-websocket; the link secret admits a client, and the relay can read the room.
+
 ## Context
 
 Phase 5 implements realtime collaboration:

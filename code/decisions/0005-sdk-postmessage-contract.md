@@ -3,6 +3,8 @@
 **Status:** Proposed (finalized in Phase 6)  
 **Date:** 2026-05-03
 
+> **Note (2026-10-01):** Withdrawn. Phase 6 cut the AtlasdrawAPI and the embed SDK (Q-P6-1), and `docs/architecture/adr/0016-sdk-removed-cli-deferred.md` (repository root) deleted the `packages/sdk` stub. A read-only map embeds through the `/embed` route, configured by URL parameters. A scriptable API would be a new decision.
+
 ## Context
 
 Phase 7 introduces a plugin sandbox: plugins run in Web Workers and communicate with the main app via postMessage. Phase 6 publishes a stable AtlasdrawAPI surface for embed and plugin authors.

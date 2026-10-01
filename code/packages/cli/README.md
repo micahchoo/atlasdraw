@@ -22,7 +22,7 @@ yarn workspace @atlasdraw/cli test         # vitest
 yarn test:typecheck
 ```
 
-Architecture notes: [`docs/architecture/subsystems/cli/`](../../../docs/architecture/subsystems/cli/).
+The package is frozen until its future is decided (`docs/architecture/adr/0016-sdk-removed-cli-deferred.md` at the repository root): no new commands.
 
 ## License
 

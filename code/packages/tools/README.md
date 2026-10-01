@@ -1,6 +1,6 @@
 # @atlasdraw/tools
 
-Geo-aware drawing tools for Atlasdraw. `PinTool` is the only one — the seven Phase 2 Wave 1b tools (polygon, polyline, freehand, text label, arrow, rectangle, circle) were deleted 2026-07-31 after three sessions of looking turned up no caller and no behaviour the native Excalidraw toolbar does not already produce (FU-2).
+Map tools for Atlasdraw: the pin, the Measure tool's state machine, unit text, and the converter from drawn shapes to GeoJSON. `PinTool` is the one drawing tool; the native Excalidraw toolbar draws every other shape.
 
 Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 
@@ -10,7 +10,7 @@ Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 
 - **`PinTool`** — the one built-in tool, dispatched by `apps/atlas-app/src/hooks/useAtlasdrawTool.ts`.
 - **`classifyTool`** — maps an element back to the tool that produced it.
-- **`convert.ts`** — element ↔ geo conversion helpers.
+- **`convert.ts`** — `drawingToFeatureCollection` / `annotationToFeatureCollection`: drawn elements to GeoJSON, through the document's world frame. GeoJSON export and convert-to-data-layer both use it.
 - **Measuring** — `measureStep` (the Measure tool's path as a pure state machine) and `formatLength` / `formatArea` / `unitSystemForLocale` (metric or imperial text, scaled to size).
 - **`registerTool` / `getTool` / `listTools`** — lookup-by-id, so a tool can arrive without a compile-time import. `PinTool` self-registers at module load; this is the seam plugin registration would use.
 
@@ -26,8 +26,6 @@ import { PinTool, classifyTool } from "@atlasdraw/tools";
 yarn workspace @atlasdraw/tools test       # vitest
 yarn test:typecheck
 ```
-
-Architecture notes: [`docs/architecture/subsystems/tools/`](../../../docs/architecture/subsystems/tools/).
 
 ## License
 
