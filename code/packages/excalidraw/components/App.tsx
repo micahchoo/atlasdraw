@@ -2657,7 +2657,6 @@ class App extends React.Component<AppProps, AppState> {
         name: this.getName(),
         viewBackgroundColor: this.state.viewBackgroundColor,
         exportingFrame: opts.exportingFrame,
-        backgroundCanvas: this.props.getBackgroundCanvas?.() ?? null,
       },
     )
       .catch(muteFSAbortError)

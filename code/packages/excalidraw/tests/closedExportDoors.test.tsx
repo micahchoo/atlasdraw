@@ -1,24 +1,36 @@
 import React from "react";
 import { vi } from "vitest";
 
-import { KEYS } from "@atlasdraw/common";
+import { CODES, KEYS } from "@atlasdraw/common";
 
 import { CommandPalette, Excalidraw } from "../index";
+import * as data from "../data/index";
 import * as json from "../data/json";
 
 import { API } from "./helpers/api";
-import { Keyboard } from "./helpers/ui";
-import { act, render, waitFor } from "./test-utils";
+import { Keyboard, UI } from "./helpers/ui";
+import { GlobalTestState, act, fireEvent, render, waitFor } from "./test-utils";
 
 import type { UIOptions } from "../types";
 
 // Atlasdraw addition (ADR-0010). A host that sets these canvasActions to
 // false closes every upstream door that writes an image or an .excalidraw
-// file: the keyboard shortcuts and the command-palette entries. The atlas
+// file: the keyboard shortcuts, the command-palette entries and the
+// copy-as-image items of the context menu. The atlas
 // app uses exactly these options (MapEditor.tsx EXCALIDRAW_UI_OPTIONS), so
 // its own Export dialog and the .atlasdraw bundle are the only doors.
 // Each case also runs with the upstream defaults, to show that the probe
 // can see an open door.
+
+// The copy actions check clipboard support once, when their module loads,
+// and jsdom has no clipboard. Without this stub the copy items never show,
+// and the closed-door cases below would pass without testing anything.
+vi.hoisted(() => {
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: async () => {}, write: async () => {} },
+  });
+});
 
 const CLOSED: UIOptions = {
   canvasActions: {
@@ -117,6 +129,54 @@ describe("closed export doors", () => {
       expect(labels.some((label) => label.includes("Save to disk"))).toBe(
         false,
       );
+    });
+  });
+
+  describe("copy as PNG / SVG (image to the clipboard)", () => {
+    const openCanvasMenu = () => {
+      fireEvent.contextMenu(GlobalTestState.interactiveCanvas, {
+        button: 2,
+        clientX: 1,
+        clientY: 1,
+      });
+      return UI.queryContextMenu();
+    };
+
+    it("is in the canvas context menu with the upstream defaults", async () => {
+      await renderEditor();
+      const menu = openCanvasMenu();
+      expect(menu?.querySelector('li[data-testid="copyAsSvg"]')).not.toBe(null);
+    });
+
+    it("is absent from the canvas context menu when saveAsImage is false", async () => {
+      await renderEditor(CLOSED);
+      const menu = openCanvasMenu();
+      expect(menu).not.toBe(null);
+      expect(menu?.querySelector('li[data-testid="copyAsSvg"]')).toBe(null);
+      expect(menu?.querySelector('li[data-testid="copyAsPng"]')).toBe(null);
+    });
+
+    it("Shift+Alt+C copies with the upstream defaults", async () => {
+      const exportCanvas = vi
+        .spyOn(data, "exportCanvas")
+        .mockResolvedValue(undefined);
+      await renderEditor();
+      Keyboard.withModifierKeys({ shift: true, alt: true }, () => {
+        Keyboard.codeDown(CODES.C);
+      });
+      await waitFor(() => expect(exportCanvas).toHaveBeenCalledTimes(1));
+    });
+
+    it("Shift+Alt+C does nothing when saveAsImage is false", async () => {
+      const exportCanvas = vi
+        .spyOn(data, "exportCanvas")
+        .mockResolvedValue(undefined);
+      await renderEditor(CLOSED);
+      Keyboard.withModifierKeys({ shift: true, alt: true }, () => {
+        Keyboard.codeDown(CODES.C);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(exportCanvas).not.toHaveBeenCalled();
     });
   });
 });

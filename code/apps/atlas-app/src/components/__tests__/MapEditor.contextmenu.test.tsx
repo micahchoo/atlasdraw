@@ -247,7 +247,6 @@ vi.mock("@atlasdraw/excalidraw", () => {
     },
     MainMenu: MainMenuStub,
     Sidebar: SidebarStub,
-    setExportElementTransformer: vi.fn(),
   };
 });
 

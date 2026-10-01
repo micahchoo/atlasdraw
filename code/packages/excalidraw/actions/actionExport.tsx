@@ -280,11 +280,8 @@ function prepareDataForJSONExport(
       // so we resolve to orig data
     }
 
-    const exportedElements = _exportTransformer
-      ? (_exportTransformer(elements) as readonly ExcalidrawElement[])
-      : elements;
     resolve({
-      elements: exportedElements,
+      elements,
       appState,
       // return latest files in case they finished loading during onExport
       files: app.files,
@@ -295,23 +292,6 @@ function prepareDataForJSONExport(
     abortController,
     data: dataPromise,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Export element transformer — host apps can normalize elements before the
-// JSON payload is written to disk (e.g. to canonical geo coordinates).
-// ---------------------------------------------------------------------------
-
-type ExportElementTransformer = (
-  elements: readonly ExcalidrawElement[],
-) => readonly unknown[];
-
-let _exportTransformer: ExportElementTransformer | null = null;
-
-export function setExportElementTransformer(
-  fn: ExportElementTransformer | null,
-): void {
-  _exportTransformer = fn;
 }
 
 // ---------------------------------------------------------------------------

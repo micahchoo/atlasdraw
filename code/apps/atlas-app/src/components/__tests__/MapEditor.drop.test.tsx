@@ -149,7 +149,6 @@ vi.mock("@atlasdraw/excalidraw", () => ({
         ),
     },
   ),
-  setExportElementTransformer: vi.fn(),
 }));
 
 // Synthetic map instance shared by useMapRef stub + assertions.
