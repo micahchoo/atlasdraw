@@ -16,11 +16,11 @@
 import { create } from "zustand";
 
 /**
- * True for a data-layer or raster id. Every other selectable id is an
- * Excalidraw element id, which is an annotation.
+ * True for a data-layer, raster or tile-layer id. Every other selectable id
+ * is an Excalidraw element id, which is an annotation.
  */
 export function isOverlayId(id: string): boolean {
-  return id.startsWith("dl:") || id.startsWith("rl:");
+  return id.startsWith("dl:") || id.startsWith("rl:") || id.startsWith("tl:");
 }
 
 export type SelectedLayerState = {

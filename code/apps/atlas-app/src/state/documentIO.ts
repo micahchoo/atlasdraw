@@ -33,14 +33,19 @@ import type {
 
 import type { AtlasdrawDocument, Camera, Manifest } from "@atlasdraw/data";
 
+import { validateTileTemplate } from "../lib/tileLayers";
+
 import {
   DEFAULT_CAMERA,
   DEFAULT_DOCUMENT_TITLE,
   createDocument,
   openDocument,
   type Document,
+  type DataLayerEntry,
   type DocumentState,
   type OverlayEntry,
+  type RasterLayerEntry,
+  type TileLayerEntry,
 } from "./document";
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
@@ -89,7 +94,23 @@ export function contentKey(doc: Document): string {
   ].join("|");
 }
 
-function manifestLayer(entry: OverlayEntry): Manifest["layers"][number] {
+type ManifestTileLayer = NonNullable<Manifest["tileLayers"]>[number];
+
+function manifestTileLayer(entry: TileLayerEntry): ManifestTileLayer {
+  return {
+    kind: "tile",
+    id: entry.id,
+    label: entry.label,
+    visible: entry.visible,
+    opacity: entry.opacity,
+    url: entry.url,
+    ...(entry.attribution ? { attribution: entry.attribution } : {}),
+  };
+}
+
+function manifestLayer(
+  entry: DataLayerEntry | RasterLayerEntry,
+): Manifest["layers"][number] {
   if (entry.kind === "raster") {
     return {
       kind: "raster",
@@ -139,13 +160,20 @@ export function toFile(
       if (fc) {
         layers.set(entry.id, fc);
       }
-    } else {
+    } else if (entry.kind === "raster") {
       const image = state.images[entry.id];
       if (image) {
         files.set(entry.imageKey, image);
       }
     }
   }
+  // A tile layer has no payload: the tiles stay on their server. The field
+  // is written only when there is a tile layer, so a document without one
+  // gives the same file as before tile layers existed.
+  const tileLayers = state.overlays
+    .filter((e): e is TileLayerEntry => e.kind === "tile")
+    .sort((a, b) => a.order - b.order)
+    .map(manifestTileLayer);
 
   const used = new Set<string>();
   for (const el of elements) {
@@ -181,7 +209,12 @@ export function toFile(
         id: useBasemapStore.getState().activeBasemapId,
       },
       camera: liveCamera() ?? state.camera,
-      layers: state.overlays.map(manifestLayer),
+      layers: state.overlays
+        .filter(
+          (e): e is DataLayerEntry | RasterLayerEntry => e.kind !== "tile",
+        )
+        .map(manifestLayer),
+      ...(tileLayers.length > 0 ? { tileLayers } : {}),
       permissions: { publicView: false },
     },
     scene: elements,
@@ -298,6 +331,26 @@ export function fromFile(file: AtlasdrawDocument): Partial<DocumentState> {
       geometryKind: entry.geometryKind ?? geometryKindOf(fc),
       style: entry.style,
       ...(entry.provenance ? { provenance: entry.provenance } : {}),
+    });
+  }
+  // A tile layer makes the browser call its server, so a file's layer must
+  // pass the same check as one the user adds (https, {z}/{x}/{y}).
+  for (const entry of file.manifest.tileLayers ?? []) {
+    const check = validateTileTemplate(entry.url);
+    if (!check.ok) {
+      // eslint-disable-next-line no-console
+      console.warn("[atlasdraw] tile layer refused, skipped", entry.id);
+      continue;
+    }
+    overlays.push({
+      kind: "tile",
+      id: entry.id,
+      label: entry.label,
+      visible: entry.visible,
+      order: 0,
+      opacity: entry.opacity,
+      url: check.url,
+      ...(entry.attribution ? { attribution: entry.attribution } : {}),
     });
   }
   return {

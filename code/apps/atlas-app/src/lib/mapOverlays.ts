@@ -23,8 +23,9 @@
 // writes, and reads `getLayer` after each add, to know what landed.
 //
 // Overlays draw beneath the basemap's first symbol layer, so place names stay
-// readable over a filled area. Rasters are the bottom band, data layers are
-// above them, and the collaboration layer is on top.
+// readable over a filled area. Tile layers (XYZ map tiles) are the bottom
+// band, rasters (georeferenced pictures) are above them, data layers above
+// those, and the collaboration layer is on top.
 
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 
@@ -36,6 +37,8 @@ import {
 import { geometryKindOf, type AtlasGeometryKind } from "@atlasdraw/data";
 
 import { rasterUrl } from "../state/rasterUrls";
+
+import { validateTileTemplate } from "./tileLayers";
 
 import type {
   DocumentState,
@@ -67,6 +70,15 @@ export type OverlaySource =
       type: "image";
       url: string;
       coordinates: RasterCorners;
+      version: string;
+    }
+  | {
+      id: string;
+      type: "raster";
+      /** One XYZ template. */
+      tiles: [string];
+      tileSize: number;
+      attribution?: string;
       version: string;
     };
 
@@ -111,7 +123,12 @@ function versionOf(payload: object): number {
 }
 
 /** A source of the right type with no payload, for validating a layer. */
-const EMPTY_SOURCES: Record<"geojson" | "image", SourceSpecification> = {
+const EMPTY_SOURCES: Record<OverlaySource["type"], SourceSpecification> = {
+  raster: {
+    type: "raster",
+    tiles: ["https://example.org/{z}/{x}/{y}.png"],
+    tileSize: 256,
+  },
   geojson: {
     type: "geojson",
     data: { type: "FeatureCollection", features: [] },
@@ -134,7 +151,7 @@ const EMPTY_SOURCES: Record<"geojson" | "image", SourceSpecification> = {
  */
 function validateLayers(
   layers: readonly LayerSpecification[],
-  sourceType: "geojson" | "image",
+  sourceType: OverlaySource["type"],
 ): string[] {
   const sources: Record<string, SourceSpecification> = {};
   for (const layer of layers) {
@@ -176,10 +193,13 @@ function withVisibility(
   } as LayerSpecification;
 }
 
+/** XYZ tiles are 256 px squares: the OSM convention most servers follow. */
+const TILE_SIZE = 256;
+
 /**
- * The overlays the document asks for. Rasters first, then data layers, each
- * band in the document's order (0 at the bottom), then the collaboration
- * layer. An overlay whose layers MapLibre would reject, or whose payload is
+ * The overlays the document asks for. Tile layers first, then rasters, then
+ * data layers, each band in the document's order (0 at the bottom), then the
+ * collaboration layer. An overlay whose layers MapLibre would reject, or whose payload is
  * missing, is in `rejected` and has no layers.
  */
 export function overlaySpec(
@@ -212,6 +232,39 @@ export function overlaySpec(
       .filter((e) => e.kind === kind)
       .slice()
       .sort((a, b) => a.order - b.order);
+
+  for (const entry of band("tile")) {
+    if (entry.kind !== "tile") {
+      continue;
+    }
+    const check = validateTileTemplate(entry.url);
+    if (!check.ok) {
+      rejected.push({ overlayId: entry.id, reason: check.reason });
+      continue;
+    }
+    add(
+      entry.id,
+      {
+        id: entry.id,
+        type: "raster",
+        tiles: [check.url],
+        tileSize: TILE_SIZE,
+        ...(entry.attribution ? { attribution: entry.attribution } : {}),
+        version: `${check.url} ${entry.attribution ?? ""}`,
+      },
+      [
+        withVisibility(
+          {
+            id: entry.id,
+            type: "raster",
+            source: entry.id,
+            paint: { "raster-opacity": entry.opacity },
+          },
+          entry.visible,
+        ),
+      ],
+    );
+  }
 
   for (const entry of band("raster")) {
     if (entry.kind !== "raster") {
@@ -326,9 +379,23 @@ export interface MapOverlays {
 }
 
 function sourceSpecOf(source: OverlaySource): SourceSpecification {
-  return source.type === "geojson"
-    ? { type: "geojson", data: source.data }
-    : { type: "image", url: source.url, coordinates: source.coordinates };
+  switch (source.type) {
+    case "geojson":
+      return { type: "geojson", data: source.data };
+    case "image":
+      return {
+        type: "image",
+        url: source.url,
+        coordinates: source.coordinates,
+      };
+    case "raster":
+      return {
+        type: "raster",
+        tiles: source.tiles,
+        tileSize: source.tileSize,
+        ...(source.attribution ? { attribution: source.attribution } : {}),
+      };
+  }
 }
 
 function sameValue(a: unknown, b: unknown): boolean {

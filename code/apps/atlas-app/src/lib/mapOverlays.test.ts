@@ -361,3 +361,95 @@ describe("createMapOverlays — apply", () => {
     expect(map.getLayer(COLLAB_OVERLAY_ID)).toBeUndefined();
   });
 });
+
+describe("tile layers (W9d)", () => {
+  const URL_T = "https://tiles.example.org/{z}/{x}/{y}.png";
+  const addTile = (
+    d: ReturnType<typeof createDocument>,
+    id: string,
+    url = URL_T,
+  ) =>
+    d.dispatch({
+      type: "add-tile-layer",
+      id,
+      label: id,
+      url,
+      attribution: "© Example",
+      opacity: 0.6,
+    });
+
+  it("draws tile layers as the bottom band, under rasters and data", () => {
+    const { d, spec } = doc();
+    d.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: POINTS,
+      label: "a",
+      style: STYLE,
+    });
+    d.dispatch({
+      type: "add-raster-layer",
+      id: "rl:r",
+      label: "r",
+      corners: CORNERS,
+      imageKey: "r.png",
+      image: new Blob(["png"]),
+    });
+    addTile(d, "tl:t");
+
+    expect(spec().layers.map((l) => l.spec.id)).toEqual([
+      "tl:t",
+      "rl:r",
+      "dl:a",
+    ]);
+  });
+
+  it("puts an XYZ raster source and a raster layer on the map", () => {
+    const { d, spec } = doc();
+    addTile(d, "tl:t");
+    const map = basemap();
+
+    const report = createMapOverlays(asTarget(map)).apply(spec());
+
+    expect(report.get("tl:t")).toEqual({ status: "landed" });
+    expect(map.getSource("tl:t")).toEqual({
+      type: "raster",
+      tiles: [URL_T],
+      tileSize: 256,
+      attribution: "© Example",
+    });
+    expect(map.layers.get("tl:t")?.spec.type).toBe("raster");
+    expect(map.layers.get("tl:t")?.paint["raster-opacity"]).toBe(0.6);
+    expect(map.getLayersOrder()).toEqual(["land", "tl:t", "places"]);
+    expect(map.errors).toEqual([]);
+  });
+
+  it("fades and hides a tile layer in place", () => {
+    const { d, spec } = doc();
+    addTile(d, "tl:t");
+    const map = basemap();
+    const overlays = createMapOverlays(asTarget(map));
+    overlays.apply(spec());
+    const before = map.layers.get("tl:t");
+
+    d.dispatch({ type: "set-opacity", id: "tl:t", opacity: 0.2 });
+    d.dispatch({ type: "set-visibility", id: "tl:t", visible: false });
+    overlays.apply(spec());
+
+    expect(map.layers.get("tl:t")).toBe(before);
+    expect(map.layers.get("tl:t")?.paint["raster-opacity"]).toBe(0.2);
+    expect(map.getLayoutProperty("tl:t", "visibility")).toBe("none");
+    expect(map.errors).toEqual([]);
+  });
+
+  it("rejects a tile layer whose URL the editor refuses, with the reason", () => {
+    const { d, spec } = doc();
+    addTile(d, "tl:t", "http://tiles.example.org/{z}/{x}/{y}.png");
+
+    const s = spec();
+    expect(s.layers).toEqual([]);
+    expect(s.rejected).toEqual([
+      { overlayId: "tl:t", reason: expect.stringMatching(/https/) },
+    ]);
+  });
+});
