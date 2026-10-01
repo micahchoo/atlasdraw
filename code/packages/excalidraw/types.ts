@@ -55,6 +55,7 @@ import type { ClipboardData } from "./clipboard";
 import type App from "./components/App";
 import type Library from "./data/library";
 import type { ContextMenuItems } from "./components/ContextMenu";
+import type { HistoryChange } from "./history";
 import type { SnapLine } from "./snapping";
 import type { ImportedDataState } from "./data/types";
 
@@ -62,6 +63,8 @@ import type { Language } from "./i18n";
 import type { isOverScrollBars } from "./scene/scrollbars";
 import type React from "react";
 import type { JSX } from "react";
+
+export type { HistoryChange };
 
 export type { App };
 
@@ -605,6 +608,16 @@ export type OnExportProgress = {
   progress?: number;
 };
 
+/** Atlasdraw addition: see `ExcalidrawProps.historyHost`. */
+export interface HistoryHost {
+  undo(): void;
+  redo(): void;
+  canUndo(): boolean;
+  canRedo(): boolean;
+  /** Called after canUndo or canRedo may have changed. */
+  subscribe(listener: () => void): () => void;
+}
+
 export interface ExcalidrawProps {
   onChange?: (
     elements: readonly OrderedExcalidrawElement[],
@@ -796,6 +809,14 @@ export interface ExcalidrawProps {
     shrunk: boolean;
     collar: boolean;
   }) => void;
+  /**
+   * Atlasdraw addition: the host owns undo. The undo and redo keys and
+   * buttons call the host, and the buttons are enabled by it. The host runs
+   * the drawing's own entries through `api.history.undo()` / `redo()` when
+   * they are the newest. The atlas app keeps one history over its document
+   * and this drawing (apps/atlas-app/src/session/history.ts).
+   */
+  historyHost?: HistoryHost;
   /**
    * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
    * The scene is a world map at a fixed reference zoom, so one scene unit can
@@ -1264,6 +1285,21 @@ export interface ExcalidrawImperativeAPI {
   >["getSceneElementsMapIncludingDeleted"];
   history: {
     clear: InstanceType<typeof App>["resetHistory"];
+    /**
+     * Atlasdraw addition: undo or redo the drawing's own newest entry, as
+     * its key would without a `historyHost`. Nothing happens while a shape
+     * is being drawn or dragged.
+     */
+    undo: () => void;
+    redo: () => void;
+    /** Atlasdraw addition: how many entries each stack holds. */
+    depth: () => { undo: number; redo: number };
+    /** Atlasdraw addition: drop the redo entries, keep the undo entries. */
+    clearRedo: () => void;
+    /** Atlasdraw addition: hear every change to the stacks. */
+    subscribe: (
+      listener: (change: HistoryChange) => void,
+    ) => UnsubscribeCallback;
   };
   getSceneElements: InstanceType<typeof App>["getSceneElements"];
   getAppState: () => InstanceType<typeof App>["state"];

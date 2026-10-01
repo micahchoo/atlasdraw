@@ -316,7 +316,11 @@ import {
   actionSelectAllElementsInFrame,
   actionWrapSelectionInFrame,
 } from "../actions/actionFrame";
-import { createRedoAction, createUndoAction } from "../actions/actionHistory";
+import {
+  createRedoAction,
+  createUndoAction,
+  executeHistoryAction,
+} from "../actions/actionHistory";
 import { actionTextAutoResize } from "../actions/actionTextAutoResize";
 import { actionToggleViewMode } from "../actions/actionToggleViewMode";
 import { ActionManager } from "../actions/manager";
@@ -857,6 +861,14 @@ class App extends React.Component<AppProps, AppState> {
         this.getSceneElementsMapIncludingDeleted,
       history: {
         clear: this.resetHistory,
+        undo: () => this.runDrawingHistory("undo"),
+        redo: () => this.runDrawingHistory("redo"),
+        depth: () => ({
+          undo: this.history.undoStack.length,
+          redo: this.history.redoStack.length,
+        }),
+        clearRedo: () => this.history.clearRedo(),
+        subscribe: (listener) => this.history.onChangeEmitter.on(listener),
       },
       scrollToContent: this.scrollToContent,
       getSceneElements: this.getSceneElements,
@@ -2088,6 +2100,23 @@ class App extends React.Component<AppProps, AppState> {
 
   private resetHistory = () => {
     this.history.clear();
+  };
+
+  /**
+   * Atlasdraw addition: one step of the drawing's own history, past any
+   * `historyHost`. The same guards as the undo and redo actions.
+   */
+  private runDrawingHistory = (kind: "undo" | "redo") => {
+    const elements = arrayToMap(
+      this.scene.getElementsIncludingDeleted(),
+    ) as SceneElementsMap;
+    this.syncActionResult(
+      executeHistoryAction(this, this.state, () =>
+        kind === "undo"
+          ? this.history.undo(elements, this.state)
+          : this.history.redo(elements, this.state),
+      ),
+    );
   };
 
   private resetStore = () => {
