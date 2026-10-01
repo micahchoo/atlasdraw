@@ -99,8 +99,139 @@ export function savedCameraTurn(elements: readonly unknown[]): number {
 }
 
 /**
- * Migrate one v1 element. An element without an anchor is returned as it is:
- * v1 draws it fixed to the screen, which no world position reproduces.
+ * Where v1's screen pixels sat on the world when the file was saved: the
+ * screen point (`sx`, `sy`) is the scene point (`wx`, `wy`), one screen
+ * pixel is `scale` scene units, and the screen is turned by `turn` radians
+ * (y-down) against the world.
+ */
+export interface V1Screen {
+  readonly sx: number;
+  readonly sy: number;
+  readonly wx: number;
+  readonly wy: number;
+  readonly scale: number;
+  readonly turn: number;
+}
+
+/**
+ * The save camera's screen, read from the first anchored box: v1 kept the
+ * box's screen rectangle and its geographic corners in step, so the two
+ * centres are one point and the two widths give the scale. A file with no
+ * anchored box gives the saved camera instead: its screen's top-left corner
+ * at the camera's centre, one pixel at the camera's zoom. v1 saved no screen
+ * size, so the centre of that screen is not known.
+ */
+export function v1Screen(
+  elements: readonly unknown[],
+  frame: WorldFrame,
+  camera: { center: readonly [number, number]; zoom: number },
+): V1Screen {
+  const turn = savedCameraTurn(elements);
+  for (const el of elements) {
+    const e = el as V1Element;
+    if (
+      !isGeoCustomData(e?.customData) ||
+      e.customData.geo.kind !== "bbox" ||
+      !(typeof e.width === "number" && e.width > 0) ||
+      typeof e.height !== "number"
+    ) {
+      continue;
+    }
+    const geo = e.customData.geo;
+    const nw = toScene(frame, normalizeLng(geo.west), geo.north);
+    const se = toScene(frame, normalizeLng(geo.east), geo.south);
+    return {
+      sx: e.x + e.width / 2,
+      sy: e.y + e.height / 2,
+      wx: (nw.x + se.x) / 2,
+      wy: (nw.y + se.y) / 2,
+      scale: (se.x - nw.x) / e.width,
+      turn,
+    };
+  }
+  const c = toScene(frame, normalizeLng(camera.center[0]), camera.center[1]);
+  return {
+    sx: 0,
+    sy: 0,
+    wx: c.x,
+    wy: c.y,
+    scale: Math.pow(2, frame.z0 - camera.zoom),
+    turn,
+  };
+}
+
+/**
+ * A v1 element without an anchor, placed where v1 drew it at the save
+ * camera (`v1Screen`). v1 kept it in screen pixels, which in world
+ * coordinates is a speck beside the frame's origin. Its sizes are scaled to
+ * scene units, and it records one save-camera pixel as its unit. A box takes
+ * the screen's turn into its angle; a line's points are turned instead, as
+ * v1 turned an anchored line's points.
+ */
+export function placeUnanchoredV1<T extends V1Element>(
+  el: T,
+  screen: V1Screen,
+): T {
+  const { scale: k, turn } = screen;
+  const cos = Math.cos(-turn);
+  const sin = Math.sin(-turn);
+  /** A screen offset from the reference, as a scene offset. */
+  const toWorld = (dx: number, dy: number): [number, number] => [
+    (dx * cos - dy * sin) * k,
+    (dx * sin + dy * cos) * k,
+  ];
+  const customData = worldCustomData(el.customData ?? {}, {}, k);
+  const sizes = {
+    ...(el.strokeWidth !== undefined
+      ? { strokeWidth: el.strokeWidth * k }
+      : {}),
+    ...(el.fontSize !== undefined ? { fontSize: el.fontSize * k } : {}),
+  };
+  if (el.points && el.points.length > 0) {
+    const [ox, oy] = toWorld(el.x - screen.sx, el.y - screen.sy);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const points = el.points.map(([px, py]): [number, number] => {
+      const p = toWorld(px, py);
+      minX = Math.min(minX, p[0]);
+      maxX = Math.max(maxX, p[0]);
+      minY = Math.min(minY, p[1]);
+      maxY = Math.max(maxY, p[1]);
+      return p;
+    });
+    return {
+      ...el,
+      ...sizes,
+      customData,
+      x: screen.wx + ox,
+      y: screen.wy + oy,
+      points,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }
+  const w = el.width ?? 0;
+  const h = el.height ?? 0;
+  const [cx, cy] = toWorld(el.x + w / 2 - screen.sx, el.y + h / 2 - screen.sy);
+  return {
+    ...el,
+    ...sizes,
+    customData,
+    x: screen.wx + cx - (w * k) / 2,
+    y: screen.wy + cy - (h * k) / 2,
+    ...(el.width !== undefined ? { width: w * k } : {}),
+    ...(el.height !== undefined ? { height: h * k } : {}),
+    ...(el.angle !== undefined || turn !== 0
+      ? { angle: (el.angle ?? 0) - turn }
+      : {}),
+  };
+}
+
+/**
+ * Migrate one v1 element. An element without an anchor is returned as it is;
+ * `placeUnanchoredV1` places it.
  *
  * `screen` and `hybrid` scale modes are migrated as geographic. The last v1
  * releases stamped them on no new element, and no saved document uses them.

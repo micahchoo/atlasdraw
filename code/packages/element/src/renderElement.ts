@@ -91,7 +91,14 @@ const isPendingImageElement = (
   isInitializedImageElement(element) &&
   !renderConfig.imageCache.has(element.fileId);
 
-const getCanvasPadding = (element: ExcalidrawElement) => {
+/**
+ * Atlasdraw: exported for its test. The default padding is in the element's
+ * pixel unit, and never less than five stroke widths: the stroke picker can
+ * widen a stroke at another zoom, which leaves the unit as it was, and the
+ * outer half of such a stroke fell outside the cache canvas. Five stroke
+ * widths is upstream's 20 at its widest stroke, 4.
+ */
+export const getCanvasPadding = (element: ExcalidrawElement) => {
   switch (element.type) {
     case "freedraw":
       return element.strokeWidth * 12;
@@ -100,11 +107,11 @@ const getCanvasPadding = (element: ExcalidrawElement) => {
     // Atlasdraw: in the element's pixel unit (atlasStyleUnit.ts).
     case "arrow":
       if (element.endArrowhead || element.endArrowhead) {
-        return 40 * styleUnit(element);
+        return Math.max(40 * styleUnit(element), 5 * element.strokeWidth);
       }
-      return 20 * styleUnit(element);
+      return Math.max(20 * styleUnit(element), 5 * element.strokeWidth);
     default:
-      return 20 * styleUnit(element);
+      return Math.max(20 * styleUnit(element), 5 * element.strokeWidth);
   }
 };
 

@@ -24,8 +24,13 @@ export type {
   SceneViewport,
   ScenePoint,
 } from "./world.js";
-export { migrateElementV1, savedCameraTurn } from "./migrateV1.js";
-export type { V1Element } from "./migrateV1.js";
+export {
+  migrateElementV1,
+  placeUnanchoredV1,
+  savedCameraTurn,
+  v1Screen,
+} from "./migrateV1.js";
+export type { V1Element, V1Screen } from "./migrateV1.js";
 export { areaOf, geodesicDistance, lengthOf } from "./measure.js";
 export type { LngLat } from "./measure.js";
 export {
