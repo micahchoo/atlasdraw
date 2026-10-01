@@ -91,7 +91,12 @@ import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
 import { currentDocument, dispatch } from "../state/document";
-import { loadDocument, toFile } from "../state/documentIO";
+import {
+  hasUnsavedWork,
+  loadDocument,
+  markSavedToFile,
+  toFile,
+} from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
   fitMapToContent,
@@ -120,6 +125,7 @@ import { SheetRail } from "./SheetRail";
 import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { ShareDialog } from "./ShareDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
@@ -279,7 +285,9 @@ export async function saveAtlasDocument(
     return;
   }
   try {
-    await store.saveToDisk(toFile(currentDocument()));
+    const doc = currentDocument();
+    await store.saveToDisk(toFile(doc));
+    markSavedToFile(doc);
     usePersistenceStore.getState().clearDirty();
     notify?.success("Map saved as .atlasdraw");
   } catch (err) {
@@ -294,9 +302,15 @@ export async function saveAtlasDocument(
   }
 }
 
+/**
+ * Open a file in place of the open document. When the open document holds
+ * work that is not in a file, `confirmReplace` is asked first (an in-page
+ * question); without an answer of yes, nothing is opened.
+ */
 export async function openAtlasDocument(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   notify?: DocumentNotify,
+  confirmReplace: () => Promise<boolean> = async () => false,
 ): Promise<void> {
   if (!excalidrawAPI) {
     return;
@@ -306,9 +320,15 @@ export async function openAtlasDocument(
     return;
   }
   try {
+    if (hasUnsavedWork(currentDocument()) && !(await confirmReplace())) {
+      return;
+    }
     const loaded = await store.openFromDisk();
     if (loaded) {
-      await loadDocument(loaded, excalidrawAPI);
+      const opened = await loadDocument(loaded, excalidrawAPI);
+      if (opened) {
+        markSavedToFile(opened);
+      }
       // The opened file becomes the autosaved document.
       usePersistenceStore.getState().markDirty();
       // eslint-disable-next-line no-console
@@ -843,6 +863,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Keyboard shortcuts (Cmd+K quick actions, Cmd+S/Cmd+O save/open, `?`
   // shortcuts panel, Escape to dismiss) — extracted to useMapEditorKeyboard.
+  //
+  // Open asks before it replaces unsaved work. The question is a promise the
+  // ConfirmDialog below settles; null means no question is open.
+  const [replacePrompt, setReplacePrompt] = useState<
+    ((yes: boolean) => void) | null
+  >(null);
+  const confirmReplace = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        setReplacePrompt(() => (yes: boolean) => {
+          setReplacePrompt(null);
+          resolve(yes);
+        });
+      }),
+    [],
+  );
   useMapEditorKeyboard({
     spaceHeldRef,
     excalidrawAPI,
@@ -850,7 +886,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     setShowShortcuts,
     setShowQuickActions,
     onSave: (api) => void saveAtlasDocument(api, documentNotify),
-    onOpen: (api) => void openAtlasDocument(api, documentNotify),
+    onOpen: (api) =>
+      void openAtlasDocument(api, documentNotify, confirmReplace),
   });
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
@@ -1216,7 +1253,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
                 <MainMenu.Item
                   onSelect={() =>
-                    void openAtlasDocument(excalidrawAPI, documentNotify)
+                    void openAtlasDocument(
+                      excalidrawAPI,
+                      documentNotify,
+                      confirmReplace,
+                    )
                   }
                   data-testid="main-menu-open"
                 >
@@ -1481,6 +1522,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </Suspense>
           )}
 
+          {replacePrompt && (
+            <ConfirmDialog
+              title="Open another map?"
+              body="This map has changes you have not saved to a file. Opening another map closes it."
+              confirmLabel="Open anyway"
+              onConfirm={() => replacePrompt(true)}
+              onCancel={() => replacePrompt(false)}
+            />
+          )}
+
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
           (the share reads the drawing). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
@@ -1594,7 +1645,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                     "import",
                   ],
                   onSelect: () =>
-                    void openAtlasDocument(excalidrawAPI, documentNotify),
+                    void openAtlasDocument(
+                      excalidrawAPI,
+                      documentNotify,
+                      confirmReplace,
+                    ),
                 },
                 {
                   id: "save",

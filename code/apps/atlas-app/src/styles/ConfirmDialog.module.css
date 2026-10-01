@@ -1,0 +1,67 @@
+/* ConfirmDialog — an in-page question. z:100, the same band as the
+ * ExportDialog scrim. Uses --ad-* design tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.dialog {
+  width: min(400px, calc(100vw - 2 * var(--ad-space-4)));
+  padding: var(--ad-space-4);
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+  font-family: var(--ad-font-sans);
+}
+
+.title {
+  margin: 0 0 var(--ad-space-2);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ad-ink);
+}
+
+.body {
+  margin: 0 0 var(--ad-space-4);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-ink-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ad-space-2);
+}
+
+.button {
+  padding: 6px 12px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: #f8f9fa;
+}
+
+.buttonPrimary {
+  background: #1971c2;
+  border-color: #1971c2;
+  color: #ffffff;
+}
+
+.buttonPrimary:hover {
+  background: #1864ab;
+}

@@ -185,9 +185,30 @@ export function usePersistenceWiring(
     );
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 
+    // Closing or leaving the tab: write unsaved changes now, not after the
+    // autosave delay. 'visibilitychange' to hidden comes first and leaves the
+    // most time; 'pagehide' covers a close that skips it.
+    const flushOnLeave = () => {
+      if (store.isDirty()) {
+        void store.save(getDoc()).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("[persistence] save on leave failed", err);
+        });
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flushOnLeave();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flushOnLeave);
+
     return () => {
       cancelled = true;
       abort.abort();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flushOnLeave);
       unsubDirty();
       unsubDocument();
       unsubBasemap();

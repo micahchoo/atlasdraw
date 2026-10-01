@@ -194,6 +194,33 @@ export function encode(doc: Document): Promise<Blob> {
 }
 
 // ---------------------------------------------------------------------------
+// Saved to a file
+// ---------------------------------------------------------------------------
+
+/**
+ * The content key each document had when it was last written to a file or
+ * opened from one. The autosave keeps a copy in the browser; this is about
+ * the user's own file.
+ */
+const fileKeys = new WeakMap<Document, string>();
+
+/** Record that the document, as it is now, is in a file. */
+export function markSavedToFile(doc: Document): void {
+  fileKeys.set(doc, contentKey(doc));
+}
+
+/**
+ * True when the document holds work that is not in a file: it is not blank,
+ * and it changed since it was last written to or opened from a file. Open
+ * asks before it replaces such a document.
+ */
+export function hasUnsavedWork(doc: Document): boolean {
+  const blank =
+    doc.scene.elements().length === 0 && doc.snapshot().overlays.length === 0;
+  return !blank && fileKeys.get(doc) !== contentKey(doc);
+}
+
+// ---------------------------------------------------------------------------
 // Open
 // ---------------------------------------------------------------------------
 

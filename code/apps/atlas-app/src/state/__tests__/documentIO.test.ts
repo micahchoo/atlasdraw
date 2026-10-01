@@ -24,7 +24,15 @@ import {
   type Document,
   type RasterCorners,
 } from "../document";
-import { decode, encode, fromFile, loadDocument, toFile } from "../documentIO";
+import {
+  decode,
+  encode,
+  fromFile,
+  hasUnsavedWork,
+  loadDocument,
+  markSavedToFile,
+  toFile,
+} from "../documentIO";
 import { sceneOf } from "../scene";
 import { useBasemapStore } from "../basemap";
 import { useMapInstanceStore } from "../mapInstance";
@@ -405,5 +413,32 @@ describe("loadDocument", () => {
       (files as Array<{ id: string }>).map((f) => f.id),
     );
     expect(given).toEqual(["img-1"]);
+  });
+});
+
+describe("unsaved work", () => {
+  it("a blank document has none", () => {
+    const doc = createDocument({}, sceneOf(makeFakeExcalidraw().api));
+    expect(hasUnsavedWork(doc)).toBe(false);
+  });
+
+  it("a drawing not written to a file is unsaved work, until it is written", () => {
+    const fx = makeFakeExcalidraw([geoRect("rect-1")]);
+    const doc = createDocument({}, sceneOf(fx.api));
+    expect(hasUnsavedWork(doc)).toBe(true);
+
+    markSavedToFile(doc);
+    expect(hasUnsavedWork(doc)).toBe(false);
+
+    doc.dispatch({ type: "rename-document", title: "Changed" });
+    expect(hasUnsavedWork(doc)).toBe(true);
+  });
+
+  it("loading alone does not say the document is in a file", async () => {
+    // loadDocument also opens the autosave and share links; only Open from
+    // a file marks it saved (MapEditor.openAtlasDocument).
+    const fx = makeFakeExcalidraw();
+    const doc = await loadDocument(savedDocument(), fx.api);
+    expect(doc && hasUnsavedWork(doc)).toBe(true);
   });
 });

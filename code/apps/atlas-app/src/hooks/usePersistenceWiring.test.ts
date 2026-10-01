@@ -103,6 +103,68 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("usePersistenceWiring — closing the tab", () => {
+  function hide() {
+    Object.defineProperty(document, "visibilityState", {
+      value: "hidden",
+      configurable: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+
+  afterEach(() => {
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
+  });
+
+  it("saves at once when the page is hidden with unsaved changes", () => {
+    const store = makeFakeStore({ isDirty: vi.fn(() => true) });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    hide();
+
+    expect(store.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves at once on pagehide with unsaved changes", () => {
+    const store = makeFakeStore({ isDirty: vi.fn(() => true) });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    window.dispatchEvent(new Event("pagehide"));
+
+    expect(store.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes nothing when nothing changed", () => {
+    const store = makeFakeStore();
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+    renderHook(() =>
+      usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    hide();
+
+    expect(store.save).not.toHaveBeenCalled();
+  });
+});
+
 describe("usePersistenceWiring", () => {
   it("does nothing when excalidrawAPI is null", () => {
     const createSpy = vi.spyOn(persistenceModule, "createPersistenceStore");
