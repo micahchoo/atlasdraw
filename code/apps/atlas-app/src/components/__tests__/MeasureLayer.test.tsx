@@ -23,7 +23,11 @@ import type { LocalPoint } from "@atlasdraw/math";
 
 import { FakeMercatorMap } from "../../hooks/__tests__/fakeMercatorMap";
 import { currentDocument } from "../../state/document";
-import { MEASURE_UNITS_KEY, useMeasureStore } from "../../state/measure";
+import { MEASURE_UNITS_KEY } from "../../state/measure";
+import {
+  testSession,
+  withSession,
+} from "../../session/__tests__/sessionFixture";
 import { MeasureLayer } from "../MeasureLayer";
 
 import type maplibregl from "maplibre-gl";
@@ -133,12 +137,15 @@ function renderLayer(
   otherToolActive = false,
 ) {
   return render(
-    <MeasureLayer
-      map={map as unknown as maplibregl.Map}
-      excalidrawAPI={api}
-      otherToolActive={otherToolActive}
-      onStart={() => {}}
-    />,
+    withSession(
+      <MeasureLayer
+        map={map as unknown as maplibregl.Map}
+        excalidrawAPI={api}
+        otherToolActive={otherToolActive}
+        onStart={() => {}}
+      />,
+      session,
+    ),
   );
 }
 
@@ -152,9 +159,13 @@ function clickAt(map: MeasureMap, p: { lng: number; lat: number }) {
 
 const text = (id: string) => screen.getByTestId(id).textContent;
 
+/** The editor's session: the tool off, metric units. */
+let session = testSession();
+
 beforeEach(() => {
   localStorage.clear();
-  useMeasureStore.setState({ active: false, units: "metric" });
+  localStorage.setItem(MEASURE_UNITS_KEY, "metric");
+  session = testSession();
 });
 afterEach(cleanup);
 
@@ -242,7 +253,7 @@ describe("Measure tool", () => {
     map.setBearing(30);
     const ed = fakeEditor([]);
     renderLayer(map, ed.api);
-    act(() => useMeasureStore.getState().setActive(true));
+    act(() => session.view.getState().setMeasuring(true));
     expect(text("measure-distance")).toBe("Click the map to start");
 
     clickAt(map, LONDON);
@@ -256,7 +267,7 @@ describe("Measure tool", () => {
     const [line] = ed.elements();
     expect(line.type).toBe("line");
     expect(ed.selected()).toEqual([line.id]);
-    expect(useMeasureStore.getState().active).toBe(false);
+    expect(session.view.getState().measuring).toBe(false);
     // The kept line measures what the tool measured.
     expect(text("measure-length")).toBe("Length 344 km");
   });
@@ -264,7 +275,7 @@ describe("Measure tool", () => {
   it("shows the running distance to the pointer", () => {
     const map = new MeasureMap(7, { lng: 1, lat: 50.2 });
     renderLayer(map, fakeEditor([]).api);
-    act(() => useMeasureStore.getState().setActive(true));
+    act(() => session.view.getState().setMeasuring(true));
     clickAt(map, LONDON);
     const { x, y } = map.project([PARIS.lng, PARIS.lat]);
     fireEvent.pointerMove(screen.getByTestId("measure-overlay"), {
@@ -277,7 +288,7 @@ describe("Measure tool", () => {
   it("pans the map on a drag and adds no point", () => {
     const map = new MeasureMap(7, { lng: 1, lat: 50.2 });
     renderLayer(map, fakeEditor([]).api);
-    act(() => useMeasureStore.getState().setActive(true));
+    act(() => session.view.getState().setMeasuring(true));
     const overlay = screen.getByTestId("measure-overlay");
     fireEvent.pointerDown(overlay, { clientX: 500, clientY: 400, button: 0 });
     fireEvent.pointerMove(overlay, {
@@ -293,7 +304,7 @@ describe("Measure tool", () => {
   it("ends on Enter, removes a point on Backspace, and exits on Escape", () => {
     const map = new MeasureMap(7, { lng: 1, lat: 50.2 });
     renderLayer(map, fakeEditor([]).api);
-    act(() => useMeasureStore.getState().setActive(true));
+    act(() => session.view.getState().setMeasuring(true));
     const reachedEditor = vi.fn();
     document.addEventListener("keydown", reachedEditor);
     try {
@@ -316,13 +327,13 @@ describe("Measure tool", () => {
   it("turns on and off with m, but not while typing", () => {
     renderLayer(new MeasureMap(7, LONDON), fakeEditor([]).api);
     fireEvent.keyDown(document.body, { key: "m" });
-    expect(useMeasureStore.getState().active).toBe(true);
+    expect(session.view.getState().measuring).toBe(true);
     fireEvent.keyDown(document.body, { key: "m" });
-    expect(useMeasureStore.getState().active).toBe(false);
+    expect(session.view.getState().measuring).toBe(false);
     const input = document.createElement("input");
     document.body.appendChild(input);
     fireEvent.keyDown(input, { key: "m" });
-    expect(useMeasureStore.getState().active).toBe(false);
+    expect(session.view.getState().measuring).toBe(false);
     input.remove();
   });
 
@@ -330,16 +341,19 @@ describe("Measure tool", () => {
     const map = new MeasureMap(7, LONDON);
     const ed = fakeEditor([]);
     const view = renderLayer(map, ed.api);
-    act(() => useMeasureStore.getState().setActive(true));
+    act(() => session.view.getState().setMeasuring(true));
     view.rerender(
-      <MeasureLayer
-        map={map as unknown as maplibregl.Map}
-        excalidrawAPI={ed.api}
-        otherToolActive
-        onStart={() => {}}
-      />,
+      withSession(
+        <MeasureLayer
+          map={map as unknown as maplibregl.Map}
+          excalidrawAPI={ed.api}
+          otherToolActive
+          onStart={() => {}}
+        />,
+        session,
+      ),
     );
-    expect(useMeasureStore.getState().active).toBe(false);
+    expect(session.view.getState().measuring).toBe(false);
     expect(screen.queryByTestId("measure-overlay")).toBeNull();
   });
 });

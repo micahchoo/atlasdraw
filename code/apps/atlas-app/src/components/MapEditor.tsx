@@ -57,8 +57,6 @@ import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
 import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
-import { useCommentMode, toggleCommentMode } from "../state/commentMode";
-import { useMeasureStore } from "../state/measure";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useRoom } from "../hooks/useRoom";
 import { useBrowserTabTitle } from "../hooks/useBrowserTabTitle";
@@ -70,7 +68,7 @@ import { useServerBackup } from "../hooks/useServerBackup";
 import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
+import { isOverlayId } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
 import {
@@ -404,13 +402,13 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   // useExcalidrawChangeHandler. A selection never moves the camera; only
   // "Zoom to layer" does.
   useEffect(() => {
-    const unsub = useSelectedLayerStore.subscribe((state) => {
-      if (!excalidrawAPI) {
+    const unsub = session.view.subscribe((state, prev) => {
+      if (!excalidrawAPI || state.selection === prev.selection) {
         return;
       }
       // Data and raster ids are not Excalidraw element ids.
       const annotationIds: Record<string, true> = {};
-      for (const id of Object.keys(state.selectedLayerIds)) {
+      for (const id of Object.keys(state.selection)) {
         if (!isOverlayId(id)) {
           annotationIds[id] = true;
         }
@@ -425,7 +423,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
       }
     });
     return unsub;
-  }, [excalidrawAPI]);
+  }, [session, excalidrawAPI]);
 
   // Map-click → panel selection for data/raster layers, and the attribute
   // popup for the feature under the pointer. The hand tool lets the click
@@ -444,7 +442,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
       // The topmost visible data layer under the pointer wins (featureAt).
       const hit = featureAt(map, overlays, point);
       if (hit) {
-        useSelectedLayerStore.getState().selectLayer(hit.overlayId);
+        session.view.getState().select(hit.overlayId);
         showFeaturePopup(hit, lngLat);
         return;
       }
@@ -458,15 +456,15 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
       for (const r of rasters) {
         const screenCorners = r.corners.map((c) => map.project(c));
         if (pointInPolygon(point, screenCorners)) {
-          useSelectedLayerStore.getState().selectLayer(r.id);
+          session.view.getState().select(r.id);
           return;
         }
       }
 
       // Click on empty area → clear selection
-      useSelectedLayerStore.getState().clearSelection();
+      session.view.getState().clearSelection();
     },
-    [map, showFeaturePopup, closeFeaturePopup],
+    [session, map, showFeaturePopup, closeFeaturePopup],
   );
   useEffect(() => {
     if (!map) {
@@ -571,12 +569,10 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
     useAtlasdrawTool(map, excalidrawAPI);
   const isPinActive = activeAtlasTool?.id === "pin";
 
-  // Step 5 — comment MODE (replaces the comments sidebar tab). The boolean
-  // lives in state/commentMode.ts because the rail, the keyboard handler, the
-  // anchor overlay and this component all have to agree about it and none is
-  // an ancestor of the others.
-  const commentMode = useCommentMode();
+  // Comment mode: a click on the map starts a thread.
+  const commentMode = useStore(session.view, (s) => s.commentMode);
   useCommentModeTool({
+    view: session.view,
     atlasTool: activeAtlasTool,
     setAtlasTool: setActiveAtlasTool,
   });
@@ -622,6 +618,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
     [],
   );
   useMapEditorKeyboard({
+    view: session.view,
     excalidrawAPI,
     showShortcuts,
     setShowShortcuts,
@@ -793,6 +790,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   // Excalidraw onChange: background intercept + autosave markDirty +
   // aria-live selection announce — extracted to useExcalidrawChangeHandler.
   const handleExcalidrawChange = useExcalidrawChangeHandler({
+    view: session.view,
     excalidrawAPI,
     announceMapEditor,
     setMapBg,
@@ -955,7 +953,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                   <MeasureToolButton />
                   <CommentModeButton
                     active={commentMode}
-                    onToggle={toggleCommentMode}
+                    onToggle={session.view.getState().toggleCommentMode}
                     openThreadCount={openThreadCount}
                   />
                 </>
@@ -1324,7 +1322,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                   category: "Tools",
                   hint: "M",
                   keywords: ["ruler", "length", "area", "distance"],
-                  onSelect: () => useMeasureStore.getState().setActive(true),
+                  onSelect: () => session.view.getState().setMeasuring(true),
                 },
                 {
                   id: "layers",
@@ -1347,7 +1345,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
                   category: "View",
                   hint: "C",
                   keywords: ["comment", "threads", "annotate", "review"],
-                  onSelect: toggleCommentMode,
+                  onSelect: session.view.getState().toggleCommentMode,
                 },
                 {
                   id: "find",

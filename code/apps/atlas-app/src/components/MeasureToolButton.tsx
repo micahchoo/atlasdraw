@@ -2,16 +2,15 @@
 //
 // MeasureToolButton — the Measure tool's toggle on the drawing-tools toolbar,
 // beside PinToolButton in the `renderToolbarExtras` slot. It reads and flips
-// the store itself, so MapEditor holds no Measure state; MeasureLayer does
-// the measuring.
+// the session view itself; MeasureLayer does the measuring.
 
 import { MeasureIcon } from "../lib/icons";
-import { useMeasureStore } from "../state/measure";
+import { useView } from "../session/SessionContext";
 import styles from "../styles/MeasureToolButton.module.css";
 
 export function MeasureToolButton() {
-  const active = useMeasureStore((s) => s.active);
-  const onToggle = useMeasureStore((s) => s.toggleActive);
+  const active = useView((s) => s.measuring);
+  const onToggle = useView((s) => s.toggleMeasuring);
   return (
     <button
       type="button"

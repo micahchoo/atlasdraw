@@ -52,9 +52,8 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
-import { useSession } from "../session/SessionContext";
+import { useSession, useView } from "../session/SessionContext";
 import { currentDocument, dispatch, useDocument } from "../state/document";
-import { useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneStore } from "../state/scene";
 import {
   deleteAnnotation,
@@ -1521,7 +1520,7 @@ function TileLayersSection({
   tiles: TileLayerEntry[];
   mutators: Mutators;
   actions: LayerActions;
-  selectedLayerIds: Record<string, true>;
+  selectedLayerIds: Readonly<Record<string, true>>;
   selectLayer: (id: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -1706,8 +1705,8 @@ export function LayerPanel() {
   /** The scene, for the annotation commands. Null before Excalidraw mounts. */
   const scene = () => useSceneStore.getState().api;
 
-  const selectedLayerIds = useSelectedLayerStore((s) => s.selectedLayerIds);
-  const selectLayer = useSelectedLayerStore((s) => s.selectLayer);
+  const selectedLayerIds = useView((s) => s.selection);
+  const selectLayer = useView((s) => s.select);
 
   // Accordion: at most one card open. See the header note — multi-open is the
   // unbounded-growth failure mode this design is most exposed to.

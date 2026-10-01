@@ -38,7 +38,7 @@ import {
 } from "@atlasdraw/protocol";
 
 import { useCommentFocus } from "../state/commentFocus";
-import { useCommentMode } from "../state/commentMode";
+import { useView } from "../session/SessionContext";
 import {
   setAnchorMode,
   setPendingAnchor,
@@ -128,7 +128,7 @@ export function CommentAnchorsOverlay(
   const { map, excalidrawAPI } = props;
   const commentsLayer = useDocumentStore((s) => s.doc.comments);
   const { anchor: pendingAnchor } = usePendingAnchor();
-  const commentMode = useCommentMode();
+  const commentMode = useView((s) => s.commentMode);
   // A canvas-search hit asks for one comment by id; the anchor that owns it
   // opens itself. Everyone else gets `undefined` and is untouched.
   const commentFocus = useCommentFocus();

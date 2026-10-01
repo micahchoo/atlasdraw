@@ -15,6 +15,8 @@ import { createDocumentStore } from "../state/document";
 
 import { sceneOf } from "../state/scene";
 
+import { MEASURE_UNITS_KEY } from "../state/measure";
+
 import { createSession } from "./EditorSession";
 import { createViewStore } from "./view";
 
@@ -146,5 +148,74 @@ describe("one view per session", () => {
     expect(b.view.getState().map).toBeNull();
     expect(a.view.getState().sheetPanelWidth).toBe(444);
     expect(b.view.getState().sheetPanelWidth).not.toBe(444);
+  });
+});
+
+describe("comment mode", () => {
+  it("starts off; set and toggle move it", () => {
+    const view = createViewStore();
+    expect(view.getState().commentMode).toBe(false);
+    view.getState().toggleCommentMode();
+    expect(view.getState().commentMode).toBe(true);
+    view.getState().setCommentMode(false);
+    expect(view.getState().commentMode).toBe(false);
+  });
+
+  it("setting the mode it has tells no one", () => {
+    const view = createViewStore();
+    let heard = 0;
+    view.subscribe(() => {
+      heard += 1;
+    });
+    view.getState().setCommentMode(false);
+    expect(heard).toBe(0);
+  });
+});
+
+describe("measuring", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("turns the tool on and off", () => {
+    const view = createViewStore();
+    view.getState().toggleMeasuring();
+    expect(view.getState().measuring).toBe(true);
+    view.getState().setMeasuring(false);
+    expect(view.getState().measuring).toBe(false);
+  });
+
+  it("remembers a unit switch in this browser", () => {
+    localStorage.setItem(MEASURE_UNITS_KEY, "metric");
+    const view = createViewStore();
+    view.getState().toggleUnits();
+    expect(view.getState().units).toBe("imperial");
+    expect(localStorage.getItem(MEASURE_UNITS_KEY)).toBe("imperial");
+    expect(createViewStore().getState().units).toBe("imperial");
+  });
+
+  it("keeps the switch for the session when storage throws", () => {
+    localStorage.setItem(MEASURE_UNITS_KEY, "metric");
+    const view = createViewStore();
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("quota");
+      });
+    try {
+      view.getState().toggleUnits();
+      expect(view.getState().units).toBe("imperial");
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+});
+
+describe("selection", () => {
+  it("select replaces the selection with one id; clear empties it", () => {
+    const view = createViewStore();
+    view.getState().setSelection({ a: true, b: true });
+    view.getState().select("dl:roads");
+    expect(view.getState().selection).toEqual({ "dl:roads": true });
+    view.getState().clearSelection();
+    expect(view.getState().selection).toEqual({});
   });
 });

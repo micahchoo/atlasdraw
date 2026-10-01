@@ -10,11 +10,7 @@ import { useEffect } from "react";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { ZoomAction } from "@atlasdraw/excalidraw/types";
 
-import {
-  isCommentModeActive,
-  setCommentMode,
-  toggleCommentMode,
-} from "../state/commentMode";
+import type { ViewStore } from "../session/view";
 
 import type { Dispatch, SetStateAction } from "react";
 
@@ -37,6 +33,8 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export interface MapEditorKeyboardParams {
+  /** The session view: comment mode. */
+  view: ViewStore;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   showShortcuts: boolean;
   setShowShortcuts: Dispatch<SetStateAction<boolean>>;
@@ -62,6 +60,7 @@ const ZOOM_KEYS: Readonly<Record<string, ZoomAction>> = {
 };
 
 export function useMapEditorKeyboard({
+  view,
   excalidrawAPI,
   showShortcuts,
   setShowShortcuts,
@@ -162,7 +161,7 @@ export function useMapEditorKeyboard({
         !isTypingTarget(e.target)
       ) {
         e.preventDefault();
-        toggleCommentMode();
+        view.getState().toggleCommentMode();
         return;
       }
       if (e.key === "Escape") {
@@ -191,8 +190,8 @@ export function useMapEditorKeyboard({
       }
       // Leaving comment mode restores the atlas tool it dropped (see
       // useCommentModeTool's cleanup). The Excalidraw tool is never touched.
-      if (isCommentModeActive()) {
-        setCommentMode(false);
+      if (view.getState().commentMode) {
+        view.getState().setCommentMode(false);
         return true;
       }
       return false;
@@ -204,6 +203,7 @@ export function useMapEditorKeyboard({
       drawingLayer?.removeEventListener("keydown", onDrawingEscape, true);
     };
   }, [
+    view,
     drawingLayer,
     showShortcuts,
     excalidrawAPI,

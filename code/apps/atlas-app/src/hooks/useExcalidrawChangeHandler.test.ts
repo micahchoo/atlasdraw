@@ -9,6 +9,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { OrderedExcalidrawElement } from "@atlasdraw/element/types";
 import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
+import { createViewStore } from "../session/view";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
 import { useExcalidrawChangeHandler } from "./useExcalidrawChangeHandler";
@@ -43,6 +44,7 @@ function makeParams(
     excalidrawAPI,
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
+    view: createViewStore(),
     ...overrides,
   };
 }
@@ -248,5 +250,39 @@ describe("useExcalidrawChangeHandler — 3. selection aria-live announce", () =>
 
     expect(params.announceMapEditor).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+});
+
+describe("useExcalidrawChangeHandler — 4. the canvas selection reaches the panel", () => {
+  it("the selected elements become the selection; a panel-selected data layer stays", () => {
+    const params = makeParams();
+    params.view.getState().setSelection({ "dl:roads": true, old: true });
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", type: "rectangle" }]),
+      makeAppState({ selectedElementIds: { el1: true } }),
+      NO_FILES,
+    );
+
+    expect(params.view.getState().selection).toEqual({
+      "dl:roads": true,
+      el1: true,
+    });
+  });
+
+  it("an unchanged selection writes nothing", () => {
+    const params = makeParams();
+    params.view.getState().setSelection({ el1: true });
+    const before = params.view.getState().selection;
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", type: "rectangle" }]),
+      makeAppState({ selectedElementIds: { el1: true } }),
+      NO_FILES,
+    );
+
+    expect(params.view.getState().selection).toBe(before);
   });
 });

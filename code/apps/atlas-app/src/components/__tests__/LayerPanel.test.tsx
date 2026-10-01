@@ -14,8 +14,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
-import { withSession } from "../../session/__tests__/sessionFixture";
-import { useSelectedLayerStore } from "../../state/selectedLayer";
+import {
+  testSession,
+  withSession,
+} from "../../session/__tests__/sessionFixture";
 
 import {
   createDocument,
@@ -694,7 +696,7 @@ describe("LayerPanel — raster layers", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Bidirectional selection — the panel reads/writes useSelectedLayerStore
+// Selection — the panel reads and writes the session view's selection
 // ---------------------------------------------------------------------------
 //
 // A row click is the single-select gesture: it replaces the selection set with
@@ -703,8 +705,9 @@ describe("LayerPanel — raster layers", () => {
 // the highlight must not move while you toggle a layer.
 
 describe("LayerPanel — row selection", () => {
+  let session = testSession();
   beforeEach(() => {
-    useSelectedLayerStore.setState({ selectedLayerIds: {} });
+    session = testSession();
   });
 
   function seedData(id: string, label: string) {
@@ -719,11 +722,11 @@ describe("LayerPanel — row selection", () => {
 
   it("selects the clicked row (single-select replace)", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(withSession(<LayerPanel />));
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-1": true,
     });
   });
@@ -731,33 +734,33 @@ describe("LayerPanel — row selection", () => {
   it("switches selection to the newly clicked row", () => {
     seedData("dl:sel-1", "parcels.geojson");
     seedData("dl:sel-2", "roads.geojson");
-    render(withSession(<LayerPanel />));
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-2"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-2": true,
     });
   });
 
   it("row controls do not change the selection", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(withSession(<LayerPanel />));
+    render(withSession(<LayerPanel />, session));
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
 
     fireEvent.click(screen.getByTestId("layer-visibility-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1")); // close again
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-1": true,
     });
   });
 
   it("marks the selected row's header with the rowSelected class", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(withSession(<LayerPanel />));
+    render(withSession(<LayerPanel />, session));
 
     const header = screen.getByTestId("layer-row-header-dl:sel-1");
     expect(header.className).not.toContain("rowSelected");
@@ -769,11 +772,11 @@ describe("LayerPanel — row selection", () => {
 
   it("selects an annotation row by clicking its name label", () => {
     seedScene(["el-1"]);
-    render(withSession(<LayerPanel />));
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-name-el-1"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "el-1": true,
     });
   });

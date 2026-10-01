@@ -182,6 +182,7 @@ function mountEditor(
       excalidrawAPI: api,
       announceMapEditor: () => {},
       setMapBg: () => {},
+      view,
     });
     useEffect(
       () =>

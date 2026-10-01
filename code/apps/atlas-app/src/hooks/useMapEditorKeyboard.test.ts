@@ -8,10 +8,7 @@ import { renderHook, cleanup } from "@testing-library/react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import {
-  isCommentModeActive,
-  __resetForTest as __resetCommentMode,
-} from "../state/commentMode";
+import { createViewStore } from "../session/view";
 
 import { useMapEditorKeyboard } from "./useMapEditorKeyboard";
 
@@ -23,10 +20,21 @@ function fireKey(
   (target ?? window).dispatchEvent(event);
 }
 
+/** The session view of the editor under test; a new one for every case. */
+let currentView = createViewStore();
+beforeEach(() => {
+  currentView = createViewStore();
+});
+
+function isCommentModeActive(): boolean {
+  return currentView.getState().commentMode;
+}
+
 function baseParams(
   overrides: Partial<Parameters<typeof useMapEditorKeyboard>[0]> = {},
 ) {
   return {
+    view: currentView,
     excalidrawAPI: null as ExcalidrawImperativeAPI | null,
     showShortcuts: false,
     setShowShortcuts: vi.fn(),
@@ -200,13 +208,6 @@ describe("useMapEditorKeyboard — shortcut bindings", () => {
 // ---------------------------------------------------------------------------
 
 describe("useMapEditorKeyboard — comment mode (`c`)", () => {
-  beforeEach(() => {
-    __resetCommentMode();
-  });
-  afterEach(() => {
-    __resetCommentMode();
-  });
-
   it("toggles comment mode on bare `c`, both ways", () => {
     renderHook(() => useMapEditorKeyboard(baseParams()));
 

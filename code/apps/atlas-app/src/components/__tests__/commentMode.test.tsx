@@ -30,10 +30,9 @@ import type { AtlasdrawTool } from "@atlasdraw/tools";
 import { useCommentModeTool } from "../../hooks/useCommentModeTool";
 
 import {
-  __resetForTest as __resetCommentMode,
-  isCommentModeActive,
-  setCommentMode,
-} from "../../state/commentMode";
+  testSession,
+  withSession,
+} from "../../session/__tests__/sessionFixture";
 import {
   __resetForTest as __resetPicker,
   setPendingAnchor,
@@ -147,14 +146,19 @@ function makeFakeMap() {
   };
 }
 
+/** The editor's session; a new one, comment mode off, for every case. */
+let session = testSession();
+const setCommentMode = (on: boolean) =>
+  session.view.getState().setCommentMode(on);
+const isCommentModeActive = () => session.view.getState().commentMode;
+
 beforeEach(() => {
-  __resetCommentMode();
+  session = testSession();
   __resetPicker();
 });
 
 afterEach(() => {
   cleanup();
-  __resetCommentMode();
   __resetPicker();
 });
 
@@ -167,7 +171,7 @@ function Harness({
   atlasTool: AtlasdrawTool | null;
   setAtlasTool: (tool: AtlasdrawTool | null) => void;
 }) {
-  useCommentModeTool({ atlasTool, setAtlasTool });
+  useCommentModeTool({ view: session.view, atlasTool, setAtlasTool });
   const { mode } = usePendingAnchor();
   return <div data-testid="picker-mode">{mode ?? "null"}</div>;
 }
@@ -236,7 +240,13 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
   ) => {
     expect(currentDocument().comments).toBe(commentsLayer);
     return render(
-      <CommentAnchorsOverlay map={map as never} excalidrawAPI={api as never} />,
+      withSession(
+        <CommentAnchorsOverlay
+          map={map as never}
+          excalidrawAPI={api as never}
+        />,
+        session,
+      ),
     );
   };
 

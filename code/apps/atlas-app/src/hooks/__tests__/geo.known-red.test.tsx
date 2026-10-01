@@ -45,6 +45,7 @@ import {
 import { buildToolContext } from "../useAtlasdrawTool";
 import { useCameraBridge } from "../useCameraBridge";
 import { useExcalidrawChangeHandler } from "../useExcalidrawChangeHandler";
+import { createViewStore } from "../../session/view";
 
 import { FakeMercatorMap } from "./fakeMercatorMap";
 
@@ -146,10 +147,12 @@ function Harness({
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const asMap = map as unknown as maplibregl.Map;
   const { bridge, onZoomAction } = useCameraBridge(asMap, api, layer);
+  const [view] = useState(() => createViewStore());
   const onChange = useExcalidrawChangeHandler({
     excalidrawAPI: api,
     announceMapEditor: () => {},
     setMapBg: () => {},
+    view,
   });
   return (
     <div ref={setLayer} style={{ width: 1024, height: 768 }}>

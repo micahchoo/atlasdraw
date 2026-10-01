@@ -38,7 +38,6 @@ import {
 
 import { bindScene } from "../../state/scene";
 import { useOverlayReport } from "../../hooks/useMapOverlays";
-import { useSelectedLayerStore } from "../../state/selectedLayer";
 import { makeFakeExcalidraw } from "../../state/__tests__/fixtures/documentWorld";
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
@@ -338,9 +337,9 @@ describe("data layer card — the three missing actions", () => {
     });
     const fitBounds = vi.fn();
     const map = { fitBounds } as unknown as maplibregl.Map;
-    useSelectedLayerStore.getState().clearSelection();
+    const session = testSession({ map });
 
-    render(withSession(<LayerPanel />, testSession({ map })));
+    render(withSession(<LayerPanel />, session));
     fireEvent.click(screen.getByTestId("layer-menu-g1"));
     fireEvent.click(screen.getByTestId("layer-zoom-g1"));
 
@@ -350,7 +349,7 @@ describe("data layer card — the three missing actions", () => {
     expect(east).toBeGreaterThanOrEqual(13.4);
     expect(south).toBeLessThanOrEqual(52.5);
     expect(north).toBeGreaterThanOrEqual(52.5);
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({});
+    expect(session.view.getState().selection).toEqual({});
     unbind();
   });
 
