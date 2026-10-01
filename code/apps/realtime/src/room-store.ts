@@ -22,6 +22,8 @@ export interface StoredRoom {
 
 export interface RoomStore {
   load(room: string): StoredRoom | null;
+  /** The verifier of `room`, without its state; null when there is none. */
+  verifierOf(room: string): string | null;
   save(room: string, stored: StoredRoom): void;
   /** The bytes of the stored state of `room`; 0 when there is none. */
   bytesOf(room: string): number;
@@ -63,6 +65,9 @@ export function sqliteRoomStore(
   const select = db.prepare<[string], { verifier: string; state: Buffer }>(
     "SELECT verifier, state FROM rooms WHERE name = ?",
   );
+  const selectVerifier = db.prepare<[string], { verifier: string }>(
+    "SELECT verifier FROM rooms WHERE name = ?",
+  );
   const selectBytes = db.prepare<[string], { bytes: number }>(
     "SELECT length(state) AS bytes FROM rooms WHERE name = ?",
   );
@@ -94,6 +99,7 @@ export function sqliteRoomStore(
         ? { verifier: row.verifier, state: new Uint8Array(row.state) }
         : null;
     },
+    verifierOf: (room) => selectVerifier.get(room)?.verifier ?? null,
     save(room, stored) {
       const before = bytesOf(room);
       upsert.run(room, stored.verifier, Buffer.from(stored.state), now());

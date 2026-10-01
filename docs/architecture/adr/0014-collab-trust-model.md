@@ -58,8 +58,9 @@ The relay is trusted. Option C is permanent.
 
 ## Consequences
 
-- Comments, late-joiner catch-up, undo and persistence all come from Yjs; there
-  is no custom sync protocol to maintain.
+- Comments, late-joiner catch-up and persistence come from Yjs; there is no
+  custom sync protocol to maintain. Undo does not: it stays Excalidraw's (see
+  "Implementation").
 - Privacy against the operator depends on who runs the relay. A user who needs
   it runs their own deployment, which is the self-host posture (ADR-0013).
 - ADR-0010's tables "What the Phase 5 relay can see" and its claim that comments
@@ -123,9 +124,14 @@ relay's SQLite file:
 | Title, world frame, basemap, the camera the room was made at      | Yes                                                        |
 | Comments: text, author name, anchor (lng/lat or element id)       | Yes                                                        |
 | Presence: each person's name, colour, cursor (lng/lat) and camera | Yes, while they are connected; not stored                  |
+| The browser id, in presence and as each comment's author id       | Yes; stored with the comments                              |
 | The room id, connection times, message sizes                      | Yes                                                        |
 | The link secret                                                   | No: the fragment never leaves the browser                  |
 | The room token                                                    | Yes, in memory during a connection; stored only as SHA-256 |
+
+The browser id (`identity.ts`, `user.id` in presence, `authorId` on a
+comment) is one UUID per browser, the same in every room. The relay, and
+everyone in each room, can link one browser across all its rooms.
 
 The room id alone grants nothing: it appears in URLs and logs, and the relay
 refuses a connection that does not present the room's token.

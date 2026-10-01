@@ -11,6 +11,8 @@
 // connection only with the token the room was created with, so the room id
 // alone grants nothing.
 
+import { isRoomId } from "./wire.js";
+
 /** A parsed room link. */
 export interface RoomLink {
   /** A UUID. */
@@ -24,9 +26,8 @@ const TOKEN_LABEL = "atlasdraw-room-auth";
 /** The y-websocket message types are 0 (sync), 1 (awareness), 2 (auth). */
 const MESSAGE_TOKEN = 3;
 
-const ROOM_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const SECRET = /^[A-Za-z0-9_-]{43}$/;
+/** A secret and a token are both 32 bytes in base64url without padding. */
+const KEY32 = /^[A-Za-z0-9_-]{43}$/;
 
 function toBase64url(bytes: Uint8Array): string {
   let binary = "";
@@ -68,11 +69,7 @@ export function parseRoomLink(hash: string): RoomLink | null {
     return null;
   }
   const [roomId, secret, ...rest] = raw.slice(PREFIX.length).split(",");
-  if (
-    rest.length > 0 ||
-    !ROOM_ID.test(roomId ?? "") ||
-    !SECRET.test(secret ?? "")
-  ) {
+  if (rest.length > 0 || !isRoomId(roomId ?? "") || !KEY32.test(secret ?? "")) {
     return null;
   }
   return { roomId: roomId!, secret: secret! };
@@ -110,7 +107,11 @@ export function roomTokenMessage(token: string): Uint8Array {
   return new Uint8Array([MESSAGE_TOKEN, bytes.length, ...bytes]);
 }
 
-/** The token in a token message, or null when the message is not one. */
+/**
+ * The token in a token message, or null when the message is not one or its
+ * token is not 32 bytes in base64url. The relay reads the first message
+ * with this.
+ */
 export function readRoomTokenMessage(message: Uint8Array): string | null {
   if (message.length < 2 || message[0] !== MESSAGE_TOKEN) {
     return null;
@@ -119,7 +120,8 @@ export function readRoomTokenMessage(message: Uint8Array): string | null {
   if (length > 127 || message.length !== 2 + length) {
     return null;
   }
-  return new TextDecoder().decode(message.subarray(2));
+  const token = new TextDecoder().decode(message.subarray(2));
+  return KEY32.test(token) ? token : null;
 }
 
 /**

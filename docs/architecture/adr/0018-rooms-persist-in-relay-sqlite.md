@@ -40,8 +40,13 @@ SQLite in the relay. `apps/realtime/src/room-store.ts` holds one table,
 - Each write stores the whole state (`Y.encodeStateAsUpdate`). That is also
   the compaction: there is no update log to grow.
 - The verifier is written once and never changes.
-- A room larger than `MAX_ROOM_BYTES` (64 MiB) is not saved; its
-  connections close with code 4413.
+- A room never grows past `MAX_ROOM_BYTES` (64 MiB, protocol
+  `ROOM_SIZE.roomBytes`). The relay checks every update before it applies
+  it: one that would take the room past the cap closes its socket with 4413
+  "room too large: N > cap", and the room in memory keeps its state. (Until
+  2026-10-01 the check ran only at save, 2 s after the edit, so a room
+  reached 5x the cap in memory first.) The save keeps its own check as a
+  second guard.
 
 ## Why not the others
 
@@ -68,7 +73,9 @@ statement, and `better-sqlite3` is already built for `apps/storage`.
 - A room nobody was in for `ROOM_EXPIRY_DAYS` (default 90) is deleted by a
   sweep on `updated_at`, at start and every `ROOM_SWEEP_INTERVAL_MS`. A
   room is saved when its last connection closes, so `updated_at` is also
-  when someone was last in it. A room in memory is never swept. The id of a
+  when someone was last in it, unless that save was refused at
+  `MAX_TOTAL_ROOM_BYTES`: then it is the last good save, and a room in use
+  can expire. A room in memory is never swept. The id of a
   deleted room is free again: its old link makes a new, empty room.
 - `MAX_TOTAL_ROOM_BYTES` caps the file's room states together (W6b,
   SECURITY.md row 14).

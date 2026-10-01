@@ -36,6 +36,7 @@ import {
   type Document,
 } from "../state/document";
 import { liveCamera, restoreCamera } from "../state/documentIO";
+import { planSeed, type Seed } from "../state/roomDocument";
 import {
   joinRoom,
   type Peer,
@@ -54,6 +55,10 @@ export interface RoomSession {
   readonly available: boolean;
   readonly room: Room | null;
   readonly status: RoomStatus | null;
+  /** The room's reason for a refusal, with sizes; null otherwise (Room.reason). */
+  readonly reason: string | null;
+  /** True while the editor shows the room's document. */
+  readonly entered: boolean;
   /** Everyone else in the room. */
   readonly peers: readonly Peer[];
   /** This person as the room sees them; null outside a room. */
@@ -64,7 +69,9 @@ export interface RoomSession {
   readonly error: string | null;
   /**
    * Make a room from the open map and join it, or keep the room the editor
-   * is in. Resolves with the room's URL.
+   * is in. Resolves with the room's URL. Rejects, before anything
+   * connects, when the map is over a size cap: the error names the size
+   * and the cap.
    */
   start(): Promise<string>;
 }
@@ -90,6 +97,8 @@ export function useRoom(
   const { transport, persistence } = session;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
+  const [reason, setReason] = useState<string | null>(null);
+  const [entered, setEntered] = useState(false);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
   const [self, setSelf] = useState<Identity | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,15 +107,11 @@ export function useRoom(
   mapRef.current = map;
 
   const join = useCallback(
-    (link: RoomLink, seed?: Document): Room | null => {
+    (link: RoomLink, seed?: Seed): Room | null => {
       if (!transport) {
         return null;
       }
-      const next = joinRoom(
-        link,
-        transport,
-        seed ? { seed, seedCamera: liveCamera(mapRef.current) } : {},
-      );
+      const next = joinRoom(link, transport, seed ? { seed } : {});
       roomRef.current = next;
       setRoom(next);
       return next;
@@ -179,10 +184,12 @@ export function useRoom(
       restoreCamera(mapRef.current, roomDocument.snapshot().camera);
       detach = room.attach(editorOf(api));
       api.history?.clear();
+      setEntered(true);
     };
 
     const unsubscribeStatus = room.status((next) => {
       setStatus(next);
+      setReason(room.reason);
       if (next === "joined") {
         enter();
       }
@@ -228,6 +235,8 @@ export function useRoom(
       setPeers(NO_PEERS);
       setSelf(null);
       setStatus(null);
+      setReason(null);
+      setEntered(false);
     };
   }, [room, api, persistence]);
 
@@ -270,8 +279,16 @@ export function useRoom(
     if (current) {
       return roomUrl(current.link);
     }
+    const plan = await planSeed(currentDocument(), liveCamera(mapRef.current));
+    if (!plan.ok) {
+      throw new Error(plan.reason);
+    }
+    if (roomRef.current) {
+      // Another start() made a room while this one measured the map.
+      return roomUrl(roomRef.current.link);
+    }
     const link = newRoomLink();
-    join(link, currentDocument());
+    join(link, plan);
     window.history.replaceState(
       window.history.state,
       "",
@@ -295,6 +312,8 @@ export function useRoom(
     available: transport !== null,
     room,
     status,
+    reason,
+    entered,
     peers,
     self,
     rename,
@@ -303,21 +322,71 @@ export function useRoom(
   };
 }
 
+const REFUSALS: ReadonlySet<RoomStatus> = new Set<RoomStatus>([
+  "denied",
+  "full",
+  "too-large",
+  "limited",
+  "no-space",
+  "unavailable",
+]);
+
 /** Why the editor cannot be in the room, in the user's words; null when it can. */
-export function roomProblem(room: Pick<RoomSession, "error" | "status">) {
+export function roomProblem(
+  room: Pick<RoomSession, "error" | "status" | "reason" | "entered">,
+): string | null {
   if (room.error) {
     return room.error;
   }
+  const why = refusalText(room);
+  if (!why) {
+    return null;
+  }
+  // The editor still shows the room's document; nothing typed now arrives.
+  return room.entered
+    ? `${why} Edits you make in this map are no longer saved.`
+    : why;
+}
+
+function refusalText(
+  room: Pick<RoomSession, "status" | "reason">,
+): string | null {
   switch (room.status) {
     case "denied":
       return "This shared map link was refused. Ask for a new link.";
     case "full":
       return "This shared map is full. Try again later.";
+    case "too-large":
+      return room.reason ?? "This shared map is over the server's size limit.";
     case "limited":
       return "Too many shared maps were opened from your network. Try again in an hour.";
     case "no-space":
       return "The server has no space for shared maps. Tell the person who runs it.";
+    case "unavailable":
+      return room.reason ?? "Shared maps are not available on this page.";
     default:
       return null;
+  }
+}
+
+/**
+ * The room's connection in a few words, for the presence list; null when
+ * the room is joined and nothing needs saying.
+ */
+export function roomConnection(
+  room: Pick<RoomSession, "status">,
+): string | null {
+  switch (room.status) {
+    case "connecting":
+      return "Connecting…";
+    case "offline":
+      return "Offline. Reconnecting…";
+    case null:
+    case "joined":
+      return null;
+    default:
+      return REFUSALS.has(room.status)
+        ? "Not connected. Edits are not saved."
+        : null;
   }
 }

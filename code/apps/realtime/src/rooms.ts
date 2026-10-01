@@ -18,6 +18,14 @@
 // store after a short delay and when the last connection closes; then the
 // room leaves memory. The relay reads everything in a room doc.
 //
+// A frame that `ws` refuses (over `maxMessageBytes`: 1009; a text frame that
+// is not UTF-8: 1007) closes that socket only. Every socket has an "error"
+// listener: without one, Node turns the error into an exit of the process.
+//
+// A room's size is checked on every update, before the update is applied:
+// one that would take the room past `maxRoomBytes` is refused with 4413 and
+// "room too large: N > cap", and the room in memory stays as it was.
+//
 // Abuse limits (SECURITY.md row 14), each closed with a code and a reason:
 // connections per client address (4429), new rooms per client address per
 // hour (4429), and the bytes of all stored rooms together (4507). A room
@@ -33,32 +41,26 @@ import * as syncProtocol from "y-protocols/sync";
 import { WebSocket, WebSocketServer } from "ws";
 import * as Y from "yjs";
 
+import {
+  CLOSE,
+  ROOM_SIZE,
+  closeReason,
+  isRoomId,
+  readRoomTokenMessage,
+} from "@atlasdraw/protocol";
+
 import { logger } from "./logger.js";
 
 import type { RoomStore } from "./room-store.js";
 import type http from "http";
 import type { Duplex } from "stream";
 
-/** Close codes the client reads (apps/atlas-app/src/state/room.ts). */
-export const CLOSE_DENIED = 4403;
-export const CLOSE_FULL = 4409;
-export const CLOSE_TOO_LARGE = 4413;
-export const CLOSE_LIMITED = 4429;
-export const CLOSE_NO_SPACE = 4507;
-
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
-const MESSAGE_TOKEN = 3;
 const PING_INTERVAL_MS = 30_000;
 const AUTH_TIMEOUT_MS = 10_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
-
-/** A room id is a UUID, as `crypto.randomUUID()` makes it. */
-const ROOM_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-/** A token is 32 bytes in base64url without padding. */
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 export interface RoomServerOptions {
   store: RoomStore;
@@ -109,21 +111,13 @@ interface Room {
   readonly awareness: awarenessProtocol.Awareness;
   /** Connection → the awareness client ids it controls. */
   readonly conns: Map<WebSocket, Set<number>>;
+  /**
+   * The room's size in bytes, or more: the size at the last load or save,
+   * plus every update applied since. An update only ever adds to the state
+   * by at most its own size, so this is an upper bound.
+   */
+  bytes: number;
   saveTimer: ReturnType<typeof setTimeout> | null;
-}
-
-/** The token in a token message, or null when the message is not one. */
-function readTokenMessage(message: Uint8Array): string | null {
-  try {
-    const decoder = decoding.createDecoder(message);
-    if (decoding.readVarUint(decoder) !== MESSAGE_TOKEN) {
-      return null;
-    }
-    const token = decoding.readVarString(decoder);
-    return TOKEN.test(token) ? token : null;
-  } catch {
-    return null;
-  }
 }
 
 function verifierOf(token: string): string {
@@ -171,11 +165,26 @@ export function parseTrustProxy(raw: string | undefined): boolean | number {
 /** Defaults, with the environment variables that change them. */
 export function roomLimitsFromEnv(): Omit<RoomServerOptions, "store"> {
   const env = process.env;
+  const maxMessageBytes = positiveInt(
+    env.MAX_MESSAGE_BYTES,
+    ROOM_SIZE.messageBytes,
+  );
+  const maxRoomBytes = positiveInt(env.MAX_ROOM_BYTES, ROOM_SIZE.roomBytes);
+  if (
+    maxMessageBytes < ROOM_SIZE.messageBytes ||
+    maxRoomBytes < ROOM_SIZE.roomBytes
+  ) {
+    logger.warn(
+      { maxMessageBytes, maxRoomBytes, protocol: ROOM_SIZE },
+      "caps below the protocol's size table: the editor lets users make " +
+        "records and rooms this relay refuses",
+    );
+  }
   return {
     maxRooms: positiveInt(env.MAX_ROOMS, 1000),
     maxPeersPerRoom: positiveInt(env.MAX_ROOM_SIZE, 50),
-    maxMessageBytes: positiveInt(env.MAX_MESSAGE_BYTES, 16 << 20),
-    maxRoomBytes: positiveInt(env.MAX_ROOM_BYTES, 64 << 20),
+    maxMessageBytes,
+    maxRoomBytes,
     maxNewRoomsPerIp: countOrOff(env.MAX_NEW_ROOMS_PER_IP, 30),
     maxConnectionsPerIp: countOrOff(env.MAX_CONNECTIONS_PER_IP, 64),
     maxTotalBytes: countOrOff(env.MAX_TOTAL_ROOM_BYTES, 2 * 1024 ** 3),
@@ -211,7 +220,7 @@ export function clientAddress(
 }
 
 /**
- * Serve rooms on `server` under `/yjs/`. Other upgrade paths are left alone.
+ * Serve rooms on `server` under `/yjs/`. Any other upgrade path gets 404.
  */
 export function registerRoomServer(
   server: http.Server,
@@ -221,8 +230,8 @@ export function registerRoomServer(
     store,
     maxRooms = 1000,
     maxPeersPerRoom = 50,
-    maxMessageBytes = 16 << 20,
-    maxRoomBytes = 64 << 20,
+    maxMessageBytes = ROOM_SIZE.messageBytes,
+    maxRoomBytes = ROOM_SIZE.roomBytes,
     saveDelayMs = 2000,
     maxNewRoomsPerIp = 0,
     maxConnectionsPerIp = 0,
@@ -242,6 +251,7 @@ export function registerRoomServer(
     noServer: true,
     maxPayload: maxMessageBytes,
   });
+  wss.on("error", (err) => logger.error({ err }, "websocket server error"));
 
   const save = (room: Room): void => {
     if (room.saveTimer) {
@@ -249,13 +259,17 @@ export function registerRoomServer(
       room.saveTimer = null;
     }
     const state = Y.encodeStateAsUpdate(room.doc);
+    room.bytes = state.byteLength;
     if (state.byteLength > maxRoomBytes) {
       logger.warn(
         { room: room.name, bytes: state.byteLength },
         "room is over the size limit, not saved",
       );
       for (const conn of room.conns.keys()) {
-        conn.close(CLOSE_TOO_LARGE, "room too large");
+        conn.close(
+          CLOSE.roomTooLarge,
+          closeReason("room too large", state.byteLength, maxRoomBytes),
+        );
       }
       return;
     }
@@ -270,7 +284,7 @@ export function registerRoomServer(
         "stored rooms are at the total limit, not saved",
       );
       for (const conn of room.conns.keys()) {
-        conn.close(CLOSE_NO_SPACE, "relay storage full");
+        conn.close(CLOSE.noSpace, "relay storage full");
       }
       return;
     }
@@ -306,6 +320,7 @@ export function registerRoomServer(
       doc,
       awareness,
       conns: new Map(),
+      bytes: stored?.state.byteLength ?? 0,
       saveTimer: null,
     };
     if (!stored) {
@@ -379,6 +394,19 @@ export function registerRoomServer(
     }
   };
 
+  /**
+   * True when an update of `bytes` keeps `room` within `maxRoomBytes`. The
+   * running bound is checked first; only near the cap is the state encoded
+   * to learn its real size.
+   */
+  const fits = (room: Room, bytes: number): boolean => {
+    if (room.bytes + bytes <= maxRoomBytes) {
+      return true;
+    }
+    room.bytes = Y.encodeStateAsUpdate(room.doc).byteLength;
+    return room.bytes + bytes <= maxRoomBytes;
+  };
+
   const join = (room: Room, conn: WebSocket): void => {
     room.conns.set(conn, new Set());
     conn.on("message", (data: ArrayBuffer) => {
@@ -387,8 +415,28 @@ export function registerRoomServer(
         const encoder = encoding.createEncoder();
         switch (decoding.readVarUint(decoder)) {
           case MESSAGE_SYNC:
+            if (
+              decoding.peekVarUint(decoder) !==
+                syncProtocol.messageYjsSyncStep1 &&
+              !fits(room, data.byteLength)
+            ) {
+              conn.close(
+                CLOSE.roomTooLarge,
+                closeReason(
+                  "room too large",
+                  room.bytes + data.byteLength,
+                  maxRoomBytes,
+                ),
+              );
+              return;
+            }
             encoding.writeVarUint(encoder, MESSAGE_SYNC);
-            syncProtocol.readSyncMessage(decoder, encoder, room.doc, conn);
+            if (
+              syncProtocol.readSyncMessage(decoder, encoder, room.doc, conn) !==
+              syncProtocol.messageYjsSyncStep1
+            ) {
+              room.bytes += data.byteLength;
+            }
             if (encoding.length(encoder) > 1) {
               send(conn, encoding.toUint8Array(encoder));
             }
@@ -473,52 +521,68 @@ export function registerRoomServer(
     let room = rooms.get(name);
     if (!room) {
       if (rooms.size >= maxRooms) {
-        ws.close(CLOSE_FULL, "server full");
+        ws.close(CLOSE.full, "server full");
         return;
       }
-      const stored = store.load(name);
-      if (stored && !sameVerifier(stored.verifier, verifier)) {
-        ws.close(CLOSE_DENIED, "denied");
+      // Only the verifier: a refused token must not cost a read of the
+      // whole room.
+      const stored = store.verifierOf(name);
+      if (stored !== null && !sameVerifier(stored, verifier)) {
+        ws.close(CLOSE.denied, "denied");
         return;
       }
-      if (!stored) {
+      if (stored === null) {
         if (maxTotalBytes > 0 && store.totalBytes() >= maxTotalBytes) {
-          ws.close(CLOSE_NO_SPACE, "relay storage full");
+          ws.close(CLOSE.noSpace, "relay storage full");
           return;
         }
         if (!takeNewRoom(ip)) {
-          ws.close(CLOSE_LIMITED, "too many new rooms");
+          ws.close(CLOSE.limited, "too many new rooms");
           return;
         }
       }
       room = openRoom(name, verifier);
     } else if (!sameVerifier(room.verifier, verifier)) {
-      ws.close(CLOSE_DENIED, "denied");
+      ws.close(CLOSE.denied, "denied");
       return;
     }
     if (room.conns.size >= maxPeersPerRoom) {
-      ws.close(CLOSE_FULL, "room full");
+      ws.close(CLOSE.full, "room full");
       return;
     }
     join(room, ws);
   };
 
   server.on("upgrade", (request, socket: Duplex, head: Buffer) => {
+    // A reset before `ws` takes the socket must not end the process either.
+    socket.on("error", () => socket.destroy());
     const url = new URL(request.url ?? "/", "http://relay");
     if (!url.pathname.startsWith("/yjs/")) {
+      // Nothing else on this server takes an upgrade; an unanswered one
+      // would hold its socket open.
+      socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
       return;
     }
     const name = url.pathname.slice("/yjs/".length);
-    if (!ROOM_ID.test(name)) {
+    if (!isRoomId(name)) {
       socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
       return;
     }
     const ip = clientAddress(request, trustProxy);
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.binaryType = "arraybuffer";
+      // `ws` has already sent the close frame (1009, 1007, ...) when it
+      // emits this; the listener only keeps the error from ending the
+      // process.
+      ws.on("error", (err: Error & { code?: string }) => {
+        logger.warn(
+          { room: name, ip, code: err.code, cap: maxMessageBytes },
+          `socket closed: ${err.message}`,
+        );
+      });
       const open = connectionsByIp.get(ip) ?? 0;
       if (maxConnectionsPerIp > 0 && open >= maxConnectionsPerIp) {
-        ws.close(CLOSE_LIMITED, "too many connections");
+        ws.close(CLOSE.limited, "too many connections");
         return;
       }
       connectionsByIp.set(ip, open + 1);
@@ -533,14 +597,14 @@ export function registerRoomServer(
       // The token is the first message, never part of the URL: a URL is
       // written to proxy access logs.
       const timer = setTimeout(
-        () => ws.close(CLOSE_DENIED, "no token"),
+        () => ws.close(CLOSE.denied, "no token"),
         AUTH_TIMEOUT_MS,
       );
       ws.once("message", (data: ArrayBuffer) => {
         clearTimeout(timer);
-        const token = readTokenMessage(new Uint8Array(data));
+        const token = readRoomTokenMessage(new Uint8Array(data));
         if (token === null) {
-          ws.close(CLOSE_DENIED, "no token");
+          ws.close(CLOSE.denied, "no token");
           return;
         }
         admit(ws, name, token, ip);

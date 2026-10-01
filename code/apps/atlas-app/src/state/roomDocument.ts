@@ -25,7 +25,10 @@
 // client may have written a kind this one does not know.
 
 import { ulid } from "ulid";
+import * as Y from "yjs";
 import { documentFrame, type WorldFrame } from "@atlasdraw/geo";
+
+import { ROOM_SIZE, sizeText, type RoomSize } from "@atlasdraw/protocol";
 
 import type { Camera } from "@atlasdraw/data";
 
@@ -37,7 +40,13 @@ import {
   type Document,
   type OverlayEntry,
 } from "./document";
-import { writeScene, type RoomEditor } from "./roomScene";
+import {
+  ELEMENTS_KEY,
+  FILES_KEY,
+  elementRecord,
+  fileRecord,
+  type RoomEditor,
+} from "./roomScene";
 
 import {
   checkBasemap,
@@ -55,7 +64,6 @@ import {
 
 import type { SceneAccess } from "./scene";
 import type { FeatureCollection } from "geojson";
-import type * as Y from "yjs";
 
 export const META_KEY = "meta";
 export const OVERLAYS_KEY = "overlays";
@@ -89,7 +97,11 @@ function blobOf(image: RoomImage): Blob {
   return blob;
 }
 
-/** The valid content of the room, as Document data. */
+/**
+ * The valid content of the room, as Document data, and the ids of the
+ * layer entries left out of it: entries that fail their check, and valid
+ * entries whose payload (features, image) this client cannot read.
+ */
 function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
   const m = maps(doc);
   const reject = (map: Y.Map<unknown>, key: string, what: string): null => {
@@ -107,7 +119,9 @@ function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
   }
   const overlays: OverlayEntry[] = [];
   const images: Record<string, Blob> = {};
+  const skipped = new Set<string>();
   for (const key of m.overlays.keys()) {
+    skipped.add(key);
     const entry =
       checkOverlay(key, m.overlays.get(key)) ??
       reject(m.overlays, key, "layer");
@@ -132,6 +146,7 @@ function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
       continue;
     }
     overlays.push(entry);
+    skipped.delete(key);
   }
   const rawTitle = m.meta.get("title");
   const title =
@@ -139,10 +154,13 @@ function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
       ? DEFAULT_DOCUMENT_TITLE
       : checkTitle(rawTitle) ?? reject(m.meta, "title", "title");
   return {
-    title: title ?? fallbackTitle,
-    overlays,
-    featureCollections,
-    images,
+    content: {
+      title: title ?? fallbackTitle,
+      overlays,
+      featureCollections,
+      images,
+    },
+    skipped,
   };
 }
 
@@ -167,45 +185,200 @@ async function imageRecord(blob: Blob): Promise<RoomImage> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Seed: a room made from the user's map
+// ---------------------------------------------------------------------------
+
+/** One write of a seed, and the bytes it adds to a room doc. */
+interface SeedWrite {
+  readonly bytes: number;
+  write(doc: Y.Doc): void;
+}
+
 /**
- * Make a room from `seed`: its drawing, layers, title, frame, comments,
- * camera and the basemap, written to `doc` as one transaction.
+ * A map planned as a room: writes packed into transactions, each one
+ * message on the wire within the relay's message cap. Or the reason the map
+ * cannot be a room, with its size and the cap.
  */
+export type SeedPlan =
+  | {
+      readonly ok: true;
+      /** The whole seed, in bytes of room state. */
+      readonly bytes: number;
+      readonly batches: ReadonlyArray<readonly SeedWrite[]>;
+    }
+  | { readonly ok: false; readonly reason: string };
+
+/** A seed that fits. */
+export type Seed = Extract<SeedPlan, { ok: true }>;
+
+/** `write` and what it adds, measured in a doc of its own. */
+function measured(write: (doc: Y.Doc) => void): SeedWrite {
+  const scratch = new Y.Doc();
+  scratch.transact(() => write(scratch));
+  const bytes = Y.encodeStateAsUpdate(scratch).byteLength;
+  scratch.destroy();
+  return { bytes, write };
+}
+
+function tooLarge(what: string, bytes: number, cap: number): SeedPlan {
+  return {
+    ok: false,
+    reason: `${what} is ${sizeText(
+      bytes,
+    )}; a shared map takes at most ${sizeText(cap)}.`,
+  };
+}
+
+/**
+ * Plan a room made from `seed`: its frame, title, camera and basemap first,
+ * so a joiner never meets a room without a frame; then each layer with its
+ * payload, the comments and the drawing. A record over its cap in `size`,
+ * or a map over the room cap, gives the reason instead. Nothing connects
+ * here: the caller refuses before joining.
+ */
+export async function planSeed(
+  seed: Document,
+  camera: Camera | null,
+  size: RoomSize = ROOM_SIZE,
+): Promise<SeedPlan> {
+  const state = seed.snapshot();
+  const writes: SeedWrite[] = [];
+  const id = ulid();
+  writes.push(
+    measured((doc) => {
+      const { meta } = maps(doc);
+      meta.set("id", id);
+      meta.set("title", state.title);
+      meta.set("world", state.world);
+      meta.set("camera", camera ?? state.camera);
+      meta.set("basemap", state.basemap);
+    }),
+  );
+
+  for (const entry of state.overlays) {
+    const name = `The layer "${entry.label}"`;
+    if (entry.kind === "raster") {
+      const blob = state.images[entry.id];
+      if (!blob) {
+        // A raster entry goes into the room only with its image.
+        continue;
+      }
+      const image = await imageRecord(blob);
+      if (image.bytes.byteLength > size.rasterBytes) {
+        return tooLarge(name, image.bytes.byteLength, size.rasterBytes);
+      }
+      writes.push(
+        measured((doc) => {
+          maps(doc).images.set(entry.id, image);
+          maps(doc).overlays.set(entry.id, entry);
+        }),
+      );
+      continue;
+    }
+    const fc =
+      entry.kind === "data" ? state.featureCollections[entry.id] : null;
+    // A data layer's entry travels with its features: a peer that read the
+    // entry alone would skip it.
+    const layer = measured((doc) => {
+      if (fc) {
+        maps(doc).features.set(entry.id, fc);
+      }
+      maps(doc).overlays.set(entry.id, entry);
+    });
+    if (fc && layer.bytes > size.featureBytes) {
+      return tooLarge(name, layer.bytes, size.featureBytes);
+    }
+    writes.push(layer);
+  }
+  const entries = new Set(state.overlays.map((e) => e.id));
+  for (const [layerId, fc] of Object.entries(state.featureCollections)) {
+    if (!entries.has(layerId)) {
+      writes.push(measured((doc) => maps(doc).features.set(layerId, fc)));
+    }
+  }
+
+  for (const comment of seed.comments.comments) {
+    writes.push(measured((doc) => seedComments(doc, [comment])));
+  }
+
+  const drawing = sceneEditor(seed.scene);
+  const used = new Set<string>();
+  for (const el of drawing.elements()) {
+    const record = elementRecord(el);
+    writes.push(
+      measured((doc) => doc.getMap(ELEMENTS_KEY).set(record.id, record)),
+    );
+    const fileId = (el as { fileId?: string | null }).fileId;
+    if (fileId && !el.isDeleted) {
+      used.add(fileId);
+    }
+  }
+  const files = drawing.files();
+  for (const fileId of used) {
+    const file = files[fileId];
+    if (!file) {
+      continue;
+    }
+    const record = fileRecord(file);
+    if (record.dataURL.length > size.imageDataUrlChars) {
+      return tooLarge(
+        "An image in the drawing",
+        record.dataURL.length,
+        size.imageDataUrlChars,
+      );
+    }
+    writes.push(measured((doc) => doc.getMap(FILES_KEY).set(fileId, record)));
+  }
+
+  // Pack the writes in order, each transaction one message under the cap.
+  const room = writes.reduce((n, w) => n + w.bytes, 0);
+  if (room > size.roomBytes) {
+    return tooLarge("This map", room, size.roomBytes);
+  }
+  const budget = size.messageBytes - size.frameBytes;
+  const batches: SeedWrite[][] = [];
+  let batch: SeedWrite[] = [];
+  let bytes = 0;
+  for (const w of writes) {
+    if (w.bytes > budget) {
+      return tooLarge("One part of this map", w.bytes, budget);
+    }
+    if (bytes + w.bytes > budget) {
+      batches.push(batch);
+      batch = [];
+      bytes = 0;
+    }
+    batch.push(w);
+    bytes += w.bytes;
+  }
+  batches.push(batch);
+  return { ok: true, bytes: room, batches };
+}
+
+/** Write a planned seed into `doc`: one transaction, one message, per batch. */
+export function writeSeed(doc: Y.Doc, seed: Seed, origin: unknown): void {
+  for (const batch of seed.batches) {
+    doc.transact(() => {
+      for (const w of batch) {
+        w.write(doc);
+      }
+    }, origin);
+  }
+}
+
+/** Plan and write a seed; throws the reason when the map cannot be a room. */
 export async function seedRoom(
   doc: Y.Doc,
   seed: Document,
   origin: unknown,
   camera: Camera | null = null,
 ): Promise<void> {
-  const state = seed.snapshot();
-  const rasters = await Promise.all(
-    state.overlays
-      .filter((e) => e.kind === "raster" && state.images[e.id])
-      .map(
-        async (e) => [e.id, await imageRecord(state.images[e.id]!)] as const,
-      ),
-  );
-  const m = maps(doc);
-  doc.transact(() => {
-    m.meta.set("id", ulid());
-    m.meta.set("title", state.title);
-    m.meta.set("world", state.world);
-    m.meta.set("camera", camera ?? state.camera);
-    m.meta.set("basemap", state.basemap);
-    for (const [id, image] of rasters) {
-      m.images.set(id, image);
-    }
-    for (const entry of state.overlays) {
-      if (entry.kind !== "raster" || m.images.has(entry.id)) {
-        m.overlays.set(entry.id, entry);
-      }
-    }
-    for (const [id, fc] of Object.entries(state.featureCollections)) {
-      m.features.set(id, fc);
-    }
-    seedComments(doc, seed.comments.comments);
-    writeScene(doc, sceneEditor(seed.scene), origin);
-  }, origin);
+  const plan = await planSeed(seed, camera);
+  if (!plan.ok) {
+    throw new Error(plan.reason);
+  }
+  writeSeed(doc, plan, origin);
 }
 
 /** The drawing of a SceneAccess, as the scene writer reads an editor. */
@@ -256,7 +429,14 @@ export function bindRoomDocument(
   origin: unknown,
 ): { document: Document; unbind: () => void } {
   const m = maps(doc);
-  const content = readContent(doc);
+  const read = readContent(doc);
+  const content = read.content;
+  /**
+   * Layer entries in the room that this client left out of its Document.
+   * toRoom never deletes one: a newer client may have written a kind or a
+   * geometry this one does not know, and its user did not remove it.
+   */
+  let skipped = read.skipped;
   const camera: Camera = checkCamera(m.meta.get("camera")) ?? DEFAULT_CAMERA;
   let world = checkWorld(m.meta.get("world")) as WorldFrame | null;
   if (!world) {
@@ -299,10 +479,11 @@ export function bindRoomDocument(
     try {
       if (Array.from(tr.changed.keys()).some((type) => watched.has(type))) {
         const next = readContent(doc, document.snapshot().title);
-        for (const blob of Object.values(next.images)) {
+        skipped = next.skipped;
+        for (const blob of Object.values(next.content.images)) {
           known.add(blob);
         }
-        document.dispatch({ type: "replace-content", ...next });
+        document.dispatch({ type: "replace-content", ...next.content });
         const basemap = readBasemap(doc);
         if (basemap) {
           document.dispatch({ type: "set-basemap", id: basemap });
@@ -339,10 +520,10 @@ export function bindRoomDocument(
         }
         m.overlays.set(entry.id, entry);
       }
-      // Only an entry this client could read was removed by its user; an
-      // entry it skipped stays for the clients that can read it.
+      // Only an entry this client showed can have been removed by its
+      // user; an entry it skipped stays for the clients that can read it.
       for (const key of Array.from(m.overlays.keys())) {
-        if (!ids.has(key) && checkOverlay(key, m.overlays.get(key))) {
+        if (!ids.has(key) && !skipped.has(key)) {
           m.overlays.delete(key);
           m.images.delete(key);
         }

@@ -19,14 +19,18 @@ import {
   currentDocument,
   openDocument,
 } from "../state/document";
-import { isRoomDocument, type RoomTransport } from "../state/room";
+import {
+  isRoomDocument,
+  type RoomTransport,
+  type TransportEvents,
+} from "../state/room";
 import { seedRoom } from "../state/roomDocument";
 import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
 
 import { testSession } from "../session/__tests__/sessionFixture";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
-import { useRoom } from "./useRoom";
+import { roomConnection, roomProblem, useRoom } from "./useRoom";
 
 import type { AppConfig } from "../config/app-config";
 import type { PersistenceStore } from "../state/persistence";
@@ -71,6 +75,23 @@ function memoryRelay() {
     };
   };
   return { server, transport };
+}
+
+/** A memory relay whose connection the test can close, as a relay would. */
+function closableRelay() {
+  const relay = memoryRelay();
+  let events: TransportEvents | null = null;
+  const transport: RoomTransport = (args) => {
+    events = args.events;
+    return relay.transport(args);
+  };
+  return {
+    ...relay,
+    transport,
+    close(code: number, reason = "") {
+      events?.closed(code, reason);
+    },
+  };
 }
 
 /** The editor's session; a new one for every case. */
@@ -255,6 +276,95 @@ describe("useRoom", () => {
     expect(currentDocument().snapshot().title).toBe("Mine");
     expect(fake.all().map((e) => e.id)).toEqual(["own"]);
     expect(saved.filter((t) => t !== "Mine")).toEqual([]);
+  });
+
+  it("start() on a map over the size cap says why, and makes no room", async () => {
+    const relay = memoryRelay();
+    const fake = makeFakeExcalidraw([rect("own")] as never);
+    const own = createDocument(
+      { title: "Mine" },
+      { elements: () => fake.all() as never, files: () => ({}) },
+    );
+    own.dispatch({
+      type: "add-data-layer",
+      id: "dl:big",
+      label: "Parcels",
+      style: {},
+      fc: {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [13.4, 52.5] },
+            properties: { note: "x".repeat(16 << 20) },
+          },
+        ],
+      },
+    });
+    openDocument(own);
+
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
+    );
+    let refusal: unknown = null;
+    await act(async () => {
+      await result.current.start().catch((err: unknown) => {
+        refusal = err;
+      });
+    });
+
+    expect(String(refusal)).toMatch(/Parcels.*16\.0 MB.*15\.0 MB/);
+    expect(result.current.room).toBeNull();
+    expect(window.location.hash).toBe("");
+    expect(relay.server.getMap("meta").size).toBe(0);
+    expect(currentDocument()).toBe(own);
+  });
+
+  it("a refusal after joining says, with the sizes, that edits are no longer saved", async () => {
+    const relay = closableRelay();
+    await seedRoom(relay.server, createDocument({ title: "Shared" }), "host");
+    window.history.replaceState(null, "", `/${roomFragment(newRoomLink())}`);
+    const fake = makeFakeExcalidraw();
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
+    );
+    await waitFor(() => expect(result.current.status).toBe("joined"));
+    expect(roomConnection(result.current)).toBeNull();
+
+    act(() => relay.close(4413, "room too large: 70000 > 65536"));
+
+    expect(result.current.status).toBe("too-large");
+    const problem = roomProblem(result.current) ?? "";
+    expect(problem).toMatch(/68\.4 KB.*64\.0 KB/);
+    expect(problem).toMatch(/no longer saved/);
+    expect(roomConnection(result.current)).toMatch(/not saved/i);
+  });
+
+  it("shows connecting, and offline after a drop, in the status line", async () => {
+    const relay = closableRelay();
+    await seedRoom(relay.server, createDocument({ title: "Shared" }), "host");
+    window.history.replaceState(null, "", `/${roomFragment(newRoomLink())}`);
+    const fake = makeFakeExcalidraw();
+    const { result } = renderHook(() =>
+      useRoom(fake.api, null, {
+        transport: relay.transport,
+        persistence: session.persistence,
+      }),
+    );
+    expect(roomConnection(result.current)).toMatch(/connecting/i);
+    await waitFor(() => expect(result.current.status).toBe("joined"));
+
+    act(() => relay.close(1006));
+
+    expect(result.current.status).toBe("offline");
+    expect(roomConnection(result.current)).toMatch(/offline/i);
+    expect(roomProblem(result.current)).toBeNull();
   });
 
   it("says why a link that is not a room link cannot be joined", () => {

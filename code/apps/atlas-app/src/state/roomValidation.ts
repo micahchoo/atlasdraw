@@ -34,15 +34,11 @@
 
 import { z } from "zod";
 
-import { IMAGE_MIME_TYPES, MAX_ALLOWED_FILE_BYTES } from "@atlasdraw/common";
-import {
-  CameraSchema,
-  RASTER_MAX_DIM,
-  ULIDSchema,
-  WorldFrameSchema,
-} from "@atlasdraw/data";
+import { IMAGE_MIME_TYPES } from "@atlasdraw/common";
+import { CameraSchema, ULIDSchema, WorldFrameSchema } from "@atlasdraw/data";
 import {
   COMMENT_SCHEMA_VERSION,
+  ROOM_SIZE,
   normalizeAnchor,
   type CommentAnchor,
   type CommentSchemaV1,
@@ -75,10 +71,10 @@ export const ROOM_LIMITS = {
   title: 500,
   /** Features of one data layer. */
   features: 250_000,
-  /** Characters of a drawing file's data URL: Excalidraw's file cap in base64. */
-  fileDataUrl: Math.ceil((MAX_ALLOWED_FILE_BYTES * 4) / 3) + 128,
-  /** Bytes of a raster image: an RGBA picture at the raster size cap. */
-  rasterBytes: RASTER_MAX_DIM * RASTER_MAX_DIM * 4 + (1 << 16),
+  /** Characters of a drawing file's data URL (protocol ROOM_SIZE). */
+  fileDataUrl: ROOM_SIZE.imageDataUrlChars,
+  /** Bytes of a raster image (protocol ROOM_SIZE): fits one relay message. */
+  rasterBytes: ROOM_SIZE.rasterBytes,
 } as const;
 
 // ---------------------------------------------------------------------------

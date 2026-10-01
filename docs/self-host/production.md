@@ -315,8 +315,8 @@ WebSocket with a code and a reason, and the editor tells the user why.
 | `ROOM_SWEEP_INTERVAL_MS` | `3600000` (1 h) | How often the expiry sweep runs. It also runs once at start |
 | `MAX_ROOMS` | `1000` | Rooms in memory at one time (4409) |
 | `MAX_ROOM_SIZE` | `50` | Connections to one room (4409) |
-| `MAX_ROOM_BYTES` | `67108864` (64 MiB) | One room. A larger room is not saved (4413) |
-| `MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | One message from a client |
+| `MAX_ROOM_BYTES` | `67108864` (64 MiB) | One room. An update that would pass it is refused before it is applied (4413); the editor says the map is too large and stops saving |
+| `MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | One message from a client. A larger one closes that socket (1009). Do not set either cap below its default: the editor's limits come from the same table (`@atlasdraw/protocol` `ROOM_SIZE`) |
 | `TRUST_PROXY` | `1` in compose, else `false` | Which proxies can give the client address in `X-Forwarded-For`: `true`, `false` or the number of proxies in front |
 
 The per-address limits use the address that the relay sees. Behind Caddy,

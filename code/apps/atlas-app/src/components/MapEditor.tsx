@@ -46,7 +46,7 @@ import { useMapSelect } from "../hooks/useMapSelect";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
 import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
-import { roomProblem, useRoom } from "../hooks/useRoom";
+import { roomConnection, roomProblem, useRoom } from "../hooks/useRoom";
 import { useSelectionSync } from "../hooks/useSelectionSync";
 import { useServerBackup } from "../hooks/useServerBackup";
 import { useSessionImport } from "../hooks/useSessionImport";
@@ -402,6 +402,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
                 peers={room.peers}
                 self={room.self}
                 onRename={room.rename}
+                connection={roomConnection(room)}
                 onGoTo={(camera) =>
                   map?.jumpTo({
                     center: camera.center,

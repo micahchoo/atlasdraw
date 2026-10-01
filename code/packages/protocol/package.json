@@ -1,7 +1,7 @@
 {
   "name": "@atlasdraw/protocol",
   "version": "0.0.0",
-  "description": "Atlasdraw wire-protocol types: realtime CollabEvent union + RoomKey fragment parser",
+  "description": "Atlasdraw room wire facts: room links and tokens, the size table and close codes, the comment schema",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
