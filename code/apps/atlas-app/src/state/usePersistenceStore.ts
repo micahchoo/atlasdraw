@@ -35,6 +35,13 @@ export type PersistenceState = {
   lastSavedAt: number | null;
   /** True when the last remoteSave failed (IDB ok, server stale). */
   remoteSaveFailed: boolean;
+  /**
+   * False while the autosave reads and opens the user's own map at start.
+   * A room waits for it (hooks/useRoom.ts), so the map the user comes back
+   * to when they leave the room is their own, not the blank one the editor
+   * starts with. True where no autosave runs.
+   */
+  ownMapLoaded: boolean;
   autosaveDispose: (() => void) | null;
   /**
    * T13: Imperative flush wired by MapEditor when it instantiates the
@@ -51,6 +58,7 @@ export type PersistenceState = {
   setAutosaveDispose: (fn: (() => void) | null) => void;
   setForceSave: (fn: () => Promise<void>) => void;
   setRemoteSaveFailed: (v: boolean) => void;
+  setOwnMapLoaded: (v: boolean) => void;
 };
 
 export const usePersistenceStore = create<PersistenceState>()(
@@ -60,6 +68,7 @@ export const usePersistenceStore = create<PersistenceState>()(
     isDraining: false,
     lastSavedAt: null,
     remoteSaveFailed: false,
+    ownMapLoaded: true,
     autosaveDispose: null,
     // Default no-op so calling forceSave() before MapEditor wires it is safe.
     forceSave: () => Promise.resolve(),
@@ -114,6 +123,11 @@ export const usePersistenceStore = create<PersistenceState>()(
     setRemoteSaveFailed: (v) =>
       set((s) => {
         s.remoteSaveFailed = v;
+      }),
+
+    setOwnMapLoaded: (v) =>
+      set((s) => {
+        s.ownMapLoaded = v;
       }),
   })),
 );

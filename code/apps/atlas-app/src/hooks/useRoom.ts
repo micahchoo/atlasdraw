@@ -8,7 +8,9 @@
 //
 // Once the room has joined, the editor opens the room's Document and shows
 // the room's drawing; the user's own document waits in memory and comes
-// back when the editor unmounts. Opening another document leaves the room. Nothing in the room is written to
+// back when the editor unmounts. A room joined before the autosave opened
+// the user's own map waits for it (usePersistenceStore#ownMapLoaded): the
+// map that waits in memory must be theirs, not the blank start. Opening another document leaves the room. Nothing in the room is written to
 // the user's own map: the autosave skips a room's document.
 //
 // Presence: the pointer's place on the map (map.unproject) and the camera
@@ -128,14 +130,28 @@ export function useRoom(
       >;
     } | null = null;
     let detach: (() => void) | null = null;
+    let stopWaiting: () => void = () => {};
 
     const enter = (): void => {
       const roomDocument = room.document;
       if (previous || !roomDocument) {
         return;
       }
-      // Write the user's own map before it leaves the editor.
-      void usePersistenceStore.getState().forceSave();
+      const persistence = usePersistenceStore.getState();
+      if (!persistence.ownMapLoaded) {
+        stopWaiting();
+        stopWaiting = usePersistenceStore.subscribe((state) => {
+          if (state.ownMapLoaded) {
+            stopWaiting();
+            enter();
+          }
+        });
+        return;
+      }
+      // Write the user's unsaved changes before their map leaves the editor.
+      if (persistence.isDirty) {
+        void persistence.forceSave();
+      }
       previous = {
         doc: currentDocument(),
         elements: api.getSceneElementsIncludingDeleted(),
@@ -172,6 +188,7 @@ export function useRoom(
     });
 
     return () => {
+      stopWaiting();
       unsubscribeStatus();
       unsubscribePeers();
       unsubscribeDocument();

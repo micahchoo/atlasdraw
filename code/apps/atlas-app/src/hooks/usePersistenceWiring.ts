@@ -105,6 +105,7 @@ export function usePersistenceWiring(
     let cancelled = false;
     const abort = new AbortController();
     let unsubCamera: () => void = () => {};
+    usePersistenceStore.getState().setOwnMapLoaded(false);
     void (async () => {
       try {
         const loaded = await store.load();
@@ -142,6 +143,8 @@ export function usePersistenceWiring(
         documentNotify.error(
           "Couldn't load your saved map — starting from a blank canvas",
         );
+      } finally {
+        usePersistenceStore.getState().setOwnMapLoaded(true);
       }
     })();
 
@@ -224,6 +227,7 @@ export function usePersistenceWiring(
       unsubDocument();
       unsubBasemap();
       unsubCamera();
+      usePersistenceStore.getState().setOwnMapLoaded(true);
       dispose();
       usePersistenceStore.getState().setAutosaveDispose(null);
       usePersistenceStore.getState().setPersistenceStore(null);

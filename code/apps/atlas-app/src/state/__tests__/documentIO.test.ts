@@ -21,6 +21,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import {
   createDocument,
   currentDocument,
+  openDocument,
   type Document,
   type RasterCorners,
 } from "../document";
@@ -506,6 +507,35 @@ describe("loadDocument", () => {
     expect(doc).toBeNull();
     expect(currentDocument()).toBe(before);
     expect(fx.api.getSceneElements()).toEqual([]);
+  });
+
+  it("leaves a document that opened while the files were read, such as a room", async () => {
+    const fx = makeFakeExcalidraw();
+
+    const pending = loadDocument(savedDocument(), fx.api);
+    const room = createDocument({ title: "Shared survey" });
+    openDocument(room);
+
+    expect(await pending).toBeNull();
+    expect(currentDocument()).toBe(room);
+    expect(fx.api.getSceneElements()).toEqual([]);
+  });
+
+  it("of two opens, the later one wins, whichever finishes first", async () => {
+    const fx = makeFakeExcalidraw();
+    const second: AtlasdrawDocument = {
+      ...savedDocument(),
+      manifest: { ...savedDocument().manifest, title: "Second" },
+    };
+
+    const results = await Promise.all([
+      loadDocument(savedDocument(), fx.api),
+      loadDocument(second, fx.api),
+    ]);
+
+    expect(results[0]).toBeNull();
+    expect(currentDocument()).toBe(results[1]);
+    expect(currentDocument().snapshot().title).toBe("Second");
   });
 
   it("hands Excalidraw the drawing as one step that undo does not take back", async () => {

@@ -9,7 +9,11 @@ import * as Y from "yjs";
 
 import { newRoomLink, roomFragment } from "@atlasdraw/protocol";
 
+import type { AtlasdrawDocument } from "@atlasdraw/data";
+
 import * as appConfig from "../config/app-config";
+import { toFile } from "../state/documentIO";
+import * as persistenceModule from "../state/persistence";
 import {
   createDocument,
   currentDocument,
@@ -20,9 +24,11 @@ import { isRoomDocument, type RoomTransport } from "../state/room";
 import { seedRoom } from "../state/roomDocument";
 import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
 
+import { usePersistenceWiring } from "./usePersistenceWiring";
 import { useRoom } from "./useRoom";
 
 import type { AppConfig } from "../config/app-config";
+import type { PersistenceStore } from "../state/persistence";
 
 function rect(id: string) {
   return {
@@ -168,6 +174,68 @@ describe("useRoom", () => {
       "shared",
     ]);
     expect(currentDocument().snapshot().title).toBe("From a file");
+  });
+
+  it("a room link opened before the autosaved map loaded: leaving returns the user's own map, and it is never overwritten", async () => {
+    const relay = memoryRelay();
+    vi.spyOn(roomModule, "relayTransport").mockReturnValue(relay.transport);
+    const host = createDocument(
+      { title: "Shared survey" },
+      { elements: () => [rect("shared")] as never, files: () => ({}) },
+    );
+    await seedRoom(relay.server, host, "host");
+    const link = newRoomLink();
+    window.history.replaceState(null, "", `/${roomFragment(link)}`);
+
+    // The autosave holds the user's own map; reading it is slow.
+    const ownFile = toFile(
+      createDocument(
+        { title: "Mine" },
+        { elements: () => [rect("own")] as never, files: () => ({}) },
+      ),
+    );
+    let finishLoad: (doc: AtlasdrawDocument) => void = () => {};
+    const saved: string[] = [];
+    const store = {
+      load: () =>
+        new Promise<AtlasdrawDocument>((resolve) => {
+          finishLoad = resolve;
+        }),
+      save: vi.fn(async (doc: AtlasdrawDocument) => {
+        saved.push(doc.manifest.title);
+      }),
+      onDirty: () => () => {},
+      markDirty: () => {},
+      isDirty: () => false,
+      remoteSaveFailed: () => false,
+      close: async () => {},
+    } as unknown as PersistenceStore;
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      store,
+    );
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(() => {});
+
+    // What MapEditor does: the autosave wiring and the room, one editor.
+    const fake = makeFakeExcalidraw();
+    const notify = { error: vi.fn() };
+    const { result, unmount } = renderHook(() => {
+      usePersistenceWiring(fake.api, notify);
+      return useRoom(fake.api, null);
+    });
+    await waitFor(() => expect(result.current.room).not.toBeNull());
+    // The room is ready before the autosave is.
+    await new Promise((r) => setTimeout(r, 20));
+    await act(async () => {
+      finishLoad(ownFile);
+    });
+    await waitFor(() => expect(isRoomDocument(currentDocument())).toBe(true));
+    expect(fake.all().map((e) => e.id)).toEqual(["shared"]);
+
+    unmount();
+
+    expect(currentDocument().snapshot().title).toBe("Mine");
+    expect(fake.all().map((e) => e.id)).toEqual(["own"]);
+    expect(saved.filter((t) => t !== "Mine")).toEqual([]);
   });
 
   it("says why a link that is not a room link cannot be joined", () => {
