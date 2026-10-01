@@ -18,7 +18,7 @@ import type {
   PointerDownState,
 } from "@atlasdraw/excalidraw/types";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** True when a pointer-up ends a plain selection-tool click on no drawing. */
 export function isClickOnEmptyCanvas(

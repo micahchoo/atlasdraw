@@ -13,7 +13,7 @@
 import { getBasemap, type BasemapConfig } from "./BasemapRegistry";
 import { buildStyle } from "./style-builder";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /**
  * Thrown by resolveStyle when a basemap config has `requiresRemote: true` and

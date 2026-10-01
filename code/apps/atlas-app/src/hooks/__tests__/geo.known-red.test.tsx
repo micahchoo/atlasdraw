@@ -50,7 +50,7 @@ import { createViewStore } from "../../session/view";
 
 import { FakeMercatorMap } from "./fakeMercatorMap";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 beforeAll(() => {
   if (!window.matchMedia) {

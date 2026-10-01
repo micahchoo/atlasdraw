@@ -15,7 +15,7 @@ import { useCommandKeys } from "./useCommandKeys";
 
 import type { Command } from "./commands";
 import type { EditorSession } from "../session/EditorSession";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 function fireKey(
   init: KeyboardEventInit,

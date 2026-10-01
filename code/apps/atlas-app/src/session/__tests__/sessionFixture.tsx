@@ -11,7 +11,7 @@ import { editorScene } from "../../state/scene";
 import { createSession, type EditorSession } from "../EditorSession";
 import { SessionProvider } from "../SessionContext";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export function testSession(
   options: { map?: maplibregl.Map | null } = {},

@@ -12,7 +12,7 @@ import React, { useEffect, useReducer } from "react";
 import styles from "../styles/CursorOverlay.module.css";
 
 import type { Peer } from "../state/room";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface CursorOverlayProps {
   map: Pick<maplibregl.Map, "project" | "on" | "off"> | null;

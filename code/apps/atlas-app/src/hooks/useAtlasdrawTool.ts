@@ -39,7 +39,7 @@ import { currentDocument } from "../state/document";
 
 import type { ViewStore } from "../session/view";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface UseAtlasdrawToolResult {
   /** Currently active tool, or null when no atlas-tool is engaged. */

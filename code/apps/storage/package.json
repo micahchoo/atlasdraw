@@ -14,7 +14,7 @@
     "@aws-sdk/client-s3": "^3",
     "@sentry/node": "10.69.0",
     "better-sqlite3": "^11",
-    "fastify": "^5.2.0",
+    "fastify": "^5.12.5",
     "nanoid": "^5",
     "pg": "^8",
     "pino": "10.3.1",

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 import {
   __resetPmtilesProtocolForTests,
@@ -12,9 +12,7 @@ import {
 // reference to `addProtocol` resolves to our spy.
 vi.mock("maplibre-gl", () => {
   return {
-    default: {
-      addProtocol: vi.fn(),
-    },
+    addProtocol: vi.fn(),
   };
 });
 

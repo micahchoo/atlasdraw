@@ -12,7 +12,7 @@
 // the "2x" export is a stretched screenshot.
 
 import { exportToCanvas } from "@atlasdraw/excalidraw";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -127,7 +127,7 @@ export async function renderMapOffscreen(
       Math.ceil(width * pixelRatio),
       Math.ceil(height * pixelRatio),
     ],
-    preserveDrawingBuffer: true,
+    canvasContextAttributes: { preserveDrawingBuffer: true },
     interactive: false,
     attributionControl: false,
     fadeDuration: 0,

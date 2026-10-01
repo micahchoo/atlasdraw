@@ -10,7 +10,7 @@ import { exportPNG, type PngPixelRatio } from "../lib/export";
 import { creditLine } from "../lib/tileLayers";
 import { currentDocument } from "../state/document";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface ExportPNGNotify {
   error: (msg: string) => void;

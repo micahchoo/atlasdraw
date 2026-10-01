@@ -18,7 +18,7 @@ import { setCameraRotation } from "@atlasdraw/basemap";
 
 import { FakeMercatorMap } from "./__tests__/fakeMercatorMap";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /**
  * The screen angle of geographic east, degrees, y-down: project two points a

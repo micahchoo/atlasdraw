@@ -22,7 +22,7 @@ import { ToastProvider } from "../ToastProvider";
 
 import { createDocument, openDocument } from "../../state/document";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Mocks (hoisted)

@@ -30,7 +30,7 @@ import { loadUnitSystem, saveUnitSystem } from "../state/measure";
 import { focusOrigin } from "./focusReturn";
 
 import type { ExportFormat } from "../components/ExportDialog";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** A yes-or-no question, in the user's words. */
 export interface Question {

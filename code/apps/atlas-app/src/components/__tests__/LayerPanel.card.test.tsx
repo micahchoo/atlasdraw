@@ -39,7 +39,7 @@ import { makeFakeExcalidraw } from "../../state/__tests__/fixtures/documentWorld
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 
 /** Three parcels with properties, so the attribute preview has something real. */

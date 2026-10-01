@@ -53,7 +53,7 @@ import { editorOf } from "../state/roomScene";
 
 import type { ViewStore } from "../session/view";
 import type { PersistenceStateStore } from "../state/persistenceState";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface RoomSession {
   /** Whether this editor offers rooms at all. */

@@ -17,7 +17,7 @@ import styles from "../styles/CollarShell.module.css";
 
 import { GraticuleTicks } from "./GraticuleTicks";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 interface CollarShellProps {
   /** Live map — drives the graticule tick labels. */

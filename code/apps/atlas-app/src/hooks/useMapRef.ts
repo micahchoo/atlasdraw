@@ -16,7 +16,7 @@
 
 import { useRef, useState, useCallback } from "react";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface UseMapRefReturn {
   mapRef: React.MutableRefObject<maplibregl.Map | null>;

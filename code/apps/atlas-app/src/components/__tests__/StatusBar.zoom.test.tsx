@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { StatusBar } from "../StatusBar";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 afterEach(cleanup);
 

@@ -30,7 +30,7 @@ import {
   type StyleTarget,
 } from "../lib/mapOverlays";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** One reconciler per map, so a remount does not lose what is on the map. */
 const reconcilers = new WeakMap<object, MapOverlays>();

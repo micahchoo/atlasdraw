@@ -26,7 +26,7 @@ import { createSession, type EditorSession } from "./EditorSession";
 import { openMap, openSceneFile, saveMap } from "./fileActions";
 
 import type { PersistenceStore } from "../state/persistence";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** The picker: what Save wrote, and what Open will hand back. */
 function fakeDisk(session: EditorSession) {

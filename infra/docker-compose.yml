@@ -41,8 +41,9 @@ services:
       BLOB_REGION: ${BLOB_REGION:-us-east-1}
       BLOB_FORCE_PATH_STYLE: ${BLOB_FORCE_PATH_STYLE:-true}
       PUBLIC_URL: https://${PUBLIC_DOMAIN}
-      # One hop: Caddy. Lets the limiters see the real client address.
-      TRUST_PROXY: "1"
+      # Caddy, on this private compose network. Lets the limiters see the real
+      # client address. Storage refuses a hop count (apps/storage/src/config.ts).
+      TRUST_PROXY: "loopback,uniquelocal"
       # Limits. Each default equals the server's default
       # (docs/self-host/production.md "Storage limits"). Never set one to an
       # empty value: an empty number reads as 0, which means "no limit".

@@ -15,7 +15,7 @@ import { creditLine } from "../lib/tileLayers";
 import { useDocument } from "../state/document";
 import styles from "../styles/StatusBar.module.css";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Helpers

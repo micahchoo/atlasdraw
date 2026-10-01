@@ -34,7 +34,7 @@
 
 import { useEffect } from "react";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Canonical scrollZoom math: matches MapLibre's internal wheel-handler at
  *  default speed (`scrollZoom` enabled with default options). */

@@ -14,8 +14,10 @@ import {
 } from "@atlasdraw/basemap";
 
 import { getAppConfig } from "../config/app-config";
+// For its effect: MapLibre's worker URL, set before the first map is made.
+import "../lib/maplibreWorker";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export function useBasemapStyle(
   map: maplibregl.Map | null,

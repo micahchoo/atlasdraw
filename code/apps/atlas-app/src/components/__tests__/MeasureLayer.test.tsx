@@ -30,7 +30,7 @@ import {
 } from "../../session/__tests__/sessionFixture";
 import { MeasureLayer } from "../MeasureLayer";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // jsdom 22 has no PointerEvent, so React would read no clientX.
 if (typeof globalThis.PointerEvent === "undefined") {

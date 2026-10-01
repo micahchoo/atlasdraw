@@ -29,10 +29,12 @@ const ROUTES: Record<string, string> = {
 };
 
 const KB = 1024;
-// Measured 2026-10-01 after the import split: editor 960 KB, viewer 870 KB.
+// Measured 2026-10-01 with maplibre-gl 6.11 (the upgrade costs ~49 KB:
+// v6 ships a main and a shared module where v4 shipped one file):
+// editor 1009 KB, viewer 920 KB.
 const BUDGETS: Record<string, number> = {
-  editor: 990 * KB,
-  viewer: 900 * KB,
+  editor: 1040 * KB,
+  viewer: 950 * KB,
 };
 
 const dist = resolve(process.argv[2] ?? "dist");

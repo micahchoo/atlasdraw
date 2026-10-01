@@ -46,7 +46,7 @@ import {
 
 import type { CommentsLayer } from "../../state/comments";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Open a new document; its comments are the layer the overlay reads. */
 function makeLayer(): CommentsLayer {

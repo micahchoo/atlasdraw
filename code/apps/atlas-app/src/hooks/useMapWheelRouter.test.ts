@@ -12,7 +12,7 @@ import { renderHook, cleanup } from "@testing-library/react";
 
 import { useMapWheelRouter } from "./useMapWheelRouter";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 function makeMockMap(zoom = 10) {
   return {

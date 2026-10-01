@@ -33,7 +33,7 @@ import { focusComment } from "../state/commentFocus";
 import { isOpenThread } from "./useOpenThreadCount";
 
 import type { Comment, CommentsLayer } from "../state/comments";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Group id + heading for the comments source. */
 export const COMMENT_SEARCH_SOURCE_ID = "comments";

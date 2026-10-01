@@ -19,7 +19,7 @@ import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import type { LocalPoint } from "@atlasdraw/math";
 import type { WorldFrame } from "@atlasdraw/geo";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 function mulberry32(seed: number): () => number {
   let a = seed;

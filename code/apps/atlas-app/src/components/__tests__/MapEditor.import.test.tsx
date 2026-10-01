@@ -31,7 +31,7 @@ import {
 
 import type { DocumentCommand } from "../../state/document";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** The command an import or a convert sends to the open document. */
 type AddDataLayer = Extract<DocumentCommand, { type: "add-data-layer" }>;

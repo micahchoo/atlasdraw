@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 
 import styles from "../styles/GraticuleTicks.module.css";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 

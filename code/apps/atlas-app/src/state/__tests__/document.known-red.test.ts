@@ -58,7 +58,7 @@ import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 
 import type { FeatureCollection } from "geojson";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // usePersistenceWiring's own IDB name (state/persistence.ts).
 const DB_NAME = "atlasdraw-autosave";

@@ -25,7 +25,7 @@ import type { LayerLegendEntry } from "./print-pdf";
 import type { OverlayEntry } from "../state/document";
 import type { AnnotationRow } from "../state/annotations";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** A layer the legend can describe: a map layer or an annotation row. */
 export type LegendSource = OverlayEntry | AnnotationRow;

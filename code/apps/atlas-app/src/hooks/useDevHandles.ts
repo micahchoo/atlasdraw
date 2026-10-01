@@ -14,7 +14,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import { seedShapes } from "../lib/devSeedShapes";
 
 import type { EditorSession } from "../session/EditorSession";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export function useDevHandles(
   session: EditorSession,

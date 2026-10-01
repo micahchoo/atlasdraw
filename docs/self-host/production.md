@@ -302,7 +302,10 @@ an empty value: an empty number reads as `0`, which turns that limit off.
 | `SHUTDOWN_TIMEOUT_MS`                    | `25000`                | How long a stop waits for requests in flight. Compose gives the container 30 s                                                                        |
 
 An IPv6 client counts by its /64 for every per-address limit. Behind Caddy
-the address is the client's (`TRUST_PROXY=1`). People behind one address
+the address is the client's (`TRUST_PROXY=loopback,uniquelocal`: trust a
+proxy on the private compose network). Storage refuses a hop count such as
+`1`; its HTTP server (Fastify 5.12 and later) cannot check a proxy by hop
+count. People behind one address
 share the limits. Many addresses together can still fill `MAX_TOTAL_BYTES`;
 then every owner's growing save gets `507` until you raise the cap or
 delete maps. If only your team should create maps, put the site behind

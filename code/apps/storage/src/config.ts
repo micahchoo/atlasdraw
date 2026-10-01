@@ -26,19 +26,29 @@ const BaseSchema = z.object({
   SENTRY_DSN: z.string().optional(),
   // Which proxies may set X-Forwarded-For (Fastify `trustProxy`). Off by
   // default: with no proxy in front, a client could otherwise choose its own
-  // IP and step around the rate limiter. Behind one reverse proxy, set "1".
-  // Accepts "true", "false", a hop count, or a comma-separated IP/CIDR list.
+  // IP and step around the rate limiter. Accepts "true", "false", or a
+  // comma-separated list of IPs, CIDRs and the names loopback, linklocal and
+  // uniquelocal. Behind a proxy on a private network (the compose files),
+  // set "loopback,uniquelocal".
+  //
+  // A hop count is refused. Fastify 5.12 trusts no address for one (it
+  // cannot tell the proxy from a client that forged the header), so "1"
+  // would put every client behind the proxy at the proxy's address.
   TRUST_PROXY: z
     .string()
     .optional()
-    .transform((v): boolean | number | string => {
+    .refine((v) => v === undefined || !/^\d+$/.test(v), {
+      message:
+        'a hop count is not accepted; name the proxy instead, e.g. "loopback,uniquelocal"',
+    })
+    .transform((v): boolean | string => {
       if (v === undefined || v === "" || v.toLowerCase() === "false") {
         return false;
       }
       if (v.toLowerCase() === "true") {
         return true;
       }
-      return /^\d+$/.test(v) ? Number(v) : v;
+      return v;
     }),
   // Per-IP fixed-window rate limit for the HTTP API. RATE_LIMIT_MAX requests
   // per RATE_LIMIT_WINDOW_MS window; /health is always exempt. Set

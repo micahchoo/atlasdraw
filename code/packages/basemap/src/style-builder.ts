@@ -5,7 +5,7 @@
 // caller-provided path. A config whose styleFile is not in ./styles/ gets a
 // minimal valid placeholder style.
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 import type { BasemapConfig } from "./BasemapRegistry";
 

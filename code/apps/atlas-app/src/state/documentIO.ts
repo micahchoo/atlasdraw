@@ -60,7 +60,7 @@ import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Save

@@ -57,7 +57,7 @@ import styles from "../styles/MeasureLayer.module.css";
 
 import { ToolOptionsBar } from "./ToolOptionsBar";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** A pointer that moves less than this between down and up has clicked. */
 const CLICK_SLOP_PX = 4;

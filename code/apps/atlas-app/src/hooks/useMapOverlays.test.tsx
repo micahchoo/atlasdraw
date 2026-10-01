@@ -17,7 +17,7 @@ import { FakeMapLibre } from "../lib/__tests__/fixtures/fakeMapLibre";
 
 import { useMapOverlays, useOverlayReport } from "./useMapOverlays";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 
 /** A fake map that also fires "styledata", and can load a new basemap. */

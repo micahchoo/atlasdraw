@@ -30,7 +30,7 @@ import {
 } from "./commands";
 import { bindingId, keyLabels } from "./keys";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** A map that counts its zoom steps. */
 function fakeMap() {

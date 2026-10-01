@@ -35,7 +35,7 @@ import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 
 import type { PersistenceStateStore } from "./persistenceState";
 import type { StorageClient } from "../services/createHttpStorageClient";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface MapActionContext {
   api: ExcalidrawImperativeAPI;
