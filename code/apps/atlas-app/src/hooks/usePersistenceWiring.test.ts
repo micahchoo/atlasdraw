@@ -5,7 +5,7 @@
 // MapEditor.atlasdraw-export.test.tsx exercising saveAtlasDocument/
 // openAtlasDocument, which read the same usePersistenceStore contract.
 //
-// createPersistenceStore/startAutoSave/hydrate are mocked so this test
+// createPersistenceStore/startAutoSave/loadDocument are mocked so this test
 // verifies the WIRING (what usePersistenceWiring does with the store's
 // lifecycle) rather than re-testing persistence.ts's own IDB round-trip,
 // which persistence.test.ts already covers.
@@ -22,7 +22,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
 import * as persistenceModule from "../state/persistence";
-import * as hydrateModule from "../state/hydrate";
+import * as documentIO from "../state/documentIO";
 import * as appConfigModule from "../config/app-config";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
@@ -124,15 +124,15 @@ describe("usePersistenceWiring", () => {
     expect(usePersistenceStore.getState().persistenceStore).toBe(store);
   });
 
-  it("hydrates the scene when load() resolves a document", async () => {
+  it("opens the loaded document when load() resolves one", async () => {
     const store = makeFakeStore({ load: vi.fn(async () => FAKE_DOC) });
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
       store,
     );
     vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
     const hydrateSpy = vi
-      .spyOn(hydrateModule, "hydrate")
-      .mockResolvedValue(undefined);
+      .spyOn(documentIO, "loadDocument")
+      .mockResolvedValue(undefined as never);
 
     renderHook(() =>
       usePersistenceWiring(fakeExcalidrawAPI, { error: vi.fn() }),

@@ -35,7 +35,7 @@ import { useLayerRegistrySync } from "../useLayerRegistrySync";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
 import { useRasterImageStore } from "../../state/useRasterImageStore";
-import { hydrate } from "../../state/hydrate";
+import { loadDocument } from "../../state/documentIO";
 import { useSceneBinding, useSceneStore } from "../../state/scene";
 import { annotationRows } from "../../state/annotations";
 import { reconcileDataLayers } from "../../lib/dataLayerRender";
@@ -407,7 +407,7 @@ describe("raster layers follow the registry onto the map", () => {
         files: new Map([["img-b", new Blob(["png-b"])]]),
       };
       await act(async () => {
-        await hydrate(docB, api);
+        await loadDocument(docB, api);
       });
 
       expect({

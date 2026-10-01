@@ -21,7 +21,7 @@ import {
 
 import { safeFileName } from "../lib/safeFileName";
 
-import { documentFromExcalidrawJson } from "./selectDocument";
+import { documentFromExcalidrawJson } from "./documentIO";
 
 // ---------------------------------------------------------------------------
 // IndexedDB schema

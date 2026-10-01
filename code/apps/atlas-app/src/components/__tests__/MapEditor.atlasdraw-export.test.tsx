@@ -5,10 +5,10 @@
 //
 // Succeeds the renderCustomUI-cards contract test (atlasdraw-9078): same
 // assertions, now against the extracted handlers instead of dialog cards.
-//   1. saveAtlasDocument calls `persistenceStore.saveToDisk(selectDocument(...))`
+//   1. saveAtlasDocument calls `persistenceStore.saveToDisk(toFile(...))`
 //      then `clearDirty`.
 //   2. openAtlasDocument calls `persistenceStore.openFromDisk()` and on
-//      success hands the loaded doc to `hydrate(...)`.
+//      success hands the loaded doc to `loadDocument(...)`.
 //   3. Both no-op on a null Excalidraw API (pre-mount) or missing store.
 //
 // We test the exported handlers directly rather than mounting MapEditor —
@@ -105,20 +105,17 @@ vi.mock("@atlasdraw/geo", () => ({
   isGeoCustomData: () => false,
 }));
 
-// hydrate is called from openAtlasDocument. Spy on it.
+// loadDocument is called from openAtlasDocument, toFile from
+// saveAtlasDocument. Spy on the first; the second returns a sentinel doc.
 const hydrateSpy = vi.fn();
-vi.mock("../../state/hydrate", () => ({
-  hydrate: (...args: unknown[]) => hydrateSpy(...args),
-}));
-
-// selectDocument is called from saveAtlasDocument. Returns a sentinel doc.
 const sentinelDoc = {
   manifest: { id: "doc-x", layers: [] },
   scene: [],
   layers: new Map(),
 } as unknown as AtlasdrawDocument;
-vi.mock("../../state/selectDocument", () => ({
-  selectDocument: vi.fn(() => sentinelDoc),
+vi.mock("../../state/documentIO", () => ({
+  loadDocument: (...args: unknown[]) => hydrateSpy(...args),
+  toFile: vi.fn(() => sentinelDoc),
 }));
 
 // usePersistenceStore — only `getState()` is used inside the handlers.
@@ -138,12 +135,12 @@ vi.mock("../../state/usePersistenceStore", () => ({
           }
         : null,
       clearDirty: clearDirtyMock,
+      markDirty: vi.fn(),
     }),
   },
 }));
 
-// useLayerRegistryStore — `getState()` is read by saveAtlasDocument via
-// selectDocument; the mocked selectDocument ignores its arg, so a stub is fine.
+// useLayerRegistryStore — MapEditor imports it; the handlers do not read it.
 vi.mock("../../state/layerRegistry", () => ({
   useLayerRegistryStore: { getState: () => ({}) },
 }));

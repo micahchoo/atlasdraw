@@ -6,8 +6,8 @@
 // W3 document owner flips each one to `it` when the fix lands.
 //
 // Everything here runs through the production composition: the real
-// usePersistenceWiring (load -> hydrate -> autosave/forceSave through
-// selectDocument), the real PersistenceStore on fake-indexeddb, the real
+// usePersistenceWiring (load -> loadDocument -> autosave/forceSave through
+// toFile), the real PersistenceStore on fake-indexeddb, the real
 // layer registry, useLayerRegistrySync and useExcalidrawChangeHandler. Only
 // Excalidraw and MapLibre are stand-ins (fixtures/documentWorld.ts).
 //
@@ -35,7 +35,9 @@ import { useExcalidrawChangeHandler } from "../../hooks/useExcalidrawChangeHandl
 import { FakeMercatorMap } from "../../hooks/geoOpFuzz.harness";
 import { useShareLink } from "../../hooks/useShareLink";
 import { createPersistenceStore } from "../persistence";
-import { selectDocument } from "../selectDocument";
+import { createDocument, currentDocument, openDocument } from "../document";
+import { toFile } from "../documentIO";
+import { sceneOf } from "../scene";
 import { loadShareDocument, tokenFromPath } from "../loadShareDocument";
 import { usePersistenceStore } from "../usePersistenceStore";
 import { useLayerRegistryStore } from "../layerRegistry";
@@ -528,6 +530,8 @@ describe("share links", () => {
           status: "saved",
         },
       ]);
+      // The open document saves this drawing.
+      openDocument(createDocument({}, sceneOf(fx.api)));
       fx.api.addFiles([
         {
           id: "img-1",
@@ -547,8 +551,7 @@ describe("share links", () => {
       const client = makeMemoryStorage();
       const { result } = renderHook(() =>
         useShareLink({
-          getDoc: () =>
-            selectDocument(fx.api, useLayerRegistryStore.getState()),
+          getDoc: () => toFile(currentDocument()),
           client,
         }),
       );

@@ -1,22 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// T9 — Persistence wiring.
+// Persistence wiring. When Excalidraw is ready: create the PersistenceStore,
+// load the last autosaved document and open it (documentIO.loadDocument),
+// start autosave, and mirror the dirty and drain state into
+// usePersistenceStore for the "Unsaved" indicator and the share flush.
 //
-// On excalidrawAPI ready: create a PersistenceStore, attempt to load() the
-// last-persisted document from IDB, start auto-save, and register the dirty
-// channel to React state for the MainMenu indicator.
-//
-// Phase 4 W0 (atlasdraw-3601): scene + layers + FCs are hydrated via
-// `hydrate(loaded, excalidrawAPI)` in state/hydrate.ts. The previously
-// observe-only stub left a refreshed page with a blank canvas even when an
-// IDB doc existed; this closes the round-trip gate.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 3). No
-// test covered the autosave debounce/forceSave path directly before this
-// extraction — indirect coverage came from MapEditor.atlasdraw-export.test.tsx
-// exercising saveAtlasDocument/openAtlasDocument, which read the same
-// usePersistenceStore contract. New usePersistenceWiring.test.ts adds direct
-// characterization coverage.
+// What marks the document dirty: a change of the open Document's revision
+// (its layers, payloads, title), a change of the basemap, and, from
+// useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
 import { useEffect } from "react";
 
@@ -24,10 +15,9 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useLayerRegistryStore } from "../state/layerRegistry";
 import { useBasemapStore } from "../state/basemap";
-import { selectDocument } from "../state/selectDocument";
-import { hydrate, restoreCamera } from "../state/hydrate";
+import { currentDocument, followDocument } from "../state/document";
+import { loadDocument, restoreCamera, toFile } from "../state/documentIO";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
@@ -89,8 +79,7 @@ export function usePersistenceWiring(
     // call store.save(getDoc())). useShareLink consumes this via
     // usePersistenceStore to guarantee a fresh snapshot before
     // share-link minting.
-    const getDoc = () =>
-      selectDocument(excalidrawAPI, useLayerRegistryStore.getState());
+    const getDoc = () => toFile(currentDocument());
     usePersistenceStore.getState().setForceSave(async () => {
       try {
         await store.save(getDoc());
@@ -113,7 +102,7 @@ export function usePersistenceWiring(
           return;
         }
         if (loaded) {
-          await hydrate(loaded, excalidrawAPI);
+          await loadDocument(loaded, excalidrawAPI);
           // hydrate moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,
           // for as long as this editor is mounted.
@@ -148,12 +137,16 @@ export function usePersistenceWiring(
       usePersistenceStore.setState({ isDirty: true, isDraining: true });
     });
 
-    // A layer change is a document change. The scene half of dirty tracking
-    // is in useExcalidrawChangeHandler; this is the layer half.
-    const unsubLayers = useLayerRegistryStore.subscribe((state, prev) => {
-      if (state.revision !== prev.revision) {
+    // A command on the open document is an edit. Opening another document
+    // is not; whoever opens one decides whether it needs a save.
+    let followed = currentDocument();
+    let followedRevision = followed.revision;
+    const unsubDocument = followDocument((doc) => {
+      if (doc === followed && doc.revision !== followedRevision) {
         usePersistenceStore.getState().markDirty();
       }
+      followed = doc;
+      followedRevision = doc.revision;
     });
     // The basemap is saved in the manifest, so choosing another one is an
     // edit too.
@@ -189,7 +182,7 @@ export function usePersistenceWiring(
     return () => {
       cancelled = true;
       unsubDirty();
-      unsubLayers();
+      unsubDocument();
       unsubBasemap();
       unsubCamera();
       dispose();

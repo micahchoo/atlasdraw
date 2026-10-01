@@ -93,8 +93,8 @@ import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
-import { selectDocument } from "../state/selectDocument";
-import { hydrate } from "../state/hydrate";
+import { currentDocument } from "../state/document";
+import { loadDocument, toFile } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
   fitMapToContent,
@@ -282,9 +282,7 @@ export async function saveAtlasDocument(
     return;
   }
   try {
-    await store.saveToDisk(
-      selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
-    );
+    await store.saveToDisk(toFile(currentDocument()));
     usePersistenceStore.getState().clearDirty();
     notify?.success("Map saved as .atlasdraw");
   } catch (err) {
@@ -313,11 +311,11 @@ export async function openAtlasDocument(
   try {
     const loaded = await store.openFromDisk();
     if (loaded) {
-      // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
-      // see state/hydrate.ts for ordering + idempotency.
-      await hydrate(loaded, excalidrawAPI);
+      await loadDocument(loaded, excalidrawAPI);
+      // The opened file becomes the autosaved document.
+      usePersistenceStore.getState().markDirty();
       // eslint-disable-next-line no-console
-      console.info("[atlasdraw] document opened + hydrated", {
+      console.info("[atlasdraw] document opened", {
         id: loaded.manifest.id,
         layerCount: loaded.manifest.layers.length,
         sceneLength: loaded.scene.length,
@@ -1472,16 +1470,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           )}
 
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
-          (selectDocument needs the imperative API). Phase 5 collab integration:
+          (the share reads the drawing). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
           firing the read-only generate. Receives the editor's CollabState so
           the Collaborate path reuses the same socket as the editor. */}
           {showShareDialog && excalidrawAPI && (
             <ShareDialog
               onCloseRequest={() => setShowShareDialog(false)}
-              getDoc={() =>
-                selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
-              }
+              getDoc={() => toFile(currentDocument())}
               client={getShareClient()}
               collabState={collabState}
             />
