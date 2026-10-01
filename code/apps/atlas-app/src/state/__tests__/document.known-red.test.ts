@@ -40,7 +40,6 @@ import { toFile } from "../documentIO";
 import { sceneOf } from "../scene";
 import { loadShareDocument, tokenFromPath } from "../loadShareDocument";
 import { usePersistenceStore } from "../usePersistenceStore";
-import { useLayerRegistryStore } from "../layerRegistry";
 import { useMapInstanceStore } from "../mapInstance";
 import { useBasemapStore } from "../basemap";
 import { useSceneBinding, useSceneStore } from "../scene";
@@ -208,10 +207,8 @@ beforeEach(async () => {
   });
   await db.clear("state");
   db.close();
-  const reg = useLayerRegistryStore.getState();
-  for (const id of reg.entries.map((e) => e.id)) {
-    reg.remove(id);
-  }
+  // A new, empty open document for every case.
+  openDocument(createDocument());
   usePersistenceStore.setState({ isDirty: false, isDraining: false });
   useMapInstanceStore.setState({ map: null });
   useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
@@ -345,7 +342,11 @@ describe("dirty tracking", () => {
   it("renaming a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore.getState().renameLayer("dl:wells", "Boreholes"),
+      currentDocument().dispatch({
+        type: "rename-layer",
+        id: "dl:wells",
+        label: "Boreholes",
+      }),
     );
     expect(isDirty()).toBe(true);
   });
@@ -353,23 +354,27 @@ describe("dirty tracking", () => {
   it("restyling a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore
-        .getState()
-        .updateStyle("dl:wells", { fillColor: "#ff0000" }),
+      currentDocument().dispatch({
+        type: "restyle",
+        id: "dl:wells",
+        patch: { fillColor: "#ff0000" },
+      }),
     );
     expect(isDirty()).toBe(true);
   });
 
   it("reordering layers marks the document dirty", async () => {
     await loadedAndClean();
-    const before = useLayerRegistryStore
-      .getState()
-      .entries.filter((e) => e.kind === "data")
+    const before = currentDocument()
+      .snapshot()
+      .overlays.filter((e) => e.kind === "data")
       .map((e) => e.id);
-    act(() => useLayerRegistryStore.getState().reorder(before[0], 1));
-    const after = useLayerRegistryStore
-      .getState()
-      .entries.filter((e) => e.kind === "data")
+    act(() =>
+      currentDocument().dispatch({ type: "reorder", id: before[0], order: 1 }),
+    );
+    const after = currentDocument()
+      .snapshot()
+      .overlays.filter((e) => e.kind === "data")
       .map((e) => e.id);
     expect(after).not.toEqual(before); // the reorder did happen
     expect(isDirty()).toBe(true);
@@ -378,7 +383,8 @@ describe("dirty tracking", () => {
   it("importing a data layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore.getState().registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:schools",
         fc: pointFC(4),
         label: "Schools",
@@ -541,7 +547,8 @@ describe("share links", () => {
         },
       ] as unknown as Parameters<ExcalidrawImperativeAPI["addFiles"]>[0]);
       // ~150 KB of GeoJSON: far over the 32 KiB hash threshold.
-      useLayerRegistryStore.getState().registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:wells",
         fc: pointFC(2000),
         label: "Wells",

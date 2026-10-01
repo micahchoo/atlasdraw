@@ -10,12 +10,12 @@ import {
   type LegendSource,
 } from "../legend";
 
-import type { LayerRegistryEntry } from "../../state/layerRegistry";
+import type { OverlayEntry } from "../../state/document";
 
 function dataLayer(
   id: string,
-  overrides: Partial<Extract<LayerRegistryEntry, { kind: "data" }>> = {},
-): LayerRegistryEntry {
+  overrides: Partial<Extract<OverlayEntry, { kind: "data" }>> = {},
+): OverlayEntry {
   return {
     kind: "data",
     id,
@@ -25,7 +25,7 @@ function dataLayer(
     featureCount: 1,
     style: { fillColor: "#0aa" },
     ...overrides,
-  } as LayerRegistryEntry;
+  } as OverlayEntry;
 }
 
 function annotation(id: string): LegendSource {

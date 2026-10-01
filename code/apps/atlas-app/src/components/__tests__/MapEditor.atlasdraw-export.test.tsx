@@ -140,12 +140,7 @@ vi.mock("../../state/usePersistenceStore", () => ({
   },
 }));
 
-// useLayerRegistryStore — MapEditor imports it; the handlers do not read it.
-vi.mock("../../state/layerRegistry", () => ({
-  useLayerRegistryStore: { getState: () => ({}) },
-}));
-
-// Fake imperative API — the handlers pass this to selectDocument / hydrate.
+// Fake imperative API — the handlers pass this to loadDocument.
 // Identity is what matters; the methods are only called by selectDocument
 // (mocked) so a bare object suffices.
 const fakeAPI = {

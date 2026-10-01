@@ -25,9 +25,12 @@ import type { CommentAnchor } from "@atlasdraw/protocol";
 import { AriaAnnouncer, useAnnouncerStore } from "../components/AriaAnnouncer";
 import { LayerPanel } from "../components/LayerPanel";
 import { CommentsLayer } from "../state/comments";
-import { useLayerRegistryStore } from "../state/layerRegistry";
 
-import { createDocument, openDocument } from "../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../state/document";
 
 import type { FeatureCollection } from "geojson";
 
@@ -57,7 +60,8 @@ async function flush(): Promise<void> {
 
 describe("aria-live: layer-visibility toggle", () => {
   it("toggling a data layer's visibility emits an announcement", async () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:test-1",
       fc: emptyFc(1),
       label: "Roads",

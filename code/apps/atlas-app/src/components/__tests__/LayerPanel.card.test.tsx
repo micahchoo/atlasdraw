@@ -22,11 +22,13 @@ import {
 } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
 import { useMapInstanceStore } from "../../state/mapInstance";
 
-import { createDocument, openDocument } from "../../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
 
@@ -86,7 +88,8 @@ const parcelsFc: FeatureCollection = {
 };
 
 function seedParcels(id = "dl:parcels") {
-  useLayerRegistryStore.getState().registerDataLayer({
+  currentDocument().dispatch({
+    type: "add-data-layer",
     id,
     fc: parcelsFc,
     label: "parcels.geojson",
@@ -109,7 +112,8 @@ function seedMany(n: number, prefix = "layer") {
     ],
   };
   for (let i = 0; i < n; i++) {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: `dl:${prefix}-${i}`,
       fc,
       label: `${prefix} ${i}`,
@@ -163,8 +167,9 @@ describe("data layer card — disclosure", () => {
 
     expect(screen.queryByTestId(`layer-detail-${id}`)).toBeNull();
     expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === id)
-        ?.visible,
+      currentDocument()
+        .snapshot()
+        .overlays.find((e) => e.id === id)?.visible,
     ).toBe(false);
   });
 });
@@ -183,7 +188,8 @@ describe("data layer card — provenance", () => {
   });
 
   it("says 'none' rather than '0' for a clean import", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:clean",
       fc: parcelsFc,
       label: "clean.geojson",
@@ -200,7 +206,8 @@ describe("data layer card — provenance", () => {
 
   it("says 'unknown' rather than guessing for a layer with no import record", () => {
     // Converted annotations and collab-received layers arrive without one.
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:converted",
       fc: parcelsFc,
       label: "Converted shape",
@@ -216,7 +223,8 @@ describe("data layer card — provenance", () => {
   });
 
   it("reports the geometry of the first feature that has one", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:nullfirst",
       // `@types/geojson`'s bare `FeatureCollection` narrows geometry to
       // non-null, but RFC 7946 allows null and `parse()` lets it through — so
@@ -319,7 +327,9 @@ describe("data layer card — the three missing actions", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === id)?.label,
+      currentDocument()
+        .snapshot()
+        .overlays.find((e) => e.id === id)?.label,
     ).toBe("King County Parcels");
     expect(screen.getByText("King County Parcels")).toBeTruthy();
   });
@@ -351,7 +361,9 @@ describe("data layer card — the three missing actions", () => {
     fireEvent.keyDown(input, { key: "Escape" });
 
     expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === id)?.label,
+      currentDocument()
+        .snapshot()
+        .overlays.find((e) => e.id === id)?.label,
     ).toBe("parcels.geojson");
   });
 
@@ -363,12 +375,12 @@ describe("data layer card — the three missing actions", () => {
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
 
     // Still there after the first click — the confirm step is the point.
-    expect(useLayerRegistryStore.getState().entries).toHaveLength(1);
+    expect(currentDocument().snapshot().overlays).toHaveLength(1);
 
     fireEvent.click(screen.getByTestId(`layer-delete-confirm-${id}`));
 
-    expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
-    expect(useDataLayerFCStore.getState().fcs[id]).toBeUndefined();
+    expect(currentDocument().snapshot().overlays).toHaveLength(0);
+    expect(currentDocument().snapshot().featureCollections[id]).toBeUndefined();
   });
 
   it("cancelling the delete confirm leaves the layer alone", () => {
@@ -379,7 +391,7 @@ describe("data layer card — the three missing actions", () => {
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
     fireEvent.click(screen.getByTestId(`layer-delete-cancel-${id}`));
 
-    expect(useLayerRegistryStore.getState().entries).toHaveLength(1);
+    expect(currentDocument().snapshot().overlays).toHaveLength(1);
     expect(screen.getByTestId(`layer-delete-${id}`)).toBeTruthy();
   });
 
@@ -591,9 +603,9 @@ describe("scale (step 6)", () => {
     ).toBe(false);
 
     fireEvent.click(screen.getByTestId("layer-up-dl:Road-5"));
-    const order = useLayerRegistryStore
-      .getState()
-      .entries.filter((e) => e.kind === "data")
+    const order = currentDocument()
+      .snapshot()
+      .overlays.filter((e) => e.kind === "data")
       .slice()
       .sort((a, b) => a.order - b.order)
       .map((e) => e.label);

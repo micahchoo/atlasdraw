@@ -32,9 +32,6 @@ import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useLayerRegistrySync } from "../useLayerRegistrySync";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
-import { useRasterImageStore } from "../../state/useRasterImageStore";
 import { loadDocument } from "../../state/documentIO";
 import { useSceneBinding, useSceneStore } from "../../state/scene";
 import { annotationRows } from "../../state/annotations";
@@ -44,13 +41,17 @@ import { StylePanel } from "../../components/StylePanel";
 import { ToastProvider } from "../../components/ToastProvider";
 import { AriaAnnouncer } from "../../components/AriaAnnouncer";
 
-import { createDocument, openDocument } from "../../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
-import type { RasterCorners } from "../../state/layerRegistry";
+import type { RasterCorners } from "../../state/document";
 
 // ---------------------------------------------------------------------------
 // FakeMapLibre — style state + the 4.7.1 error contract
@@ -314,8 +315,9 @@ function points(values: Array<Record<string, unknown>>): FeatureCollection {
 }
 
 function registerRaster(id: string): void {
-  useRasterImageStore.getState().set(id, new Blob(["png"]));
-  useLayerRegistryStore.getState().registerRasterLayer({
+  currentDocument().dispatch({
+    type: "add-raster-layer",
+    image: new Blob(["png"]),
     id,
     label: id,
     corners: CORNERS,
@@ -360,7 +362,11 @@ describe("raster layers follow the registry onto the map", () => {
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() =>
-      useLayerRegistryStore.getState().setVisibility("rl:sheet", false),
+      currentDocument().dispatch({
+        type: "set-visibility",
+        id: "rl:sheet",
+        visible: false,
+      }),
     );
 
     expect(map.getLayoutProperty("rl:sheet", "visibility")).toBe("none");
@@ -373,7 +379,9 @@ describe("raster layers follow the registry onto the map", () => {
     renderHook(() => useLayerRegistrySync(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
-    act(() => useLayerRegistryStore.getState().remove("rl:sheet"));
+    act(() =>
+      currentDocument().dispatch({ type: "remove-layer", id: "rl:sheet" }),
+    );
 
     expect(map.getLayer("rl:sheet")).toBeUndefined();
     expect(map.getSource("rl:sheet")).toBeUndefined();
@@ -462,7 +470,8 @@ describe("data-layer panel order matches map z-order", () => {
     const ids = ["dl:roads", "dl:rivers", "dl:wells"];
     act(() => {
       for (const id of ids) {
-        useLayerRegistryStore.getState().registerDataLayer({
+        currentDocument().dispatch({
+          type: "add-data-layer",
           id,
           fc: points([{ n: 1 }]),
           label: id,
@@ -493,7 +502,8 @@ describe("a style MapLibre rejects is not committed", () => {
     const map = new FakeMapLibre();
     renderHook(() => useLayerRegistrySync(asMap(map)));
     act(() =>
-      useLayerRegistryStore.getState().registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:wells",
         fc,
         label: "Wells",
@@ -518,8 +528,8 @@ describe("a style MapLibre rejects is not committed", () => {
     const fresh = new FakeMapLibre();
     reconcileDataLayers(
       asMap(fresh),
-      useLayerRegistryStore.getState().entries,
-      useDataLayerFCStore.getState().getAll(),
+      currentDocument().snapshot().overlays,
+      currentDocument().snapshot().featureCollections,
     );
     return { draws: fresh.draws(id), errors: fresh.errors };
   }

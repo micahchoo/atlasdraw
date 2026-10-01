@@ -7,14 +7,13 @@
 // need to mock @atlasdraw/excalidraw — the component imports nothing
 // from there.
 //
-// Store seeding follows the same pattern as state/__tests__/layerRegistry.test.ts —
-// `setState({ entries: [] })` in beforeEach, then call action methods.
+// Each test starts with a new, empty open document (test-setup.ts); layers
+// are added with document commands and annotations with a seeded scene.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useSelectedLayerStore } from "../../state/selectedLayer";
 
 import {
@@ -66,7 +65,8 @@ describe("LayerPanel", () => {
   });
 
   it("renders a DataLayerRow with the 'Data layer' badge", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:test-1",
       fc: emptyFc(3),
       label: "Roads",
@@ -89,7 +89,8 @@ describe("LayerPanel", () => {
   });
 
   it("clicking the eye toggle on a data row flips visible in the store", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:test-2",
       fc: emptyFc(1),
       label: "Buildings",
@@ -104,14 +105,15 @@ describe("LayerPanel", () => {
     const hideBtn = screen.getByLabelText("Hide Buildings");
     fireEvent.click(hideBtn);
 
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "dl:test-2");
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:test-2");
     expect(entry?.visible).toBe(false);
   });
 
   it("changing the fill color input calls updateStyle and the patch lands in entry.style", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:test-3",
       fc: emptyFc(0),
       label: "Parks",
@@ -126,9 +128,9 @@ describe("LayerPanel", () => {
     const fillInput = screen.getByLabelText("Fill") as HTMLInputElement;
     fireEvent.change(fillInput, { target: { value: "#ff8800" } });
 
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "dl:test-3");
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:test-3");
     expect(entry?.kind).toBe("data");
     if (entry?.kind === "data") {
       expect(entry.style.fillColor).toBe("#ff8800");
@@ -224,14 +226,15 @@ describe("LayerPanel", () => {
   describe("reorder with mixed layer kinds", () => {
     /** 2 data layers + 3 annotations, registered data-first. */
     function seedMixed() {
-      const store = useLayerRegistryStore.getState();
-      store.registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:d1",
         fc: emptyFc(1),
         label: "D1",
         style: {},
       });
-      store.registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:d2",
         fc: emptyFc(1),
         label: "D2",
@@ -240,7 +243,10 @@ describe("LayerPanel", () => {
       seedScene(["a1", "A1"], ["a2", "A2"], ["a3", "A3"]);
     }
 
-    const ids = () => useLayerRegistryStore.getState().entries.map((e) => e.id);
+    const ids = () =>
+      currentDocument()
+        .snapshot()
+        .overlays.map((e) => e.id);
     const annotationIds = sceneAnnotationIds;
 
     /**
@@ -284,9 +290,9 @@ describe("LayerPanel", () => {
     }
 
     const dataIds = () =>
-      useLayerRegistryStore
-        .getState()
-        .entries.filter((e) => e.kind === "data")
+      currentDocument()
+        .snapshot()
+        .overlays.filter((e) => e.kind === "data")
         .slice()
         .sort((a, b) => a.order - b.order)
         .map((e) => e.id);
@@ -383,14 +389,15 @@ describe("LayerPanel", () => {
     });
 
     it("works on a data-only registry", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:only-1",
         fc: emptyFc(1),
         label: "One",
         style: {},
       });
-      store.registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:only-2",
         fc: emptyFc(1),
         label: "Two",
@@ -534,7 +541,8 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
   });
 
   it("opens the same editor from a data layer's ⋯ menu", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:test-1",
       fc: emptyFc(1),
       label: "parcels.geojson",
@@ -549,8 +557,9 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === "dl:test-1")
-        ?.label,
+      currentDocument()
+        .snapshot()
+        .overlays.find((e) => e.id === "dl:test-1")?.label,
     ).toBe("Parcels");
   });
 
@@ -622,8 +631,9 @@ describe("LayerPanel — raster layers", () => {
 
     fireEvent.click(eye);
     expect(
-      useLayerRegistryStore.getState().entries.find((e) => e.id === id)
-        ?.visible,
+      currentDocument()
+        .snapshot()
+        .overlays.find((e) => e.id === id)?.visible,
     ).toBe(false);
   });
 
@@ -635,7 +645,7 @@ describe("LayerPanel — raster layers", () => {
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
     fireEvent.click(screen.getByTestId(`layer-delete-confirm-${id}`));
 
-    expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
+    expect(currentDocument().snapshot().overlays).toHaveLength(0);
   });
 
   it("renders layers in map stacking order: Annotations above Data Layers above Images", () => {
@@ -644,7 +654,8 @@ describe("LayerPanel — raster layers", () => {
     // → Basemap (foundation). Threads is a review surface, not a layer.
     seedRaster();
     seedScene(["el-1", "Note"]);
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:parcels",
       fc: { type: "FeatureCollection", features: [] },
       label: "parcels",
@@ -692,7 +703,8 @@ describe("LayerPanel — row selection", () => {
   });
 
   function seedData(id: string, label: string) {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id,
       fc: emptyFc(1),
       label,

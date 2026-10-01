@@ -15,9 +15,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 
-import { useLayerRegistryStore } from "../state/layerRegistry";
-
-import { createDocument, openDocument } from "../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../state/document";
 
 import {
   applyStyleToMap,
@@ -28,7 +30,7 @@ import {
   type MapPaintSurface,
 } from "./useLayerRegistrySync";
 
-import type { LayerRegistryEntry, LayerStyle } from "../state/layerRegistry";
+import type { OverlayEntry, LayerStyle } from "../state/document";
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 
@@ -128,11 +130,7 @@ const TEAL: LayerStyle = {
   opacity: 0.5,
 };
 
-function rasterEntry(
-  id: string,
-  visible: boolean,
-  order = 0,
-): LayerRegistryEntry {
+function rasterEntry(id: string, visible: boolean, order = 0): OverlayEntry {
   return {
     kind: "raster",
     id,
@@ -155,7 +153,7 @@ function dataEntry(
   style: LayerStyle,
   visible = true,
   order = 0,
-): LayerRegistryEntry {
+): OverlayEntry {
   return {
     kind: "data",
     id,
@@ -320,8 +318,8 @@ describe("diffStyles — registry entry style changes (P1)", () => {
   });
 
   it("ignores raster entries (no style field)", () => {
-    const prev: LayerRegistryEntry[] = [rasterEntry("rl:x", true)];
-    const next: LayerRegistryEntry[] = [
+    const prev: OverlayEntry[] = [rasterEntry("rl:x", true)];
+    const next: OverlayEntry[] = [
       { ...rasterEntry("rl:x", true), label: "renamed" },
     ];
     expect(diffStyles(prev, next)).toEqual([]);
@@ -376,8 +374,8 @@ describe("diffDataLayerIds — data-layer id set and sequence (P2/P3)", () => {
   it("detects a same-length swap", () => {
     // One entry out and one in leaves `entries.length` unchanged. A length
     // heuristic sees nothing, and the new layer never reaches the map.
-    const prev: LayerRegistryEntry[] = [rasterEntry("rl:old", true)];
-    const next: LayerRegistryEntry[] = [dataEntry("dl:new", TEAL, true, 0)];
+    const prev: OverlayEntry[] = [rasterEntry("rl:old", true)];
+    const next: OverlayEntry[] = [dataEntry("dl:new", TEAL, true, 0)];
     expect(prev.length).toBe(next.length);
     expect(diffDataLayerIds(prev, next)).toEqual({
       added: ["dl:new"],
@@ -415,7 +413,7 @@ describe("diffDataLayerIds — data-layer id set and sequence (P2/P3)", () => {
   });
 
   it("ignores raster entries entirely", () => {
-    const withRasters: LayerRegistryEntry[] = [
+    const withRasters: OverlayEntry[] = [
       rasterEntry("rl:a", true),
       dataEntry("dl:a", TEAL, true, 0),
     ];
@@ -427,12 +425,12 @@ describe("diffDataLayerIds — data-layer id set and sequence (P2/P3)", () => {
   });
 
   it("does not call an interleaved raster removal a reorder", () => {
-    const prev: LayerRegistryEntry[] = [
+    const prev: OverlayEntry[] = [
       dataEntry("dl:a", TEAL, true, 0),
       rasterEntry("rl:a", true),
       dataEntry("dl:b", TEAL, true, 1),
     ];
-    const next: LayerRegistryEntry[] = [
+    const next: OverlayEntry[] = [
       dataEntry("dl:a", TEAL, true, 0),
       dataEntry("dl:b", TEAL, true, 1),
     ];
@@ -531,14 +529,15 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
   it("reorder repaints — a permuted registry restacks the MapLibre style (P3)", () => {
     const { map, order } = makeSubscriberStubMap();
     mountWith(map);
-    const registry = useLayerRegistryStore.getState();
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a",
       style: TEAL,
     });
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:b",
       fc: POINT_FC,
       label: "b",
@@ -547,7 +546,7 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
     expect(order()).toEqual(["dl:a", "dl:b"]);
 
     // "Move dl:b up" in the panel — index 0 within the data-layer stack.
-    useLayerRegistryStore.getState().reorder("dl:b", 0);
+    currentDocument().dispatch({ type: "reorder", id: "dl:b", order: 0 });
 
     expect(order()).toEqual(["dl:b", "dl:a"]);
   });
@@ -555,7 +554,8 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
   it("removes the previous document's layers when the registry drops them (D)", () => {
     const { map, raw, order } = makeSubscriberStubMap();
     mountWith(map);
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:old",
       fc: POLY_FC,
       label: "old",
@@ -579,21 +579,22 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
   it("removes a single deleted data layer from the style", () => {
     const { map, raw, order } = makeSubscriberStubMap();
     mountWith(map);
-    const registry = useLayerRegistryStore.getState();
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a",
       style: TEAL,
     });
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:b",
       fc: POINT_FC,
       label: "b",
       style: TEAL,
     });
 
-    useLayerRegistryStore.getState().remove("dl:a");
+    currentDocument().dispatch({ type: "remove-layer", id: "dl:a" });
 
     expect(raw.removeLayer).toHaveBeenCalledWith("dl:a");
     expect(order()).toEqual(["dl:b"]);
@@ -602,14 +603,15 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
   it("issues no moveLayer for a plain visibility toggle", () => {
     const { map, raw } = makeSubscriberStubMap();
     mountWith(map);
-    const registry = useLayerRegistryStore.getState();
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a",
       style: TEAL,
     });
-    registry.registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:b",
       fc: POINT_FC,
       label: "b",
@@ -617,7 +619,11 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
     });
     raw.moveLayer.mockClear();
 
-    useLayerRegistryStore.getState().setVisibility("dl:a", false);
+    currentDocument().dispatch({
+      type: "set-visibility",
+      id: "dl:a",
+      visible: false,
+    });
 
     expect(raw.setLayoutProperty).toHaveBeenCalledWith(
       "dl:a",
@@ -631,7 +637,8 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
     const { map, raw } = makeSubscriberStubMap();
     const { unmount } = mountWith(map);
     unmount();
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a",

@@ -6,9 +6,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 
-import { useLayerRegistryStore } from "../state/layerRegistry";
-
-import { createDocument, openDocument } from "../state/document";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../state/document";
 
 import { useBasemapStyle } from "./useBasemapStyle";
 
@@ -213,7 +215,8 @@ describe("useBasemapStyle", () => {
 describe("useBasemapStyle — data-layer re-add after a style swap (P2)", () => {
   it("reconciles the registry's data layers once the new style has loaded", async () => {
     const map = makeMockMap();
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a.geojson",

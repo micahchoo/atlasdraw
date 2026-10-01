@@ -26,7 +26,7 @@ import { useDataFileImport } from "./useDataFileImport";
 
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
-import type { LayerStyle } from "../state/layerRegistry";
+import type { LayerStyle } from "../state/document";
 
 // ---------------------------------------------------------------------------
 // Mocks

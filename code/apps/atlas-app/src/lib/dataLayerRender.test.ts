@@ -23,10 +23,10 @@ import {
 } from "./dataLayerRender";
 
 import type {
-  LayerRegistryEntry,
+  OverlayEntry,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 import type { FeatureCollection } from "geojson";
 
 const POLY_FC: FeatureCollection = {
@@ -178,7 +178,7 @@ function dataEntry(
   style: LayerStyle = TEAL,
   visible = true,
   order = 0,
-): LayerRegistryEntry {
+): OverlayEntry {
   return {
     kind: "data",
     id,
@@ -621,7 +621,7 @@ function rasterEntry(
   visible = true,
   opacity = 1,
   order = 0,
-): LayerRegistryEntry {
+): OverlayEntry {
   return {
     kind: "raster",
     id,
