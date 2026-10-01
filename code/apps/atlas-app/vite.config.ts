@@ -210,6 +210,9 @@ export default defineConfig({
     copyPublicAssetsPlugin,
     precompressPlugin,
   ] as any,
+  // The import worker (src/lib/import.worker.ts) imports the parsers, which
+  // split into chunks; only an ES-module worker can load chunks.
+  worker: { format: "es" },
   build: {
     // See copyPublicAssetsPlugin — selective replacement for the blanket
     // public/ copy that dragged a 4.9 GB local archive through dist/.

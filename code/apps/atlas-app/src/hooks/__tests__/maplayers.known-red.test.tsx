@@ -1,20 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Known-red tests for the map-overlay defects in the 2026-10 architecture
-// audit (audit-04, map side). Each `it.fails` states the CORRECT behaviour
-// and fails on today's code. The W5 map-overlay wave flips each to `it()`.
+// Tests for the map-overlay defects in the 2026-10 architecture audit
+// (audit-04, map side). Each states the correct behaviour; they were written
+// as known-red tests and pass since the map overlays got one writer.
 //
-// The map here is `FakeMapLibre`, not a call recorder. It keeps the style
-// state MapLibre 4.7.1 keeps (sources, layers, paint, layout, order) and
-// follows its error contract, read from maplibre-gl-dev.js 4.7.1:
-//   - addLayer / setPaintProperty / setLayoutProperty / moveLayer /
-//     removeLayer on an invalid spec or a missing layer FIRE an "error" event
-//     and return. They do not throw (Style#addLayer :44860, :45045, :45071).
-//   - addSource on a duplicate id and removeSource on a missing id THROW.
-//   - removeSource while a layer uses the source fires "error" and returns.
-// Validation uses the real @maplibre/maplibre-gl-style-spec validator, so a
-// spec this fake accepts is one MapLibre accepts. Every assertion reads the
-// resulting style state.
+// The map is FakeMapLibre (lib/__tests__/fixtures/fakeMapLibre.ts): it keeps
+// MapLibre 4.7.1's style state and fires "error" events where MapLibre does.
+// Every assertion reads the resulting style state.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -25,17 +17,21 @@ import {
   renderHook,
   screen,
 } from "@testing-library/react";
-import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 
 import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { useLayerRegistrySync } from "../useLayerRegistrySync";
+import { useMapOverlays } from "../useMapOverlays";
 import { loadDocument } from "../../state/documentIO";
 import { useSceneBinding, useSceneStore } from "../../state/scene";
 import { annotationRows } from "../../state/annotations";
-import { reconcileDataLayers } from "../../lib/dataLayerRender";
+import {
+  createMapOverlays,
+  overlaySpec,
+  type StyleTarget,
+} from "../../lib/mapOverlays";
+import { FakeMapLibre } from "../../lib/__tests__/fixtures/fakeMapLibre";
 import { LayerPanel } from "../../components/LayerPanel";
 import { StylePanel } from "../../components/StylePanel";
 import { ToastProvider } from "../../components/ToastProvider";
@@ -47,209 +43,9 @@ import {
   openDocument,
 } from "../../state/document";
 
-import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
-
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
 import type { RasterCorners } from "../../state/document";
-
-// ---------------------------------------------------------------------------
-// FakeMapLibre — style state + the 4.7.1 error contract
-// ---------------------------------------------------------------------------
-
-type LayerState = {
-  spec: Record<string, unknown>;
-  paint: Record<string, unknown>;
-  layout: Record<string, unknown>;
-};
-
-type ErrorListener = (e: { error: Error }) => void;
-
-class FakeMapLibre {
-  readonly sources = new Map<string, Record<string, unknown>>();
-  readonly layers = new Map<string, LayerState>();
-  /** Bottom-first, like Style#_order. */
-  readonly order: string[] = [];
-  readonly errors: string[] = [];
-  private readonly errorListeners = new Set<ErrorListener>();
-
-  on(type: string, fn: ErrorListener): this {
-    if (type === "error") {
-      this.errorListeners.add(fn);
-    }
-    return this;
-  }
-
-  off(type: string, fn: ErrorListener): this {
-    if (type === "error") {
-      this.errorListeners.delete(fn);
-    }
-    return this;
-  }
-
-  private fire(message: string): void {
-    this.errors.push(message);
-    for (const fn of this.errorListeners) {
-      fn({ error: new Error(message) });
-    }
-  }
-
-  private validateLayer(spec: Record<string, unknown>): string[] {
-    const style = {
-      version: 8,
-      sources: Object.fromEntries(this.sources),
-      layers: [spec],
-    } as unknown as StyleSpecification;
-    return validateStyleMin(style).map((e) => e.message);
-  }
-
-  addSource(id: string, spec: Record<string, unknown>): void {
-    if (this.sources.has(id)) {
-      throw new Error(`Source "${id}" already exists.`);
-    }
-    const errs = validateStyleMin({
-      version: 8,
-      sources: { [id]: spec },
-      layers: [],
-    } as unknown as StyleSpecification).map((e) => e.message);
-    if (errs.length > 0) {
-      errs.forEach((m) => this.fire(m));
-      return;
-    }
-    this.sources.set(id, spec);
-  }
-
-  getSource(id: string): unknown {
-    return this.sources.get(id);
-  }
-
-  removeSource(id: string): void {
-    if (!this.sources.has(id)) {
-      throw new Error("There is no source with this ID");
-    }
-    for (const [layerId, layer] of this.layers) {
-      if (layer.spec.source === id) {
-        this.fire(
-          `Source "${id}" cannot be removed while layer "${layerId}" is using it.`,
-        );
-        return;
-      }
-    }
-    this.sources.delete(id);
-  }
-
-  addLayer(spec: Record<string, unknown>, before?: string): void {
-    const id = spec.id as string;
-    if (this.layers.has(id)) {
-      this.fire(`Layer "${id}" already exists on this map.`);
-      return;
-    }
-    const errs = this.validateLayer(spec);
-    if (errs.length > 0) {
-      errs.forEach((m) => this.fire(m));
-      return;
-    }
-    const index = before ? this.order.indexOf(before) : this.order.length;
-    if (before && index === -1) {
-      this.fire(
-        `Cannot add layer "${id}" before non-existing layer "${before}".`,
-      );
-      return;
-    }
-    this.order.splice(index, 0, id);
-    this.layers.set(id, {
-      spec,
-      paint: { ...((spec.paint as Record<string, unknown>) ?? {}) },
-      layout: { ...((spec.layout as Record<string, unknown>) ?? {}) },
-    });
-  }
-
-  getLayer(id: string): unknown {
-    return this.layers.get(id)?.spec;
-  }
-
-  removeLayer(id: string): void {
-    if (!this.layers.has(id)) {
-      this.fire(`Cannot remove non-existing layer "${id}".`);
-      return;
-    }
-    this.layers.delete(id);
-    this.order.splice(this.order.indexOf(id), 1);
-  }
-
-  moveLayer(id: string, before?: string): void {
-    if (!this.layers.has(id)) {
-      this.fire(
-        `The layer '${id}' does not exist in the map's style and cannot be moved.`,
-      );
-      return;
-    }
-    if (id === before) {
-      return;
-    }
-    this.order.splice(this.order.indexOf(id), 1);
-    const index = before ? this.order.indexOf(before) : this.order.length;
-    if (before && index === -1) {
-      this.fire(
-        `Cannot move layer "${id}" before non-existing layer "${before}".`,
-      );
-      return;
-    }
-    this.order.splice(index, 0, id);
-  }
-
-  getLayersOrder(): string[] {
-    return [...this.order];
-  }
-
-  private setProperty(
-    bucket: "paint" | "layout",
-    layerId: string,
-    name: string,
-    value: unknown,
-  ): void {
-    const layer = this.layers.get(layerId);
-    if (!layer) {
-      this.fire(`Cannot style non-existing layer "${layerId}".`);
-      return;
-    }
-    const candidate = {
-      ...layer.spec,
-      paint: layer.paint,
-      layout: layer.layout,
-      [bucket]: { ...layer[bucket], [name]: value },
-    };
-    const errs = this.validateLayer(candidate);
-    if (errs.length > 0) {
-      errs.forEach((m) => this.fire(m));
-      return;
-    }
-    layer[bucket][name] = value;
-  }
-
-  setPaintProperty(layerId: string, name: string, value: unknown): void {
-    this.setProperty("paint", layerId, name, value);
-  }
-
-  setLayoutProperty(layerId: string, name: string, value: unknown): void {
-    this.setProperty("layout", layerId, name, value);
-  }
-
-  getLayoutProperty(layerId: string, name: string): unknown {
-    return this.layers.get(layerId)?.layout[name];
-  }
-
-  /** True when a layer AND its source are in the style. */
-  draws(id: string): boolean {
-    return this.layers.has(id) && this.sources.has(id);
-  }
-
-  /** Same-named overlay ids, top of the stack first. */
-  topFirst(ids: readonly string[]): string[] {
-    const wanted = new Set(ids);
-    return this.order.filter((id) => wanted.has(id)).reverse();
-  }
-}
 
 const asMap = (m: FakeMapLibre) => m as unknown as maplibregl.Map;
 
@@ -354,11 +150,10 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("raster layers follow the registry onto the map", () => {
-  // KNOWN-RED (W5 map overlays): hiding a raster flips the registry but sets no visibility on the map, because the visibility diff has branches for annotation and data only. Flip to it() when fixed.
-  it.fails("hiding a raster sets visibility none on its map layer", () => {
+  it("hiding a raster sets visibility none on its map layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map)));
+    renderHook(() => useMapOverlays(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() =>
@@ -372,11 +167,10 @@ describe("raster layers follow the registry onto the map", () => {
     expect(map.getLayoutProperty("rl:sheet", "visibility")).toBe("none");
   });
 
-  // KNOWN-RED (W5 map overlays): deleting a raster removes its registry row but leaves its image source and layer on the map, because the membership diff counts data ids only. Flip to it() when fixed.
-  it.fails("deleting a raster removes its image source and layer", () => {
+  it("deleting a raster removes its image source and layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map)));
+    renderHook(() => useMapOverlays(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() =>
@@ -387,43 +181,39 @@ describe("raster layers follow the registry onto the map", () => {
     expect(map.getSource("rl:sheet")).toBeUndefined();
   });
 
-  // KNOWN-RED (W5 map overlays): opening document B leaves document A's raster drawn and never draws B's, because no data id changed so nothing reconciles rasters. Flip to it() when fixed.
-  it.fails(
-    "opening another document replaces the previous document's rasters",
-    async () => {
-      registerRaster("rl:doc-a");
-      const map = new FakeMapLibre();
-      const { api } = fakeExcalidraw();
-      renderHook(() => useLayerRegistrySync(asMap(map)));
-      expect(map.draws("rl:doc-a")).toBe(true);
+  it("opening another document replaces the previous document's rasters", async () => {
+    registerRaster("rl:doc-a");
+    const map = new FakeMapLibre();
+    const { api } = fakeExcalidraw();
+    renderHook(() => useMapOverlays(asMap(map)));
+    expect(map.draws("rl:doc-a")).toBe(true);
 
-      const docB: AtlasdrawDocument = {
-        manifest: manifest([
-          {
-            kind: "raster",
-            id: "rl:doc-b",
-            label: "B sheet",
-            visible: true,
-            corners: CORNERS,
-            opacity: 1,
-            imageKey: "img-b",
-          },
-        ]),
-        scene: [],
-        layers: new Map(),
-        styleRef: {},
-        files: new Map([["img-b", new Blob(["png-b"])]]),
-      };
-      await act(async () => {
-        await loadDocument(docB, api);
-      });
+    const docB: AtlasdrawDocument = {
+      manifest: manifest([
+        {
+          kind: "raster",
+          id: "rl:doc-b",
+          label: "B sheet",
+          visible: true,
+          corners: CORNERS,
+          opacity: 1,
+          imageKey: "img-b",
+        },
+      ]),
+      scene: [],
+      layers: new Map(),
+      styleRef: {},
+      files: new Map([["img-b", new Blob(["png-b"])]]),
+    };
+    await act(async () => {
+      await loadDocument(docB, api);
+    });
 
-      expect({
-        a: map.draws("rl:doc-a"),
-        b: map.draws("rl:doc-b"),
-      }).toEqual({ a: false, b: true });
-    },
-  );
+    expect({
+      a: map.draws("rl:doc-a"),
+      b: map.draws("rl:doc-b"),
+    }).toEqual({ a: false, b: true });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -463,10 +253,9 @@ describe("annotation rows act on the scene", () => {
 // ---------------------------------------------------------------------------
 
 describe("data-layer panel order matches map z-order", () => {
-  // KNOWN-RED (W5 map overlays): the Data Layers section lists order 0 at the top, but MapLibre draws order 0 at the bottom, so the top row is drawn underneath. Flip to it() when fixed.
-  it.fails("the panel's top data row is the top data layer on the map", () => {
+  it("the panel's top data row is the top data layer on the map", () => {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map)));
+    renderHook(() => useMapOverlays(asMap(map)));
     const ids = ["dl:roads", "dl:rivers", "dl:wells"];
     act(() => {
       for (const id of ids) {
@@ -500,7 +289,7 @@ describe("data-layer panel order matches map z-order", () => {
 describe("a style MapLibre rejects is not committed", () => {
   function setup(fc: FeatureCollection) {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map)));
+    renderHook(() => useMapOverlays(asMap(map)));
     act(() =>
       currentDocument().dispatch({
         type: "add-data-layer",
@@ -526,10 +315,8 @@ describe("a style MapLibre rejects is not committed", () => {
    */
   function reload(id: string): { draws: boolean; errors: string[] } {
     const fresh = new FakeMapLibre();
-    reconcileDataLayers(
-      asMap(fresh),
-      currentDocument().snapshot().overlays,
-      currentDocument().snapshot().featureCollections,
+    createMapOverlays(fresh as unknown as StyleTarget).apply(
+      overlaySpec(currentDocument().snapshot()),
     );
     return { draws: fresh.draws(id), errors: fresh.errors };
   }
@@ -540,18 +327,13 @@ describe("a style MapLibre rejects is not committed", () => {
     fireEvent.click(screen.getByTestId("cat-apply"));
   }
 
-  // KNOWN-RED (W5 map overlays): two blank categorical rows compile to a match with duplicate labels; MapLibre rejects it with an error event, yet the registry keeps it and the layer is missing after reload. Flip to it() when fixed.
-  it.fails(
-    "two blank categorical rows: the layer still renders after reload",
-    () => {
-      setup(points([{ kind: "a" }, { kind: "b" }]));
-      applyTwoBlankCategories();
-      expect(reload("dl:wells")).toEqual({ draws: true, errors: [] });
-    },
-  );
+  it("two blank categorical rows: the layer still renders after reload", () => {
+    setup(points([{ kind: "a" }, { kind: "b" }]));
+    applyTwoBlankCategories();
+    expect(reload("dl:wells")).toEqual({ draws: true, errors: [] });
+  });
 
-  // KNOWN-RED (W5 map overlays): applying a categorical style MapLibre rejects shows the user nothing; the error event goes to the console only. Flip to it() when fixed.
-  it.fails("two blank categorical rows: the rejection is surfaced", () => {
+  it("two blank categorical rows: the rejection is surfaced", () => {
     setup(points([{ kind: "a" }, { kind: "b" }]));
     applyTwoBlankCategories();
     expect(document.body.textContent ?? "").toMatch(
@@ -559,18 +341,14 @@ describe("a style MapLibre rejects is not committed", () => {
     );
   });
 
-  // KNOWN-RED (W5 map overlays): quantile stops on skewed data are not deduplicated, so the interpolate stops are not strictly ascending; MapLibre rejects them, yet the registry keeps them and the layer is missing after reload. Flip to it() when fixed.
-  it.fails(
-    "duplicate quantile stops: the layer still renders after reload",
-    () => {
-      setup(points([0, 0, 0, 0, 0, 0, 1, 2, 100].map((v) => ({ v }))));
-      fireEvent.click(screen.getByTestId("style-tab-graduated"));
-      fireEvent.change(screen.getByTestId("grad-method"), {
-        target: { value: "quantile" },
-      });
-      fireEvent.click(screen.getByTestId("grad-compute"));
-      fireEvent.click(screen.getByTestId("grad-apply"));
-      expect(reload("dl:wells")).toEqual({ draws: true, errors: [] });
-    },
-  );
+  it("duplicate quantile stops: the layer still renders after reload", () => {
+    setup(points([0, 0, 0, 0, 0, 0, 1, 2, 100].map((v) => ({ v }))));
+    fireEvent.click(screen.getByTestId("style-tab-graduated"));
+    fireEvent.change(screen.getByTestId("grad-method"), {
+      target: { value: "quantile" },
+    });
+    fireEvent.click(screen.getByTestId("grad-compute"));
+    fireEvent.click(screen.getByTestId("grad-apply"));
+    expect(reload("dl:wells")).toEqual({ draws: true, errors: [] });
+  });
 });

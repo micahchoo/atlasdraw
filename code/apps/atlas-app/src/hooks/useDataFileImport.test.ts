@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useDataFileImport (renamed from useGeoJsonDrop — ISSUES.md
-// Direction 1: Shapefile import + file-picker UI).
-//
-// This hook is the app's ONLY external-input trust boundary (drag-drop and
-// now click-to-pick GeoJSON/CSV/Shapefile importer). MapEditor.drop.test.tsx
-// covers the happy paths indirectly (mounting the whole MapEditor tree);
-// this file drives the hook in isolation via a minimal harness component so
-// branch coverage doesn't depend on MapEditor's unrelated wiring: map-null
-// early return, the addLayer-failure rollback, each parser's error-toast
-// path, the configured-geocoder CSV branch, listener cleanup on unmount,
-// and (new) the imperative importFile() path used by the "Import…" menu
-// item, including its unsupported-file-type toast — a deliberate pick gets
-// explicit feedback where an accidental drag silently no-ops.
+// Tests for useDataFileImport, the app's import boundary for dropped and
+// picked files. The hook runs in a harness component. jsdom has no Worker,
+// so the import client runs the pipeline on this thread, with the parsers
+// mocked: each parser's error message, the geocoder branch, layer naming,
+// provenance, multi-file drops, listener cleanup and the picker path.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
@@ -25,7 +17,6 @@ import { ToastProvider } from "../components/ToastProvider";
 import { useDataFileImport } from "./useDataFileImport";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
 import type { LayerStyle } from "../state/document";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +36,6 @@ const {
   parseShapefileMock,
   requireHomogeneousGeometryMock,
   photonGeocoderCtor,
-  compileLayerMock,
   defaultLayerStyleMock,
   getAppConfigMock,
   decodeGeoTiffMock,
@@ -98,14 +88,6 @@ const {
     parseShapefileMock: vi.fn(),
     requireHomogeneousGeometryMock: vi.fn(),
     photonGeocoderCtor: vi.fn(),
-    compileLayerMock: vi.fn(
-      (id: string, _style: unknown, geomType: string) => ({
-        id,
-        type: geomType,
-        source: id,
-        paint: {},
-      }),
-    ),
     defaultLayerStyleMock: vi.fn(() => ({} as LayerStyle)),
     getAppConfigMock: vi.fn(() => ({ geocoder: undefined } as unknown)),
     decodeGeoTiffMock: vi.fn(),
@@ -149,7 +131,6 @@ vi.mock("@atlasdraw/data", async (importActual) => ({
 }));
 
 vi.mock("@atlasdraw/basemap", () => ({
-  compileLayer: compileLayerMock,
   defaultLayerStyle: defaultLayerStyleMock,
 }));
 
@@ -233,31 +214,13 @@ function makeFile(name: string, text = "", type = ""): File {
   } as unknown as File;
 }
 
-function makeMockMap(): maplibregl.Map & {
-  addSource: ReturnType<typeof vi.fn>;
-  addLayer: ReturnType<typeof vi.fn>;
-  removeSource: ReturnType<typeof vi.fn>;
-} {
-  return {
-    addSource: vi.fn(),
-    addLayer: vi.fn(),
-    removeSource: vi.fn(),
-  } as unknown as maplibregl.Map & {
-    addSource: ReturnType<typeof vi.fn>;
-    addLayer: ReturnType<typeof vi.fn>;
-    removeSource: ReturnType<typeof vi.fn>;
-  };
-}
-
 let lastImportFile: ((file: File) => void) | null = null;
 
 function Harness({
-  map,
   registerDataLayer,
   onImported,
   registerRasterLayer,
 }: {
-  map: maplibregl.Map | null;
   registerDataLayer: (opts: {
     id: string;
     fc: FeatureCollection;
@@ -275,7 +238,6 @@ function Harness({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { importFile } = useDataFileImport(
     rootRef,
-    map,
     registerDataLayer,
     onImported,
     registerRasterLayer as never,
@@ -285,7 +247,6 @@ function Harness({
 }
 
 function renderHarness(
-  map: maplibregl.Map | null,
   registerDataLayer = vi.fn(),
   onImported = vi.fn(),
   registerRasterLayer = vi.fn(),
@@ -295,7 +256,6 @@ function renderHarness(
       ToastProvider,
       null,
       React.createElement(Harness, {
-        map,
         registerDataLayer,
         onImported,
         registerRasterLayer,
@@ -326,24 +286,20 @@ afterEach(() => {
 
 describe("useDataFileImport — drag-and-drop", () => {
   it("dragover always calls preventDefault, regardless of file type", () => {
-    const map = makeMockMap();
-    const { root } = renderHarness(map);
+    const { root } = renderHarness();
     const event = new Event("dragover", { bubbles: true, cancelable: true });
     root.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
   });
 
   it("ignores drops with no file (dataTransfer.files empty)", () => {
-    const map = makeMockMap();
-    const { root } = renderHarness(map);
+    const { root } = renderHarness();
     fireEvent.drop(root, { dataTransfer: { files: [] } });
     expect(parseMock).not.toHaveBeenCalled();
-    expect(map.addSource).not.toHaveBeenCalled();
   });
 
   it("passes through unrecognized extensions (no preventDefault, no parse)", () => {
-    const map = makeMockMap();
-    const { root } = renderHarness(map);
+    const { root } = renderHarness();
     const event = new Event("drop", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "dataTransfer", {
       value: { files: [makeFile("notes.txt")] },
@@ -353,26 +309,14 @@ describe("useDataFileImport — drag-and-drop", () => {
     expect(parseMock).not.toHaveBeenCalled();
   });
 
-  it("does not parse when map is null (early return in processDataDrop)", async () => {
-    const { root } = renderHarness(null);
-    fireEvent.drop(root, {
-      dataTransfer: { files: [makeFile("test.geojson")] },
-    });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(parseMock).not.toHaveBeenCalled();
-  });
-
-  it("happy path: parses .geojson, adds source/layer, registers the data layer, and toasts success", async () => {
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+  it("happy path: parses .geojson, registers the data layer, and toasts success", async () => {
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("test.geojson")] },
     });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
     expect(requireHomogeneousGeometryMock).toHaveBeenCalledWith(POLY_FC);
-    expect(map.addSource).toHaveBeenCalledTimes(1);
-    expect(map.addLayer).toHaveBeenCalledTimes(1);
     const callArg = registerDataLayer.mock.calls[0][0];
     expect(callArg.label).toBe("test.geojson");
     expect(callArg.fc).toBe(POLY_FC);
@@ -382,8 +326,7 @@ describe("useDataFileImport — drag-and-drop", () => {
   // that didn't even carry the drop count, and `label` stops answering "which
   // file?" the first time anyone renames the layer.
   it("records the source filename on the registry entry, separately from the label", async () => {
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("parcels.geojson")] },
     });
@@ -404,8 +347,7 @@ describe("useDataFileImport — drag-and-drop", () => {
         { type: "Feature", properties: {}, geometry: null },
       ],
     });
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("sparse.geojson")] },
     });
@@ -422,8 +364,7 @@ describe("useDataFileImport — drag-and-drop", () => {
         return POLY_FC;
       },
     );
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("sites.csv")] } });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
@@ -435,8 +376,7 @@ describe("useDataFileImport — drag-and-drop", () => {
 
   it("CSV path with no geocoder configured calls parseCSV without geocoder options", async () => {
     parseCSVMock.mockResolvedValue(POLY_FC);
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("pts.csv")] } });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
@@ -453,8 +393,7 @@ describe("useDataFileImport — drag-and-drop", () => {
       geocoder: { endpoint: "https://photon.example.test" },
     });
     parseCSVMock.mockResolvedValue(POLY_FC);
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("addresses.csv")] },
     });
@@ -469,8 +408,7 @@ describe("useDataFileImport — drag-and-drop", () => {
 
   it("Shapefile path: drops a .zip, parses via parseShapefile, registers the data layer", async () => {
     parseShapefileMock.mockResolvedValue(POLY_FC);
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("parcels.zip")] },
     });
@@ -485,8 +423,7 @@ describe("useDataFileImport — drag-and-drop", () => {
     parseMock.mockRejectedValue(
       new FakeGeoJSONParseError("bad geometry at feature 2"),
     );
-    const map = makeMockMap();
-    const { root, registerDataLayer, findByTestId } = renderHarness(map);
+    const { root, registerDataLayer, findByTestId } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("broken.geojson")] },
     });
@@ -495,7 +432,6 @@ describe("useDataFileImport — drag-and-drop", () => {
     expect(toast.textContent).toMatch(/GeoJSON import failed/);
     expect(toast.textContent).toMatch(/bad geometry at feature 2/);
     expect(registerDataLayer).not.toHaveBeenCalled();
-    expect(map.addSource).not.toHaveBeenCalled();
   });
 
   it("CSV NO_COORD_COLUMNS without a geocoder appends the geocoder hint to the toast", async () => {
@@ -506,8 +442,7 @@ describe("useDataFileImport — drag-and-drop", () => {
       ),
     );
     getAppConfigMock.mockReturnValue({ geocoder: undefined });
-    const map = makeMockMap();
-    const { root, registerDataLayer, findByTestId } = renderHarness(map);
+    const { root, registerDataLayer, findByTestId } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("addresses.csv")] },
     });
@@ -528,8 +463,7 @@ describe("useDataFileImport — drag-and-drop", () => {
       parseShapefileMock.mockRejectedValue(
         new FakeShapefileParseError(code, message),
       );
-      const map = makeMockMap();
-      const { root, registerDataLayer, findByTestId } = renderHarness(map);
+      const { root, registerDataLayer, findByTestId } = renderHarness();
       fireEvent.drop(root, {
         dataTransfer: { files: [makeFile("parcels.zip")] },
       });
@@ -540,28 +474,8 @@ describe("useDataFileImport — drag-and-drop", () => {
     },
   );
 
-  it("rolls back addSource via removeSource when addLayer throws, and surfaces a toast", async () => {
-    const map = makeMockMap();
-    map.addLayer.mockImplementation(() => {
-      throw new Error("invalid layer spec");
-    });
-    const { root, registerDataLayer, findByTestId } = renderHarness(map);
-
-    fireEvent.drop(root, {
-      dataTransfer: { files: [makeFile("test.geojson")] },
-    });
-
-    const toast = await findByTestId("toast-error");
-    expect(toast.textContent).toMatch(/import failed unexpectedly/);
-    expect(map.removeSource).toHaveBeenCalledWith(
-      expect.stringMatching(/^dl:/),
-    );
-    expect(registerDataLayer).not.toHaveBeenCalled();
-  });
-
   it("removes the drop/dragover listeners on unmount (no parse after unmount)", () => {
-    const map = makeMockMap();
-    const { root, unmount } = renderHarness(map);
+    const { root, unmount } = renderHarness();
     unmount();
     const event = new Event("drop", { bubbles: true, cancelable: true });
     Object.defineProperty(event, "dataTransfer", {
@@ -569,36 +483,6 @@ describe("useDataFileImport — drag-and-drop", () => {
     });
     root.dispatchEvent(event);
     expect(parseMock).not.toHaveBeenCalled();
-  });
-
-  it("infers 'line' geometry type for LineString/MultiLineString features", async () => {
-    const lineFc: FeatureCollection = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [0, 0],
-              [1, 1],
-            ],
-          },
-        },
-      ],
-    };
-    parseMock.mockResolvedValue(lineFc);
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
-    fireEvent.drop(root, {
-      dataTransfer: { files: [makeFile("test.geojson")] },
-    });
-
-    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
-    expect(map.addLayer).toHaveBeenCalledTimes(1);
-    const layerSpec = map.addLayer.mock.calls[0][0] as { type: string };
-    expect(layerSpec.type).toBe("line");
   });
 
   it("CSV NO_COORD_COLUMNS WITH a geocoder configured omits the geocoder hint", async () => {
@@ -611,8 +495,7 @@ describe("useDataFileImport — drag-and-drop", () => {
     getAppConfigMock.mockReturnValue({
       geocoder: { endpoint: "https://photon.example.test" },
     });
-    const map = makeMockMap();
-    const { root, findByTestId } = renderHarness(map);
+    const { root, findByTestId } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("addresses.csv")] },
     });
@@ -622,33 +505,12 @@ describe("useDataFileImport — drag-and-drop", () => {
     expect(toast.textContent).not.toMatch(/geocoder/);
   });
 
-  it("swallows a removeSource failure during addLayer-failure rollback (rollback is best-effort) and still toasts", async () => {
-    const map = makeMockMap();
-    map.addLayer.mockImplementation(() => {
-      throw new Error("invalid layer spec");
-    });
-    map.removeSource.mockImplementation(() => {
-      throw new Error("source already gone");
-    });
-    const { root, registerDataLayer, findByTestId } = renderHarness(map);
-
-    fireEvent.drop(root, {
-      dataTransfer: { files: [makeFile("test.geojson")] },
-    });
-
-    const toast = await findByTestId("toast-error");
-    expect(toast.textContent).toMatch(/import failed unexpectedly/);
-    expect(map.removeSource).toHaveBeenCalledTimes(1);
-    expect(registerDataLayer).not.toHaveBeenCalled();
-  });
-
   it("does nothing when the root ref never attaches to a DOM node", () => {
-    const map = makeMockMap();
     // Harness that calls the hook but never renders the ref'd element —
     // exercises the `if (!root) return;` guard inside the effect.
-    function UnattachedHarness({ mapArg }: { mapArg: maplibregl.Map | null }) {
+    function UnattachedHarness() {
       const rootRef = useRef<HTMLDivElement | null>(null);
-      useDataFileImport(rootRef, mapArg, vi.fn());
+      useDataFileImport(rootRef, vi.fn());
       return null;
     }
     // No throw = the effect's `if (!root) return;` guard was taken cleanly.
@@ -657,7 +519,7 @@ describe("useDataFileImport — drag-and-drop", () => {
         React.createElement(
           ToastProvider,
           null,
-          React.createElement(UnattachedHarness, { mapArg: map }),
+          React.createElement(UnattachedHarness),
         ),
       ),
     ).not.toThrow();
@@ -666,8 +528,7 @@ describe("useDataFileImport — drag-and-drop", () => {
 
 describe("useDataFileImport — importFile (deliberate file-picker action)", () => {
   it("imports a .geojson file picked via importFile the same way a drop would", async () => {
-    const map = makeMockMap();
-    const { registerDataLayer } = renderHarness(map);
+    const { registerDataLayer } = renderHarness();
 
     lastImportFile!(makeFile("picked.geojson"));
 
@@ -677,8 +538,7 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
 
   it("imports a .zip Shapefile bundle picked via importFile", async () => {
     parseShapefileMock.mockResolvedValue(POLY_FC);
-    const map = makeMockMap();
-    const { registerDataLayer } = renderHarness(map);
+    const { registerDataLayer } = renderHarness();
 
     lastImportFile!(makeFile("parcels.zip"));
 
@@ -687,8 +547,7 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
   });
 
   it("toasts an explicit 'unsupported file type' error for an unrecognized extension — unlike drag-drop's silent no-op", async () => {
-    const map = makeMockMap();
-    const { registerDataLayer, findByTestId } = renderHarness(map);
+    const { registerDataLayer, findByTestId } = renderHarness();
 
     lastImportFile!(makeFile("notes.txt"));
 
@@ -710,8 +569,7 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
   it.each([["wards.gpkg", "GeoPackage"]])(
     "names the format and says 'not yet' for %s, rather than blaming the file",
     async (fileName, label) => {
-      const map = makeMockMap();
-      const { registerDataLayer, findByTestId } = renderHarness(map);
+      const { registerDataLayer, findByTestId } = renderHarness();
 
       lastImportFile!(makeFile(fileName));
 
@@ -727,8 +585,7 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
 describe("useDataFileImport — KML, KMZ and GPX", () => {
   it("imports a file with one geometry kind as one layer named after the file", async () => {
     parseKMLMock.mockResolvedValue({ fc: LINE_FC, droppedCount: 0 });
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("trail.kml")] } });
 
@@ -745,9 +602,8 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
 
   it("imports a file with points and lines as one layer per kind, lines first", async () => {
     parseGPXMock.mockResolvedValue({ fc: MIXED_FC, droppedCount: 0 });
-    const map = makeMockMap();
     const { root, registerDataLayer, onImported, findByTestId } =
-      renderHarness(map);
+      renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("hike.gpx")] } });
 
@@ -758,7 +614,7 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
     expect(points.label).toBe("hike.gpx — points");
     expect(points.fc).toEqual(POINT_FC);
     expect(lines.id).not.toBe(points.id);
-    expect(map.addSource).toHaveBeenCalledTimes(2);
+    expect(registerDataLayer).toHaveBeenCalledTimes(2);
     expect(onImported).toHaveBeenCalledTimes(1);
     const toast = await findByTestId("toast-success");
     expect(toast.textContent).toMatch(/3 features imported as 2 layers/);
@@ -766,8 +622,7 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
 
   it("records the dropped count once, on the first layer, so the total stays true", async () => {
     parseGPXMock.mockResolvedValue({ fc: MIXED_FC, droppedCount: 4 });
-    const map = makeMockMap();
-    const { root, registerDataLayer } = renderHarness(map);
+    const { root, registerDataLayer } = renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("hike.gpx")] } });
 
@@ -786,8 +641,7 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
       },
       droppedCount: 0,
     });
-    const map = makeMockMap();
-    const { registerDataLayer } = renderHarness(map);
+    const { registerDataLayer } = renderHarness();
 
     lastImportFile!(makeFile("Parks.KMZ"));
 
@@ -807,8 +661,7 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
     "detects a file with no known extension by its MIME type %s",
     async (type, parser) => {
       parser.mockResolvedValue({ fc: LINE_FC, droppedCount: 0 });
-      const map = makeMockMap();
-      const { registerDataLayer } = renderHarness(map);
+      const { registerDataLayer } = renderHarness();
 
       lastImportFile!(makeFile("download", "", type));
 
@@ -825,9 +678,8 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
         "The file is not well-formed XML.",
       ),
     );
-    const map = makeMockMap();
     const { root, registerDataLayer, onImported, findByTestId } =
-      renderHarness(map);
+      renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("bad.kml")] } });
 
@@ -836,7 +688,6 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
       /KML import failed — The file is not well-formed XML\./,
     );
     expect(registerDataLayer).not.toHaveBeenCalled();
-    expect(map.addSource).not.toHaveBeenCalled();
     expect(onImported).not.toHaveBeenCalled();
   });
 });
@@ -847,8 +698,7 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
 // a panel open to show the user nothing.
 describe("useDataFileImport — onImported (success-only signal)", () => {
   it("fires after the layer is registered", async () => {
-    const map = makeMockMap();
-    const { root, registerDataLayer, onImported } = renderHarness(map);
+    const { root, registerDataLayer, onImported } = renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
 
@@ -857,8 +707,7 @@ describe("useDataFileImport — onImported (success-only signal)", () => {
   });
 
   it("fires once per import, not once per feature", async () => {
-    const map = makeMockMap();
-    const { root, onImported } = renderHarness(map);
+    const { root, onImported } = renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
     await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
@@ -866,21 +715,11 @@ describe("useDataFileImport — onImported (success-only signal)", () => {
 
   it("does NOT fire when the parse fails", async () => {
     parseMock.mockRejectedValueOnce(new FakeGeoJSONParseError("bad json"));
-    const map = makeMockMap();
-    const { root, onImported, findByTestId } = renderHarness(map);
+    const { root, onImported, findByTestId } = renderHarness();
 
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
 
     await findByTestId("toast-error");
-    expect(onImported).not.toHaveBeenCalled();
-  });
-
-  it("does NOT fire when there is no map to import onto", async () => {
-    const { root, onImported } = renderHarness(null);
-
-    fireEvent.drop(root, { dataTransfer: { files: [makeFile("a.geojson")] } });
-
-    await Promise.resolve();
     expect(onImported).not.toHaveBeenCalled();
   });
 });
@@ -914,10 +753,9 @@ describe("useDataFileImport — GeoTIFF", () => {
     encodeRasterPngMock.mockResolvedValue(new Blob([new Uint8Array([1])]));
   });
 
-  it("adds an image source and registers a raster layer", async () => {
-    const map = makeMockMap();
+  it("registers a raster layer with its image", async () => {
     const { registerRasterLayer, registerDataLayer, onImported } =
-      renderHarness(map);
+      renderHarness();
 
     lastImportFile!(makeFile("survey-sheet.tif"));
 
@@ -930,10 +768,7 @@ describe("useDataFileImport — GeoTIFF", () => {
     });
     expect(args.id).toMatch(/^rl:/);
 
-    expect(map.addSource).toHaveBeenCalledWith(
-      args.id,
-      expect.objectContaining({ type: "image", coordinates: DECODED.corners }),
-    );
+    expect(args.image).toBeInstanceOf(Blob);
     // Never the vector path: a .tif that reached parseDroppedFile would be
     // read as JSON and fail with a message about GeoJSON.
     expect(registerDataLayer).not.toHaveBeenCalled();
@@ -941,27 +776,10 @@ describe("useDataFileImport — GeoTIFF", () => {
     expect(onImported).toHaveBeenCalledTimes(1);
   });
 
-  it("gives the map a real URL, not an empty one", async () => {
-    // The ordering rule this path lives by: the image goes into its store
-    // BEFORE the map write, because the URL handed to addSource is read back
-    // out of that store. Reversed, MapLibre gets `undefined` and draws nothing
-    // while every other signal says the import worked.
-    const map = makeMockMap();
-    renderHarness(map);
-
-    lastImportFile!(makeFile("plate.tiff"));
-
-    await waitFor(() => expect(map.addSource).toHaveBeenCalledTimes(1));
-    const [, spec] = map.addSource.mock.calls[0];
-    expect(typeof spec.url).toBe("string");
-    expect(spec.url.length).toBeGreaterThan(0);
-  });
-
   it.each([".tif", ".tiff", ".geotiff"])(
     "routes %s to the raster path",
     async (ext) => {
-      const map = makeMockMap();
-      const { registerRasterLayer } = renderHarness(map);
+      const { registerRasterLayer } = renderHarness();
 
       lastImportFile!(makeFile(`sheet${ext}`));
 
@@ -973,8 +791,7 @@ describe("useDataFileImport — GeoTIFF", () => {
     decodeGeoTiffMock.mockRejectedValue(
       new FakeUnsupportedRasterCrsError("EPSG:32643"),
     );
-    const map = makeMockMap();
-    const { registerRasterLayer, findByTestId } = renderHarness(map);
+    const { registerRasterLayer, findByTestId } = renderHarness();
 
     lastImportFile!(makeFile("utm-survey.tif"));
 
@@ -991,8 +808,7 @@ describe("useDataFileImport — GeoTIFF", () => {
     decodeGeoTiffMock.mockRejectedValue(
       new FakeRasterDecodeError("this TIFF states no position"),
     );
-    const map = makeMockMap();
-    const { findByTestId } = renderHarness(map);
+    const { findByTestId } = renderHarness();
 
     lastImportFile!(makeFile("plain.tif"));
 
@@ -1002,8 +818,7 @@ describe("useDataFileImport — GeoTIFF", () => {
 
   it("says so when the browser cannot encode the image", async () => {
     encodeRasterPngMock.mockResolvedValue(null);
-    const map = makeMockMap();
-    const { registerRasterLayer, findByTestId } = renderHarness(map);
+    const { registerRasterLayer, findByTestId } = renderHarness();
 
     lastImportFile!(makeFile("sheet.tif"));
 
@@ -1011,13 +826,67 @@ describe("useDataFileImport — GeoTIFF", () => {
     expect(toast.textContent).toMatch(/cannot encode/i);
     // Nothing half-registered: no row in the panel for a layer with no image.
     expect(registerRasterLayer).not.toHaveBeenCalled();
-    expect(map.addSource).not.toHaveBeenCalled();
+  });
+});
+
+describe("useDataFileImport — limits, many files, cancel", () => {
+  it("refuses a file over the size limit and states the limit", async () => {
+    const { registerDataLayer, findByTestId } = renderHarness();
+    const big = Object.assign(makeFile("huge.geojson"), {
+      size: 300 * 1024 * 1024,
+    });
+
+    lastImportFile!(big);
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toMatch(/huge\.geojson is 300 MB/);
+    expect(toast.textContent).toMatch(/up to 256 MB/);
+    expect(parseMock).not.toHaveBeenCalled();
+    expect(registerDataLayer).not.toHaveBeenCalled();
   });
 
-  it("is a no-op with no map yet", async () => {
-    const { registerRasterLayer } = renderHarness(null);
-    lastImportFile!(makeFile("sheet.tif"));
-    await Promise.resolve();
-    expect(registerRasterLayer).not.toHaveBeenCalled();
+  it("reads a .json file as GeoJSON", async () => {
+    const { registerDataLayer } = renderHarness();
+    lastImportFile!(makeFile("parcels.json"));
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(registerDataLayer.mock.calls[0][0].label).toBe("parcels.json");
+  });
+
+  it("imports every data file of a drop and says which files it skipped", async () => {
+    const { root, registerDataLayer, findByTestId } = renderHarness();
+    fireEvent.drop(root, {
+      dataTransfer: {
+        files: [
+          makeFile("a.geojson"),
+          makeFile("notes.txt"),
+          makeFile("b.geojson"),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(2));
+    expect(registerDataLayer.mock.calls.map((c) => c[0].label)).toEqual([
+      "a.geojson",
+      "b.geojson",
+    ]);
+    expect((await findByTestId("toast-warning")).textContent).toMatch(
+      /1 of the dropped files is not a data file/,
+    );
+  });
+
+  it("Cancel on the progress toast stops the import", async () => {
+    parseMock.mockReturnValue(new Promise(() => {}));
+    const { registerDataLayer, findByTestId, onImported } = renderHarness();
+
+    lastImportFile!(makeFile("slow.geojson"));
+    fireEvent.click(await findByTestId("toast-action"));
+
+    await waitFor(() =>
+      expect(document.body.textContent).toMatch(
+        /slow\.geojson: import cancelled/,
+      ),
+    );
+    expect(registerDataLayer).not.toHaveBeenCalled();
+    expect(onImported).not.toHaveBeenCalled();
   });
 });

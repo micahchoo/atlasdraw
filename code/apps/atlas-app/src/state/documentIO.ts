@@ -17,7 +17,12 @@
 import { ulid } from "ulid";
 
 import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
-import { CURRENT_MANIFEST_VERSION, read, write } from "@atlasdraw/data";
+import {
+  CURRENT_MANIFEST_VERSION,
+  geometryKindOf,
+  read,
+  write,
+} from "@atlasdraw/data";
 
 import type {
   BinaryFileData,
@@ -103,6 +108,7 @@ function manifestLayer(entry: OverlayEntry): Manifest["layers"][number] {
     label: entry.label,
     visible: entry.visible,
     featureCount: entry.featureCount,
+    geometryKind: entry.geometryKind,
     style: entry.style as Record<string, unknown>,
     source: `data/layer-${entry.id}.geojson`,
     ...(entry.provenance ? { provenance: entry.provenance } : {}),
@@ -288,6 +294,8 @@ export function fromFile(file: AtlasdrawDocument): Partial<DocumentState> {
       visible: entry.visible,
       order: 0,
       featureCount: fc.features.length,
+      // A file written before the kind was saved: decide it now, once.
+      geometryKind: entry.geometryKind ?? geometryKindOf(fc),
       style: entry.style,
       ...(entry.provenance ? { provenance: entry.provenance } : {}),
     });

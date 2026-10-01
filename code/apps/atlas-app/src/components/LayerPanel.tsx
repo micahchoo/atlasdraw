@@ -63,7 +63,12 @@ import {
   renameAnnotation,
   setAnnotationVisible,
 } from "../state/annotations";
-import { fitMapToBox, fitMapToLayer } from "../lib/fitMapToContent";
+import {
+  fitMapToBox,
+  fitMapToContent,
+  fitMapToLayer,
+} from "../lib/fitMapToContent";
+import { useOverlayOutcome } from "../hooks/useMapOverlays";
 
 import styles from "../styles/LayerPanel.module.css";
 
@@ -1142,6 +1147,7 @@ function DataLayerCard({
         >
           D
         </span>
+        <RejectedBadge id={id} />
         <LayerNameField
           id={id}
           label={label}
@@ -1178,6 +1184,29 @@ function DataLayerCard({
         />
       </div>
     </SortableRow>
+  );
+}
+
+/**
+ * Shown when the map did not draw this overlay, with MapLibre's reason. The
+ * row stays: the layer is still in the document, and the user can fix or
+ * delete it.
+ */
+function RejectedBadge({ id }: { id: string }) {
+  const outcome = useOverlayOutcome(id);
+  if (outcome?.status !== "rejected") {
+    return null;
+  }
+  return (
+    <span
+      role="img"
+      aria-label={`Not drawn: ${outcome.reason}`}
+      title={`Not drawn: ${outcome.reason}`}
+      className={joinClass(styles.kindBadge, styles.kindBadgeRejected)}
+      data-testid={`layer-rejected-${id}`}
+    >
+      !
+    </span>
   );
 }
 
@@ -1314,6 +1343,7 @@ function RasterLayerRow({
         >
           I
         </span>
+        <RejectedBadge id={id} />
         <LayerNameField
           id={id}
           label={label}
@@ -1462,12 +1492,20 @@ function BasemapSection() {
 // LayerPanel
 // ---------------------------------------------------------------------------
 
-const byOrder = (a: OverlayEntry, b: OverlayEntry) => a.order - b.order;
+/**
+ * The top of the map's stack first. The document numbers each stack from the
+ * bottom (order 0 draws first), so the list reverses it.
+ */
+const topFirst = (a: OverlayEntry, b: OverlayEntry) => b.order - a.order;
 
 export function LayerPanel() {
   const entries = useDocument((s) => s.overlays);
-  const reorder = (id: string, order: number) =>
-    dispatch({ type: "reorder", id, order });
+  /** `index` is the row's position in its top-first section. */
+  const reorder = (id: string, index: number) => {
+    const kind = entries.find((e) => e.id === id)?.kind;
+    const count = entries.filter((e) => e.kind === kind).length;
+    dispatch({ type: "reorder", id, order: count - 1 - index });
+  };
   const updateStyle = (id: string, patch: Partial<LayerStyle>) =>
     dispatch({ type: "restyle", id, patch });
   const remove = (id: string) => dispatch({ type: "remove-layer", id });
@@ -1597,9 +1635,15 @@ export function LayerPanel() {
           announce(`"${name}" has no geometry to zoom to`);
         }
       } else {
-        // Annotation: route through selection → MapEditor effect handles zoom.
-        useSelectedLayerStore.getState().selectLayer(id);
-        announce(`Zooming to "${name}"`);
+        // Annotation: fit the map to the element's geographic bounds.
+        const element = scene()
+          ?.getSceneElements()
+          .find((el) => el.id === id);
+        if (element && fitMapToContent(map, [element])) {
+          announce(`Zoomed to "${name}"`);
+        } else {
+          announce(`"${name}" has no geometry to zoom to`);
+        }
       }
     },
   };
@@ -1607,11 +1651,11 @@ export function LayerPanel() {
   const dataLayers = entries
     .filter((e): e is DataLayerEntry => e.kind === "data")
     .slice()
-    .sort(byOrder);
+    .sort(topFirst);
   const rasters = entries
     .filter((e): e is RasterLayerEntry => e.kind === "raster")
     .slice()
-    .sort(byOrder);
+    .sort(topFirst);
 
   // Unfiltered — reorder indices address the real stack, not the visible
   // subset (see SortableRow).

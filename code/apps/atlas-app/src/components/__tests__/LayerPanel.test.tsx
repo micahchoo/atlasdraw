@@ -313,12 +313,13 @@ describe("LayerPanel", () => {
       expect(
         (screen.getByTestId("layer-down-a3") as HTMLButtonElement).disabled,
       ).toBe(true);
-      // Data section has its own first/last.
+      // Data section has its own first/last. It lists the top of the map's
+      // stack first, so the last layer added (dl:d2) is the first row.
       expect(
-        (screen.getByTestId("layer-up-dl:d1") as HTMLButtonElement).disabled,
+        (screen.getByTestId("layer-up-dl:d2") as HTMLButtonElement).disabled,
       ).toBe(true);
       expect(
-        (screen.getByTestId("layer-down-dl:d2") as HTMLButtonElement).disabled,
+        (screen.getByTestId("layer-down-dl:d1") as HTMLButtonElement).disabled,
       ).toBe(true);
     });
 
@@ -355,7 +356,9 @@ describe("LayerPanel", () => {
       seedMixed();
       render(<LayerPanel />);
 
-      dragOnto("dl:d1", "dl:d2", "below");
+      // The list is [d2, d1], top first. Dropping d2 below d1 puts d2 at the
+      // bottom of the stack.
+      dragOnto("dl:d2", "dl:d1", "below");
 
       expect(dataIds()).toEqual(["dl:d2", "dl:d1"]);
       expect(annotationIds()).toEqual(["a1", "a2", "a3"]);
@@ -405,7 +408,8 @@ describe("LayerPanel", () => {
       });
       render(<LayerPanel />);
 
-      dragOnto("dl:only-2", "dl:only-1", "above");
+      // The list is [Two, One], top first. One above Two puts One on top.
+      dragOnto("dl:only-1", "dl:only-2", "above");
       expect(dataIds()).toEqual(["dl:only-2", "dl:only-1"]);
       expect(ids()).toEqual(["dl:only-2", "dl:only-1"]);
     });

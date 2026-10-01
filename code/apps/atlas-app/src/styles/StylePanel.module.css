@@ -230,3 +230,13 @@
 .secondaryBtn:hover {
   background: var(--ad-surface-inset);
 }
+
+/* --- rejected style --------------------------------------------------------- */
+
+.error {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ad-danger);
+  overflow-wrap: anywhere;
+}

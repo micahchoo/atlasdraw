@@ -18,7 +18,10 @@ export {
 export type { LayerStyle, StyleExpression } from "./style";
 export {
   compileLayer,
+  compileLayers,
+  compileOutlinePaint,
   compilePaint,
+  outlineLayerId,
   defaultLayerStyle,
 } from "./style-compiler";
 export type { CompiledPaint, LayerGeometryType } from "./style-compiler";

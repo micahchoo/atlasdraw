@@ -1,33 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// W-C — Convert annotation → data layer, surfaced via the element
-// right-click context menu.
+// Convert an annotation to a data layer, from the element's right-click menu
+// (registered through the fork's `excalidrawAPI.registerContextMenuItem`).
 //
-// Rule-0 retrofit: original surface (Wave 3b T14) was a custom <div role="menu">
-// hung off the root container's onContextMenu. v0.18 ships no public way to
-// splice items into Excalidraw's element context menu (App.tsx:12488
-// getContextMenuItems is hardcoded; Action interface has no contextItemLabel).
-// So Convert surfaces via the atlasdraw fork's `excalidrawAPI.registerContextMenuItem`
-// (packages/excalidraw/components/App.tsx) instead — registered internally
-// by this hook, predicate-driven enabled state (single geo selection, not
-// text/arrow). NB: an older W-B plan additionally described a MainMenu.Item
-// surface reading the same predicate/handler pair; no such MainMenu item
-// exists in MapEditor's JSX (confirmed by grep before this extraction) — the
-// context menu is the only live surface today. `currentConvertibleSelection`/
-// `handleConvert` are returned for a future MainMenu surface to reuse, should
-// one get built; today nothing outside this hook consumes them.
-//
-// Why we don't call registry.convertAnnotationToDataLayer here: that method
-// mints its own dl:<uuid> internally and uses DEFAULT_CONVERTED_STYLE, but
-// returns nothing — we'd have no id to coordinate with map.addSource/
-// addLayer. Instead we mirror T13's drop pattern: generate the id at the
-// call site, registerDataLayer with the fc/style we built, then remove the
-// annotation entry. Same end state, with id ownership at the call site.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 2) — the
-// best-covered inline concern: MapEditor.contextmenu.test.tsx exercises
-// registration, predicate, the full perform pipeline, and unregister-on-
-// unmount.
+// The conversion is two edits: the document gains a data layer with the
+// element's geometry, and the element is deleted as an undoable scene step.
+// The map overlays draw the new layer; nothing here writes the map.
 
 import { useCallback, useEffect } from "react";
 
@@ -36,15 +14,14 @@ import {
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "@atlasdraw/tools";
-import { compileLayer, defaultLayerStyle } from "@atlasdraw/basemap";
+import { defaultLayerStyle } from "@atlasdraw/basemap";
 import { isGeoCustomData } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { inferGeometryType } from "../lib/geometryType";
+import { deleteAnnotation, generateLayerLabel } from "../state/annotations";
 
 import type { DocumentCommand } from "../state/document";
-import type maplibregl from "maplibre-gl";
 
 /**
  * Registers the Convert-annotation-to-data-layer action on the element
@@ -57,7 +34,6 @@ export interface ConvertToDataLayerNotify {
 }
 
 export function useConvertToDataLayer(
-  map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   addDataLayer: (
     layer: Omit<Extract<DocumentCommand, { type: "add-data-layer" }>, "type">,
@@ -98,43 +74,28 @@ export function useConvertToDataLayer(
 
   const handleConvert = useCallback(
     (el: ConvertibleElement) => {
-      if (!map || !excalidrawAPI) {
+      if (!excalidrawAPI) {
         return;
       }
       try {
-        // Step 1 — pure computation, no side effects.
         const fc = annotationToFeatureCollection(el);
-        const id = `dl:${crypto.randomUUID()}`;
-        const style = defaultLayerStyle(fc);
-        const geometryType = inferGeometryType(fc);
-        // Step 2 — map mutations first; rollback the orphan source if addLayer throws.
-        map.addSource(id, { type: "geojson", data: fc });
-        try {
-          map.addLayer(compileLayer(id, style, geometryType));
-        } catch (layerErr) {
-          try {
-            map.removeSource(id);
-          } catch {
-            /* swallow secondary failure */
-          }
-          throw layerErr;
-        }
-        // Step 3 — the document gains the layer (won't throw).
-        addDataLayer({ id, fc, label: el.id, style });
-        // Step 4 — destructive scene mutation last.
-        const remaining = excalidrawAPI
+        const source = excalidrawAPI
           .getSceneElements()
-          .filter((x) => x.id !== el.id);
-        excalidrawAPI.updateScene({ elements: remaining });
+          .find((x) => x.id === el.id);
+        addDataLayer({
+          id: `dl:${crypto.randomUUID()}`,
+          fc,
+          label: source ? generateLayerLabel(source) : el.type,
+          style: defaultLayerStyle(fc),
+        });
+        deleteAnnotation(excalidrawAPI, el.id);
       } catch (err) {
         if (err instanceof UnsupportedConvertElementError) {
           notify.error(err.message);
           return;
         }
-        // `handleConvert` runs synchronously inside the vendored context
-        // menu's onClick — an unguarded rethrow here would surface as an
-        // uncaught exception with nothing shown to the user (same class of
-        // bug as useDataFileImport.ts's addLayer-failure path).
+        // `handleConvert` runs inside the context menu's onClick; a rethrow
+        // would be an uncaught exception with nothing shown to the user.
         // eslint-disable-next-line no-console
         console.error("[useConvertToDataLayer] convert failed:", err);
         notify.error(
@@ -144,10 +105,10 @@ export function useConvertToDataLayer(
         );
       }
     },
-    [map, addDataLayer, excalidrawAPI, notify],
+    [addDataLayer, excalidrawAPI, notify],
   );
 
-  // W-C — Surface Convert as a right-click context-menu item via the
+  // Convert is a right-click context-menu item, through the
   // atlasdraw fork's `excalidrawAPI.registerContextMenuItem`. Item appears
   // at the tail of the element menu, gated the same way
   // currentConvertibleSelection is (single geo selection, not text/arrow).
