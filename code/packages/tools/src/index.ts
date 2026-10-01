@@ -1,5 +1,4 @@
 // @atlasdraw/tools — public surface.
-// T14
 
 // PinTool is the one built-in tool. The native Excalidraw toolbar draws
 // every other shape. `classifyTool`, the `AtlasdrawTool` type, the converter
@@ -15,8 +14,7 @@ import { PinTool } from "./PinTool.js";
 import type { AtlasdrawTool } from "./types.js";
 export * from "./types.js";
 export { classifyTool } from "./classifyTool.js";
-export { PinTool } from "./PinTool.js"; // Phase 1 Wave 3b Task 14
-// Phase 2 Wave 2b additions:
+export { PinTool } from "./PinTool.js";
 export {
   annotationToFeatureCollection,
   drawingToFeatureCollection,
@@ -64,7 +62,7 @@ export function listTools(): readonly AtlasdrawTool[] {
 for (const tool of [PinTool] as const) {
   registerTool(tool);
 }
-// W9 — measuring.
+// Measuring.
 export { formatArea, formatLength, unitSystemForLocale } from "./units.js";
 export type { UnitSystem } from "./units.js";
 export { IDLE_MEASURE, measureStep, shownPath } from "./measureSession.js";
