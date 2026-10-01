@@ -1829,8 +1829,11 @@ export function LayerPanel() {
               north = lat;
             }
           }
-          fitMapToBox(map, { west, south, east, north });
-          announce(`Zoomed to "${name}"`);
+          if (fitMapToBox(map, { west, south, east, north })) {
+            announce(`Zoomed to "${name}"`);
+          } else {
+            announce(`"${name}" has no position the map can zoom to`);
+          }
         } else {
           announce(`"${name}" has no geometry to zoom to`);
         }

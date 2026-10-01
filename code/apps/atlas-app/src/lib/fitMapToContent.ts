@@ -51,9 +51,9 @@ export interface FitBoundsSurface {
  * "don't move the camera" rather than framing [0,0], which would throw the user
  * into the Gulf of Guinea.
  *
- * GeometryCollection is walked recursively even though `requireHomogeneousGeometry`
- * rejects it at import: layers also arrive by conversion and collaboration,
- * and silently framing nothing is worse than handling the case.
+ * GeometryCollection is walked recursively even though an import divides it
+ * by kind: layers also arrive by conversion and collaboration, and silently
+ * framing nothing is worse than handling the case.
  */
 export function computeFeatureCollectionBounds(
   fc: FeatureCollection,
@@ -129,42 +129,52 @@ export function fitMapToLayer(
   map: FitBoundsSurface | null,
   fc: FeatureCollection | undefined,
 ): boolean {
-  if (!map || !fc) {
-    return false;
-  }
-  const box = computeFeatureCollectionBounds(fc);
-  if (!box) {
-    return false;
-  }
-  map.fitBounds(
-    [
-      [box.west, box.south],
-      [box.east, box.north],
-    ],
-    { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: FIT_DURATION_MS },
+  const box = fc ? computeFeatureCollectionBounds(fc) : null;
+  return box ? fitMapToBox(map, box) : false;
+}
+
+/** True for a box on the globe: finite, lat within ±90, west ≤ east. */
+function onGlobe(box: LngLatBox): boolean {
+  const { west, south, east, north } = box;
+  return (
+    [west, south, east, north].every(Number.isFinite) &&
+    south >= -90 &&
+    north <= 90 &&
+    south <= north &&
+    west <= east &&
+    west >= -360 &&
+    east <= 360
   );
-  return true;
 }
 
 /**
- * Frame the camera on a geographic bounding box. Returns false when the map is
- * absent, so callers can gate their feedback. Uses the same padding, maxZoom,
- * and duration as fitMapToLayer — one set of constants,
- * one visual result.
+ * Frame the camera on a geographic bounding box. Returns false, and leaves
+ * the camera, when the map is absent, the box is not on the globe (a layer
+ * in metres), or the map refuses the fit: a "zoom to" never throws.
  */
 export function fitMapToBox(
   map: FitBoundsSurface | null,
   box: LngLatBox,
 ): boolean {
-  if (!map) {
+  if (!map || !onGlobe(box)) {
     return false;
   }
-  map.fitBounds(
-    [
-      [box.west, box.south],
-      [box.east, box.north],
-    ],
-    { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: FIT_DURATION_MS },
-  );
-  return true;
+  try {
+    map.fitBounds(
+      [
+        [box.west, box.south],
+        [box.east, box.north],
+      ],
+      {
+        padding: FIT_PADDING,
+        maxZoom: FIT_MAX_ZOOM,
+        duration: FIT_DURATION_MS,
+      },
+    );
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] the map refused a camera fit", box, err);
+    return false;
+  }
 }

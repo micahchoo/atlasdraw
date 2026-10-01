@@ -12,6 +12,11 @@ export {
 } from "./geojson";
 export type { AtlasGeometryKind, GeometryKindPart } from "./geojson";
 
+// A parsed FeatureCollection made ready for the map: lng/lat, drawable,
+// one part per geometry kind.
+export { prepareForMap, CoordinateError } from "./coordinates";
+export type { CoordinateErrorCode, PreparedLayers } from "./coordinates";
+
 // KML, KMZ and GPX → GeoJSON. Output can mix geometry kinds.
 export {
   parseKML,

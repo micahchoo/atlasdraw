@@ -20,8 +20,8 @@ import {
   parseKML,
   parseKMZ,
   parseGPX,
-  splitByGeometryKind,
-  requireHomogeneousGeometry,
+  prepareForMap,
+  CoordinateError,
   GeoJSONParseError,
   CSVParseError,
   ShapefileParseError,
@@ -79,7 +79,13 @@ export interface ImportedLayer {
 }
 
 export type ImportOutcome =
-  | { ok: true; kind: "vector"; layers: ImportedLayer[] }
+  | {
+      ok: true;
+      kind: "vector";
+      layers: ImportedLayer[];
+      /** The CRS the positions were converted from, or null. */
+      reprojectedFrom: string | null;
+    }
   | {
       ok: true;
       kind: "raster";
@@ -166,15 +172,6 @@ const KIND_LABEL: Readonly<Record<AtlasGeometryKind, string>> = {
   circle: "points",
 };
 
-/**
- * Features that will never render: `geometry: null` is RFC 7946-legal and
- * survives `parse()`, yet MapLibre draws nothing for it. Counted as dropped
- * so the panel's number matches what the user can see.
- */
-function countNullGeometries(fc: FeatureCollection): number {
-  return fc.features.reduce((n, f) => (f.geometry ? n : n + 1), 0);
-}
-
 function shapefileErrorMessage(err: ShapefileParseError): string {
   switch (err.code) {
     case "BAD_ZIP":
@@ -194,56 +191,56 @@ async function importVector(
   const progress = options.onProgress ?? (() => {});
   progress({ phase: "parsing" });
 
-  let parts: Array<{ fc: FeatureCollection; kindLabel: string | null }>;
   // Input records the parser discarded: CSV rows with no usable
-  // coordinates, KML/GPX features with no geometry. GeoJSON and shapefiles
-  // reject the whole file instead, so 0 from those is a fact.
-  let dropped = 0;
+  // coordinates, KML/GPX features with no geometry.
+  let parsed = 0;
+  let fc: FeatureCollection;
   if (format === "kml" || format === "kmz" || format === "gpx") {
     const parser =
       format === "kml" ? parseKML : format === "kmz" ? parseKMZ : parseGPX;
-    const { fc, droppedCount } = await parser(file);
-    const split = splitByGeometryKind(fc);
-    parts = split.map(({ kind, fc: part }) => ({
-      fc: part,
-      kindLabel: split.length > 1 ? KIND_LABEL[kind] : null,
-    }));
-    dropped = droppedCount;
+    const result = await parser(file);
+    fc = result.fc;
+    parsed = result.droppedCount;
+  } else if (format === "csv") {
+    fc = await parseCSV(file, {
+      ...(options.geocoderEndpoint
+        ? {
+            geocoder: new PhotonGeocoder({
+              endpoint: options.geocoderEndpoint,
+            }),
+          }
+        : {}),
+      onStats: (stats) => {
+        parsed = stats.dropped;
+      },
+      onGeocodeProgress: (done, total) =>
+        progress({ phase: "geocoding", done, total }),
+    });
+  } else if (format === "zip") {
+    fc = await parseShapefile(file);
   } else {
-    let fc: FeatureCollection;
-    if (format === "csv") {
-      fc = await parseCSV(file, {
-        ...(options.geocoderEndpoint
-          ? {
-              geocoder: new PhotonGeocoder({
-                endpoint: options.geocoderEndpoint,
-              }),
-            }
-          : {}),
-        onStats: (stats) => {
-          dropped = stats.dropped;
-        },
-        onGeocodeProgress: (done, total) =>
-          progress({ phase: "geocoding", done, total }),
-      });
-    } else if (format === "zip") {
-      fc = await parseShapefile(file);
-    } else {
-      fc = await parse(file);
-    }
-    requireHomogeneousGeometry(fc);
-    parts = [{ fc, kindLabel: null }];
+    fc = await parse(file);
   }
 
+  // Positions in lng/lat, drawable features only, one layer per kind.
+  const { parts, dropped, reprojectedFrom } = prepareForMap(fc);
+  if (parts.length === 0) {
+    return {
+      ok: false,
+      message: `${file.name}: no feature in this file has coordinates the map can draw.`,
+    };
+  }
   return {
     ok: true,
     kind: "vector",
-    layers: parts.map(({ fc, kindLabel }, i) => ({
-      fc,
-      label: kindLabel ? `${file.name} — ${kindLabel}` : file.name,
-      // The parser's count belongs to the file, not to a kind. The first
-      // layer records it, so the sum over the layers is true.
-      droppedCount: (i === 0 ? dropped : 0) + countNullGeometries(fc),
+    reprojectedFrom,
+    layers: parts.map(({ kind, fc: part }, i) => ({
+      fc: part,
+      label:
+        parts.length > 1 ? `${file.name} — ${KIND_LABEL[kind]}` : file.name,
+      // The counts belong to the file, not to a kind. The first layer
+      // records them, so the sum over the layers is true.
+      droppedCount: i === 0 ? parsed + dropped : 0,
     })),
   };
 }
@@ -286,6 +283,9 @@ function failureMessage(
     return `${file.name}: this image is in ${err.crs}. Reproject it to EPSG:4326 and try again.`;
   }
   if (err instanceof RasterDecodeError) {
+    return `${file.name}: ${err.message}`;
+  }
+  if (err instanceof CoordinateError) {
     return `${file.name}: ${err.message}`;
   }
   if (err instanceof GeoJSONParseError) {

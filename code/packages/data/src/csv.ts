@@ -92,7 +92,11 @@ const LAT_NAME_RE = /^(lat|latitude|y)$/i;
 const LNG_NAME_RE = /^(lng|lon|long|longitude|x)$/i;
 const ADDRESS_NAME_RE = /^(address|location|street|addr)$/i;
 
-type CSVErrorCode = "EMPTY_FILE" | "NO_COORD_COLUMNS" | "PARSE_FAILED";
+type CSVErrorCode =
+  | "EMPTY_FILE"
+  | "NO_COORD_COLUMNS"
+  | "PARSE_FAILED"
+  | "PROJECTED_COORDINATES";
 
 export class CSVParseError extends Error {
   readonly code: CSVErrorCode;
@@ -175,6 +179,8 @@ export async function parseCSV(
   const features: Feature[] = [];
   const pending: PendingRow[] = [];
   const numberColumns = numericColumns(headers, rows);
+  /** A row whose coordinates are numbers off the globe, for the message. */
+  let offGlobe: { lng: number; lat: number } | null = null;
 
   for (const row of rows) {
     const lat = hasCoordCols ? toFiniteNumber(row[latCol!]) : null;
@@ -195,6 +201,9 @@ export async function parseCSV(
       properties._addressColumn_v1 = addressCol;
     }
 
+    if (!(latOk && lngOk) && lat !== null && lng !== null) {
+      offGlobe ??= { lng, lat };
+    }
     if (latOk && lngOk) {
       features.push({
         type: "Feature",
@@ -253,6 +262,16 @@ export async function parseCSV(
         features.push(feat);
       }
     }
+  }
+
+  if (features.length === 0 && offGlobe) {
+    throw new CSVParseError(
+      "PROJECTED_COORDINATES",
+      `The columns ${lngCol} and ${latCol} hold values like ${offGlobe.lng}, ${offGlobe.lat}: ` +
+        "these look like metres in a projected system, not longitude and " +
+        "latitude. Convert the coordinates to longitude and latitude " +
+        "(EPSG:4326) and import the file again.",
+    );
   }
 
   opts?.onStats?.({

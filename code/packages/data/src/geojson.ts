@@ -16,11 +16,9 @@
 //      RFC-legal but we still require the key to exist), and a `properties`
 //      field. The error names the offending field AND the feature index.
 //
-// Deliberately NOT validated here:
-//   - per-coordinate numeric range (lng ∈ [-180, 180], etc.)
-//   - geometry-type-specific shape (Polygon ring closure, LineString min len)
-//   - bbox / foreign members
-//   - CRS objects (RFC 7946 deprecated them; we tolerate their presence)
+// Not validated here: positions, their range and a declared CRS are
+// coordinates.ts#prepareForMap's job; ring closure, bbox and foreign
+// members are not checked anywhere.
 
 import type {
   Feature,
@@ -134,9 +132,9 @@ export async function write(fc: FeatureCollection): Promise<Blob> {
  * MapLibre rendering should invoke this helper immediately after `parse()`
  * to fail fast with a user-actionable error.
  *
- * Formats where mixed kinds are normal (KML, KMZ, GPX) are divided with
- * `splitByGeometryKind` instead; atlas-app's import rejects mixed GeoJSON,
- * CSV and shapefiles with this helper.
+ * atlas-app's import does not call it: it divides every format with
+ * `splitByGeometryKind` (coordinates.ts#prepareForMap). Only the bench
+ * measures it.
  *
  * `null` geometries are RFC-legal and treated as no-op (no contribution to
  * the kind set). GeometryCollection and unknown types are rejected as

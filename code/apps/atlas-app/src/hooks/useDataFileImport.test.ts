@@ -34,7 +34,6 @@ const {
   parseGPXMock,
   parseCSVMock,
   parseShapefileMock,
-  requireHomogeneousGeometryMock,
   photonGeocoderCtor,
   defaultLayerStyleMock,
   getAppConfigMock,
@@ -86,7 +85,6 @@ const {
     parseGPXMock: vi.fn(),
     parseCSVMock: vi.fn(),
     parseShapefileMock: vi.fn(),
-    requireHomogeneousGeometryMock: vi.fn(),
     photonGeocoderCtor: vi.fn(),
     defaultLayerStyleMock: vi.fn(() => ({} as LayerStyle)),
     getAppConfigMock: vi.fn(() => ({ geocoder: undefined } as unknown)),
@@ -103,11 +101,14 @@ const {
   };
 });
 
-// splitByGeometryKind is the real function: the layers that a mixed file
-// makes are the behaviour under test, and a mock would only repeat it.
+// prepareForMap is the real function: the layers that a mixed file makes,
+// and what it drops, are the behaviour under test; a mock would only
+// repeat it.
 vi.mock("@atlasdraw/data", async (importActual) => ({
-  splitByGeometryKind: (await importActual<typeof import("@atlasdraw/data")>())
-    .splitByGeometryKind,
+  prepareForMap: (await importActual<typeof import("@atlasdraw/data")>())
+    .prepareForMap,
+  CoordinateError: (await importActual<typeof import("@atlasdraw/data")>())
+    .CoordinateError,
   parseKML: parseKMLMock,
   parseKMZ: parseKMZMock,
   parseGPX: parseGPXMock,
@@ -123,7 +124,6 @@ vi.mock("@atlasdraw/data", async (importActual) => ({
       photonGeocoderCtor(...args);
     }
   },
-  requireHomogeneousGeometry: requireHomogeneousGeometryMock,
   decodeGeoTiff: decodeGeoTiffMock,
   encodeRasterPng: encodeRasterPngMock,
   RasterDecodeError: FakeRasterDecodeError,
@@ -227,7 +227,7 @@ function Harness({
     label: string;
     style: LayerStyle;
   }) => void;
-  onImported?: () => void;
+  onImported?: (box: unknown) => void;
   registerRasterLayer?: (opts: {
     id: string;
     label: string;
@@ -277,7 +277,6 @@ beforeEach(() => {
   lastImportFile = null;
   getAppConfigMock.mockReturnValue({ geocoder: undefined });
   parseMock.mockResolvedValue(POLY_FC);
-  requireHomogeneousGeometryMock.mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -316,7 +315,6 @@ describe("useDataFileImport — drag-and-drop", () => {
     });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
-    expect(requireHomogeneousGeometryMock).toHaveBeenCalledWith(POLY_FC);
     const callArg = registerDataLayer.mock.calls[0][0];
     expect(callArg.label).toBe("test.geojson");
     expect(callArg.fc).toBe(POLY_FC);
@@ -885,5 +883,22 @@ describe("useDataFileImport — limits, many files, cancel", () => {
     );
     expect(registerDataLayer).not.toHaveBeenCalled();
     expect(onImported).not.toHaveBeenCalled();
+  });
+});
+
+describe("useDataFileImport — the camera after an import", () => {
+  it("hands the bounds of what it imported to onImported, so the map can fit them", async () => {
+    const { root, onImported } = renderHarness();
+    fireEvent.drop(root, {
+      dataTransfer: { files: [makeFile("parcels.geojson")] },
+    });
+
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+    expect(onImported).toHaveBeenCalledWith({
+      west: 0,
+      south: 0,
+      east: 1,
+      north: 1,
+    });
   });
 });

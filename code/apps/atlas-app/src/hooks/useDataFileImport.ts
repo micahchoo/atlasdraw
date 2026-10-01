@@ -20,6 +20,8 @@ import { useCallback, useEffect } from "react";
 
 import { defaultLayerStyle } from "@atlasdraw/basemap";
 
+import type { LngLatBox } from "@atlasdraw/geo";
+
 import { getAppConfig } from "../config/app-config";
 
 import { useToast } from "../components/ToastProvider";
@@ -31,6 +33,7 @@ import {
   type ImportProgress,
 } from "../lib/importPipeline";
 import { importFileOffThread, isImportCancelled } from "../lib/importClient";
+import { computeFeatureCollectionBounds } from "../lib/fitMapToContent";
 
 import type { FeatureCollection } from "geojson";
 import type {
@@ -73,6 +76,30 @@ function progressText(fileName: string, progress: ImportProgress): string {
   }
 }
 
+/** The lng/lat box of a raster's corners. */
+function boxOfCorners(corners: RasterCorners): LngLatBox {
+  const lngs = corners.map(([lng]) => lng);
+  const lats = corners.map(([, lat]) => lat);
+  return {
+    west: Math.min(...lngs),
+    east: Math.max(...lngs),
+    south: Math.min(...lats),
+    north: Math.max(...lats),
+  };
+}
+
+function union(a: LngLatBox | null, b: LngLatBox | null): LngLatBox | null {
+  if (!a || !b) {
+    return a ?? b;
+  }
+  return {
+    west: Math.min(a.west, b.west),
+    south: Math.min(a.south, b.south),
+    east: Math.max(a.east, b.east),
+    north: Math.max(a.north, b.north),
+  };
+}
+
 export interface UseDataFileImportResult {
   /** Import a file the user picked. An unknown format gets a message. */
   importFile: (file: File) => void;
@@ -88,10 +115,11 @@ export function useDataFileImport(
     provenance?: LayerProvenance;
   }) => void,
   /**
-   * Called after an import added its layers, never after a failure. MapEditor
-   * opens the sheet panel on it.
+   * Called after an import added its layers, never after a failure, with the
+   * lng/lat box of what it added (null when nothing has a position). The
+   * editor opens the sheet panel and fits the camera on it.
    */
-  onImported?: () => void,
+  onImported?: (box: LngLatBox | null) => void,
   addRasterLayer?: (opts: {
     id: string;
     label: string;
@@ -144,12 +172,14 @@ export function useDataFileImport(
           provenance: { sourceFile: file.name, droppedCount: 0 },
         });
         toast.success(`${file.name}: imported as a ${outcome.crs} image`);
-        onImported?.();
+        onImported?.(boxOfCorners(outcome.corners));
         return;
       }
 
       let features = 0;
+      let box: LngLatBox | null = null;
       for (const layer of outcome.layers) {
+        box = union(box, computeFeatureCollectionBounds(layer.fc));
         addDataLayer({
           id: `dl:${crypto.randomUUID()}`,
           fc: layer.fc,
@@ -164,12 +194,15 @@ export function useDataFileImport(
       }
       const asLayers =
         outcome.layers.length > 1 ? ` as ${outcome.layers.length} layers` : "";
+      const converted = outcome.reprojectedFrom
+        ? `, converted from ${outcome.reprojectedFrom} to longitude and latitude`
+        : "";
       toast.success(
         `${file.name}: ${features} feature${
           features === 1 ? "" : "s"
-        } imported${asLayers}`,
+        } imported${asLayers}${converted}`,
       );
-      onImported?.();
+      onImported?.(box);
     },
     [addDataLayer, addRasterLayer, onImported, toast],
   );
