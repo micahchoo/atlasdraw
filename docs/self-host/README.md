@@ -95,18 +95,18 @@ The minimal compose file reads two variables from `.env` or the shell:
 - `PUBLIC_URL` — the prefix of the share URLs that the API returns. Default
   empty: relative URLs (`/m/<token>`). Set it, for example to
   `https://atlas.example.com`, when Atlasdraw is behind your own proxy.
-- `LOG_LEVEL` — the pino log level. Default `info`; `debug` logs every
-  request.
+- `LOG_LEVEL` — the pino log level. Default `info`, which already logs
+  every request (a share token shows as `[redacted]`); `debug` adds detail.
 
 ```bash
 LOG_LEVEL=debug docker compose -f infra/docker-compose.minimal.yml up
 ```
 
-The storage server reads more variables (`MAX_TOTAL_BYTES`,
-`SWEEP_INTERVAL_MS`, `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS`, `TRUST_PROXY`).
-The minimal compose file does not pass them; add them to the `storage`
-service's `environment` to use them. [`production.md`](production.md)
-explains each one.
+The storage server reads more variables: the limits (`MAX_TOTAL_BYTES`,
+10 GiB by default, and the others in "Storage limits" in
+[`production.md`](production.md)) and `TRUST_PROXY`. The minimal compose
+file does not pass them, so the server's defaults apply; add one to the
+`storage` service's `environment` to change it.
 
 ### Editor (at build time)
 
@@ -118,11 +118,11 @@ Docker image takes five of them as build arguments: `VITE_BUILD_TARGET`,
 `code/apps/atlas-app/.env.production.local` (git ignores it) before you build.
 Vite reads that file during the image build.
 
-| Variable                     | Default                              | Effect                                       |
-| ---------------------------- | ------------------------------------ | -------------------------------------------- |
-| `VITE_ALLOW_REMOTE_BASEMAPS` | `true`                               | `false` removes "Bright", "OSM" and the USGS tile preset |
-| `VITE_GEOCODER_ENDPOINT`     | empty (off)                          | A Photon server for CSV address columns      |
-| `VITE_EMBED_ENABLED`         | `true`                               | `false` makes `/embed` open the editor       |
+| Variable                     | Default     | Effect                                                   |
+| ---------------------------- | ----------- | -------------------------------------------------------- |
+| `VITE_ALLOW_REMOTE_BASEMAPS` | `true`      | `false` removes "Bright", "OSM" and the USGS tile preset |
+| `VITE_GEOCODER_ENDPOINT`     | empty (off) | A Photon server for CSV address columns                  |
+| `VITE_EMBED_ENABLED`         | `true`      | `false` makes `/embed` open the editor                   |
 
 ## What the browser fetches from other servers
 
@@ -177,6 +177,15 @@ The `atlas-storage-data` volume stays when the images change. The storage
 server migrates its schema at start, so copy the volume before an update.
 Read the "Upgrade" part of [`CHANGELOG.md`](../../CHANGELOG.md) first.
 
+The storage image now runs as the unprivileged `node` user. A volume that
+an older image made is owned by root; give it to `node` once, before the
+new image starts:
+
+```bash
+docker compose -f infra/docker-compose.minimal.yml run --rm \
+  --user root --entrypoint chown storage -R node:node /data
+```
+
 ## Limits of the minimal stack
 
 - **One writer.** SQLite takes one write at a time. This is enough for one
@@ -194,6 +203,13 @@ Read the "Upgrade" part of [`CHANGELOG.md`](../../CHANGELOG.md) first.
 **"Couldn't sync to the server".** The editor saved your map in the browser
 but could not reach `/api`. Check that the `storage` container is healthy:
 `docker compose -f infra/docker-compose.minimal.yml ps`.
+
+**"The server no longer has this map" or "…no longer accepts this
+browser's key".** The server refused the map this browser saves to: it was
+deleted, or the key in this browser does not open it. The editor does not
+make a new server map by itself, because links you shared would stay on the
+old version. Your changes are in the browser. A new server copy gets new
+links.
 
 **The build fails on `better-sqlite3`.** The storage image needs Python and
 C++ build tools for this native module. The Dockerfile installs them; if you

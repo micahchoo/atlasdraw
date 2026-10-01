@@ -68,7 +68,7 @@ vi.mock("@aws-sdk/client-s3", () => {
     GetObjectCommand: class GetObjectCommand extends Command {},
     CreateBucketCommand: class CreateBucketCommand extends Command {},
     HeadBucketCommand: class HeadBucketCommand extends Command {},
-    ListBucketsCommand: class ListBucketsCommand extends Command {},
+    ListObjectsV2Command: class ListObjectsV2Command extends Command {},
     DeleteObjectCommand: class DeleteObjectCommand extends Command {},
   };
 });
@@ -239,13 +239,20 @@ describe("postgres-minio adapter", () => {
       expect(queryMock).toHaveBeenCalledWith("SELECT 1");
     });
 
-    it("checks S3 via ListBuckets, not HeadBucket on our own (possibly-unmade) bucket", async () => {
+    it("checks S3 with HeadBucket on its own bucket, which a user limited to that bucket may do", async () => {
       const client = makeAdapter();
       await client.ping();
-      const listBucketsCall = s3SendMock.mock.calls
-        .map(([c]) => c)
-        .find((c) => c?.constructor?.name === "ListBucketsCommand");
-      expect(listBucketsCall).toBeDefined();
+      const names = s3SendMock.mock.calls.map(
+        ([c]) => c?.constructor?.name as string,
+      );
+      expect(names).toEqual(["HeadBucketCommand"]);
+    });
+
+    it("asks S3 again on every ping, not once", async () => {
+      const client = makeAdapter();
+      await client.ping();
+      await client.ping();
+      expect(s3SendMock).toHaveBeenCalledTimes(2);
     });
 
     it("rejects when postgres is down", async () => {

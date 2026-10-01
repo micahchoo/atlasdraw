@@ -42,7 +42,6 @@ vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
   }
   class HeadBucketCommand extends Command {}
   class CreateBucketCommand extends Command {}
-  class ListBucketsCommand extends Command {}
   class ListObjectsV2Command extends Command {}
   class PutObjectCommand extends Command {}
   class GetObjectCommand extends Command {}
@@ -101,7 +100,6 @@ vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
     S3Client,
     HeadBucketCommand,
     CreateBucketCommand,
-    ListBucketsCommand,
     ListObjectsV2Command,
     PutObjectCommand,
     GetObjectCommand,

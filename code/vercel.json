@@ -3,6 +3,12 @@
   "buildCommand": "yarn workspace @atlasdraw/atlas-app build",
   "outputDirectory": "apps/atlas-app/dist",
   "installCommand": "yarn install",
+  "rewrites": [
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

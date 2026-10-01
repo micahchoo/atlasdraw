@@ -19,7 +19,6 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
-  ListBucketsCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -157,10 +156,7 @@ export function createPostgresMinioAdapter(opts: {
   // stack's MinIO user) still works with a bucket made for it. A bucket that
   // exists but is not ours is an error: on AWS, BucketAlreadyExists means
   // another account owns the name.
-  async function ensureBucket(): Promise<void> {
-    if (bucketReady) {
-      return;
-    }
+  async function headOrCreateBucket(): Promise<void> {
     try {
       await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
     } catch (err: unknown) {
@@ -182,6 +178,12 @@ export function createPostgresMinioAdapter(opts: {
       }
     }
     bucketReady = true;
+  }
+
+  async function ensureBucket(): Promise<void> {
+    if (!bucketReady) {
+      await headOrCreateBucket();
+    }
   }
 
   /** Streams `body` to `key`; exactly `body.size` bytes or a rejection. */
@@ -647,12 +649,11 @@ export function createPostgresMinioAdapter(opts: {
     },
 
     async ping(): Promise<void> {
-      // Ping via ListBuckets, not HeadBucket on our own bucket — the bucket
-      // may not exist yet (lazily created on first write) even though MinIO
-      // itself is perfectly healthy. ListBuckets checks connectivity +
-      // credentials without depending on our bucket's existence.
+      // HeadBucket on our own bucket, every time: it checks the endpoint,
+      // the credentials and the bucket, and needs only the bucket rights
+      // the app user has (ListBuckets would need s3:ListAllMyBuckets).
       await pool.query("SELECT 1");
-      await s3.send(new ListBucketsCommand({}));
+      await headOrCreateBucket();
     },
 
     async close(): Promise<void> {

@@ -17,6 +17,19 @@
 #   tls internal
 # or comment out the entire `tls` directive and use http://${PUBLIC_DOMAIN}.
 
+# Global options. The default log carries the handlers' own messages (the
+# reverse proxy logs a request it could not finish, with its URI after /api
+# was stripped), so it gets the same share-token filter as the access log.
+{
+	log {
+		format filter {
+			wrap json
+			request>uri regexp "^/(api/share|share|m|embed)/[^/?#]+" "/${1}/[redacted]"
+			request>headers>Referer regexp "/(m|embed)/[^/?#]+" "/${1}/[redacted]"
+		}
+	}
+}
+
 {$PUBLIC_DOMAIN} {
 	encode zstd gzip
 
@@ -42,9 +55,17 @@
 
 	tls {$ACME_EMAIL}
 
+	# A share token is a read capability, and it travels in the path
+	# (/m/<token>, /embed/<token>, /api/share/<token>/blob) and in the Referer
+	# of what those pages fetch. The access log writes [redacted] instead, so
+	# shipping this log to an aggregator does not ship the links.
 	log {
 		output stdout
-		format json
+		format filter {
+			wrap json
+			request>uri regexp "^/(api/share|share|m|embed)/[^/?#]+" "/${1}/[redacted]"
+			request>headers>Referer regexp "/(m|embed)/[^/?#]+" "/${1}/[redacted]"
+		}
 		level INFO
 	}
 }

@@ -26,7 +26,18 @@ the new images. Then:
 3. **Full stack with the relay: add the `roomsdata` volume.** The relay now
    saves rooms to SQLite at `/data/rooms.sqlite`. The new
    `infra/docker-compose.yml` declares the volume.
-4. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
+4. **Give old volumes to the unprivileged users.** The storage, relay and
+   web images no longer run as root (Node 22). A volume an older image made
+   is root's. Before the first start, run once per volume, for example:
+   `docker compose -f infra/docker-compose.minimal.yml run --rm --user root --entrypoint chown storage -R node:node /data`
+   (the relay: the same with `realtime`; `docs/self-host/production.md`,
+   "Upgrading").
+5. **Full stack: set `MINIO_APP_PASSWORD` in `.env`.** The storage server
+   now uses its own MinIO user, which the new `minio-init` job makes with
+   access to the bucket only. Compose refuses to start without it. The
+   MinIO image is pinned by digest; see "Blob storage" in
+   `docs/self-host/production.md` if your host cannot pull it.
+6. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
    and each client address may make 60 new maps an hour
    (`MAX_NEW_MAPS_PER_IP`). `POST /maps` is open to anyone who reaches the
    API. The relay has its own caps with defaults
