@@ -12,6 +12,12 @@ trap 'compose logs --no-color | tail -50; compose down -v >/dev/null 2>&1' EXIT
 compose up -d --build --wait --wait-timeout 180
 base=http://localhost:3000
 
+# Docker reports the web container healthy as soon as it starts; nginx may
+# not accept connections yet. Wait for the first answer, then test.
+for _ in $(seq 1 30); do
+  curl -fsS -o /dev/null "$base/" && break
+  sleep 1
+done
 curl -fsS -o /dev/null "$base/"
 curl -fsS "$base/api/health"
 created=$(curl -fsS -X POST -H 'content-type: application/octet-stream' \
