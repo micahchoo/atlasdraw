@@ -487,10 +487,13 @@ export function bindRoomDocument(
         for (const blob of Object.values(next.content.images)) {
           known.add(blob);
         }
-        document.dispatch({ type: "replace-content", ...next.content });
+        document.dispatch(
+          { type: "replace-content", ...next.content },
+          "remote",
+        );
         const basemap = readBasemap(doc);
         if (basemap) {
-          document.dispatch({ type: "set-basemap", id: basemap });
+          document.dispatch({ type: "set-basemap", id: basemap }, "remote");
         }
       }
     } finally {
