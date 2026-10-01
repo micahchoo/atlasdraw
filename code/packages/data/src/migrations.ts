@@ -134,7 +134,7 @@ function v1Origin(
  * plus its place on Earth in `customData.geo` and its sizes in
  * `customData._lastSync`. Version 2 stores it in world coordinates: Web
  * Mercator pixels at the reference zoom, from the origin in `manifest.world`
- * (ADR-0015). Each anchored element is moved there from its anchor; an
+ * (docs/architecture/adr/0015-world-coordinates-gate.md). Each anchored element is moved there from its anchor; an
  * element without one is kept as it is.
  */
 const worldCoordinates: MigrationStep = ({ manifest, scene }) => {

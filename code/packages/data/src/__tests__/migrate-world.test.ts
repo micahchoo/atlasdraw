@@ -2,10 +2,8 @@
 //
 // A version 1 file opens in world coordinates, every element where v1 drew it.
 //
-// fixtures/v1-delhi.atlasdraw was written by the version 1 build itself
-// (branch spike/world-coords, before W3): its elements were drawn in screen
-// pixels at zoom 12, stamped by useGeoAnchor's handler, placed by the pin
-// tool's seedToElement, projected by CoordinateSync, then saved by data.write
+// fixtures/v1-delhi.atlasdraw was written by the version 1 editor itself: its
+// elements were drawn in screen pixels at zoom 12, then saved by data.write
 // with the camera at zoom 13.3 and bearing 25. Two rectangles carry the
 // legacy `screen` and `hybrid` scale modes.
 //

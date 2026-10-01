@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// FU-1 RA-2 — GeoTIFF decode.
+// GeoTIFF decode.
 //
 // Fixtures are WRITTEN here rather than committed as binaries, using geotiff's
 // own writer. Three reasons, in order of how much they matter:

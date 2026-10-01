@@ -1,10 +1,7 @@
 // @atlasdraw/data — barrel.
 //
-// Phase 2 Wave 1b T10 implemented the GeoJSON parser in ./geojson; Wave 2b
-// T13 (MapEditor drop import) is the first consumer that imports from the
-// package root, so the barrel re-export is added here. CSV and Shapefile
-// followed in Phase 3. Format adapters re-export their parser entry point
-// through this file rather than from a deep path.
+// Format adapters re-export their parser entry point through this file;
+// consumers import from the package root, not from a deep path.
 
 export {
   parse,
@@ -29,7 +26,7 @@ export type {
   GeoXmlParseErrorCode,
 } from "./geoxml";
 
-// Phase 3 Wave 0 Task 1 — manifest schema + AtlasdrawDocument runtime type.
+// Manifest schema and the AtlasdrawDocument runtime type.
 export {
   ManifestSchema,
   BasemapRefSchema,
@@ -61,7 +58,7 @@ export {
 } from "./migrations";
 export type { MigrationStep, StoredDocument } from "./migrations";
 
-// Phase 3 Wave 1 Task 2/3 — .atlasdraw zip read/write.
+// .atlasdraw zip read/write.
 export {
   write,
   read,
@@ -69,11 +66,11 @@ export {
   AtlasdrawWriteCache,
 } from "./atlasdraw";
 
-// Phase 3 Wave 1 Task 4 — pure-JSON variant (.atlasdraw.json).
+// Pure-JSON variant (.atlasdraw.json).
 export { writeJSON, readJSON, AtlasdrawJSONError } from "./atlasdraw-json";
 
-// Phase 3 Wave 1 Task 6 — CSV → GeoJSON parser.
-// Phase 6 A8 — `CsvReadOptions` adds an optional Photon geocoder hook.
+// CSV → GeoJSON parser, with an optional Photon geocoder hook
+// (`CsvReadOptions.geocoder`).
 export {
   parseCSV,
   CSVParseError,
@@ -82,13 +79,14 @@ export {
 } from "./csv";
 export type { CsvReadOptions, CsvImportStats } from "./csv";
 
-// W9 — FeatureCollection → the text of a GeoJSON or CSV file, for the
+// FeatureCollection → the text of a GeoJSON or CSV file, for the
 // layer panel's "Export as …" items. The inverse of `parse` and `parseCSV`.
 export { toGeoJSONText, toCSV, toWKT, csvGeometryMode } from "./export";
 export type { CsvGeometryMode, GeoJSONTextOptions } from "./export";
 
-// Phase 6 A7 — Photon-compatible geocoder client + LRU cache.
-// Operator-configured; no default endpoint (ADR-0006 / ADR-0011).
+// Photon-compatible geocoder client + LRU cache. Operator-configured; no
+// default endpoint (docs/architecture/adr/0006-telemetry.md and
+// 0011-hosted-mode-telemetry.md).
 export {
   PhotonGeocoder,
   GeocoderNetworkError,
@@ -96,13 +94,13 @@ export {
 } from "./geocode";
 export type { GeocodeResult, GeocoderConfig } from "./geocode";
 
-// Phase 3 Wave 1 Task 7 — Shapefile → GeoJSON parser.
+// Shapefile → GeoJSON parser.
 export { parseShapefile, ShapefileParseError } from "./shapefile";
 
-// Phase 3 Wave 1 Task 5 — Browser-only thumbnail generator (returns null in Node).
+// Browser-only thumbnail generator (returns null in Node).
 export { generateThumbnail } from "./thumbnail";
 
-// FU-1 RA-2 — GeoTIFF decode. Bytes in, pixels plus four lng/lat corners out.
+// GeoTIFF decode. Bytes in, pixels plus four lng/lat corners out.
 export {
   decodeGeoTiff,
   encodeRasterPng,
@@ -116,9 +114,8 @@ export type { DecodedRaster, RasterCorners } from "./geotiff";
 // base64url for bytes in URLs (share links).
 export { uint8ArrayToBase64Url, base64UrlToUint8Array } from "./base64url";
 
-// Phase 6 A11 — `.excalidrawlib` reader + built-in atlas library index.
-// Powers the atlas-app AssetLibraryPanel (Phase 6 A12) which pushes the
-// bundled wildfire / transit / hazard fixtures into Excalidraw's built-in
-// library via `excalidrawAPI.updateLibrary({ libraryItems, merge: true })`.
+// `.excalidrawlib` reader + built-in atlas library index. The atlas-app
+// AssetLibraryPanel pushes the bundled libraries into Excalidraw's own
+// library with `excalidrawAPI.updateLibrary({ libraryItems, merge: true })`.
 export { parseLibraryFile, getBuiltInLibraries } from "./asset-library";
 export type { ExcalidrawLibrary, LibraryParseError } from "./asset-library";

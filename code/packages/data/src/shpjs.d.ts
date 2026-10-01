@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/shpjs.d.ts
-// Phase 3 Wave 1 T7 — ambient module declaration for shpjs ^6.2.
+// Ambient module declaration for shpjs ^6.2.
 //
 // shpjs ships its own ESM but no TypeScript declarations, and there is no
 // @types/shpjs on npm. This shim covers only the surface we actually call:

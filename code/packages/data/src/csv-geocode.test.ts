@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/csv-geocode.test.ts
-// Phase 6 A8 — integration tests for CSV + geocoder wire-up.
+// Integration tests for CSV + geocoder wire-up.
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -32,17 +32,17 @@ function photonEmpty(): Response {
   );
 }
 
-describe("parseCSV — geocoder OFF (pre-A8 behaviour preserved)", () => {
+describe("parseCSV — geocoder OFF", () => {
   it("does NOT call fetch when no geocoder is passed", async () => {
     // Spy on globalThis.fetch — if anyone bypasses our injected stub, this
-    // will fail the test. Critical for the zero-call-home audit.
+    // will fail the test. This guards the zero-call-home policy.
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     try {
       const fc = await parseCSV(
         csvBlob("address,name\n1 Main St,Foo\n2 Other St,Bar"),
       );
-      // No coord columns → previously this would throw, but a CSV with
-      // only an address column + no geocoder still throws.
+      // No coord columns and no geocoder: a CSV with only an address
+      // column throws.
       expect.fail("expected NO_COORD_COLUMNS when geocoder absent");
       expect(fc).toBeDefined(); // unreachable
     } catch (err) {

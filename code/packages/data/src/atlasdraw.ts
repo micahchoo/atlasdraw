@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/atlasdraw.ts
-// Phase 3 Wave 1 T2 + T3 — `.atlasdraw` zip writer + reader.
+// `.atlasdraw` zip writer + reader.
 //
 // The `.atlasdraw` file is a zip archive whose layout is:
 //
@@ -13,7 +13,8 @@
 //   meta/thumbnail.png            (STORE)    optional preview, write-only here
 //
 // Boundary contract: this module returns / accepts an in-memory
-// `AtlasdrawDocument`. Higher layers translate to/from Yjs and Excalidraw.
+// `AtlasdrawDocument`. Higher layers translate it to and from the app's
+// document and the Excalidraw scene.
 
 import JSZip from "jszip";
 

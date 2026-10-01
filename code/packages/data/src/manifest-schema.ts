@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Phase 3 Wave 0 Task 1 — Canonical Zod schema for `manifest.json`.
+// Canonical Zod schema for `manifest.json`.
 //
 // This is the single source of truth for the persisted manifest shape. The
 // `.atlasdraw` zip writer (`atlasdraw.ts`), reader (`atlasdraw.ts`),
@@ -34,13 +34,13 @@ export const CameraSchema = z.object({
 export type Camera = z.infer<typeof CameraSchema>;
 
 // LayerStyle is owned by @atlasdraw/basemap and may grow. We accept its
-// runtime shape opaquely here so manifest evolution doesn't gate Phase 3.
+// runtime shape opaquely here so the manifest need not change when it grows.
 const LayerStyleSchema = z.record(z.string(), z.unknown());
 
 const DataLayerEntrySchema = z.object({
   kind: z.literal("data"),
-  // `dl:` prefix matches the runtime convention from
-  // apps/atlas-app/src/state/layerRegistry.ts so a layer id can never
+  // `dl:` prefix matches the runtime convention in
+  // apps/atlas-app/src/state/document.ts so a layer id can never
   // collide with an Excalidraw element id.
   id: z.string().regex(/^dl:/, "data layer id must start with 'dl:'"),
   label: z.string(),
@@ -75,14 +75,13 @@ const RasterCornersSchema = z.tuple([
 ]);
 
 /**
- * FU-1 — a georeferenced picture. Shares almost nothing with a data layer: no
+ * A georeferenced picture. Shares almost nothing with a data layer: no
  * `featureCount` (no features), no `style` (fill colour means nothing to
  * pixels), and `source` is replaced by `imageKey`, which addresses the decoded
  * PNG in the zip's `files/` bag rather than a GeoJSON path in `data/`.
  *
- * The original GeoTIFF is deliberately NOT persisted — see `RasterLayerEntry`
- * in the app's layerRegistry for why. `provenance.sourceFile` is the only
- * record of the file that produced this.
+ * The original GeoTIFF is deliberately NOT saved. `provenance.sourceFile` is
+ * the only record of the file that produced this.
  */
 const RasterLayerEntrySchema = z.object({
   kind: z.literal("raster"),
@@ -104,7 +103,7 @@ const RasterLayerEntrySchema = z.object({
 });
 
 /**
- * W9d — an XYZ raster tile layer: map tiles fetched from a URL template
+ * An XYZ raster tile layer: map tiles fetched from a URL template
  * (`{z}/{x}/{y}`), such as aerial imagery or a historic map. It has no
  * payload in the file; the tiles stay on their server. `attribution` is the
  * credit the tile provider asks for; it is printed with the basemap's.
@@ -140,7 +139,8 @@ export const LayerEntrySchema = z.discriminatedUnion("kind", [
 export type LayerEntry = z.infer<typeof LayerEntrySchema>;
 
 /**
- * The world frame (ADR-0015): a scene coordinate is a Web Mercator pixel at
+ * The world frame (docs/architecture/adr/0015-world-coordinates-gate.md): a
+ * scene coordinate is a Web Mercator pixel at
  * zoom `z0`, minus `origin` (a world pixel at z0). Integers, so the frame
  * adds no rounding error.
  */
@@ -168,7 +168,7 @@ export const ManifestSchema = z
     camera: CameraSchema,
     world: WorldFrameSchema,
     layers: z.array(LayerEntrySchema),
-    /** W9d. Optional: see TileLayerEntrySchema. */
+    /** Optional: see TileLayerEntrySchema. */
     tileLayers: z.array(TileLayerEntrySchema).optional(),
     permissions: PermissionsSchema,
   })
@@ -186,9 +186,8 @@ export type Manifest = z.infer<typeof ManifestSchema>;
 
 /**
  * Structural minimum of an Excalidraw scene element as @atlasdraw/data sees
- * it. Phase 4 Wave 0 (atlasdraw-3601): tightened from `unknown` so the
- * persistence-load hydration path (`updateScene({elements: doc.scene})`) does
- * not have to launder typing.
+ * it. Typed, not `unknown`, so the load path
+ * (`updateScene({elements: doc.scene})`) needs no laundering of types.
  *
  * We deliberately do NOT import @atlasdraw/element types here — that would
  * pull the entire Excalidraw type graph into a package the CLI also consumes.
@@ -198,7 +197,7 @@ export type Manifest = z.infer<typeof ManifestSchema>;
  * Excalidraw's `OrderedExcalidrawElement` is a structural subtype of this:
  * the assignment `scene: excalidrawAPI.getSceneElements()` typechecks without
  * a cast. Going the other direction (passing `doc.scene` to `updateScene`)
- * needs a narrowing cast at the boundary — see the app's state/hydrate.ts.
+ * needs a narrowing cast at the boundary — see the app's state/documentIO.ts.
  */
 export interface SceneElement {
   readonly id: string;
@@ -226,8 +225,8 @@ export type SavedComment = z.infer<typeof SavedCommentSchema>;
 
 /**
  * Runtime in-memory representation of an atlasdraw document. The zip writer
- * accepts this; the reader returns it. `styleRef` is still typed as `unknown`
- * since basemap shape is a Phase 4 contract still in motion.
+ * accepts this; the reader returns it. `styleRef` is opaque (`unknown`): this
+ * package does not read it.
  */
 export interface AtlasdrawDocument {
   readonly manifest: Manifest;

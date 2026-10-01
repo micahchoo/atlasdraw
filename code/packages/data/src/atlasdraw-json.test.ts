@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/atlasdraw-json.test.ts
-// Phase 3 Wave 1 Task 4 — colocated tests for the pure-JSON variant.
+// Colocated tests for the pure-JSON variant.
 
 import { describe, expect, it } from "vitest";
 

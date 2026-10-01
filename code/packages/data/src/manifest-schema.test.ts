@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Phase 3 Wave 0 Task 1 — schema tests.
+// Schema tests.
 
 import { describe, expect, it } from "vitest";
 

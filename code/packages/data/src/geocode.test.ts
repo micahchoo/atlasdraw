@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/geocode.test.ts
-// Phase 6 A7 — colocated tests for PhotonGeocoder + LRU cache.
+// Colocated tests for PhotonGeocoder + LRU cache.
 
 import { describe, expect, it, vi } from "vitest";
 

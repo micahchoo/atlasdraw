@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Phase 3 Wave 1 Task 5 — thumbnail generator.
+// Thumbnail generator.
 //
 // Browser-only PNG generator for the .atlasdraw `meta/thumbnail.png` entry.
 // CLI and test stubs receive `null` so the call site can pass the result

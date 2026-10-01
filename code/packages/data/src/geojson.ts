@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/geojson.ts
-// Phase 2 Wave 1b T10 — GeoJSON parser/writer.
+// GeoJSON parser/writer.
 //
 // Pure module. No Yjs, no MapLibre, no @excalidraw imports — this layer is
 // strictly text-in / FeatureCollection-out (and the inverse). Higher layers
-// translate the parsed FC into Yjs-backed layers or Excalidraw elements.
+// turn the parsed FC into the document's data layers.
 //
 // Validation depth chosen: RFC 7946 minimum that an actionable error message
 // can name a specific offending field. We verify:
@@ -16,7 +16,7 @@
 //      RFC-legal but we still require the key to exist), and a `properties`
 //      field. The error names the offending field AND the feature index.
 //
-// Deliberately NOT validated here (Phase 5 concern):
+// Deliberately NOT validated here:
 //   - per-coordinate numeric range (lng ∈ [-180, 180], etc.)
 //   - geometry-type-specific shape (Polygon ring closure, LineString min len)
 //   - bbox / foreign members
@@ -124,19 +124,19 @@ export async function write(fc: FeatureCollection): Promise<Blob> {
 }
 
 /**
- * Atlasdraw v1 renders one MapLibre layer style per data layer (fill | line |
+ * Atlasdraw renders one MapLibre layer style per data layer (fill | line |
  * circle). A FeatureCollection that mixes geometry kinds (e.g. Polygon +
- * LineString) cannot be rendered correctly in this model — `inferGeometryType`
- * would silently drop all features that don't match the first.
+ * LineString) cannot be rendered correctly in this model — the layer would
+ * silently drop every feature not of its one kind.
  *
  * This is a *rendering* constraint, not a GeoJSON-spec violation, so it lives
  * outside `parse()` (which stays RFC-pure). Callers that route the FC into
  * MapLibre rendering should invoke this helper immediately after `parse()`
  * to fail fast with a user-actionable error.
  *
- * Sub-layers per kind is the planned-of-record direction for Phase 4+ when
- * self-host justifies the data-model complexity. T24 maintainer decision
- * 2026-05-05 (atlasdraw-4142): reject in v1.
+ * Formats where mixed kinds are normal (KML, KMZ, GPX) are divided with
+ * `splitByGeometryKind` instead; atlas-app's import rejects mixed GeoJSON,
+ * CSV and shapefiles with this helper.
  *
  * `null` geometries are RFC-legal and treated as no-op (no contribution to
  * the kind set). GeometryCollection and unknown types are rejected as
