@@ -120,4 +120,30 @@ describe("loadConfig", () => {
       expect(cfg.PUBLIC_URL).toBe("");
     });
   });
+
+  describe("MAX_TOTAL_BYTES and SWEEP_INTERVAL_MS", () => {
+    const base = { STORAGE_MODE: "sqlite-fs", DATA_DIR: "/tmp/x" };
+
+    it("default to no cap and an hourly sweep", () => {
+      const cfg = loadConfig(base);
+      expect(cfg.MAX_TOTAL_BYTES).toBe(0);
+      expect(cfg.SWEEP_INTERVAL_MS).toBe(3_600_000);
+    });
+
+    it("read numbers from env", () => {
+      const cfg = loadConfig({
+        ...base,
+        MAX_TOTAL_BYTES: "10737418240",
+        SWEEP_INTERVAL_MS: "0",
+      });
+      expect(cfg.MAX_TOTAL_BYTES).toBe(10_737_418_240);
+      expect(cfg.SWEEP_INTERVAL_MS).toBe(0);
+    });
+
+    it("refuse a negative cap by name", () => {
+      expect(() => loadConfig({ ...base, MAX_TOTAL_BYTES: "-1" })).toThrow(
+        /MAX_TOTAL_BYTES/,
+      );
+    });
+  });
 });

@@ -95,4 +95,37 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE share_tokens DROP COLUMN IF EXISTS workspace_id;
     `,
   },
+  {
+    // A map carries the SHA-256 of its write key (ADR-0017). A map stored
+    // before this has no key: nobody can write it, and it lives only while a
+    // share token reads it. A share token may have no expiry, so
+    // expires_at becomes nullable. SQLite cannot drop NOT NULL in place, so
+    // share_tokens is copied into a new table.
+    name: "003_write_keys_and_lasting_links",
+    sqlite: (db) => {
+      if (!hasColumn(db, "maps", "write_key_hash")) {
+        db.exec("ALTER TABLE maps ADD COLUMN write_key_hash TEXT");
+      }
+      db.exec(`
+        CREATE TABLE share_tokens_new (
+          token TEXT PRIMARY KEY,
+          map_id TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          expires_at TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (map_id) REFERENCES maps(id)
+        );
+        INSERT INTO share_tokens_new (token, map_id, mode, expires_at, created_at)
+          SELECT token, map_id, mode, expires_at, created_at FROM share_tokens;
+        DROP TABLE share_tokens;
+        ALTER TABLE share_tokens_new RENAME TO share_tokens;
+        CREATE INDEX share_tokens_map_id_idx ON share_tokens(map_id);
+      `);
+    },
+    postgres: `
+      ALTER TABLE maps ADD COLUMN IF NOT EXISTS write_key_hash TEXT;
+      ALTER TABLE share_tokens ALTER COLUMN expires_at DROP NOT NULL;
+      CREATE INDEX IF NOT EXISTS share_tokens_map_id_idx ON share_tokens(map_id);
+    `,
+  },
 ];

@@ -20,7 +20,7 @@ describe("sqlite-fs adapter", () => {
   it("createMap writes blob + row, then getMap roundtrips", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     const blob = Buffer.from("hello, atlas");
-    const record = await client.createMap(blob);
+    const record = await client.createMap(blob, null);
 
     expect(record.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
     expect(record.byte_size).toBe(blob.byteLength);
@@ -50,7 +50,7 @@ describe("sqlite-fs adapter", () => {
 
   it("updateMap changes byte_size, updated_at, and the blob bytes", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const created = await client.createMap(Buffer.from("v1"));
+    const created = await client.createMap(Buffer.from("v1"), null);
     // Sleep a tick so the ISO string differs.
     await new Promise((r) => setTimeout(r, 10));
 
@@ -73,24 +73,29 @@ describe("sqlite-fs adapter", () => {
     ).rejects.toThrow(/not found/);
   });
 
-  it("createShareToken links to map, sets mode=read and 7d expiry", async () => {
+  it("createShareToken links to map and sets mode=read", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const map = await client.createMap(Buffer.from("blob"));
-    const token = await client.createShareToken(map.id);
+    const map = await client.createMap(Buffer.from("blob"), null);
+    const token = await client.createShareToken(map.id, null);
 
     expect(token.token).toMatch(/^[A-Za-z0-9_-]{21}$/);
     expect(token.map_id).toBe(map.id);
     expect(token.mode).toBe("read");
+  });
 
-    const expiresAt = new Date(token.expires_at).getTime();
-    const createdAt = new Date(token.created_at).getTime();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-    expect(expiresAt - createdAt).toBe(sevenDaysMs);
+  it("writes a blob through a temp file and leaves none behind", async () => {
+    const client = createSqliteFsAdapter({ dataDir: scratch.name });
+    const map = await client.createMap(Buffer.from("v1"), null);
+    await client.updateMap(map.id, Buffer.from("v2"));
+
+    expect(fs.readdirSync(path.join(scratch.name, "blobs"))).toEqual([
+      `${map.id}.atlasdraw`,
+    ]);
   });
 
   it("createShareToken throws for unknown map", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    await expect(client.createShareToken("a".repeat(21))).rejects.toThrow(
+    await expect(client.createShareToken("a".repeat(21), null)).rejects.toThrow(
       /not found/,
     );
   });
@@ -103,8 +108,8 @@ describe("sqlite-fs adapter", () => {
 
   it("resolveToken returns the token row when it exists", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const map = await client.createMap(Buffer.from("blob"));
-    const created = await client.createShareToken(map.id);
+    const map = await client.createMap(Buffer.from("blob"), null);
+    const created = await client.createShareToken(map.id, null);
     const resolved = await client.resolveToken(created.token);
     expect(resolved).toEqual(created);
   });
@@ -113,7 +118,7 @@ describe("sqlite-fs adapter", () => {
   it("getBlob returns the original bytes for an existing map", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     const payload = Buffer.from("scene-bytes-roundtrip");
-    const map = await client.createMap(payload);
+    const map = await client.createMap(payload, null);
     const fetched = await client.getBlob(map.id);
     expect(fetched).not.toBeNull();
     expect(fetched!.equals(payload)).toBe(true);

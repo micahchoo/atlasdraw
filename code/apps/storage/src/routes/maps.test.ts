@@ -1,10 +1,46 @@
+// /maps routes against a real SQLite store in a temp dir. A map carries a
+// write key: create returns it once, and every write or owner read must show
+// it in `Authorization: Bearer <key>`.
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+import Database from "better-sqlite3";
 import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
+import { createMapService } from "../service/maps";
 
 import { registerMapRoutes } from "./maps";
+
+const OCTETS = { "content-type": "application/octet-stream" };
+const UNKNOWN_ID = "a".repeat(21);
+
+function bearer(key: string): Record<string, string> {
+  return { authorization: `Bearer ${key}` };
+}
+
+function makeApp(
+  dataDir: string,
+  opts: { bodyLimit?: number; maxTotalBytes?: number } = {},
+): FastifyInstance {
+  const app = Fastify({
+    logger: false,
+    bodyLimit: opts.bodyLimit ?? 50 * 1024 * 1024,
+  });
+  app.addContentTypeParser(
+    "application/octet-stream",
+    { parseAs: "buffer" },
+    (_req, body, done) => done(null, body),
+  );
+  const service = createMapService(createSqliteFsAdapter({ dataDir }), {
+    maxTotalBytes: opts.maxTotalBytes ?? 0,
+  });
+  registerMapRoutes(app, service);
+  return app;
+}
 
 describe("/maps routes", () => {
   let scratch: tmp.DirResult;
@@ -12,14 +48,7 @@ describe("/maps routes", () => {
 
   beforeEach(async () => {
     scratch = tmp.dirSync({ unsafeCleanup: true });
-    app = Fastify({ logger: false, bodyLimit: 50 * 1024 * 1024 });
-    app.addContentTypeParser(
-      "application/octet-stream",
-      { parseAs: "buffer" },
-      (_req, body, done) => done(null, body),
-    );
-    const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    registerMapRoutes(app, client);
+    app = makeApp(scratch.name);
     await app.ready();
   });
 
@@ -28,129 +57,314 @@ describe("/maps routes", () => {
     scratch.removeCallback();
   });
 
-  it("POST /maps returns 201 with a MapRecord", async () => {
+  async function create(
+    bytes = "first map",
+  ): Promise<{ id: string; writeKey: string }> {
     const res = await app.inject({
       method: "POST",
       url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("first map"),
+      headers: OCTETS,
+      payload: Buffer.from(bytes),
     });
     expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
-    expect(body.byte_size).toBe(9);
+    return { id: res.json().id, writeKey: res.json().write_key };
+  }
+
+  describe("POST /maps", () => {
+    it("returns 201 with the id, the record and a write key", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("first map"),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json();
+      expect(body.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
+      expect(body.byte_size).toBe(9);
+      // 32 random bytes, base64url: 256 bits.
+      expect(body.write_key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    });
+
+    it("gives every map its own write key", async () => {
+      const a = await create();
+      const b = await create();
+      expect(a.writeKey).not.toBe(b.writeKey);
+    });
+
+    it("stores only a hash of the write key", async () => {
+      const { writeKey } = await create();
+      const db = new Database(path.join(scratch.name, "atlas.db"));
+      const dump = JSON.stringify(db.prepare("SELECT * FROM maps").all());
+      db.close();
+      expect(dump).not.toContain(writeKey);
+    });
+
+    it("never exposes where the blob is stored", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("first map"),
+      });
+      expect(res.json()).not.toHaveProperty("blob_ref");
+      expect(res.json()).not.toHaveProperty("write_key_hash");
+      expect(res.body).not.toContain(scratch.name);
+    });
+
+    it("returns 415 for a body that is not octet-stream", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: { "content-type": "application/json" },
+        payload: "{}",
+      });
+      expect(res.statusCode).toBe(415);
+    });
+
+    it("returns 413 when the body exceeds bodyLimit", async () => {
+      const tiny = makeApp(scratch.name, { bodyLimit: 64 });
+      await tiny.ready();
+      const res = await tiny.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.alloc(128, 0xff),
+      });
+      expect(res.statusCode).toBe(413);
+      await tiny.close();
+    });
   });
 
-  it("never exposes where the blob is stored", async () => {
-    const created = await app.inject({
-      method: "POST",
-      url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("first map"),
+  describe("PUT /maps/:id", () => {
+    it("returns 200 with the updated record for the key holder", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("v1"),
+      });
+      const { id, write_key: writeKey, created_at } = created.json();
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("version two"),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const updated = res.json();
+      expect(updated.id).toBe(id);
+      expect(updated.byte_size).toBe(11);
+      expect(updated.created_at).toBe(created_at);
+      expect(updated).not.toHaveProperty("write_key");
+      expect(updated).not.toHaveProperty("blob_ref");
     });
-    const id: string = created.json().id;
-    const read = await app.inject({ method: "GET", url: `/maps/${id}` });
-    const updated = await app.inject({
+
+    it("refuses a write with no key: 401, and the bytes stay", async () => {
+      const { id, writeKey } = await create("original");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: OCTETS,
+        payload: Buffer.from("defaced"),
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.headers["www-authenticate"]).toBe("Bearer");
+      const read = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(writeKey),
+      });
+      expect(read.body).toBe("original");
+    });
+
+    it("refuses a header that is not a Bearer key: 401", async () => {
+      const { id } = await create();
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, authorization: "Basic dXNlcjpwYXNz" },
+        payload: Buffer.from("x"),
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("refuses a wrong key: 403, and the bytes stay", async () => {
+      const { id, writeKey } = await create("original");
+      const other = await create("other map");
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(other.writeKey) },
+        payload: Buffer.from("defaced"),
+      });
+
+      expect(res.statusCode).toBe(403);
+      const read = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(writeKey),
+      });
+      expect(read.body).toBe("original");
+    });
+
+    it("refuses any key for a map stored before write keys: 403", async () => {
+      const { id, writeKey } = await create("old map");
+      const db = new Database(path.join(scratch.name, "atlas.db"));
+      db.prepare("UPDATE maps SET write_key_hash = NULL WHERE id = ?").run(id);
+      db.close();
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("x"),
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("returns 400 for a malformed id", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: "/maps/bad-id",
+        headers: { ...OCTETS, ...bearer("k".repeat(43)) },
+        payload: Buffer.from("x"),
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("returns 404 for an unknown id", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${UNKNOWN_ID}`,
+        headers: { ...OCTETS, ...bearer("k".repeat(43)) },
+        payload: Buffer.from("x"),
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  describe("GET /maps/:id/blob (the owner's backup)", () => {
+    it("returns the latest bytes to the key holder", async () => {
+      const { id, writeKey } = await create("v1");
+      await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("v2"),
+      });
+
+      const res = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(writeKey),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-type"]).toBe("application/octet-stream");
+      expect(res.headers["cache-control"]).toBe("no-store");
+      expect(res.body).toBe("v2");
+    });
+
+    it("refuses no key with 401 and a wrong key with 403", async () => {
+      const { id } = await create();
+      const other = await create();
+
+      const none = await app.inject({ method: "GET", url: `/maps/${id}/blob` });
+      const wrong = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(other.writeKey),
+      });
+
+      expect(none.statusCode).toBe(401);
+      expect(wrong.statusCode).toBe(403);
+      expect(wrong.body).not.toContain("first map");
+    });
+
+    it("returns 404 for an unknown id", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: `/maps/${UNKNOWN_ID}/blob`,
+        headers: bearer("k".repeat(43)),
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
+
+  it("has no route that returns a map's record without its key", async () => {
+    const { id } = await create();
+    const res = await app.inject({ method: "GET", url: `/maps/${id}` });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain("byte_size");
+  });
+
+  describe("the total-size cap", () => {
+    it("refuses a new map that would pass the cap: 507", async () => {
+      const capped = makeApp(scratch.name, { maxTotalBytes: 10 });
+      await capped.ready();
+      const first = await capped.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("123456"),
+      });
+      const second = await capped.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("123456"),
+      });
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(507);
+      await capped.close();
+    });
+
+    it("counts a rewrite by its growth, not its whole size", async () => {
+      const capped = makeApp(scratch.name, { maxTotalBytes: 10 });
+      await capped.ready();
+      const created = await capped.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("12345678"),
+      });
+      const { id, write_key: writeKey } = created.json();
+
+      const same = await capped.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("87654321"),
+      });
+      const grown = await capped.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("12345678901"),
+      });
+
+      expect(same.statusCode).toBe(200);
+      expect(grown.statusCode).toBe(507);
+      await capped.close();
+    });
+  });
+
+  it("leaves no temp file behind after a write", async () => {
+    const { id, writeKey } = await create();
+    await app.inject({
       method: "PUT",
       url: `/maps/${id}`,
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("second"),
+      headers: { ...OCTETS, ...bearer(writeKey) },
+      payload: Buffer.from("again"),
     });
-    for (const res of [created, read, updated]) {
-      expect(res.json()).not.toHaveProperty("blob_ref");
-      expect(res.body).not.toContain(scratch.name);
-    }
-  });
-
-  it("GET /maps/:id returns 400 for malformed id", async () => {
-    const res = await app.inject({ method: "GET", url: "/maps/not-a-nanoid" });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("GET /maps/:id returns 404 for unknown id (well-formed)", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: `/maps/${"a".repeat(21)}`,
-    });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it("GET /maps/:id returns 200 for an existing map", async () => {
-    const create = await app.inject({
-      method: "POST",
-      url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("payload"),
-    });
-    const created = create.json();
-    const res = await app.inject({
-      method: "GET",
-      url: `/maps/${created.id}`,
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(created);
-  });
-
-  it("PUT /maps/:id returns 400 for malformed id", async () => {
-    const res = await app.inject({
-      method: "PUT",
-      url: "/maps/bad-id",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("x"),
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("PUT /maps/:id returns 404 for unknown id", async () => {
-    const res = await app.inject({
-      method: "PUT",
-      url: `/maps/${"a".repeat(21)}`,
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("x"),
-    });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it("PUT /maps/:id returns 200 with the updated record", async () => {
-    const create = await app.inject({
-      method: "POST",
-      url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("v1"),
-    });
-    const created = create.json();
-    const res = await app.inject({
-      method: "PUT",
-      url: `/maps/${created.id}`,
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("version two"),
-    });
-    expect(res.statusCode).toBe(200);
-    const updated = res.json();
-    expect(updated.id).toBe(created.id);
-    expect(updated.byte_size).toBe(11);
-    expect(updated.created_at).toBe(created.created_at);
-  });
-
-  it("POST /maps returns 413 when body exceeds bodyLimit", async () => {
-    // Use a tiny-limit instance for this case so we don't allocate 50 MiB.
-    const tiny = Fastify({ logger: false, bodyLimit: 64 });
-    tiny.addContentTypeParser(
-      "application/octet-stream",
-      { parseAs: "buffer" },
-      (_req, body, done) => done(null, body),
-    );
-    const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    registerMapRoutes(tiny, client);
-    await tiny.ready();
-
-    const res = await tiny.inject({
-      method: "POST",
-      url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.alloc(128, 0xff),
-    });
-    expect(res.statusCode).toBe(413);
-    await tiny.close();
+    const files = fs.readdirSync(path.join(scratch.name, "blobs"));
+    expect(files).toEqual([`${id}.atlasdraw`]);
   });
 });
