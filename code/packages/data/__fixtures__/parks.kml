@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>City parks</name>
+    <Placemark>
+      <name>Visitor centre</name>
+      <description>Open 9 to 5</description>
+      <TimeStamp><when>2026-04-01</when></TimeStamp>
+      <Point><coordinates>-122.4862,37.7694,0</coordinates></Point>
+    </Placemark>
+    <Folder>
+      <name>Parks</name>
+      <Placemark>
+        <name>Golden Gate Park</name>
+        <description>Large urban park</description>
+        <Polygon>
+          <outerBoundaryIs>
+            <LinearRing>
+              <coordinates>
+                -122.5110,37.7710,0 -122.4530,37.7730,0 -122.4530,37.7660,0 -122.5100,37.7640,0 -122.5110,37.7710,0
+              </coordinates>
+            </LinearRing>
+          </outerBoundaryIs>
+        </Polygon>
+      </Placemark>
+      <Folder>
+        <name>Trails</name>
+        <Placemark>
+          <name>Lake loop</name>
+          <LineString>
+            <coordinates>-122.4900,37.7700,0 -122.4800,37.7710,0 -122.4750,37.7690,0</coordinates>
+          </LineString>
+        </Placemark>
+      </Folder>
+    </Folder>
+    <Placemark>
+      <name>Planned bench</name>
+      <description>No location yet</description>
+    </Placemark>
+  </Document>
+</kml>
