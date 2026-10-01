@@ -110,6 +110,19 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
     // -----------------------------------------------------------------------
     let currentRoom: string | null = null;
 
+    // Relay to the room this socket JOINED, never to a room named in the
+    // payload, and stamp the sender from the socket, never from the payload.
+    // A socket that has not joined sends nothing.
+    function relay(event: string, payload: object): void {
+      if (!currentRoom) {
+        return;
+      }
+      trackSender(socket, socket.id);
+      socket
+        .to(currentRoom)
+        .emit(event, { ...payload, roomId: currentRoom, senderId: socket.id });
+    }
+
     // -----------------------------------------------------------------------
     // JOIN_ROOM — with room-size guard (MAX_ROOM_SIZE, default 4)
     //
@@ -182,8 +195,7 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
         return; // malformed — silently drop
       }
 
-      trackSender(socket, evt.senderId ?? "");
-      socket.to(evt.roomId ?? "").emit("SCENE_UPDATE", payload);
+      relay("SCENE_UPDATE", evt);
     });
 
     // -----------------------------------------------------------------------
@@ -195,17 +207,13 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
       }
 
       const evt = payload as Partial<MapCameraUpdateEvent>;
-      const roomId = evt.roomId ?? "";
-      const senderId = evt.senderId ?? "";
-      if (!roomId || !senderId) {
+      if (!currentRoom) {
         return;
       }
-
-      const state = getLWWState(roomId, senderId);
+      const state = getLWWState(currentRoom, socket.id);
       if ((evt.timestamp ?? 0) > state.lastCameraTimestamp) {
         state.lastCameraTimestamp = evt.timestamp ?? 0;
-        trackSender(socket, senderId);
-        socket.to(roomId).emit("MAP_CAMERA_UPDATE", payload);
+        relay("MAP_CAMERA_UPDATE", evt);
       }
     });
 
@@ -217,15 +225,7 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
         return;
       }
 
-      const evt = payload as Partial<CursorEvent>;
-      const roomId = evt.roomId ?? "";
-      const senderId = evt.senderId ?? "";
-      if (!roomId || !senderId) {
-        return;
-      }
-
-      trackSender(socket, senderId);
-      socket.to(roomId).emit("CURSOR", payload);
+      relay("CURSOR", payload as Partial<CursorEvent>);
     });
 
     // -----------------------------------------------------------------------
@@ -237,17 +237,13 @@ export function registerSocketIOHandlers(io: SocketIOServer): void {
       }
 
       const evt = payload as Partial<CommentEvent>;
-      const roomId = evt.roomId ?? "";
-      const senderId = evt.senderId ?? "";
-      if (!roomId || !senderId || !evt.data) {
+      if (!currentRoom || !evt.data) {
         return;
       }
-
-      const state = getLWWState(roomId, senderId);
+      const state = getLWWState(currentRoom, socket.id);
       if ((evt.data.version ?? 0) > state.lastCommentVersion) {
         state.lastCommentVersion = evt.data.version ?? 0;
-        trackSender(socket, senderId);
-        socket.to(roomId).emit("COMMENT", payload);
+        relay("COMMENT", evt);
       }
     });
 

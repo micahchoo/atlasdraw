@@ -34,6 +34,8 @@ import { registerYjsHandler } from "../src/yjs-server";
 let server: http.Server;
 let io: SocketIOServer;
 let port: number;
+// Short, so a test can outlive it. Eviction must still wait for the last client.
+const ROOM_TTL_MS = 200;
 
 // ---------------------------------------------------------------------------
 // Minimal y-websocket client — encodes sync step 1, receives updates, applies
@@ -250,7 +252,7 @@ beforeAll(async () => {
     cors: { origin: "*", methods: ["GET", "POST"] },
     transports: ["websocket"],
   });
-  registerYjsHandler(server);
+  registerYjsHandler(server, { roomTtlMs: ROOM_TTL_MS });
   await new Promise<void>((resolve) => {
     server.listen(0, () => {
       port = (server.address() as { port: number }).port;
@@ -321,5 +323,30 @@ describe("comments y-websocket routing", () => {
 
     a.close();
     b.close();
+  });
+});
+
+describe("room lifetime", () => {
+  it("keeps a room while anyone is still connected", async () => {
+    const path = buildCommentsDocPath("room-lifetime", null);
+    const a = openClient(path);
+    const b = openClient(path);
+    await Promise.all([a.ready, b.ready]);
+    appendComment(a.doc, makeComment("still here", "socket-a"));
+    await waitFor(() => (readComments(b.doc).length > 0 ? true : null));
+
+    a.close();
+    await new Promise((r) => setTimeout(r, ROOM_TTL_MS * 3));
+
+    const late = openClient(path);
+    await late.ready;
+    const seen = await waitFor(() => {
+      const comments = readComments(late.doc);
+      return comments.length > 0 ? comments : null;
+    });
+    expect(seen[0]?.text).toBe("still here");
+
+    b.close();
+    late.close();
   });
 });

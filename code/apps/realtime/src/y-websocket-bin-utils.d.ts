@@ -6,6 +6,7 @@
 declare module "y-websocket/bin/utils" {
   import type { IncomingMessage } from "http";
   import type { WebSocket } from "ws";
+  import type { Doc } from "yjs";
 
   /**
    * Options for {@link setupWSConnection}.
@@ -37,5 +38,11 @@ declare module "y-websocket/bin/utils" {
    * Managed by {@link setupWSConnection}; exposed so consumers can
    * implement eviction or persistence.
    */
-  export const docs: Map<string, import("yjs").Doc>;
+  export const docs: Map<string, WSSharedDoc>;
+
+  /** The server-side doc: a Y.Doc plus its live connections. */
+  interface WSSharedDoc extends Doc {
+    /** Connected sockets → the awareness client ids each one controls. */
+    conns: Map<WebSocket, Set<number>>;
+  }
 }

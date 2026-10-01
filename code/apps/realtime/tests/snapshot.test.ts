@@ -370,3 +370,53 @@ describe("SCENE_SNAPSHOT (encrypted reply, Q-P5-1)", () => {
     target.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Room binding: the relay trusts its own record of the room, not the payload
+// ---------------------------------------------------------------------------
+
+describe("room binding", () => {
+  const ROOM = "room-binding-aaaa";
+  const envelope = { iv: "aXY=", ciphertext: "Y3Q=" };
+
+  it("drops events from a socket that never joined the room", async () => {
+    const member = await connectClient();
+    const outsider = await connectClient();
+    await joinRoom(member, ROOM);
+    const received: unknown[] = [];
+    member.on("SCENE_UPDATE", (p: unknown) => received.push(p));
+    member.on("CURSOR", (p: unknown) => received.push(p));
+
+    outsider.emit("SCENE_UPDATE", {
+      roomId: ROOM,
+      senderId: "outsider",
+      data: envelope,
+    });
+    outsider.emit("CURSOR", {
+      roomId: ROOM,
+      senderId: "outsider",
+      data: { x: 1, y: 2 },
+    });
+    await new Promise((r) => setTimeout(r, 300));
+
+    expect(received).toEqual([]);
+    member.close();
+    outsider.close();
+  });
+
+  it("stamps the real sender id on relayed events", async () => {
+    const a = await connectClient();
+    const b = await connectClient();
+    await joinRoom(a, ROOM);
+    await joinRoom(b, ROOM);
+    const seen = new Promise<{ senderId: string }>((resolve) =>
+      b.on("CURSOR", resolve),
+    );
+
+    a.emit("CURSOR", { roomId: ROOM, senderId: b.id, data: { x: 1, y: 2 } });
+
+    expect((await seen).senderId).toBe(a.id);
+    a.close();
+    b.close();
+  });
+});

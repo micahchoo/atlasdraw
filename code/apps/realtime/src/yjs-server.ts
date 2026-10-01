@@ -41,7 +41,7 @@ import type http from "http";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS ?? "300000", 10);
+const DEFAULT_ROOM_TTL_MS = parseInt(process.env.ROOM_TTL_MS ?? "300000", 10);
 
 // ---------------------------------------------------------------------------
 // Eviction state — one timer per room key
@@ -60,7 +60,7 @@ function cancelEviction(docName: string): void {
   }
 }
 
-function scheduleEviction(docName: string): void {
+function scheduleEviction(docName: string, ttlMs: number): void {
   // Guard: don't double-schedule
   if (evictionTimers.has(docName)) {
     return;
@@ -71,15 +71,12 @@ function scheduleEviction(docName: string): void {
 
     // The docs map is shared with y-websocket's internal getYDoc.
     const ydoc = docs.get(docName);
-    if (ydoc !== undefined) {
+    if (ydoc !== undefined && ydoc.conns.size === 0) {
       ydoc.destroy();
       docs.delete(docName);
-      logger.warn(
-        { docName, ttlMs: ROOM_TTL_MS },
-        "room evicted (no persistence wired)",
-      );
+      logger.warn({ docName, ttlMs }, "room evicted (no persistence wired)");
     }
-  }, ROOM_TTL_MS);
+  }, ttlMs);
 
   evictionTimers.set(docName, timer);
 }
@@ -109,7 +106,10 @@ function scheduleEviction(docName: string): void {
  * `WebSocketServer` — used on SIGTERM/SIGINT so `docker compose stop`
  * drains in-flight y-websocket sessions instead of hard-killing them.
  */
-export function registerYjsHandler(server: http.Server): { close(): void } {
+export function registerYjsHandler(
+  server: http.Server,
+  { roomTtlMs = DEFAULT_ROOM_TTL_MS }: { roomTtlMs?: number } = {},
+): { close(): void } {
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (request, socket, head) => {
@@ -128,12 +128,16 @@ export function registerYjsHandler(server: http.Server): { close(): void } {
       wss.handleUpgrade(request, socket, head, (ws) => {
         setupWSConnection(ws, request, { docName: roomId });
 
-        // When this client disconnects, schedule TTL eviction.
+        // When the LAST client disconnects, schedule TTL eviction. Evicting
+        // while others are connected splits the room: they keep editing a
+        // destroyed doc and a late joiner gets a fresh, empty one.
         // setupWSConnection's own close handler runs first (added inside
         // setupWSConnection), so doc.conns is already cleaned up by the
         // time this fires.
         ws.on("close", () => {
-          scheduleEviction(roomId);
+          if ((docs.get(roomId)?.conns.size ?? 0) === 0) {
+            scheduleEviction(roomId, roomTtlMs);
+          }
         });
       });
     } catch {
