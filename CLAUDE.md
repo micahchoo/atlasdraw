@@ -13,6 +13,10 @@ User docs say what the code does now. History goes in `CHANGELOG.md` and the
 ADRs only. An ADR that a later one reverses keeps its text and gets a dated
 note at the top.
 
+Open follow-up work is in `.agents/docs/SHEET_PANEL_FOLLOWUPS.md`.
+Code comments that cite `ISSUES.md`, `DEADWOOD.md` or `docs/superpowers/plans/`
+name deleted ledgers; `git log` holds them.
+
 ## Scoped rules
 
 `.claude/rules/*.md` hold path-scoped knowledge. A rule's `paths:` frontmatter

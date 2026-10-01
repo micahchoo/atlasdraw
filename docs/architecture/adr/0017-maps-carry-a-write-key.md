@@ -72,4 +72,3 @@ working until they expire.
   menu offers **Restore from server backup**, which reads `GET /maps/:id/blob`.
 - The Share dialog offers "Until you stop it", 7 days or 30 days, and
   **Stop sharing this link**.
-
