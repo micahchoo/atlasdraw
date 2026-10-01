@@ -347,8 +347,7 @@ describe("dirty tracking", () => {
     return fx;
   }
 
-  // KNOWN-RED (W3 document owner): renaming a data layer never calls markDirty, so the rename is saved only if some later scene change happens. Flip to it() when fixed.
-  it.fails("renaming a layer marks the document dirty", async () => {
+  it("renaming a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
       useLayerRegistryStore.getState().renameLayer("dl:wells", "Boreholes"),
@@ -356,8 +355,7 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): restyling a data layer never calls markDirty, so closing the tab without moving the map loses the new style. Flip to it() when fixed.
-  it.fails("restyling a layer marks the document dirty", async () => {
+  it("restyling a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
       useLayerRegistryStore
@@ -367,8 +365,7 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): reordering layers in the panel never calls markDirty. Flip to it() when fixed.
-  it.fails("reordering layers marks the document dirty", async () => {
+  it("reordering layers marks the document dirty", async () => {
     await loadedAndClean();
     const before = useLayerRegistryStore
       .getState()
@@ -383,8 +380,7 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): importing a data layer never calls markDirty; today it survives only because the import also moves the camera. Flip to it() when fixed.
-  it.fails("importing a data layer marks the document dirty", async () => {
+  it("importing a data layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
       useLayerRegistryStore.getState().registerDataLayer({
@@ -397,8 +393,7 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): a pan re-projects every element into new screen x/y, the onChange handler sees a new elements array, and marks the document dirty. Flip to it() when fixed.
-  it.fails("a pure map pan does not mark the document dirty", async () => {
+  it("a pure map pan does not mark the document dirty", async () => {
     const map = new FakeMercatorMap(11, { lng: 13.4, lat: 52.5 });
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
     const sync = new CoordinateSync({
@@ -437,32 +432,28 @@ function shownOnCanvas(el: { isDeleted?: boolean; opacity?: number }): boolean {
 }
 
 describe("annotation rows after reload and undo", () => {
-  // KNOWN-RED (W3 document owner): useLayerRegistrySync seeds knownIds at mount, before load() resolves, and skips ids hydrate already registered, so a reloaded shape is never tracked and its deletion leaves a ghost row. Flip to it() when fixed.
-  it.fails(
-    "deleting a reloaded shape removes its row and keeps it out of the next save",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
-      expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
-        ["rect-1"],
-      );
+  it("deleting a reloaded shape removes its row and keeps it out of the next save", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
+    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual([
+      "rect-1",
+    ]);
 
-      act(() =>
-        fx.setElements(fx.all().map((el) => ({ ...el, isDeleted: true }))),
-      );
+    act(() =>
+      fx.setElements(fx.all().map((el) => ({ ...el, isDeleted: true }))),
+    );
 
-      expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
-        [],
-      );
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const saved = await autosaveDocument();
-      expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);
-    },
-  );
+    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
+      [],
+    );
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const saved = await autosaveDocument();
+    expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);
+  });
 
   // KNOWN-RED (W3 document owner): the registry is not under Excalidraw's undo, so delete-then-undo re-registers the shape with a generated label and visible:true while the element itself comes back at opacity 0. Flip to it() when fixed.
   it.fails(

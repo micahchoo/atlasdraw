@@ -1091,3 +1091,74 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
     expect(raw.addLayer).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scene → registry wiring: the per-change label pass
+// ---------------------------------------------------------------------------
+
+describe("useLayerRegistrySync — scene → registry wiring", () => {
+  afterEach(() => {
+    cleanup();
+    useLayerRegistryStore.setState({ entries: [] });
+  });
+
+  /** A scene that fires onChange on demand, with the elements it was given. */
+  function onChangeScene() {
+    let listener: ((els: readonly SyncSceneElement[]) => void) | null = null;
+    const api = {
+      onChange: (fn: (els: readonly SyncSceneElement[]) => void) => {
+        listener = fn;
+        return () => {
+          listener = null;
+        };
+      },
+    };
+    return {
+      api: api as unknown as Parameters<typeof useLayerRegistrySync>[1],
+      fire: (els: readonly SyncSceneElement[]) => listener?.(els),
+    };
+  }
+
+  const anchored = (id: string): SyncSceneElement => ({
+    id,
+    type: "rectangle",
+    customData: {
+      schemaVersion: 1,
+      projection: "mercator",
+      scaleMode: "geographic",
+      geo: { kind: "point", lng: 13.4, lat: 52.5, zRef: 10 },
+    },
+  });
+
+  // Each label write is an immer produce with a linear find, so a pass that
+  // writes every label is quadratic: 152 ms a frame at 1,000 shapes.
+  it("calls no label action for a scene change that changes no label (a pan at 1,000 shapes)", () => {
+    useLayerRegistryStore.setState({ entries: [] });
+    const scene = onChangeScene();
+    renderHook(() => useLayerRegistrySync(null, scene.api));
+    const shapes = Array.from({ length: 1000 }, (_, i) => anchored(`el-${i}`));
+    scene.fire(shapes);
+    expect(useLayerRegistryStore.getState().entries).toHaveLength(1000);
+
+    const label = vi.spyOn(
+      useLayerRegistryStore.getState(),
+      "updateAnnotationLabel",
+    );
+    scene.fire(shapes.map((el) => ({ ...el })));
+
+    expect(label).not.toHaveBeenCalled();
+  });
+
+  it("tracks a shape the registry already held when the hook mounted, so its deletion removes the row", () => {
+    useLayerRegistryStore.setState({ entries: [] });
+    const scene = onChangeScene();
+    renderHook(() => useLayerRegistrySync(null, scene.api));
+    // A document load registers the row after the hook mounted.
+    useLayerRegistryStore.getState().registerAnnotation("el-1", "Ward 3");
+    scene.fire([anchored("el-1")]);
+
+    scene.fire([{ ...anchored("el-1"), isDeleted: true }]);
+
+    expect(useLayerRegistryStore.getState().entries).toEqual([]);
+  });
+});

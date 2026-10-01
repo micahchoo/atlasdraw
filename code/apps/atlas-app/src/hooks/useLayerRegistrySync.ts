@@ -250,14 +250,19 @@ export function buildSceneDiffHandler(
       elementById.set(el.id, el);
     }
 
-    // Additions — in incoming but not known AND not already in registry.
+    // Additions. An id the registry already holds (a document load registers
+    // its rows) is not registered again, but it is tracked: otherwise its
+    // later deletion would leave a row behind.
     for (const id of incoming) {
-      if (!knownIds.has(id) && !deps.existsInRegistry(id)) {
+      if (knownIds.has(id)) {
+        continue;
+      }
+      if (!deps.existsInRegistry(id)) {
         const el = elementById.get(id);
         const label = el ? generateLayerLabel(el) : id;
         registerAnnotation(id, label);
-        knownIds.add(id);
       }
+      knownIds.add(id);
     }
 
     // Label enrichment — update labels for known elements that now have geo
@@ -576,15 +581,39 @@ export function useLayerRegistrySync(
       seedEntries.filter((e) => e.kind === "annotation").map((e) => e.id),
     );
 
+    // The handler asks about every element on every change, so lookups go
+    // through an id index. It is rebuilt only when the entries array changes.
+    let indexed: readonly LayerRegistryEntry[] | null = null;
+    let byId = new Map<string, LayerRegistryEntry>();
+    const entryById = (id: string): LayerRegistryEntry | undefined => {
+      const entries = useLayerRegistryStore.getState().entries;
+      if (entries !== indexed) {
+        indexed = entries;
+        byId = new Map(entries.map((e) => [e.id, e]));
+      }
+      return byId.get(id);
+    };
+
     const handler = buildSceneDiffHandler({
       knownIds: knownIdsRef.current,
       registerAnnotation: (id, label) =>
         useLayerRegistryStore.getState().registerAnnotation(id, label),
-      updateAnnotationLabel: (id, label) =>
-        useLayerRegistryStore.getState().updateAnnotationLabel(id, label),
+      // Skip the store when the label would not change. A store write is a
+      // produce with a linear find, so writing every label on every change
+      // is quadratic in the number of shapes.
+      updateAnnotationLabel: (id, label) => {
+        const entry = entryById(id);
+        if (
+          !entry ||
+          entry.label === label ||
+          (entry.kind === "annotation" && entry.renamedByUser)
+        ) {
+          return;
+        }
+        useLayerRegistryStore.getState().updateAnnotationLabel(id, label);
+      },
       remove: (id) => useLayerRegistryStore.getState().remove(id),
-      existsInRegistry: (id) =>
-        useLayerRegistryStore.getState().entries.some((e) => e.id === id),
+      existsInRegistry: (id) => entryById(id) !== undefined,
     });
 
     const unsub = excalidrawAPI.onChange(

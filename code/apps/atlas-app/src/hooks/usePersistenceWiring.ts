@@ -135,6 +135,14 @@ export function usePersistenceWiring(
       usePersistenceStore.setState({ isDirty: true, isDraining: true });
     });
 
+    // A layer change is a document change. The scene half of dirty tracking
+    // is in useExcalidrawChangeHandler; this is the layer half.
+    const unsubLayers = useLayerRegistryStore.subscribe((state, prev) => {
+      if (state.revision !== prev.revision) {
+        usePersistenceStore.getState().markDirty();
+      }
+    });
+
     const dispose = startAutoSave(
       store,
       getDoc,
@@ -161,6 +169,7 @@ export function usePersistenceWiring(
     return () => {
       cancelled = true;
       unsubDirty();
+      unsubLayers();
       dispose();
       usePersistenceStore.getState().setAutosaveDispose(null);
       usePersistenceStore.getState().setPersistenceStore(null);

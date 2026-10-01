@@ -274,7 +274,7 @@ describe("useExcalidrawChangeHandler — 4. autosave markDirty gate", () => {
     expect(usePersistenceStore.getState().isDirty).toBe(false);
   });
 
-  it("marks dirty when the elements reference changes on a subsequent call", () => {
+  it("marks dirty when an element is added", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
 
@@ -288,14 +288,56 @@ describe("useExcalidrawChangeHandler — 4. autosave markDirty gate", () => {
     expect(usePersistenceStore.getState().isDirty).toBe(true);
   });
 
-  it("does not mark dirty again when the same elements reference recurs", () => {
+  it("marks dirty when an element's version rises (an edit)", () => {
     const params = makeParams();
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
-    const sameElements = fakeElements([{ id: "el1" }]);
 
-    result.current(sameElements, makeAppState(), NO_FILES);
-    usePersistenceStore.getState().clearDirty();
-    result.current(sameElements, makeAppState(), NO_FILES);
+    result.current(
+      fakeElements([{ id: "el1", version: 1, versionNonce: 7 }]),
+      makeAppState(),
+      NO_FILES,
+    );
+    result.current(
+      fakeElements([{ id: "el1", version: 2, versionNonce: 9 }]),
+      makeAppState(),
+      NO_FILES,
+    );
+
+    expect(usePersistenceStore.getState().isDirty).toBe(true);
+  });
+
+  it("marks dirty when an element is deleted", () => {
+    const params = makeParams();
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", version: 1 }]),
+      makeAppState(),
+      NO_FILES,
+    );
+    result.current(
+      fakeElements([{ id: "el1", version: 1, isDeleted: true }]),
+      makeAppState(),
+      NO_FILES,
+    );
+
+    expect(usePersistenceStore.getState().isDirty).toBe(true);
+  });
+
+  it("does not mark dirty for a new array of the same element versions (a camera move)", () => {
+    const params = makeParams();
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", version: 3, versionNonce: 5, x: 10 }]),
+      makeAppState(),
+      NO_FILES,
+    );
+    result.current(
+      fakeElements([{ id: "el1", version: 3, versionNonce: 5, x: 210 }]),
+      makeAppState(),
+      NO_FILES,
+    );
 
     expect(usePersistenceStore.getState().isDirty).toBe(false);
   });

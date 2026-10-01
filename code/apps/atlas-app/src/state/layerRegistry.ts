@@ -271,11 +271,20 @@ function reindexByKind(entries: LayerRegistryEntry[]): void {
 
 export type LayerRegistryState = {
   entries: LayerRegistryEntry[];
+  /**
+   * Rises by one on every change a save must carry: a register, rename,
+   * restyle, reorder, visibility flip or removal. It does not rise for a
+   * generated annotation label, which is derived from the scene and carries
+   * no decision of the user. Persistence compares it to mark the document
+   * dirty.
+   */
+  revision: number;
 } & Omit<ILayerRegistry, "entries">;
 
 export const useLayerRegistryStore = create<LayerRegistryState>()(
   immer((set) => ({
     entries: [],
+    revision: 0,
 
     registerAnnotation: (elementId, label) =>
       set((s) => {
@@ -294,6 +303,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           order: 0,
         });
         reindexByKind(s.entries);
+        s.revision += 1;
       }),
     updateAnnotationLabel: (elementId, label) =>
       set((s) => {
@@ -318,6 +328,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         if (e.kind === "annotation") {
           e.renamedByUser = true;
         }
+        s.revision += 1;
       }),
 
     registerDataLayer: ({ id, fc, label, style, provenance }) => {
@@ -348,6 +359,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           ...(provenance ? { provenance } : {}),
         });
         reindexByKind(s.entries);
+        s.revision += 1;
       });
     },
 
@@ -380,6 +392,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           ...(provenance ? { provenance } : {}),
         });
         reindexByKind(s.entries);
+        s.revision += 1;
       });
     },
 
@@ -417,6 +430,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         });
         // The annotation stack just lost a member; close the gap it left.
         reindexByKind(s.entries);
+        s.revision += 1;
       });
       // Deleting the old elementId is a no-op in the FC store (annotation ids
       // never had an FC), but kept for symmetry with `remove` — the call site
@@ -427,8 +441,9 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
     setVisibility: (id, visible) =>
       set((s) => {
         const e = s.entries.find((x) => x.id === id);
-        if (e) {
+        if (e && e.visible !== visible) {
           e.visible = visible;
+          s.revision += 1;
         }
       }),
 
@@ -467,6 +482,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         });
         s.entries = next;
         reindexByKind(s.entries);
+        s.revision += 1;
       }),
 
     updateStyle: (id, patch) =>
@@ -474,16 +490,22 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         const e = s.entries.find((x) => x.id === id);
         if (e?.kind === "data") {
           Object.assign(e.style, patch);
+          s.revision += 1;
         }
         // annotations: no-op (no style field on AnnotationLayerEntry).
       }),
 
     remove: (id) => {
       set((s) => {
+        const before = s.entries.length;
         s.entries = s.entries.filter((e) => e.id !== id);
+        if (s.entries.length === before) {
+          return;
+        }
         // Removing from the middle would otherwise leave a hole in the
         // remaining stack's order (0,2,…), which breaks first/last detection.
         reindexByKind(s.entries);
+        s.revision += 1;
       });
       // Phase 4 W0: drop the FC if any. Unconditional delete — annotation ids
       // never had an FC, so the call is a cheap no-op for them and keeps
