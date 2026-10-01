@@ -2,10 +2,11 @@
 //
 // SheetPanelResizer — the drag handle on the sheet panel's LEFT edge.
 //
-// Why it lives app-side rather than inside the vendored `Sidebar`: the width it
-// edits is the host's (persisted in `state/sheetPanel.ts`, published back into
-// the editor as the `rightSidebarWidth` prop), and the panel's left edge is a
-// position the host already knows — the plate's right edge minus the width.
+// Why it lives app-side rather than inside the vendored `Sidebar`: the width
+// it edits is the host's (kept in the session view, session/view.ts, and
+// published back into the editor as the `rightSidebarWidth` prop), and the
+// panel's left edge is a position the host already knows — the plate's right
+// edge minus the width.
 // Putting the handle in the fork would mean a second controlled-value round
 // trip for no new information. This mirrors `SheetRail`, which is likewise an
 // app-side control over a fork surface.

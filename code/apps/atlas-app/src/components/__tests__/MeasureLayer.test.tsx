@@ -324,19 +324,6 @@ describe("Measure tool", () => {
     }
   });
 
-  it("turns on and off with m, but not while typing", () => {
-    renderLayer(new MeasureMap(7, LONDON), fakeEditor([]).api);
-    fireEvent.keyDown(document.body, { key: "m" });
-    expect(session.view.getState().measuring).toBe(true);
-    fireEvent.keyDown(document.body, { key: "m" });
-    expect(session.view.getState().measuring).toBe(false);
-    const input = document.createElement("input");
-    document.body.appendChild(input);
-    fireEvent.keyDown(input, { key: "m" });
-    expect(session.view.getState().measuring).toBe(false);
-    input.remove();
-  });
-
   it("turns off when another tool starts", () => {
     const map = new MeasureMap(7, LONDON);
     const ed = fakeEditor([]);

@@ -45,6 +45,7 @@ import type { UnitSystem } from "@atlasdraw/tools";
 
 import { buildToolContext } from "../hooks/useAtlasdrawTool";
 import { currentDocument } from "../state/document";
+import { isTypingTarget } from "../commands/keys";
 import { useSession, useView } from "../session/SessionContext";
 import styles from "../styles/MeasureLayer.module.css";
 
@@ -79,17 +80,6 @@ export interface MeasureLayerProps {
   otherToolActive: boolean;
   /** Called when the Measure tool turns on: drop the other atlas tool. */
   onStart: () => void;
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return (
-    !!el?.tagName &&
-    (el.tagName === "INPUT" ||
-      el.tagName === "TEXTAREA" ||
-      el.tagName === "SELECT" ||
-      el.isContentEditable === true)
-  );
 }
 
 const frame = (): WorldFrame => currentDocument().snapshot().world;
@@ -471,26 +461,6 @@ export function MeasureLayer({
     }
     otherWas.current = otherToolActive;
   }, [otherToolActive, setActive]);
-
-  // `m` turns the tool on and off.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (
-        e.key.toLowerCase() === "m" &&
-        !e.repeat &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !e.shiftKey &&
-        !isTypingTarget(e.target)
-      ) {
-        e.preventDefault();
-        view.getState().toggleMeasuring();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [view]);
 
   const exit = useCallback(() => setActive(false), [setActive]);
 

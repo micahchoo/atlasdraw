@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Characterization tests for usePersistenceWiring — extracted from
-// MapEditor.tsx (DEADWOOD.md god-module split, Cut 3). Before this
-// extraction, this wiring effect had only indirect coverage via
-// MapEditor.atlasdraw-export.test.tsx exercising saveAtlasDocument/
-// openAtlasDocument, which read the same usePersistenceStore contract.
+// Tests for usePersistenceWiring.
 //
 // createPersistenceStore/startAutoSave/loadDocument are mocked so this test
 // verifies the WIRING (what usePersistenceWiring does with the store's

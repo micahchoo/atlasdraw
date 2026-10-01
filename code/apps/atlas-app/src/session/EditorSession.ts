@@ -13,6 +13,7 @@
 //   transport  how a room reaches its relay (state/room.ts); null when this
 //              build has no rooms
 //   view       the editor's view state (session/view.ts)
+//   notify     where an action tells the user how it went (the toasts)
 
 import { createViewStore, type ViewStore } from "./view";
 
@@ -21,10 +22,17 @@ import type { RoomTransport } from "../state/room";
 import type { SceneAccess } from "../state/scene";
 import type maplibregl from "maplibre-gl";
 
+/** Where an action tells the user how it went. */
+export interface Notify {
+  success: (msg: string) => void;
+  error: (msg: string) => void;
+}
+
 export interface SessionDeps {
   store: DocumentStore;
   scene: SceneAccess;
   transport: RoomTransport | null;
+  notify: Notify;
   /** A map that is already loaded; normally the map arrives later. */
   map?: maplibregl.Map | null;
 }
@@ -33,6 +41,7 @@ export interface EditorSession {
   readonly store: DocumentStore;
   readonly scene: SceneAccess;
   readonly transport: RoomTransport | null;
+  readonly notify: Notify;
   readonly view: ViewStore;
 }
 
@@ -41,6 +50,7 @@ export function createSession(deps: SessionDeps): EditorSession {
     store: deps.store,
     scene: deps.scene,
     transport: deps.transport,
+    notify: deps.notify,
     view: createViewStore({ map: deps.map }),
   };
 }

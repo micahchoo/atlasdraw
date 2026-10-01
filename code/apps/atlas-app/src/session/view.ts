@@ -10,8 +10,10 @@
 //
 // The rest is what several views must agree about: the comment mode (the
 // toolbar, the keys, the anchor overlay, the plate's hint), the Measure tool
-// (the toolbar, the palette, the `m` key, the measure layer) and the layer
-// selection (the Layers panel and the drawing).
+// (the toolbar, the palette, the `m` key, the measure layer), the atlas tool
+// (the Pin button, the palette, the tool overlay), the layer selection (the
+// Layers panel and the drawing) and the one dialog that is open (the menu,
+// the palette and the keys open them; EditorDialogs shows it).
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 
@@ -21,11 +23,35 @@ import {
 } from "@atlasdraw/common";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
-import type { UnitSystem } from "@atlasdraw/tools";
+import type { AtlasdrawTool, UnitSystem } from "@atlasdraw/tools";
 
 import { loadUnitSystem, saveUnitSystem } from "../state/measure";
 
+import type { ExportFormat } from "../components/ExportDialog";
 import type maplibregl from "maplibre-gl";
+
+/** A yes-or-no question, in the user's words. */
+export interface Question {
+  title: string;
+  body: string;
+  confirmLabel: string;
+}
+
+/** A dialog that needs nothing but its name. */
+export type SimpleDialog =
+  | "palette"
+  | "shortcuts"
+  | "about"
+  | "settings"
+  | "share"
+  | "my-maps"
+  | "asset-library";
+
+/** The editor's dialogs. Only one is open at a time. */
+export type Dialog =
+  | { kind: SimpleDialog }
+  | { kind: "export"; format: ExportFormat }
+  | ({ kind: "confirm"; answer(yes: boolean): void } & Question);
 
 export const SHEET_PANEL_WIDTH_KEY = "atlasdraw:sheet-panel:width";
 
@@ -72,6 +98,19 @@ export interface ViewState {
    * (state/selectedLayer.ts#isOverlayId).
    */
   selection: Readonly<Record<string, true>>;
+  /** The atlas tool that takes the next click on the map (the Pin), or null. */
+  atlasTool: AtlasdrawTool | null;
+  /** The open dialog, or null. */
+  dialog: Dialog | null;
+  /** The canvas colour chosen in the drawing's menu, shown behind the map. */
+  mapBackground: string;
+  /** True when this browser holds a server backup of the open map. */
+  backupAvailable: boolean;
+  /**
+   * Import one data file into the open map. The editor's import pipeline
+   * (useDataFileImport) sets it; null until the editor mounts.
+   */
+  importFile: ((file: File) => void) | null;
   setMap(map: maplibregl.Map | null): void;
   setApi(api: ExcalidrawImperativeAPI | null): void;
   /** Set the width (clamped) and keep it in this browser. */
@@ -87,6 +126,13 @@ export interface ViewState {
   /** Select exactly this one layer. */
   select(id: string): void;
   clearSelection(): void;
+  setAtlasTool(tool: AtlasdrawTool | null): void;
+  openDialog(dialog: Dialog): void;
+  /** Open the dialog when another (or none) is open; close it when it is. */
+  toggleDialog(kind: SimpleDialog): void;
+  closeDialog(): void;
+  /** Show `question` and resolve with the answer. */
+  ask(question: Question): Promise<boolean>;
 }
 
 export type ViewStore = StoreApi<ViewState>;
@@ -102,6 +148,11 @@ export function createViewStore(
     measuring: false,
     units: loadUnitSystem(),
     selection: {},
+    atlasTool: null,
+    dialog: null,
+    mapBackground: "transparent",
+    backupAvailable: false,
+    importFile: null,
     setMap: (map) => set({ map }),
     setApi: (api) => set({ api }),
     setSheetPanelWidth: (width) => {
@@ -133,5 +184,23 @@ export function createViewStore(
     setSelection: (ids) => set({ selection: ids }),
     select: (id) => set({ selection: { [id]: true } }),
     clearSelection: () => set({ selection: {} }),
+    setAtlasTool: (tool) => set({ atlasTool: tool }),
+    openDialog: (dialog) => set({ dialog }),
+    toggleDialog: (kind) =>
+      set({ dialog: get().dialog?.kind === kind ? null : { kind } }),
+    closeDialog: () => set({ dialog: null }),
+    ask: (question) =>
+      new Promise<boolean>((resolve) => {
+        set({
+          dialog: {
+            kind: "confirm",
+            ...question,
+            answer: (yes) => {
+              set({ dialog: null });
+              resolve(yes);
+            },
+          },
+        });
+      }),
   }));
 }

@@ -10,9 +10,9 @@
 // it changes what a click on the plate does, which is what the tool strip is
 // for. Same move PinToolButton made when it left the main menu.
 //
-// The mode itself still lives in state/commentMode.ts — this button only
-// flips it, exactly as the rail item did. The keyboard toggle and
-// Escape-to-exit (useMapEditorKeyboard) are untouched.
+// The mode is session view state (session/view.ts); this button only flips
+// it. The `c` key is the "Comment mode" command, and Escape leaves the mode
+// (commands/useCommandKeys.ts).
 //
 // Styling: renders inside the `.excalidraw` scope (the collar strip host
 // re-establishes it), so it uses Excalidraw CSS vars with fallbacks to match

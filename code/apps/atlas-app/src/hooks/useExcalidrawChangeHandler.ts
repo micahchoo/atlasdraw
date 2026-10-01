@@ -21,12 +21,12 @@ import { sceneSignature } from "../state/sceneSignature";
 import { isOverlayId } from "../state/selectedLayer";
 
 import type { ViewStore } from "../session/view";
-import type { Dispatch, SetStateAction } from "react";
 
 export interface ExcalidrawChangeHandlerParams {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   announceMapEditor: (msg: string) => void;
-  setMapBg: Dispatch<SetStateAction<string>>;
+  /** Receives the canvas colour the user chose in the drawing's menu. */
+  setMapBg: (color: string) => void;
   /** The session view whose layer selection follows the canvas. */
   view: ViewStore;
 }

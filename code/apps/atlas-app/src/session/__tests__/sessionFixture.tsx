@@ -20,6 +20,7 @@ export function testSession(
     store: useDocumentStore,
     scene: editorScene,
     transport: null,
+    notify: { success: () => {}, error: () => {} },
     map: options.map ?? null,
   });
 }

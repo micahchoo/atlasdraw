@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// W-B — MainMenu "Layers panel" item wiring test for MapEditor.
-//
-// Replaces the T22 free-floating Layers button test. The button is now a
-// MainMenu.Item rendered inside <Excalidraw> via the MainMenu slot. The
-// real MainMenu mounts via tunnels and DropdownMenu — too heavy for jsdom
-// — so we stub it as a passthrough that renders Item children directly,
-// exposing onSelect as the click handler. We then assert
-// excalidrawAPI.toggleSidebar({name:"layers"}) fires on click.
+// The Layers tab: MapEditor registers it with the drawing's sidebar, and the
+// registered element reads the session (the basemap picker in it writes
+// the document). The real MainMenu and sidebar are too heavy for jsdom, so
+// Excalidraw is a stub here; e2e drives the real ones.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks rather
 // than mutating the contextmenu/drop test fixtures.
@@ -261,70 +257,9 @@ afterEach(() => {
   cleanup();
 });
 
-// IA restructure: the "Layers panel" MainMenu item was ejected (the menu
-// holds document/app actions only). The panel's affordances are now the
-// vendored sidebar trigger and the ⌘K quick-actions palette; these tests
-// drive the palette, which exercises the same toggleSidebar wiring.
-describe("MapEditor — Layers panel affordances (W-B)", () => {
-  async function renderAndOpenPalette() {
-    const utils = render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    // Wait for the Excalidraw stub's useEffect to fire setExcalidrawAPI so
-    // the palette actions have a non-null api reference.
-    await waitFor(() => {
-      expect(utils.getByTestId("excalidraw-stub")).toBeTruthy();
-    });
-    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    await waitFor(() => {
-      expect(utils.getByTestId("quick-actions-panel")).toBeTruthy();
-    });
-    return utils;
-  }
-
-  it("the quick-actions palette lists the Layers panel action", async () => {
-    const utils = await renderAndOpenPalette();
-    expect(utils.getByTestId("quick-action-layers")).toBeTruthy();
-  });
-
-  it("selecting the action calls excalidrawAPI.toggleSidebar({name:'default', tab:'layers'})", async () => {
-    const utils = await renderAndOpenPalette();
-    fireEvent.click(utils.getByTestId("quick-action-layers"));
-
-    await waitFor(() => {
-      expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(1);
-    });
-    expect(mockToggleSidebarSpy).toHaveBeenCalledWith({
-      name: "default",
-      tab: "layers",
-    });
-  });
-
-  it("re-invoking the action fires toggleSidebar again (Excalidraw owns visibility state)", async () => {
-    const utils = await renderAndOpenPalette();
-    fireEvent.click(utils.getByTestId("quick-action-layers"));
-
-    // The palette closes on select — reopen and invoke again.
-    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    fireEvent.click(
-      await waitFor(() => utils.getByTestId("quick-action-layers")),
-    );
-
-    await waitFor(() => {
-      expect(mockToggleSidebarSpy).toHaveBeenCalledTimes(2);
-    });
-    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(1, {
-      name: "default",
-      tab: "layers",
-    });
-    expect(mockToggleSidebarSpy).toHaveBeenNthCalledWith(2, {
-      name: "default",
-      tab: "layers",
-    });
-  });
-
+// The Layers command and its palette entry are tested against the session
+// in commands/commands.test.ts and EditorDialogs.test.tsx.
+describe("MapEditor — the Layers tab", () => {
   it("registers the Layers tab via registerSidebarTab", async () => {
     render(
       <ToastProvider>

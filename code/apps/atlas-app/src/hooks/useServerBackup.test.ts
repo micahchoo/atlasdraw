@@ -8,11 +8,10 @@ import { openDB } from "idb";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
-
 import * as appConfigModule from "../config/app-config";
 import { createDocument, openDocument } from "../state/document";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
+import { createViewStore } from "../session/view";
 
 import { useServerBackup } from "./useServerBackup";
 
@@ -35,9 +34,6 @@ const config = (enableBackendPersistence: boolean): AppConfig => ({
   appVersion: "unknown",
   gitHash: "unknown",
 });
-
-const api = {} as ExcalidrawImperativeAPI;
-const notify = { success: vi.fn(), error: vi.fn() };
 
 async function pushServerMap(documentId: string) {
   const client = {
@@ -65,10 +61,12 @@ describe("useServerBackup", () => {
     await pushServerMap(A);
     openDocument(createDocument({ id: A }));
 
-    const { result } = renderHook(() => useServerBackup(api, notify));
+    const view = createViewStore();
+    view.setState({ backupAvailable: true });
+    renderHook(() => useServerBackup(view));
     await act(async () => {});
 
-    expect(result.current.available).toBe(false);
+    expect(view.getState().backupAvailable).toBe(false);
   });
 
   it("is offered for a document with a server map, and not for one without", async () => {
@@ -76,10 +74,11 @@ describe("useServerBackup", () => {
     await pushServerMap(A);
     openDocument(createDocument({ id: A }));
 
-    const { result } = renderHook(() => useServerBackup(api, notify));
-    await waitFor(() => expect(result.current.available).toBe(true));
+    const view = createViewStore();
+    renderHook(() => useServerBackup(view));
+    await waitFor(() => expect(view.getState().backupAvailable).toBe(true));
 
     act(() => openDocument(createDocument({ id: B })));
-    await waitFor(() => expect(result.current.available).toBe(false));
+    await waitFor(() => expect(view.getState().backupAvailable).toBe(false));
   });
 });

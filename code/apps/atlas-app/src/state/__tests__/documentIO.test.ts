@@ -597,7 +597,7 @@ describe("unsaved work", () => {
 
   it("loading alone does not say the document is in a file", async () => {
     // loadDocument also opens the autosave and share links; only Open from
-    // a file marks it saved (MapEditor.openAtlasDocument).
+    // a file marks it saved (session/fileActions.ts#openMap).
     const fx = makeFakeExcalidraw();
     const doc = await loadDocument(savedDocument(), fx.api);
     expect(doc && hasUnsavedWork(doc)).toBe(true);

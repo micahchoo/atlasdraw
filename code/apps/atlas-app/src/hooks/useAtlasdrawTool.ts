@@ -18,7 +18,8 @@
 // multiple pins, click the button between each placement. This matches stock
 // Excalidraw's "one shape, then back to selection" behaviour.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useStore } from "zustand";
 
 import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
 
@@ -35,6 +36,8 @@ import type {
 
 import { seedToElement } from "../tools/seedToElement";
 import { currentDocument } from "../state/document";
+
+import type { ViewStore } from "../session/view";
 
 import type maplibregl from "maplibre-gl";
 
@@ -125,18 +128,20 @@ export function buildToolContext(
 }
 
 /**
- * useAtlasdrawTool — owns the active atlas-tool and exposes a dispatcher.
+ * useAtlasdrawTool — the active atlas tool (session view state) and a
+ * dispatcher for the interaction overlay.
  *
+ * @param view          - The session view that holds the active tool.
  * @param map           - MapLibre Map instance, or null while loading.
  * @param excalidrawAPI - Excalidraw imperative API, or null while loading.
  */
 export function useAtlasdrawTool(
+  view: ViewStore,
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
 ): UseAtlasdrawToolResult {
-  const [activeAtlasTool, setActiveAtlasTool] = useState<AtlasdrawTool | null>(
-    null,
-  );
+  const activeAtlasTool = useStore(view, (s) => s.atlasTool);
+  const setActiveAtlasTool = useStore(view, (s) => s.setAtlasTool);
 
   // ToolContext factory — re-built when (map, api) changes. The context is a
   // thin façade around the live deps; tools call its methods, never the deps
@@ -158,7 +163,7 @@ export function useAtlasdrawTool(
       // another. (See lifecycle docstring above.)
       setActiveAtlasTool(null);
     },
-    [activeAtlasTool, ctx],
+    [activeAtlasTool, ctx, setActiveAtlasTool],
   );
 
   return { activeAtlasTool, setActiveAtlasTool, dispatchPointerDown };

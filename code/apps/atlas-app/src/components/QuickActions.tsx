@@ -38,7 +38,7 @@ interface QuickActionsProps {
 
 // ---------------------------------------------------------------------------
 
-const CATEGORY_ORDER = ["Tools", "File", "View", "Export", "Help"];
+const CATEGORY_ORDER = ["File", "Edit", "Tools", "View", "Help"];
 
 function groupByCategory(actions: QuickAction[]): Map<string, QuickAction[]> {
   const map = new Map<string, QuickAction[]>();
@@ -112,8 +112,9 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
       case "Enter":
         e.preventDefault();
         if (flattened[selectedIndex]) {
-          flattened[selectedIndex].onSelect();
+          // Close first: the action may open a dialog of its own.
           onClose();
+          flattened[selectedIndex].onSelect();
         }
         break;
       case "Escape":
@@ -183,8 +184,8 @@ export function QuickActions({ actions, onClose }: QuickActionsProps) {
                       data-action-index={idx}
                       data-testid={`quick-action-${a.id}`}
                       onClick={() => {
-                        a.onSelect();
                         onClose();
+                        a.onSelect();
                       }}
                       onMouseEnter={() => setSelectedIndex(idx)}
                     >

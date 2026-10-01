@@ -129,6 +129,7 @@ describe("one view per session", () => {
     store: createDocumentStore(),
     scene: sceneOf({ getSceneElements: () => [], getFiles: () => ({}) }),
     transport: null,
+    notify: { success: () => {}, error: () => {} },
   });
 
   it("hands every module the instance it was given", () => {
@@ -217,5 +218,38 @@ describe("selection", () => {
     expect(view.getState().selection).toEqual({ "dl:roads": true });
     view.getState().clearSelection();
     expect(view.getState().selection).toEqual({});
+  });
+});
+
+describe("dialogs", () => {
+  it("one dialog is open at a time; opening another replaces it", () => {
+    const view = createViewStore();
+    view.getState().openDialog({ kind: "about" });
+    view.getState().openDialog({ kind: "export", format: "pdf" });
+    expect(view.getState().dialog).toEqual({ kind: "export", format: "pdf" });
+    view.getState().closeDialog();
+    expect(view.getState().dialog).toBeNull();
+  });
+
+  it("toggleDialog opens a closed dialog and closes an open one", () => {
+    const view = createViewStore();
+    view.getState().toggleDialog("shortcuts");
+    expect(view.getState().dialog).toEqual({ kind: "shortcuts" });
+    view.getState().toggleDialog("shortcuts");
+    expect(view.getState().dialog).toBeNull();
+  });
+
+  it("ask shows a question and resolves with the answer, then closes it", async () => {
+    const view = createViewStore();
+    const answer = view.getState().ask({
+      title: "Open another map?",
+      body: "…",
+      confirmLabel: "Open anyway",
+    });
+    const dialog = view.getState().dialog;
+    expect(dialog?.kind).toBe("confirm");
+    (dialog as { answer(yes: boolean): void }).answer(true);
+    await expect(answer).resolves.toBe(true);
+    expect(view.getState().dialog).toBeNull();
   });
 });

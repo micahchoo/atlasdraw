@@ -65,6 +65,7 @@ function editorSession(): {
     store: useDocumentStore,
     scene: editorScene,
     transport: null,
+    notify: { success: () => {}, error: () => {} },
   });
   const fx = makeFakeExcalidraw();
   const map = new FakeCameraMap({ center: [2.35, 48.85], zoom: 9 });

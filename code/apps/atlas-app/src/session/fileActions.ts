@@ -12,15 +12,12 @@ import {
   markSavedToFile,
   toFile,
 } from "../state/documentIO";
+import { restoreServerBackup } from "../state/myMaps";
 import { usePersistenceStore } from "../state/usePersistenceStore";
+import { getAppConfig } from "../config/app-config";
+import { createHttpStorageClient } from "../services/createHttpStorageClient";
 
-import type { EditorSession } from "./EditorSession";
-
-/** Where an action tells the user how it went. */
-export interface Notify {
-  success: (msg: string) => void;
-  error: (msg: string) => void;
-}
+import type { EditorSession, Notify } from "./EditorSession";
 
 /** A dismissed picker is the user's choice, not a failure. */
 function isPickerCancel(err: unknown): boolean {
@@ -58,6 +55,13 @@ export async function saveMap(
   }
 }
 
+/** Asked before Open replaces a map that holds work not in a file. */
+export const REPLACE_QUESTION = {
+  title: "Open another map?",
+  body: "This map has changes you have not saved to a file. Opening another map closes it.",
+  confirmLabel: "Open anyway",
+};
+
 /**
  * Open a file the user picks in place of the open map. When the open map
  * holds work that is not in a file, `confirmReplace` is asked first; without
@@ -65,8 +69,9 @@ export async function saveMap(
  */
 export async function openMap(
   s: EditorSession,
-  notify?: Notify,
-  confirmReplace: () => Promise<boolean> = async () => false,
+  notify: Notify = s.notify,
+  confirmReplace: () => Promise<boolean> = () =>
+    s.view.getState().ask(REPLACE_QUESTION),
 ): Promise<void> {
   const { api, map } = s.view.getState();
   const store = usePersistenceStore.getState().persistenceStore;
@@ -101,4 +106,29 @@ export async function openMap(
       "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
     );
   }
+}
+
+/**
+ * Replace the open map with the copy the server holds of it, after a yes.
+ * The restored map is saved again, so both copies agree.
+ */
+export async function restoreBackup(s: EditorSession): Promise<void> {
+  const { api, map } = s.view.getState();
+  if (!api) {
+    return;
+  }
+  await restoreServerBackup({
+    api,
+    map,
+    notify: s.notify,
+    client: createHttpStorageClient({
+      baseUrl: getAppConfig().storageBaseUrl ?? "",
+    }),
+    confirm: () =>
+      s.view.getState().ask({
+        title: "Restore from server backup?",
+        body: "The server copy of this map replaces the map you see. Changes that are not on the server are lost.",
+        confirmLabel: "Restore",
+      }),
+  });
 }

@@ -175,8 +175,9 @@ Made before W4 and carried out in it:
    (fork prop `screenSizedStyles`).
 2. **One owner for the camera.** Excalidraw's zoom keys, zoom buttons and
    fit actions call the host (`onZoomAction`), which zooms the map;
-   `useMapEditorKeyboard` takes the zoom keys when focus is outside the
-   drawing; trackpad pinch goes to the map with the wheel.
+   the editor's command keys (`commands/useCommandKeys.ts`) take the zoom
+   keys before the drawing sees them; trackpad pinch goes to the map with
+   the wheel.
 3. **Bearing** is a CSS rotation of the drawing layer's canvases about the
    map centre, display only. Drawing stays blocked while the map is turned.
 

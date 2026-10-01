@@ -295,3 +295,22 @@ export function useRoom(
     start,
   };
 }
+
+/** Why the editor cannot be in the room, in the user's words; null when it can. */
+export function roomProblem(room: Pick<RoomSession, "error" | "status">) {
+  if (room.error) {
+    return room.error;
+  }
+  switch (room.status) {
+    case "denied":
+      return "This shared map link was refused. Ask for a new link.";
+    case "full":
+      return "This shared map is full. Try again later.";
+    case "limited":
+      return "Too many shared maps were opened from your network. Try again in an hour.";
+    case "no-space":
+      return "The server has no space for shared maps. Tell the person who runs it.";
+    default:
+      return null;
+  }
+}
