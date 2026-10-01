@@ -17,8 +17,12 @@ import { App } from "../App";
 vi.mock("../components/MapEditor", () => ({
   MapEditor: () => <div data-testid="route-map-editor" />,
 }));
-vi.mock("../components/ShareView", () => ({
-  ShareView: () => <div data-testid="route-share-view" />,
+vi.mock("../components/EmbedView", () => ({
+  EmbedView: ({ chrome }: { chrome: string }) => (
+    <div
+      data-testid={chrome === "share" ? "route-share-view" : "route-embed"}
+    />
+  ),
 }));
 function setLocation(
   pathname: string,
@@ -46,14 +50,14 @@ describe("App path routing", () => {
     expect(screen.queryByTestId("route-share-view")).toBeNull();
   });
 
-  it("renders ShareView for /m#v1:<encoded> (hash share)", async () => {
+  it("renders the viewer with share chrome for /m#v1:<encoded>", async () => {
     setLocation("/m", "#v1:abc123");
     render(<App />);
     expect(await screen.findByTestId("route-share-view")).not.toBeNull();
     expect(screen.queryByTestId("route-map-editor")).toBeNull();
   });
 
-  it("renders ShareView for /m/<token> (upload share)", async () => {
+  it("renders the viewer with share chrome for /m/<token>", async () => {
     setLocation("/m/abcdefghij1234567890K", "");
     render(<App />);
     expect(await screen.findByTestId("route-share-view")).not.toBeNull();
@@ -64,6 +68,12 @@ describe("App path routing", () => {
     render(<App />);
     expect(await screen.findByTestId("route-share-view")).not.toBeNull();
     expect(screen.queryByTestId("route-map-editor")).toBeNull();
+  });
+
+  it("renders the viewer with minimal chrome for /embed", async () => {
+    setLocation("/embed", "#v2:abc123");
+    render(<App />);
+    expect(await screen.findByTestId("route-embed")).not.toBeNull();
   });
 
   it("renders MapEditor on /billing, which is not a route", async () => {

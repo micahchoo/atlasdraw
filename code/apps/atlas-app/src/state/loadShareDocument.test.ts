@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Unit tests for the shared read-only document loader (ShareView + EmbedView).
+// The read-only viewer's document loader.
 import { describe, it, expect } from "vitest";
 import LZString from "lz-string";
 
@@ -10,11 +10,7 @@ import {
   type HttpStorageClient,
 } from "../services/createHttpStorageClient";
 
-import {
-  decodeHashDoc,
-  tokenFromPath,
-  loadShareDocument,
-} from "./loadShareDocument";
+import { decodeHashDoc, loadShareDocument } from "./loadShareDocument";
 import {
   savedDocument,
   savedManifest,
@@ -86,36 +82,22 @@ describe("decodeHashDoc", () => {
   });
 });
 
-describe("tokenFromPath", () => {
-  it("extracts a token under the given prefix", () => {
-    expect(tokenFromPath(`/embed/${TOKEN}`, "/embed/")).toBe(TOKEN);
-    expect(tokenFromPath(`/m/${TOKEN}`, "/m/")).toBe(TOKEN);
-  });
-
-  it("returns null for a mismatched prefix, wrong length, or bare prefix", () => {
-    expect(tokenFromPath(`/embed/${TOKEN}`, "/m/")).toBeNull();
-    expect(tokenFromPath("/embed/short", "/embed/")).toBeNull();
-    expect(tokenFromPath("/embed", "/embed/")).toBeNull();
-  });
-});
-
 describe("loadShareDocument", () => {
-  it("resolves a hash document (hash wins over token)", async () => {
-    const r = await loadShareDocument(hashFor(sampleDoc), TOKEN);
+  it("resolves a hash document", async () => {
+    const r = await loadShareDocument({ hash: hashFor(sampleDoc).slice(1) });
     expect(r.kind).toBe("ready");
     expect(r.kind === "ready" && r.doc.manifest.id).toBe(sampleDoc.manifest.id);
   });
 
   it("returns an error for a corrupt hash", async () => {
-    const r = await loadShareDocument(
-      `#v1:${LZString.compressToBase64("not json{{")}`,
-      null,
-    );
+    const r = await loadShareDocument({
+      hash: `v1:${LZString.compressToBase64("not json{{")}`,
+    });
     expect(r.kind).toBe("error");
   });
 
-  it("returns an error when neither hash nor token is present", async () => {
-    const r = await loadShareDocument("", null);
+  it("returns an error for a damaged link", async () => {
+    const r = await loadShareDocument(null);
     expect(r).toEqual({ kind: "error", message: "Invalid share link." });
   });
 
@@ -123,7 +105,7 @@ describe("loadShareDocument", () => {
     const client = {
       getShareBlob: async () => null,
     } as unknown as HttpStorageClient;
-    const r = await loadShareDocument("", TOKEN, client);
+    const r = await loadShareDocument({ token: TOKEN }, client);
     expect(r.kind).toBe("not-found");
   });
 
@@ -133,7 +115,7 @@ describe("loadShareDocument", () => {
         throw new ShareExpiredError();
       },
     } as unknown as HttpStorageClient;
-    const r = await loadShareDocument("", TOKEN, client);
+    const r = await loadShareDocument({ token: TOKEN }, client);
     expect(r.kind).toBe("expired");
   });
 
@@ -143,7 +125,7 @@ describe("loadShareDocument", () => {
         throw new Error("network down");
       },
     } as unknown as HttpStorageClient;
-    const r = await loadShareDocument("", TOKEN, client);
+    const r = await loadShareDocument({ token: TOKEN }, client);
     expect(r).toEqual({ kind: "error", message: "network down" });
   });
 });

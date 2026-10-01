@@ -87,6 +87,7 @@ import {
   toFile,
 } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
+import { type SharedMap } from "../routes";
 import { featureAt } from "../lib/featureHit";
 import {
   createHttpStorageClient,
@@ -342,13 +343,16 @@ export interface MapEditorProps {
    * if the parent re-renders with a fresh callback closure.
    */
   onMount?: (map: maplibregl.Map, api: ExcalidrawImperativeAPI) => void;
+
+  /** A shared map to open as a copy when the editor starts (routes.ts). */
+  open?: SharedMap | null;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function MapEditor({ initialView, onMount }: MapEditorProps) {
+export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
   const { map, onMapReady } = useMapRef();
   const [excalidrawAPI, setExcalidrawAPI] =
     useState<ExcalidrawImperativeAPI | null>(null);
@@ -631,7 +635,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
   // opens the last autosaved document,
   // starts auto-save, and mirrors dirty/drain state into Zustand.
-  usePersistenceWiring(excalidrawAPI, documentNotify);
+  usePersistenceWiring(excalidrawAPI, documentNotify, open);
   // Publish the scene for the layer panel's annotation rows and commands.
   useSceneBinding(excalidrawAPI);
 

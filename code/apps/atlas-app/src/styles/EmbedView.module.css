@@ -1,11 +1,10 @@
-/* EmbedView — chromeless read-only map embed.
+/* EmbedView — the read-only viewer.
  *
- * Reuses MapEditor.module.css for the two-layer stack (.mapLayer / .excalidrawLayer
- * / .fullSize). This module owns only the embed-specific concerns: the sizing
- * root and stripping Excalidraw's residual view-mode chrome. Scoped under
- * .embedRoot so the editor's own chrome is never affected (this is NOT the
- * excalidraw-theme.css override layer — it's feature-scoped display control for
- * the embed surface, not theming).
+ * Reuses MapEditor.module.css for the two-layer stack (.mapLayer /
+ * .excalidrawLayer / .fullSize). This module owns the viewer's own frame:
+ * the sizing root, the share page's head bar, the message screens, and
+ * hiding Excalidraw's view-mode chrome. Everything is scoped under the
+ * viewer's roots, so the editor is never affected.
  */
 
 .embedRoot {
@@ -16,30 +15,120 @@
 }
 
 /* In viewModeEnabled Excalidraw already hides its top menu, but the footer
- * (zoom controls) and the help button still render. A read-only embed shows
- * only the map + annotations — the map carries its own attribution and the
- * viewer uses the map's native scroll/drag to navigate. */
+ * (zoom controls) and the help button still render. The viewer shows only
+ * the map and the drawing; the map carries its own attribution and pans with
+ * the map's own gestures. */
 .embedRoot :global(.layer-ui__wrapper__footer),
 .embedRoot :global(.App-menu_top),
 .embedRoot :global(.help-icon) {
   /* !important: Excalidraw's own `.layer-ui__wrapper__footer { display: flex }`
    * out-specifies a plain scoped selector. This is feature-scoped display
-   * control for the embed surface, not the excalidraw-theme.css token-override
+   * control for the viewer, not the excalidraw-theme.css token-override
    * layer the vendored-chrome rule guards. */
   display: none !important;
 }
 
-/* Graceful degradation when scripts are blocked (see the <noscript> block). */
-.fallback {
+/* --- share page: a head bar like the editor's collar, then the map ------- */
+
+.shareRoot {
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  width: 100%;
+  height: 100%;
+  background: var(--ad-surface);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-3);
+  min-width: 0;
+  padding: 0 var(--ad-space-3);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.wordmark {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ad-ink-secondary);
+  user-select: none;
+}
+
+.title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readOnly {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  color: var(--ad-ink-secondary);
+  font-size: 11px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.open {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: var(--ad-radius-md);
+  background: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.open:hover {
+  background: var(--ad-accent-hover);
+}
+
+.open:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}
+
+.stage {
+  position: relative;
+  min-height: 0;
+}
+
+/* --- loading and failure screens ---------------------------------------- */
+
+.message {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: 2rem;
+  padding: var(--ad-space-8);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
   text-align: center;
-  color: var(--ad-ink, #212529);
-  background: var(--ad-surface, #f8f9fa);
-  font-family: system-ui, sans-serif;
+}
+
+.messageTitle {
+  margin: 0 0 var(--ad-space-2) 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.messageBody {
+  margin: 0;
+  color: var(--ad-ink-secondary);
+  font-size: 0.875rem;
 }

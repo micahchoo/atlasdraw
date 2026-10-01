@@ -138,6 +138,21 @@ function blankFile(): AtlasdrawDocument {
 }
 
 /**
+ * A shared map as a map of the user's own: a new id, so its saves never
+ * reach the owner's copy, and new dates.
+ */
+export function copyOfSharedMap(
+  shared: AtlasdrawDocument,
+  now: Date = new Date(),
+): AtlasdrawDocument {
+  const at = now.toISOString();
+  return {
+    ...shared,
+    manifest: { ...shared.manifest, id: ulid(), createdAt: at, updatedAt: at },
+  };
+}
+
+/**
  * Open a new, blank map. It is saved at once, so it is in My maps and a
  * reload opens it. True when it opened.
  */

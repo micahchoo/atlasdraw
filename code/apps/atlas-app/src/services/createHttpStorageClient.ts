@@ -66,7 +66,7 @@ export class StorageHttpError extends Error {
 
 /**
  * Thrown by `getShareBlob` on 410 Gone (the token expired, or its map is
- * gone). 404 (never existed, or revoked) is null instead, so ShareView can
+ * gone). 404 (never existed, or revoked) is null instead, so the viewer can
  * show two messages.
  */
 export class ShareExpiredError extends Error {

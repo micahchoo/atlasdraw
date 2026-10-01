@@ -11,19 +11,15 @@ import { AriaAnnouncer } from "./components/AriaAnnouncer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ToastProvider";
 
-// The three route roots load on demand, so a visitor downloads only the one
-// that mounts: an /embed iframe does not pull the editor, and an editor
-// visitor does not pull the read-only views. Exactly one of these mounts per
-// page load.
+// The two route roots load on demand, so a visitor downloads only the one
+// that mounts: a share link or an /embed iframe does not pull the editor, and
+// an editor visitor does not pull the viewer.
 //
 // `.then(m => ({ default: ... }))` because each module exports a NAMED
 // component and React.lazy resolves `default` only. Keep the named exports —
 // the test suite mocks these modules by name.
 const MapEditor = lazy(() =>
   import("./components/MapEditor").then((m) => ({ default: m.MapEditor })),
-);
-const ShareView = lazy(() =>
-  import("./components/ShareView").then((m) => ({ default: m.ShareView })),
 );
 const EmbedView = lazy(() =>
   import("./components/EmbedView").then((m) => ({ default: m.EmbedView })),
@@ -41,14 +37,14 @@ function pickView() {
   const route = parseRoute(window.location);
   switch (route.kind) {
     case "share":
-      return <ShareView />;
+      return <EmbedView chrome="share" map={route.map} />;
     case "embed":
       if (getAppConfig().embedEnabled) {
-        return <EmbedView />;
+        return <EmbedView chrome="minimal" map={route.map} />;
       }
       return <MapEditor initialView={INITIAL_VIEW} />;
     case "editor":
-      return <MapEditor initialView={INITIAL_VIEW} />;
+      return <MapEditor initialView={INITIAL_VIEW} open={route.open} />;
   }
 }
 

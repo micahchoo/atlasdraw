@@ -24,6 +24,7 @@ import { usePersistenceStore } from "../state/usePersistenceStore";
 import * as persistenceModule from "../state/persistence";
 import * as documentIO from "../state/documentIO";
 import * as roomModule from "../state/room";
+import * as shareModule from "../state/loadShareDocument";
 import * as appConfigModule from "../config/app-config";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
@@ -231,6 +232,78 @@ describe("usePersistenceWiring", () => {
         FAKE_DOC,
         fakeExcalidrawAPI,
         expect.anything(),
+      );
+    });
+  });
+
+  describe("a link that opens a copy of a shared map", () => {
+    afterEach(() => {
+      window.history.replaceState(null, "", "/");
+    });
+
+    it("opens a copy with its own id instead of the autosave, saves it, and clears the link", async () => {
+      window.history.replaceState(null, "", "/#open:v2:AAAA");
+      const store = makeFakeStore({ load: vi.fn(async () => FAKE_DOC) });
+      vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+        store,
+      );
+      vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+      const shared = {
+        ...FAKE_DOC,
+        manifest: { ...FAKE_DOC.manifest, id: "shared-1", title: "Wells" },
+      } as AtlasdrawDocument;
+      const loadShared = vi
+        .spyOn(shareModule, "loadShareDocument")
+        .mockResolvedValue({ kind: "ready", doc: shared });
+      const open = vi
+        .spyOn(documentIO, "loadDocument")
+        .mockResolvedValue({} as never);
+      const notify = { error: vi.fn(), success: vi.fn() };
+
+      renderHook(() =>
+        usePersistenceWiring(fakeExcalidrawAPI, notify, { hash: "v2:AAAA" }),
+      );
+
+      await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+      expect(loadShared).toHaveBeenCalledWith({ hash: "v2:AAAA" });
+      expect(store.load).not.toHaveBeenCalled();
+      const opened = open.mock.calls[0][0];
+      expect(opened.manifest.title).toBe("Wells");
+      expect(opened.manifest.id).not.toBe("shared-1");
+      expect(usePersistenceStore.getState().isDirty).toBe(true);
+      expect(window.location.hash).toBe("");
+      expect(notify.success).toHaveBeenCalledWith('Opened a copy of "Wells"');
+    });
+
+    it("says so and opens the autosave when the shared map cannot load", async () => {
+      const store = makeFakeStore({ load: vi.fn(async () => FAKE_DOC) });
+      vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+        store,
+      );
+      vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(vi.fn());
+      vi.spyOn(shareModule, "loadShareDocument").mockResolvedValue({
+        kind: "expired",
+      });
+      const open = vi
+        .spyOn(documentIO, "loadDocument")
+        .mockResolvedValue({} as never);
+      const notify = { error: vi.fn(), success: vi.fn() };
+
+      renderHook(() =>
+        usePersistenceWiring(fakeExcalidrawAPI, notify, {
+          token: "abcdefghij1234567890K",
+        }),
+      );
+
+      await waitFor(() =>
+        expect(open).toHaveBeenCalledWith(
+          FAKE_DOC,
+          fakeExcalidrawAPI,
+          expect.anything(),
+        ),
+      );
+      expect(notify.error).toHaveBeenCalledWith(
+        "Couldn't open the shared map: the link has expired.",
       );
     });
   });

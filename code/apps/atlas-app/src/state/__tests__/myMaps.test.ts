@@ -13,6 +13,7 @@ import { write, type AtlasdrawDocument } from "@atlasdraw/data";
 import { createDocument, currentDocument, openDocument } from "../document";
 import { toFile } from "../documentIO";
 import {
+  copyOfSharedMap,
   deleteSavedMap,
   openSavedMap,
   restoreServerBackup,
@@ -171,6 +172,20 @@ describe("openSavedMap", () => {
     expect(notify.error).toHaveBeenCalledWith(
       "This map is not saved in this browser now.",
     );
+  });
+});
+
+describe("copyOfSharedMap", () => {
+  it("is the same map under a new id and new dates", () => {
+    const shared = savedFile(A, "Wells", "2026-05-02T00:00:00.000Z");
+    const copy = copyOfSharedMap(shared, new Date("2026-10-01T00:00:00Z"));
+    expect(copy.manifest.id).not.toBe(A);
+    expect(copy.manifest.title).toBe("Wells");
+    expect(copy.manifest.createdAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(copy.manifest.updatedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(copy.manifest.camera).toEqual(shared.manifest.camera);
+    expect(copy.scene).toBe(shared.scene);
+    expect(shared.manifest.id).toBe(A);
   });
 });
 
