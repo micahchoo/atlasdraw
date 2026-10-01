@@ -5,11 +5,11 @@
 // The document is encoded once, as the same `.atlasdraw` bytes a save writes
 // (data layers, rasters and pasted images included). Then:
 //
-//   - Hash mode   — the bytes fit in a URL fragment: `/m#v2:<base64url>`.
+//   - Hash mode   — the bytes fit in a URL fragment: `<base>m#v2:<base64url>`.
 //                   Fully self-contained, no server.
 //   - Upload mode — they do not: the bytes go to the document's own server
 //                   map (the one the autosave updates), and the server mints
-//                   a token for `/m/<token>`. The token reads the map's
+//                   a token for `<base>m/<token>`. The token reads the map's
 //                   latest bytes, so a later save updates the link. It lasts
 //                   until revoked unless the owner chose an expiry.
 //
@@ -23,6 +23,7 @@ import { uint8ArrayToBase64Url, write } from "@atlasdraw/data";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
+import { routeUrl } from "../routes";
 import { revokeShare, shareDocument } from "../state/remoteMapIdCache";
 
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
@@ -104,9 +105,10 @@ export function useShareLink(opts: UseShareLinkOptions): UseShareLinkState {
         if (bytes.byteLength <= HASH_BYTE_LIMIT) {
           setMode("hash");
           return {
-            url: `${
-              window.location.origin
-            }/m#${HASH_PREFIX}${uint8ArrayToBase64Url(bytes)}`,
+            url: routeUrl({
+              kind: "share",
+              map: { hash: `${HASH_PREFIX}${uint8ArrayToBase64Url(bytes)}` },
+            }),
             mode: "hash",
             token: null,
             expiresAt: null,
@@ -122,7 +124,7 @@ export function useShareLink(opts: UseShareLinkOptions): UseShareLinkState {
           );
           setMode("upload");
           return {
-            url: `${window.location.origin}/m/${share.token}`,
+            url: routeUrl({ kind: "share", map: { token: share.token } }),
             mode: "upload",
             token: share.token,
             expiresAt: share.expiresAt,

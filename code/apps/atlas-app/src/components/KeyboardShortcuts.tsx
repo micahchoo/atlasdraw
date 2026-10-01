@@ -16,17 +16,29 @@ import styles from "../styles/KeyboardShortcuts.module.css";
 // Shortcut registry
 // ---------------------------------------------------------------------------
 
-interface Shortcut {
+export interface Shortcut {
   keys: string[];
   label: string;
   category: string;
 }
 
-const SHORTCUTS: Shortcut[] = [
+export const SHORTCUTS: Shortcut[] = [
   // --- Map ---
+  // A drag with the selection tool selects; it does not pan (classifyTool,
+  // decision atlasdraw-dd91). Space or the hand tool pans.
   {
-    keys: ["Pan"],
-    label: "Drag to pan map",
+    keys: ["Drag"],
+    label: "Select shapes in a box",
+    category: "Map",
+  },
+  {
+    keys: ["Space", "Drag"],
+    label: "Pan the map",
+    category: "Map",
+  },
+  {
+    keys: ["H"],
+    label: "Hand tool: a drag pans the map",
     category: "Map",
   },
   {
@@ -36,46 +48,21 @@ const SHORTCUTS: Shortcut[] = [
   },
   {
     keys: ["Shift", "Drag"],
-    label: "Box zoom",
+    label: "Box zoom (hand tool)",
     category: "Map",
   },
 
-  // --- Drawing ---
-  {
-    keys: ["1"],
-    label: "Selection tool (default)",
-    category: "Drawing",
-  },
-  {
-    keys: ["2"],
-    label: "Rectangle",
-    category: "Drawing",
-  },
-  {
-    keys: ["3"],
-    label: "Freehand",
-    category: "Drawing",
-  },
-  {
-    keys: ["4"],
-    label: "Arrow",
-    category: "Drawing",
-  },
-  {
-    keys: ["5"],
-    label: "Line",
-    category: "Drawing",
-  },
-  {
-    keys: ["6"],
-    label: "Text",
-    category: "Drawing",
-  },
-  {
-    keys: ["H"],
-    label: "Hand / pan tool",
-    category: "Drawing",
-  },
+  // --- Drawing --- (the digits of packages/excalidraw/components/shapes.tsx)
+  { keys: ["1"], label: "Selection tool (default)", category: "Drawing" },
+  { keys: ["2"], label: "Rectangle", category: "Drawing" },
+  { keys: ["3"], label: "Diamond", category: "Drawing" },
+  { keys: ["4"], label: "Ellipse", category: "Drawing" },
+  { keys: ["5"], label: "Arrow", category: "Drawing" },
+  { keys: ["6"], label: "Line", category: "Drawing" },
+  { keys: ["7"], label: "Free draw", category: "Drawing" },
+  { keys: ["8"], label: "Text", category: "Drawing" },
+  { keys: ["9"], label: "Insert image", category: "Drawing" },
+  { keys: ["0"], label: "Eraser (or E)", category: "Drawing" },
 
   // --- Editing ---
   {

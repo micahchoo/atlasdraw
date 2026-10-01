@@ -13,9 +13,9 @@
  * ((x + scrollX) * zoom) is where `map.project` puts its lng/lat.
  *
  * Test A (pin) — the Atlas-side PinTool path; a pin is centred on its point.
- * Test B (rectangle) — Excalidraw's stock rectangle. Programmatic drag in
- * Excalidraw is finicky in headless; if the rectangle never materializes,
- * fixme.
+ * Test B (rectangle) — Excalidraw's stock rectangle. The tool is chosen
+ * through the API: a click on the plate does not focus Excalidraw, so a
+ * typed `r` would not reach it.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -169,6 +169,14 @@ async function placePin(page: Page, x: number, y: number): Promise<void> {
   await expect(page.getByTestId("atlas-tool-overlay")).toBeHidden();
 }
 
+async function selectRectangleTool(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as AtlasdrawWindow;
+    w.__atlasdraw__?.excalidrawAPI.setActiveTool({ type: "rectangle" });
+  });
+  await page.waitForTimeout(50);
+}
+
 async function dragRectangle(page: Page): Promise<void> {
   const startX = 500;
   const startY = 300;
@@ -239,22 +247,12 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    // Focus the Excalidraw area first (click empty space well away from the
-    // Pin button to avoid toggling it), then the stock rectangle shortcut.
-    await page.mouse.move(900, 100);
-    await page.mouse.click(900, 100);
-    await page.keyboard.press("r");
+    await selectRectangleTool(page);
     await dragRectangle(page);
 
     const rect1 = await measure(page, "rectangle");
-    if (!rect1) {
-      test.fixme(
-        true,
-        "Excalidraw rectangle drag failed in headless — pin test (A) covers the load-bearing invariant.",
-      );
-      return;
-    }
-    const [nw1, se1] = rect1.geo;
+    expect(rect1, "the drag drew a rectangle").toBeDefined();
+    const [nw1, se1] = rect1!.geo;
     expect(nw1.lng).toBeLessThan(se1.lng);
     expect(se1.lat).toBeLessThan(nw1.lat);
 
@@ -264,11 +262,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     expect(rect2, "rectangle should still exist after pan").toBeDefined();
 
     // Source of truth: the box is unchanged.
-    expect(rect2!.geo).toEqual(rect1.geo);
+    expect(rect2!.geo).toEqual(rect1!.geo);
 
     // Drawn position shifts by ~−200 in x.
-    const dx = rect2!.drawn[0].x - rect1.drawn[0].x;
-    const dy = rect2!.drawn[0].y - rect1.drawn[0].y;
+    const dx = rect2!.drawn[0].x - rect1!.drawn[0].x;
+    const dy = rect2!.drawn[0].y - rect1!.drawn[0].y;
     expect(
       Math.abs(dx - -200),
       `expected the box to shift ~−200px on screen, got ${dx}`,
@@ -313,22 +311,11 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     await expect(page.getByTestId("pin-tool-button")).toBeVisible();
     await waitForAtlasdrawReady(page);
 
-    // Switch to rectangle via imperative API (avoids keyboard focus issues).
-    await page.evaluate(() => {
-      const w = window as unknown as AtlasdrawWindow;
-      w.__atlasdraw__?.excalidrawAPI.setActiveTool({ type: "rectangle" });
-    });
-    await page.waitForTimeout(50);
+    await selectRectangleTool(page);
     await dragRectangle(page);
 
     const rect1 = await measure(page, "rectangle");
-    if (!rect1) {
-      test.fixme(
-        true,
-        "Rectangle drag failed in headless — see Test B for context.",
-      );
-      return;
-    }
+    expect(rect1, "the drag drew a rectangle").toBeDefined();
 
     // Zoom in by 1 level → 2x pixel density per degree.
     await zoomInOneLevel(page);
@@ -337,7 +324,7 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     expect(rect2, "rectangle should still exist after zoom").toBeDefined();
 
     // Source of truth: the box is unchanged.
-    expect(rect2!.geo).toEqual(rect1.geo);
+    expect(rect2!.geo).toEqual(rect1!.geo);
 
     // Drawn width/height equal the projected span of NW and SE at the new
     // zoom, twice the drag.
@@ -351,7 +338,7 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
       ).toFixed(1)}) driftWH=(${driftW.toFixed(3)},${driftH.toFixed(3)})`,
     );
     expect(
-      Math.abs(dse.x - dnw.x - 2 * (rect1.drawn[1].x - rect1.drawn[0].x)),
+      Math.abs(dse.x - dnw.x - 2 * (rect1!.drawn[1].x - rect1!.drawn[0].x)),
       "one zoom level doubles the drawn width",
     ).toBeLessThan(2);
     expect(Math.abs(driftW), "width matches the geographic span").toBeLessThan(

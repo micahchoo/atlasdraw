@@ -13,6 +13,8 @@ import {
   BasemapRemoteGatedError,
 } from "@atlasdraw/basemap";
 
+import { getAppConfig } from "../config/app-config";
+
 import type maplibregl from "maplibre-gl";
 
 export function useBasemapStyle(
@@ -33,8 +35,7 @@ export function useBasemapStyle(
     const apply = async () => {
       let style;
       try {
-        const pmtilesPath =
-          import.meta.env.VITE_PMTILES_PATH ?? "/data/world-low-zoom.pmtiles";
+        const pmtilesPath = getAppConfig().pmtilesPath;
         style = await resolveStyle(activeBasemapId, {
           allowRemote,
           pmtilesPath,

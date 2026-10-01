@@ -43,25 +43,54 @@
 
 .button {
   padding: 6px 12px;
-  border: 1px solid #adb5bd;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #212529;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .button:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
 }
 
 .buttonPrimary {
-  background: #1971c2;
-  border-color: #1971c2;
-  color: #ffffff;
+  background: var(--ad-accent);
+  border-color: var(--ad-accent);
+  color: var(--ad-ink-inverse);
 }
 
 .buttonPrimary:hover {
-  background: #1864ab;
+  background: var(--ad-accent-hover);
+}
+
+.buttonDestructive {
+  background: var(--ad-danger);
+  border-color: var(--ad-danger);
+  color: var(--ad-ink-inverse);
+}
+
+.buttonDestructive:hover {
+  background: color-mix(in srgb, var(--ad-danger) 85%, black);
+}
+
+/* A choice that goes with the answer, e.g. "Also delete the server copy". */
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ad-space-2);
+  margin: 0 0 var(--ad-space-4);
+  font-size: 13px;
+  color: var(--ad-ink);
+}
+
+.option input {
+  margin: 2px 0 0;
 }

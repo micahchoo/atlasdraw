@@ -1,11 +1,9 @@
 /**
  * What the keyboard actually does to comment mode, in a real browser.
  *
- * Comment mode used to borrow the `hand` tool and exit when the user picked a
- * tool — that exit was the subject of FU-5 ("`h` can't exit comment mode").
- * Both are gone: the overlay intercepts clicks itself, so the Excalidraw tool
- * is never touched. Entering the mode changes nothing about the editor, and no
- * tool pick can end it — Escape and the rail toggle are the only exits.
+ * The comment overlay intercepts clicks itself, so the Excalidraw tool is
+ * never touched. Entering the mode changes nothing about the editor, and no
+ * tool pick can end it: Escape and the rail toggle are the only exits.
  *
  * Only a browser runs the real actions, so the claims get browser probes: the
  * mode must leave the tool alone, Escape must exit, and a tool shortcut must
@@ -115,10 +113,6 @@ test.describe("comment mode — the tool is not borrowed", () => {
   test("`r` changes the tool without ending the mode; Escape then exits", async ({
     page,
   }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (unassigned, found W1): with the rectangle tool active, Escape does not leave comment mode — aria-pressed stays true. Remove when fixed.",
-    );
     await waitForApp(page);
     await focusEditor(page);
     await enterCommentMode(page);

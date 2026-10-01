@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildRemoteSaveCallback,
+  deleteServerMap,
   hasServerMap,
   restoreFromServer,
   revokeShare,
@@ -48,6 +49,7 @@ function fakeClient() {
   );
   const revokeShareToken = vi.fn(async () => {});
   const readMap = vi.fn(async () => new Uint8Array([7, 7]).buffer);
+  const deleteMap = vi.fn(async (_mapId: string, _key: string) => {});
   return {
     client: {
       createMap,
@@ -55,7 +57,9 @@ function fakeClient() {
       createShareToken,
       revokeShareToken,
       readMap,
+      deleteMap,
     } as unknown as StorageClient,
+    deleteMap,
     createMap,
     updateMap,
     createShareToken,
@@ -249,5 +253,45 @@ describe("hasServerMap", () => {
 
     expect(await hasServerMap(A)).toBe(true);
     expect(await hasServerMap(B)).toBe(false);
+  });
+});
+
+describe("deleteServerMap", () => {
+  it("deletes the document's server map with its key and forgets it", async () => {
+    const f = fakeClient();
+    await buildRemoteSaveCallback(f.client)(bytes(), A);
+    await buildRemoteSaveCallback(f.client)(bytes(), B);
+
+    await deleteServerMap(f.client, A);
+
+    expect(f.deleteMap).toHaveBeenCalledWith("map000000000000000001", "key-1");
+    expect(await hasServerMap(A)).toBe(false);
+    expect(await hasServerMap(B)).toBe(true);
+  });
+
+  it("forgets a map the server no longer has", async () => {
+    const f = fakeClient();
+    await buildRemoteSaveCallback(f.client)(bytes(), A);
+    f.deleteMap.mockRejectedValueOnce(new StorageHttpError("deleteMap", 404));
+
+    await deleteServerMap(f.client, A);
+
+    expect(await hasServerMap(A)).toBe(false);
+  });
+
+  it("keeps the key when the server fails for another reason", async () => {
+    const f = fakeClient();
+    await buildRemoteSaveCallback(f.client)(bytes(), A);
+    f.deleteMap.mockRejectedValueOnce(new StorageHttpError("deleteMap", 500));
+
+    await expect(deleteServerMap(f.client, A)).rejects.toThrow();
+
+    expect(await hasServerMap(A)).toBe(true);
+  });
+
+  it("does nothing for a document with no server map", async () => {
+    const f = fakeClient();
+    await deleteServerMap(f.client, A);
+    expect(f.deleteMap).not.toHaveBeenCalled();
   });
 });

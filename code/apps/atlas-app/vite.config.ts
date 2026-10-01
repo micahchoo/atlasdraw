@@ -197,6 +197,24 @@ const precompressPlugin = {
   },
 };
 
+// GitHub Pages serves 404.html for a path with no file, such as a share link
+// `/atlasdraw/m#v2:…`. A copy of index.html there boots the app on every
+// route; routes.ts then reads the path.
+const pagesFallbackPlugin = {
+  name: "atlasdraw-pages-fallback",
+  apply: "build" as const,
+  closeBundle() {
+    if (BUILD_TARGET !== "pages") {
+      return;
+    }
+    const distDir = path.resolve(__dirname, "dist");
+    fs.copyFileSync(
+      path.join(distDir, "index.html"),
+      path.join(distDir, "404.html"),
+    );
+  },
+};
+
 export default defineConfig({
   base: BASE,
   define: {
@@ -208,6 +226,7 @@ export default defineConfig({
     react(),
     pmtilesNotFoundPlugin,
     copyPublicAssetsPlugin,
+    pagesFallbackPlugin,
     precompressPlugin,
   ] as any,
   // The import worker (src/lib/import.worker.ts) imports the parsers, which

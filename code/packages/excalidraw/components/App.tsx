@@ -4957,7 +4957,10 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
-      if (event.key === KEYS.QUESTION_MARK) {
+      if (
+        event.key === KEYS.QUESTION_MARK &&
+        this.props.UIOptions.canvasActions.toggleShortcuts
+      ) {
         this.setState({
           openDialog: { name: "help" },
         });

@@ -298,6 +298,85 @@ describe("/maps routes", () => {
     });
   });
 
+  describe("DELETE /maps/:id", () => {
+    function rows(table: string, id: string): number {
+      const db = new Database(path.join(scratch.name, "atlas.db"), {
+        readonly: true,
+      });
+      try {
+        const column = table === "maps" ? "id" : "map_id";
+        return (
+          db
+            .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`)
+            .get(id) as { n: number }
+        ).n;
+      } finally {
+        db.close();
+      }
+    }
+
+    it("removes the map's row, its share tokens and its bytes for the key holder", async () => {
+      const { id, writeKey } = await create("to delete");
+      const db = new Database(path.join(scratch.name, "atlas.db"));
+      db.prepare(
+        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
+         VALUES (?, ?, 'read', NULL, ?)`,
+      ).run("t".repeat(21), id, new Date().toISOString());
+      db.close();
+      expect(rows("share_tokens", id)).toBe(1);
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/maps/${id}`,
+        headers: bearer(writeKey),
+      });
+
+      expect(res.statusCode).toBe(204);
+      expect(rows("maps", id)).toBe(0);
+      expect(rows("share_tokens", id)).toBe(0);
+      expect(
+        fs.existsSync(path.join(scratch.name, "blobs", `${id}.atlasdraw`)),
+      ).toBe(false);
+      const again = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(writeKey),
+      });
+      expect(again.statusCode).toBe(404);
+    });
+
+    it("refuses no key with 401 and a wrong key with 403, and the map stays", async () => {
+      const { id } = await create();
+      const other = await create();
+
+      const none = await app.inject({ method: "DELETE", url: `/maps/${id}` });
+      const wrong = await app.inject({
+        method: "DELETE",
+        url: `/maps/${id}`,
+        headers: bearer(other.writeKey),
+      });
+
+      expect(none.statusCode).toBe(401);
+      expect(wrong.statusCode).toBe(403);
+      expect(rows("maps", id)).toBe(1);
+    });
+
+    it("returns 404 for an unknown id and 400 for a malformed one", async () => {
+      const unknown = await app.inject({
+        method: "DELETE",
+        url: `/maps/${UNKNOWN_ID}`,
+        headers: bearer("k".repeat(43)),
+      });
+      const malformed = await app.inject({
+        method: "DELETE",
+        url: "/maps/nope",
+        headers: bearer("k".repeat(43)),
+      });
+      expect(unknown.statusCode).toBe(404);
+      expect(malformed.statusCode).toBe(400);
+    });
+  });
+
   it("has no route that returns a map's record without its key", async () => {
     const { id } = await create();
     const res = await app.inject({ method: "GET", url: `/maps/${id}` });

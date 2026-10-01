@@ -10,7 +10,7 @@
 //   Enter or blur                       → commit
 //   Escape                              → cancel, restore the previous name
 //   blank input                         → treated as a cancel, not a reset to
-//                                         "Untitled atlasdraw" — clearing the
+//                                         "Untitled map" — clearing the
 //                                         box is how you retype, not how you
 //                                         throw the name away
 //

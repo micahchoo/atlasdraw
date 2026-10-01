@@ -58,6 +58,11 @@ export interface StorageClient {
    * whose blob is gone.
    */
   getBlob(id: string): Promise<Buffer | null>;
+  /**
+   * Deletes the map, its share tokens and its bytes. False when no map has
+   * the id.
+   */
+  deleteMap(id: string): Promise<boolean>;
   /** The sum of `byte_size` over every stored map. */
   totalBytes(): Promise<number>;
   /**

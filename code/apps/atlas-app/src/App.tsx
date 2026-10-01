@@ -1,40 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// App — top-level mount.
-//
-// Phase 4 T8/T9 amendment: hand-rolled path detection (no router dep). The
-// recipient navigates to a `/m...` link freshly; no SPA navigation is needed
-// within the share view, so we read `window.location` once at mount.
-//
-// A `#room:` fragment on `/` joins a room (hooks/useRoom.ts). On `/m` it is
-// treated as a read-only share: a path mismatch never joins a room.
-//
-// Routes:
-//   /m#v2:<encoded>      → ShareView (hash mode; #v1: links still open)
-//   /m/<token>           → ShareView (upload mode)
-//   /m#room:...          → ShareView (read-only)
-//   /#room:<id>,<secret> → MapEditor, in the room
-//   anything else        → MapEditor (the editor)
+// App — top-level mount. routes.ts decides what the URL opens; the page reads
+// the location once, at mount.
 
 import { Suspense, lazy, useEffect } from "react";
 
 import { dismissBootShell } from "./bootShell";
+import { getAppConfig } from "./config/app-config";
+import { parseRoute } from "./routes";
 import { AriaAnnouncer } from "./components/AriaAnnouncer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ToastProvider";
 
-// The three route roots load on demand, so a visitor downloads only the one
-// that mounts: an /embed iframe does not pull the editor, and an editor
-// visitor does not pull the read-only views. Exactly one of these mounts per
-// page load.
+// The two route roots load on demand, so a visitor downloads only the one
+// that mounts: a share link or an /embed iframe does not pull the editor, and
+// an editor visitor does not pull the viewer.
 //
 // `.then(m => ({ default: ... }))` because each module exports a NAMED
 // component and React.lazy resolves `default` only. Keep the named exports —
 // the test suite mocks these modules by name.
 const MapEditor = lazy(() =>
   import("./components/MapEditor").then((m) => ({ default: m.MapEditor })),
-);
-const ShareView = lazy(() =>
-  import("./components/ShareView").then((m) => ({ default: m.ShareView })),
 );
 const EmbedView = lazy(() =>
   import("./components/EmbedView").then((m) => ({ default: m.EmbedView })),
@@ -49,34 +34,18 @@ const INITIAL_VIEW = {
 };
 
 function pickView() {
-  // SSR / jsdom guard — `window` exists in our test environment (jsdom),
-  // but a defensive check costs nothing.
-  if (typeof window === "undefined") {
-    return <MapEditor initialView={INITIAL_VIEW} />;
+  const route = parseRoute(window.location);
+  switch (route.kind) {
+    case "share":
+      return <EmbedView chrome="share" map={route.map} />;
+    case "embed":
+      if (getAppConfig().embedEnabled) {
+        return <EmbedView chrome="minimal" map={route.map} />;
+      }
+      return <MapEditor initialView={INITIAL_VIEW} />;
+    case "editor":
+      return <MapEditor initialView={INITIAL_VIEW} open={route.open} />;
   }
-  const path = window.location.pathname;
-  const hash = window.location.hash;
-  // D1: read-only MAP embed. Distinct from ShareView (`/m`) — mounts the full
-  // MapLibre stack chromeless for cross-origin <iframe> use. `/embed#v2:<…>`
-  // (hash) and `/embed/<token>` (token). Enabled by default; operators opt out
-  // with VITE_EMBED_ENABLED=false.
-  if (
-    (path === "/embed" || path.startsWith("/embed/")) &&
-    import.meta.env.VITE_EMBED_ENABLED !== "false"
-  ) {
-    return <EmbedView />;
-  }
-  // A `#room:` fragment under `/m` never joins a room.
-  if (path === "/m" && hash.startsWith("#room:")) {
-    return <ShareView />;
-  }
-  if (path === "/m" && (hash.startsWith("#v2:") || hash.startsWith("#v1:"))) {
-    return <ShareView />;
-  }
-  if (path.startsWith("/m/")) {
-    return <ShareView />;
-  }
-  return <MapEditor initialView={INITIAL_VIEW} />;
 }
 
 function BootShellDismiss(): null {

@@ -24,7 +24,6 @@ const B = "01J0000000000000000000000B";
 
 const config = (enableBackendPersistence: boolean): AppConfig => ({
   buildTarget: "hosted",
-  enableShareUI: true,
   realtime: { enabled: false, wsUrl: undefined },
   enableBackendPersistence,
   showDemoBadge: false,
@@ -32,6 +31,10 @@ const config = (enableBackendPersistence: boolean): AppConfig => ({
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
+  embedEnabled: true,
+  pmtilesPath: "/data/world-low-zoom.pmtiles",
+  appVersion: "unknown",
+  gitHash: "unknown",
 });
 
 const api = {} as ExcalidrawImperativeAPI;

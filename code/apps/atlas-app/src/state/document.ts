@@ -43,7 +43,7 @@ import type { FeatureCollection } from "geojson";
 
 export type { LayerStyle };
 
-export const DEFAULT_DOCUMENT_TITLE = "Untitled atlasdraw";
+export const DEFAULT_DOCUMENT_TITLE = "Untitled map";
 
 /** Where a document opens when nothing better is known. */
 export const DEFAULT_CAMERA: Camera = {

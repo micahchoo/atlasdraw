@@ -7,6 +7,7 @@
 //   readMap          GET    /maps/:id/blob           (write key) → bytes
 //   createShareToken POST   /maps/:id/share          (write key) → token
 //   revokeShareToken DELETE /maps/:id/share/:token   (write key)
+//   deleteMap        DELETE /maps/:id                (write key)
 //   getShareBlob     GET    /share/:token/blob       → bytes | null
 //
 // The write key goes in `Authorization: Bearer <key>`. Only the server map's
@@ -52,6 +53,8 @@ export interface StorageClient {
     expiresInDays: number | null,
   ): Promise<ShareLinkToken>;
   revokeShareToken(id: string, writeKey: string, token: string): Promise<void>;
+  /** Delete the map, its links and its bytes from the server. */
+  deleteMap(id: string, writeKey: string): Promise<void>;
 }
 
 /** A non-2xx answer. `status` tells a refusal (401, 403, 404) from a fault. */
@@ -66,7 +69,7 @@ export class StorageHttpError extends Error {
 
 /**
  * Thrown by `getShareBlob` on 410 Gone (the token expired, or its map is
- * gone). 404 (never existed, or revoked) is null instead, so ShareView can
+ * gone). 404 (never existed, or revoked) is null instead, so the viewer can
  * show two messages.
  */
 export class ShareExpiredError extends Error {
@@ -201,6 +204,16 @@ export function createHttpStorageClient(
           headers: bearer(writeKey),
         }),
         "revokeShareToken",
+      );
+    },
+
+    async deleteMap(id, writeKey) {
+      await okOrThrow(
+        await fetchImpl(mapUrl(id, ""), {
+          method: "DELETE",
+          headers: bearer(writeKey),
+        }),
+        "deleteMap",
       );
     },
 

@@ -29,6 +29,7 @@ import {
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { getAppConfig } from "../config/app-config";
+import { routeUrl } from "../routes";
 import {
   currentDocument,
   openDocument,
@@ -70,8 +71,7 @@ export interface RoomSession {
 }
 
 function roomUrl(link: RoomLink): string {
-  const { origin, pathname, search } = window.location;
-  return `${origin}${pathname}${search}${roomFragment(link)}`;
+  return routeUrl({ kind: "editor", room: link, open: null });
 }
 
 const NO_PEERS: readonly Peer[] = [];

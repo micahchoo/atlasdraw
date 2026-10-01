@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Shared read-only document loader for ShareView and EmbedView.
-//
-// A link carries the document in its hash or names it by a token:
+// The read-only viewer's document loader. A link (routes.ts#SharedMap)
+// carries the document or names it by a token:
 //   - `#v2:<base64url>` — the document's `.atlasdraw` bytes (useShareLink).
 //   - `#v1:<lz-string>` — older links: `JSON.stringify(doc)`. JSON has no
 //                          Map, so these carry the manifest and the drawing
@@ -28,6 +27,8 @@ import {
 import { getAppConfig } from "../config/app-config";
 
 import { decode } from "./documentIO";
+
+import type { SharedMap } from "../routes";
 
 export type ShareLoadResult =
   | { kind: "ready"; doc: AtlasdrawDocument }
@@ -82,25 +83,14 @@ export async function decodeHashDoc(hash: string): Promise<AtlasdrawDocument> {
   };
 }
 
-/** Extract a 21-char share token from a `<prefix><token>` path; null if none. */
-export function tokenFromPath(pathname: string, prefix: string): string | null {
-  const re = new RegExp(`^${prefix}([A-Za-z0-9_-]{21})/?$`);
-  const m = re.exec(pathname);
-  return m ? m[1] : null;
-}
-
-/**
- * Resolve a shared document from a hash fragment or a token. Hash wins if both
- * are present (matches the pre-extraction ShareView precedence).
- */
+/** Resolve a shared map. A null map is a damaged link. */
 export async function loadShareDocument(
-  hash: string,
-  token: string | null,
+  map: SharedMap | null,
   client?: HttpStorageClient,
 ): Promise<ShareLoadResult> {
-  if (hash.startsWith("#v1:") || hash.startsWith("#v2:")) {
+  if (map && "hash" in map) {
     try {
-      return { kind: "ready", doc: await decodeHashDoc(hash) };
+      return { kind: "ready", doc: await decodeHashDoc(map.hash) };
     } catch (err) {
       return {
         kind: "error",
@@ -109,7 +99,7 @@ export async function loadShareDocument(
     }
   }
 
-  if (!token) {
+  if (!map) {
     return { kind: "error", message: "Invalid share link." };
   }
 
@@ -117,7 +107,7 @@ export async function loadShareDocument(
   const httpClient =
     client ?? createHttpStorageClient({ baseUrl: cfg.storageBaseUrl ?? "" });
   try {
-    const buf = await httpClient.getShareBlob(token);
+    const buf = await httpClient.getShareBlob(map.token);
     if (!buf) {
       return { kind: "not-found" };
     }

@@ -52,6 +52,11 @@ export interface MapService {
     writeKey: string,
     token: string,
   ): Promise<{ kind: "revoked" } | Forbidden | Missing>;
+  /** Delete the map, its links and its bytes. */
+  remove(
+    id: string,
+    writeKey: string,
+  ): Promise<{ kind: "deleted" } | Forbidden | Missing>;
   sweep(): Promise<SweepResult>;
 }
 
@@ -204,6 +209,16 @@ export function createMapService(
       }
       return (await store.deleteShareToken(id, token))
         ? { kind: "revoked" }
+        : { kind: "missing" };
+    },
+
+    async remove(id, writeKey) {
+      const map = await owned(id, writeKey);
+      if (refused(map)) {
+        return map;
+      }
+      return (await store.deleteMap(id))
+        ? { kind: "deleted" }
         : { kind: "missing" };
     },
 

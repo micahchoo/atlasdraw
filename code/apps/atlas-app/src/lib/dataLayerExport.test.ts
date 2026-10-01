@@ -157,10 +157,10 @@ describe("geoJsonExportFile", () => {
       includeDataLayers: false,
     });
     expect(file.type).toBe("application/geo+json");
-    expect(file.fileName).toBe("Untitled atlasdraw.geojson");
+    expect(file.fileName).toBe("Untitled map.geojson");
     expect(JSON.parse(file.text)).toEqual({
       type: "FeatureCollection",
-      name: "Untitled atlasdraw",
+      name: "Untitled map",
       features: [
         {
           type: "Feature",

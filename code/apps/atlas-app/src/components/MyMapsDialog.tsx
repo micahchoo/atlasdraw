@@ -7,7 +7,7 @@
 // A modal, because no existing surface lists documents: the MainMenu holds
 // actions, not lists, and the sidebar belongs to the open map's layers.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -16,16 +16,19 @@ import { relativeTime } from "../lib/relativeTime";
 import { useDocumentStore } from "../state/document";
 import {
   deleteSavedMap,
+  distinctTitles,
   openSavedMap,
   startNewMap,
   type MapActionContext,
 } from "../state/myMaps";
 import { usePersistenceStore } from "../state/usePersistenceStore";
+import { hasServerMap } from "../state/remoteMapIdCache";
 
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FocusTrap } from "./FocusTrap";
 
 import type { DocumentSummary } from "../state/persistence";
+import type { StorageClient } from "../services/createHttpStorageClient";
 
 export interface MyMapsDialogProps {
   excalidrawAPI: ExcalidrawImperativeAPI;
@@ -33,10 +36,13 @@ export interface MyMapsDialogProps {
   onClose: () => void;
   /** The clock the relative times are read against. */
   now?: () => number;
+  /** The storage server, when this build saves maps to one. */
+  server?: StorageClient | null;
 }
 
 type Prompt =
-  | { kind: "delete"; map: DocumentSummary }
+  /** `onServer`: the map has a server copy this browser can delete. */
+  | { kind: "delete"; map: DocumentSummary; onServer: boolean }
   | { kind: "loss"; answer: (yes: boolean) => void };
 
 export function MyMapsDialog({
@@ -44,9 +50,11 @@ export function MyMapsDialog({
   notify,
   onClose,
   now = Date.now,
+  server = null,
 }: MyMapsDialogProps) {
   const [maps, setMaps] = useState<DocumentSummary[] | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [alsoServer, setAlsoServer] = useState(false);
   const openId = useDocumentStore((s) => s.doc.id);
 
   const refresh = useCallback(async () => {
@@ -78,6 +86,8 @@ export function MyMapsDialog({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose, prompt]);
 
+  const titles = useMemo(() => distinctTitles(maps ?? []), [maps]);
+
   const ctx: MapActionContext = {
     api: excalidrawAPI,
     notify,
@@ -105,9 +115,15 @@ export function MyMapsDialog({
     }
   };
 
-  const remove = async (map: DocumentSummary) => {
+  const askDelete = async (map: DocumentSummary) => {
+    setAlsoServer(false);
+    const onServer = server !== null && (await hasServerMap(map.id));
+    setPrompt({ kind: "delete", map, onServer });
+  };
+
+  const remove = async (map: DocumentSummary, withServer: boolean) => {
     setPrompt(null);
-    await deleteSavedMap(ctx, map.id);
+    await deleteSavedMap(ctx, map.id, withServer && server ? { server } : {});
     await refresh();
   };
 
@@ -159,6 +175,7 @@ export function MyMapsDialog({
               >
                 {maps.map((map) => {
                   const isOpen = map.id === openId;
+                  const title = titles.get(map.id) ?? map.title;
                   return (
                     <li
                       key={map.id}
@@ -167,7 +184,7 @@ export function MyMapsDialog({
                       data-map-id={map.id}
                     >
                       <div className={styles.meta}>
-                        <span className={styles.mapTitle}>{map.title}</span>
+                        <span className={styles.mapTitle}>{title}</span>
                         <span className={styles.detail}>
                           <time dateTime={map.updatedAt}>
                             {relativeTime(map.updatedAt, now())}
@@ -184,7 +201,7 @@ export function MyMapsDialog({
                         disabled={isOpen}
                         aria-disabled={isOpen ? "true" : undefined}
                         title={isOpen ? "This map is open" : undefined}
-                        aria-label={`Open ${map.title}`}
+                        aria-label={`Open ${title}`}
                         data-testid="my-maps-open"
                       >
                         Open
@@ -194,8 +211,8 @@ export function MyMapsDialog({
                         className={[styles.button, styles.buttonDanger].join(
                           " ",
                         )}
-                        onClick={() => setPrompt({ kind: "delete", map })}
-                        aria-label={`Delete ${map.title}`}
+                        onClick={() => void askDelete(map)}
+                        aria-label={`Delete ${title}`}
                         data-testid="my-maps-delete"
                       >
                         Delete
@@ -223,9 +240,22 @@ export function MyMapsDialog({
       {prompt?.kind === "delete" && (
         <ConfirmDialog
           title="Delete map?"
-          body={`"${prompt.map.title}" is deleted from this browser. You cannot undo this.`}
+          body={`"${
+            titles.get(prompt.map.id) ?? prompt.map.title
+          }" is deleted from this browser. You cannot undo this.`}
           confirmLabel="Delete map"
-          onConfirm={() => void remove(prompt.map)}
+          tone="destructive"
+          option={
+            prompt.onServer
+              ? {
+                  label:
+                    "Also delete the server copy. Its links and embeds stop working.",
+                  checked: alsoServer,
+                  onChange: setAlsoServer,
+                }
+              : undefined
+          }
+          onConfirm={() => void remove(prompt.map, alsoServer)}
           onCancel={() => setPrompt(null)}
         />
       )}

@@ -34,6 +34,7 @@ function baseParams(
     onSave: vi.fn(),
     onOpen: vi.fn(),
     onZoomAction: vi.fn(() => true),
+    drawingLayer: null as HTMLElement | null,
     ...overrides,
   };
 }
@@ -292,5 +293,63 @@ describe("useMapEditorKeyboard — comment mode (`c`)", () => {
     fireKey({ key: "Escape" });
     expect(params.setShowShortcuts).toHaveBeenCalledWith(false);
     expect(isCommentModeActive()).toBe(true);
+  });
+
+  describe("with focus in the drawing", () => {
+    // Excalidraw takes Escape at the React root whenever a tool other than
+    // selection is active (actionDeselect) and stops it there, so the window
+    // listener never hears it. The drawing layer catches it first.
+    function drawing() {
+      const layer = document.createElement("div");
+      const canvas = document.createElement("div");
+      layer.appendChild(canvas);
+      document.body.appendChild(layer);
+      const excalidraw = vi.fn((e: Event) => e.stopPropagation());
+      canvas.addEventListener("keydown", excalidraw);
+      return { layer, canvas, excalidraw };
+    }
+
+    it("Escape leaves comment mode before Excalidraw sees it", () => {
+      const { layer, canvas, excalidraw } = drawing();
+      renderHook(() =>
+        useMapEditorKeyboard(baseParams({ drawingLayer: layer })),
+      );
+      fireKey({ key: "c" });
+
+      fireKey({ key: "Escape" }, canvas);
+
+      expect(isCommentModeActive()).toBe(false);
+      expect(excalidraw).not.toHaveBeenCalled();
+      layer.remove();
+    });
+
+    it("Escape goes to Excalidraw when comment mode is off", () => {
+      const { layer, canvas, excalidraw } = drawing();
+      renderHook(() =>
+        useMapEditorKeyboard(baseParams({ drawingLayer: layer })),
+      );
+
+      fireKey({ key: "Escape" }, canvas);
+
+      expect(excalidraw).toHaveBeenCalledTimes(1);
+      layer.remove();
+    });
+
+    it("Escape in a text box inside the drawing stays with the text box", () => {
+      const { layer } = drawing();
+      const textarea = document.createElement("textarea");
+      layer.appendChild(textarea);
+      const typed = vi.fn();
+      textarea.addEventListener("keydown", typed);
+      renderHook(() =>
+        useMapEditorKeyboard(baseParams({ drawingLayer: layer })),
+      );
+      fireKey({ key: "c" });
+
+      fireKey({ key: "Escape" }, textarea);
+
+      expect(typed).toHaveBeenCalledTimes(1);
+      layer.remove();
+    });
   });
 });

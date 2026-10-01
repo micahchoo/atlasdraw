@@ -9,9 +9,11 @@
 // (its layers, payloads, title), a change of the basemap, and, from
 // useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+
+import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -23,11 +25,30 @@ import { isRoomDocument } from "../state/room";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
+import {
+  loadShareDocument,
+  type ShareLoadResult,
+} from "../state/loadShareDocument";
+import { copyOfSharedMap } from "../state/myMaps";
+import { buildRoute, type SharedMap } from "../routes";
 
-/** Structurally identical to MapEditor's DocumentNotify — kept local so this
- * hook doesn't import a type from the component file it was extracted from. */
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
+  success?: (msg: string) => void;
+}
+
+/** Why a shared map did not load, as the end of a sentence. */
+function shareFailure(result: Exclude<ShareLoadResult, { kind: "ready" }>) {
+  switch (result.kind) {
+    case "not-found":
+      return "the link does not point to a map.";
+    case "expired":
+      return "the link has expired.";
+    case "error":
+      return result.message
+        .replace(/\.?$/, ".")
+        .replace(/^./, (c) => c.toLowerCase());
+  }
 }
 
 /**
@@ -40,7 +61,12 @@ export interface PersistenceWiringNotify {
 export function usePersistenceWiring(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   documentNotify: PersistenceWiringNotify,
+  /** A shared map to open as a copy in place of the autosave. */
+  open: SharedMap | null = null,
 ): void {
+  // Read once: the link is consumed by the first open.
+  const openRef = useRef(open);
+
   useEffect(() => {
     if (!excalidrawAPI) {
       return;
@@ -106,9 +132,27 @@ export function usePersistenceWiring(
     const abort = new AbortController();
     let unsubCamera: () => void = () => {};
     usePersistenceStore.getState().setOwnMapLoaded(false);
+    // A copy of a shared map, or null when there is none or it did not load.
+    const sharedCopy = async (): Promise<AtlasdrawDocument | null> => {
+      const link = openRef.current;
+      openRef.current = null;
+      if (!link) {
+        return null;
+      }
+      const shared = await loadShareDocument(link);
+      if (shared.kind !== "ready") {
+        documentNotify.error(
+          `Couldn't open the shared map: ${shareFailure(shared)}`,
+        );
+        return null;
+      }
+      return copyOfSharedMap(shared.doc);
+    };
+
     void (async () => {
       try {
-        const loaded = await store.load();
+        const copy = await sharedCopy();
+        const loaded = copy ?? (await store.load());
         if (cancelled) {
           return;
         }
@@ -119,6 +163,19 @@ export function usePersistenceWiring(
           });
           if (!opened) {
             return;
+          }
+          if (copy) {
+            // The copy is a new map: save it, and drop the link so a reload
+            // opens the copy, not another one.
+            usePersistenceStore.getState().markDirty();
+            window.history.replaceState(
+              window.history.state,
+              "",
+              buildRoute({ kind: "editor", room: null, open: null }),
+            );
+            documentNotify.success?.(
+              `Opened a copy of "${copy.manifest.title}"`,
+            );
           }
           // loadDocument moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,

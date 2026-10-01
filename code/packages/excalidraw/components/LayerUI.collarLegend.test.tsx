@@ -110,6 +110,19 @@ const openSidebar = async (tab: string) => {
   await act(async () => {});
 };
 
+describe("the collar's style panel", () => {
+  it("is named for what it holds: the selected shape's properties", async () => {
+    const { container } = await renderCollarWithSelection();
+    await withExcalidrawDimensions({ width: 1920, height: 1080 }, async () => {
+      await waitFor(() => expect(legend(container)).not.toBe(null));
+      const header = legend(container)!.querySelector(
+        ".App-collar-legend__header",
+      );
+      expect(header?.textContent).toBe("Shape properties");
+    });
+  });
+});
+
 describe("collar LEGEND placement vs. the right sidebar", () => {
   it("does NOT offset the legend when the sidebar is docked — the wrapper already did", async () => {
     const { container } = await renderCollarWithSelection();

@@ -171,6 +171,25 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       expect(await client.resolveToken(token.token)).toBeNull();
     });
 
+    it("deleteMap removes the map, its tokens and its bytes, and nothing else", async () => {
+      const client = open();
+      const gone = await client.createMap(Buffer.from("gone"), HASH);
+      const kept = await client.createMap(Buffer.from("kept"), HASH);
+      const goneToken = await client.createShareToken(gone.id, null);
+      const keptToken = await client.createShareToken(kept.id, null);
+
+      expect(await client.deleteMap(gone.id)).toBe(true);
+
+      expect(await client.getMap(gone.id)).toBeNull();
+      expect(await client.getBlob(gone.id)).toBeNull();
+      expect(await client.resolveToken(goneToken.token)).toBeNull();
+      expect(await client.getMap(kept.id)).not.toBeNull();
+      expect(await client.resolveToken(keptToken.token)).not.toBeNull();
+      expect(await client.totalBytes()).toBe(4);
+      expect(await client.deleteMap(gone.id)).toBe(false);
+      expect(await client.deleteMap(UNKNOWN_ID)).toBe(false);
+    });
+
     it("totalBytes sums the stored maps", async () => {
       const client = open();
       expect(await client.totalBytes()).toBe(0);

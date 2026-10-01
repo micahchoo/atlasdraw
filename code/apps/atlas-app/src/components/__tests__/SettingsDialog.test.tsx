@@ -16,7 +16,6 @@ import type { AppConfig } from "../../config/app-config";
 
 const BASE_CONFIG: AppConfig = {
   buildTarget: "local-only",
-  enableShareUI: false,
   realtime: { enabled: false, wsUrl: undefined },
   enableBackendPersistence: false,
   showDemoBadge: false,
@@ -24,6 +23,10 @@ const BASE_CONFIG: AppConfig = {
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
+  embedEnabled: true,
+  pmtilesPath: "/data/world-low-zoom.pmtiles",
+  appVersion: "unknown",
+  gitHash: "unknown",
 };
 
 function openStorageTab() {

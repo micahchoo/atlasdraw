@@ -4,6 +4,7 @@
 //   POST /maps            create; answers the map and its write key, once
 //   PUT  /maps/:id        replace the bytes            (write key)
 //   GET  /maps/:id/blob   the owner's backup           (write key)
+//   DELETE /maps/:id      the map, its links and bytes (write key)
 //
 // There is no route that returns a map's record: nothing needs one.
 
@@ -56,6 +57,23 @@ export function registerMapRoutes(
       return reply.code(refusal.status).send(refusal.body);
     }
     return reply.code(200).send(result.map);
+  });
+
+  fastify.delete<{ Params: IdParams }>("/maps/:id", async (request, reply) => {
+    const { id } = request.params;
+    if (!ID_RE.test(id)) {
+      return reply.code(400).send({ error: "invalid id" });
+    }
+    const writeKey = writeKeyOrRefuse(request, reply);
+    if (writeKey === null) {
+      return reply;
+    }
+    const result = await service.remove(id, writeKey);
+    if (result.kind !== "deleted") {
+      const refusal = REFUSAL[result.kind];
+      return reply.code(refusal.status).send(refusal.body);
+    }
+    return reply.code(204).send();
   });
 
   fastify.get<{ Params: IdParams }>(

@@ -126,6 +126,19 @@ export function createSqliteFsAdapter(opts: {
   );
   const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
 
+  const deleteMapShares = db.prepare(
+    `DELETE FROM share_tokens WHERE map_id = ?`,
+  );
+  const deleteMapRows = db.transaction((id: string) => {
+    const row = selectMap.get(id) as MapRow | undefined;
+    if (!row) {
+      return null;
+    }
+    deleteMapShares.run(id);
+    deleteMapRow.run(id);
+    return row.blob_ref;
+  });
+
   const sweepRows = db.transaction((nowIso: string) => {
     const tokens = deleteExpired.run(nowIso).changes;
     const maps = selectUnreachable.all() as Array<{
@@ -239,6 +252,18 @@ export function createSqliteFsAdapter(opts: {
         }
         throw err;
       }
+    },
+
+    async deleteMap(id) {
+      if (!ID_RE.test(id)) {
+        return false;
+      }
+      const blobRef = deleteMapRows(id);
+      if (blobRef === null) {
+        return false;
+      }
+      await fsp.rm(path.join(dataDir, blobRef), { force: true });
+      return true;
     },
 
     async totalBytes() {

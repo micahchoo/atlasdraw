@@ -64,19 +64,14 @@ async function paintedPixels(page: Page): Promise<number> {
 }
 
 test.describe("known-red", () => {
+  // Fixed in W7a: /m is the viewer, with the map stack.
   test("W7: the read-only share page renders a map", async ({ page }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W7 share view): /m renders Excalidraw on opaque white with no MapLibre canvas. Remove when fixed.",
-    );
     const url = await shareLinkWithRectangle(page);
     const path = url.slice(url.indexOf("/m#"));
 
     const viewer = await page.context().newPage();
     await viewer.goto(path);
-    await expect(viewer.getByTestId("share-view-canvas")).toBeVisible();
-    // A share of a MAP shows the map: ShareView mounts Excalidraw alone on
-    // opaque white, with no basemap under it.
+    await expect(viewer.getByTestId("viewer-canvas")).toBeVisible();
     await expect(viewer.locator("canvas.maplibregl-canvas")).toHaveCount(1, {
       timeout: 15_000,
     });
@@ -89,7 +84,7 @@ test.describe("known-red", () => {
 
     const embed = await page.context().newPage();
     await embed.goto(`/embed${hash}`);
-    await expect(embed.getByTestId("embed-canvas")).toBeVisible();
+    await expect(embed.getByTestId("viewer-canvas")).toBeVisible();
     await embed.waitForSelector("canvas.maplibregl-canvas");
     // The camera bridge sets the viewport once Excalidraw has initialized.
     await embed.waitForTimeout(1500);
@@ -140,11 +135,8 @@ test.describe("known-red", () => {
     );
   });
 
+  // Fixed in W7a: the fork's help door is closed (toggleShortcuts: false).
   test("W7: pressing ? opens exactly one help surface", async ({ page }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W7 help): ? opens both the Atlasdraw shortcuts panel and Excalidraw's HelpDialog. Remove when fixed.",
-    );
     await openEditor(page);
     await page.mouse.click(300, 650);
     await page.keyboard.press("?");

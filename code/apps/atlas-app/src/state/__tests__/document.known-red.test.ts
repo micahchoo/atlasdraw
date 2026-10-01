@@ -37,7 +37,8 @@ import { createPersistenceStore } from "../persistence";
 import { createDocument, currentDocument, openDocument } from "../document";
 import { toFile } from "../documentIO";
 import { sceneOf } from "../scene";
-import { loadShareDocument, tokenFromPath } from "../loadShareDocument";
+import { loadShareDocument } from "../loadShareDocument";
+import { parseRoute } from "../../routes";
 import { usePersistenceStore } from "../usePersistenceStore";
 import { useMapInstanceStore } from "../mapInstance";
 import { useBasemapStore } from "../basemap";
@@ -612,11 +613,10 @@ describe("share links", () => {
     });
     expect(url).not.toBeNull();
 
-    // Open the link the way ShareView does.
-    const link = new URL(url as unknown as string);
+    // Open the link the way the viewer does.
+    const route = parseRoute(new URL(url as unknown as string));
     const loaded = await loadShareDocument(
-      link.hash,
-      tokenFromPath(link.pathname, "/m/"),
+      route.kind === "share" ? route.map : null,
       client,
     );
     expect(loaded.kind).toBe("ready");

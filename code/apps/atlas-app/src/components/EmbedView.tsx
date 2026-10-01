@@ -1,27 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// EmbedView — read-only MAP embed (DIVERGENCES.md D1, flag VITE_EMBED_ENABLED).
+// EmbedView — the read-only viewer, for share links (/m) and embeds (/embed).
 //
-// Unlike ShareView (which renders annotations on opaque white and drops the
-// basemap — see PROBE-embed.md), EmbedView mounts the real MapLibre stack the
-// editor uses, chromeless, so a finished map embeds in a cross-origin
-// <iframe> as a live map:
-//   - MapLibre basemap (from manifest.basemap.id) at the authored camera
-//   - the document's data and raster layers, opened with the editor's loader
-//     (documentIO.loadDocument)
-//   - the drawing, in world coordinates; the camera bridge moves Excalidraw's
-//     viewport with the map (useCameraBridge)
+// It mounts the editor's map stack without the editor:
+//   - the MapLibre basemap (manifest.basemap.id) at the saved camera
+//   - the document's data, raster and tile layers (useMapOverlays), opened
+//     with the editor's loader (documentIO.loadDocument)
+//   - the drawing, in world coordinates; the camera bridge moves
+//     Excalidraw's viewport with the map (useCameraBridge)
 //
-// Routes (App.tsx):
-//   /embed#<hash>    — hash mode (self-contained; see loadShareDocument)
-//   /embed/<token>   — token mode (the document over HTTP)
+// `chrome` decides what goes around the map: "minimal" for an iframe embed,
+// "share" for a page of its own, with the map's title and a link that opens
+// a copy in the editor.
 //
 // URL params: ?lock=1 disables map pan/zoom (camera-locked presentation).
 // It also turns off the attribute popup: a locked embed takes no clicks.
 // Unlocked, a click on a feature shows its attributes (FeaturePopup).
-//
-// Deferred: a real scripts-blocked <noscript> PNG fallback needs SSR or a
-// pre-rendered static embed page — a React <noscript> never renders when JS
-// is off (the whole SPA doesn't boot). Tracked in BUILD-embed.md.
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -45,9 +38,9 @@ import {
 } from "../hooks/useFeaturePopup";
 import { loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
+import { buildRoute, type SharedMap } from "../routes";
 import {
   loadShareDocument,
-  tokenFromPath,
   type ShareLoadResult,
 } from "../state/loadShareDocument";
 import mapStyles from "../styles/MapEditor.module.css";
@@ -55,9 +48,8 @@ import styles from "../styles/EmbedView.module.css";
 
 import { FeaturePopup } from "./FeaturePopup";
 
-// Read-only: disable Excalidraw's own persistence actions. The transparent
-// background (so map tiles show through — contrast ShareView's opaque
-// `#ffffff`) is set via each mount's `initialData.appState` below.
+// Read-only: disable Excalidraw's own persistence actions. The background is
+// transparent (initialData below), so the map shows through.
 const EMBED_UI_OPTIONS = {
   canvasActions: {
     loadScene: false,
@@ -78,68 +70,98 @@ export function parseEmbedOptions(search: string): EmbedOptions {
   return { lock: params.get("lock") === "1" };
 }
 
+/** What goes around the map. */
+export type ViewerChrome = "minimal" | "share";
+
 export interface EmbedViewProps {
+  chrome: ViewerChrome;
+  /** The map the link names; null when the link is damaged (routes.ts). */
+  map: SharedMap | null;
   /** Test seam — override the HTTP client. */
-  client?: Parameters<typeof loadShareDocument>[2];
-  /** Test seam — override the location source for path / hash / search. */
-  location?: { pathname: string; hash: string; search?: string };
+  client?: Parameters<typeof loadShareDocument>[1];
+  /** Test seam — the URL's query string. */
+  search?: string;
 }
 
-export const EmbedView: React.FC<EmbedViewProps> = ({ client, location }) => {
+export const EmbedView: React.FC<EmbedViewProps> = ({
+  chrome,
+  map,
+  client,
+  search,
+}) => {
   const [state, setState] = useState<ViewState>({ kind: "loading" });
 
   useEffect(() => {
-    const loc = location ?? {
-      pathname: window.location.pathname,
-      hash: window.location.hash,
-    };
     let cancelled = false;
-
     void (async () => {
-      const token = tokenFromPath(loc.pathname, "/embed/");
-      const result = await loadShareDocument(loc.hash, token, client);
+      const result = await loadShareDocument(map, client);
       if (!cancelled) {
         setState(result);
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [client, location]);
+  }, [client, map]);
 
   const options = useMemo(
-    () =>
-      parseEmbedOptions(
-        location?.search ??
-          (typeof window !== "undefined" ? window.location.search : ""),
-      ),
-    [location],
+    () => parseEmbedOptions(search ?? window.location.search),
+    [search],
   );
 
   if (state.kind === "loading") {
-    return <EmbedMessage testid="embed-loading" title="Loading map…" />;
+    return <ViewerMessage testid="viewer-loading" title="Loading map…" />;
   }
   if (state.kind === "not-found") {
-    return <EmbedMessage testid="embed-not-found" title="Map not found" />;
+    return (
+      <ViewerMessage
+        testid="viewer-not-found"
+        title="Map not found"
+        body="The link does not point to a map. The owner may have stopped sharing it."
+      />
+    );
   }
   if (state.kind === "expired") {
     return (
-      <EmbedMessage testid="embed-expired" title="This link has expired" />
+      <ViewerMessage
+        testid="viewer-expired"
+        title="This link has expired"
+        body="Ask the owner for a new link."
+      />
     );
   }
   if (state.kind === "error") {
     return (
-      <EmbedMessage
-        testid="embed-error"
+      <ViewerMessage
+        testid="viewer-error"
         title="Couldn't load map"
         body={state.message}
       />
     );
   }
-  // ready — mount the map stack with the document in hand so MapCanvas gets
-  // the authored camera at construction (initialView is consumed once).
-  return <EmbedCanvas doc={state.doc} options={options} />;
+  // The document is in hand before MapCanvas mounts, so the map starts at
+  // the saved camera (initialView is read once).
+  const canvas = <EmbedCanvas doc={state.doc} options={options} />;
+  if (chrome === "minimal" || !map) {
+    return canvas;
+  }
+  return (
+    <div className={styles.shareRoot}>
+      <header className={styles.head} data-testid="viewer-head">
+        <span className={styles.wordmark}>ATLASDRAW</span>
+        <h1 className={styles.title}>{state.doc.manifest.title}</h1>
+        <span className={styles.readOnly}>Read-only</span>
+        <span className={styles.spacer} />
+        <a
+          className={styles.open}
+          href={buildRoute({ kind: "editor", room: null, open: map })}
+        >
+          Open in Atlasdraw
+        </a>
+      </header>
+      <div className={styles.stage}>{canvas}</div>
+    </div>
+  );
 };
 
 const EmbedCanvas: React.FC<{
@@ -215,7 +237,7 @@ const EmbedCanvas: React.FC<{
     : undefined;
 
   return (
-    <div className={styles.embedRoot} data-testid="embed-canvas">
+    <div className={styles.embedRoot} data-testid="viewer-canvas">
       <div className={mapStyles.mapLayer}>
         <MapCanvas
           initialView={initialView}
@@ -241,40 +263,13 @@ const EmbedCanvas: React.FC<{
   );
 };
 
-const EmbedMessage: React.FC<{
+const ViewerMessage: React.FC<{
   testid: string;
   title: string;
   body?: string;
 }> = ({ testid, title, body }) => (
-  <div
-    data-testid={testid}
-    style={{
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      width: "100%",
-      height: "100%",
-      padding: "2rem",
-      color: "var(--ad-ink, #212529)",
-      textAlign: "center",
-    }}
-  >
-    <h2
-      style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 600 }}
-    >
-      {title}
-    </h2>
-    {body && (
-      <p
-        style={{
-          margin: 0,
-          color: "var(--ad-ink-secondary, #495057)",
-          fontSize: "0.875rem",
-        }}
-      >
-        {body}
-      </p>
-    )}
+  <div data-testid={testid} className={styles.message}>
+    <h2 className={styles.messageTitle}>{title}</h2>
+    {body && <p className={styles.messageBody}>{body}</p>}
   </div>
 );
