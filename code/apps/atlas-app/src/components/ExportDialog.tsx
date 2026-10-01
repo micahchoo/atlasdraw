@@ -39,6 +39,7 @@ import {
 } from "../lib/print-pdf";
 import { safeFileName } from "../lib/safeFileName";
 
+import { creditLine } from "../lib/tileLayers";
 import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
@@ -127,7 +128,10 @@ interface ExportDialogProps {
    * leave the north arrow describing a viewport the image does not show.
    */
   getCameraRotationDeg?: () => number;
-  /** The active basemap's credit line, printed on the PDF page. */
+  /**
+   * The active basemap's credit, printed on the PDF page. The credit of each
+   * visible tile layer is added to it (lib/tileLayers#creditLine).
+   */
   attribution?: string;
   /** Decides the PDF's scale-bar units. Default `navigator.language`. */
   locale?: string;
@@ -183,6 +187,7 @@ export function ExportDialog({
   // back to the store. The dialog mounts fresh on each open (ExportDialog is
   // conditionally rendered), so the seed re-reads the current name.
   const documentTitle = useDocument((s) => s.title);
+  const overlays = useDocument((s) => s.overlays);
   const [title, setTitle] = useState(documentTitle);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,7 +225,7 @@ export function ExportDialog({
         mapImageDataUrl,
         view: printView,
         layers,
-        attribution,
+        attribution: creditLine(attribution, overlays),
         units: scaleUnitsForLocale(locale),
         cameraRotationDeg: getCameraRotationDeg?.() ?? 0,
       });

@@ -12,7 +12,12 @@
 
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
-import type { LayerStyle, StyleExpression } from "./style";
+import type {
+  FilterStyle,
+  LabelStyle,
+  LayerStyle,
+  StyleExpression,
+} from "./style";
 
 // MapLibre paint expressions are typed loosely (recursive `unknown[]`). We use
 // `unknown` rather than `any` so consumers must narrow before extracting, but
@@ -132,23 +137,142 @@ export function outlineLayerId(id: string): string {
   return `${id}::outline`;
 }
 
+/** The id of a data layer's label (symbol) layer. */
+export function labelLayerId(id: string): string {
+  return `${id}::label`;
+}
+
+/**
+ * A no-number stand-in for < and >: `to-number` of a value that is not a
+ * number gives this, and it passes neither comparison for any sane value.
+ */
+const NOT_A_NUMBER_HIGH = 1e308;
+
+/**
+ * The MapLibre filter expression for a filter. = and ≠ compare as text, so a
+ * number in the data matches the same digits typed in the panel. < and >
+ * compare as numbers; a feature with no value, or a value that is not a
+ * number, never matches. "contains" ignores case.
+ */
+export function compileFilter(filter: FilterStyle): unknown[] {
+  const value = ["get", filter.property];
+  const text = ["to-string", value];
+  switch (filter.op) {
+    case "==":
+    case "!=":
+      return [filter.op, text, filter.value];
+    case "<":
+      return [
+        "all",
+        ["!=", value, null],
+        ["<", ["to-number", value, NOT_A_NUMBER_HIGH], Number(filter.value)],
+      ];
+    case ">":
+      return [
+        "all",
+        ["!=", value, null],
+        [">", ["to-number", value, -NOT_A_NUMBER_HIGH], Number(filter.value)],
+      ];
+    case "contains":
+      return ["in", filter.value.toLowerCase(), ["downcase", text]];
+  }
+}
+
+/** Why the map cannot apply this filter, or null. */
+export function filterProblem(filter: FilterStyle): string | null {
+  if (!filter.property) {
+    return "Choose a property to filter by.";
+  }
+  if (
+    (filter.op === "<" || filter.op === ">") &&
+    (filter.value.trim() === "" || !Number.isFinite(Number(filter.value)))
+  ) {
+    return "Type a number to compare with < or >.";
+  }
+  return null;
+}
+
+export const LABEL_SIZE_MIN = 6;
+export const LABEL_SIZE_MAX = 48;
+
+/** Why the map cannot draw these labels, or null. */
+export function labelProblem(label: LabelStyle): string | null {
+  if (!label.property) {
+    return "Choose a property for the labels.";
+  }
+  if (
+    !Number.isFinite(label.size) ||
+    label.size < LABEL_SIZE_MIN ||
+    label.size > LABEL_SIZE_MAX
+  ) {
+    return `Use a label size from ${LABEL_SIZE_MIN} to ${LABEL_SIZE_MAX}.`;
+  }
+  return null;
+}
+
+/** Label text: the panel's ink colour, with a white halo when asked. */
+const LABEL_COLOR = "#212529";
+const LABEL_HALO_COLOR = "#ffffff";
+const LABEL_HALO_WIDTH = 1.5;
+
+function compileLabelLayer(
+  id: string,
+  label: LabelStyle,
+  geometryType: LayerGeometryType,
+  font: string[],
+): maplibregl.LayerSpecification {
+  // A point's label sits under the point; a line's runs along the line; a
+  // polygon's is placed inside it by MapLibre.
+  const placement =
+    geometryType === "circle"
+      ? { "text-anchor": "top", "text-offset": [0, 0.6] }
+      : geometryType === "line"
+      ? { "symbol-placement": "line" }
+      : {};
+  return {
+    id: labelLayerId(id),
+    type: "symbol",
+    source: id,
+    layout: {
+      "text-field": ["to-string", ["get", label.property]],
+      "text-font": font,
+      "text-size": label.size,
+      ...placement,
+    },
+    paint: {
+      "text-color": LABEL_COLOR,
+      "text-halo-color": LABEL_HALO_COLOR,
+      "text-halo-width": label.halo ? LABEL_HALO_WIDTH : 0,
+    },
+  } as maplibregl.LayerSpecification;
+}
+
+export interface CompileLayersOptions {
+  /**
+   * A font the basemap's glyphs serve, for labels. Without one there are no
+   * glyphs to draw text with, and the label layer is left out.
+   */
+  labelFont?: string[];
+}
+
 /**
  * Every MapLibre layer that draws one data layer, bottom first. A polygon
  * layer is a fill and an outline (`outlineLayerId`); a line or point layer is
- * one layer. Each layer reads the source named `id`.
+ * one layer. With `style.label` and a font, a symbol layer for the labels
+ * (`labelLayerId`) is last. With `style.filter`, every layer carries the
+ * filter. Each layer reads the source named `id`.
  */
 export function compileLayers(
   id: string,
   style: LayerStyle,
   geometryType: LayerGeometryType,
+  options: CompileLayersOptions = {},
 ): maplibregl.LayerSpecification[] {
-  const main = compileLayer(id, style, geometryType);
-  if (geometryType !== "fill") {
-    return [main];
-  }
-  return [
-    main,
-    {
+  const layers: maplibregl.LayerSpecification[] = [
+    compileLayer(id, style, geometryType),
+  ];
+  if (geometryType === "fill") {
+    layers.push({
       id: outlineLayerId(id),
       type: "line",
       source: id,
@@ -156,8 +280,20 @@ export function compileLayers(
         maplibregl.LayerSpecification,
         { type: "line" }
       >["paint"],
-    },
-  ];
+    });
+  }
+  if (style.label && options.labelFont) {
+    layers.push(
+      compileLabelLayer(id, style.label, geometryType, options.labelFont),
+    );
+  }
+  if (!style.filter) {
+    return layers;
+  }
+  const filter = compileFilter(style.filter);
+  return layers.map(
+    (layer) => ({ ...layer, filter } as maplibregl.LayerSpecification),
+  );
 }
 
 /**

@@ -83,6 +83,8 @@ describe("useExportPNG", () => {
     expect(exportPNGMock).toHaveBeenCalledWith(map, api, {
       pixelRatio: 3,
       backgroundColor: "#123456",
+      // The basemap's credit, read at export time (W9d).
+      credit: expect.stringContaining("OpenStreetMap"),
     });
     // The file name says the size, so 1x and 3x files are told apart.
     expect(anchor.download).toMatch(/^atlasdraw-\d+@3x\.png$/);

@@ -174,6 +174,25 @@ describe("ExportDialog — PDF", () => {
     expect(page.texts.join(" ")).not.toMatch(/ mi\b| ft\b/);
   });
 
+  it("prints the credit of each visible tile layer after the basemap's", async () => {
+    currentDocument().dispatch({
+      type: "add-tile-layer",
+      id: "tl:aerial",
+      label: "Aerial",
+      url: "https://tiles.example.org/{z}/{x}/{y}.png",
+      attribution: "© Example Aerials",
+    });
+    const downloads = captureDownloads();
+    const props = renderDialog({ initialFormat: "pdf" });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() => expect(props.onCloseRequest).toHaveBeenCalled());
+
+    const pdf = await readPdf(downloads.blobs[0]);
+    expect(pdf.pages[0].texts).toContain(
+      "© Protomaps © OpenStreetMap · © Example Aerials",
+    );
+  });
+
   it("adds feet and miles to the scale for a US locale", async () => {
     const downloads = captureDownloads();
     const props = renderDialog({ initialFormat: "pdf", locale: "en-US" });

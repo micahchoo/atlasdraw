@@ -31,10 +31,18 @@
 
 import React, { useMemo, useState } from "react";
 
-import type { StyleExpression } from "@atlasdraw/basemap";
+import { LABEL_SIZE_MAX, LABEL_SIZE_MIN } from "@atlasdraw/basemap";
+
+import type {
+  FilterOp,
+  FilterStyle,
+  LabelStyle,
+  StyleExpression,
+} from "@atlasdraw/basemap";
 
 import { dispatch, useDocument } from "../state/document";
 import { validateLayerStyle } from "../lib/mapOverlays";
+import { useOverlayReport } from "../hooks/useMapOverlays";
 
 import styles from "../styles/StylePanel.module.css";
 
@@ -237,12 +245,218 @@ export function StylePanel({ layerId }: StylePanelProps) {
           />
         )}
       </div>
+      <LabelSection
+        entry={entry}
+        allProps={allProps}
+        onApply={(label) => restyle({ label })}
+      />
+      <FilterSection
+        entry={entry}
+        allProps={allProps}
+        onApply={(filter) => restyle({ filter })}
+      />
       {rejection && (
         <p role="alert" className={styles.error} data-testid="style-rejected">
-          {`Not applied: the map cannot draw this style. ${rejection}`}
+          {`Not applied: ${rejection}`}
         </p>
       )}
     </div>
+  );
+}
+
+// ---- labels (W9d) -----------------------------------------------------------
+
+const DEFAULT_LABEL_SIZE = 12;
+
+/**
+ * Labels from one property. They need the basemap's glyphs: when the map
+ * says the basemap has none, the section says so. The label is still saved,
+ * and shows when the user picks a basemap with labels.
+ */
+function LabelSection({
+  entry,
+  allProps,
+  onApply,
+}: {
+  entry: DataLayerEntry;
+  allProps: string[];
+  onApply: (label: LabelStyle | undefined) => void;
+}) {
+  const existing = entry.style.label;
+  const [property, setProperty] = useState(
+    existing?.property ?? allProps[0] ?? "",
+  );
+  const [size, setSize] = useState(existing?.size ?? DEFAULT_LABEL_SIZE);
+  const [halo, setHalo] = useState(existing?.halo ?? true);
+  const labelFont = useOverlayReport((s) => s.labelFont);
+
+  return (
+    <section
+      className={styles.section}
+      aria-label="Labels"
+      data-testid="style-labels"
+    >
+      <h5 className={styles.sectionHeading}>Labels</h5>
+      {labelFont === null && (
+        <p className={styles.note} data-testid="label-no-glyphs">
+          This basemap has no font for labels. Labels show on a basemap that has
+          place names, for example Light or Dark.
+        </p>
+      )}
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Property</span>
+        <select
+          value={property}
+          data-testid="label-property"
+          onChange={(e) => setProperty(e.target.value)}
+        >
+          {allProps.length === 0 && <option value="">(no properties)</option>}
+          {allProps.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Size</span>
+        <input
+          type="number"
+          min={LABEL_SIZE_MIN}
+          max={LABEL_SIZE_MAX}
+          value={size}
+          data-testid="label-size"
+          onChange={(e) => setSize(Number(e.target.value))}
+        />
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Halo</span>
+        <input
+          type="checkbox"
+          checked={halo}
+          data-testid="label-halo"
+          onChange={(e) => setHalo(e.target.checked)}
+        />
+      </label>
+      <div className={styles.sectionActions}>
+        {existing && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            data-testid="label-remove"
+            onClick={() => onApply(undefined)}
+          >
+            Remove labels
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.applyBtn}
+          data-testid="label-apply"
+          onClick={() => onApply({ property, size, halo })}
+        >
+          Apply
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---- filter (W9d) -----------------------------------------------------------
+
+/** The comparisons, in the order the menu shows them, with their signs. */
+const FILTER_OPS: ReadonlyArray<{ op: FilterOp; sign: string }> = [
+  { op: "==", sign: "=" },
+  { op: "!=", sign: "≠" },
+  { op: "<", sign: "<" },
+  { op: ">", sign: ">" },
+  { op: "contains", sign: "contains" },
+];
+
+/** Draw only the features whose property passes one comparison. */
+function FilterSection({
+  entry,
+  allProps,
+  onApply,
+}: {
+  entry: DataLayerEntry;
+  allProps: string[];
+  onApply: (filter: FilterStyle | undefined) => void;
+}) {
+  const existing = entry.style.filter;
+  const [property, setProperty] = useState(
+    existing?.property ?? allProps[0] ?? "",
+  );
+  const [op, setOp] = useState<FilterOp>(existing?.op ?? "==");
+  const [value, setValue] = useState(existing?.value ?? "");
+
+  return (
+    <section
+      className={styles.section}
+      aria-label="Filter"
+      data-testid="style-filter"
+    >
+      <h5 className={styles.sectionHeading}>Filter</h5>
+      <p className={styles.note}>Show only the features that match.</p>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Property</span>
+        <select
+          value={property}
+          data-testid="filter-property"
+          onChange={(e) => setProperty(e.target.value)}
+        >
+          {allProps.length === 0 && <option value="">(no properties)</option>}
+          {allProps.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Compare</span>
+        <select
+          value={op}
+          data-testid="filter-op"
+          onChange={(e) => setOp(e.target.value as FilterOp)}
+        >
+          {FILTER_OPS.map((o) => (
+            <option key={o.op} value={o.op}>
+              {o.sign}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Value</span>
+        <input
+          type="text"
+          value={value}
+          data-testid="filter-value"
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <div className={styles.sectionActions}>
+        {existing && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            data-testid="filter-remove"
+            onClick={() => onApply(undefined)}
+          >
+            Remove filter
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.applyBtn}
+          data-testid="filter-apply"
+          onClick={() => onApply({ property, op, value })}
+        >
+          Apply
+        </button>
+      </div>
+    </section>
   );
 }
 

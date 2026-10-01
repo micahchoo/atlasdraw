@@ -56,6 +56,8 @@ import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler"
 import { useCameraBridge } from "../hooks/useCameraBridge";
 import { seedShapes } from "../lib/devSeedShapes";
 import { useMapOverlays } from "../hooks/useMapOverlays";
+import { useFeaturePopup, type PopupMap } from "../hooks/useFeaturePopup";
+import { useCanvasClickThrough } from "../hooks/useCanvasClickThrough";
 import { useToolState } from "../hooks/useToolState";
 import { useCameraRotation } from "../hooks/useCameraRotation";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
@@ -72,6 +74,7 @@ import { useCollabDocumentTitle } from "../hooks/useCollabDocumentTitle";
 import { useDataFileImport } from "../hooks/useDataFileImport";
 import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
+import { useServerBackup } from "../hooks/useServerBackup";
 import { CollabState } from "../state/collab";
 
 import { LayersIcon } from "../lib/icons";
@@ -91,6 +94,7 @@ import {
   toFile,
 } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
+import { featureAt } from "../lib/featureHit";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -110,8 +114,10 @@ import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { ShareDialog } from "./ShareDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MyMapsDialog } from "./MyMapsDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
+import { FeaturePopup } from "./FeaturePopup";
 import { CursorOverlay } from "./CursorOverlay";
 import { PresenceList } from "./PresenceList";
 import { StatusBar } from "./StatusBar";
@@ -591,7 +597,47 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return unsub;
   }, [excalidrawAPI]);
 
-  // Map-click → panel selection for data/raster layers
+  // Map-click → panel selection for data/raster layers, and the attribute
+  // popup for the feature under the pointer. The hand tool lets the click
+  // through to MapLibre; with the selection tool Excalidraw takes the press,
+  // and a click on empty canvas reaches the same handler
+  // (useCanvasClickThrough).
+  const featurePopup = useFeaturePopup(map as unknown as PopupMap | null);
+  const { show: showFeaturePopup, close: closeFeaturePopup } = featurePopup;
+  const handleMapClick = useCallback(
+    (point: maplibregl.Point, lngLat: maplibregl.LngLat) => {
+      if (!map) {
+        return;
+      }
+      const overlays = currentDocument().snapshot().overlays;
+
+      // The topmost visible data layer under the pointer wins (featureAt).
+      const hit = featureAt(map, overlays, point);
+      if (hit) {
+        useSelectedLayerStore.getState().selectLayer(hit.overlayId);
+        showFeaturePopup(hit, lngLat);
+        return;
+      }
+      closeFeaturePopup();
+
+      // Rasters draw no features: test the point against the projected
+      // corners, top raster first, visible ones only.
+      const rasters = overlays
+        .filter((e): e is RasterLayerEntry => e.kind === "raster" && e.visible)
+        .sort((a, b) => b.order - a.order);
+      for (const r of rasters) {
+        const screenCorners = r.corners.map((c) => map.project(c));
+        if (pointInPolygon(point, screenCorners)) {
+          useSelectedLayerStore.getState().selectLayer(r.id);
+          return;
+        }
+      }
+
+      // Click on empty area → clear selection
+      useSelectedLayerStore.getState().clearSelection();
+    },
+    [map, showFeaturePopup, closeFeaturePopup],
+  );
   useEffect(() => {
     if (!map) {
       return;
@@ -602,50 +648,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (activeTool && activeTool !== "selection" && activeTool !== "hand") {
         return;
       }
-
-      const overlays = currentDocument().snapshot().overlays;
-
-      // One query per layer, top of the stack first. MapLibre answers a
-      // query that names a layer missing from the style with [] for every
-      // layer, so one rejected overlay must not blank the others.
-      const dataLayers = overlays
-        .filter((e) => e.kind === "data" && e.visible)
-        .sort((a, b) => b.order - a.order);
-      for (const entry of dataLayers) {
-        if (!map.getLayer(entry.id)) {
-          continue;
-        }
-        const hit = map.queryRenderedFeatures(e.point, {
-          layers: [entry.id],
-        });
-        if (hit.length > 0) {
-          useSelectedLayerStore.getState().selectLayer(entry.id);
-          return;
-        }
-      }
-
-      // Rasters draw no features: test the point against the projected
-      // corners, top raster first, visible ones only.
-      const rasters = overlays
-        .filter((e): e is RasterLayerEntry => e.kind === "raster" && e.visible)
-        .sort((a, b) => b.order - a.order);
-      for (const r of rasters) {
-        const screenCorners = r.corners.map((c) => map.project(c));
-        if (pointInPolygon(e.point, screenCorners)) {
-          useSelectedLayerStore.getState().selectLayer(r.id);
-          return;
-        }
-      }
-
-      // Click on empty area → clear selection
-      useSelectedLayerStore.getState().clearSelection();
+      handleMapClick(e.point, e.lngLat);
     };
 
     map.on("click", handler);
     return () => {
       map.off("click", handler);
     };
-  }, [map, excalidrawAPI]);
+  }, [map, excalidrawAPI, handleMapClick]);
+  useCanvasClickThrough(excalidrawAPI, map, handleMapClick);
 
   // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
   useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);
@@ -758,6 +769,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Quick-actions palette — Cmd+K / Ctrl+K.
   const [showQuickActions, setShowQuickActions] = useState(false);
+  // My maps — the maps saved in this browser.
+  const [showMyMaps, setShowMyMaps] = useState(false);
   // Onboarding — shown on first visit only.
   const onboarding = useOnboarding();
 
@@ -794,6 +807,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Selector form so the component re-renders ONLY on isDirty flips, not on
   // store/dispose pointer changes.
   const isDirty = usePersistenceStore((s) => s.isDirty);
+  const serverBackup = useServerBackup(excalidrawAPI, documentNotify);
 
   // T13 — data-file drag-and-drop import (extracted to useDataFileImport
   // hook). ISSUES.md Direction 1: also exposes importFile() for the
@@ -1155,6 +1169,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   Save
                 </MainMenu.Item>
                 <MainMenu.Item
+                  onSelect={() => setShowMyMaps(true)}
+                  data-testid="main-menu-my-maps"
+                >
+                  My maps…
+                </MainMenu.Item>
+                {serverBackup.available && (
+                  <MainMenu.Item
+                    onSelect={serverBackup.request}
+                    data-testid="main-menu-restore-backup"
+                  >
+                    Restore from server backup
+                  </MainMenu.Item>
+                )}
+                <MainMenu.Item
                   onSelect={handleImportFile}
                   data-testid="main-menu-import"
                 >
@@ -1214,6 +1242,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               </MainMenu>
             </Excalidraw>
           </div>
+
+          {/* The attributes of the feature the last map click opened. */}
+          <FeaturePopup
+            popup={featurePopup.popup}
+            onClose={featurePopup.close}
+          />
 
           {/* Phase 6 A3 — anchored comment overlay. Iterates the live
           CommentsLayer and renders one bubble per unresolved comment,
@@ -1417,6 +1451,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             />
           )}
 
+          {showMyMaps && excalidrawAPI && (
+            <MyMapsDialog
+              excalidrawAPI={excalidrawAPI}
+              notify={documentNotify}
+              onClose={() => setShowMyMaps(false)}
+            />
+          )}
+          {serverBackup.dialog}
+
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
           (the share reads the drawing). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
@@ -1544,6 +1587,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   keywords: ["disk", "file", "atlasdraw"],
                   onSelect: () =>
                     void saveAtlasDocument(excalidrawAPI, documentNotify),
+                },
+                {
+                  id: "my-maps",
+                  label: "My maps",
+                  category: "File",
+                  keywords: ["list", "recent", "new", "delete", "documents"],
+                  onSelect: () => setShowMyMaps(true),
                 },
                 {
                   id: "share",

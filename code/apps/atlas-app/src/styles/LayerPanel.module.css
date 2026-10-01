@@ -682,3 +682,21 @@
   border-color: var(--ad-accent, #1971c2);
   font-weight: 600;
 }
+
+/* --- Tile layers (W9d) ------------------------------------------------------
+ * A tile row's one style, its opacity, sits on the line under the row. */
+.tileOpacity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 4px 32px;
+}
+
+.tileOpacity input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tileAddRow {
+  padding: 4px 8px 8px;
+}

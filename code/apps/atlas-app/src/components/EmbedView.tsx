@@ -16,6 +16,8 @@
 //   /embed/<token>   — token mode (the document over HTTP)
 //
 // URL params: ?lock=1 disables map pan/zoom (camera-locked presentation).
+// It also turns off the attribute popup: a locked embed takes no clicks.
+// Unlocked, a click on a feature shows its attributes (FeaturePopup).
 //
 // Deferred: a real scripts-blocked <noscript> PNG fallback needs SSR or a
 // pre-rendered static embed page — a React <noscript> never renders when JS
@@ -36,6 +38,11 @@ import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useCameraBridge } from "../hooks/useCameraBridge";
 import { useMapOverlays } from "../hooks/useMapOverlays";
+import {
+  useFeaturePopup,
+  usePopupOnClick,
+  type PopupMap,
+} from "../hooks/useFeaturePopup";
 import { loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
@@ -45,6 +52,8 @@ import {
 } from "../state/loadShareDocument";
 import mapStyles from "../styles/MapEditor.module.css";
 import styles from "../styles/EmbedView.module.css";
+
+import { FeaturePopup } from "./FeaturePopup";
 
 // Read-only: disable Excalidraw's own persistence actions. The transparent
 // background (so map tiles show through — contrast ShareView's opaque
@@ -151,6 +160,11 @@ const EmbedCanvas: React.FC<{
   // Draw the open document's data and raster layers on the map.
   useMapOverlays(map);
 
+  // A click on a feature shows its attributes, unless the embed is locked.
+  const popupMap = map as unknown as PopupMap | null;
+  const featurePopup = useFeaturePopup(popupMap);
+  usePopupOnClick(popupMap, !options.lock, featurePopup);
+
   // Open the document the way the editor opens a file (documentIO): its
   // layers, rasters and drawing. One loader, so the embed shows what the
   // editor shows.
@@ -222,6 +236,7 @@ const EmbedCanvas: React.FC<{
           UIOptions={EMBED_UI_OPTIONS}
         />
       </div>
+      <FeaturePopup popup={featurePopup.popup} onClose={featurePopup.close} />
     </div>
   );
 };

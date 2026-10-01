@@ -6,6 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
+import { labelLayerId } from "@atlasdraw/basemap";
+
 import {
   createDocument,
   currentDocument,
@@ -37,6 +39,13 @@ class StyledMap extends FakeMapLibre {
       return this;
     }
     return super.off(type, fn);
+  }
+
+  /** Fire "styledata", as MapLibre does after a style change. */
+  emitStyleData(): void {
+    for (const fn of Array.from(this.styleListeners)) {
+      fn();
+    }
   }
 
   /** What setStyle does: drop everything, load the basemap, fire styledata. */
@@ -126,5 +135,42 @@ describe("useMapOverlays", () => {
     expect(useOverlayReport.getState().report.get("dl:a")).toEqual({
       status: "landed",
     });
+  });
+
+  it("draws labels once the basemap has glyphs, and says when it has none", () => {
+    const map = new StyledMap();
+    map.loadBasemap();
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: POINTS,
+      label: "a",
+      style: {
+        fillColor: "#0aa",
+        label: { property: "n", size: 12, halo: true },
+      },
+    });
+    renderHook(() => useMapOverlays(asMap(map)));
+    expect(map.getLayer(labelLayerId("dl:a"))).toBeUndefined();
+    expect(useOverlayReport.getState().labelFont).toBeNull();
+
+    // A basemap with glyphs and a label font, like the Protomaps styles.
+    act(() => {
+      map.glyphs = "https://glyphs.example.org/{fontstack}/{range}.pbf";
+      map.loadBasemap();
+      map.addLayer({
+        id: "roads-label",
+        type: "symbol",
+        source: "osm",
+        layout: { "text-field": "x", "text-font": ["Noto Sans Regular"] },
+      });
+      map.emitStyleData();
+    });
+
+    expect(useOverlayReport.getState().labelFont).toEqual([
+      "Noto Sans Regular",
+    ]);
+    expect(map.getLayersOrder().at(-1)).toBe(labelLayerId("dl:a"));
+    expect(map.errors).toEqual([]);
   });
 });

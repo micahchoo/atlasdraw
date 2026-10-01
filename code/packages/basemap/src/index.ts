@@ -15,7 +15,13 @@ export {
   setCameraRotation,
 } from "./cameraRotation";
 
-export type { LayerStyle, StyleExpression } from "./style";
+export type {
+  FilterOp,
+  FilterStyle,
+  LabelStyle,
+  LayerStyle,
+  StyleExpression,
+} from "./style";
 export {
   compileLayer,
   compileLayers,
@@ -23,8 +29,18 @@ export {
   compilePaint,
   outlineLayerId,
   defaultLayerStyle,
+  compileFilter,
+  filterProblem,
+  labelLayerId,
+  labelProblem,
+  LABEL_SIZE_MAX,
+  LABEL_SIZE_MIN,
 } from "./style-compiler";
-export type { CompiledPaint, LayerGeometryType } from "./style-compiler";
+export type {
+  CompiledPaint,
+  CompileLayersOptions,
+  LayerGeometryType,
+} from "./style-compiler";
 
 export {
   BASEMAPS,

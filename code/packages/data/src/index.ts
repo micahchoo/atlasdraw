@@ -44,6 +44,7 @@ export type {
   BasemapRef,
   Camera,
   LayerEntry,
+  TileLayerEntry,
   Permissions,
   WorldFrameData,
   AtlasdrawDocument,
