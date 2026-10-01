@@ -180,6 +180,28 @@ export function toWKT(g: Geometry): string {
   }
 }
 
+/** Header names for the property keys: none equal to a geometry column's. */
+function propertyHeaders(keys: string[], geometry: string[]): string[] {
+  const taken = new Set(geometry.map((h) => h.toLowerCase()));
+  for (const key of keys) {
+    if (!taken.has(key.toLowerCase())) {
+      taken.add(key.toLowerCase());
+    }
+  }
+  const reserved = new Set(geometry.map((h) => h.toLowerCase()));
+  return keys.map((key) => {
+    if (!reserved.has(key.toLowerCase())) {
+      return key;
+    }
+    let name = `${key} (property)`;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) {
+      name = `${key} (property ${n})`;
+    }
+    taken.add(name.toLowerCase());
+    return name;
+  });
+}
+
 /**
  * The text of a CSV file for `fc`: RFC 4180, CRLF line ends, a header row.
  *
@@ -187,9 +209,14 @@ export function toWKT(g: Geometry): string {
  * one column per property key, in the order the keys are first seen. A
  * feature that has no value for a key gets an empty cell.
  *
+ * A property whose name is a geometry column's, in any case, is written as
+ * "<name> (property)", so every header names one column.
+ *
  * For a point layer, `parseCSV(toCSV(fc))` gives the same features back when
- * each property column holds only numbers or only text. A text column whose
- * every value looks like a number comes back as numbers.
+ * each property column holds only numbers or only text, with two
+ * exceptions: a text column whose every value looks like a number comes
+ * back as numbers, and text that starts with =, +, - or @ comes back with
+ * the leading ' that keeps a spreadsheet from running it as a formula.
  */
 export function toCSV(fc: FeatureCollection): string {
   const mode = csvGeometryMode(fc);
@@ -206,7 +233,11 @@ export function toCSV(fc: FeatureCollection): string {
 
   const geometryHeader =
     mode === "point" ? ["longitude", "latitude"] : ["geometry"];
-  const lines = [[...geometryHeader, ...keys].map(csvField).join(",")];
+  const lines = [
+    [...geometryHeader, ...propertyHeaders(keys, geometryHeader)]
+      .map(csvField)
+      .join(","),
+  ];
 
   for (const f of fc.features) {
     const g = f.geometry;

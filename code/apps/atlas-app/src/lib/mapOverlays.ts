@@ -31,19 +31,11 @@
 // band, rasters (georeferenced pictures) are above them, and data layers
 // above those.
 
-import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
-
-import {
-  compileLayers,
-  filterProblem,
-  labelProblem,
-  type LayerStyle,
-} from "@atlasdraw/basemap";
-
-import type { AtlasGeometryKind } from "@atlasdraw/data";
+import { compileLayers } from "@atlasdraw/basemap";
 
 import { rasterUrl } from "../state/rasterUrls";
 
+import { styleProblem, validateLayers } from "./layerStyle";
 import { validateTileTemplate } from "./tileLayers";
 
 import type {
@@ -55,7 +47,6 @@ import type {
 import type {
   LayerSpecification,
   SourceSpecification,
-  StyleSpecification,
 } from "@maplibre/maplibre-gl-style-spec";
 import type { FeatureCollection } from "geojson";
 
@@ -126,87 +117,6 @@ function versionOf(payload: object): number {
     payloadVersions.set(payload, version);
   }
   return version;
-}
-
-/** A source of the right type with no payload, for validating a layer. */
-const EMPTY_SOURCES: Record<OverlaySource["type"], SourceSpecification> = {
-  raster: {
-    type: "raster",
-    tiles: ["https://example.org/{z}/{x}/{y}.png"],
-    tileSize: 256,
-  },
-  geojson: {
-    type: "geojson",
-    data: { type: "FeatureCollection", features: [] },
-  },
-  image: {
-    type: "image",
-    url: "",
-    coordinates: [
-      [0, 1],
-      [1, 1],
-      [1, 0],
-      [0, 0],
-    ],
-  },
-};
-
-/**
- * MapLibre's objections to these layers, or an empty list. Uses the same
- * validator MapLibre runs inside addLayer and setPaintProperty.
- */
-function validateLayers(
-  layers: readonly LayerSpecification[],
-  sourceType: OverlaySource["type"],
-): string[] {
-  const sources: Record<string, SourceSpecification> = {};
-  for (const layer of layers) {
-    if ("source" in layer && typeof layer.source === "string") {
-      sources[layer.source] = EMPTY_SOURCES[sourceType];
-    }
-  }
-  // A symbol layer with text needs glyphs in the style. Whether the basemap
-  // has them is the caller's question (labelFont); this checks the layers.
-  const hasText = layers.some((l) => l.type === "symbol");
-  const style: StyleSpecification = {
-    version: 8,
-    ...(hasText ? { glyphs: CHECK_GLYPHS } : {}),
-    sources,
-    layers: [...layers],
-  };
-  return validateStyleMin(style).map((e) => e.message);
-}
-
-/** Glyphs and a font to validate a label layer with; never fetched. */
-const CHECK_GLYPHS = "https://example.org/{fontstack}/{range}.pbf";
-const CHECK_FONT = ["Check Regular"];
-
-/** Why a style's label or filter cannot be applied, or null. */
-function styleProblem(style: LayerStyle): string | null {
-  return (
-    (style.filter ? filterProblem(style.filter) : null) ??
-    (style.label ? labelProblem(style.label) : null)
-  );
-}
-
-/**
- * MapLibre's objections to a data-layer style, or an empty list. The style
- * panel asks before it commits a style, so a style MapLibre rejects is never
- * saved. A label is checked as if the basemap had glyphs: whether it has is
- * a different question, which the panel answers on its own.
- */
-export function validateLayerStyle(
-  style: LayerStyle,
-  geometryKind: AtlasGeometryKind,
-): string[] {
-  const problem = styleProblem(style);
-  if (problem) {
-    return [problem];
-  }
-  return validateLayers(
-    compileLayers("check", style, geometryKind, { labelFont: CHECK_FONT }),
-    "geojson",
-  );
 }
 
 /** The part of a map labelFontOf reads. */
@@ -383,12 +293,26 @@ export function overlaySpec(
       rejected.push({ overlayId: entry.id, reason: problem });
       continue;
     }
+    // A style stored before every path checked it can still throw while it
+    // compiles. It stops its own overlay, never the others.
+    let specs: LayerSpecification[];
+    try {
+      specs = compileLayers(entry.id, entry.style, entry.geometryKind, {
+        labelFont: options.labelFont ?? undefined,
+      }).map((l) => withVisibility(l, entry.visible));
+    } catch (err) {
+      rejected.push({
+        overlayId: entry.id,
+        reason: `The style cannot be drawn: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+      continue;
+    }
     add(
       entry.id,
       { id: entry.id, type: "geojson", data: fc, version: versionOf(fc) },
-      compileLayers(entry.id, entry.style, entry.geometryKind, {
-        labelFont: options.labelFont ?? undefined,
-      }).map((l) => withVisibility(l, entry.visible)),
+      specs,
     );
   }
 

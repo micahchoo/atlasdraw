@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // The document's file form: what a save writes (toFile, encode) and what an
-// open reads and applies (decode, fromFile, loadDocument). Run at the
+// open reads and applies (fromFile, loadDocument). Run at the
 // Document interface with a stateful scene stand-in.
 
 import {
@@ -26,7 +26,6 @@ import {
   type RasterCorners,
 } from "../document";
 import {
-  decode,
   encode,
   fromFile,
   hasUnsavedWork,
@@ -44,6 +43,7 @@ import {
   savedDocument,
   savedManifest,
 } from "./fixtures/documentWorld";
+import { PNG_BYTES, admittedOf } from "./fixtures/admitted";
 
 import type { FeatureCollection } from "geojson";
 
@@ -223,29 +223,12 @@ describe("encode", () => {
   });
 });
 
-describe("decode", () => {
-  it("reads a file a v1 build saved, through the migrations", async () => {
-    const result = await decode(await write(savedDocument()));
-
-    expect(result.ok).toBe(true);
-    const file = result.ok ? result.file : null;
-    expect(file?.manifest.version).toBe(2);
-    expect(file?.manifest.layers).toEqual([]);
-  });
-
-  it("returns an error, not a throw, for bytes that are not a document", async () => {
-    const result = await decode(new Blob(["not a zip"]));
-
-    expect(result.ok).toBe(false);
-  });
-});
-
 describe("fromFile", () => {
   async function v2File(
     layers: AtlasdrawDocument["manifest"]["layers"],
     payloads: Partial<Pick<AtlasdrawDocument, "layers" | "files">> = {},
   ): Promise<AtlasdrawDocument> {
-    const result = await decode(
+    const admitted = await admittedOf(
       await write(
         savedDocument({
           manifest: savedManifest({ layers }),
@@ -254,10 +237,7 @@ describe("fromFile", () => {
         }),
       ),
     );
-    if (!result.ok) {
-      throw result.error;
-    }
-    return result.file;
+    return admitted.doc;
   }
 
   it("keeps a saved geometry kind, and decides it for a file without one", async () => {
@@ -302,7 +282,7 @@ describe("fromFile", () => {
       },
     );
 
-    const kinds = fromFile(file).overlays?.map((e) =>
+    const kinds = fromFile(await admittedOf(file)).overlays?.map((e) =>
       e.kind === "data" ? [e.id, e.geometryKind] : [],
     );
     expect(kinds).toEqual([
@@ -312,7 +292,7 @@ describe("fromFile", () => {
   });
 
   it("rebuilds layers with their payloads, visibility and provenance", async () => {
-    const image = new Blob(["png"], { type: "image/png" });
+    const image = new Blob([PNG_BYTES], { type: "image/png" });
     const file = await v2File(
       [
         {
@@ -341,7 +321,7 @@ describe("fromFile", () => {
       },
     );
 
-    const state = fromFile(file);
+    const state = fromFile(await admittedOf(file));
 
     expect(state.overlays).toMatchObject([
       {
@@ -377,7 +357,7 @@ describe("fromFile", () => {
       },
     ]);
 
-    expect(fromFile(file).overlays).toEqual([]);
+    expect(fromFile(await admittedOf(file)).overlays).toEqual([]);
   });
 });
 
@@ -437,10 +417,8 @@ describe("tile layers in the file (W9d)", () => {
   it("comes back from the bytes as the same tile layers", async () => {
     const fx = makeFakeExcalidraw([]);
     const doc = withTiles(createDocument({}, sceneOf(fx.api)));
-    const result = await decode(await encode(doc));
-    expect(result.ok).toBe(true);
     const reopened = createDocument(
-      fromFile(result.ok ? result.file : savedDocument()),
+      fromFile(await admittedOf(await encode(doc))),
     );
 
     expect(reopened.snapshot().overlays).toEqual(doc.snapshot().overlays);
@@ -460,8 +438,7 @@ describe("tile layers in the file (W9d)", () => {
         ),
       },
     };
-    const result = await decode(await write(tampered));
-    const state = fromFile(result.ok ? result.file : savedDocument());
+    const state = fromFile(await admittedOf(await write(tampered)));
 
     expect(state.overlays?.map((e) => e.id)).toEqual(["tl:aerial"]);
   });
@@ -486,31 +463,34 @@ describe("loadDocument", () => {
         planted("evil-2", "embeddable"),
       ] as unknown as AtlasdrawDocument["scene"],
     });
-    const onRefused = vi.fn();
+    const onDropped = vi.fn();
 
-    const doc = await loadDocument(file, fx.api, { onRefused });
+    const doc = await loadDocument(await admittedOf(file), fx.api, {
+      onDropped,
+    });
 
     expect(doc).not.toBeNull();
     expect(fx.api.getSceneElements().map((e) => e.id)).toEqual(["rect-1"]);
-    expect(onRefused).toHaveBeenCalledWith(2);
+    expect(onDropped).toHaveBeenCalledWith(
+      expect.stringMatching(/2 drawing elements/),
+    );
   });
 
   it("reports nothing when the file has no refused element", async () => {
     const fx = makeFakeExcalidraw();
-    const onRefused = vi.fn();
-    await loadDocument(savedDocument(), fx.api, { onRefused });
-    expect(onRefused).not.toHaveBeenCalled();
+    const onDropped = vi.fn();
+    await loadDocument(await admittedOf(savedDocument()), fx.api, {
+      onDropped,
+    });
+    expect(onDropped).not.toHaveBeenCalled();
   });
 
   it("opens a new document with the file's identity and layers, at revision 0", async () => {
     const fx = makeFakeExcalidraw();
     const before = currentDocument();
-    const file = (await decode(await write(savedDocument()))) as {
-      ok: true;
-      file: AtlasdrawDocument;
-    };
+    const file = await admittedOf(await write(savedDocument()));
 
-    const doc = await loadDocument(file.file, fx.api);
+    const doc = await loadDocument(file, fx.api);
 
     expect(currentDocument()).toBe(doc);
     expect(doc).not.toBe(before);
@@ -527,7 +507,7 @@ describe("loadDocument", () => {
     const abort = new AbortController();
     abort.abort();
 
-    const doc = await loadDocument(savedDocument(), fx.api, {
+    const doc = await loadDocument(await admittedOf(savedDocument()), fx.api, {
       signal: abort.signal,
     });
 
@@ -539,7 +519,8 @@ describe("loadDocument", () => {
   it("leaves a document that opened while the files were read, such as a room", async () => {
     const fx = makeFakeExcalidraw();
 
-    const pending = loadDocument(savedDocument(), fx.api);
+    const file = await admittedOf(savedDocument());
+    const pending = loadDocument(file, fx.api);
     const room = createDocument({ title: "Shared survey" });
     openDocument(room);
 
@@ -555,9 +536,11 @@ describe("loadDocument", () => {
       manifest: { ...savedDocument().manifest, title: "Second" },
     };
 
+    const first = await admittedOf(savedDocument());
+    const later = await admittedOf(second);
     const results = await Promise.all([
-      loadDocument(savedDocument(), fx.api),
-      loadDocument(second, fx.api),
+      loadDocument(first, fx.api),
+      loadDocument(later, fx.api),
     ]);
 
     expect(results[0]).toBeNull();
@@ -569,7 +552,7 @@ describe("loadDocument", () => {
     const fx = makeFakeExcalidraw();
     const update = vi.spyOn(fx.api, "updateScene");
 
-    await loadDocument(savedDocument(), fx.api);
+    await loadDocument(await admittedOf(savedDocument()), fx.api);
 
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ captureUpdate: "NEVER" }),
@@ -584,6 +567,7 @@ describe("loadDocument", () => {
       manifest: {
         ...savedDocument().manifest,
         version: 2,
+        world: { z0: 22, origin: { x: 0, y: 0 } },
         layers: [
           {
             kind: "raster",
@@ -596,13 +580,17 @@ describe("loadDocument", () => {
           },
         ],
       },
+      scene: [
+        geoRect("rect-1"),
+        { ...geoRect("pic"), type: "image", fileId: "img-1" },
+      ] as unknown as AtlasdrawDocument["scene"],
       files: new Map([
-        ["raster-sheet.png", new Blob(["png"], { type: "image/png" })],
-        ["img-1", new Blob(["img"], { type: "image/png" })],
+        ["raster-sheet.png", new Blob([PNG_BYTES])],
+        ["img-1", new Blob([PNG_BYTES])],
       ]),
     };
 
-    await loadDocument(file, fx.api);
+    await loadDocument(await admittedOf(file), fx.api);
 
     const given = add.mock.calls.flatMap(([files]) =>
       (files as Array<{ id: string }>).map((f) => f.id),
@@ -633,7 +621,7 @@ describe("unsaved work", () => {
     // loadDocument also opens the autosave and share links; only Open from
     // a file marks it saved (session/fileActions.ts#openMap).
     const fx = makeFakeExcalidraw();
-    const doc = await loadDocument(savedDocument(), fx.api);
+    const doc = await loadDocument(await admittedOf(savedDocument()), fx.api);
     expect(doc && hasUnsavedWork(doc)).toBe(true);
   });
 });
@@ -648,11 +636,9 @@ describe("comments in the file", () => {
       authorName: "Ada",
     });
 
-    const result = await decode(await encode(doc));
-    if (!result.ok) {
-      throw result.error;
-    }
-    const reopened = createDocument(fromFile(result.file));
+    const reopened = createDocument(
+      fromFile(await admittedOf(await encode(doc))),
+    );
 
     expect(reopened.comments.comments).toEqual(doc.comments.comments);
   });

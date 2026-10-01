@@ -87,6 +87,25 @@ async function dropGeoJSON(page: Page, name: string, lng: number) {
     },
     { name, text },
   );
+  // After an import the camera flies to the new data; a click during the
+  // flight lands on a point that then moves away.
+  await expect
+    .poll(() =>
+      page.evaluate((lng) => {
+        const map = (
+          window as unknown as {
+            __atlasdraw__: {
+              map: {
+                isMoving: () => boolean;
+                getCenter: () => { lng: number };
+              };
+            };
+          }
+        ).__atlasdraw__.map;
+        return !map.isMoving() && Math.abs(map.getCenter().lng - lng) < 1e-3;
+      }, lng),
+    )
+    .toBe(true);
 }
 
 async function addComment(page: Page, x: number, y: number, text: string) {

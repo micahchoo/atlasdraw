@@ -349,3 +349,13 @@ describe("parseCSV — number columns", () => {
     ]);
   });
 });
+
+describe("parseCSV — coordinates in metres", () => {
+  it("refuses x and y in metres, and names the fix", async () => {
+    const csv = "name,x,y\nA,500000,4649776\nB,500100,4649876\n";
+    await expect(parseCSV(new Blob([csv]))).rejects.toMatchObject({
+      code: "PROJECTED_COORDINATES",
+      message: expect.stringMatching(/metres.*EPSG:4326/s),
+    });
+  });
+});

@@ -17,11 +17,13 @@
 // document and the Excalidraw scene.
 
 import JSZip from "jszip";
+import { LIMITS, type ArchiveLimits } from "@atlasdraw/protocol";
 
 import {
   ManifestSchema,
   SavedCommentSchema,
   type AtlasdrawDocument,
+  type Manifest,
   type SavedComment,
   type SceneElement,
 } from "./manifest-schema.js";
@@ -44,7 +46,8 @@ export type AtlasdrawFormatErrorCode =
   | "MISSING_MANIFEST"
   | "INVALID_MANIFEST"
   | "MISSING_SCENE"
-  | "UNSUPPORTED_VERSION";
+  | "UNSUPPORTED_VERSION"
+  | "TOO_LARGE";
 
 /**
  * Error type for `.atlasdraw` format violations. `code` is the machine-readable
@@ -52,11 +55,62 @@ export type AtlasdrawFormatErrorCode =
  */
 export class AtlasdrawFormatError extends Error {
   readonly code: AtlasdrawFormatErrorCode;
-  constructor(code: AtlasdrawFormatErrorCode, message: string) {
+  /** For INVALID_MANIFEST: the path of the first field that failed. */
+  readonly field: string | undefined;
+  constructor(code: AtlasdrawFormatErrorCode, message: string, field?: string) {
     super(message);
     this.code = code;
+    this.field = field;
     this.name = "AtlasdrawFormatError";
   }
+}
+
+/**
+ * A stored manifest and scene, brought to the current version by the format
+ * migrations and checked against the manifest schema. Every reader of a
+ * stored document uses it: the zip reader here, and the app's document gate
+ * for a document that arrives already parsed (an old share link).
+ */
+export function parseManifest(
+  manifestJson: unknown,
+  scene: readonly unknown[],
+): { manifest: Manifest; scene: ReadonlyArray<SceneElement> } {
+  // An older file is brought to the current version first (migrations.ts),
+  // so the schema below only ever sees the current shape.
+  if (
+    !manifestJson ||
+    typeof manifestJson !== "object" ||
+    Array.isArray(manifestJson)
+  ) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      "manifest.json is not a JSON object",
+    );
+  }
+  let migrated: StoredDocument;
+  try {
+    migrated = migrate({
+      manifest: manifestJson as Record<string, unknown>,
+      scene: scene as ReadonlyArray<SceneElement>,
+    });
+  } catch (err) {
+    if (err instanceof MigrationError) {
+      throw new AtlasdrawFormatError("UNSUPPORTED_VERSION", err.message);
+    }
+    throw err;
+  }
+  const parsed = ManifestSchema.safeParse(migrated.manifest);
+  if (!parsed.success) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      `manifest.json failed schema validation: ${parsed.error.message}`,
+      parsed.error.issues[0]?.path.join("."),
+    );
+  }
+  return {
+    manifest: parsed.data,
+    scene: migrated.scene as ReadonlyArray<SceneElement>,
+  };
 }
 
 export interface WriteOptions {
@@ -274,21 +328,41 @@ export async function write(
   return new Blob([bytes as unknown as BlobPart], { type: ATLASDRAW_MIME });
 }
 
+/** What `read` takes besides the bytes. */
+export interface ReadOptions {
+  /** What the archive may expand to. The default is LIMITS.archive. */
+  limits?: ArchiveLimits;
+}
+
 /**
  * Parse a `.atlasdraw` zip Blob into an `AtlasdrawDocument`.
  *
  * Throws `AtlasdrawFormatError` for any structural violation; the caller is
  * expected to surface `error.code` to the UI ("not a valid atlasdraw file" /
- * "manifest corrupt" / etc).
+ * "manifest corrupt" / etc). An archive that would expand past `limits` is
+ * refused with `TOO_LARGE` before it fills memory: the entry count is read
+ * from the archive's directory, and the inflated bytes are counted as they
+ * arrive, because the sizes an archive declares can lie.
+ *
+ * A data layer whose GeoJSON is not JSON is left out of `layers`; its
+ * manifest entry stays, so the caller can count it as dropped.
  */
-export async function read(blob: Blob): Promise<AtlasdrawDocument> {
+export async function read(
+  blob: Blob,
+  options: ReadOptions = {},
+): Promise<AtlasdrawDocument> {
+  const limits = options.limits ?? LIMITS.archive;
   let zip: JSZip;
   try {
     // JSZip's Blob support is browser-only; in node test runtimes we hand it
     // an ArrayBuffer, which is universally supported.
     const buf = await blobBytes(blob);
+    refuseEntryCount(declaredEntryCount(buf), limits);
     zip = await JSZip.loadAsync(buf);
   } catch (err) {
+    if (err instanceof AtlasdrawFormatError) {
+      throw err;
+    }
     throw new AtlasdrawFormatError(
       "BAD_ZIP",
       `failed to open .atlasdraw archive: ${
@@ -296,6 +370,11 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       }`,
     );
   }
+  refuseEntryCount(Object.keys(zip.files).length, limits);
+  const inflate = inflater(limits);
+  refuseDeclaredSizes(zip, limits);
+  const text = async (entry: JSZip.JSZipObject): Promise<string> =>
+    new TextDecoder().decode(await inflate(entry));
 
   // --- manifest.json --------------------------------------------------------
   const manifestEntry = zip.file(MANIFEST_PATH);
@@ -305,7 +384,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       `archive is missing required entry "${MANIFEST_PATH}"`,
     );
   }
-  const manifestText = await manifestEntry.async("string");
+  const manifestText = await text(manifestEntry);
   let manifestJson: unknown;
   try {
     manifestJson = JSON.parse(manifestText);
@@ -325,7 +404,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       `archive is missing required entry "${SCENE_PATH}"`,
     );
   }
-  const sceneText = await sceneEntry.async("string");
+  const sceneText = await text(sceneEntry);
   let sceneJson: unknown;
   try {
     sceneJson = JSON.parse(sceneText);
@@ -348,40 +427,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
           .elements as ReadonlyArray<SceneElement>)
       : [];
 
-  // --- migrate, then validate -----------------------------------------------
-  // An older file is brought to the current version first (migrations.ts), so
-  // the schema below only ever sees the current shape.
-  if (
-    !manifestJson ||
-    typeof manifestJson !== "object" ||
-    Array.isArray(manifestJson)
-  ) {
-    throw new AtlasdrawFormatError(
-      "INVALID_MANIFEST",
-      "manifest.json is not a JSON object",
-    );
-  }
-  let migrated: StoredDocument;
-  try {
-    migrated = migrate({
-      manifest: manifestJson as Record<string, unknown>,
-      scene: sceneElements,
-    });
-  } catch (err) {
-    if (err instanceof MigrationError) {
-      throw new AtlasdrawFormatError("UNSUPPORTED_VERSION", err.message);
-    }
-    throw err;
-  }
-  const parsed = ManifestSchema.safeParse(migrated.manifest);
-  if (!parsed.success) {
-    throw new AtlasdrawFormatError(
-      "INVALID_MANIFEST",
-      `manifest.json failed schema validation: ${parsed.error.message}`,
-    );
-  }
-  const manifest = parsed.data;
-  const scene = migrated.scene as ReadonlyArray<SceneElement>;
+  const { manifest, scene } = parseManifest(manifestJson, sceneElements);
 
   // --- data/layer-<id>.geojson ---------------------------------------------
   const layers = new Map<string, FeatureCollection>();
@@ -398,11 +444,15 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
     const layerMatch = path.match(LAYER_PATH_RE);
     if (layerMatch) {
       const layerId = layerMatch[1]!;
-      const text = await entry.async("string");
-      // Layer GeoJSON is opaque here — geojson.ts validates content for the
-      // import path; round-trip integrity is enough for the format reader.
-      const fc = JSON.parse(text) as FeatureCollection;
-      layers.set(layerId, fc);
+      // The content is checked by the reader's caller (the app's document
+      // gate); here a layer that is not JSON is only left out.
+      try {
+        layers.set(layerId, JSON.parse(await text(entry)) as FeatureCollection);
+      } catch (err) {
+        if (err instanceof AtlasdrawFormatError) {
+          throw err;
+        }
+      }
       continue;
     }
 
@@ -412,8 +462,8 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       if (basename.includes("/")) {
         continue;
       }
-      const blob = await entry.async("blob");
-      files.set(basename, blob);
+      const bytes = await inflate(entry);
+      files.set(basename, new Blob([bytes as Uint8Array<ArrayBuffer>]));
       continue;
     }
     // manifest.json, scene.excalidraw.json, style.json, meta/thumbnail.png
@@ -424,7 +474,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   let styleRef: unknown = null;
   const styleEntry = zip.file(STYLE_PATH);
   if (styleEntry) {
-    const styleText = await styleEntry.async("string");
+    const styleText = await text(styleEntry);
     try {
       styleRef = JSON.parse(styleText);
     } catch {
@@ -439,7 +489,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   if (commentsEntry) {
     let raw: unknown = [];
     try {
-      raw = JSON.parse(await commentsEntry.async("string"));
+      raw = JSON.parse(await text(commentsEntry));
     } catch {
       // An unreadable comments file loses the comments, not the map.
     }
@@ -459,4 +509,143 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
     files,
     comments,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Archive limits
+// ---------------------------------------------------------------------------
+
+function tooLarge(message: string): AtlasdrawFormatError {
+  return new AtlasdrawFormatError("TOO_LARGE", message);
+}
+
+function refuseEntryCount(count: number | null, limits: ArchiveLimits): void {
+  if (count !== null && count > limits.entries) {
+    throw tooLarge(
+      `the archive has ${count} entries; a map may have at most ${limits.entries}`,
+    );
+  }
+}
+
+/**
+ * The entry count in the archive's end-of-directory record, or null when
+ * there is none (then the zip reader refuses the bytes) or it defers to a
+ * zip64 record. Read before the zip reader makes an object per entry.
+ */
+function declaredEntryCount(buf: ArrayBuffer): number | null {
+  const view = new DataView(buf);
+  const last = buf.byteLength - 22;
+  // The record is 22 bytes plus a comment of up to 65535.
+  for (let at = last; at >= 0 && at >= last - 0xffff; at--) {
+    if (view.getUint32(at, true) === 0x06054b50) {
+      const count = view.getUint16(at + 10, true);
+      return count === 0xffff ? null : count;
+    }
+  }
+  return null;
+}
+
+/** The size JSZip read from the directory: internal, but stable in 3.x. */
+function declaredSize(entry: JSZip.JSZipObject): number {
+  const size = (entry as unknown as { _data?: { uncompressedSize?: unknown } })
+    ._data?.uncompressedSize;
+  return typeof size === "number" && size > 0 ? size : 0;
+}
+
+/** Refuse at once what the directory already says is too large. */
+function refuseDeclaredSizes(zip: JSZip, limits: ArchiveLimits): void {
+  let total = 0;
+  for (const [path, entry] of Object.entries(zip.files)) {
+    const size = declaredSize(entry);
+    if (size > limits.entryBytes) {
+      throw entryTooLarge(path, limits);
+    }
+    total += size;
+  }
+  if (total > limits.totalBytes) {
+    throw totalTooLarge(limits);
+  }
+}
+
+function entryTooLarge(path: string, limits: ArchiveLimits) {
+  return tooLarge(
+    `"${path}" expands past ${limits.entryBytes} bytes, the cap for one entry`,
+  );
+}
+
+function totalTooLarge(limits: ArchiveLimits) {
+  return tooLarge(
+    `the archive expands past ${limits.totalBytes} bytes, the cap for a map`,
+  );
+}
+
+/** JSZip's entry stream: present on every entry, absent from its types. */
+interface EntryStream {
+  on(event: "data", listener: (chunk: Uint8Array) => void): EntryStream;
+  on(event: "error", listener: (err: Error) => void): EntryStream;
+  on(event: "end", listener: () => void): EntryStream;
+  pause(): EntryStream;
+  resume(): EntryStream;
+}
+
+/**
+ * A function that inflates one entry and counts what it inflates, against
+ * the entry cap and against the total of every entry it inflated before.
+ * It stops the moment a cap is passed.
+ */
+function inflater(limits: ArchiveLimits) {
+  let total = 0;
+  return (entry: JSZip.JSZipObject): Promise<Uint8Array> =>
+    new Promise((resolve, reject) => {
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      let settled = false;
+      const stream = (
+        entry as unknown as { internalStream(type: "uint8array"): EntryStream }
+      ).internalStream("uint8array");
+      const fail = (err: Error): void => {
+        if (!settled) {
+          settled = true;
+          stream.pause();
+          reject(err);
+        }
+      };
+      stream
+        .on("data", (chunk) => {
+          if (settled) {
+            return;
+          }
+          size += chunk.byteLength;
+          total += chunk.byteLength;
+          if (size > limits.entryBytes) {
+            fail(entryTooLarge(entry.name, limits));
+          } else if (total > limits.totalBytes) {
+            fail(totalTooLarge(limits));
+          } else {
+            chunks.push(chunk);
+          }
+        })
+        .on("error", (err) =>
+          fail(
+            new AtlasdrawFormatError(
+              "BAD_ZIP",
+              `"${entry.name}" could not be read: ${err.message}`,
+            ),
+          ),
+        )
+        .on("end", () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          const out = new Uint8Array(size);
+          let at = 0;
+          for (const chunk of chunks) {
+            out.set(chunk, at);
+            at += chunk.byteLength;
+          }
+          resolve(out);
+        })
+        .resume();
+    });
 }

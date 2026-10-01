@@ -279,3 +279,89 @@ describe("atlasdraw comments", () => {
     expect((await read(blob)).comments).toEqual([comment]);
   });
 });
+
+describe("atlasdraw.read — archive limits", () => {
+  const SMALL = { entries: 20, entryBytes: 4_000, totalBytes: 10_000 };
+
+  async function zipWith(extra: Record<string, string>): Promise<Uint8Array> {
+    const zip = await blobToZip(await write(synthAtlasdrawDocument()));
+    for (const [path, text] of Object.entries(extra)) {
+      zip.file(path, text);
+    }
+    return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  }
+
+  async function codeOf(bytes: Uint8Array, limits = SMALL): Promise<string> {
+    try {
+      await read(new Blob([bytes as unknown as BlobPart]), { limits });
+    } catch (err) {
+      expect(err).toBeInstanceOf(AtlasdrawFormatError);
+      return `${(err as AtlasdrawFormatError).code}: ${(err as Error).message}`;
+    }
+    return "read";
+  }
+
+  it("reads an archive inside the limits", async () => {
+    expect(await codeOf(await zipWith({}))).toBe("read");
+  });
+
+  it("refuses an archive with more entries than the cap, and names the cap", async () => {
+    const many: Record<string, string> = {};
+    for (let i = 0; i < 30; i++) {
+      many[`files/f${i}`] = "x";
+    }
+    expect(await codeOf(await zipWith(many))).toMatch(/^TOO_LARGE: .*20/);
+  });
+
+  it("refuses one entry that inflates past the entry cap", async () => {
+    const bomb = "a".repeat(50_000); // deflates to a few hundred bytes
+    expect(await codeOf(await zipWith({ "files/bomb": bomb }))).toMatch(
+      /^TOO_LARGE: .*files\/bomb/,
+    );
+  });
+
+  it("refuses entries that together inflate past the total cap", async () => {
+    const parts: Record<string, string> = {};
+    for (let i = 0; i < 4; i++) {
+      parts[`files/p${i}`] = "b".repeat(3_000);
+    }
+    expect(await codeOf(await zipWith(parts))).toMatch(/^TOO_LARGE: /);
+  });
+
+  it("counts the bytes it inflates, not the sizes the archive claims", async () => {
+    const bytes = await zipWith({ "files/liar": "c".repeat(50_000) });
+    // Rewrite the size the archive declares for "files/liar" to 10 bytes,
+    // in its local header and in the central directory.
+    const view = new DataView(bytes.buffer, bytes.byteOffset);
+    const name = (at: number, length: number) =>
+      new TextDecoder().decode(bytes.subarray(at, at + length));
+    let rewritten = 0;
+    for (let i = 0; i + 46 <= bytes.length; i++) {
+      const sig = view.getUint32(i, true);
+      if (
+        sig === 0x04034b50 &&
+        name(i + 30, view.getUint16(i + 26, true)) === "files/liar"
+      ) {
+        view.setUint32(i + 22, 10, true);
+        rewritten++;
+      } else if (
+        sig === 0x02014b50 &&
+        name(i + 46, view.getUint16(i + 28, true)) === "files/liar"
+      ) {
+        view.setUint32(i + 24, 10, true);
+        rewritten++;
+      }
+    }
+    expect(rewritten).toBe(2);
+    expect(await codeOf(bytes)).toMatch(/^TOO_LARGE: .*files\/liar/);
+  });
+
+  it("skips a data layer whose GeoJSON is not JSON, and opens the rest", async () => {
+    const bytes = await zipWith({
+      "data/layer-dl:broken.geojson": "{not json",
+    });
+    const doc = await read(new Blob([bytes as unknown as BlobPart]));
+    expect(doc.layers.has("dl:broken")).toBe(false);
+    expect(doc.layers.has(DATA_LAYER_ID)).toBe(true);
+  });
+});

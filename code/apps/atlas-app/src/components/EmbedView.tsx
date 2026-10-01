@@ -26,7 +26,6 @@ import {
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
-import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
@@ -39,6 +38,7 @@ import {
 } from "../hooks/useFeaturePopup";
 import { creditLine } from "../lib/tileLayers";
 import { fromFile, loadDocument } from "../state/documentIO";
+
 import { getAppConfig } from "../config/app-config";
 import { buildRoute, type SharedMap } from "../routes";
 import {
@@ -49,6 +49,8 @@ import mapStyles from "../styles/MapEditor.module.css";
 import styles from "../styles/EmbedView.module.css";
 
 import { FeaturePopup } from "./FeaturePopup";
+
+import type { Admitted } from "../state/documentGate";
 
 // Read-only: disable Excalidraw's own persistence actions, and its help:
 // the viewer has no editing keys to explain, so `?` opens nothing. The
@@ -145,7 +147,7 @@ export const EmbedView: React.FC<EmbedViewProps> = ({
   }
   // The document is in hand before MapCanvas mounts, so the map starts at
   // the saved camera (initialView is read once).
-  const canvas = <EmbedCanvas doc={state.doc} options={options} />;
+  const canvas = <EmbedCanvas admitted={state.admitted} options={options} />;
   if (chrome === "minimal" || !map) {
     return canvas;
   }
@@ -153,7 +155,7 @@ export const EmbedView: React.FC<EmbedViewProps> = ({
     <div className={styles.shareRoot}>
       <header className={styles.head} data-testid="viewer-head">
         <span className={styles.wordmark}>ATLASDRAW</span>
-        <h1 className={styles.title}>{state.doc.manifest.title}</h1>
+        <h1 className={styles.title}>{state.admitted.doc.manifest.title}</h1>
         <span className={styles.readOnly}>Read-only</span>
         <span className={styles.spacer} />
         <a
@@ -169,9 +171,10 @@ export const EmbedView: React.FC<EmbedViewProps> = ({
 };
 
 const EmbedCanvas: React.FC<{
-  doc: AtlasdrawDocument;
+  admitted: Admitted;
   options: EmbedOptions;
-}> = ({ doc, options }) => {
+}> = ({ admitted, options }) => {
+  const doc = admitted.doc;
   const { map, onMapReady } = useMapRef();
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
 
@@ -186,9 +189,9 @@ const EmbedCanvas: React.FC<{
     () =>
       creditLine(
         getBasemap(basemapId)?.attribution,
-        fromFile(doc).overlays ?? [],
+        fromFile(admitted).overlays ?? [],
       ),
-    [doc, basemapId],
+    [admitted, basemapId],
   );
 
   // Excalidraw's viewport follows the map camera.
@@ -211,9 +214,9 @@ const EmbedCanvas: React.FC<{
       return;
     }
     const abort = new AbortController();
-    void loadDocument(doc, api, { signal: abort.signal });
+    void loadDocument(admitted, api, { signal: abort.signal });
     return () => abort.abort();
-  }, [doc, api]);
+  }, [admitted, api]);
 
   // ?lock=1 — pin the camera. Disable every MapLibre interaction handler.
   useEffect(() => {

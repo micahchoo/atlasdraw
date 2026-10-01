@@ -14,6 +14,14 @@
       content="Draw on a map. Atlasdraw is an Excalidraw fork over MapLibre GL, with each shape anchored to a place."
     />
     <meta property="og:type" content="website" />
+    <script>
+      // The drawing's fonts load from this origin: the build emits them
+      // under the base path, and the fork's loader resolves each font path
+      // against this. Without it the loader asks a public CDN, which the
+      // content security policy refuses and an offline install cannot reach.
+      // Set here, before any module: the loader reads it at module load.
+      window.EXCALIDRAW_ASSET_PATH = "/";
+    </script>
     <style>
       *,
       *::before,

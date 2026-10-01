@@ -5,14 +5,15 @@
 //   toFile(doc)            the `.atlasdraw` content of a Document and its scene
 //   encode(doc)            those contents as bytes; the same document gives
 //                          the same bytes
-//   decode(bytes)          bytes to file contents, through the format
-//                          migrations, or an error
-//   fromFile(file)         the Document state a file describes
-//   loadDocument(file, api) open a file: a new Document, its drawing handed to
-//                          Excalidraw, its camera and basemap restored
+//   fromFile(admitted)     the Document state an admitted file describes
+//   loadDocument(admitted, api) open a file: a new Document, its drawing
+//                          handed to Excalidraw, its camera and basemap
+//                          restored
 //
-// The editor, the share view and the embed open files through loadDocument,
-// so there is one way to apply a file.
+// A file is read and checked by the document gate (documentGate.ts#admit);
+// these take only what it admitted. The editor, the share view and the
+// embed open files through loadDocument, so there is one way to apply a
+// file.
 
 import { ulid } from "ulid";
 import {
@@ -21,15 +22,10 @@ import {
   type CommentAnchor,
 } from "@atlasdraw/protocol";
 
-import {
-  CaptureUpdateAction,
-  isRefusedElementType,
-  syncInvalidIndices,
-} from "@atlasdraw/element";
+import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
 import {
   CURRENT_MANIFEST_VERSION,
   geometryKindOf,
-  read,
   write,
 } from "@atlasdraw/data";
 import { documentFrame } from "@atlasdraw/geo";
@@ -44,7 +40,6 @@ import type {
 import type { AtlasdrawDocument, Camera, Manifest } from "@atlasdraw/data";
 
 import { placeDrawing, type PlaceableElement } from "../lib/placeDrawing";
-import { validateTileTemplate } from "../lib/tileLayers";
 
 import {
   DEFAULT_CAMERA,
@@ -60,6 +55,7 @@ import {
   type TileLayerEntry,
 } from "./document";
 
+import { droppedMessage, type Admitted } from "./documentGate";
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
 
@@ -275,28 +271,11 @@ export function hasUnsavedWork(doc: Document): boolean {
 // Open
 // ---------------------------------------------------------------------------
 
-export type DecodeResult =
-  | { ok: true; file: AtlasdrawDocument }
-  | { ok: false; error: Error };
-
-/** Bytes to file contents, through the format migrations. Never throws. */
-export async function decode(bytes: Blob): Promise<DecodeResult> {
-  try {
-    return { ok: true, file: await read(bytes) };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err : new Error(String(err)),
-    };
-  }
-}
-
 /**
- * The Document state a file describes. A layer whose payload is missing (a
- * data layer with no GeoJSON, a raster with no image) is left out: a row in
- * the panel that can never draw is worse than no row.
+ * The Document state an admitted file describes. The gate left out every
+ * layer that cannot draw, so each manifest entry here has its payload.
  */
-export function fromFile(file: AtlasdrawDocument): DocumentInit {
+export function fromFile({ doc: file }: Admitted): DocumentInit {
   const overlays: OverlayEntry[] = [];
   const featureCollections: Record<string, FeatureCollection> = {};
   const images: Record<string, Blob> = {};
@@ -304,11 +283,6 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
     if (entry.kind === "raster") {
       const image = file.files.get(entry.imageKey);
       if (!image) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[atlasdraw] raster layer has no image, skipped",
-          entry.id,
-        );
         continue;
       }
       images[entry.id] = image;
@@ -327,8 +301,6 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
     }
     const fc = file.layers.get(entry.id);
     if (!fc) {
-      // eslint-disable-next-line no-console
-      console.warn("[atlasdraw] data layer has no GeoJSON, skipped", entry.id);
       continue;
     }
     featureCollections[entry.id] = fc;
@@ -339,21 +311,12 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
       visible: entry.visible,
       order: 0,
       featureCount: fc.features.length,
-      // A file written before the kind was saved: decide it now, once.
       geometryKind: entry.geometryKind ?? geometryKindOf(fc),
       style: entry.style,
       ...(entry.provenance ? { provenance: entry.provenance } : {}),
     });
   }
-  // A tile layer makes the browser call its server, so a file's layer must
-  // pass the same check as one the user adds (https, {z}/{x}/{y}).
   for (const entry of file.manifest.tileLayers ?? []) {
-    const check = validateTileTemplate(entry.url);
-    if (!check.ok) {
-      // eslint-disable-next-line no-console
-      console.warn("[atlasdraw] tile layer refused, skipped", entry.id);
-      continue;
-    }
     overlays.push({
       kind: "tile",
       id: entry.id,
@@ -361,7 +324,7 @@ export function fromFile(file: AtlasdrawDocument): DocumentInit {
       visible: entry.visible,
       order: 0,
       opacity: entry.opacity,
-      url: check.url,
+      url: entry.url,
       ...(entry.attribution ? { attribution: entry.attribution } : {}),
     });
   }
@@ -405,13 +368,6 @@ export function restoreCamera(
   return true;
 }
 
-/** What the editor tells the user when loadDocument refused elements. */
-export function refusedMessage(count: number): string {
-  return count === 1
-    ? "Removed 1 embedded web page from this map. Atlasdraw does not show them."
-    : `Removed ${count} embedded web pages from this map. Atlasdraw does not show them.`;
-}
-
 /** Rises with each loadDocument; only the latest one may open its file. */
 let loadTicket = 0;
 
@@ -435,9 +391,8 @@ async function blobToDataURL(blob: Blob): Promise<string> {
  * back, nor reach into the previous document. Raster PNGs are not given to
  * Excalidraw; they are the document's, not the drawing's.
  *
- * An `iframe` or `embeddable` element is dropped, and `onRefused` hears how
- * many: they rendered live web pages, and a file, a share link and a saved
- * map are all data from a stranger (ADR-0010). The rest of the file opens.
+ * `onDropped` hears what the gate left out or repaired, in the user's
+ * words, when it did either.
  *
  * The new Document settles on the loaded content, so a save with no edit
  * keeps the file's updatedAt. The result is null, and nothing changes, when
@@ -446,20 +401,21 @@ async function blobToDataURL(blob: Blob): Promise<string> {
  * joined meanwhile must not be replaced by an older request).
  */
 export async function loadDocument(
-  file: AtlasdrawDocument,
+  admitted: Admitted,
   api: ExcalidrawImperativeAPI,
   options: {
     signal?: AbortSignal;
     /** The map to move to the file's camera, when there is one. */
     map?: Pick<maplibregl.Map, "jumpTo"> | null;
-    /** Told how many elements were refused, when there were any. */
-    onRefused?: (count: number) => void;
+    /** Told what the gate left out or repaired, when it did. */
+    onDropped?: (message: string) => void;
   } = {},
 ): Promise<Document | null> {
   const ticket = ++loadTicket;
   const before = currentDocument();
+  const file = admitted.doc;
   // The document is bound to the Excalidraw it is opened into.
-  const doc = createDocument(fromFile(file), sceneOf(api));
+  const doc = createDocument(fromFile(admitted), sceneOf(api));
   const rasterKeys = new Set(
     file.manifest.layers.flatMap((l) =>
       l.kind === "raster" ? [l.imageKey] : [],
@@ -490,18 +446,17 @@ export async function loadDocument(
   openDocument(doc);
   restoreCamera(options.map ?? null, file.manifest.camera);
 
-  const scene = file.scene.filter((el) => !isRefusedElementType(el.type));
-  const refused = file.scene.length - scene.length;
-  if (refused > 0) {
+  const dropped = droppedMessage(admitted);
+  if (dropped) {
     // eslint-disable-next-line no-console
-    console.warn("[atlasdraw] embedded web page elements refused", refused);
-    options.onRefused?.(refused);
+    console.warn("[atlasdraw] opened with parts left out", admitted.dropped);
+    options.onDropped?.(dropped);
   }
   // syncInvalidIndices repairs missing fractional indices in older files; it
   // is a no-op when they are valid.
   api.updateScene({
     elements: syncInvalidIndices(
-      scene as unknown as Parameters<typeof syncInvalidIndices>[0],
+      file.scene as unknown as Parameters<typeof syncInvalidIndices>[0],
     ) as unknown as Parameters<typeof api.updateScene>[0]["elements"],
     captureUpdate: CaptureUpdateAction.NEVER,
   });

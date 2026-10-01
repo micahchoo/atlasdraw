@@ -26,8 +26,11 @@ may embed, without breaking the zero-config first run.
 ## Decision
 
 Emit a `Content-Security-Policy: frame-ancestors <list>` header on the served
-app HTML, at the Caddy edge (`infra/caddy/Caddyfile`, the `handle` block that
-proxies the `web` container). The value comes from a new operator env var:
+app HTML. Amended 2026-10-01 (roadmap 2, R2): the `web` container's nginx
+sends it, for `/embed/*` only; every other page gets `frame-ancestors 'self'`,
+because those pages hold write keys. Caddy passes it through. The rest of the
+policy is a `<meta>` the build writes into index.html. The value comes from a
+new operator env var:
 
 ```
 EMBED_FRAME_ANCESTORS   (default: *)

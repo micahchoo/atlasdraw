@@ -10,30 +10,30 @@
 // image file of the drawing). A message carries one or more records plus
 // framing, so each record cap leaves room under the message cap.
 
+import { LIMITS } from "./limits.js";
+
 const KiB = 1 << 10;
 const MiB = 1 << 20;
-/** The largest single record. A message holds one, its key and its framing. */
-const RECORD_BYTES = 15 * MiB;
 
 /** Size limits of a room, in bytes unless the name says otherwise. */
 export const ROOM_SIZE = {
   /** The largest WebSocket message the relay reads (MAX_MESSAGE_BYTES). */
-  messageBytes: 16 * MiB,
+  messageBytes: LIMITS.message,
   /** The largest room state the relay holds (MAX_ROOM_BYTES). */
-  roomBytes: 64 * MiB,
+  roomBytes: LIMITS.room,
   /**
    * What a client keeps free in each message it packs: the sync header, and
    * the Yjs structs and keys around its records.
    */
-  frameBytes: 64 * KiB,
+  frameBytes: LIMITS.frame,
   /** One raster layer's image. */
-  rasterBytes: RECORD_BYTES,
+  rasterBytes: LIMITS.record.raster,
   /** One data layer's FeatureCollection, as the room doc encodes it. */
-  featureBytes: RECORD_BYTES,
+  featureBytes: LIMITS.record.features,
   /** One image file of the drawing, as bytes (Excalidraw's file cap). */
-  imageBytes: 4 * MiB,
+  imageBytes: LIMITS.record.image,
   /** The same file as the data URL the room doc holds. */
-  imageDataUrlChars: Math.ceil((4 * MiB * 4) / 3) + 128,
+  imageDataUrlChars: Math.ceil((LIMITS.record.image * 4) / 3) + 128,
 } as const;
 
 /** A size table of the same shape: tests scale it down. */

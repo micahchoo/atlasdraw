@@ -14,7 +14,7 @@ import {
   currentDocument,
   openDocument,
 } from "../../state/document";
-import { USGS_IMAGERY } from "../AddTileLayerForm";
+import { USGS_IMAGERY } from "../../lib/tileLayers";
 
 import { unbindPanelScene } from "./fixtures/panelScene";
 

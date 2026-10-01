@@ -215,3 +215,66 @@ describe("fitMapToBox", () => {
     expect(opts).toEqual({ padding: 64, maxZoom: 16, duration: 600 });
   });
 });
+
+describe("a fit never throws on bounds the map refuses", () => {
+  /** A map that refuses a latitude off the globe, as MapLibre's LngLat does. */
+  const strictMap = () =>
+    ({
+      fitBounds: vi.fn((bounds: [[number, number], [number, number]]) => {
+        for (const [, lat] of bounds) {
+          if (lat > 90 || lat < -90) {
+            throw new Error(
+              "Invalid LngLat latitude value: must be between -90 and 90",
+            );
+          }
+        }
+      }),
+    } as unknown as maplibregl.Map);
+
+  it("returns false and leaves the camera for a box off the globe", () => {
+    const map = strictMap();
+    expect(() =>
+      fitMapToBox(map, {
+        west: 1_491_681,
+        south: 6_891_041,
+        east: 1_491_700,
+        north: 6_891_100,
+      }),
+    ).not.toThrow();
+    expect(
+      fitMapToBox(map, {
+        west: 0,
+        south: 2_000_000,
+        east: 1,
+        north: 2_000_001,
+      }),
+    ).toBe(false);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it("returns false for a layer whose positions are metres", () => {
+    const map = strictMap();
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: [1_491_681, 6_891_041] },
+        },
+      ],
+    };
+    expect(fitMapToLayer(map, fc)).toBe(false);
+  });
+
+  it("returns false when the map throws for any other reason", () => {
+    const map = {
+      fitBounds: vi.fn(() => {
+        throw new Error("style not loaded");
+      }),
+    } as unknown as maplibregl.Map;
+    expect(fitMapToBox(map, { west: 0, south: 0, east: 1, north: 1 })).toBe(
+      false,
+    );
+  });
+});

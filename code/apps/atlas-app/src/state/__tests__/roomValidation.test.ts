@@ -10,7 +10,12 @@ import { describe, expect, it } from "vitest";
 import { MAX_ALLOWED_FILE_BYTES } from "@atlasdraw/common";
 import { ROOM_SIZE } from "@atlasdraw/protocol";
 
-import { ROOM_LIMITS, checkFile, checkImage } from "../roomValidation";
+import {
+  ROOM_LIMITS,
+  checkFile,
+  checkImage,
+  checkOverlay,
+} from "../roomValidation";
 
 describe("room image caps", () => {
   it("let every image record fit in one relay message, with its framing", () => {
@@ -45,5 +50,33 @@ describe("room image caps", () => {
     };
     expect(checkFile("f1", under)).toBe(under);
     expect(checkFile("f1", over)).toBeNull();
+  });
+});
+
+describe("a data layer's style from a peer", () => {
+  const entry = (style: object) => ({
+    kind: "data",
+    id: "dl:roads",
+    label: "Roads",
+    visible: true,
+    order: 0,
+    featureCount: 1,
+    geometryKind: "line",
+    style,
+  });
+
+  it("passes when the map can draw it", () => {
+    const ok = entry({ strokeColor: "#333", strokeWidth: 2 });
+    expect(checkOverlay("dl:roads", ok)).toBe(ok);
+  });
+
+  it("is skipped when the map cannot draw it, or it throws while it compiles", () => {
+    expect(checkOverlay("dl:roads", entry({ strokeWidth: -5 }))).toBeNull();
+    expect(
+      checkOverlay(
+        "dl:roads",
+        entry({ filter: { property: "n", op: "contains", value: 5 } }),
+      ),
+    ).toBeNull();
   });
 });

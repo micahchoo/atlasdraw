@@ -24,10 +24,10 @@ import { currentDocument, followDocument } from "../state/document";
 import {
   liveCamera,
   loadDocument,
-  refusedMessage,
   restoreCamera,
   toFile,
 } from "../state/documentIO";
+import { admit, type Admitted } from "../state/documentGate";
 import { isRoomDocument } from "../state/room";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
@@ -203,7 +203,7 @@ export function usePersistenceWiring(
     let unsubCamera: () => void = () => {};
     persistence.getState().setOwnMapLoaded(false);
     // A copy of a shared map, or null when there is none or it did not load.
-    const sharedCopy = async (): Promise<AtlasdrawDocument | null> => {
+    const sharedCopy = async (): Promise<Admitted | null> => {
       const link = openRef.current;
       openRef.current = null;
       if (!link) {
@@ -216,22 +216,34 @@ export function usePersistenceWiring(
         );
         return null;
       }
-      return copyOfSharedMap(shared.doc);
+      // A new id and new dates; the content is what the gate admitted.
+      return {
+        ...shared.admitted,
+        doc: copyOfSharedMap(shared.admitted.doc),
+      };
     };
 
     void (async () => {
       try {
         const copy = await sharedCopy();
-        const loaded = copy ?? (await store.load());
+        const stored = copy ? null : await store.load();
+        const admitted = copy ?? (stored ? await admit(stored, "file") : null);
         if (cancelled) {
           return;
         }
+        if (admitted && !admitted.ok) {
+          documentNotify.error(
+            `Couldn't open your saved map: ${admitted.reason}`,
+          );
+          return;
+        }
+        const loaded = admitted?.doc ?? null;
         // A room joined while the autosave was read: the room stays open.
-        if (loaded && !isRoomDocument(currentDocument())) {
-          const opened = await loadDocument(loaded, excalidrawAPI, {
+        if (admitted && loaded && !isRoomDocument(currentDocument())) {
+          const opened = await loadDocument(admitted, excalidrawAPI, {
             signal: abort.signal,
             map: view.getState().map,
-            onRefused: (n) => documentNotify.error(refusedMessage(n)),
+            onDropped: (message) => documentNotify.error(message),
           });
           if (!opened) {
             return;
@@ -246,7 +258,7 @@ export function usePersistenceWiring(
               buildRoute({ kind: "editor", room: null, open: null }),
             );
             documentNotify.success?.(
-              `Opened a copy of "${copy.manifest.title}"`,
+              `Opened a copy of "${copy.doc.manifest.title}"`,
             );
           }
           // loadDocument moved the map if there was one. The autosave can load

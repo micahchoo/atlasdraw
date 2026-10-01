@@ -23,12 +23,11 @@ import {
   DEFAULT_DOCUMENT_TITLE,
   currentDocument,
 } from "./document";
+import { admit } from "./documentGate";
 import {
-  decode,
   hasUnsavedWork,
   liveCamera,
   loadDocument,
-  refusedMessage,
   type CameraSource,
 } from "./documentIO";
 import { isNewerBuildError } from "./persistence";
@@ -87,14 +86,20 @@ export async function openSavedMap(
     return false;
   }
   try {
-    const file = await store.open(id);
-    if (!file) {
+    const stored = await store.open(id);
+    if (!stored) {
       ctx.notify?.error("This map is not saved in this browser now.");
       return false;
     }
-    const opened = await loadDocument(file, ctx.api, {
+    const admitted = await admit(stored, "file");
+    if (!admitted.ok) {
+      ctx.notify?.error(`This map cannot open: ${admitted.reason}`);
+      return false;
+    }
+    const file = admitted.doc;
+    const opened = await loadDocument(admitted, ctx.api, {
       map: ctx.map,
-      onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+      onDropped: (message) => ctx.notify?.error(message),
     });
     if (!opened) {
       return false;
@@ -111,6 +116,15 @@ export async function openSavedMap(
     );
     return false;
   }
+}
+
+/** Open a new, blank map in the editor; null when the open was overtaken. */
+async function openBlank(ctx: MapActionContext) {
+  const blank = await admit(blankFile(ctx), "file");
+  if (!blank.ok) {
+    throw new Error(`a blank map was refused: ${blank.reason}`);
+  }
+  return loadDocument(blank, ctx.api, { map: ctx.map });
 }
 
 function blankFile(ctx: MapActionContext): AtlasdrawDocument {
@@ -193,7 +207,7 @@ export async function startNewMap(ctx: MapActionContext): Promise<boolean> {
   if (!(await keepOpenMap(ctx))) {
     return false;
   }
-  const opened = await loadDocument(blankFile(ctx), ctx.api, { map: ctx.map });
+  const opened = await openBlank(ctx);
   if (!opened) {
     return false;
   }
@@ -233,9 +247,7 @@ export async function deleteSavedMap(
   }
   if (id === currentDocument().id) {
     // Its changes go with it: nothing to keep, nothing to ask.
-    const opened = await loadDocument(blankFile(ctx), ctx.api, {
-      map: ctx.map,
-    });
+    const opened = await openBlank(ctx);
     if (!opened) {
       return;
     }
@@ -286,20 +298,22 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
     ctx.notify?.error("This map has no server backup.");
     return;
   }
-  const decoded = await decode(new Blob([bytes as BlobPart]));
+  const decoded = await admit(new Blob([bytes as BlobPart]), "share");
   if (!decoded.ok) {
-    ctx.notify?.error("The server backup is damaged. Your map did not change.");
+    ctx.notify?.error(
+      `The server backup cannot open: ${decoded.reason} Your map did not change.`,
+    );
     return;
   }
-  const opened = await loadDocument(decoded.file, ctx.api, {
+  const opened = await loadDocument(decoded, ctx.api, {
     map: ctx.map,
-    onRefused: (n) => ctx.notify?.error(refusedMessage(n)),
+    onDropped: (message) => ctx.notify?.error(message),
   });
   if (!opened) {
     return;
   }
   ctx.persistence.getState().markDirty();
   ctx.notify?.success(
-    `Restored "${decoded.file.manifest.title}" from the server backup`,
+    `Restored "${decoded.doc.manifest.title}" from the server backup`,
   );
 }

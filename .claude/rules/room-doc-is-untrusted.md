@@ -19,7 +19,12 @@ Y.Doc. The relay checks the token, not the content (ADR-0014). So:
   `checkElement`, `checkFile`, `checkOverlay`, `checkFeatures`,
   `checkImage`, `checkComment` and the meta checks. A new key in the room
   doc gets a check there before anything reads it. A record that fails is
-  skipped, and `rejectFrom` says so once per peer.
+  skipped, and `rejectFrom` says so once per peer. These checks are also
+  the record-level half of the document gate (`documentGate.ts`): files
+  and share links pass the same functions. A data layer's style is checked
+  with `lib/layerStyle.ts#validateLayerStyle`, the style panel's own check.
+- **The frame is refused, never guessed.** `joinRoom` refuses a room whose
+  `meta.world` fails `documentGate.ts#worldProblem` (status `damaged`).
 - **Never delete what was skipped.** A newer client may write a kind or a
   geometry this one does not know. `readContent` returns `skipped`: every
   layer entry it left out of the Document, both an entry that fails

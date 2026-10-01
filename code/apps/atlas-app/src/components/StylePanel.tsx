@@ -32,7 +32,6 @@ import type {
 } from "@atlasdraw/basemap";
 
 import { dispatch, useDocument } from "../state/document";
-import { validateLayerStyle } from "../lib/mapOverlays";
 import { useOverlayReport } from "../hooks/useMapOverlays";
 
 import styles from "../styles/StylePanel.module.css";
@@ -128,22 +127,14 @@ export function StylePanel({ layerId }: StylePanelProps) {
   const fc = useDocument((s) => s.featureCollections[layerId]);
   // MapLibre's objection to the last style the user tried to apply.
   const [rejection, setRejection] = useState<string | null>(null);
-  // A style MapLibre rejects is not committed: the document keeps the style
-  // the map draws, and the user sees why.
+  // A style MapLibre rejects is refused by the document, which keeps the
+  // style the map draws; the user sees why.
   const restyle = (patch: Partial<LayerStyle>) => {
     if (!entry) {
       return;
     }
-    const errors = validateLayerStyle(
-      { ...entry.style, ...patch },
-      entry.geometryKind,
-    );
-    if (errors.length > 0) {
-      setRejection(errors[0]);
-      return;
-    }
-    setRejection(null);
-    dispatch({ type: "restyle", id: layerId, patch });
+    const result = dispatch({ type: "restyle", id: layerId, patch });
+    setRejection(result.ok ? null : result.reason);
   };
 
   // Initial tab: derive from the existing style.expression (if any).

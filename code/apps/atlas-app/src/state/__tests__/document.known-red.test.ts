@@ -619,7 +619,7 @@ describe("share links", () => {
       client,
     );
     expect(loaded.kind).toBe("ready");
-    const doc = loaded.kind === "ready" ? loaded.doc : null;
+    const doc = loaded.kind === "ready" ? loaded.admitted.doc : null;
     const wells =
       doc?.layers instanceof Map ? doc.layers.get("dl:wells") : undefined;
     expect(wells?.features.length).toBe(2000);

@@ -12,6 +12,11 @@ export {
 } from "./geojson";
 export type { AtlasGeometryKind, GeometryKindPart } from "./geojson";
 
+// A parsed FeatureCollection made ready for the map: lng/lat, drawable,
+// one part per geometry kind.
+export { prepareForMap, CoordinateError } from "./coordinates";
+export type { CoordinateErrorCode, PreparedLayers } from "./coordinates";
+
 // KML, KMZ and GPX → GeoJSON. Output can mix geometry kinds.
 export {
   parseKML,
@@ -33,6 +38,7 @@ export {
   CameraSchema,
   LayerEntrySchema,
   PermissionsSchema,
+  SavedCommentSchema,
   ULIDSchema,
   WorldFrameSchema,
 } from "./manifest-schema";
@@ -59,9 +65,11 @@ export {
 export type { MigrationStep, StoredDocument } from "./migrations";
 
 // .atlasdraw zip read/write.
+export type { ReadOptions } from "./atlasdraw";
 export {
   write,
   read,
+  parseManifest,
   AtlasdrawFormatError,
   AtlasdrawWriteCache,
 } from "./atlasdraw";

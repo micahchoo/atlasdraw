@@ -9,12 +9,17 @@
 //                  geometry or version is wrong; its style fields are
 //                  repaired to Excalidraw's defaults
 //   checkFile      an image file of the drawing (type, data URL, size)
-//   checkOverlay   a layer entry (kind, id prefix dl:/rl:/tl:, fields)
+//   checkOverlay   a layer entry (kind, id prefix dl:/rl:/tl:, fields, and
+//                  a data layer's style, by lib/layerStyle.ts)
 //   checkFeatures  a data layer's FeatureCollection (RFC 7946 shapes,
 //                  finite coordinates, a feature cap)
 //   checkImage     a raster's bytes (type, size)
 //   checkComment   one comment row of the comments Y.Array
 //   checkTitle, checkCamera, checkWorld, checkBasemap   the meta map
+//
+// These are the record-level half of the document gate (documentGate.ts):
+// a file or a share link is checked record by record with the same
+// functions, so each rule has one copy.
 //
 // Why a zod schema and not Excalidraw's restoreElements: restoreElements
 // fills defaults for legacy files, but it passes wrong types through (x: "10"
@@ -48,6 +53,7 @@ import type { BinaryFileData } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import type { Camera, WorldFrameData } from "@atlasdraw/data";
 
+import { validateLayerStyle } from "../lib/layerStyle";
 import { validateTileTemplate } from "../lib/tileLayers";
 
 import type { OverlayEntry } from "./document";
@@ -314,6 +320,11 @@ export type RoomFile = Pick<BinaryFileData, "mimeType" | "dataURL" | "created">;
 
 const IMAGE_TYPES = new Set<string>(Object.values(IMAGE_MIME_TYPES));
 
+/** True for a type the drawing may hold as an image file. */
+export function isImageType(mimeType: string): boolean {
+  return IMAGE_TYPES.has(mimeType);
+}
+
 const fileOf = memo<RoomFile>((raw) => {
   const f = raw as Partial<RoomFile>;
   if (
@@ -395,9 +406,19 @@ const OverlaySchema = z.discriminatedUnion("kind", [
     .passthrough(),
 ]);
 
-const overlayOf = memo<OverlayEntry>((raw) =>
-  OverlaySchema.safeParse(raw).success ? (raw as OverlayEntry) : null,
-);
+const overlayOf = memo<OverlayEntry>((raw) => {
+  const parsed = OverlaySchema.safeParse(raw);
+  if (!parsed.success) {
+    return null;
+  }
+  // A style the map cannot draw stops that layer from drawing, and one that
+  // throws while it compiles stopped every layer.
+  const entry = parsed.data;
+  return entry.kind === "data" &&
+    validateLayerStyle(entry.style, entry.geometryKind).length > 0
+    ? null
+    : (raw as OverlayEntry);
+});
 
 /** The layer entry stored under `key`, or null. */
 export function checkOverlay(key: string, value: unknown): OverlayEntry | null {
@@ -452,11 +473,7 @@ function isGeometry(g: unknown, nested = 0): boolean {
 
 const featuresOf = memo<FeatureCollection>((raw) => {
   const fc = raw as Record<string, unknown>;
-  if (
-    fc.type !== "FeatureCollection" ||
-    !Array.isArray(fc.features) ||
-    fc.features.length > ROOM_LIMITS.features
-  ) {
+  if (fc.type !== "FeatureCollection" || !Array.isArray(fc.features)) {
     return null;
   }
   const ok = fc.features.every(
@@ -469,14 +486,25 @@ const featuresOf = memo<FeatureCollection>((raw) => {
   return ok ? (raw as unknown as FeatureCollection) : null;
 });
 
-/** The FeatureCollection of data layer `key`, or null. */
+/**
+ * The FeatureCollection of data layer `key`, or null. `maxFeatures` is the
+ * room's cap unless the caller holds the layer whole in memory already (a
+ * file it read).
+ */
 export function checkFeatures(
   key: string,
   value: unknown,
+  maxFeatures: number = ROOM_LIMITS.features,
 ): FeatureCollection | null {
-  return /^dl:/.test(key) && key.length <= ROOM_LIMITS.id
-    ? featuresOf(value)
-    : null;
+  const features = (value as { features?: unknown } | null)?.features;
+  if (
+    !/^dl:/.test(key) ||
+    key.length > ROOM_LIMITS.id ||
+    (Array.isArray(features) && features.length > maxFeatures)
+  ) {
+    return null;
+  }
+  return featuresOf(value);
 }
 
 // ---------------------------------------------------------------------------

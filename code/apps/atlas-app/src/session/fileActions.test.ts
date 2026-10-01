@@ -13,7 +13,8 @@ import {
   openDocument,
   useDocumentStore,
 } from "../state/document";
-import { decode, hasUnsavedWork, markSavedToFile } from "../state/documentIO";
+import { hasUnsavedWork, markSavedToFile } from "../state/documentIO";
+import { admittedOf } from "../state/__tests__/fixtures/admitted";
 import { editorScene } from "../state/scene";
 import {
   FakeCameraMap,
@@ -74,9 +75,7 @@ function editorSession(): {
 }
 
 async function fileOnDisk(): Promise<AtlasdrawDocument> {
-  const result = await decode(await write(savedDocument()));
-  expect(result.ok).toBe(true);
-  return (result as { ok: true; file: AtlasdrawDocument }).file;
+  return (await admittedOf(await write(savedDocument()))).doc;
 }
 
 const notify = () => ({ success: vi.fn(), error: vi.fn() });

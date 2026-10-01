@@ -17,22 +17,10 @@
 import React, { useId, useState } from "react";
 
 import { getAppConfig } from "../config/app-config";
-import { validateTileTemplate } from "../lib/tileLayers";
+import { USGS_IMAGERY, validateTileTemplate } from "../lib/tileLayers";
 import { dispatch } from "../state/document";
 
 import styles from "../styles/AddTileLayerForm.module.css";
-
-/**
- * USGS The National Map, imagery only. Read 2026-10-01 from the service's
- * own description (MapServer?f=pjson): 256 px tiles, levels 0–23, no token,
- * public-domain orthoimagery (NAIP for the conterminous United States).
- * ArcGIS tile URLs put the row before the column: {z}/{y}/{x}.
- */
-export const USGS_IMAGERY = {
-  label: "USGS aerial imagery (United States)",
-  url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
-  attribution: "USDA, USGS The National Map: Orthoimagery",
-} as const;
 
 /** The name a layer gets when the user gives none: its server. */
 function hostOf(url: string): string {

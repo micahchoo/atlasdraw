@@ -44,12 +44,12 @@
 	}
 
 	handle {
-		# D1: allow the map embed (/embed) to be framed cross-origin. Default
-		# `*` (zero-config first run); operators tighten to an allowlist via
-		# EMBED_FRAME_ANCESTORS in .env. CSP frame-ancestors — not
-		# X-Frame-Options, which can't express an allowlist. See
-		# docs/architecture/adr/0012-embed-frame-ancestors.md.
-		header Content-Security-Policy "frame-ancestors {$EMBED_FRAME_ANCESTORS:*}"
+		# The web container sends the page's frame-ancestors header itself,
+		# per path (/embed from EMBED_FRAME_ANCESTORS, every other page only
+		# from this origin; code/apps/atlas-app/nginx.conf). The rest of the
+		# content security policy is a <meta> in index.html. Caddy passes
+		# both through and adds no policy of its own: two policies would both
+		# apply. See docs/architecture/adr/0012-embed-frame-ancestors.md.
 		reverse_proxy web:3000
 	}
 

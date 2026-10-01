@@ -103,7 +103,10 @@ Optional:
 
 The compose file passes each of these from `.env` to its service, with the
 server's default when `.env` does not set it. `EMBED_FRAME_ANCESTORS`
-(default `*`, any site may embed your maps) goes to `caddy`.
+(default `*`, any site may embed your maps) goes to `web`, which sends it on
+`/embed` pages only. `VITE_CSP_CONNECT_SRC` (space-separated origins) lets the
+page reach tile servers besides the built-in basemaps; the page's content
+security policy refuses every other host.
 
 ## Bring it up
 

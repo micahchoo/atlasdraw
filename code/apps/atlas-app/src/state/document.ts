@@ -39,6 +39,8 @@ import type { LayerStyle } from "@atlasdraw/basemap";
 
 import type { AtlasGeometryKind, Camera } from "@atlasdraw/data";
 
+import { validateLayerStyle } from "../lib/layerStyle";
+
 import { CommentsLayer, seedComments, type Comment } from "./comments";
 import { editorScene, type SceneAccess } from "./scene";
 
@@ -243,6 +245,14 @@ export type DocumentCommand =
       images: Readonly<Record<string, Blob>>;
     };
 
+/**
+ * What a command did: applied (or changed nothing), or refused with a
+ * reason for the user. Nothing is stored when it is refused.
+ */
+export type DispatchResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
+
 /** What a document is created from: its state, and its comments. */
 export type DocumentInit = Partial<DocumentState> & {
   comments?: readonly Comment[];
@@ -258,7 +268,12 @@ export interface Document {
   /** Rises by one on every change; 0 for a document just created or loaded. */
   readonly revision: number;
   snapshot(): DocumentState;
-  dispatch(command: DocumentCommand): void;
+  /**
+   * Run a command. A command that would store a data-layer style the map
+   * cannot draw is refused (lib/layerStyle.ts#validateLayerStyle), whoever
+   * sends it.
+   */
+  dispatch(command: DocumentCommand): DispatchResult;
   subscribe(listener: () => void): () => void;
   /**
    * Record the current content key as the saved baseline without moving
@@ -347,6 +362,56 @@ function sameRecord<T>(
   return (
     keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
   );
+}
+
+/** The first reason the map cannot draw `style`, or null. */
+function styleProblemOf(
+  style: unknown,
+  kind: AtlasGeometryKind,
+): string | null {
+  return validateLayerStyle(style, kind)[0] ?? null;
+}
+
+/**
+ * Why the map cannot draw a style that `command` would store, or null. Only
+ * styles the command changes are checked: an entry a room sends again by
+ * identity was checked when it arrived.
+ */
+function styleRefusal(
+  state: DocumentState,
+  command: DocumentCommand,
+): string | null {
+  switch (command.type) {
+    case "add-data-layer":
+      return styleProblemOf(
+        command.style,
+        command.geometryKind ?? geometryKindOf(command.fc),
+      );
+    case "restyle": {
+      const entry = state.overlays.find((e) => e.id === command.id);
+      return entry?.kind === "data"
+        ? styleProblemOf(
+            { ...entry.style, ...command.patch },
+            entry.geometryKind,
+          )
+        : null;
+    }
+    case "replace-content": {
+      const held = new Map(state.overlays.map((e) => [e.id, e]));
+      for (const entry of command.overlays) {
+        if (entry.kind !== "data" || held.get(entry.id) === entry) {
+          continue;
+        }
+        const problem = styleProblemOf(entry.style, entry.geometryKind);
+        if (problem) {
+          return `The layer "${entry.label}": ${problem}`;
+        }
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
 }
 
 /**
@@ -598,13 +663,18 @@ export function createDocument(
     },
     snapshot: () => state,
     dispatch: (command) => {
+      const refusal = styleRefusal(state, command);
+      if (refusal) {
+        return { ok: false, reason: refusal };
+      }
       const next = reduce(state, command);
       if (next === state) {
-        return;
+        return { ok: true };
       }
       state = next;
       revision += 1;
       notify();
+      return { ok: true };
     },
     subscribe: (listener) => {
       listeners.add(listener);
@@ -682,8 +752,8 @@ export function followDocument(listener: (doc: Document) => void): () => void {
 }
 
 /** Run a command on the open document. */
-export function dispatch(command: DocumentCommand): void {
-  currentDocument().dispatch(command);
+export function dispatch(command: DocumentCommand): DispatchResult {
+  return currentDocument().dispatch(command);
 }
 
 /** Tell `onChange` about every change of the open document, or a swap. */

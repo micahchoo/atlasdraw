@@ -12,6 +12,9 @@ import { useCallback, useEffect, useRef } from "react";
 import { DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type { LngLatBox } from "@atlasdraw/geo";
+
+import { fitMapToBox } from "../lib/fitMapToContent";
 
 import { useDataFileImport } from "./useDataFileImport";
 
@@ -68,10 +71,21 @@ export function useSessionImport(
     });
   }, [api]);
 
+  // After an import, the camera shows what came in.
+  const onImported = useCallback(
+    (box: LngLatBox | null) => {
+      openPanel();
+      if (box) {
+        fitMapToBox(session.view.getState().map, box);
+      }
+    },
+    [openPanel, session],
+  );
+
   const { importFile } = useDataFileImport(
     rootRef,
     addDataLayer,
-    openPanel,
+    onImported,
     addRasterLayer,
   );
   useEffect(() => {

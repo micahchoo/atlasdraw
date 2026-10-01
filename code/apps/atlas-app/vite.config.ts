@@ -6,6 +6,12 @@ import zlib from "zlib";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import {
+  contentSecurityPolicy,
+  inlineScripts,
+  withPolicyMeta,
+} from "./src/lib/contentSecurityPolicy";
+
 // AboutDialog (T14) needs version + build hash. Read from atlas-app's
 // package.json and a short git rev at config time; fall back to "unknown"
 // if either fails (CI without git history, fresh clones, etc.).
@@ -215,6 +221,42 @@ const pagesFallbackPlugin = {
   },
 };
 
+// The page's content security policy, as a <meta> element in index.html,
+// made from the build's own configuration and the basemap styles it ships.
+// See src/lib/contentSecurityPolicy.ts. Build only: the dev server needs
+// inline scripts and eval for hot reload.
+const cspPlugin = (() => {
+  let env: Record<string, string | undefined> = {};
+  return {
+    name: "atlasdraw-csp",
+    apply: "build" as const,
+    configResolved(config: { env: Record<string, string | undefined> }) {
+      env = { ...config.env, ...process.env };
+    },
+    transformIndexHtml: {
+      order: "post" as const,
+      handler(html: string) {
+        const stylesDir = path.resolve(
+          __dirname,
+          "../../packages/basemap/src/styles",
+        );
+        const styles = fs
+          .readdirSync(stylesDir)
+          .filter((f) => f.endsWith(".json"))
+          .map((f) =>
+            JSON.parse(fs.readFileSync(path.join(stylesDir, f), "utf8")),
+          );
+        const policy = contentSecurityPolicy({
+          env,
+          styles,
+          scripts: inlineScripts(html),
+        });
+        return withPolicyMeta(html, policy);
+      },
+    },
+  };
+})();
+
 export default defineConfig({
   base: BASE,
   define: {
@@ -226,6 +268,7 @@ export default defineConfig({
     react(),
     pmtilesNotFoundPlugin,
     copyPublicAssetsPlugin,
+    cspPlugin,
     pagesFallbackPlugin,
     precompressPlugin,
   ] as any,

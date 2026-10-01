@@ -19,7 +19,13 @@ import { promises as fs } from "node:fs";
 
 import { Command } from "commander";
 import JSZip from "jszip";
-import { read, AtlasdrawFormatError, ManifestSchema } from "@atlasdraw/data";
+import {
+  read,
+  migrate,
+  AtlasdrawFormatError,
+  ManifestSchema,
+  type AtlasdrawDocument,
+} from "@atlasdraw/data";
 
 export interface LintStreams {
   stdout: { write: (s: string) => void };
@@ -63,6 +69,13 @@ export async function runLint(
 
   try {
     const doc = await read(blob);
+    const missing = layersWithoutPayload(doc);
+    if (missing.length > 0) {
+      for (const line of missing) {
+        streams.stderr.write(`${line}\n`);
+      }
+      return 1;
+    }
     streams.stdout.write(
       `OK: manifest version ${doc.manifest.version}, id ${doc.manifest.id}, title '${doc.manifest.title}'\n`,
     );
@@ -103,7 +116,30 @@ export async function runLint(
 }
 
 /**
- * Crack the zip open ourselves to fish out `manifest.json`, then run
+ * One line per manifest layer whose payload is missing or unreadable: the
+ * editor opens the file without that layer.
+ */
+function layersWithoutPayload(doc: AtlasdrawDocument): string[] {
+  return doc.manifest.layers.flatMap((layer) => {
+    if (layer.kind === "raster") {
+      return doc.files.has(layer.imageKey)
+        ? []
+        : [
+            `files/${layer.imageKey}: missing; raster layer ${layer.id} would not open`,
+          ];
+    }
+    return doc.layers.has(layer.id)
+      ? []
+      : [
+          `data/layer-${layer.id}.geojson: missing or not JSON; data layer ${layer.id} would not open`,
+        ];
+  });
+}
+
+/**
+ * Crack the zip open ourselves to fish out `manifest.json`, bring it to the
+ * current version with the format migrations (as `read()` does, so an old
+ * file reports its cause and not the fields a migration adds), then run
  * `ManifestSchema.safeParse()` and format each issue as
  * `manifest.json: <fieldPath>: <message>`. Returns `[]` if we can't reach a
  * structured failure (the caller falls back to the wrapped message).
@@ -126,7 +162,16 @@ async function formatManifestErrors(buf: Buffer): Promise<string[]> {
   } catch {
     return [];
   }
-  const parsed = ManifestSchema.safeParse(manifestJson);
+  let migrated: unknown;
+  try {
+    migrated = migrate({
+      manifest: manifestJson as Record<string, unknown>,
+      scene: [],
+    }).manifest;
+  } catch {
+    return [];
+  }
+  const parsed = ManifestSchema.safeParse(migrated);
   if (parsed.success) {
     return [];
   }

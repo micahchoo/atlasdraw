@@ -12,9 +12,11 @@ import {
 
 import { decodeHashDoc, loadShareDocument } from "./loadShareDocument";
 import {
+  geoRect,
   savedDocument,
   savedManifest,
 } from "./__tests__/fixtures/documentWorld";
+import { PNG_BYTES } from "./__tests__/fixtures/admitted";
 
 /** A Blob's bytes; jsdom's Blob has no arrayBuffer(). */
 function blobBytes(blob: Blob): Promise<Uint8Array> {
@@ -29,7 +31,7 @@ function blobBytes(blob: Blob): Promise<Uint8Array> {
 // A link made before v2: a v1 manifest and the drawing, as JSON.
 const sampleDoc = {
   manifest: savedManifest(),
-  scene: [{ id: "rect-1", type: "rectangle", version: 1 }],
+  scene: [geoRect("rect-1")],
 };
 const hashFor = (doc: unknown) =>
   `#v1:${LZString.compressToBase64(JSON.stringify(doc))}`;
@@ -39,7 +41,7 @@ const TOKEN = "abcdefghij_klmnop-qrs";
 
 describe("decodeHashDoc", () => {
   it("reads a v1 hash through the migrations: the manifest and the drawing", async () => {
-    const doc = await decodeHashDoc(hashFor(sampleDoc));
+    const { doc } = await decodeHashDoc(hashFor(sampleDoc));
 
     expect(doc.manifest.id).toBe(sampleDoc.manifest.id);
     expect(doc.manifest.version).toBe(2);
@@ -55,12 +57,29 @@ describe("decodeHashDoc", () => {
       features: [],
     };
     const source = savedDocument({
+      manifest: savedManifest({
+        layers: [
+          {
+            kind: "data",
+            id: "dl:wells",
+            label: "Wells",
+            visible: true,
+            featureCount: 0,
+            style: {},
+            source: "data/layer-dl:wells.geojson",
+          },
+        ] as never,
+      }),
+      scene: [
+        geoRect("rect-1"),
+        { ...geoRect("pic"), type: "image", fileId: "img-1" },
+      ] as never,
       layers: new Map([["dl:wells", fc]]),
-      files: new Map([["img-1", new Blob(["png"])]]),
+      files: new Map([["img-1", new Blob([PNG_BYTES])]]),
     });
     const bytes = await blobBytes(await write(source));
 
-    const doc = await decodeHashDoc(`#v2:${uint8ArrayToBase64Url(bytes)}`);
+    const { doc } = await decodeHashDoc(`#v2:${uint8ArrayToBase64Url(bytes)}`);
 
     expect(doc.manifest.id).toBe(source.manifest.id);
     expect(doc.layers.get("dl:wells")).toEqual(fc);
@@ -86,7 +105,9 @@ describe("loadShareDocument", () => {
   it("resolves a hash document", async () => {
     const r = await loadShareDocument({ hash: hashFor(sampleDoc).slice(1) });
     expect(r.kind).toBe("ready");
-    expect(r.kind === "ready" && r.doc.manifest.id).toBe(sampleDoc.manifest.id);
+    expect(r.kind === "ready" && r.admitted.doc.manifest.id).toBe(
+      sampleDoc.manifest.id,
+    );
   });
 
   it("returns an error for a corrupt hash", async () => {

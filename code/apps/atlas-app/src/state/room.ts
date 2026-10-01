@@ -42,7 +42,9 @@ import type { Camera } from "@atlasdraw/data";
 import { getAppConfig } from "../config/app-config";
 
 import { MAX_NAME_LENGTH, localIdentity, type Identity } from "./identity";
+import { worldProblem } from "./documentGate";
 import {
+  META_KEY,
   bindRoomDocument,
   makeEmptyRoom,
   roomIsMade,
@@ -79,7 +81,9 @@ export type RoomStatus =
   | "too-large"
   | "limited"
   | "no-space"
-  | "unavailable";
+  | "unavailable"
+  /** The room's content cannot be placed: its world frame is not valid. */
+  | "damaged";
 
 /** The status a refusal close code means; null for any other close. */
 function refusal(code: number): RoomStatus | null {
@@ -430,6 +434,14 @@ export function joinRoom(
       } else {
         makeEmptyRoom(doc, local);
       }
+    }
+    // Every element in the room is measured in its frame. A frame this
+    // client cannot use is refused, never replaced by a guess.
+    const frame = worldProblem(doc.getMap(META_KEY).get("world"));
+    if (frame) {
+      refuse("damaged", frame);
+      connection?.close();
+      return;
     }
     const bound = bindRoomDocument(doc, options.scene ?? editorScene, local);
     document = bound.document;

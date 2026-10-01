@@ -17,6 +17,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { useShareLink, type ShareLink } from "../useShareLink";
 import { decodeHashDoc } from "../../state/loadShareDocument";
+import { PNG_BYTES } from "../../state/__tests__/fixtures/admitted";
 
 import type { HttpStorageClient } from "../../services/createHttpStorageClient";
 import type { FeatureCollection } from "geojson";
@@ -31,6 +32,18 @@ const WELLS: FeatureCollection = {
     },
   ],
 };
+
+const ELEMENT = (id: string, type: string) => ({
+  id,
+  type,
+  x: 0,
+  y: 0,
+  width: 10,
+  height: 10,
+  version: 1,
+  versionNonce: 1,
+  isDeleted: false,
+});
 
 function doc(files: Map<string, Blob> = new Map()): AtlasdrawDocument {
   return {
@@ -56,7 +69,10 @@ function doc(files: Map<string, Blob> = new Map()): AtlasdrawDocument {
       ],
       permissions: { publicView: false },
     },
-    scene: [{ id: "rect-1", type: "rectangle", version: 1 }],
+    scene: [
+      ELEMENT("rect-1", "rectangle"),
+      { ...ELEMENT("img-el", "image"), fileId: "img-1", status: "saved" },
+    ],
     layers: new Map([["dl:wells", WELLS]]),
     styleRef: {},
     files,
@@ -186,14 +202,14 @@ describe("useShareLink", () => {
 
   it("a small document goes in the hash whole: data layers, files and all", async () => {
     const client = makeMockClient();
-    const small = doc(new Map([["img-1", new Blob(["png"])]]));
+    const small = doc(new Map([["img-1", new Blob([PNG_BYTES])]]));
 
     const { url, captured } = await share(small, client);
 
     expect(url?.startsWith("https://test.example/m#v2:")).toBe(true);
     expect(captured().mode).toBe("hash");
     expect(client.createMapSpy).not.toHaveBeenCalled();
-    const back = await decodeHashDoc(new URL(url!).hash);
+    const back = (await decodeHashDoc(new URL(url!).hash)).doc;
     expect(back.manifest.id).toBe(small.manifest.id);
     expect(back.layers.get("dl:wells")).toEqual(WELLS);
     expect(back.files.has("img-1")).toBe(true);

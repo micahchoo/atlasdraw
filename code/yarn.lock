@@ -165,6 +165,7 @@ __metadata:
   resolution: "@atlasdraw/data@workspace:packages/data"
   dependencies:
     "@atlasdraw/geo": "npm:0.1.0"
+    "@atlasdraw/protocol": "npm:0.0.0"
     "@tmcw/togeojson": "npm:^7.1.2"
     "@types/geojson": "npm:*"
     "@types/jsdom": "npm:^21"
