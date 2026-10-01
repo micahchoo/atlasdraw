@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useToolState (ISSUES.md Issue 6 — coverage climb).
+// Tests for useToolState.
 //
 // Subscribes to Excalidraw's onChange to derive isDrawingMode for the
 // Flow B pointer-events gate. classifyTool is used unmocked — it's a pure,

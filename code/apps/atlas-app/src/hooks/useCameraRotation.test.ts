@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// RT-3/RT-9 — tests for useCameraRotation.
+// Tests for useCameraRotation.
 //
 // Driven against `FakeMercatorMap`, which models bearing with a real rotation
 // matrix over real Web Mercator. The sign relationship — a map at bearing θ

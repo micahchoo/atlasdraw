@@ -322,10 +322,9 @@ describe("useDataFileImport — drag-and-drop", () => {
     expect(callArg.fc).toBe(POLY_FC);
   });
 
-  // Provenance — PRD §3 persona C. Before this it lived in a 4-second toast
-  // that didn't even carry the drop count, and `label` stops answering "which
-  // file?" the first time anyone renames the layer.
-  it("records the source filename on the registry entry, separately from the label", async () => {
+  // Provenance: a toast is gone in seconds, and `label` stops answering
+  // "which file?" the first time anyone renames the layer.
+  it("records the source filename on the layer entry, separately from the label", async () => {
     const { root, registerDataLayer } = renderHarness();
     fireEvent.drop(root, {
       dataTransfer: { files: [makeFile("parcels.geojson")] },
@@ -380,9 +379,10 @@ describe("useDataFileImport — drag-and-drop", () => {
     fireEvent.drop(root, { dataTransfer: { files: [makeFile("pts.csv")] } });
 
     await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
-    // Options are always passed now (the hook needs `onStats` to record how
-    // many rows the parse dropped), but `geocoder` must stay absent so the
-    // reader makes no network calls — ADR-0006/0011.
+    // Options are always passed (the hook needs `onStats` to record how many
+    // rows the parse dropped), but `geocoder` must stay absent so the reader
+    // makes no network calls (docs/architecture/adr/0006-telemetry.md,
+    // 0011-hosted-mode-telemetry.md).
     const [, csvOpts] = parseCSVMock.mock.calls[0];
     expect(csvOpts.geocoder).toBeUndefined();
     expect(photonGeocoderCtor).not.toHaveBeenCalled();
@@ -558,14 +558,11 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
     expect(registerDataLayer).not.toHaveBeenCalled();
   });
 
-  // FU-1. Raster import is PRD §4 job 1 and is not built. Until it is, a
-  // dropped GeoTIFF is a gap in this app, not a mistake by the person holding
-  // it — and telling them "unsupported file type" sends them off to convert a
-  // file that was already correct. The import itself is unchanged; only the
-  // sentence is.
-  // GeoTIFF is gone from this list — RA-4 built the importer, and `detectExt`
-  // now claims those extensions before the message is ever reached. The list is
-  // for formats that genuinely have no path yet.
+  // A format with no import path yet is a gap in this app, not a mistake by
+  // the person holding the file — and "unsupported file type" sends them off
+  // to convert a file that was already correct. The list holds only formats
+  // that genuinely have no path; `detectExt` claims every importable
+  // extension (GeoTIFF included) before this message is reached.
   it.each([["wards.gpkg", "GeoPackage"]])(
     "names the format and says 'not yet' for %s, rather than blaming the file",
     async (fileName, label) => {
@@ -692,10 +689,10 @@ describe("useDataFileImport — KML, KMZ and GPX", () => {
   });
 });
 
-// The sheet panel defaults closed (design doc §5) and a successful import is the
-// one moment both personas want it open. So `onImported` has to be exactly
-// "a layer reached the map AND the registry" — firing it on a failure would pop
-// a panel open to show the user nothing.
+// The sheet panel defaults closed, and a successful import is the one moment
+// a user wants it open. So `onImported` has to be exactly "a layer reached
+// the map AND the document" — firing it on a failure would pop a panel open
+// to show the user nothing.
 describe("useDataFileImport — onImported (success-only signal)", () => {
   it("fires after the layer is registered", async () => {
     const { root, registerDataLayer, onImported } = renderHarness();
@@ -725,7 +722,7 @@ describe("useDataFileImport — onImported (success-only signal)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// FU-1 RA-4 — the raster path.
+// The raster path.
 //
 // The decoder has its own tests against real GeoTIFF bytes; these are about the
 // wiring around it. What can go wrong here is not decoding — it is ordering

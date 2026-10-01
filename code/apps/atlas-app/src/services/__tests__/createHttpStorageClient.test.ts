@@ -210,7 +210,7 @@ describe("createHttpStorageClient", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  // Phase 4 T8 amendment — getShareBlob (HTTP-only helper).
+  // getShareBlob (HTTP-only helper).
   describe("getShareBlob", () => {
     it("returns the ArrayBuffer on 200 with octet-stream payload", async () => {
       const bytes = new Uint8Array([0xa1, 0xb2, 0xc3, 0xd4]);

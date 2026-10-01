@@ -52,8 +52,8 @@ export interface UseAtlasdrawToolResult {
 
 /**
  * Build a `ToolContext` that bridges a tool to the live MapLibre and Excalidraw
- * instances. Extracted from the React hook so it can be unit-tested with
- * mocked deps (no React renderer required) — mirrors the PinTool test pattern.
+ * instances. A plain function, outside the React hook, so it can be
+ * unit-tested with mocked deps (no React renderer required).
  *
  * @param map           - MapLibre Map instance.
  * @param excalidrawAPI - Excalidraw imperative API.
@@ -114,7 +114,7 @@ export function buildToolContext(
         excalidrawAPI.getAppState()?.activeTool?.type ?? "selection",
     },
     ui: {
-      // Phase 1 stubs — real popup UI lands Phase 2.
+      // Stubs: no tool shows a popup or a status message, so these only log.
       showPopup: (lngLat, content) => {
         // eslint-disable-next-line no-console
         console.info("[ui.showPopup]", lngLat, content);
@@ -145,7 +145,7 @@ export function useAtlasdrawTool(
 
   // ToolContext factory — re-built when (map, api) changes. The context is a
   // thin façade around the live deps; tools call its methods, never the deps
-  // directly. This keeps tools postMessage-safe (Q11) for Phase 7 worker plugins.
+  // directly.
   const ctx = useMemo<ToolContext | null>(() => {
     if (!map || !excalidrawAPI) {
       return null;

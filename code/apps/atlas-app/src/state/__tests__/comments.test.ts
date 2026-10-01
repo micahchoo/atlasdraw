@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentsLayer unit tests.
+// CommentsLayer unit tests.
 //
 // Exercises the CRDT semantics of CommentsLayer in isolation: addComment
 // appends, resolve flips, delete removes, and two layers wired together

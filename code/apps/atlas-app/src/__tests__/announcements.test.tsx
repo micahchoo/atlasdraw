@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14b — surface-level announcement tests.
+// Surface-level announcement tests.
 //
 // Asserts:
 //  - Toggling layer visibility in LayerPanel triggers an aria-live

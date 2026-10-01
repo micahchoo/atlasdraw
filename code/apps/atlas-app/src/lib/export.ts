@@ -180,9 +180,8 @@ function assertSize(
  * Excalidraw annotations on top, both rendered at `pixelRatio`.
  *
  * This is the single definition of "what an export contains". Every export
- * surface must go through it. The PDF path did not, and shipped a document
- * with the basemap and none of the user's shapes — see FU-12 in
- * `.agents/docs/SHEET_PANEL_FOLLOWUPS.md`.
+ * surface must go through it: a path that composites on its own can ship a
+ * document with the basemap and none of the user's shapes.
  */
 export async function compositeMapScene(
   map: maplibregl.Map,

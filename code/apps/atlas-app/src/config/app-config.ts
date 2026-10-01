@@ -23,10 +23,10 @@ const EnvSchema = z.object({
   VITE_REALTIME_ENABLED: Flag.default("false"),
   VITE_REALTIME_WS_URL: z.string().default(""),
   // A Photon-compatible geocoder. Empty by default: no call-home
-  // (ADR-0006, ADR-0011).
+  // (docs/architecture/adr/0006-telemetry.md, 0011-hosted-mode-telemetry.md).
   VITE_GEOCODER_ENDPOINT: z.string().default(""),
-  // Remote basemap tiles (OpenFreeMap, OSM). On by default; see ADR-0006
-  // "Update (2026-06-13)".
+  // Remote basemap tiles (OpenFreeMap, OSM). On by default; see the dated
+  // update in docs/architecture/adr/0006-telemetry.md.
   VITE_ALLOW_REMOTE_BASEMAPS: Flag.default("true"),
   // The /embed route. On by default.
   VITE_EMBED_ENABLED: Flag.default("true"),

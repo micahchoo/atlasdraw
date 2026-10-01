@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // A room: one shared map, held in one Y.Doc that a relay keeps and syncs
-// (ADR-0014). The room doc holds the drawing (roomScene.ts), the layers,
-// title and frame (roomDocument.ts) and the comments (comments.ts).
+// (docs/architecture/adr/0014-collab-trust-model.md). The room doc holds the
+// drawing (roomScene.ts), the layers, title and frame (roomDocument.ts) and
+// the comments (comments.ts).
 // Presence (who is here, their cursor and camera) is Yjs awareness.
 //
 //   const room = joinRoom(link, relayTransport(url));

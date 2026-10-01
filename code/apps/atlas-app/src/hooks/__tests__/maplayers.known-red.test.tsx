@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Tests for the map-overlay defects in the 2026-10 architecture audit
-// (audit-04, map side). Each states the correct behaviour; they were written
-// as known-red tests and pass since the map overlays got one writer.
+// Tests for map-overlay hazards. Each case states the correct behaviour. They
+// pass because the map overlays have one writer (lib/mapOverlays.ts).
 //
 // The map is FakeMapLibre (lib/__tests__/fixtures/fakeMapLibre.ts): it keeps
 // MapLibre 4.7.1's style state and fires "error" events where MapLibre does.
@@ -315,7 +314,7 @@ describe("a style MapLibre rejects is not committed", () => {
   }
 
   /**
-   * A reload: the persisted registry state reconciled onto a fresh map. The
+   * A reload: the persisted document's layers reconciled onto a fresh map. The
    * errors MapLibre fired ride along so a failure names the rejection.
    */
   function reload(id: string): { draws: boolean; errors: string[] } {

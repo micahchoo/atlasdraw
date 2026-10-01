@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useBasemapStyle (ISSUES.md Issue 6 — coverage climb).
+// Tests for useBasemapStyle.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
@@ -50,7 +50,7 @@ type MockMap = maplibregl.Map & {
 function makeMockMap(): MockMap {
   // Real MapLibre event semantics, minus the once-ness: `on` accumulates and
   // only `off` removes. That is what lets these tests see a leaked listener at
-  // all — a stub with `once` semantics would hide the bug being fixed.
+  // all — a stub with `once` semantics would hide a leaked listener.
   const handlers = new Map<string, Array<() => void>>();
   const map = {
     setStyle: vi.fn(),

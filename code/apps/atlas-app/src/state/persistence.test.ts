@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 3 Wave 2 Task 8 — persistence.ts tests.
+// persistence.ts tests.
 //
 // fake-indexeddb/auto polyfills the global IDB factory with an in-memory
 // implementation so the `idb` package can run unmodified under jsdom.
@@ -116,7 +116,7 @@ describe("createPersistenceStore — IDB", () => {
 });
 
 // ---------------------------------------------------------------------------
-// T13 — remoteSave callback option
+// remoteSave callback option
 // ---------------------------------------------------------------------------
 
 describe("createPersistenceStore — protecting the stored copy", () => {

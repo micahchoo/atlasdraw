@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// FU-13 — the export legend describes the exported view, not the document.
+// The export legend describes the exported view, not the document.
 //
-// The PDF legend used to be `registry.entries.map(...)`: every layer in the
-// document, including ones the user had switched off with the eye toggle and
-// ones whose features sit nowhere near the exported page. Print a detail of
-// one neighbourhood and the key described the whole project — the one thing a
-// printed legend exists to prevent.
+// A legend of every layer in the document includes layers the user switched
+// off with the eye toggle and layers whose features sit nowhere near the
+// exported page. Print a detail of one neighbourhood and the key describes
+// the whole project — the one thing a printed legend exists to prevent.
 //
 // Small units so each is testable on its own:
 //   renderedDataLayerIds  — which MapLibre layers actually painted something
@@ -192,9 +191,9 @@ export function buildLegendEntries(
 }
 
 /**
- * The legend for an export of the live view: the registry, less what is
- * hidden or not on the page. Read at export time, like the image, so both
- * answer the same viewport (FU-13).
+ * The legend for an export of the live view: the document's layers, less what
+ * is hidden or not on the page. Read at export time, like the image, so both
+ * answer the same viewport.
  */
 export function exportLegendEntries(
   entries: readonly LegendSource[],

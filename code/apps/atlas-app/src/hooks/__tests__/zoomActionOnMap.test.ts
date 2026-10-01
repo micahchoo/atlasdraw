@@ -1,5 +1,6 @@
-// W4b: Excalidraw's "reset zoom" (Ctrl+0) is its 100%, which in world
-// coordinates is map zoom 22 (ADR-0015) — not a view anyone wants. On the map
+// Excalidraw's "reset zoom" (Ctrl+0) is its 100%, which in world coordinates
+// is map zoom 22 (docs/architecture/adr/0015-world-coordinates-gate.md) — not
+// a view anyone wants. On the map
 // it frames everything drawn, as zoom-to-fit does.
 
 import { describe, expect, it, vi } from "vitest";

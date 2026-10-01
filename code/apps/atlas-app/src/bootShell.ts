@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Boot shell — the markup index.html paints before any JavaScript runs.
 //
-// Ranks 6 and 38 of docs/performance/boot-payload-audit.md. index.html used to
-// ship an empty <div id="root">, so the screen stayed blank for the whole time
-// the entry chunk spent downloading, parsing and mounting. The shell is a
+// An empty <div id="root"> leaves the screen blank for the whole time the
+// entry chunk spends downloading, parsing and mounting (ranks 6 and 38 of
+// docs/performance/boot-payload-audit.md). The shell is a
 // static silhouette of the page's frame — the editor's collar, or the
 // viewer's head bar — with no content it could get wrong.
 //

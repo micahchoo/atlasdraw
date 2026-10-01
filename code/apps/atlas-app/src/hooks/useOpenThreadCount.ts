@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Step 5 — the rail's comment badge count.
+// The comment badge count (CommentModeButton, and the Threads section's
+// disclosure).
 //
-// Comments became a mode, so their surface is no longer always on screen.
+// Comments are a mode, so their surface is not always on screen.
 // The badge is what stops that from making them invisible. It counts OPEN
 // threads — `resolved === false` — read straight off the live CommentsLayer
 // snapshot, the same array CommentsPanel and CommentAnchorsOverlay render
 // from. There is deliberately no parallel counter to drift.
 //
-// Naming: the design doc says "unread". The v1 wire format
+// Naming: "open", not "unread". The comment schema
 // (protocol/comment-schema.ts CommentSchemaV1) carries no per-user read
-// receipt, so "unread" is not derivable without changing what goes over the
-// realtime channel — which this step does not do. "Open" is the honest word
-// for what we can actually count, and it is also the number that matters for
-// Marcus's review pass: threads still needing an answer.
+// receipt, so "unread" cannot be derived without changing what goes over the
+// realtime channel. "Open" is the honest word for what we can count, and it
+// is also the number that matters for a review pass: threads still needing
+// an answer.
 
 import { useEffect, useState } from "react";
 

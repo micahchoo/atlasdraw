@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Geo regressions from audit 01 (2026-10-01): undo after a pan, a pin's
-// anchor, a pan that rewrote the drawing. Each came from the screen-pixel
-// design, where the camera rewrote every element; world coordinates
-// (ADR-0015) fix them by construction, and these cases keep it so.
+// Geo hazards: undo after a pan, a pin's anchor, a pan that rewrites the
+// drawing. Each is a defect of a screen-pixel design, where the camera
+// rewrites every element; world coordinates
+// (docs/architecture/adr/0015-world-coordinates-gate.md) prevent them by
+// construction, and these cases keep it so.
 //
 // What runs here is real: the vendored Excalidraw editor (its store, its
 // history, its keyboard undo), the real `useCameraBridge` and

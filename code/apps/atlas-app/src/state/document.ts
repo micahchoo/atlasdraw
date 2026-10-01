@@ -11,7 +11,8 @@
 //   title      — the sheet name
 //   basemap    — the registry id of the map under the drawing
 //   camera     — the camera the document was saved with
-//   world      — the world frame: what a scene coordinate means (ADR-0015),
+//   world      — the world frame: what a scene coordinate means
+//                (docs/architecture/adr/0015-world-coordinates-gate.md),
 //                fixed when the document is created
 //   overlays   — the data, raster and tile layers, in order; each kind is
 //                its own z-order stack
@@ -141,7 +142,7 @@ export type RasterLayerEntry = {
 };
 
 /**
- * W9d — an XYZ tile layer: map tiles fetched from `url`, a template with
+ * An XYZ tile layer: map tiles fetched from `url`, a template with
  * {z}, {x} and {y} (lib/tileLayers validates it). It has no payload in the
  * document; the tiles stay on their server. `attribution` is the credit the
  * provider asks for. The id is `tl:<uuid>`.

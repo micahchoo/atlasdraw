@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// KNOWN-RED tests for the document model (W1, architecture audit 03).
-//
-// Each `it.fails` states the CORRECT behaviour and fails on today's code. The
-// W3 document owner flips each one to `it` when the fix lands.
+// Tests for document-model hazards. Each case states the correct behaviour.
 //
 // Everything here runs through the production composition: the real
 // usePersistenceWiring (load -> loadDocument -> autosave/forceSave through
-// toFile), the real PersistenceStore on fake-indexeddb, the real
-// layer registry, useMapOverlays and useExcalidrawChangeHandler. Only
+// toFile), the real PersistenceStore on fake-indexeddb, the real document
+// store, useSceneBinding, useMapOverlays and useExcalidrawChangeHandler. Only
 // Excalidraw and MapLibre are stand-ins (fixtures/documentWorld.ts).
 //
 // If a fix moves a responsibility to a hook this file does not mount (for
@@ -169,7 +166,7 @@ let persistence = createPersistenceState();
 
 /**
  * Mount the editor's document wiring the way MapEditor does: persistence,
- * the registry <-> scene bridge, and the onChange handler that marks dirty.
+ * the document <-> scene binding, and the onChange handler that marks dirty.
  */
 function mountEditor(
   api: ExcalidrawImperativeAPI,
@@ -205,7 +202,7 @@ async function waitForHydrate(api: ExcalidrawImperativeAPI): Promise<void> {
   await waitFor(() =>
     expect(api.getSceneElements().map((e) => e.id)).toContain("rect-1"),
   );
-  // hydrate() clears the UI dirty flag in a microtask; let it run.
+  // Loading clears the UI dirty flag in a microtask; let it run.
   await act(async () => {
     await Promise.resolve();
   });

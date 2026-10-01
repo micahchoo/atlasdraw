@@ -2,11 +2,10 @@
  * useMapWheelRouter — route wheel events to the map regardless of which layer
  * is on top.
  *
- * Background (atlasdraw-5afc): in drawing mode (selection/rectangle/etc.) the
- * Excalidraw layer is `pointer-events: auto` to capture pointer drags. That
- * also captures wheel events — MapLibre's scrollZoom listener never sees them
- * and the user's scroll-to-zoom appears to do nothing, leaving annotations
- * apparently detached from their geographic anchor on zoom attempts.
+ * Background: in drawing mode (selection/rectangle/etc.) the Excalidraw layer
+ * is `pointer-events: auto` to capture pointer drags. That also captures wheel
+ * events — MapLibre's scrollZoom listener never sees them and the user's
+ * scroll-to-zoom does nothing.
  *
  * In atlasdraw, wheel = map zoom is the universal semantic: the map owns the
  * camera and Excalidraw's viewport follows it (useCameraBridge). This hook
@@ -25,13 +24,12 @@
  *     zoom clamps to [0.1, 30] and would jump the map many zoom levels.
  *   - shift+wheel: intercepted as map zoom (Excalidraw uses it for horizontal
  *     pan internally, but in atlasdraw the page doesn't scroll horizontally
- *     and shift-wheel-zoom is harmless if surprising — revisit in Phase 4 if
- *     a stylus/keyboard combo proves disruptive).
+ *     and shift-wheel-zoom is harmless if surprising).
  *
  * Touch pinch-zoom goes through pointer events, not wheel. Excalidraw's own
  * pinch handler takes it and the camera bridge moves the map; with
- * `onZoomAction` set the fork leaves that zoom unclamped (W4b,
- * `e2e/pinch-zoom-touch.spec.ts`).
+ * `onZoomAction` set the fork leaves that zoom unclamped
+ * (`e2e/pinch-zoom-touch.spec.ts`).
  */
 
 import { useEffect } from "react";

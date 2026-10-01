@@ -8,8 +8,8 @@
 // the view, and a north arrow.
 //
 // Pure: takes an encoded image, the view's size and ground resolution, and a
-// flat `LayerLegendEntry[]`. It never reaches into MapLibre, the layer
-// registry or React state. The caller renders the image at the pixel ratio
+// flat `LayerLegendEntry[]`. It never reaches into MapLibre, the document or
+// React state. The caller renders the image at the pixel ratio
 // `printPixelRatio` gives for the same page and legend, so the layout that
 // sized the image and the layout that places it are one function.
 //
@@ -75,7 +75,7 @@ export interface PrintOptions extends PageSpec {
    * basemap, data layers AND Excalidraw annotations — rendered at
    * `printPixelRatio(page, view, layers.length)`. Produced by
    * `exportCompositeDataURL` in lib/export.ts, the single definition of what
-   * an export contains (FU-12).
+   * an export contains.
    */
   mapImageDataUrl: string;
   view: PrintView;
@@ -423,7 +423,7 @@ function fitText(
 
 /**
  * Decode a `data:image/…;base64,…` URL. Throws on anything else: a PDF
- * without its map is a failed export, not a smaller success (FU-12).
+ * without its map is a failed export, not a smaller success.
  */
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const idx = dataUrl.indexOf("base64,");
@@ -475,10 +475,10 @@ const NORTH_ARROW_SIZE = 18;
  * Split out from the drawing so the geometry — the part that can be silently,
  * plausibly wrong by a sign — is testable without a `PDFPage`.
  *
- * RT-4. The arrow turns with the camera, because the exported raster already
- * shows a turned map: north on the page is wherever the camera left it, not up.
- * Before this the arrow always pointed up, which made every rotated export
- * wrong about the one thing a north arrow is for.
+ * The arrow turns with the camera, because the exported raster already shows
+ * a turned map: north on the page is wherever the camera left it, not up. An
+ * arrow that always points up is wrong on every rotated export, about the one
+ * thing a north arrow is for.
  *
  * **The sign, derived rather than guessed.** Let `r` be the screen rotation of
  * geographic east, y-down — what `cameraRotationDeg` carries. East on screen is `(cos r, sin r)`, so north,

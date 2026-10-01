@@ -266,7 +266,7 @@ describe("exportPDF — scale", () => {
 });
 
 // ---------------------------------------------------------------------------
-// RT-4 — the north arrow turns with the camera.
+// The north arrow turns with the camera.
 //
 // `cameraRotationDeg` is the screen rotation of geographic EAST, y-down, which
 // (`-map.getBearing()`). The arrow draws NORTH, on a y-up
