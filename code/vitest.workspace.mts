@@ -4,6 +4,9 @@
 // every Blob/zip round-trip (jsdom Blob lacks .text()) and maplibre import
 // (engine polyfills swap global URL for node's). The engine packages keep
 // the root config via `extends`.
+//
+// bench/ is NOT here: it is timing work, not a test, and runs on its own
+// (`yarn workspace @atlasdraw/bench bench`, then `ci-gate`).
 export default [
   {
     extends: "./vitest.config.mts",
@@ -27,5 +30,4 @@ export default [
   "packages/tools/vitest.config.ts",
   "packages/basemap/vitest.config.ts",
   "packages/cli/vitest.config.ts",
-  "bench/vitest.config.ts",
 ];

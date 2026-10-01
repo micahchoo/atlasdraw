@@ -45,3 +45,6 @@ dev-dist
 html
 meta*.json
 .claude
+
+# Bench runs; the committed baseline is results/phase-1-baseline.json
+bench/results/current/

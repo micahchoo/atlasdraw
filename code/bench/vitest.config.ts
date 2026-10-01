@@ -6,7 +6,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["scenarios/**/*.test.ts"],
+    include: ["scenarios/**/*.test.ts", "gate.test.ts"],
     testTimeout: 60_000,
     hookTimeout: 60_000,
   },

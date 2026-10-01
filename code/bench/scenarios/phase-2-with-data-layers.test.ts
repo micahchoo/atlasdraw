@@ -151,7 +151,13 @@ describe("phase-2 with data layers", () => {
     expect(scenarios.length).toBeGreaterThan(0);
 
     const here = dirname(fileURLToPath(import.meta.url));
-    const out = resolve(here, "..", "results", "phase-2-with-data-layers.json");
+    const out = resolve(
+      here,
+      "..",
+      "results",
+      "current",
+      "phase-2-with-data-layers.json",
+    );
     await mkdir(dirname(out), { recursive: true });
 
     const payload = {

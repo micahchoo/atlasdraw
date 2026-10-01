@@ -115,8 +115,9 @@ describe("phase-1 baseline", () => {
     expect(scenarios.length).toBeGreaterThan(0);
 
     const here = dirname(fileURLToPath(import.meta.url));
-    // scenarios/ -> bench/ root, then results/phase-1-baseline.json
-    const out = resolve(here, "..", "results", "phase-1-baseline.json");
+    // A run writes results/current/ (gitignored). It never touches the
+    // committed baseline; see rebaseline.ts.
+    const out = resolve(here, "..", "results", "current", "phase-1.json");
     await mkdir(dirname(out), { recursive: true });
 
     const payload = {

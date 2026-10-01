@@ -5,9 +5,10 @@
   "type": "module",
   "description": "Phase 2 benchmark harness — pure parse/validate timings, no MapLibre runtime.",
   "scripts": {
-    "bench": "vitest run --config ./vitest.config.ts",
+    "bench": "yarn run -T vitest run --config ./vitest.config.ts",
     "ci-gate": "tsx ci-gate.ts",
-    "test:typecheck": "tsc --noEmit"
+    "test:typecheck": "tsc --noEmit",
+    "rebaseline": "tsx rebaseline.ts"
   },
   "dependencies": {
     "@atlasdraw/data": "*",
