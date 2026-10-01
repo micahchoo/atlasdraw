@@ -29,6 +29,8 @@ import type { LayerStyle } from "@atlasdraw/basemap";
 
 import type { Camera } from "@atlasdraw/data";
 
+import { editorScene, type SceneAccess } from "./scene";
+
 import type { FeatureCollection } from "geojson";
 
 export type { LayerStyle };
@@ -172,6 +174,8 @@ export type DocumentCommand =
 export interface Document {
   /** Fixed at creation. */
   readonly id: string;
+  /** The drawing this document is saved with. */
+  readonly scene: SceneAccess;
   /** Rises by one on every change; 0 for a document just created or loaded. */
   readonly revision: number;
   snapshot(): DocumentState;
@@ -356,7 +360,10 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
   }
 }
 
-export function createDocument(initial: Partial<DocumentState> = {}): Document {
+export function createDocument(
+  initial: Partial<DocumentState> = {},
+  scene: SceneAccess = editorScene,
+): Document {
   const createdAt = initial.createdAt ?? new Date().toISOString();
   let state: DocumentState = {
     id: initial.id ?? ulid(),
@@ -380,6 +387,7 @@ export function createDocument(initial: Partial<DocumentState> = {}): Document {
 
   return {
     id: state.id,
+    scene,
     get revision() {
       return revision;
     },

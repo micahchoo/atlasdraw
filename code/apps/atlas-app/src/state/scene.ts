@@ -21,6 +21,34 @@ import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import { annotationRows, type AnnotationRow } from "./annotations";
 import { sceneSignature } from "./sceneSignature";
 
+/**
+ * What the document reads from the drawing when it saves: the live elements
+ * and the files (pasted images) Excalidraw holds.
+ */
+export interface SceneAccess {
+  elements(): readonly ExcalidrawElement[];
+  files(): Readonly<Record<string, { dataURL?: string; mimeType?: string }>>;
+}
+
+/** The scene of one Excalidraw instance. */
+export function sceneOf(
+  api: Pick<ExcalidrawImperativeAPI, "getSceneElements" | "getFiles">,
+): SceneAccess {
+  return {
+    elements: () => api.getSceneElements(),
+    files: () => api.getFiles?.() ?? {},
+  };
+}
+
+/**
+ * The scene of whatever Excalidraw is bound to the scene store: the editor's
+ * drawing. Empty until Excalidraw mounts.
+ */
+export const editorScene: SceneAccess = {
+  elements: () => useSceneStore.getState().api?.getSceneElements() ?? [],
+  files: () => useSceneStore.getState().api?.getFiles?.() ?? {},
+};
+
 export type SceneState = {
   /** null until Excalidraw mounts. */
   api: ExcalidrawImperativeAPI | null;
