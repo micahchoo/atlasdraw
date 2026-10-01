@@ -79,6 +79,7 @@ import { useCollabDocumentTitle } from "../hooks/useCollabDocumentTitle";
 import { useDataFileImport } from "../hooks/useDataFileImport";
 import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
+import { useServerBackup } from "../hooks/useServerBackup";
 import { CollabState } from "../state/collab";
 
 import { LayersIcon } from "../lib/icons";
@@ -122,6 +123,7 @@ import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { ShareDialog } from "./ShareDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MyMapsDialog } from "./MyMapsDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
@@ -852,6 +854,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   // Quick-actions palette — Cmd+K / Ctrl+K.
   const [showQuickActions, setShowQuickActions] = useState(false);
+  // My maps — the maps saved in this browser.
+  const [showMyMaps, setShowMyMaps] = useState(false);
   // Onboarding — shown on first visit only.
   const onboarding = useOnboarding();
 
@@ -888,6 +892,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Selector form so the component re-renders ONLY on isDirty flips, not on
   // store/dispose pointer changes.
   const isDirty = usePersistenceStore((s) => s.isDirty);
+  const serverBackup = useServerBackup(excalidrawAPI, documentNotify);
 
   // T13 — data-file drag-and-drop import (extracted to useDataFileImport
   // hook). ISSUES.md Direction 1: also exposes importFile() for the
@@ -1266,6 +1271,20 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   Save
                 </MainMenu.Item>
                 <MainMenu.Item
+                  onSelect={() => setShowMyMaps(true)}
+                  data-testid="main-menu-my-maps"
+                >
+                  My maps…
+                </MainMenu.Item>
+                {serverBackup.available && (
+                  <MainMenu.Item
+                    onSelect={serverBackup.request}
+                    data-testid="main-menu-restore-backup"
+                  >
+                    Restore from server backup
+                  </MainMenu.Item>
+                )}
+                <MainMenu.Item
                   onSelect={handleImportFile}
                   data-testid="main-menu-import"
                 >
@@ -1528,6 +1547,15 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             />
           )}
 
+          {showMyMaps && excalidrawAPI && (
+            <MyMapsDialog
+              excalidrawAPI={excalidrawAPI}
+              notify={documentNotify}
+              onClose={() => setShowMyMaps(false)}
+            />
+          )}
+          {serverBackup.dialog}
+
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
           (the share reads the drawing). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
@@ -1655,6 +1683,13 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   keywords: ["disk", "file", "atlasdraw"],
                   onSelect: () =>
                     void saveAtlasDocument(excalidrawAPI, documentNotify),
+                },
+                {
+                  id: "my-maps",
+                  label: "My maps",
+                  category: "File",
+                  keywords: ["list", "recent", "new", "delete", "documents"],
+                  onSelect: () => setShowMyMaps(true),
                 },
                 {
                   id: "share",
