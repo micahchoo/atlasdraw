@@ -39,6 +39,13 @@ export type ExportOpts = {
   backgroundColor?: string;
   /** Test seam. Default `renderMapOffscreen`. */
   renderMap?: MapRenderer;
+  /**
+   * The credit line (basemap and tile layers), printed in the bottom-right
+   * corner over a pale box. A PNG leaves the app, so the credit the map's
+   * providers ask for must travel inside it. The PDF prints the credit as
+   * page text instead, so its composite passes none.
+   */
+  credit?: string;
 };
 
 export type CompositeImageOpts = ExportOpts & {
@@ -231,7 +238,40 @@ export async function compositeMapScene(
   assertSize("drawing layer", drawings, size);
   ctx.drawImage(drawings, 0, 0);
 
+  // Layer 3 (optional): the credit line.
+  const credit = opts.credit?.trim();
+  if (credit) {
+    drawCredit(ctx, credit, size, pixelRatio);
+  }
+
   return offscreen;
+}
+
+/** Credit text: 11 CSS px, like the status bar, at the export's ratio. */
+const CREDIT_FONT_PX = 11;
+const CREDIT_PAD_PX = 4;
+
+function drawCredit(
+  ctx: OffscreenCanvasRenderingContext2D,
+  text: string,
+  size: { width: number; height: number },
+  pixelRatio: number,
+): void {
+  const font = CREDIT_FONT_PX * pixelRatio;
+  const pad = CREDIT_PAD_PX * pixelRatio;
+  ctx.font = `${font}px system-ui, sans-serif`;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  const width = Math.min(ctx.measureText(text).width, size.width - 2 * pad);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+  ctx.fillRect(
+    size.width - width - 2 * pad,
+    size.height - font - 2 * pad,
+    width + 2 * pad,
+    font + 2 * pad,
+  );
+  ctx.fillStyle = "#212529";
+  ctx.fillText(text, size.width - pad, size.height - pad, width);
 }
 
 /** Composite PNG export. */
