@@ -334,6 +334,7 @@ function manifest(layers: Manifest["layers"]): Manifest {
     updatedAt: "2026-10-01T00:00:00.000Z",
     basemap: { type: "registry", id: "default" },
     camera: { center: [77.5, 17.9], zoom: 10, bearing: 0, pitch: 0 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers,
     permissions: { publicView: false },
   };
@@ -445,7 +446,10 @@ describe("annotation rows act on the scene", () => {
       }),
     );
     expect(
-      annotationRows(useSceneStore.getState().elements).map((r) => r.id),
+      annotationRows(
+        useSceneStore.getState().elements,
+        currentDocument().snapshot().world,
+      ).map((r) => r.id),
     ).toEqual(["el-1"]);
 
     render(<LayerPanel />);

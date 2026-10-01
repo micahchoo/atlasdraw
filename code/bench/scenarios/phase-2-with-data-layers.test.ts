@@ -13,7 +13,6 @@ import { platform, version as nodeVersion } from "node:process";
 import { describe, expect, it } from "vitest";
 
 import { parse, requireHomogeneousGeometry } from "@atlasdraw/data";
-import { isValidZRef } from "@atlasdraw/geo";
 
 import { synthPointFC } from "../fixtures/synth.js";
 
@@ -75,15 +74,6 @@ function fcBlob(n: number): Blob {
   return new Blob([JSON.stringify(fc)], { type: "application/geo+json" });
 }
 
-// 5k annotation objects with valid fractional zRef values in [0, 24).
-function annotationsBlob(n: number): Blob {
-  const items = Array.from({ length: n }, (_, i) => ({
-    id: i,
-    zRef: (i % 25) + (i % 10) * 0.1,
-  }));
-  return new Blob([JSON.stringify(items)], { type: "application/json" });
-}
-
 describe("phase-2 with data layers", () => {
   it("captures phase-2 scenario timings into bench/results", async () => {
     const scenarios: ScenarioResult[] = [];
@@ -130,20 +120,6 @@ describe("phase-2 with data layers", () => {
         async (blob) => {
           const fc = await parse(blob);
           requireHomogeneousGeometry(fc);
-        },
-      ),
-    );
-
-    scenarios.push(
-      await timeIt(
-        "validate 5k geo-anchored annotations",
-        () => annotationsBlob(5_000),
-        async (blob) => {
-          const text = await blob.text();
-          const items = JSON.parse(text) as Array<{ id: number; zRef: number }>;
-          for (const item of items) {
-            isValidZRef(item.zRef);
-          }
         },
       ),
     );

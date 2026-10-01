@@ -56,12 +56,13 @@ import { useBasemapStore } from "../state/basemap";
 import { useMapInstanceStore } from "../state/mapInstance";
 import { currentDocument, dispatch, useDocument } from "../state/document";
 import { useSelectedLayerStore } from "../state/selectedLayer";
-import { useAnnotationRows, useSceneStore } from "../state/scene";
+import { useSceneStore } from "../state/scene";
 import {
   deleteAnnotation,
   moveAnnotation,
   renameAnnotation,
   setAnnotationVisible,
+  useAnnotationRows,
 } from "../state/annotations";
 import { fitMapToBox, fitMapToLayer } from "../lib/fitMapToContent";
 

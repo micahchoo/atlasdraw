@@ -1,53 +1,41 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// RT-3 — the seam between the one place that WRITES a bearing and the one
-// place that READS a rotation.
 //
-// Rotation ships with a deliberate asymmetry. Every consumer — the bbox
-// anchors (RT-2), the printed north arrow (RT-4), the compass needle —
-// *measures* the camera's rotation off the live projection, so none of them
-// depends on MapLibre's bearing sign convention. But a control has to turn the
-// camera, and `map.setBearing` is the only setter there is, so
-// `setCameraRotation` (`@atlasdraw/basemap`) converts once: `bearing =
-// -degrees`. That single line is the whole trust surface.
+// The bearing sign, checked against a real Mercator projection.
 //
-// **Why this file exists and the spy tests in
-// `packages/basemap/src/__tests__/cameraRotation.test.ts` are not enough.**
-// A `setBearing` spy can only pin *that* the conversion negates. If MapLibre's
-// bearing ran the same sign as the east-angle, the spy assertion stays green
-// and the map turns backwards under the drag. Asking whether negating is
-// *right* needs a map you can set a bearing on and then measure — which is
-// `FakeMercatorMap`, and which lives in the app's test tree rather than either
-// package's, so the round trip is asserted here where both halves resolve.
-//
-// (An earlier attempt at this lived in the basemap suite and asserted
-// `-(-137) === 137` — true under every possible convention, including a wrong
-// one. Chief Opus caught it reviewing `40dc175`. This is the test it was
-// pretending to be.)
-//
-// **What this still cannot settle, and it is the honest limit.**
-// `FakeMercatorMap` documents its own bearing as "the same convention as
-// MapLibre's `getBearing()`" (`geoOpFuzz.harness.ts:49-53`) — a reading of the
-// docs, not a verified fact, since nobody has run this app. So the round trip
-// proves the compass and the anchors agree with **each other**. If both are
-// consistently backwards relative to real MapLibre, this stays green and the
-// map turns the wrong way from the drag. That failure is loud on the first
-// frame, which is why it was judged acceptable to confine rather than remove —
-// but only opening the editor settles it.
+// One place writes a rotation (`setCameraRotation`, `bearing = -degrees`) and
+// one reads it (`useCameraRotation`, `degrees = -bearing`). The drawing layer
+// is turned by that angle, so if the sign were wrong the drawing would turn
+// against the map. A `setBearing` spy can only show that the conversion
+// negates; this file measures the screen angle of geographic east on
+// `FakeMercatorMap`, whose bearing follows MapLibre's documented convention,
+// and asks whether negating is right.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
 import { describe, it, expect } from "vitest";
 
 import { setCameraRotation } from "@atlasdraw/basemap";
-import { cameraRotation } from "@atlasdraw/geo";
 
-import { FakeMercatorMap } from "./geoOpFuzz.harness";
+import { FakeMercatorMap } from "./__tests__/fakeMercatorMap";
 
 import type maplibregl from "maplibre-gl";
 
-/** `cameraRotation` reports radians; every caller and the compass want degrees. */
+/**
+ * The screen angle of geographic east, degrees, y-down: project two points a
+ * hair apart along the centre parallel. Literal longitudes, no wrap: the
+ * Mercator transform is affine in world x, so the angle holds across the
+ * antimeridian.
+ */
 function measuredDeg(map: FakeMercatorMap): number {
-  return (cameraRotation(map as unknown as maplibregl.Map) * 180) / Math.PI;
+  const { lng, lat } = map.getCenter();
+  const a = map.project([lng, lat]);
+  const b = map.project([lng + 1e-3, lat]);
+  return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+}
+
+/** What useCameraRotation reports for a map. */
+function reportedDeg(map: FakeMercatorMap): number {
+  return -map.getBearing();
 }
 
 /** Wrap to (-180, 180], so 190 and -170 compare as the same camera. */
@@ -55,7 +43,19 @@ function wrapDeg(deg: number): number {
   return deg - 360 * Math.round(deg / 360);
 }
 
-describe("setCameraRotation ↔ cameraRotation round trip", () => {
+describe("setCameraRotation ↔ measured rotation round trip", () => {
+  it.each([-137, -33, 0, 45, 179])(
+    "useCameraRotation's -bearing is the measured angle at bearing %d",
+    (bearing) => {
+      const map = new FakeMercatorMap(6, { lng: 12, lat: 45 });
+      map.setBearing(bearing);
+      expect(wrapDeg(reportedDeg(map))).toBeCloseTo(
+        wrapDeg(measuredDeg(map)),
+        6,
+      );
+    },
+  );
+
   it.each([-170, -137, -90, -33, 15, 45, 90, 137, 179])(
     "asking for %d° of rotation measures back as %d°",
     (requested) => {
@@ -77,10 +77,7 @@ describe("setCameraRotation ↔ cameraRotation round trip", () => {
     expect(measuredDeg(map)).not.toBeCloseTo(-45, 6);
   });
 
-  it("holds at the antimeridian, where the probe used to wrap", () => {
-    // `4505042` fixed `cameraRotation` reporting 180° for a camera centred in
-    // (179.999, 180]. That fix is asserted in the geo suite against a linear
-    // fake; this checks the whole round trip survives it over real Mercator.
+  it("holds at the antimeridian", () => {
     for (const lng of [179.9995, 180, 200]) {
       const map = new FakeMercatorMap(6, { lng, lat: 0 });
 

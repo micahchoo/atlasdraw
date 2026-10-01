@@ -95,7 +95,6 @@ interface LayerUIProps {
   collarToolbarTarget?: ExcalidrawProps["collarToolbarTarget"];
   collarMenuTarget?: ExcalidrawProps["collarMenuTarget"];
   onSidebarLayoutChange?: ExcalidrawProps["onSidebarLayoutChange"];
-  onScrollBackToContent?: ExcalidrawProps["onScrollBackToContent"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onExportImage: AppClassProperties["onExportImage"];
@@ -158,7 +157,6 @@ const LayerUI = ({
   collarToolbarTarget,
   collarMenuTarget,
   onSidebarLayoutChange,
-  onScrollBackToContent,
   renderCustomStats,
   UIOptions,
   onExportImage,
@@ -794,12 +792,6 @@ const LayerUI = ({
                     type="button"
                     className="scroll-back-to-content"
                     onClick={() => {
-                      // Atlasdraw: let the app reframe the map on geo content.
-                      // If it handles it (returns true), skip the default
-                      // canvas-scroll (which is a no-op under the scroll-lock).
-                      if (onScrollBackToContent?.(elements)) {
-                        return;
-                      }
                       setAppState((appState) => ({
                         ...calculateScrollCenter(elements, appState),
                       }));

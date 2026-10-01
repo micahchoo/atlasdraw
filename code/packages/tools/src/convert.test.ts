@@ -1,321 +1,217 @@
 // packages/tools/src/convert.test.ts
 // SPDX-License-Identifier: MPL-2.0
-// Phase 2 Wave 2b Task T14 — annotationToFeatureCollection unit tests.
 //
-// Coverage matrix:
-//   1.  rectangle / bbox          → Polygon w/ closed 5-element ring
-//   2.  ellipse / point + radius  → Polygon via @turf/circle (ring length > 4)
-//   2b. ellipse / bbox            → Polygon approximating ellipse (ring > 5 pts)
-//   3.  polygon (open polyline)   → Polygon w/ auto-closed 4-element ring
-//   4.  freedraw (closed polyline)→ Polygon w/ NO double-closure
-//   4b. freedraw (open polyline)  → LineString (pen stroke, not closed area)
-//   5.  line / polyline           → LineString
-//   5b. arrow / polyline          → LineString (was: throws — now supported)
-//   6.  diamond / bbox            → Polygon with 4 midpoint vertices
-//   7.  text                      → throws UnsupportedConvertElementError
-//   8.  unknown type "hexagon"    → throws UnsupportedConvertElementError
-//   9.  ellipse missing radius    → throws (clear message)
+// A drawn element as GeoJSON, read from its scene geometry through the world
+// frame.
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { GeoCustomData } from "@atlasdraw/geo";
+import { documentFrame, toLngLat, toScene } from "@atlasdraw/geo";
 
 import {
   annotationToFeatureCollection,
+  drawingToFeatureCollection,
+  elementGeometry,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "./convert.js";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import type { Polygon, Position } from "geojson";
 
-function geoBbox(): GeoCustomData {
+const frame = documentFrame(0, 0);
+
+/** A box whose NW corner is at (west, north) and SE corner at (east, south). */
+function box(
+  type: string,
+  west: number,
+  north: number,
+  east: number,
+  south: number,
+  extra: Partial<ConvertibleElement> = {},
+): ConvertibleElement {
+  const nw = toScene(frame, west, north);
+  const se = toScene(frame, east, south);
   return {
-    geo: {
-      kind: "bbox",
-      west: -10,
-      south: -5,
-      east: 10,
-      north: 5,
-      zRef: 4,
-    },
-    scaleMode: "geographic",
-    projection: "mercator",
-    schemaVersion: 1,
+    id: type,
+    type,
+    x: nw.x,
+    y: nw.y,
+    width: se.x - nw.x,
+    height: se.y - nw.y,
+    ...extra,
   };
 }
 
-function geoPoint(): GeoCustomData {
+/** A linear element through lng/lat vertices. */
+function path(
+  type: string,
+  coords: Array<[number, number]>,
+): ConvertibleElement {
+  const pts = coords.map(([lng, lat]) => toScene(frame, lng, lat));
   return {
-    geo: { kind: "point", lng: 0, lat: 0, zRef: 4 },
-    scaleMode: "geographic",
-    projection: "mercator",
-    schemaVersion: 1,
+    id: type,
+    type,
+    x: pts[0].x,
+    y: pts[0].y,
+    points: pts.map(
+      (p) => [p.x - pts[0].x, p.y - pts[0].y] as [number, number],
+    ),
   };
 }
 
-function geoPolyline(coords: Array<[number, number]>): GeoCustomData {
-  return {
-    geo: { kind: "polyline", coordinates: coords, zRef: 4 },
-    scaleMode: "geographic",
-    projection: "mercator",
-    schemaVersion: 1,
-  };
+function expectPositions(got: Position[], want: Position[]): void {
+  expect(got).toHaveLength(want.length);
+  got.forEach(([lng, lat], i) => {
+    expect(lng).toBeCloseTo(want[i][0], 9);
+    expect(lat).toBeCloseTo(want[i][1], 9);
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+describe("elementGeometry", () => {
+  it("rectangle → its corners as a closed ring", () => {
+    const g = elementGeometry(box("rectangle", -10, 5, 10, -5), frame);
+    expect(g?.type).toBe("Polygon");
+    expectPositions((g as Polygon).coordinates[0], [
+      [-10, 5],
+      [10, 5],
+      [10, -5],
+      [-10, -5],
+      [-10, 5],
+    ]);
+  });
+
+  it("a turned rectangle keeps its turn", () => {
+    const flat = box("rectangle", -10, 5, 10, -5);
+    const g = elementGeometry({ ...flat, angle: Math.PI / 2 }, frame);
+    const [nw] = (g as Polygon).coordinates[0];
+    // A quarter turn clockwise on screen takes the NW corner to the
+    // north-east of the centre.
+    const c = toLngLat(frame, {
+      x: flat.x + flat.width! / 2,
+      y: flat.y + flat.height! / 2,
+    });
+    expect(nw[0]).toBeGreaterThan(c.lng);
+    expect(nw[1]).toBeGreaterThan(c.lat);
+  });
+
+  it("ellipse → a 64-point ring that touches its box", () => {
+    const g = elementGeometry(box("ellipse", -10, 5, 10, -5), frame) as Polygon;
+    const ring = g.coordinates[0];
+    expect(ring).toHaveLength(65);
+    expect(ring[0]).toEqual(ring[64]);
+    expect(Math.max(...ring.map((p) => p[0]))).toBeCloseTo(10, 9);
+    expect(Math.min(...ring.map((p) => p[0]))).toBeCloseTo(-10, 9);
+  });
+
+  it("diamond → the four edge midpoints", () => {
+    const g = elementGeometry(box("diamond", -10, 10, 10, -10), frame);
+    const ring = (g as Polygon).coordinates[0];
+    expect(ring).toHaveLength(5);
+    expect(ring[0][0]).toBeCloseTo(0, 9);
+    expect(ring[0][1]).toBeCloseTo(10, 9);
+    expect(ring[1][0]).toBeCloseTo(10, 9);
+  });
+
+  it("line and arrow → LineString through their points", () => {
+    for (const type of ["line", "arrow"]) {
+      const g = elementGeometry(
+        path(type, [
+          [0, 0],
+          [1, 1],
+          [2, 0],
+        ]),
+        frame,
+      );
+      expect(g?.type).toBe("LineString");
+      expectPositions(g?.type === "LineString" ? g.coordinates : [], [
+        [0, 0],
+        [1, 1],
+        [2, 0],
+      ]);
+    }
+  });
+
+  it("closed freedraw → Polygon, not closed twice", () => {
+    const g = elementGeometry(
+      path("freedraw", [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 0],
+      ]),
+      frame,
+    ) as Polygon;
+    expect(g.type).toBe("Polygon");
+    expect(g.coordinates[0]).toHaveLength(4);
+  });
+
+  it("open freedraw → LineString", () => {
+    const g = elementGeometry(
+      path("freedraw", [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ]),
+      frame,
+    );
+    expect(g?.type).toBe("LineString");
+  });
+
+  it("text and a pin → a Point at the centre", () => {
+    const text = elementGeometry(box("text", -2, 2, 2, -2), frame);
+    expect(text?.type).toBe("Point");
+    const pin = elementGeometry(
+      box("ellipse", -2, 2, 2, -2, { customData: { tool: "pin" } }),
+      frame,
+    );
+    expect(pin?.type).toBe("Point");
+    const [lng, lat] = pin?.type === "Point" ? pin.coordinates : [NaN, NaN];
+    expect(lng).toBeCloseTo(0, 9);
+    expect(lat).toBeCloseTo(0, 6);
+  });
+
+  it("a type with no geometry → null", () => {
+    expect(elementGeometry(box("selection", 0, 1, 1, 0), frame)).toBe(null);
+  });
+});
 
 describe("annotationToFeatureCollection", () => {
-  it("rectangle with bbox → Polygon with 5-element closed ring", () => {
-    const el: ConvertibleElement = {
-      id: "el1",
-      type: "rectangle",
-      customData: geoBbox(),
-    };
-    const fc = annotationToFeatureCollection(el);
-    expect(fc.type).toBe("FeatureCollection");
+  it("wraps the geometry in one feature", () => {
+    const fc = annotationToFeatureCollection(
+      box("rectangle", -1, 1, 1, -1),
+      frame,
+    );
     expect(fc.features).toHaveLength(1);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    expect(ring).toHaveLength(5);
-    expect(ring[0]).toEqual(ring[4]); // closed
-    expect(ring[0]).toEqual([-10, -5]);
-    expect(ring[2]).toEqual([10, 5]);
-  });
-
-  it("ellipse with point + _data.radiusKm → Polygon via turf/circle (ring > 4)", () => {
-    const el: ConvertibleElement = {
-      id: "el2",
-      type: "ellipse",
-      customData: { ...geoPoint(), _data: { radiusKm: 5 } },
-    };
-    const fc = annotationToFeatureCollection(el);
-    expect(fc.features).toHaveLength(1);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    // turf/circle with steps:64 produces 65 positions (closed ring).
-    expect(ring.length).toBeGreaterThan(4);
-  });
-
-  it("ellipse with top-level customData.radiusKm fallback → Polygon", () => {
-    const el: ConvertibleElement = {
-      id: "el2b",
-      type: "ellipse",
-      customData: { ...geoPoint(), radiusKm: 3 },
-    };
-    const fc = annotationToFeatureCollection(el);
     expect(fc.features[0].geometry.type).toBe("Polygon");
   });
 
-  it("polygon with open polyline (3 distinct points) → Polygon with 4-element auto-closed ring", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [1, 0],
-      [0.5, 1],
-    ];
-    const el: ConvertibleElement = {
-      id: "el3",
-      type: "polygon",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    expect(ring).toHaveLength(4);
-    expect(ring[0]).toEqual(ring[3]);
-    expect(ring[0]).toEqual([0, 0]);
+  it("refuses text", () => {
+    expect(() =>
+      annotationToFeatureCollection(box("text", -1, 1, 1, -1), frame),
+    ).toThrow(UnsupportedConvertElementError);
   });
 
-  it("freedraw with already-closed polyline → Polygon ring NOT double-closed", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [2, 0],
-      [1, 2],
-      [0, 0], // already closed
-    ];
-    const el: ConvertibleElement = {
-      id: "el4",
-      type: "freedraw",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    // Should be exactly 4 elements (not 5 — no extra closure appended).
-    expect(ring).toHaveLength(4);
-    expect(ring[0]).toEqual(ring[3]);
+  it("refuses a type with no geometry", () => {
+    expect(() =>
+      annotationToFeatureCollection(box("hexagon", -1, 1, 1, -1), frame),
+    ).toThrow(UnsupportedConvertElementError);
   });
+});
 
-  it("line with polyline → LineString with coords as-is", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [5, 5],
-      [10, 0],
-    ];
-    const el: ConvertibleElement = {
-      id: "el5",
-      type: "line",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") {
-      throw new Error("unreachable");
-    }
-    expect(g.coordinates).toEqual(coords);
-  });
-
-  it("polyline (alias) with polyline geo → LineString", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [1, 1],
-    ];
-    const el: ConvertibleElement = {
-      id: "el5b",
-      type: "polyline",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    expect(fc.features[0].geometry.type).toBe("LineString");
-  });
-
-  it("text element → throws UnsupportedConvertElementError mentioning 'text'", () => {
-    const el: ConvertibleElement = {
-      id: "el6",
-      type: "text",
-      customData: geoPoint(),
-    };
-    expect(() => annotationToFeatureCollection(el)).toThrow(
-      UnsupportedConvertElementError,
+describe("drawingToFeatureCollection", () => {
+  it("has one feature per live element, without bound text", () => {
+    const fc = drawingToFeatureCollection(
+      [
+        box("rectangle", -1, 1, 1, -1),
+        box("ellipse", -1, 1, 1, -1, { isDeleted: true }),
+        box("text", -1, 1, 1, -1, { containerId: "rectangle" }),
+        box("text", 3, 1, 4, 0),
+      ],
+      frame,
     );
-    try {
-      annotationToFeatureCollection(el);
-    } catch (err) {
-      expect((err as Error).message).toContain("text");
-    }
-  });
-
-  it("arrow with polyline geo → LineString with coords as-is", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [5, 5],
-      [10, 3],
-    ];
-    const el: ConvertibleElement = {
-      id: "el7",
-      type: "arrow",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") {
-      throw new Error("unreachable");
-    }
-    expect(g.coordinates).toEqual(coords);
-  });
-
-  it("diamond with bbox → Polygon with 4 midpoint vertices (diamond shape)", () => {
-    // geoBbox(): west:-10, south:-5, east:10, north:5 → midX:0, midY:0
-    const el: ConvertibleElement = {
-      id: "el-diamond",
-      type: "diamond",
-      customData: geoBbox(),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    expect(ring).toHaveLength(5); // 4 vertices + close
-    expect(ring[0]).toEqual([0, 5]); // North
-    expect(ring[1]).toEqual([10, 0]); // East
-    expect(ring[2]).toEqual([0, -5]); // South
-    expect(ring[3]).toEqual([-10, 0]); // West
-    expect(ring[4]).toEqual(ring[0]); // closed
-  });
-
-  it("ellipse with bbox → Polygon approximating ellipse (ring > 5 pts, touches bbox extents)", () => {
-    // geoBbox(): west:-10, south:-5, east:10, north:5 → cx:0, cy:0, rx:10, ry:5
-    const el: ConvertibleElement = {
-      id: "el-ellipse-bbox",
-      type: "ellipse",
-      customData: geoBbox(),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("Polygon");
-    if (g.type !== "Polygon") {
-      throw new Error("unreachable");
-    }
-    const ring = g.coordinates[0];
-    expect(ring.length).toBeGreaterThan(5);
-    expect(ring[0]).toEqual(ring[ring.length - 1]); // closed
-    const maxLng = Math.max(...ring.map((p) => p[0]));
-    const maxLat = Math.max(...ring.map((p) => p[1]));
-    expect(maxLng).toBeCloseTo(10, 1);
-    expect(maxLat).toBeCloseTo(5, 1);
-  });
-
-  it("freedraw with open polyline → LineString (pen stroke, not auto-closed polygon)", () => {
-    const coords: Array<[number, number]> = [
-      [0, 0],
-      [1, 2],
-      [3, 1],
-      [5, 3],
-    ];
-    const el: ConvertibleElement = {
-      id: "el-freedraw-open",
-      type: "freedraw",
-      customData: geoPolyline(coords),
-    };
-    const fc = annotationToFeatureCollection(el);
-    const g = fc.features[0].geometry;
-    expect(g.type).toBe("LineString");
-    if (g.type !== "LineString") {
-      throw new Error("unreachable");
-    }
-    expect(g.coordinates).toEqual(coords);
-  });
-
-  it("unknown type 'hexagon' with valid geo → throws UnsupportedConvertElementError", () => {
-    const el: ConvertibleElement = {
-      id: "el8",
-      type: "hexagon",
-      customData: geoPoint(),
-    };
-    expect(() => annotationToFeatureCollection(el)).toThrow(
-      UnsupportedConvertElementError,
-    );
-  });
-
-  it("ellipse without radius → throws with clear message", () => {
-    const el: ConvertibleElement = {
-      id: "el9",
-      type: "ellipse",
-      customData: geoPoint(),
-    };
-    expect(() => annotationToFeatureCollection(el)).toThrow(/radiusKm/);
+    expect(fc.features.map((f) => f.geometry.type)).toEqual([
+      "Polygon",
+      "Point",
+    ]);
   });
 });

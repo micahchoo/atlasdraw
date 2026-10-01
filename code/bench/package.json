@@ -11,8 +11,7 @@
     "rebaseline": "tsx rebaseline.ts"
   },
   "dependencies": {
-    "@atlasdraw/data": "*",
-    "@atlasdraw/geo": "*"
+    "@atlasdraw/data": "*"
   },
   "devDependencies": {
     "tsx": "^4.0.0"

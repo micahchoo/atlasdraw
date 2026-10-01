@@ -3,7 +3,7 @@
 // AtlasdrawTool interface — Phase 1 Wave 0 Task 2.
 // See docs/architecture/subsystems/tools/contracts.md for the full contract.
 
-import type { GeoAnchor, ScaleMode } from "@atlasdraw/geo";
+import type { GeoAnchor } from "@atlasdraw/geo";
 
 import type { ReactNode } from "react";
 
@@ -54,7 +54,6 @@ export interface ToolContext {
   /** Excalidraw API surface — tools call addElement, not direct mutate. */
   readonly excalidraw: {
     addElement: (element: AtlasdrawElementSeed) => string; // returns element id
-    updateElement: (id: string, patch: Partial<AtlasdrawElementSeed>) => void;
     getActiveTool: () => string;
   };
   /** App-level callbacks — popups, status bar, snackbar. */
@@ -66,7 +65,8 @@ export interface ToolContext {
 
 /**
  * Element seed passed when a tool wants to create a new Excalidraw element.
- * Geo-anchored — see @atlasdraw/geo for GeoAnchor and ScaleMode.
+ * The host places it in the document's world frame: `geo` says where, and
+ * `geo.zRef` is the map zoom whose screen pixels the seed's pixel sizes are.
  */
 export interface AtlasdrawElementSeed {
   /** Excalidraw element type or "custom" for our extension types. */
@@ -80,9 +80,8 @@ export interface AtlasdrawElementSeed {
     | "custom";
   /** Required for `type: "custom"` — picks our specific tool variant (e.g., "pin"). */
   customType?: string;
-  /** Geo anchor — mandatory for tools created via Atlasdraw. */
+  /** Where the element goes, and the zoom it was made at. */
   geo: GeoAnchor;
-  scaleMode: ScaleMode;
   /** Visual style — minimal subset; full styling comes Phase 6. */
   style?: {
     strokeColor?: string;
@@ -113,13 +112,6 @@ export interface AtlasdrawTool {
   readonly icon: string;
   /** CSS cursor when this tool is active. */
   readonly cursor: string;
-  /**
-   * Default scale-mode for elements this tool produces.
-   * Tools may override per-element via the seed's `scaleMode`, but this declares
-   * the tool's intent at definition site (queryable for toolbar UI / Phase 6 mode-toggle).
-   */
-  readonly defaultScaleMode: ScaleMode;
-
   /** Optional: lifecycle hooks. */
   onActivate?(ctx: ToolContext): void;
   onDeactivate?(ctx: ToolContext): void;

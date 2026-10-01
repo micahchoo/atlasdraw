@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-// ADR-0015 spike — the camera bridge pushes the map camera into Excalidraw's
+// The camera bridge pushes the map camera into Excalidraw's
 // viewport and routes Excalidraw's own viewport changes back to the map,
 // without a loop.
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import { frameAt, toScene } from "@atlasdraw/geo";
+import { WORLD_TILE_SIZE, frameAt, toScene } from "@atlasdraw/geo";
 
 import { CameraBridge } from "../CameraBridge";
 
@@ -166,5 +167,136 @@ describe("CameraBridge", () => {
       suppressed: 0,
     });
     expect(map.jumps).toBe(0);
+  });
+});
+
+/** Where MapLibre puts lng/lat on screen at pitch 0, bearing 0. */
+function mapPixel(
+  map: FakeMap,
+  size: { width: number; height: number },
+  lng: number,
+  lat: number,
+) {
+  const s = WORLD_TILE_SIZE * Math.pow(2, map.zoom);
+  const wx = (l: number) => ((l + 180) / 360) * s;
+  const wy = (a: number) => {
+    const r = (a * Math.PI) / 180;
+    return (0.5 - Math.log(Math.tan(Math.PI / 4 + r / 2)) / (2 * Math.PI)) * s;
+  };
+  return {
+    x: wx(lng) - wx(map.center.lng) + size.width / 2,
+    y: wy(lat) - wy(map.center.lat) + size.height / 2,
+  };
+}
+
+const lng = fc.double({ min: -170, max: 170, noNaN: true });
+const lat = fc.double({ min: -75, max: 75, noNaN: true });
+const zoom = fc.double({ min: 1, max: 22, noNaN: true });
+
+/** One input: the user moves the map, or Excalidraw moves its viewport. */
+const input = fc.oneof(
+  fc.record({ kind: fc.constant("map" as const), lng, lat, zoom }),
+  fc.record({
+    kind: fc.constant("scene" as const),
+    dx: fc.double({ min: -500, max: 500, noNaN: true }),
+    dy: fc.double({ min: -500, max: 500, noNaN: true }),
+    factor: fc.double({ min: 0.5, max: 2, noNaN: true }),
+  }),
+);
+
+describe("CameraBridge (properties)", () => {
+  it("after any input sequence, every point draws where the map draws it", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 22 }),
+        fc.array(input, { minLength: 1, maxLength: 20 }),
+        lng,
+        lat,
+        (z0, inputs, pLng, pLat) => {
+          const map = new FakeMap();
+          const scene = new FakeScene();
+          const frame = frameAt(map.center.lng, map.center.lat, z0);
+          const bridge = new CameraBridge({
+            map,
+            scene,
+            frame,
+            viewportSize: () => ({
+              width: scene.state.width,
+              height: scene.state.height,
+            }),
+          });
+          scene.onScroll = (x, y, zv) => bridge.onScrollChange(x, y, zv);
+          bridge.attach();
+          for (const step of inputs) {
+            bridge.resetStats();
+            if (step.kind === "map") {
+              map.center = { lng: step.lng, lat: step.lat };
+              map.zoom = step.zoom;
+              map.fire();
+              // One exchange per input: one write in, none back.
+              expect(bridge.stats.mapToScene).toBe(1);
+              expect(bridge.stats.sceneToMap).toBe(0);
+            } else {
+              const v = scene.state;
+              // MapLibre keeps the camera on the world (zoom >= ~1, latitude
+              // inside the Mercator square); the fake map does not, so steps
+              // that would leave it are not inputs a real map can see.
+              const nextZoom = z0 + Math.log2(v.zoom.value * step.factor);
+              if (nextZoom < 2 || nextZoom > 22) {
+                continue;
+              }
+              scene.setViewport(
+                v.scrollX + step.dx,
+                v.scrollY + step.dy,
+                v.zoom.value * step.factor,
+              );
+              expect(bridge.stats.sceneToMap).toBeLessThanOrEqual(1);
+              expect(bridge.stats.mapToScene).toBeLessThanOrEqual(1);
+            }
+          }
+          fc.pre(Math.abs(map.center.lat) < 75);
+          // Only points near the camera: what can be on screen.
+          const near = {
+            lng: map.center.lng + (pLng / 170) * 1e-3,
+            lat: Math.max(
+              -80,
+              Math.min(80, map.center.lat + (pLat / 75) * 1e-3),
+            ),
+          };
+          const p = toScene(frame, near.lng, near.lat);
+          const { scrollX, scrollY, zoom: z } = scene.state;
+          const want = mapPixel(map, scene.state, near.lng, near.lat);
+          expect(Math.abs((p.x + scrollX) * z.value - want.x)).toBeLessThan(
+            1e-6,
+          );
+          expect(Math.abs((p.y + scrollY) * z.value - want.y)).toBeLessThan(
+            1e-6,
+          );
+        },
+      ),
+      { numRuns: 300 },
+    );
+  });
+
+  it("reads the frame on every exchange, so a new document's frame applies at once", () => {
+    const map = new FakeMap();
+    const scene = new FakeScene();
+    let frame = frameAt(13.4, 52.5, 22);
+    const bridge = new CameraBridge({
+      map,
+      scene,
+      frame: () => frame,
+      viewportSize: () => ({
+        width: scene.state.width,
+        height: scene.state.height,
+      }),
+    });
+    bridge.attach();
+    frame = frameAt(77.2, 28.6, 22);
+    expect(bridge.frame).toBe(frame);
+    bridge.push();
+    const c = toScene(frame, map.center.lng, map.center.lat);
+    const { scrollX, zoom: z, width } = scene.state;
+    expect((c.x + scrollX) * z.value).toBeCloseTo(width / 2, 6);
   });
 });

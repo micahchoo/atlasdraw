@@ -1,60 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// "Scroll back to content" for the map editor: reframe the MapLibre camera on
-// the geographic bounds of the drawn (geo-anchored) content.
-//
-// Excalidraw's canvas is scroll-locked (the map is the real camera — see
-// useExcalidrawChangeHandler), so its native calculateScrollCenter is a no-op.
-// Instead we move the MAP to the content's geo bounds and let CoordinateSync
-// re-project the elements onto the reframed view (a plain camera move — no
-// change to the reprojection math). Reuses @atlasdraw/geo's computeSceneBounds.
-//
-// Returns true when it moved the map (there was geo-anchored content), or false
-// to let the caller fall back to the default behavior.
-//
-// `fitMapToLayer` is the same camera move framed on one data layer's
-// FeatureCollection — the "zoom to layer" action in the sheet panel's layer
-// card. It shares this module's padding/zoom/duration so a zoom-to-layer and a
-// scroll-back-to-content land the content at the same size; a second copy of
-// those constants is how the two silently drift apart.
+// Camera fits: frame the map on a lng/lat box (a drawing's bounds, from
+// @atlasdraw/geo's computeSceneBounds, or a raster's corners) or on a data
+// layer's FeatureCollection. One set of padding, zoom and duration
+// constants, so every "zoom to" lands its content at the same size; a second
+// copy of those constants is how the fits drift apart.
 //
 // The bounds math for a FeatureCollection lives here rather than in
-// @atlasdraw/geo because that package carries no GeoJSON type dependency and
-// its computeSceneBounds walks Excalidraw elements, which a data layer never
-// becomes.
-
-import { computeSceneBounds } from "@atlasdraw/geo";
+// @atlasdraw/geo because that package carries no GeoJSON type dependency.
 
 import type { LngLatBox } from "@atlasdraw/geo";
 
-import type maplibregl from "maplibre-gl";
 import type { FeatureCollection, Position } from "geojson";
 
 /** Padding (px) around the framed content, and the closest zoom fitBounds may pick. */
 const FIT_PADDING = 64;
 const FIT_MAX_ZOOM = 16;
 const FIT_DURATION_MS = 600;
-
-export function fitMapToContent(
-  map: maplibregl.Map | null,
-  elements: Parameters<typeof computeSceneBounds>[0],
-): boolean {
-  if (!map) {
-    return false;
-  }
-  const box = computeSceneBounds(elements);
-  if (!box) {
-    return false; // no geo-anchored content to frame
-  }
-  map.fitBounds(
-    [
-      [box.west, box.south],
-      [box.east, box.north],
-    ],
-    { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: FIT_DURATION_MS },
-  );
-  return true;
-}
 
 /** The narrowest MapLibre surface a camera fit needs, so tests can stub it. */
 export interface FitBoundsSurface {
@@ -171,7 +133,7 @@ export function fitMapToLayer(
 /**
  * Frame the camera on a geographic bounding box. Returns false when the map is
  * absent, so callers can gate their feedback. Uses the same padding, maxZoom,
- * and duration as fitMapToContent and fitMapToLayer — one set of constants,
+ * and duration as fitMapToLayer — one set of constants,
  * one visual result.
  */
 export function fitMapToBox(

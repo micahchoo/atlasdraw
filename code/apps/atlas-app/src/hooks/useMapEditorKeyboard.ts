@@ -1,24 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// MapEditor keyboard shortcuts: the space-held tracker (feeds the
-// space+drag pan bridge in handleExcalidrawChange) and the main shortcut
-// binding (Cmd+K quick actions, Cmd+S/Cmd+O document save/open, `?` for the
-// shortcuts panel, Escape to dismiss it).
+// MapEditor keyboard shortcuts: Cmd+K quick actions, Cmd+S/Cmd+O document
+// save/open, `?` for the shortcuts panel, Escape to dismiss it, and the zoom
+// keys when focus is outside the drawing.
 //
 // Step 5 adds the comment-mode toggle on bare `c`, plus an Escape branch that
 // leaves the mode. See the `c` handler for the keybinding audit that cleared
 // the key.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 4).
-// `spaceHeldRef` stays owned by MapEditor and is passed in — it's also read
-// by handleExcalidrawChange (Cut 5 territory), so the ref can't move here
-// without threading it back out. No test covered either binding directly
-// before this extraction; new useMapEditorKeyboard.test.ts adds
-// characterization coverage for both.
 
 import { useEffect } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+import type { ZoomAction } from "@atlasdraw/excalidraw/types";
 
 import {
   isCommentModeActive,
@@ -26,7 +19,7 @@ import {
   toggleCommentMode,
 } from "../state/commentMode";
 
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 
 /**
  * True when the event came from somewhere the user is typing, so a bare-letter
@@ -47,7 +40,6 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export interface MapEditorKeyboardParams {
-  spaceHeldRef: RefObject<boolean>;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   showShortcuts: boolean;
   setShowShortcuts: Dispatch<SetStateAction<boolean>>;
@@ -56,45 +48,46 @@ export interface MapEditorKeyboardParams {
   onSave: (excalidrawAPI: ExcalidrawImperativeAPI | null) => void;
   /** openAtlasDocument, injected so this hook doesn't import MapEditor.tsx. */
   onOpen: (excalidrawAPI: ExcalidrawImperativeAPI | null) => void;
+  /** The map's zoom: the same handler Excalidraw's zoom actions call. */
+  onZoomAction: (action: ZoomAction) => boolean;
 }
 
+/** Ctrl/Cmd + key → zoom action, by `KeyboardEvent.code`. */
+const ZOOM_KEYS: Readonly<Record<string, ZoomAction>> = {
+  Equal: { type: "zoomIn" },
+  NumpadAdd: { type: "zoomIn" },
+  Minus: { type: "zoomOut" },
+  NumpadSubtract: { type: "zoomOut" },
+  Digit0: { type: "resetZoom" },
+  Numpad0: { type: "resetZoom" },
+};
+
 export function useMapEditorKeyboard({
-  spaceHeldRef,
   excalidrawAPI,
   showShortcuts,
   setShowShortcuts,
   setShowQuickActions,
   onSave,
   onOpen,
+  onZoomAction,
 }: MapEditorKeyboardParams): void {
-  // Space+drag pan bridge: when space is held, Excalidraw's internal pan
-  // mechanism mutates scrollX/Y. The scroll lock in handleExcalidrawChange
-  // resets those to 0 every onChange (preserving geo-anchor identity).
-  // Without this bridge, the delta is eaten and the map never moves. The
-  // hand-tool button works because it sets pointer-events:none — events fall
-  // through to MapLibre directly. Space+drag takes the scroll-mutation path
-  // instead.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat) {
-        spaceHeldRef.current = true;
+      // Zoom keys. With focus in the drawing, Excalidraw's zoom actions take
+      // them (and call onZoomAction); this catches them with focus on the
+      // map or the frame, where the browser would zoom the page instead.
+      const zoom = ZOOM_KEYS[e.code];
+      if (
+        zoom &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.defaultPrevented &&
+        !isTypingTarget(e.target)
+      ) {
+        e.preventDefault();
+        onZoomAction(zoom);
+        return;
       }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        spaceHeldRef.current = false;
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, [spaceHeldRef]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
       // Quick-actions: Cmd+K or Ctrl+K.
       if (e.key === "k" && (e.metaKey || e.ctrlKey) && !e.altKey) {
         e.preventDefault();
@@ -194,5 +187,6 @@ export function useMapEditorKeyboard({
     setShowQuickActions,
     onSave,
     onOpen,
+    onZoomAction,
   ]);
 }

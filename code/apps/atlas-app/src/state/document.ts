@@ -10,6 +10,8 @@
 //                loaded, never minted again; updatedAt (see `stamp`)
 //   title      — the sheet name
 //   camera     — the camera the document was saved with
+//   world      — the world frame: what a scene coordinate means (ADR-0015),
+//                fixed when the document is created
 //   overlays   — the data and raster layers, in order; each kind is its own
 //                z-order stack
 //   payloads   — each data layer's FeatureCollection and each raster's PNG
@@ -25,6 +27,8 @@
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { ulid } from "ulid";
+
+import { documentFrame, type WorldFrame } from "@atlasdraw/geo";
 
 import type { LayerStyle } from "@atlasdraw/basemap";
 
@@ -138,6 +142,12 @@ export interface DocumentState {
    * while the editor runs; this value is used only when no map can be read.
    */
   readonly camera: Camera;
+  /**
+   * The world frame: a scene coordinate is a Web Mercator pixel at zoom
+   * `z0`, minus `origin`. Fixed for the life of the document, because every
+   * element's x/y is measured in it.
+   */
+  readonly world: WorldFrame;
   readonly overlays: readonly OverlayEntry[];
   /** Data-layer id → its FeatureCollection. */
   readonly featureCollections: Readonly<Record<string, FeatureCollection>>;
@@ -372,6 +382,12 @@ export function createDocument(
     updatedAt: initial.updatedAt ?? createdAt,
     title: initial.title?.trim() || DEFAULT_DOCUMENT_TITLE,
     camera: initial.camera ?? DEFAULT_CAMERA,
+    world:
+      initial.world ??
+      documentFrame(
+        (initial.camera ?? DEFAULT_CAMERA).center[0],
+        (initial.camera ?? DEFAULT_CAMERA).center[1],
+      ),
     overlays: reindex(initial.overlays ?? []),
     featureCollections: initial.featureCollections ?? {},
     images: initial.images ?? {},

@@ -42,6 +42,8 @@ export { PinTool } from "./PinTool.js"; // Phase 1 Wave 3b Task 14
 // Phase 2 Wave 2b additions:
 export {
   annotationToFeatureCollection,
+  drawingToFeatureCollection,
+  elementGeometry,
   UnsupportedConvertElementError,
   type ConvertibleElement,
 } from "./convert.js";

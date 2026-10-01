@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// ADR-0015 spike — DEV-ONLY measurement hook. Seeds N shapes over the current
-// view so the pan benchmark can compare the scroll lock with the camera
-// bridge at the same scene: two thirds rectangles (bbox anchors), one third
-// five-point lines (polyline anchors), deterministic from a fixed seed.
-//
-// Scroll lock (frame === null): screen-pixel elements carrying the v1
-// `customData.geo` anchor, exactly what useGeoAnchor stamps.
-// World (frame given): world-coordinate elements with no anchor.
+// DEV-ONLY measurement hook, reached as `window.__atlasdraw__.seed(n)` (see
+// MapEditor; the whole hook is behind `import.meta.env.DEV`). Seeds N shapes
+// in world coordinates over the current view, so the pan benchmark
+// (scripts/bench-world-coords.mjs) measures a known scene: two thirds
+// rectangles, one third five-point lines, deterministic from a fixed seed.
 
 import {
   CaptureUpdateAction,
@@ -15,12 +12,12 @@ import {
   newLinearElement,
 } from "@atlasdraw/element";
 import { pointFrom } from "@atlasdraw/math";
-import { toScene } from "@atlasdraw/geo";
+import { sceneUnitsPerPixel, toScene } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import type { LocalPoint } from "@atlasdraw/math";
-import type { GeoCustomData, WorldFrame } from "@atlasdraw/geo";
+import type { WorldFrame } from "@atlasdraw/geo";
 
 import type maplibregl from "maplibre-gl";
 
@@ -38,21 +35,16 @@ export function seedShapes(
   map: maplibregl.Map,
   api: ExcalidrawImperativeAPI,
   n: number,
-  frame: WorldFrame | null,
+  frame: WorldFrame,
 ): number {
   const rand = mulberry32(15);
   const container = map.getContainer();
   const W = container.clientWidth;
   const H = container.clientHeight;
-  const zoom = map.getZoom();
-  const scale = frame ? Math.pow(2, zoom - frame.z0) : 1;
-  const ll = (x: number, y: number) => map.unproject([x, y]);
-  /** Screen px → this mode's scene coordinates. */
+  const stroke = 2 * sceneUnitsPerPixel(frame, map.getZoom());
+  /** Screen px → scene coordinates. */
   const scene = (x: number, y: number) => {
-    if (!frame) {
-      return { x, y };
-    }
-    const p = ll(x, y);
+    const p = map.unproject([x, y]);
     return toScene(frame, p.lng, p.lat);
   };
   const out: ExcalidrawElement[] = [];
@@ -65,23 +57,6 @@ export function seedShapes(
     if (i % 3 !== 2) {
       const nw = scene(sx, sy);
       const se = scene(sx + sw, sy + sh);
-      const a = ll(sx, sy);
-      const b = ll(sx + sw, sy + sh);
-      const geo: GeoCustomData | undefined = frame
-        ? undefined
-        : {
-            geo: {
-              kind: "bbox",
-              west: a.lng,
-              north: a.lat,
-              east: b.lng,
-              south: b.lat,
-              zRef: zoom,
-            },
-            scaleMode: "geographic",
-            projection: "mercator",
-            schemaVersion: 1,
-          };
       out.push(
         newElement({
           type: "rectangle",
@@ -89,11 +64,10 @@ export function seedShapes(
           y: nw.y,
           width: se.x - nw.x,
           height: se.y - nw.y,
-          strokeWidth: 2 / scale,
+          strokeWidth: stroke,
           backgroundColor: "#a5d8ff",
           fillStyle: "solid",
           roughness: 0,
-          ...(geo ? { customData: geo } : {}),
         }),
       );
     } else {
@@ -106,30 +80,14 @@ export function seedShapes(
         const p = scene(x, y);
         return pointFrom<LocalPoint>(p.x - o.x, p.y - o.y);
       });
-      const geo: GeoCustomData | undefined = frame
-        ? undefined
-        : {
-            geo: {
-              kind: "polyline",
-              coordinates: screen.map(([x, y]) => {
-                const p = ll(x, y);
-                return [p.lng, p.lat] as [number, number];
-              }),
-              zRef: zoom,
-            },
-            scaleMode: "geographic",
-            projection: "mercator",
-            schemaVersion: 1,
-          };
       out.push(
         newLinearElement({
           type: "line",
           x: o.x,
           y: o.y,
           points: pts,
-          strokeWidth: 2 / scale,
+          strokeWidth: stroke,
           roughness: 0,
-          ...(geo ? { customData: geo } : {}),
         }),
       );
     }

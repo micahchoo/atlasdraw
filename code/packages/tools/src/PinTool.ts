@@ -10,17 +10,9 @@
 // the Pin button. The overlay captures pointerdown, builds a `ToolContext`
 // from the current (map, excalidrawAPI) tuple, and calls `onPointerDown` here.
 //
-// scaleMode: always "geographic" (maintainer decision, 2026-07-19: geographic
-// is the ONLY creation mode; Spec §3.4's screen-fixed pins are superseded —
-// "screen"/"hybrid" survive only as render support for legacy documents). The
-// CoordinateSync hook re-projects the element's (lng,lat) → (x,y) on every
-// camera move so the pin appears stuck to its geographic location.
-//
-// customData.geo wrapper: the seed only carries the bare `geo` payload and
-// `scaleMode`. atlas-app's `seedToElement` bridge fills in the full
-// `GeoCustomData` shape (`projection: "mercator"`, `schemaVersion: 1`) when
-// it converts the seed into a real Excalidraw element. This keeps the tools
-// package decoupled from the wrapper's serialization rules.
+// The seed carries the click's lng/lat and the zoom it was made at. atlas-app's
+// `seedToElement` places the pin in the document's world frame, centred on
+// the click, sized in screen pixels at that zoom.
 
 import type { AtlasdrawTool } from "./types.js";
 
@@ -38,7 +30,6 @@ export const PinTool: AtlasdrawTool = {
   label: "Pin",
   icon: "pin",
   cursor: "crosshair",
-  defaultScaleMode: "geographic",
 
   onPointerDown(e, ctx) {
     // Viewport-relative pixel → geographic. buildToolContext's unproject
@@ -52,8 +43,6 @@ export const PinTool: AtlasdrawTool = {
       type: "custom",
       customType: "pin",
       geo: { kind: "point", lng, lat, zRef },
-      // Geographic — the only creation mode (maintainer decision, 2026-07-19).
-      scaleMode: "geographic",
       data: { label: "Pin" },
     });
   },

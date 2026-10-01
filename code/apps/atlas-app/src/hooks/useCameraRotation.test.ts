@@ -1,21 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // RT-3/RT-9 — tests for useCameraRotation.
 //
-// Driven against `FakeMercatorMap` (geoOpFuzz.harness), which models bearing
-// with a real rotation matrix over real Web Mercator, rather than a stubbed
-// `cameraRotation`. Two reasons. The hook's whole job is to report the
-// *measured* rotation, so stubbing the measurement would leave nothing under
-// test but a `useState`. And the sign relationship it inherits — a map at
-// bearing θ shows east at screen angle −θ — is the one every other RT task
-// agrees with; asserting it here is what keeps the compass needle and the
-// annotations turning the same way.
+// Driven against `FakeMercatorMap`, which models bearing with a real rotation
+// matrix over real Web Mercator. The sign relationship — a map at bearing θ
+// shows east at screen angle −θ — is what keeps the compass needle and the
+// turned drawing layer turning the same way.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { renderHook, cleanup, act } from "@testing-library/react";
 
-import { FakeMercatorMap } from "./geoOpFuzz.harness";
+import { FakeMercatorMap } from "./__tests__/fakeMercatorMap";
 import { useCameraRotation } from "./useCameraRotation";
 
 import type maplibregl from "maplibre-gl";

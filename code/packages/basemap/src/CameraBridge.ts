@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// ADR-0015 spike — the camera bridge.
+//
+// The camera bridge (ADR-0015).
 //
 // The map owns the camera. On every map `move` the bridge writes Excalidraw's
 // scrollX / scrollY / zoom from it and writes no element. When Excalidraw moves
@@ -42,7 +43,7 @@ export interface CameraBridgeStats {
 }
 
 export class CameraBridge {
-  readonly frame: WorldFrame;
+  private readonly getFrame: () => WorldFrame;
   private readonly map: BridgeMap;
   private readonly scene: BridgeScene;
   private attached = false;
@@ -54,17 +55,26 @@ export class CameraBridge {
    * `viewportSize` is the MAP's size. The drawing layer and the map share a
    * top-left corner but not a width — the sheet panel narrows only the map —
    * so the camera centre lands at the map's centre in both.
+   *
+   * `frame` is read on every exchange: opening a document changes it, and the
+   * next camera event must already use the new one.
    */
   constructor(opts: {
     map: BridgeMap;
     scene: BridgeScene;
-    frame: WorldFrame;
+    frame: WorldFrame | (() => WorldFrame);
     viewportSize: () => { width: number; height: number };
   }) {
     this.map = opts.map;
     this.scene = opts.scene;
-    this.frame = opts.frame;
+    const frame = opts.frame;
+    this.getFrame = typeof frame === "function" ? frame : () => frame;
     this.viewportSize = opts.viewportSize;
+  }
+
+  /** The world frame the bridge maps with now. */
+  get frame(): WorldFrame {
+    return this.getFrame();
   }
 
   attach(): void {
@@ -91,7 +101,7 @@ export class CameraBridge {
       return;
     }
     const { width, height } = this.viewportSize();
-    const v = viewportFor(this.frame, {
+    const v = viewportFor(this.getFrame(), {
       center: this.map.getCenter(),
       zoom: this.map.getZoom(),
       width,
@@ -133,7 +143,7 @@ export class CameraBridge {
     // (MapLibre clamps a centre or zoom) cannot bounce the same value back.
     this.written = { scrollX, scrollY, zoom: zoom.value };
     this.map.jumpTo(
-      cameraFor(this.frame, {
+      cameraFor(this.getFrame(), {
         scrollX,
         scrollY,
         zoom: zoom.value,

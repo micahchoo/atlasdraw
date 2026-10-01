@@ -39,6 +39,7 @@ import {
   type AtlasdrawDocument,
   type Manifest,
 } from "@atlasdraw/data";
+import { documentFrame } from "@atlasdraw/geo";
 
 import type { FeatureCollection } from "geojson";
 
@@ -160,6 +161,7 @@ export function buildCLIManifest(opts: {
     updatedAt: now,
     basemap: { type: "registry", id: "default" },
     camera: { center: [0, 0], zoom: 1, bearing: 0, pitch: 0 },
+    world: documentFrame(0, 0),
     layers: [
       {
         kind: "data",

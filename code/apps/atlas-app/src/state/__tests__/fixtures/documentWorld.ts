@@ -185,7 +185,8 @@ export const SAVED_ULID = "01HZ8KQR5Z3MV7BJ4N6XPYD9TF";
  * beside the data and raster layers. This is the format of every file saved
  * before the v1 → v2 migration, so loading it exercises that migration.
  */
-export interface SavedManifestV1 extends Omit<Manifest, "version" | "layers"> {
+export interface SavedManifestV1
+  extends Omit<Manifest, "version" | "layers" | "world"> {
   version: 1;
   layers: Array<
     | Manifest["layers"][number]

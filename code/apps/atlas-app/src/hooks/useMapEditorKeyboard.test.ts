@@ -23,21 +23,17 @@ function fireKey(
   (target ?? window).dispatchEvent(event);
 }
 
-function fireKeyUp(init: Partial<KeyboardEventInit> & { code?: string }) {
-  window.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, ...init }));
-}
-
 function baseParams(
   overrides: Partial<Parameters<typeof useMapEditorKeyboard>[0]> = {},
 ) {
   return {
-    spaceHeldRef: { current: false },
     excalidrawAPI: null as ExcalidrawImperativeAPI | null,
     showShortcuts: false,
     setShowShortcuts: vi.fn(),
     setShowQuickActions: vi.fn(),
     onSave: vi.fn(),
     onOpen: vi.fn(),
+    onZoomAction: vi.fn(() => true),
     ...overrides,
   };
 }
@@ -46,33 +42,56 @@ afterEach(() => {
   cleanup();
 });
 
-describe("useMapEditorKeyboard — space-held tracker", () => {
-  it("sets spaceHeldRef true on keydown Space and false on keyup", () => {
+describe("useMapEditorKeyboard — zoom keys go to the map", () => {
+  it.each([
+    ["Equal", "zoomIn"],
+    ["NumpadAdd", "zoomIn"],
+    ["Minus", "zoomOut"],
+    ["NumpadSubtract", "zoomOut"],
+    ["Digit0", "resetZoom"],
+  ])("Ctrl+%s → %s, and the browser does not zoom the page", (code, type) => {
     const params = baseParams();
     renderHook(() => useMapEditorKeyboard(params));
-
-    fireKey({ code: "Space" });
-    expect(params.spaceHeldRef.current).toBe(true);
-
-    fireKeyUp({ code: "Space" });
-    expect(params.spaceHeldRef.current).toBe(false);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      code,
+      ctrlKey: true,
+    });
+    window.dispatchEvent(event);
+    expect(params.onZoomAction).toHaveBeenCalledWith({ type });
+    expect(event.defaultPrevented).toBe(true);
   });
 
-  it("ignores repeat keydown events (does not re-trigger)", () => {
+  it("leaves a key Excalidraw already took (its own action routes it)", () => {
     const params = baseParams();
     renderHook(() => useMapEditorKeyboard(params));
-
-    fireKey({ code: "Space", repeat: true });
-    expect(params.spaceHeldRef.current).toBe(false);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      code: "Equal",
+      ctrlKey: true,
+    });
+    event.preventDefault();
+    window.dispatchEvent(event);
+    expect(params.onZoomAction).not.toHaveBeenCalled();
   });
 
-  it("removes its listeners on unmount", () => {
+  it("leaves a key typed into an input alone", () => {
     const params = baseParams();
-    const { unmount } = renderHook(() => useMapEditorKeyboard(params));
-    unmount();
+    renderHook(() => useMapEditorKeyboard(params));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireKey({ code: "Equal", ctrlKey: true }, input);
+    input.remove();
+    expect(params.onZoomAction).not.toHaveBeenCalled();
+  });
 
-    fireKey({ code: "Space" });
-    expect(params.spaceHeldRef.current).toBe(false);
+  it("does nothing without Ctrl or Cmd", () => {
+    const params = baseParams();
+    renderHook(() => useMapEditorKeyboard(params));
+    fireKey({ code: "Equal" });
+    expect(params.onZoomAction).not.toHaveBeenCalled();
   });
 });
 

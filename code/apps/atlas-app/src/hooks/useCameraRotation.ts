@@ -1,37 +1,28 @@
 /**
  * useCameraRotation — how far the camera is turned, as React state.
  *
- * RT-3/RT-9. Nothing in the app read the live camera rotation before this: the
- * only `getBearing()` calls in the tree were two test mocks returning 0. The
- * compass needs it to draw, and RT-9's drawing gate needs it to decide.
+ * The compass draws from it, the drawing gate decides from it, and the
+ * drawing layer is turned by the same angle (useCameraBridge), so all three
+ * agree.
  *
- * It reports `cameraRotation(map)` — the *measured* screen rotation of
- * geographic east — rather than `map.getBearing()`, for the reason RT-2
- * established: nobody has run this app, and measuring means no code has to be
- * right about MapLibre's bearing sign convention. The compass, the annotation
- * anchors and the printed north arrow then all turn off the same number, so
- * they cannot disagree with each other even if that convention is the opposite
- * of what we assume.
+ * The angle is the screen rotation of geographic east, y-down: MapLibre's
+ * bearing is the compass direction at the top of the screen, so east sits at
+ * `-bearing`. `cameraRotationRoundTrip.test.ts` checks that sign against a
+ * real Mercator projection.
  *
  * Subscribed to `rotate` alone. Pitch is impossible (`maxPitch: 0`), and pan
- * and zoom cannot change the rotation of east on screen under Mercator, so the
- * broader `move` this could have piggybacked on would only add re-renders.
+ * and zoom cannot change the rotation of east on screen under Mercator.
  */
 
 import { useEffect, useState } from "react";
 
-import { cameraRotation } from "@atlasdraw/geo";
-
 import type maplibregl from "maplibre-gl";
 
 /**
- * Rotations closer to north than this read as north.
- *
- * Two things need the tolerance. `cameraRotation` measures rather than reads,
- * so it returns float noise rather than a clean 0 even for a camera sitting at
- * bearing 0. And `resetNorth` animates: the last frames before it settles are
- * a hair off, and a drawing gate that flickers back on a frame early is worse
- * than one that rounds. 0.01° is far below anything a user can see or aim at.
+ * Rotations closer to north than this read as north. `resetNorth` animates:
+ * the last frames before it settles are a hair off, and a drawing gate that
+ * flickers back on a frame early is worse than one that rounds. 0.01° is far
+ * below anything a user can see or aim at.
  */
 const NORTH_EPSILON_DEG = 0.01;
 
@@ -46,7 +37,7 @@ const NORTH_UP: CameraRotation = { degrees: 0, isRotated: false };
 
 /** Read the rotation off a map, snapping near-north to exactly north. */
 function read(map: maplibregl.Map): CameraRotation {
-  const degrees = (cameraRotation(map) * 180) / Math.PI;
+  const degrees = -map.getBearing();
   if (Math.abs(degrees) < NORTH_EPSILON_DEG) {
     return NORTH_UP;
   }

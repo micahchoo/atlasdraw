@@ -234,11 +234,11 @@
   box-shadow: var(--ad-shadow-tracing, 0 1px 3px rgba(0, 0, 0, 0.12));
 }
 
-/* ADR-0015 spike — under world coordinates the camera bearing is a display
- * rotation of the drawing canvases about the map centre. Canvases only: the
- * sidebar is a DOM child of the Excalidraw container and must not turn.
- * useCameraBridge sets both variables on the map's `move`. */
-.excalidrawLayer[data-world-coords="on"] :global(.excalidraw__canvas) {
+/* ADR-0015 — the camera bearing is a display rotation of the drawing
+ * canvases about the map centre. Canvases only: the sidebar is a DOM child of
+ * the Excalidraw container and must not turn. useCameraBridge sets both
+ * variables on the map's `rotate` and `resize`. */
+.excalidrawLayer :global(.excalidraw__canvas) {
   transform-origin: var(--world-origin, 50% 50%);
   transform: rotate(var(--world-rotate, 0deg));
 }

@@ -4,7 +4,7 @@
 //
 // Mocks the `ToolContext` and `ToolPointerEvent` literals; verifies that
 // onPointerDown calls `map.unproject` with the click point and emits an
-// `AtlasdrawElementSeed` whose geo / scaleMode / data fields match the spec.
+// `AtlasdrawElementSeed` whose geo / data fields match the spec.
 
 import { describe, it, expect, vi } from "vitest";
 
@@ -65,7 +65,6 @@ function makeCtx(
     },
     excalidraw: {
       addElement,
-      updateElement: vi.fn(),
       getActiveTool: vi.fn(() => "selection"),
     },
     ui: {
@@ -111,15 +110,6 @@ describe("PinTool", () => {
       lat: 40.75,
       zRef: 12,
     });
-  });
-
-  it("emits a seed with scaleMode='geographic' (the only creation mode)", () => {
-    const { ctx, addElement } = makeCtx();
-
-    PinTool.onPointerDown(makePointerEvent(), ctx);
-
-    const seed = addElement.mock.calls[0][0] as AtlasdrawElementSeed;
-    expect(seed.scaleMode).toBe("geographic");
   });
 
   it("emits a seed.data.label = 'Pin'", () => {

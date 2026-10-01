@@ -1,17 +1,17 @@
-// packages/geo/src/bounds.ts
 // SPDX-License-Identifier: MIT
-// Phase 1 Wave 2 Task 10 — Scene-wide geographic bounds.
 //
-// Iterates geo-anchored elements, unions their lng/lat extents into a single
-// box. Used by viewport "zoom to fit" and persistence camera defaults.
+// The lng/lat box that holds a drawing: "fit the map to the content", "zoom
+// to this annotation".
 //
 // The FeatureCollection equivalent ("zoom to layer") lives in atlas-app's
-// lib/fitMapToContent.ts rather than here: @atlasdraw/geo deliberately carries
-// no GeoJSON type dependency, and a data layer is never an Excalidraw element.
+// lib/fitMapToContent.ts: @atlasdraw/geo carries no GeoJSON type dependency,
+// and a data layer is never an Excalidraw element.
 
-import { isGeoCustomData } from "./types.js";
+import { shapeOutline } from "./sceneGeometry.js";
+import { toLngLat } from "./world.js";
 
-import type { ExcalidrawElementLike } from "./excalidrawTypes.js";
+import type { SceneShape } from "./sceneGeometry.js";
+import type { WorldFrame } from "./world.js";
 
 export type LngLatBox = {
   west: number;
@@ -20,76 +20,34 @@ export type LngLatBox = {
   north: number;
 };
 
+/**
+ * The box of every live element's drawn outline, or null when there is none.
+ * Scene y grows southward and Mercator is monotone, so the scene box's corners
+ * are the lng/lat box's corners.
+ */
 export function computeSceneBounds(
-  elements: ReadonlyArray<ExcalidrawElementLike>,
+  elements: ReadonlyArray<SceneShape & { readonly isDeleted?: boolean }>,
+  frame: WorldFrame,
 ): LngLatBox | null {
-  let west = Infinity;
-  let east = -Infinity;
-  let south = Infinity;
-  let north = -Infinity;
-  let any = false;
-
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
   for (const el of elements) {
-    if (!isGeoCustomData(el.customData)) {
+    if (el.isDeleted) {
       continue;
     }
-    const geo = el.customData.geo;
-
-    let elWest: number;
-    let elEast: number;
-    let elSouth: number;
-    let elNorth: number;
-
-    if (geo.kind === "point") {
-      elWest = elEast = geo.lng;
-      elSouth = elNorth = geo.lat;
-    } else if (geo.kind === "bbox") {
-      elWest = geo.west;
-      elEast = geo.east;
-      elSouth = geo.south;
-      elNorth = geo.north;
-    } else {
-      // polyline
-      if (geo.coordinates.length === 0) {
-        continue;
-      }
-      elWest = Infinity;
-      elEast = -Infinity;
-      elSouth = Infinity;
-      elNorth = -Infinity;
-      for (const [lng, lat] of geo.coordinates) {
-        if (lng < elWest) {
-          elWest = lng;
-        }
-        if (lng > elEast) {
-          elEast = lng;
-        }
-        if (lat < elSouth) {
-          elSouth = lat;
-        }
-        if (lat > elNorth) {
-          elNorth = lat;
-        }
-      }
+    for (const p of shapeOutline(el)) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
     }
-
-    if (elWest < west) {
-      west = elWest;
-    }
-    if (elEast > east) {
-      east = elEast;
-    }
-    if (elSouth < south) {
-      south = elSouth;
-    }
-    if (elNorth > north) {
-      north = elNorth;
-    }
-    any = true;
   }
-
-  if (!any) {
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
     return null;
   }
-  return { west, south, east, north };
+  const nw = toLngLat(frame, { x: minX, y: minY });
+  const se = toLngLat(frame, { x: maxX, y: maxY });
+  return { west: nw.lng, north: nw.lat, east: se.lng, south: se.lat };
 }

@@ -6,12 +6,12 @@
 //
 //   - map anchors:     map.project([lng, lat]) → screen pixels; re-projected
 //                      on every map move + zoomend.
-//   - annotation anchors (element / raster): sceneCoordsToViewportCoords (from
-//                      @atlasdraw/common — verified at
-//                      code/packages/common/src/utils.ts:439) on the element's
-//                      bounding-box top-right, or map.project of the raster's
-//                      corner centroid; re-projected on Excalidraw
-//                      scrollX/scrollY/zoom changes and map moves.
+//   - annotation anchors (element / raster): the element's top-right corner,
+//                      from its scene coordinates through the world frame to
+//                      lng/lat, then map.project; or map.project of the
+//                      raster's corner centroid. Re-projected on drawing
+//                      changes and map moves. Through the map, the anchor
+//                      turns with a turned camera, as the drawing does.
 //
 // While comment mode is active and no anchor is pending, a full-overlay
 // click-intercept div captures every click and runs the hit-test cascade —
@@ -30,17 +30,12 @@
 
 import React, { useEffect, useState } from "react";
 
-import {
-  sceneCoordsToViewportCoords,
-  viewportCoordsToSceneCoords,
-} from "@atlasdraw/common";
+import { shapeOutline, toLngLat, toScene } from "@atlasdraw/geo";
 
 import {
   normalizeAnchor,
   type CommentAnchor as CommentAnchorData,
 } from "@atlasdraw/protocol";
-
-import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
 import { useCollab } from "../hooks/useCollab";
 
@@ -73,21 +68,15 @@ type ExcalidrawAPIShape = {
   ) => (() => void) | undefined | void;
   getSceneElements: () => ReadonlyArray<{
     id: string;
+    type?: string;
     x: number;
     y: number;
     width: number;
     height: number;
+    angle?: number;
+    points?: ReadonlyArray<readonly [number, number]>;
   }>;
   getAppState: () => unknown;
-};
-
-/** The slice of Excalidraw app state both projections need. */
-type AppStateShape = {
-  zoom: { value: NormalizedZoomValue };
-  offsetLeft: number;
-  offsetTop: number;
-  scrollX: number;
-  scrollY: number;
 };
 
 export interface CommentAnchorsOverlayProps {
@@ -210,25 +199,34 @@ export function CommentAnchorsOverlay(
   }, [excalidrawAPI]);
 
   // ---- Click-intercept hit-test cascade --------------------------------
-  // Viewport (client) coords → scene coords, then a bounding-box probe over
-  // every element. Elements are stored back-to-front, so iterate in reverse
-  // and let the topmost match win. Simple AABB is v1's rotation tolerance.
-  const hitTestElement = (clientX: number, clientY: number): string | null => {
+  // The click's lng/lat through the world frame is its scene point, at any
+  // camera turn. Then a box probe over every element's drawn outline.
+  // Elements are stored back-to-front, so iterate in reverse and let the
+  // topmost match win.
+  const hitTestElement = (lngLat: {
+    lng: number;
+    lat: number;
+  }): string | null => {
     if (!excalidrawAPI) {
       return null;
     }
-    const { x: sceneX, y: sceneY } = viewportCoordsToSceneCoords(
-      { clientX, clientY },
-      excalidrawAPI.getAppState() as AppStateShape,
+    const p = toScene(
+      currentDocument().snapshot().world,
+      lngLat.lng,
+      lngLat.lat,
     );
     const elements = excalidrawAPI.getSceneElements();
     for (let i = elements.length - 1; i >= 0; i--) {
       const el = elements[i]!;
-      const x0 = Math.min(el.x, el.x + el.width);
-      const x1 = Math.max(el.x, el.x + el.width);
-      const y0 = Math.min(el.y, el.y + el.height);
-      const y1 = Math.max(el.y, el.y + el.height);
-      if (sceneX >= x0 && sceneX <= x1 && sceneY >= y0 && sceneY <= y1) {
+      const outline = shapeOutline({ ...el, type: el.type ?? "" });
+      const xs = outline.map((q) => q.x);
+      const ys = outline.map((q) => q.y);
+      if (
+        p.x >= Math.min(...xs) &&
+        p.x <= Math.max(...xs) &&
+        p.y >= Math.min(...ys) &&
+        p.y <= Math.max(...ys)
+      ) {
         return el.id;
       }
     }
@@ -267,7 +265,7 @@ export function CommentAnchorsOverlay(
     const lngLatRecord = { lng: lngLat.lng, lat: lngLat.lat };
 
     // Cascade: Excalidraw element → raster layer → bare map point.
-    const elementId = hitTestElement(e.clientX, e.clientY);
+    const elementId = hitTestElement(lngLatRecord);
     if (elementId) {
       setDraftLngLat(lngLatRecord);
       setPendingAnchor({
@@ -347,7 +345,7 @@ export function CommentAnchorsOverlay(
     }
     // annotation/source === "element" — normalizeAnchor already rewrote v1
     // "element" anchors into this canonical shape.
-    if (!excalidrawAPI) {
+    if (!excalidrawAPI || !map) {
       return null;
     }
     const el = excalidrawAPI
@@ -356,13 +354,13 @@ export function CommentAnchorsOverlay(
     if (!el) {
       return null;
     }
-    // Element top-right corner — using Excalidraw element shape: x,y is
-    // top-left scene-coords; width/height are scene units.
-    const { x, y } = sceneCoordsToViewportCoords(
-      { sceneX: el.x + el.width, sceneY: el.y },
-      excalidrawAPI.getAppState() as AppStateShape,
-    );
-    return { screenX: x, screenY: y };
+    // Element top-right corner: x,y is the top-left in scene coordinates.
+    const { lng, lat } = toLngLat(currentDocument().snapshot().world, {
+      x: el.x + el.width,
+      y: el.y,
+    });
+    const p = map.project([lng, lat]);
+    return { screenX: p.x, screenY: p.y };
   };
 
   const projected: ProjectedAnchor[] = [];

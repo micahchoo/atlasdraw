@@ -28,6 +28,7 @@ function synthAtlasdrawDocument(
     updatedAt: "2025-01-02T00:00:00.000Z",
     basemap: { type: "registry", id: "osm-standard" },
     camera: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [
       {
         kind: "data",

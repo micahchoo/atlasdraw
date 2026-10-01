@@ -341,6 +341,7 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
+import { styleScale } from "../atlasStyleScale";
 import { isCollarMode } from "../collar";
 import {
   getDefaultAppState,
@@ -2242,7 +2243,6 @@ class App extends React.Component<AppProps, AppState> {
       collarMenuTarget,
       rightSidebarWidth,
       onSidebarLayoutChange,
-      onScrollBackToContent,
       renderCustomStats,
     } = this.props;
 
@@ -2362,7 +2362,6 @@ class App extends React.Component<AppProps, AppState> {
                               collarToolbarTarget={collarToolbarTarget}
                               collarMenuTarget={collarMenuTarget}
                               onSidebarLayoutChange={onSidebarLayoutChange}
-                              onScrollBackToContent={onScrollBackToContent}
                               renderCustomStats={renderCustomStats}
                               showExitZenModeBtn={
                                 typeof this.props?.zenModeEnabled ===
@@ -4052,13 +4051,13 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
       strokeStyle: this.state.currentItemStrokeStyle,
       roundness: null,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,
       text,
-      fontSize: this.state.currentItemFontSize,
+      fontSize: this.sceneStyleSize(this.state.currentItemFontSize),
       fontFamily: this.state.currentItemFontFamily,
       textAlign: DEFAULT_TEXT_ALIGN,
       verticalAlign: DEFAULT_VERTICAL_ALIGN,
@@ -4254,6 +4253,14 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private cancelInProgressAnimation: (() => void) | null = null;
+
+  /**
+   * Atlasdraw (ADR-0015): a stroke width or font size from the current item
+   * styles, in scene units for a new element. With `screenSizedStyles` the
+   * style is screen pixels, so it is divided by the zoom value.
+   */
+  private sceneStyleSize = (size: number): number =>
+    size * styleScale(this.props.screenSizedStyles, this.state.zoom.value);
 
   scrollToContent = (
     /**
@@ -6139,7 +6146,7 @@ class App extends React.Component<AppProps, AppState> {
 
     const lineHeight =
       existingTextElement?.lineHeight || getLineHeight(fontFamily);
-    const fontSize = this.state.currentItemFontSize;
+    const fontSize = this.sceneStyleSize(this.state.currentItemFontSize);
 
     if (
       !existingTextElement &&
@@ -6208,7 +6215,7 @@ class App extends React.Component<AppProps, AppState> {
         strokeColor: this.state.currentItemStrokeColor,
         backgroundColor: this.state.currentItemBackgroundColor,
         fillStyle: this.state.currentItemFillStyle,
-        strokeWidth: this.state.currentItemStrokeWidth,
+        strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
         strokeStyle: this.state.currentItemStrokeStyle,
         roughness: this.state.currentItemRoughness,
         opacity: this.state.currentItemOpacity,
@@ -8785,7 +8792,7 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,
@@ -8856,7 +8863,7 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: "transparent",
       backgroundColor: "transparent",
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       roundness: this.getCurrentItemRoundness("embeddable"),
@@ -8903,7 +8910,7 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       roundness: null,
@@ -9055,7 +9062,9 @@ class App extends React.Component<AppProps, AppState> {
               strokeColor: this.state.currentItemStrokeColor,
               backgroundColor: this.state.currentItemBackgroundColor,
               fillStyle: this.state.currentItemFillStyle,
-              strokeWidth: this.state.currentItemStrokeWidth,
+              strokeWidth: this.sceneStyleSize(
+                this.state.currentItemStrokeWidth,
+              ),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -9082,7 +9091,9 @@ class App extends React.Component<AppProps, AppState> {
               strokeColor: this.state.currentItemStrokeColor,
               backgroundColor: this.state.currentItemBackgroundColor,
               fillStyle: this.state.currentItemFillStyle,
-              strokeWidth: this.state.currentItemStrokeWidth,
+              strokeWidth: this.sceneStyleSize(
+                this.state.currentItemStrokeWidth,
+              ),
               strokeStyle: this.state.currentItemStrokeStyle,
               roughness: this.state.currentItemRoughness,
               opacity: this.state.currentItemOpacity,
@@ -9242,7 +9253,7 @@ class App extends React.Component<AppProps, AppState> {
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: this.sceneStyleSize(this.state.currentItemStrokeWidth),
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
       opacity: this.state.currentItemOpacity,

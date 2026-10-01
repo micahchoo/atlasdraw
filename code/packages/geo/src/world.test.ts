@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// ADR-0015 spike — WorldFrame round trips and agreement with a Mercator camera.
+// WorldFrame round trips and agreement with a Mercator camera.
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -7,8 +7,11 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_MERCATOR_LAT,
   WORLD_TILE_SIZE,
+  REFERENCE_ZOOM,
   cameraFor,
+  documentFrame,
   frameAt,
+  sceneUnitsPerPixel,
   toLngLat,
   toScene,
   viewportFor,
@@ -49,7 +52,7 @@ const camera = fc.record({
   height: fc.integer({ min: 200, max: 2000 }),
 });
 
-describe("WorldFrame (ADR-0015 spike)", () => {
+describe("WorldFrame", () => {
   it("frameAt rounds the reference zoom and origin to integers", () => {
     const f = frameAt(13.4, 52.5, 12.7);
     expect(f.z0).toBe(13);
@@ -59,6 +62,24 @@ describe("WorldFrame (ADR-0015 spike)", () => {
     const p = toScene(f, 13.4, 52.5);
     expect(Math.abs(p.x)).toBeLessThanOrEqual(0.5);
     expect(Math.abs(p.y)).toBeLessThanOrEqual(0.5);
+  });
+
+  it("a document frame has z0 = 22 and its origin at the given point", () => {
+    const f = documentFrame(77.2, 28.6);
+    expect(f.z0).toBe(REFERENCE_ZOOM);
+    expect(REFERENCE_ZOOM).toBe(22);
+    const p = toScene(f, 77.2, 28.6);
+    expect(Math.abs(p.x)).toBeLessThanOrEqual(0.5);
+    expect(Math.abs(p.y)).toBeLessThanOrEqual(0.5);
+  });
+
+  it("sceneUnitsPerPixel is one screen pixel at that map zoom", () => {
+    fc.assert(
+      fc.property(frame, camera, (f, cam) => {
+        const units = sceneUnitsPerPixel(f, cam.zoom);
+        expect(units * viewportFor(f, cam).zoom).toBeCloseTo(1, 12);
+      }),
+    );
   });
 
   it("toLngLat inverts toScene", () => {

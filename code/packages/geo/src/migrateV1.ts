@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// ADR-0015 spike — v1 (screen pixels + customData.geo) → world coordinates.
+//
+// Version 1 elements (screen pixels + customData.geo) → world coordinates.
 //
 // A v1 element's truth is its anchor plus the `_lastSync` baselines, read the
 // way `CoordinateSync._projectElement` reads them (the fallbacks included), so
@@ -11,12 +12,32 @@
 // the baseline scaled by 2^(z0 − zRef), once.
 
 import { isGeoCustomData } from "./types.js";
-import { normalizeLng } from "./projection.js";
 import { toScene } from "./world.js";
 
-import type { ExcalidrawElementLike } from "./excalidrawTypes.js";
 import type { GeoCustomData } from "./types.js";
 import type { WorldFrame } from "./world.js";
+
+/** The element fields the migration reads and writes. */
+export interface V1Element {
+  readonly type?: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly angle?: number;
+  readonly strokeWidth?: number;
+  readonly fontSize?: number;
+  readonly points?: ReadonlyArray<readonly [number, number]>;
+  readonly customData?: unknown;
+}
+
+/**
+ * Longitude in [-180, 180]. v1 stored anchors through this; a value outside
+ * it came from a map scrolled past the antimeridian.
+ */
+function normalizeLng(lng: number): number {
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}
 
 /** The keys that exist only to keep v1's screen copy in step. */
 const V1_KEYS = new Set([
@@ -27,13 +48,17 @@ const V1_KEYS = new Set([
   "_lastSync",
 ]);
 
-function stripV1(customData: unknown): Record<string, unknown> | undefined {
+function stripV1(
+  customData: unknown,
+  extra: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const rest: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(customData as Record<string, unknown>)) {
     if (!V1_KEYS.has(k)) {
       rest[k] = v;
     }
   }
+  Object.assign(rest, extra);
   return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
@@ -42,15 +67,46 @@ function num(v: unknown): number | undefined {
 }
 
 /**
+ * The camera's turn when a v1 file was saved, in radians, y-down.
+ *
+ * v1 wrote a geographic box's angle as its own turn (`_lastSync.a0`) plus the
+ * camera's, and kept no `a0` for `screen` and `hybrid` boxes. Any box with
+ * both gives the camera's turn; the file records it nowhere else. 0 when no
+ * box has both.
+ */
+export function savedCameraTurn(elements: readonly unknown[]): number {
+  for (const el of elements) {
+    const e = el as V1Element;
+    if (!isGeoCustomData(e?.customData) || e.customData.geo.kind !== "bbox") {
+      continue;
+    }
+    const sync = ((e.customData as { _lastSync?: unknown })._lastSync ??
+      {}) as Record<string, unknown>;
+    const a0 = num(sync.a0);
+    if (a0 !== undefined && typeof e.angle === "number") {
+      return e.angle - a0;
+    }
+  }
+  return 0;
+}
+
+/**
  * Migrate one v1 element. An element without an anchor is returned as it is:
  * v1 draws it fixed to the screen, which no world position reproduces.
  *
  * `screen` and `hybrid` scale modes are migrated as geographic. No creation
  * path has stamped them since 2026-07-19 and no saved document uses them.
+ *
+ * `savedTurn` is `savedCameraTurn` of the element's file.
+ *
+ * A point-anchored ellipse is a pin (the pin tool is the only writer of
+ * one). It gets `customData.tool = "pin"`, which a new pin also carries, so
+ * export can still give it as a point.
  */
-export function migrateElementV1<T extends ExcalidrawElementLike>(
+export function migrateElementV1<T extends V1Element>(
   el: T,
   frame: WorldFrame,
+  savedTurn = 0,
 ): T {
   if (!isGeoCustomData(el.customData)) {
     return el;
@@ -60,9 +116,10 @@ export function migrateElementV1<T extends ExcalidrawElementLike>(
   const anchor = cd.geo;
   const s = Math.pow(2, frame.z0 - anchor.zRef);
   const strokeWidth0 = num(sync.strokeWidth0) ?? el.strokeWidth;
+  const isPin = anchor.kind === "point" && el.type === "ellipse";
   const base = {
     ...el,
-    customData: stripV1(el.customData),
+    customData: stripV1(el.customData, isPin ? { tool: "pin" } : {}),
     ...(strokeWidth0 !== undefined ? { strokeWidth: strokeWidth0 * s } : {}),
   };
   switch (anchor.kind) {
@@ -83,7 +140,11 @@ export function migrateElementV1<T extends ExcalidrawElementLike>(
     case "bbox": {
       const nw = toScene(frame, normalizeLng(anchor.west), anchor.north);
       const se = toScene(frame, normalizeLng(anchor.east), anchor.south);
-      const angle = num(sync.a0) ?? el.angle;
+      // `a0` is the user's own turn. Without it, the saved angle holds the
+      // camera's turn at save time as well.
+      const a0 = num(sync.a0);
+      const angle =
+        a0 ?? (el.angle !== undefined ? el.angle - savedTurn : undefined);
       return {
         ...base,
         x: nw.x,

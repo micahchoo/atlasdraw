@@ -18,6 +18,7 @@ import { ulid } from "ulid";
 
 import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
 import { CURRENT_MANIFEST_VERSION, read, write } from "@atlasdraw/data";
+import { documentFrame } from "@atlasdraw/geo";
 
 import type {
   BinaryFileData,
@@ -28,6 +29,8 @@ import type {
 
 import type { AtlasdrawDocument, Camera, Manifest } from "@atlasdraw/data";
 
+import { placeDrawing, type PlaceableElement } from "../lib/placeDrawing";
+
 import {
   DEFAULT_CAMERA,
   DEFAULT_DOCUMENT_TITLE,
@@ -37,6 +40,7 @@ import {
   type DocumentState,
   type OverlayEntry,
 } from "./document";
+
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
 import { useBasemapStore } from "./basemap";
@@ -175,6 +179,7 @@ export function toFile(
         id: useBasemapStore.getState().activeBasemapId,
       },
       camera: liveCamera() ?? state.camera,
+      world: state.world,
       layers: state.overlays.map(manifestLayer),
       permissions: { publicView: false },
     },
@@ -298,6 +303,7 @@ export function fromFile(file: AtlasdrawDocument): Partial<DocumentState> {
     updatedAt: file.manifest.updatedAt,
     title: file.manifest.title,
     camera: file.manifest.camera,
+    world: file.manifest.world,
     overlays,
     featureCollections,
     images,
@@ -403,8 +409,8 @@ export async function loadDocument(
 // ---------------------------------------------------------------------------
 
 /**
- * A bare `.excalidraw` file as a new document: the drawing comes in, with no
- * map layers, the current basemap and the default camera. Import only: the
+ * A bare `.excalidraw` file as a new document: the drawing comes in at the
+ * live camera (see placeDrawing), with no map layers and the current basemap. Import only: the
  * caller must not keep a writable handle to the source file, or a later save
  * would write zip bytes over it.
  *
@@ -439,6 +445,9 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
   }
 
   const now = new Date().toISOString();
+  // The drawing opens where the user is looking, at the size it had.
+  const camera = liveCamera() ?? DEFAULT_CAMERA;
+  const world = documentFrame(camera.center[0], camera.center[1]);
   return {
     manifest: {
       id: ulid(),
@@ -451,11 +460,16 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
         type: "registry",
         id: useBasemapStore.getState().activeBasemapId,
       },
-      camera: DEFAULT_CAMERA,
+      camera,
+      world,
       layers: [],
       permissions: { publicView: false },
     },
-    scene: obj.elements as AtlasdrawDocument["scene"],
+    scene: placeDrawing(
+      obj.elements as PlaceableElement[],
+      world,
+      camera,
+    ) as unknown as AtlasdrawDocument["scene"],
     layers: new Map(),
     styleRef: {},
     files,

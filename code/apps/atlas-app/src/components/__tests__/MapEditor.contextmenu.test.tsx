@@ -13,7 +13,7 @@
 // directly:
 //   - assert the item registered with name === "atlasConvertToDataLayer".
 //   - invoke `predicate(elements, appState)` with selection fixtures:
-//       single geo polygon  → true
+//       single polygon      → true
 //       text selection      → false
 //       multi-selection     → false
 //   - invoke `perform(elements, appState)` with the polygon fixture and
@@ -105,23 +105,14 @@ vi.mock("@atlasdraw/basemap", () => ({
   },
 }));
 
-// Fake selected element — a rectangle with valid bbox geo. Mutated per-test.
+// Fake selected element — a rectangle in world coordinates. Mutated per-test.
 const fakeRectangleEl = {
   id: "anno-1",
   type: "rectangle",
-  customData: {
-    geo: {
-      kind: "bbox",
-      west: -1,
-      south: -1,
-      east: 1,
-      north: 1,
-      zRef: 4,
-    },
-    scaleMode: "geographic",
-    projection: "mercator",
-    schemaVersion: 1,
-  },
+  x: 0,
+  y: 0,
+  width: 2048,
+  height: 1024,
 };
 
 let currentScene: Array<typeof fakeRectangleEl> = [fakeRectangleEl];
@@ -272,7 +263,7 @@ const mockMap = {
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   // RT-3 — useCameraRotation reads the live camera on mount, via
-  // cameraRotation()'s north-up fast path. A map without it is not a map.
+  // useCameraRotation reads it. A map without it is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
@@ -290,14 +281,11 @@ vi.mock("../../hooks/useMapRef", () => ({
   }),
 }));
 
-vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
+vi.mock("../../hooks/useCameraBridge", () => ({
+  useCameraBridge: () => ({ bridge: null, onZoomAction: () => false }),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
-}));
-vi.mock("../../hooks/useGeoAnchor", () => ({
-  useGeoAnchor: vi.fn(),
 }));
 vi.mock("../../hooks/useLayerRegistrySync", () => ({
   useLayerRegistrySync: vi.fn(),
@@ -358,7 +346,7 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
     expect(typeof item.perform).toBe("function");
   });
 
-  it("predicate returns true for a single geo polygon selection", async () => {
+  it("predicate returns true for a single polygon selection", async () => {
     render(
       <ToastProvider>
         <MapEditor />
@@ -385,7 +373,7 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
     expect(result).toBe(false);
   });
 
-  it("predicate returns true for a single geo arrow selection", async () => {
+  it("predicate returns true for a single arrow selection", async () => {
     render(
       <ToastProvider>
         <MapEditor />

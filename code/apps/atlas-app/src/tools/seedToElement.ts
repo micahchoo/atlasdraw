@@ -1,50 +1,23 @@
 // apps/atlas-app/src/tools/seedToElement.ts
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 2 Wave 1a Task T-W1a-BRIDGE — AtlasdrawElementSeed → ExcalidrawElement bridge.
 //
-// Originally added in Phase 1 Wave 3b Task 14 for PinTool only. Phase 2 widened
-// it to the whole seed union — point, bbox and polyline geo across freedraw,
-// line, arrow, rectangle, ellipse and text elements.
+// AtlasdrawElementSeed → ExcalidrawElement, in the document's world frame.
 //
-// FU-2 (2026-07-31) deleted the seven Wave 1b tools (T03–T09) that used to be
-// this bridge's other callers; they had no runtime consumers and the native
-// Excalidraw toolbar had been the drawing path since Wave 4 T18. The branches
-// stay: `AtlasdrawElementSeed` is a public type and `registerTool` is a public
-// entry point, so the bridge's job is to accept any seed the union permits, not
-// only the ones a tool that ships today happens to emit. PinTool is the only
-// built-in producer now.
+// A tool says where an element goes in lng/lat (`seed.geo`) and at which map
+// zoom it was made (`seed.geo.zRef`). This bridge:
+//   1. Places every vertex with `toScene`: the element's x/y/points are world
+//      coordinates (ADR-0015), so no camera move ever rewrites them.
+//   2. Gives every size the tool states in screen pixels (pin diameter,
+//      default circle, font size, stroke width) in scene units at zRef, so it
+//      looks that size at the zoom where it was made.
+//   3. Keeps tool data under `customData._data`, and marks a pin with
+//      `customData.tool = "pin"` so export can give it as a point.
 //
-// 2026-07-31 (FU-2): those seven tool objects were deleted — they never
-// acquired a caller. The T03–T09 references below are history, not live
-// symbols; the branches they name are still here and still tested. Whether
-// any branch is now unreachable is a separate question (this file's only
-// caller is useAtlasdrawTool.ts:88, and PinTool is the only tool that can be
-// active), deliberately left to its own ticket rather than folded into the
-// deletion.
-//
-// Tools emit minimal seeds (geo + scaleMode + optional data + optional style).
-// This bridge:
-//   1. Projects geographic coords → scene/pixel coords using the live MapLibre map.
-//      - point  → single projectPoint call.
-//      - bbox   → project NW + SE corners, take min/max for x/y/width/height.
-//      - polyline → project every vertex; element x/y = first vertex; per-vertex
-//        `points[i]` = projected[i] - origin (relative LocalPoint tuples).
-//   2. Constructs a real `ExcalidrawElement` via the appropriate factory from
-//      `@atlasdraw/element` (`newElement`, `newFreeDrawElement`,
-//      `newLinearElement`, `newArrowElement`, `newTextElement`).
-//   3. Stamps the full `GeoCustomData` wrapper (`projection: "mercator"`,
-//      `schemaVersion: 1`) so `useCoordinateSync` recognizes it via
-//      `isGeoCustomData()` and re-projects on every camera move.
-//   4. Optional tool-supplied `seed.data` is preserved under the `_data` escape
-//      key to avoid colliding with reserved GeoCustomData fields. This escape
-//      is load-bearing — `useCoordinateSync` ignores unknown keys but the type
-//      guard rejects unknown reserved-key values.
-//
-// Q11 boundary: this bridge is HOST code (atlas-app side); importing maplibregl
-// + Excalidraw factories directly is fine. The Q11 ban applies to tool code
-// (`packages/tools`), not to the host bridge.
+// PinTool is the only built-in producer. The other branches accept the rest
+// of the seed union: `registerTool` is public, and a registered tool may emit
+// any seed the type permits.
 
-import { projectPoint } from "@atlasdraw/geo";
+import { sceneUnitsPerPixel, toScene } from "@atlasdraw/geo";
 
 import {
   newElement,
@@ -56,312 +29,201 @@ import {
 
 import { pointFrom } from "@atlasdraw/math";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawLinearElement,
-  ExcalidrawFreeDrawElement,
-} from "@atlasdraw/element/types";
+import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import type { LocalPoint } from "@atlasdraw/math";
 
 import type { AtlasdrawElementSeed } from "@atlasdraw/tools";
-import type { GeoCustomData } from "@atlasdraw/geo";
+import type { WorldFrame } from "@atlasdraw/geo";
 
-import type maplibregl from "maplibre-gl";
-
-// ---------------------------------------------------------------------------
-// Visual constants (Phase 2 — temporary defaults; full styling lands Phase 6)
-// ---------------------------------------------------------------------------
+// Screen-pixel sizes at the zoom the seed was made at.
 const PIN_DIAMETER_PX = 16;
 const PIN_STROKE_COLOR = "#1971c2";
 const PIN_FILL_COLOR = "#74c0fc";
-
-// A point seed for an ellipse carries no radius, so seed a marker-friendly
-// default. A tool that draws by dragging is expected to overwrite it on
-// pointermove via ctx.excalidraw.updateElement.
 const CIRCLE_DEFAULT_DIAMETER_PX = 40;
-
-// A text seed carries no width/height. Excalidraw recomputes via measureText
-// once the element renders; we just need a non-zero placeholder so layout
-// doesn't blow up. Real width/height comes from the text element factory's
-// internal sizing (see newTextElement).
-const TEXT_DEFAULT_FONT_SIZE = 20;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Project an array of [lng, lat] coords into scene-space tuples. */
-function projectCoords(
-  coords: ReadonlyArray<[number, number]>,
-  map: maplibregl.Map,
-): Array<{ x: number; y: number }> {
-  return coords.map(([lng, lat]) => projectPoint(map, lng, lat));
-}
+const TEXT_DEFAULT_FONT_SIZE_PX = 20;
+const DEFAULT_STROKE_WIDTH_PX = 2;
 
 /**
- * Convert projected scene-coords into element (x, y) origin + relative
- * `LocalPoint[]` (per Excalidraw's linear/freedraw convention: `points[0]` is
- * always [0, 0] and the element's x/y is the first vertex's scene position).
+ * Element x/y (the first vertex) and points relative to it, as Excalidraw's
+ * linear elements want them; width/height are the points' extent.
  */
-function buildLinearGeometry(projected: Array<{ x: number; y: number }>): {
+function linearGeometry(
+  coords: ReadonlyArray<[number, number]>,
+  frame: WorldFrame,
+): {
   x: number;
   y: number;
   points: LocalPoint[];
   width: number;
   height: number;
 } {
-  if (projected.length === 0) {
+  if (coords.length === 0) {
     throw new Error("seedToElement: linear/freedraw element needs >=1 point");
   }
-  const x = projected[0].x;
-  const y = projected[0].y;
-  const points = projected.map((p) => pointFrom<LocalPoint>(p.x - x, p.y - y));
-  // Bounding box of relative points (used for element width/height).
-  let minX = 0;
-  let minY = 0;
-  let maxX = 0;
-  let maxY = 0;
-  for (const p of points) {
-    if (p[0] < minX) {
-      minX = p[0];
-    }
-    if (p[1] < minY) {
-      minY = p[1];
-    }
-    if (p[0] > maxX) {
-      maxX = p[0];
-    }
-    if (p[1] > maxY) {
-      maxY = p[1];
-    }
-  }
+  const scene = coords.map(([lng, lat]) => toScene(frame, lng, lat));
+  const { x, y } = scene[0];
+  const points = scene.map((p) => pointFrom<LocalPoint>(p.x - x, p.y - y));
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
   return {
     x,
     y,
     points,
-    width: maxX - minX,
-    height: maxY - minY,
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
   };
 }
 
-/** Build the full GeoCustomData wrapper (+ optional `_data` escape). */
-function buildCustomData(seed: AtlasdrawElementSeed): GeoCustomData & {
-  _data?: unknown;
-} {
-  const wrapper: GeoCustomData = {
-    geo: seed.geo,
-    scaleMode: seed.scaleMode,
-    projection: "mercator",
-    schemaVersion: 1,
+/** Tool data, and the tool that made the element when it is a pin. */
+function customDataOf(
+  seed: AtlasdrawElementSeed,
+): Record<string, unknown> | undefined {
+  const pin = seed.type === "custom" && seed.customType === "pin";
+  if (!seed.data && !pin) {
+    return undefined;
+  }
+  return {
+    ...(seed.data ? { _data: seed.data } : {}),
+    ...(pin ? { tool: "pin" } : {}),
   };
-  return seed.data ? { ...wrapper, _data: seed.data } : wrapper;
 }
 
-// ---------------------------------------------------------------------------
-// Bridge
-// ---------------------------------------------------------------------------
+function wrongKind(seed: AtlasdrawElementSeed, want: string): Error {
+  const what = seed.type === "custom" ? seed.customType ?? "custom" : seed.type;
+  return new Error(
+    `seedToElement: ${what} requires geo.kind="${want}", got "${seed.geo.kind}"`,
+  );
+}
 
 /**
- * Convert a tool-emitted seed into a fully-realized Excalidraw element.
+ * Convert a tool-emitted seed into an Excalidraw element in `frame`.
  *
- * @param seed - The seed produced by an `AtlasdrawTool.onPointerDown`.
- * @param map  - Live MapLibre map; used for geo→scene projection.
- * @returns A new `ExcalidrawElement` ready to splice into the scene.
- * @throws  When the (type, customType, geo.kind) tuple is not yet supported.
+ * @throws When the (type, customType, geo.kind) tuple is not supported.
  */
 export function seedToElement(
   seed: AtlasdrawElementSeed,
-  map: maplibregl.Map,
+  frame: WorldFrame,
 ): ExcalidrawElement {
-  // ----------------------------------------------------------- custom: pin
-  // Phase 1 PinTool branch — preserve byte-identically (no regression).
-  if (seed.type === "custom" && seed.customType === "pin") {
+  const unit = sceneUnitsPerPixel(frame, seed.geo.zRef);
+  const strokeWidth =
+    (seed.style?.strokeWidth ?? DEFAULT_STROKE_WIDTH_PX) * unit;
+  const customData = customDataOf(seed);
+  const withData = <T extends ExcalidrawElement>(el: T): T =>
+    customData ? { ...el, customData } : el;
+
+  // A pin, or a circle placed by its centre.
+  if (
+    (seed.type === "custom" && seed.customType === "pin") ||
+    seed.type === "ellipse"
+  ) {
     if (seed.geo.kind !== "point") {
-      throw new Error(
-        `seedToElement: pin requires geo.kind="point", got "${seed.geo.kind}"`,
-      );
+      throw wrongKind(seed, "point");
     }
-    const { lng, lat } = seed.geo;
-    const projected = projectPoint(map, lng, lat);
-    const x = projected.x - PIN_DIAMETER_PX / 2;
-    const y = projected.y - PIN_DIAMETER_PX / 2;
-    const element = newElement({
-      type: "ellipse",
-      x,
-      y,
-      width: PIN_DIAMETER_PX,
-      height: PIN_DIAMETER_PX,
-      strokeColor: PIN_STROKE_COLOR,
-      backgroundColor: PIN_FILL_COLOR,
-      fillStyle: "solid",
-      roughness: 0,
-    });
-    return { ...element, customData: buildCustomData(seed) };
+    const pin = seed.type === "custom";
+    const diameter =
+      (pin ? PIN_DIAMETER_PX : CIRCLE_DEFAULT_DIAMETER_PX) * unit;
+    const c = toScene(frame, seed.geo.lng, seed.geo.lat);
+    return withData(
+      newElement({
+        type: "ellipse",
+        x: c.x - diameter / 2,
+        y: c.y - diameter / 2,
+        width: diameter,
+        height: diameter,
+        strokeWidth,
+        strokeColor: pin
+          ? PIN_STROKE_COLOR
+          : seed.style?.strokeColor ?? "#1e1e1e",
+        backgroundColor: pin
+          ? PIN_FILL_COLOR
+          : seed.style?.fillColor ?? "transparent",
+        fillStyle: "solid",
+        ...(pin ? { roughness: 0 } : {}),
+      }),
+    );
   }
 
-  // --------------------------------------------------------------- freedraw
-  // Both a closed ring and an open stroke arrive as freedraw with
-  // geo.kind="polyline" — a ring's coordinates have first==last, a stroke's are
-  // open. The element type is identical either way; downstream CoordinateSync
-  // re-projects every vertex, so the closure invariant holds without a branch.
   if (seed.type === "freedraw") {
     if (seed.geo.kind !== "polyline") {
-      throw new Error(
-        `seedToElement: freedraw requires geo.kind="polyline", got "${seed.geo.kind}"`,
-      );
+      throw wrongKind(seed, "polyline");
     }
-    const projected = projectCoords(seed.geo.coordinates, map);
-    const { x, y, points, width, height } = buildLinearGeometry(projected);
-    const element: ExcalidrawFreeDrawElement = newFreeDrawElement({
-      type: "freedraw",
-      x,
-      y,
-      width,
-      height,
-      points,
-      simulatePressure: false,
-      strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
-      backgroundColor: seed.style?.fillColor ?? "transparent",
-      fillStyle: "solid",
-    });
-    return { ...element, customData: buildCustomData(seed) };
+    return withData(
+      newFreeDrawElement({
+        type: "freedraw",
+        ...linearGeometry(seed.geo.coordinates, frame),
+        simulatePressure: false,
+        strokeWidth,
+        strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
+        backgroundColor: seed.style?.fillColor ?? "transparent",
+        fillStyle: "solid",
+      }),
+    );
   }
 
-  // ------------------------------------------------------------------ line
-  // Open multi-vertex line.
-  if (seed.type === "line") {
+  if (seed.type === "line" || seed.type === "arrow") {
     if (seed.geo.kind !== "polyline") {
-      throw new Error(
-        `seedToElement: line requires geo.kind="polyline", got "${seed.geo.kind}"`,
-      );
+      throw wrongKind(seed, "polyline");
     }
-    const projected = projectCoords(seed.geo.coordinates, map);
-    const { x, y, points, width, height } = buildLinearGeometry(projected);
-    const element: ExcalidrawLinearElement = newLinearElement({
-      type: "line",
-      x,
-      y,
-      width,
-      height,
-      points,
+    const geometry = linearGeometry(seed.geo.coordinates, frame);
+    const style = {
+      strokeWidth,
       strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
       backgroundColor: "transparent",
-    });
-    return { ...element, customData: buildCustomData(seed) };
+    };
+    return withData(
+      seed.type === "arrow"
+        ? newArrowElement({
+            type: "arrow",
+            ...geometry,
+            ...style,
+            endArrowhead: "arrow",
+          })
+        : newLinearElement({ type: "line", ...geometry, ...style }),
+    );
   }
 
-  // ----------------------------------------------------------------- arrow
-  // Directed line: 2 vertices, or more for an elbow arrow.
-  if (seed.type === "arrow") {
-    if (seed.geo.kind !== "polyline") {
-      throw new Error(
-        `seedToElement: arrow requires geo.kind="polyline", got "${seed.geo.kind}"`,
-      );
-    }
-    const projected = projectCoords(seed.geo.coordinates, map);
-    const { x, y, points, width, height } = buildLinearGeometry(projected);
-    const element = newArrowElement({
-      type: "arrow",
-      x,
-      y,
-      width,
-      height,
-      points,
-      endArrowhead: "arrow",
-      strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
-      backgroundColor: "transparent",
-    });
-    return { ...element, customData: buildCustomData(seed) };
-  }
-
-  // ------------------------------------------------------------- rectangle
-  // bbox geo, axis-aligned in mercator.
   if (seed.type === "rectangle") {
     if (seed.geo.kind !== "bbox") {
-      throw new Error(
-        `seedToElement: rectangle requires geo.kind="bbox", got "${seed.geo.kind}"`,
-      );
+      throw wrongKind(seed, "bbox");
     }
-    const { west, south, east, north } = seed.geo;
-    // NW corner (west, north) and SE corner (east, south). In screen-space,
-    // north has smaller y (top) than south. Mercator preserves NSEW alignment
-    // so min/max gives the correct axis-aligned bbox regardless of orientation.
-    const nw = projectPoint(map, west, north);
-    const se = projectPoint(map, east, south);
-    const x = Math.min(nw.x, se.x);
-    const y = Math.min(nw.y, se.y);
-    const width = Math.abs(se.x - nw.x);
-    const height = Math.abs(se.y - nw.y);
-    const element = newElement({
-      type: "rectangle",
-      x,
-      y,
-      width,
-      height,
-      strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
-      backgroundColor: seed.style?.fillColor ?? "transparent",
-      fillStyle: "solid",
-    });
-    return { ...element, customData: buildCustomData(seed) };
+    const nw = toScene(frame, seed.geo.west, seed.geo.north);
+    const se = toScene(frame, seed.geo.east, seed.geo.south);
+    return withData(
+      newElement({
+        type: "rectangle",
+        x: Math.min(nw.x, se.x),
+        y: Math.min(nw.y, se.y),
+        width: Math.abs(se.x - nw.x),
+        height: Math.abs(se.y - nw.y),
+        strokeWidth,
+        strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
+        backgroundColor: seed.style?.fillColor ?? "transparent",
+        fillStyle: "solid",
+      }),
+    );
   }
 
-  // --------------------------------------------------------------- ellipse
-  // Center point + default screen-pixel diameter; a dragging tool overwrites
-  // width/height with the real radius on pointermove. Width === height is
-  // enforced, because a radius is rotation-invariant and a bbox is not.
-  if (seed.type === "ellipse") {
-    if (seed.geo.kind !== "point") {
-      throw new Error(
-        `seedToElement: ellipse requires geo.kind="point", got "${seed.geo.kind}"`,
-      );
-    }
-    const { lng, lat } = seed.geo;
-    const projected = projectPoint(map, lng, lat);
-    const diameter = CIRCLE_DEFAULT_DIAMETER_PX;
-    const x = projected.x - diameter / 2;
-    const y = projected.y - diameter / 2;
-    const element = newElement({
-      type: "ellipse",
-      x,
-      y,
-      width: diameter,
-      height: diameter,
-      strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
-      backgroundColor: seed.style?.fillColor ?? "transparent",
-      fillStyle: "solid",
-    });
-    return { ...element, customData: buildCustomData(seed) };
-  }
-
-  // ------------------------------------------------------------------ text
-  // Text at a single geo point. newTextElement handles the width/height
-  // computation via measureText internally.
   if (seed.type === "text") {
     if (seed.geo.kind !== "point") {
-      throw new Error(
-        `seedToElement: text requires geo.kind="point", got "${seed.geo.kind}"`,
-      );
+      throw wrongKind(seed, "point");
     }
-    const { lng, lat } = seed.geo;
-    const projected = projectPoint(map, lng, lat);
+    const p = toScene(frame, seed.geo.lng, seed.geo.lat);
     const text =
-      typeof seed.data === "object" &&
-      seed.data !== null &&
-      typeof (seed.data as { text?: unknown }).text === "string"
+      typeof (seed.data as { text?: unknown } | undefined)?.text === "string"
         ? (seed.data as { text: string }).text
         : "";
-    const element = newTextElement({
-      x: projected.x,
-      y: projected.y,
-      text,
-      fontSize: TEXT_DEFAULT_FONT_SIZE,
-      strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
-      backgroundColor: "transparent",
-    });
-    return { ...element, customData: buildCustomData(seed) };
+    return withData(
+      newTextElement({
+        x: p.x,
+        y: p.y,
+        text,
+        fontSize: TEXT_DEFAULT_FONT_SIZE_PX * unit,
+        strokeColor: seed.style?.strokeColor ?? "#1e1e1e",
+        backgroundColor: "transparent",
+      }),
+    );
   }
 
-  // -------------------------------------------------------------- fallback
   throw new Error(
     `seedToElement: unsupported (type="${seed.type}", customType="${
       seed.customType ?? ""

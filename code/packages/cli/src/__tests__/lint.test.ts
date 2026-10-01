@@ -52,6 +52,7 @@ function makeManifest(overrides: Record<string, unknown> = {}) {
       bearing: 0,
       pitch: 0,
     },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [],
     permissions: { publicView: false },
     ...overrides,

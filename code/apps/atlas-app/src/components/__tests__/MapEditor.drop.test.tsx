@@ -174,8 +174,8 @@ const mockMap = {
   addSource: vi.fn(),
   addLayer: vi.fn(),
   setStyle: vi.fn(),
-  // The real MapEditor renders other hooks (useCoordinateSync, useMapWheelRouter,
-  // useGeoAnchor) that may probe `map.on / off / project / etc`. `on`/`off`
+  // The real MapEditor renders other hooks (useCameraBridge, useMapWheelRouter)
+  // that may probe `map.on / off / project / etc`. `on`/`off`
   // record into mapHandlers so a test can fire a map event — useBasemapStyle's
   // post-swap reconcile hangs off `styledata`, and this file mocks
   // useLayerRegistrySync (below), so firing it is what proves the reconcile
@@ -197,7 +197,7 @@ const mockMap = {
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
   // RT-3 — useCameraRotation reads the live camera on mount, via
-  // cameraRotation()'s north-up fast path. A map without it is not a map.
+  // useCameraRotation reads it. A map without it is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
@@ -216,14 +216,11 @@ vi.mock("../../hooks/useMapRef", () => ({
 }));
 
 // Stub the side-effect hooks so they don't try to do real work in jsdom.
-vi.mock("../../hooks/useCoordinateSync", () => ({
-  useCoordinateSync: vi.fn(() => ({ syncNow: vi.fn() })),
+vi.mock("../../hooks/useCameraBridge", () => ({
+  useCameraBridge: () => ({ bridge: null, onZoomAction: () => false }),
 }));
 vi.mock("../../hooks/useMapWheelRouter", () => ({
   useMapWheelRouter: vi.fn(),
-}));
-vi.mock("../../hooks/useGeoAnchor", () => ({
-  useGeoAnchor: vi.fn(),
 }));
 vi.mock("../../hooks/useLayerRegistrySync", () => ({
   useLayerRegistrySync: vi.fn(),

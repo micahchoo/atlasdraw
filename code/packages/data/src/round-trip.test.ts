@@ -124,6 +124,7 @@ function buildManifest(): Manifest {
     updatedAt: FIXED_UPDATED_AT,
     basemap: { type: "registry", id: "osm-standard" },
     camera: { center: [12.34, -56.78], zoom: 7, bearing: 30, pitch: 15 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [
       {
         kind: "data",
@@ -198,6 +199,7 @@ function buildEmptyDoc(): AtlasdrawDocument {
     updatedAt: FIXED_UPDATED_AT,
     basemap: { type: "registry", id: "osm-standard" },
     camera: { center: [0, 0], zoom: 1, bearing: 0, pitch: 0 },
+    world: { z0: 22, origin: { x: 0, y: 0 } },
     layers: [],
     permissions: { publicView: false },
   });

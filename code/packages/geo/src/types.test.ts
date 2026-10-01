@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { isGeoCustomData } from "./types.js";
 
-describe("GeoCustomData type guard", () => {
+describe("version 1 anchor guard", () => {
   it("accepts a valid point GeoCustomData", () => {
     expect(
       isGeoCustomData({

@@ -6,16 +6,16 @@
  * modules; the Excalidraw layer has pointer-events: none by default so map
  * interactions pass through. Task 13 wires isDrawingMode → .excalidrawLayerActive.
  *
- * API surface for downstream tasks:
- *   map            — from useMapRef(); useCoordinateSync reads this as a reactive dep.
- *   excalidrawAPI  — from onExcalidrawAPI callback; Task 12 reads this too.
- *   onMount        — fires once when BOTH map AND api are non-null; callers
- *                    (e.g. integration tests, Task 12 hook) can use this as
- *                    a "ready" signal.
+ * The map owns the camera; Excalidraw's scroll and zoom follow it
+ * (useCameraBridge, ADR-0015). A drawn element is stored in world
+ * coordinates, so no camera move rewrites it.
  *
- * Flow position: Step 1 of Flow A (map.on("move") → CoordinateSync path)
- *                and Flow B (pointer-down → tool dispatch path). This task
- *                builds the DOM stack; tasks 12+13 wire the dynamic behaviour.
+ * API surface for downstream tasks:
+ *   map            — from useMapRef().
+ *   excalidrawAPI  — from onExcalidrawAPI callback.
+ *   onMount        — fires once when BOTH map AND api are non-null; callers
+ *                    (e.g. integration tests) can use this as a "ready"
+ *                    signal.
  */
 
 import React, {
@@ -37,22 +37,14 @@ import { Excalidraw, MainMenu } from "@atlasdraw/excalidraw";
 
 import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
-import { PinTool } from "@atlasdraw/tools";
+import { PinTool, drawingToFeatureCollection } from "@atlasdraw/tools";
 
-import {
-  cameraRotation,
-  computeSceneBounds,
-  isGeoCustomData,
-  toLngLat,
-  toScene,
-} from "@atlasdraw/geo";
+import { computeSceneBounds, toLngLat, toScene } from "@atlasdraw/geo";
 
 import type {
   ExcalidrawElement,
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
-
-import type { ExcalidrawElementLike, GeoAnchor } from "@atlasdraw/geo";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
@@ -62,13 +54,8 @@ import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
 import { useMapEditorKeyboard } from "../hooks/useMapEditorKeyboard";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
-import { useCoordinateSync } from "../hooks/useCoordinateSync";
-import {
-  isWorldCoordsEnabled,
-  useCameraBridge,
-} from "../hooks/useCameraBridge";
+import { useCameraBridge } from "../hooks/useCameraBridge";
 import { seedShapes } from "../lib/devSeedShapes";
-import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
 import { useCameraRotation } from "../hooks/useCameraRotation";
@@ -105,11 +92,7 @@ import {
   toFile,
 } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
-import {
-  fitMapToContent,
-  fitMapToBox,
-  fitMapToLayer,
-} from "../lib/fitMapToContent";
+import { fitMapToBox, fitMapToLayer } from "../lib/fitMapToContent";
 import {
   createHttpStorageClient,
   type HttpStorageClient,
@@ -151,8 +134,6 @@ import type { LayerLegendEntry } from "../lib/print-pdf";
 import type { DocumentCommand, RasterCorners } from "../state/document";
 
 import type maplibregl from "maplibre-gl";
-
-import type { Feature, FeatureCollection, Geometry } from "geojson";
 
 // Four modal dialogs, every one behind a click and already conditionally
 // rendered. Loading them eagerly put their whole dependency tree — pdf-lib
@@ -197,51 +178,6 @@ function pointInPolygon(
     }
   }
   return inside;
-}
-
-// ---------------------------------------------------------------------------
-// GeoJSON export helpers
-// ---------------------------------------------------------------------------
-
-function geoAnchorToGeometry(anchor: GeoAnchor): Geometry {
-  if (anchor.kind === "point") {
-    return { type: "Point", coordinates: [anchor.lng, anchor.lat] };
-  }
-  if (anchor.kind === "bbox") {
-    const { west, south, east, north } = anchor;
-    return {
-      type: "Polygon",
-      coordinates: [
-        [
-          [west, north],
-          [east, north],
-          [east, south],
-          [west, south],
-          [west, north],
-        ],
-      ],
-    };
-  }
-  return { type: "LineString", coordinates: anchor.coordinates };
-}
-
-function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
-  const features: Feature[] = [];
-  for (const el of elements) {
-    if (typeof el !== "object" || el === null) {
-      continue;
-    }
-    const cd = (el as { customData?: unknown }).customData;
-    if (!isGeoCustomData(cd)) {
-      continue;
-    }
-    features.push({
-      type: "Feature",
-      geometry: geoAnchorToGeometry(cd.geo),
-      properties: {},
-    });
-  }
-  return { type: "FeatureCollection", features };
 }
 
 // ---------------------------------------------------------------------------
@@ -606,20 +542,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Phase 6 A14b — aria-live selection-change announcer, read inside
   // useExcalidrawChangeHandler.
   const announceMapEditor = useAnnounce();
-  // Space+drag pan bridge: when space is held, Excalidraw's internal pan
-  // mechanism mutates scrollX/Y. The scroll lock below resets those to 0
-  // every onChange (preserving geo-anchor identity). Without this bridge,
-  // the delta is eaten and the map never moves. The hand-tool button works
-  // because it sets pointer-events:none — events fall through to MapLibre
-  // directly. Space+drag takes the scroll-mutation path instead.
-  const spaceHeldRef = useRef(false);
-  // ADR-0015 spike: world coordinates, behind a flag. Read once per mount.
-  const [worldCoords] = useState(isWorldCoordsEnabled);
+  // The map camera drives Excalidraw's viewport; Excalidraw's own viewport
+  // changes (space-drag, scroll to content) and zoom actions go to the map.
   const [excalidrawLayer, setExcalidrawLayer] = useState<HTMLDivElement | null>(
     null,
   );
-  const cameraBridge = useCameraBridge(
-    worldCoords,
+  const { bridge: cameraBridge, onZoomAction } = useCameraBridge(
     map,
     excalidrawAPI,
     excalidrawLayer,
@@ -691,20 +619,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             fitMapToBox(m, box);
           }
         }
-        // For annotation → zoom to its geo-anchor bounds
+        // For annotation → zoom to its bounds
         if (!isOverlayId(id)) {
           const m = useMapInstanceStore.getState().map;
-          if (m) {
-            const elements = excalidrawAPI.getSceneElements();
-            const element = elements.find((e) => e.id === id);
-            if (element && isGeoCustomData(element.customData)) {
-              const box = computeSceneBounds([
-                element as ExcalidrawElementLike,
-              ]);
-              if (box) {
-                fitMapToBox(m, box);
-              }
-            }
+          const element = excalidrawAPI
+            .getSceneElements()
+            .find((e) => e.id === id);
+          const box =
+            element &&
+            computeSceneBounds([element], currentDocument().snapshot().world);
+          if (m && box) {
+            fitMapToBox(m, box);
           }
         }
       }
@@ -782,11 +707,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     w.__atlasdraw__ = {
       map,
       excalidrawAPI,
-      // ADR-0015 spike measurement hooks.
-      worldCoords,
+      // Measurement hooks for scripts/bench-world-coords.mjs.
       cameraBridge,
       seed: (n: number) =>
-        seedShapes(map, excalidrawAPI, n, cameraBridge?.frame ?? null),
+        seedShapes(map, excalidrawAPI, n, currentDocument().snapshot().world),
+      frame: () => currentDocument().snapshot().world,
       isDirty: () => usePersistenceStore.getState().isDirty,
       clearDirty: () => usePersistenceStore.getState().clearDirty(),
       toLngLat,
@@ -795,7 +720,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     return () => {
       delete (window as unknown as { __atlasdraw__?: unknown }).__atlasdraw__;
     };
-  }, [map, excalidrawAPI, worldCoords, cameraBridge]);
+  }, [map, excalidrawAPI, cameraBridge]);
 
   // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
   // opens the last autosaved document,
@@ -804,22 +729,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Publish the scene for the layer panel's annotation rows and commands.
   useSceneBinding(excalidrawAPI);
 
-  // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
-  // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
-  // Under world coordinates (ADR-0015 spike) the camera bridge replaces it.
-  const { syncNow, expectedOrigin } = useCoordinateSync(
-    worldCoords ? null : map,
-    worldCoords ? null : excalidrawAPI,
-  );
-
   // Route wheel events to the map regardless of whether Excalidraw's drawing
   // layer is on top. Without this, scroll-to-zoom is silently captured by
-  // Excalidraw in any non-hand tool and annotations don't re-project.
+  // Excalidraw in any non-hand tool.
   useMapWheelRouter(rootRef.current, map);
-
-  // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
-  // Not under world coordinates: nothing is re-derived from pixels there.
-  useGeoAnchor(worldCoords ? null : map, excalidrawAPI);
 
   // Draw the open document's data and raster layers on the map.
   useLayerRegistrySync(map);
@@ -909,7 +822,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [],
   );
   useMapEditorKeyboard({
-    spaceHeldRef,
     excalidrawAPI,
     showShortcuts,
     setShowShortcuts,
@@ -917,6 +829,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     onSave: (api) => void saveAtlasDocument(api, documentNotify),
     onOpen: (api) =>
       void openAtlasDocument(api, documentNotify, confirmReplace),
+    onZoomAction,
   });
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
@@ -1061,8 +974,10 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     if (!excalidrawAPI) {
       return;
     }
-    const elements = excalidrawAPI.getSceneElements();
-    const fc = buildGeoJsonExport(elements);
+    const fc = drawingToFeatureCollection(
+      excalidrawAPI.getSceneElements(),
+      currentDocument().snapshot().world,
+    );
     const json = JSON.stringify(fc, null, 2);
     const blob = new Blob([json], { type: "application/geo+json" });
     const url = URL.createObjectURL(blob);
@@ -1079,18 +994,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     void saveAtlasDocument(excalidrawAPI, documentNotify);
   }, [excalidrawAPI, documentNotify]);
 
-  // Excalidraw onChange: background intercept + scroll-lock/space-pan bridge
-  // + post-load geo sync + autosave markDirty + aria-live selection announce
-  // — extracted to useExcalidrawChangeHandler hook.
+  // Excalidraw onChange: background intercept + autosave markDirty +
+  // aria-live selection announce — extracted to useExcalidrawChangeHandler.
   const handleExcalidrawChange = useExcalidrawChangeHandler({
     excalidrawAPI,
-    map,
-    syncNow: syncNow ?? undefined,
-    expectedOrigin: expectedOrigin ?? undefined,
     announceMapEditor,
     setMapBg,
-    spaceHeldRef,
-    worldCoords,
   });
 
   // The PDF export's image source: the SAME composite the PNG export uses, so
@@ -1117,18 +1026,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     [map],
   );
 
-  // RT-4. How far the camera is turned, for the PDF's north arrow. Measured
-  // off the live projection by the same `cameraRotation` RT-2 uses, not read
-  // from `map.getBearing()` — so the arrow and the annotations agree by
-  // construction, and neither depends on MapLibre's bearing sign convention.
-  // Read at export time, like the image and the legend, so all three answer
-  // the same viewport.
-  const getCameraRotationDeg = useCallback((): number => {
-    if (!map) {
-      return 0;
-    }
-    return (cameraRotation(map) * 180) / Math.PI;
-  }, [map]);
+  // RT-4. How far the camera is turned, for the PDF's north arrow: the
+  // screen angle of geographic east, the same angle the drawing layer is
+  // turned by (useCameraRotation). Read at export time, like the image and
+  // the legend, so all three answer the same viewport.
+  const getCameraRotationDeg = useCallback(
+    (): number => (map ? -map.getBearing() : 0),
+    [map],
+  );
 
   // The legend describes the exported page, not the document (FU-13): hidden
   // layers and layers with nothing painted in this view are left out. Read at
@@ -1140,25 +1045,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     // Annotations first: the panel lists them above the data layers.
     return exportLegendEntries(
       [
-        ...annotationRows(excalidrawAPI.getSceneElements()),
+        ...annotationRows(
+          excalidrawAPI.getSceneElements(),
+          currentDocument().snapshot().world,
+        ),
         ...currentDocument().snapshot().overlays,
       ],
       map,
       excalidrawAPI,
     );
   }, [map, excalidrawAPI]);
-
-  // "Scroll back to content" reframes the MAP on the geographic bounds of the
-  // drawn content — Excalidraw's canvas is scroll-locked (the map is the
-  // camera), so its default calculateScrollCenter is a no-op here. Returns true
-  // when handled so the vendored button skips that default. CoordinateSync then
-  // re-projects the elements onto the reframed map (a plain camera move — no
-  // change to the reprojection math).
-  const handleScrollBackToContent = useCallback(
-    (elements: readonly ExcalidrawElement[]): boolean =>
-      fitMapToContent(map, elements),
-    [map],
-  );
 
   return (
     <CollabContext.Provider value={collabValue}>
@@ -1217,7 +1113,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           .excalidrawLayerActive when isDrawingMode is true (Flow B gate). */}
           <div
             ref={setExcalidrawLayer}
-            data-world-coords={worldCoords ? "on" : undefined}
             className={[
               styles.excalidrawLayer,
               isDrawingMode ? styles.excalidrawLayerActive : "",
@@ -1231,6 +1126,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
               onChange={handleExcalidrawChange}
               onScrollChange={cameraBridge?.onScrollChange}
+              onZoomAction={onZoomAction}
+              screenSizedStyles
               UIOptions={EXCALIDRAW_UI_OPTIONS}
               // Collar mode: toolbar + main menu render flush in the collar
               // frame (portal hosts provided by CollarShell above). Geo-search
@@ -1266,7 +1163,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   />
                 </>
               )}
-              onScrollBackToContent={handleScrollBackToContent}
             >
               {/* LayerPanel mounts as a tab inside DefaultSidebar via
               registerSidebarTab (see useEffect above). No <Sidebar> child

@@ -39,6 +39,7 @@ function doc(files: Map<string, Blob> = new Map()): AtlasdrawDocument {
       updatedAt: "2026-05-10T00:00:00.000Z",
       basemap: { type: "registry", id: "protomaps-light" },
       camera: { center: [13.4, 52.5], zoom: 11, bearing: 0, pitch: 0 },
+      world: { z0: 22, origin: { x: 0, y: 0 } },
       layers: [
         {
           kind: "data",

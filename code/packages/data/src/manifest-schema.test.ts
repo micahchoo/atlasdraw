@@ -15,6 +15,7 @@ const baseManifest = {
   updatedAt: "2026-05-06T12:30:00.000Z",
   basemap: { type: "registry" as const, id: "protomaps-light" },
   camera: { center: [0, 0] as [number, number], zoom: 4, bearing: 0, pitch: 0 },
+  world: { z0: 22, origin: { x: 0, y: 0 } },
   layers: [] as unknown[],
   permissions: { publicView: false },
 };

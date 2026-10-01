@@ -138,6 +138,10 @@ export const actionZoomIn = register({
   icon: ZoomInIcon,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (app.props.onZoomAction?.({ type: "zoomIn" })) {
+      return false;
+    }
     return {
       appState: {
         ...appState,
@@ -179,6 +183,10 @@ export const actionZoomOut = register({
   viewMode: true,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (app.props.onZoomAction?.({ type: "zoomOut" })) {
+      return false;
+    }
     return {
       appState: {
         ...appState,
@@ -220,6 +228,10 @@ export const actionResetZoom = register({
   viewMode: true,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (app.props.onZoomAction?.({ type: "resetZoom" })) {
+      return false;
+    }
     return {
       appState: {
         ...appState,
@@ -398,8 +410,21 @@ export const actionZoomToFitSelectionInViewport = register({
   trackEvent: { category: "canvas" },
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements(appState);
+    const targetElements = selectedElements.length
+      ? selectedElements
+      : elements;
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (
+      app.props.onZoomAction?.({
+        type: "zoomToFit",
+        elements: targetElements,
+        inViewport: true,
+      })
+    ) {
+      return false;
+    }
     return zoomToFit({
-      targetElements: selectedElements.length ? selectedElements : elements,
+      targetElements,
       appState: {
         ...appState,
         userToFollow: null,
@@ -424,8 +449,21 @@ export const actionZoomToFitSelection = register({
   trackEvent: { category: "canvas" },
   perform: (elements, appState, _, app) => {
     const selectedElements = app.scene.getSelectedElements(appState);
+    const targetElements = selectedElements.length
+      ? selectedElements
+      : elements;
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (
+      app.props.onZoomAction?.({
+        type: "zoomToFit",
+        elements: targetElements,
+        inViewport: false,
+      })
+    ) {
+      return false;
+    }
     return zoomToFit({
-      targetElements: selectedElements.length ? selectedElements : elements,
+      targetElements,
       appState: {
         ...appState,
         userToFollow: null,
@@ -448,8 +486,18 @@ export const actionZoomToFit = register({
   icon: zoomAreaIcon,
   viewMode: true,
   trackEvent: { category: "canvas" },
-  perform: (elements, appState, _, app) =>
-    zoomToFit({
+  perform: (elements, appState, _, app) => {
+    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    if (
+      app.props.onZoomAction?.({
+        type: "zoomToFit",
+        elements,
+        inViewport: true,
+      })
+    ) {
+      return false;
+    }
+    return zoomToFit({
       targetElements: elements,
       appState: {
         ...appState,
@@ -457,7 +505,8 @@ export const actionZoomToFit = register({
       },
       fitToViewport: false,
       canvasOffsets: app.getEditorUIOffsets(),
-    }),
+    });
+  },
   keyTest: (event) =>
     event.code === CODES.ONE &&
     event.shiftKey &&

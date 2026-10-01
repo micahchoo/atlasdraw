@@ -116,6 +116,7 @@ __metadata:
   resolution: "@atlasdraw/basemap@workspace:packages/basemap"
   dependencies:
     "@atlasdraw/geo": "npm:0.1.0"
+    fast-check: "npm:4.7.0"
     maplibre-gl: "npm:^4.7.1"
     pmtiles: "npm:^4.4.0"
     protomaps-themes-base: "npm:^4.5.0"
@@ -130,7 +131,6 @@ __metadata:
   resolution: "@atlasdraw/bench@workspace:bench"
   dependencies:
     "@atlasdraw/data": "npm:*"
-    "@atlasdraw/geo": "npm:*"
     tsx: "npm:^4.0.0"
   languageName: unknown
   linkType: soft
@@ -140,6 +140,7 @@ __metadata:
   resolution: "@atlasdraw/cli@workspace:packages/cli"
   dependencies:
     "@atlasdraw/data": "npm:0.0.0"
+    "@atlasdraw/geo": "npm:0.1.0"
     "@types/node": "npm:*"
     commander: "npm:^11.0.0"
     typescript: "npm:5.9.3"
@@ -163,6 +164,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@atlasdraw/data@workspace:packages/data"
   dependencies:
+    "@atlasdraw/geo": "npm:0.1.0"
     "@tmcw/togeojson": "npm:^7.1.2"
     "@types/geojson": "npm:*"
     "@types/jsdom": "npm:^21"
@@ -248,19 +250,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@atlasdraw/geo@npm:*, @atlasdraw/geo@npm:0.1.0, @atlasdraw/geo@workspace:packages/geo":
+"@atlasdraw/geo@npm:0.1.0, @atlasdraw/geo@workspace:packages/geo":
   version: 0.0.0-use.local
   resolution: "@atlasdraw/geo@workspace:packages/geo"
   dependencies:
     fast-check: "npm:4.7.0"
-    maplibre-gl: "npm:^4.7.1"
     typescript: "npm:5.9.3"
     vitest: "npm:3.2.7"
-  peerDependencies:
-    maplibre-gl: ">=4.0.0"
-  peerDependenciesMeta:
-    maplibre-gl:
-      optional: true
   languageName: unknown
   linkType: soft
 
@@ -329,8 +325,6 @@ __metadata:
   resolution: "@atlasdraw/tools@workspace:packages/tools"
   dependencies:
     "@atlasdraw/geo": "npm:0.1.0"
-    "@turf/circle": "npm:7.3.5"
-    "@turf/distance": "npm:7.3.5"
     "@types/react": "npm:*"
     typescript: "npm:5.9.3"
     vitest: "npm:3.2.7"
@@ -6729,63 +6723,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@turf/circle@npm:7.3.5":
-  version: 7.3.5
-  resolution: "@turf/circle@npm:7.3.5"
-  dependencies:
-    "@turf/destination": "npm:7.3.5"
-    "@turf/helpers": "npm:7.3.5"
-    "@types/geojson": "npm:^7946.0.10"
-    tslib: "npm:^2.8.1"
-  checksum: 10/047db0cbe069dc2f6f9ec0f3aa0c2618b6dfe88d4980fe6cd421616a3caa06cc84b96643ca40d92387715eb550d0460ee8ca5ab082f88e1fb6188918caa827f0
-  languageName: node
-  linkType: hard
-
-"@turf/destination@npm:7.3.5":
-  version: 7.3.5
-  resolution: "@turf/destination@npm:7.3.5"
-  dependencies:
-    "@turf/helpers": "npm:7.3.5"
-    "@turf/invariant": "npm:7.3.5"
-    "@types/geojson": "npm:^7946.0.10"
-    tslib: "npm:^2.8.1"
-  checksum: 10/9e65db0f5fdbeb1776fe03bfae05e047c21536b176650a818a018c70488fde0122715019a3e9805e63b88cc3e6f982bdeedcb192128af828ee79a402dbb3a33a
-  languageName: node
-  linkType: hard
-
-"@turf/distance@npm:7.3.5":
-  version: 7.3.5
-  resolution: "@turf/distance@npm:7.3.5"
-  dependencies:
-    "@turf/helpers": "npm:7.3.5"
-    "@turf/invariant": "npm:7.3.5"
-    "@types/geojson": "npm:^7946.0.10"
-    tslib: "npm:^2.8.1"
-  checksum: 10/8a005b2a54390b3f3e3d786b1b557f96f0ba59c0fa60ae40821f4db2bac5ce3d045694694c961232bbd5380bc5e8a55cbb8679e7e0ffcfe72eae33f2b61a50c2
-  languageName: node
-  linkType: hard
-
-"@turf/helpers@npm:7.3.5":
-  version: 7.3.5
-  resolution: "@turf/helpers@npm:7.3.5"
-  dependencies:
-    "@types/geojson": "npm:^7946.0.10"
-    tslib: "npm:^2.8.1"
-  checksum: 10/1a06157fb75c42f6c597730a1c40338e1bb11a0849428a3306a8f39d8bfdbfa1c8f5c831fd738f79c8b0a2a6d9ad4129a9111cf7fb64856f623100c4ea08582b
-  languageName: node
-  linkType: hard
-
-"@turf/invariant@npm:7.3.5":
-  version: 7.3.5
-  resolution: "@turf/invariant@npm:7.3.5"
-  dependencies:
-    "@turf/helpers": "npm:7.3.5"
-    "@types/geojson": "npm:^7946.0.10"
-    tslib: "npm:^2.8.1"
-  checksum: 10/3c3bb2c5d71fb19c0aba65392e06d389487b6d64b3747ca86344a4c173a91dc46ed875413d42d00ccfe6af87f5d3c840d7c7bd3eb00bcbc63bfb38c4cc79c585
-  languageName: node
-  linkType: hard
-
 "@types/aria-query@npm:^5.0.1":
   version: 5.0.4
   resolution: "@types/aria-query@npm:5.0.4"
@@ -6892,7 +6829,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/geojson@npm:*, @types/geojson@npm:^7946.0.10, @types/geojson@npm:^7946.0.14":
+"@types/geojson@npm:*, @types/geojson@npm:^7946.0.14":
   version: 7946.0.16
   resolution: "@types/geojson@npm:7946.0.16"
   checksum: 10/34d07421bdd60e7b99fa265441d17ac6e9aef48e3ce22d04324127d0de1daf7fbaa0bd3be1cece2092eb6995f21da84afa5231e24621a2910ff7340bc98f496f
@@ -16336,7 +16273,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.0.0, tslib@npm:^2.0.3, tslib@npm:^2.1.0, tslib@npm:^2.6.2, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
+"tslib@npm:^2.0.0, tslib@npm:^2.0.3, tslib@npm:^2.1.0, tslib@npm:^2.6.2, tslib@npm:^2.8.0":
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10/3e2e043d5c2316461cb54e5c7fe02c30ef6dccb3384717ca22ae5c6b5bc95232a6241df19c622d9c73b809bea33b187f6dbc73030963e29950c2141bc32a79f7

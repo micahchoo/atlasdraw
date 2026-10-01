@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// KNOWN-RED tests for the geo projection core (audit 01, 2026-10-01).
-//
-// Each case states the CORRECT behaviour and fails on today's code. They are
-// written as `it.fails`, so the suite stays green while the defect is open.
-// The fix that turns one green flips it to `it` — W4 (world coordinates) is
-// expected to fix all of them, because each one comes from the same design:
-// the camera rewrites screen-derived fields on every element.
+// Geo regressions from audit 01 (2026-10-01): undo after a pan, a pin's
+// anchor, a pan that rewrote the drawing. Each came from the screen-pixel
+// design, where the camera rewrote every element; world coordinates
+// (ADR-0015) fix them by construction, and these cases keep it so.
 //
 // What runs here is real: the vendored Excalidraw editor (its store, its
-// history, its keyboard undo), the real `CoordinateSync`, the real
-// `useGeoAnchor` and `useExcalidrawChangeHandler` hooks, wired as MapEditor
-// wires them. Only the map is a stand-in — `FakeMercatorMap`, the fuzz
-// harness's map, which does real Web Mercator project/unproject.
+// history, its keyboard undo), the real `useCameraBridge` and
+// `useExcalidrawChangeHandler` hooks and the pin tool's real context, wired
+// as MapEditor wires them. Only the map is a stand-in — `FakeMercatorMap`,
+// which does real Web Mercator project/unproject.
 
 import "vitest-canvas-mock";
 
@@ -32,8 +29,7 @@ import {
   newElementWith,
 } from "@atlasdraw/element";
 import { Excalidraw } from "@atlasdraw/excalidraw";
-import { CoordinateSync } from "@atlasdraw/basemap";
-import { isGeoCustomData } from "@atlasdraw/geo";
+import { shapeCenter, toLngLat } from "@atlasdraw/geo";
 import { PinTool } from "@atlasdraw/tools";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
@@ -41,10 +37,16 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
 import { usePersistenceStore } from "../../state/usePersistenceStore";
-import { FakeMercatorMap } from "../geoOpFuzz.harness";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 import { buildToolContext } from "../useAtlasdrawTool";
+import { useCameraBridge } from "../useCameraBridge";
 import { useExcalidrawChangeHandler } from "../useExcalidrawChangeHandler";
-import { useGeoAnchor } from "../useGeoAnchor";
+
+import { FakeMercatorMap } from "./fakeMercatorMap";
 
 import type maplibregl from "maplibre-gl";
 
@@ -90,26 +92,44 @@ afterEach(() => {
   cleanup();
 });
 
-/** A map whose camera the test moves by hand. Adds `panBy` for the
- * change handler's space-drag bridge, which these tests never reach. */
+/** A map whose camera the test moves by hand, with the events and the
+ * container the camera bridge and the tool context read. */
 class TestMap extends FakeMercatorMap {
-  private readonly container = document.createElement("div");
-  panBy(): void {}
+  private readonly container = (() => {
+    const div = document.createElement("div");
+    Object.defineProperty(div, "clientWidth", { value: this.containerW });
+    Object.defineProperty(div, "clientHeight", { value: this.containerH });
+    return div;
+  })();
+  private readonly listeners = new Map<string, Set<() => void>>();
   /** For the tool context's client→container offset; at the page origin. */
   getContainer(): HTMLElement {
     return this.container;
+  }
+  on(type: string, fn: () => void): void {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(fn);
+    this.listeners.set(type, set);
+  }
+  off(type: string, fn: () => void): void {
+    this.listeners.get(type)?.delete(fn);
+  }
+  jumpTo(o: { center: { lng: number; lat: number }; zoom: number }): void {
+    this.center = o.center;
+    this.zoom = o.zoom;
+    this.fire("move");
+  }
+  fire(type: string): void {
+    for (const fn of Array.from(this.listeners.get(type) ?? [])) {
+      fn();
+    }
   }
 }
 
 interface World {
   readonly api: ExcalidrawImperativeAPI;
   readonly map: TestMap;
-  readonly sync: CoordinateSync;
-  /**
-   * Move the camera, then run what a MapLibre `move` event runs. Today that is
-   * `CoordinateSync.syncMapToScene`; W4 replaces it with the camera bridge, and
-   * this is the one call site to swap.
-   */
+  /** Move the camera, then fire what MapLibre fires: `move`. */
   readonly pan: (dx: number, dy: number) => void;
   readonly zoomTo: (z: number) => void;
   readonly el: (id: string) => ExcalidrawElement;
@@ -123,19 +143,16 @@ function Harness({
   onApi: (api: ExcalidrawImperativeAPI) => void;
 }) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
+  const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const asMap = map as unknown as maplibregl.Map;
-  useGeoAnchor(asMap, api);
+  const { bridge, onZoomAction } = useCameraBridge(asMap, api, layer);
   const onChange = useExcalidrawChangeHandler({
     excalidrawAPI: api,
-    map: asMap,
-    syncNow: undefined,
-    expectedOrigin: undefined,
     announceMapEditor: () => {},
     setMapBg: () => {},
-    spaceHeldRef: { current: false },
   });
   return (
-    <div style={{ width: 1024, height: 768 }}>
+    <div ref={setLayer} style={{ width: 1024, height: 768 }}>
       <Excalidraw
         handleKeyboardGlobally={true}
         initialData={{ appState: { viewBackgroundColor: "transparent" } }}
@@ -146,12 +163,18 @@ function Harness({
           }
         }}
         onChange={onChange}
+        onScrollChange={bridge?.onScrollChange}
+        onZoomAction={onZoomAction}
+        screenSizedStyles
       />
     </div>
   );
 }
 
 async function mount(zoom = 10): Promise<World> {
+  openDocument(
+    createDocument({ camera: { center: [0, 0], zoom, bearing: 0, pitch: 0 } }),
+  );
   const map = new TestMap(zoom, { lng: 0, lat: 0 });
   let api: ExcalidrawImperativeAPI | null = null;
   const result = render(<Harness map={map} onApi={(a) => (api = a)} />);
@@ -163,21 +186,19 @@ async function mount(zoom = 10): Promise<World> {
     throw new Error("Excalidraw did not hand over its API");
   }
   const a = api as ExcalidrawImperativeAPI;
-  const sync = new CoordinateSync({
-    map: map as unknown as maplibregl.Map,
-    excalidrawAPI: a as never,
-  });
+  // The bridge attaches in an effect once the API is in; wait for its first
+  // push, which moves the viewport off Excalidraw's default.
+  await waitFor(() => expect(a.getAppState().zoom.value).not.toBe(1));
   return {
     api: a,
     map,
-    sync,
     pan: (dx, dy) => {
       map.panByScreen(dx, dy);
-      act(() => sync.syncMapToScene());
+      act(() => map.fire("move"));
     },
     zoomTo: (z) => {
       map.setZoom(z);
-      act(() => sync.syncMapToScene());
+      act(() => map.fire("move"));
     },
     el: (id) => {
       const found = a
@@ -192,29 +213,23 @@ async function mount(zoom = 10): Promise<World> {
 }
 
 /**
- * Where on Earth an element is: a point anchor's position, a bbox's NW corner.
- *
- * Today that is read off `customData.geo`. W4 drops the stored anchor and
- * derives lng/lat from scene coordinates — when it lands, this helper is the
- * one place to change, and the assertions below keep their meaning.
+ * Where on Earth an element is: the point a pin marks (its centre), a box's
+ * NW corner. Derived from scene coordinates through the open document's
+ * world frame; no anchor is stored.
  */
 function placeOf(el: ExcalidrawElement): { lng: number; lat: number } {
-  if (!isGeoCustomData(el.customData)) {
-    throw new Error(`element ${el.id} has no geo anchor`);
+  const frame = currentDocument().snapshot().world;
+  if (el.customData?.tool === "pin") {
+    return toLngLat(frame, shapeCenter(el));
   }
-  const geo = el.customData.geo;
-  if (geo.kind === "point") {
-    return { lng: geo.lng, lat: geo.lat };
+  if (el.type === "rectangle" && !el.angle) {
+    return toLngLat(frame, { x: el.x, y: el.y });
   }
-  if (geo.kind === "bbox") {
-    return { lng: geo.west, lat: geo.north };
-  }
-  throw new Error(`placeOf: ${geo.kind} anchors are not used here`);
+  throw new Error(`placeOf: ${el.type} is not used here`);
 }
 
 /** Commit an element the way a finished drawing gesture does: a captured,
- * version-bumping scene update. The geo handler stamps its anchor on the
- * onChange this fires. */
+ * version-bumping scene update. */
 function draw(world: World, el: ExcalidrawElement): void {
   act(() =>
     world.api.updateScene({
@@ -265,31 +280,26 @@ function rectangle() {
   });
 }
 
-describe("geo anchors survive undo, pins, pans (KNOWN-RED, audit 01)", () => {
-  // KNOWN-RED (W4 world coordinates): undo after a pan writes back the creation-era screen x/y and customData, and the geo handler re-stamps the anchor under the current camera, so the shape lands a pan-distance away. Flip to it() when fixed.
-  it.fails(
-    "undo of a drag returns the anchor to its pre-drag geography, even after a pan",
-    async () => {
-      const w = await mount(10);
-      const rect = rectangle();
-      draw(w, rect);
-      const beforeDrag = placeOf(w.el(rect.id));
+describe("geography survives undo, pins, pans (audit 01)", () => {
+  it("undo of a drag returns the anchor to its pre-drag geography, even after a pan", async () => {
+    const w = await mount(10);
+    const rect = rectangle();
+    draw(w, rect);
+    const beforeDrag = placeOf(w.el(rect.id));
 
-      drag(w, rect.id, 50, 0);
-      w.pan(200, 0);
-      undo();
-      // The next camera frame, which also settles any re-anchor undo provoked.
-      w.pan(0, 0);
+    drag(w, rect.id, 50, 0);
+    w.pan(200, 0);
+    undo();
+    // The next camera frame, which also settles any re-anchor undo provoked.
+    w.pan(0, 0);
 
-      // Measured in screen pixels at the current camera: under half a pixel.
-      expect(
-        screenDistance(w.map, placeOf(w.el(rect.id)), beforeDrag),
-      ).toBeLessThan(0.5);
-    },
-  );
+    // Measured in screen pixels at the current camera: under half a pixel.
+    expect(
+      screenDistance(w.map, placeOf(w.el(rect.id)), beforeDrag),
+    ).toBeLessThan(0.5);
+  });
 
-  // KNOWN-RED (W4 world coordinates): the pin tool centres the pin on the click but CoordinateSync treats a point anchor as the top-left corner, so the first onChange re-anchors the pin ~8px up-left of the click. Flip to it() when fixed.
-  it.fails("a pin stays anchored at the point the user clicked", async () => {
+  it("a pin stays anchored at the point the user clicked", async () => {
     const w = await mount(10);
     const ctx = buildToolContext(w.map as unknown as maplibregl.Map, w.api);
     const click = { clientX: 500, clientY: 400 };
@@ -328,24 +338,20 @@ describe("geo anchors survive undo, pins, pans (KNOWN-RED, audit 01)", () => {
     expect(usePersistenceStore.getState().isDirty).toBe(false);
   });
 
-  // KNOWN-RED (W4 world coordinates): a pan rewrites the element's scene x/y (the camera lives in the elements, not in scrollX/scrollY/zoom), so a pure camera move mutates the document. Flip to it() when fixed.
-  it.fails(
-    "a pure pan leaves every element's scene geometry and version alone",
-    async () => {
-      const w = await mount(10);
-      const rect = rectangle();
-      draw(w, rect);
-      w.pan(0, 0);
-      const before = w.el(rect.id);
+  it("a pure pan leaves every element's scene geometry and version alone", async () => {
+    const w = await mount(10);
+    const rect = rectangle();
+    draw(w, rect);
+    w.pan(0, 0);
+    const before = w.el(rect.id);
 
-      w.pan(200, 0);
+    w.pan(200, 0);
 
-      const after = w.el(rect.id);
-      expect({ x: after.x, y: after.y, version: after.version }).toEqual({
-        x: before.x,
-        y: before.y,
-        version: before.version,
-      });
-    },
-  );
+    const after = w.el(rect.id);
+    expect({ x: after.x, y: after.y, version: after.version }).toEqual({
+      x: before.x,
+      y: before.y,
+      version: before.version,
+    });
+  });
 });

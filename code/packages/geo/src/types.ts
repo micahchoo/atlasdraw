@@ -1,18 +1,16 @@
-// packages/geo/src/types.ts
 // SPDX-License-Identifier: MIT
-// Canonical Atlasdraw geo type schemas. Phase 1 Wave 0 Task 1.
-// See docs/architecture/subsystems/geo/contracts.md for consumer contract.
+//
+// Geographic anchors.
+//
+// A `GeoAnchor` is a shape given in lng/lat plus `zRef`, the map zoom it was
+// given at. Two things use it:
+//
+//   - a tool's element seed (packages/tools): the tool says where the shape
+//     is; `zRef` sets the scene size of its screen-pixel parts.
+//   - a version 1 document, which stored one on each element as
+//     `customData.geo` (`GeoCustomData`). The v1 → v2 migration reads it and
+//     writes world coordinates (migrateV1.ts). Nothing else reads it.
 
-/**
- * GeoAnchor — discriminated union of how an Excalidraw element is anchored to geography.
- * - point: a single (lng, lat) — used by markers, labels, text
- * - bbox: a geographic bounding box — used by rectangles, ellipses, images
- * - polyline: a sequence of (lng, lat) coords — used by lines, polygons, freehand
- *
- * `zRef` is the MapLibre zoom level at which the element was first created.
- * Anchors the "natural size" so screen-mode and hybrid-mode scaling can compute
- * the right factor at other zooms. See docs/architecture/cross-cutting/patterns.md P-04.
- */
 export type GeoAnchor =
   | { kind: "point"; lng: number; lat: number; zRef: number }
   | {
@@ -25,41 +23,16 @@ export type GeoAnchor =
     }
   | { kind: "polyline"; coordinates: Array<[number, number]>; zRef: number };
 
-/**
- * scaleMode — how the element scales as the map zooms.
- * See spec §3.4 for per-tool defaults.
- */
-export type ScaleMode = "geographic" | "screen" | "hybrid";
-
-/**
- * GeoCustomData — the wrapper that lives on Excalidraw element's `customData.geo` field.
- * NOTE: field name on the element is `customData.geo`, NOT `customData.geoAnchor`.
- *
- * `projection: "mercator"` is reserved per Q12. Only valid value in v1; CoordinateSync
- * asserts this and throws otherwise. Future: globe view (v2+) will introduce other values.
- */
+/** `customData` of an anchored element in a version 1 document. */
 export type GeoCustomData = {
   geo: GeoAnchor;
-  scaleMode: ScaleMode;
+  /** "geographic", "screen" or "hybrid". All migrate as geographic. */
+  scaleMode: string;
   projection: "mercator";
   schemaVersion: 1;
 };
 
-/**
- * Upper bound for `zRef` in GeoAnchor. MapLibre's default `maxzoom` is 22 and
- * a few tile sources go to 24; 24 is the conservative ceiling. Negative or
- * non-finite values are nonsensical (zRef is a MapLibre zoom level, which is
- * defined on `[0, maxzoom]` and may be fractional). Used by the deep parser
- * (`parseGeoCustomData`) to reject untrusted input that maplibre would otherwise
- * silently saturate.
- */
-export const MAX_ZREF = 24;
-
-/** True iff `v` is a valid `zRef`: finite, non-negative, and <= MAX_ZREF. */
-export const isValidZRef = (v: unknown): v is number =>
-  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_ZREF;
-
-/** Type guard: is this element's customData a GeoCustomData? */
+/** True when `value` is a version 1 element's `customData` with an anchor. */
 export function isGeoCustomData(value: unknown): value is GeoCustomData {
   if (typeof value !== "object" || value === null) {
     return false;

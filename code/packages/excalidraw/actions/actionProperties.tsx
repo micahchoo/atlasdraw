@@ -79,6 +79,7 @@ import type { Scene } from "@atlasdraw/element";
 import type { CaptureUpdateActionType } from "@atlasdraw/element";
 
 import { trackEvent } from "../analytics";
+import { pickerStyleValue, styleScale } from "../atlasStyleScale";
 import { RadioSelection } from "../components/RadioSelection";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { FontPicker } from "../components/FontPicker/FontPicker";
@@ -293,6 +294,9 @@ const changeFontSize = (
     }
   });
 
+  // Atlasdraw (ADR-0015): elements hold scene units, the current item style
+  // holds what the picker shows.
+  const scale = styleScale(app.props.screenSizedStyles, appState.zoom.value);
   return {
     elements: updatedElements,
     appState: {
@@ -301,7 +305,7 @@ const changeFontSize = (
       // the same font size
       currentItemFontSize:
         newFontSizes.size === 1
-          ? [...newFontSizes][0]
+          ? [...newFontSizes][0] / scale
           : fallbackValue ?? appState.currentItemFontSize,
     },
     captureUpdate: CaptureUpdateAction.IMMEDIATELY,
@@ -547,11 +551,13 @@ export const actionChangeStrokeWidth = register<
   name: "changeStrokeWidth",
   label: "labels.strokeWidth",
   trackEvent: false,
-  perform: (elements, appState, value) => {
+  perform: (elements, appState, value, app) => {
+    // Atlasdraw (ADR-0015): the picker value is screen pixels.
+    const scale = styleScale(app.props.screenSizedStyles, appState.zoom.value);
     return {
       elements: changeProperty(elements, appState, (el) =>
         newElementWith(el, {
-          strokeWidth: value,
+          strokeWidth: value === undefined ? value : value * scale,
         }),
       ),
       appState: { ...appState, currentItemStrokeWidth: value },
@@ -587,7 +593,12 @@ export const actionChangeStrokeWidth = register<
           value={getFormValue(
             elements,
             app,
-            (element) => element.strokeWidth,
+            (element) =>
+              pickerStyleValue(
+                element.strokeWidth,
+                styleScale(app.props.screenSizedStyles, appState.zoom.value),
+                Object.values(STROKE_WIDTH),
+              ),
             (element) => element.hasOwnProperty("strokeWidth"),
             (hasSelection) =>
               hasSelection ? null : appState.currentItemStrokeWidth,
@@ -763,7 +774,10 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
         app,
         () => {
           invariant(value, "actionChangeFontSize: Expected a font size value");
-          return value;
+          // Atlasdraw (ADR-0015): the picker value is screen pixels.
+          return (
+            value * styleScale(app.props.screenSizedStyles, appState.zoom.value)
+          );
         },
         value,
       );
@@ -807,17 +821,22 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
                 elements,
                 app,
                 (element) => {
-                  if (isTextElement(element)) {
-                    return element.fontSize;
-                  }
-                  const boundTextElement = getBoundTextElement(
-                    element,
-                    app.scene.getNonDeletedElementsMap(),
-                  );
-                  if (boundTextElement) {
-                    return boundTextElement.fontSize;
-                  }
-                  return null;
+                  const fontSize = isTextElement(element)
+                    ? element.fontSize
+                    : getBoundTextElement(
+                        element,
+                        app.scene.getNonDeletedElementsMap(),
+                      )?.fontSize;
+                  return fontSize === undefined
+                    ? null
+                    : pickerStyleValue(
+                        fontSize,
+                        styleScale(
+                          app.props.screenSizedStyles,
+                          appState.zoom.value,
+                        ),
+                        Object.values(FONT_SIZES),
+                      );
                 },
                 (element) =>
                   isTextElement(element) ||

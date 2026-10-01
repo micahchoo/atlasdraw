@@ -39,9 +39,10 @@ vi.mock("@atlasdraw/basemap", () => ({
 const EL: ConvertibleElement = {
   id: "el-1",
   type: "rectangle",
-  customData: {
-    geo: { kind: "bbox" },
-  } as unknown as ConvertibleElement["customData"],
+  x: 0,
+  y: 0,
+  width: 100,
+  height: 50,
 };
 
 function makeMap(overrides: Partial<maplibregl.Map> = {}) {

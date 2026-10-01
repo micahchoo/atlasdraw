@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@atlasdraw/data": "0.0.0",
+    "@atlasdraw/geo": "0.1.0",
     "commander": "^11.0.0",
     "ulid": "^2.3.0"
   },

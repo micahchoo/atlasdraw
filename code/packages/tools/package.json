@@ -22,9 +22,7 @@
     "test:typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@atlasdraw/geo": "0.1.0",
-    "@turf/circle": "7.3.5",
-    "@turf/distance": "7.3.5"
+    "@atlasdraw/geo": "0.1.0"
   },
   "peerDependencies": {
     "react": ">=18"

@@ -22,6 +22,8 @@ import {
 } from "@testing-library/react";
 import * as Y from "yjs";
 
+import { toScene } from "@atlasdraw/geo";
+
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawTool } from "@atlasdraw/tools";
@@ -93,6 +95,25 @@ function makeFakeAPI(sceneElements: SceneElement[] = []) {
         return () => listeners.delete(cb);
       },
     } as unknown as ExcalidrawImperativeAPI,
+  };
+}
+
+/**
+ * A 100 × 50 element in the open document's world frame, from lng 0 to 100
+ * and lat 50 down to 0. The fake map's unproject sends a click at (x, y) to
+ * lng x, lat y, so a click at (15, 30) lands inside it.
+ */
+function shapeOverClicks() {
+  const frame = currentDocument().snapshot().world;
+  const nw = toScene(frame, 0, 50);
+  const se = toScene(frame, 100, 0);
+  return {
+    id: "el-1",
+    type: "rectangle",
+    x: nw.x,
+    y: nw.y,
+    width: se.x - nw.x,
+    height: se.y - nw.y,
   };
 }
 
@@ -337,14 +358,12 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
   it("an element hit anchors the thread to the element", () => {
     const layer = makeLayer();
     const fakeMap = makeFakeMap();
-    const { api } = makeFakeAPI([
-      { id: "el-1", x: 0, y: 0, width: 100, height: 50 },
-    ]);
+    const { api } = makeFakeAPI([shapeOverClicks()]);
     renderOverlay(layer, fakeMap.map, api);
 
     act(() => setCommentMode(true));
-    // (15, 30) in client coords → scene coords (15, 30) at zoom 1 → inside
-    // el-1's AABB, so the cascade picks the element before the map.
+    // (15, 30) in client coords → lng 15, lat 30 → inside el-1, so the
+    // cascade picks the element before the map.
     fakeMap.click(15, 30);
 
     expect(screen.getByTestId("comment-draft-anchor-kind").textContent).toBe(
@@ -365,9 +384,7 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
   it("Pin to map on a hit drops a geographic point instead of following", () => {
     const layer = makeLayer();
     const fakeMap = makeFakeMap();
-    const { api } = makeFakeAPI([
-      { id: "el-1", x: 0, y: 0, width: 100, height: 50 },
-    ]);
+    const { api } = makeFakeAPI([shapeOverClicks()]);
     renderOverlay(layer, fakeMap.map, api);
 
     act(() => setCommentMode(true));

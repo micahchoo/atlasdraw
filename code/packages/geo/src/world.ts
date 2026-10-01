@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MIT
-// ADR-0015 spike — the world frame.
+//
+// The world frame (ADR-0015).
 //
 // A scene coordinate is a Web Mercator world pixel at the reference zoom `z0`
 // (512-px tiles, as MapLibre uses), minus the frame's floating origin. The map
 // camera becomes Excalidraw's scrollX / scrollY / zoom, and a camera move
-// rewrites no element.
+// rewrites no element. Lng/lat is a closed-form function of scene
+// coordinates, computed where it is needed: export, conversion, bounds,
+// labels, comment anchors.
 //
 // Pure functions, no MapLibre: the camera is plain data. Bearing is not part of
 // the viewport — it is a display rotation of the drawing layer about the
@@ -15,6 +18,13 @@ export const WORLD_TILE_SIZE = 512;
 
 /** MapLibre clamps latitude here before it projects. */
 export const MAX_MERCATOR_LAT = 85.051129;
+
+/**
+ * The reference zoom of every document. With z0 = 22 the Excalidraw zoom
+ * value `2^(zoom - z0)` is never above 1 at MapLibre's zoom range, so an
+ * element's cache canvas never reaches its size cap (ADR-0015, condition 1).
+ */
+export const REFERENCE_ZOOM = 22;
 
 export interface WorldFrame {
   /** Reference zoom: one scene unit is one map pixel at this zoom. */
@@ -80,6 +90,20 @@ export function frameAt(lng: number, lat: number, z: number): WorldFrame {
       y: Math.round(mercatorY(lat, z0)),
     },
   };
+}
+
+/** A document's frame: origin at (lng, lat), reference zoom `REFERENCE_ZOOM`. */
+export function documentFrame(lng: number, lat: number): WorldFrame {
+  return frameAt(lng, lat, REFERENCE_ZOOM);
+}
+
+/**
+ * Scene units per screen pixel at a map zoom. A size given in screen pixels
+ * (a stroke, a pin, a font) times this is the same size in the scene, at the
+ * zoom where it was given.
+ */
+export function sceneUnitsPerPixel(f: WorldFrame, mapZoom: number): number {
+  return Math.pow(2, f.z0 - mapZoom);
 }
 
 export function toScene(f: WorldFrame, lng: number, lat: number): ScenePoint {

@@ -8,11 +8,11 @@
  * and the user's scroll-to-zoom appears to do nothing, leaving annotations
  * apparently detached from their geographic anchor on zoom attempts.
  *
- * In atlasdraw, wheel = map zoom is the universal semantic (Excalidraw's
- * internal canvas zoom is irrelevant since the canvas is locked to the map
- * via CoordinateSync). This hook installs a capture-phase wheel listener on
- * the supplied container that intercepts wheel events and forwards them to
- * `map.easeTo` with the canonical scrollZoom delta math.
+ * In atlasdraw, wheel = map zoom is the universal semantic: the map owns the
+ * camera and Excalidraw's viewport follows it (useCameraBridge). This hook
+ * installs a capture-phase wheel listener on the supplied container that
+ * intercepts wheel events and forwards them to `map.easeTo` with the
+ * canonical scrollZoom delta math.
  *
  * Why `map.easeTo` and not synthetic `WheelEvent` dispatch on `map.getCanvas()`:
  *   - cross-browser variance (Safari is finicky with WheelEvent constructor)
@@ -21,7 +21,8 @@
  * Calling the map API directly is what scrollZoom does internally anyway.
  *
  * Modifier semantics:
- *   - ctrl/meta+wheel: pass through (browser pinch-zoom; standard expectation).
+ *   - ctrl/meta+wheel: a trackpad pinch. Map zoom too: Excalidraw's own wheel
+ *     zoom clamps to [0.1, 30] and would jump the map many zoom levels.
  *   - shift+wheel: intercepted as map zoom (Excalidraw uses it for horizontal
  *     pan internally, but in atlasdraw the page doesn't scroll horizontally
  *     and shift-wheel-zoom is harmless if surprising — revisit in Phase 4 if
@@ -30,9 +31,6 @@
  * Touch pinch-zoom on tablet hits the same Excalidraw-captures-pointer issue
  * but goes through pointer events, not wheel — out of scope for this hook.
  * Tracked separately when Phase 4 mobile/touch matrix lands.
- *
- * @see useCoordinateSync.ts — the camera-event listener whose "zoom" handler
- *   completes the loop after this hook routes the wheel.
  */
 
 import { useEffect } from "react";
@@ -102,11 +100,6 @@ export function useMapWheelRouter(
     }
 
     const handleWheel = (e: WheelEvent) => {
-      // Browser pinch-zoom (ctrl on Windows/Linux, meta on macOS) — let it through.
-      if (e.ctrlKey || e.metaKey) {
-        return;
-      }
-
       // Chrome that scrolls itself keeps its own wheel. See targetOwnsWheel.
       if (targetOwnsWheel(e.target, container)) {
         return;
