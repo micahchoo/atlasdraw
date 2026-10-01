@@ -78,6 +78,13 @@ services:
         # "realtime" profile). An empty URL means same origin: Caddy routes /yjs.
         VITE_REALTIME_ENABLED: ${VITE_REALTIME_ENABLED:-false}
         VITE_REALTIME_WS_URL: ${VITE_REALTIME_WS_URL:-}
+        VITE_GEOCODER_ENDPOINT: ${VITE_GEOCODER_ENDPOINT:-}
+        # Tile servers the page may reach besides the built-in basemaps,
+        # space-separated origins (content security policy connect-src).
+        VITE_CSP_CONNECT_SRC: ${VITE_CSP_CONNECT_SRC:-}
+    environment:
+      # Which sites may frame /embed (CSP frame-ancestors). Default: any.
+      EMBED_FRAME_ANCESTORS: ${EMBED_FRAME_ANCESTORS:-*}
     depends_on:
       - storage
     restart: unless-stopped
@@ -157,8 +164,6 @@ services:
     environment:
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
-      # Which sites may frame /embed (CSP frame-ancestors). Default: any.
-      EMBED_FRAME_ANCESTORS: ${EMBED_FRAME_ANCESTORS:-*}
     depends_on:
       - web
       - storage

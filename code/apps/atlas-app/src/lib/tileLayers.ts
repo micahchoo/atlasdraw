@@ -83,3 +83,21 @@ export function creditLine(
     .forEach((e) => add(e.kind === "tile" ? e.attribution : undefined));
   return credits.join(" · ");
 }
+
+/**
+ * USGS The National Map, imagery only. Read 2026-10-01 from the service's
+ * own description (MapServer?f=pjson): 256 px tiles, levels 0–23, no token,
+ * public-domain orthoimagery (NAIP for the conterminous United States).
+ * ArcGIS tile URLs put the row before the column: {z}/{y}/{x}.
+ */
+export const USGS_IMAGERY = {
+  label: "USGS aerial imagery (United States)",
+  url: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+  attribution: "USDA, USGS The National Map: Orthoimagery",
+} as const;
+
+/**
+ * Tile layers the editor offers by name. The page's content security policy
+ * lets the map reach their servers (lib/contentSecurityPolicy.ts).
+ */
+export const SUGGESTED_TILE_LAYERS = [USGS_IMAGERY] as const;
