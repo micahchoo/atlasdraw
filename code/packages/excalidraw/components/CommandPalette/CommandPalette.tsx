@@ -407,6 +407,7 @@ function CommandPaletteInner({
           category: DEFAULT_CATEGORIES.export,
           icon: ExportImageIcon,
           shortcut: getShortcutFromShortcutName("imageExport"),
+          predicate: appProps.UIOptions.canvasActions.saveAsImage,
           keywords: [
             "export",
             "image",

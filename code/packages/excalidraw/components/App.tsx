@@ -5174,7 +5174,8 @@ class App extends React.Component<AppProps, AppState> {
       } else if (
         event.key.toLowerCase() === KEYS.E &&
         event.shiftKey &&
-        event[KEYS.CTRL_OR_CMD]
+        event[KEYS.CTRL_OR_CMD] &&
+        this.props.UIOptions.canvasActions.saveAsImage
       ) {
         event.preventDefault();
         this.setState({ openDialog: { name: "imageExport" } });

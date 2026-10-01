@@ -37,6 +37,7 @@ import type { JSONExportData } from "../data/json";
 
 import type {
   AppClassProperties,
+  AppProps,
   AppState,
   BinaryFiles,
   ExcalidrawProps,
@@ -392,12 +393,21 @@ export const actionSaveToActiveFile = register({
     event.key === KEYS.S && event[KEYS.CTRL_OR_CMD] && !event.shiftKey,
 });
 
+// `saveFileToDisk` is not a `canvasActions` key, so the action manager
+// cannot gate it by name. The host closes it with `canvasActions.export`.
+const isSaveFileToDiskEnabled = (props: AppProps) => {
+  const exportOpts = props.UIOptions.canvasActions.export;
+  return !!exportOpts && !!exportOpts.saveFileToDisk;
+};
+
 export const actionSaveFileToDisk = register({
   name: "saveFileToDisk",
   label: "exportDialog.disk_title",
   icon: ExportIcon,
   viewMode: true,
   trackEvent: { category: "export" },
+  predicate: (elements, appState, props, app) =>
+    isSaveFileToDiskEnabled(app.props),
   perform: async (elements, appState, value, app) => {
     if (onExportInProgress) {
       return false;
@@ -439,10 +449,11 @@ export const actionSaveFileToDisk = register({
       onExportInProgress = false;
     }
   },
-  keyTest: (event) =>
+  keyTest: (event, appState, elements, app) =>
     event.key.toLowerCase() === KEYS.S &&
     event.shiftKey &&
-    event[KEYS.CTRL_OR_CMD],
+    event[KEYS.CTRL_OR_CMD] &&
+    isSaveFileToDiskEnabled(app.props),
   PanelComponent: ({ updateData }) => (
     <ToolButton
       type="button"

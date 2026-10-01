@@ -249,10 +249,10 @@ function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
 // The .atlasdraw bundle is the canonical format and these two handlers are
 // the ONLY save/open surfaces: the "Open…" / "Save" MainMenu items and the
 // Cmd+O / Cmd+S bindings all route here. Excalidraw's own persistence
-// actions (LoadScene, SaveToActiveFile, the JSONExportDialog) are disabled
-// via UIOptions.canvasActions — see EXCALIDRAW_UI_OPTIONS below — which
-// also disables their built-in keyboard shortcuts (action `predicate`
-// gates both, actions/manager.tsx). Rendering/format export (PNG, PDF,
+// actions (LoadScene, SaveToActiveFile, SaveFileToDisk, the image and JSON
+// export dialogs) are disabled via UIOptions.canvasActions — see
+// EXCALIDRAW_UI_OPTIONS below — which also disables their keyboard
+// shortcuts. Rendering/format export (PNG, PDF,
 // GeoJSON, .atlasdraw) lives in the atlas ExportDialog ("Export…" item).
 //
 // Exported for unit tests (MapEditor.atlasdraw-export.test.tsx) — the same
@@ -360,15 +360,18 @@ const EXCALIDRAW_INITIAL_DATA = {
   },
 } as const;
 
-// One format, one door: disable Excalidraw's own persistence actions
-// (.excalidraw load/save + the JSONExportDialog). The `predicate` on each
-// action gates its keyboard shortcut too, so Cmd+O / Cmd+S fall through to
-// the atlas handlers wired in MapEditor's own onKeyDown.
+// One format, one door: disable Excalidraw's own persistence and export
+// (.excalidraw load/save, the JSONExportDialog, the image export dialog).
+// These keys also close the matching shortcuts (Cmd+Shift+S, Cmd+Shift+E)
+// and command-palette entries, so Cmd+O / Cmd+S fall through to the atlas
+// handlers in MapEditor's own onKeyDown. Tested in the fork:
+// packages/excalidraw/tests/closedExportDoors.test.tsx.
 const EXCALIDRAW_UI_OPTIONS = {
   canvasActions: {
     loadScene: false,
     saveToActiveFile: false,
     export: false as const,
+    saveAsImage: false,
   },
 } as const;
 
