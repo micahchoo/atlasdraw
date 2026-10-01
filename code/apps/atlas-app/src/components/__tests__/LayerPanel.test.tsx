@@ -18,6 +18,12 @@ import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useSelectedLayerStore } from "../../state/selectedLayer";
 
 import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
+
+import {
   sceneAnnotationIds,
   sceneRow,
   seedScene,
@@ -36,7 +42,7 @@ const emptyFc = (count: number): FeatureCollection => ({
 });
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
 });
 
 // vitest config sets `globals: false`, so RTL's automatic cleanup hook
@@ -367,7 +373,7 @@ describe("LayerPanel", () => {
       const viaDrag = annotationIds();
 
       cleanup();
-      useLayerRegistryStore.setState({ entries: [] });
+      openDocument(createDocument());
       seedMixed();
       render(<LayerPanel />);
       fireEvent.click(screen.getByTestId("layer-down-a2"));
@@ -583,11 +589,13 @@ describe("LayerPanel — raster layers", () => {
   ] as never;
 
   function seedRaster(id = "rl:plate-1", label = "survey-sheet.tif") {
-    useLayerRegistryStore.getState().registerRasterLayer({
+    currentDocument().dispatch({
+      type: "add-raster-layer",
       id,
       label,
       corners: CORNERS,
       imageKey: `${id}.png`,
+      image: new Blob(["png"]),
     });
     return id;
   }

@@ -16,7 +16,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 
 import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+
+import { createDocument, openDocument } from "../state/document";
 
 import {
   applyStyleToMap,
@@ -514,8 +515,7 @@ function makeSubscriberStubMap() {
 describe("useLayerRegistrySync — store → map subscriber", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useLayerRegistryStore.setState({ entries: [] });
-    useDataLayerFCStore.getState().clear();
+    openDocument(createDocument());
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
 
@@ -563,11 +563,13 @@ describe("useLayerRegistrySync — store → map subscriber", () => {
     });
     expect(order()).toEqual(["dl:old"]);
 
-    // What hydrate() does: swap the whole entries array for another document's.
-    useDataLayerFCStore.getState().set("dl:new", POINT_FC);
-    useLayerRegistryStore.setState({
-      entries: [dataEntry("dl:new", TEAL, true, 0)],
-    });
+    // What opening a file does: another document replaces this one.
+    openDocument(
+      createDocument({
+        overlays: [dataEntry("dl:new", TEAL, true, 0)],
+        featureCollections: { "dl:new": POINT_FC },
+      }),
+    );
 
     expect(raw.removeLayer).toHaveBeenCalledWith("dl:old");
     expect(raw.removeSource).toHaveBeenCalledWith("dl:old");

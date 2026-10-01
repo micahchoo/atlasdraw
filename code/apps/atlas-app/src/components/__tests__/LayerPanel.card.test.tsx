@@ -26,6 +26,8 @@ import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
 import { useMapInstanceStore } from "../../state/mapInstance";
 
+import { createDocument, openDocument } from "../../state/document";
+
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
 
 import type maplibregl from "maplibre-gl";
@@ -117,8 +119,7 @@ function seedMany(n: number, prefix = "layer") {
 }
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
   useMapInstanceStore.setState({ map: null });
 });
 

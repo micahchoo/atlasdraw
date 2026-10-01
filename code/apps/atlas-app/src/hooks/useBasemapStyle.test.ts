@@ -8,7 +8,7 @@ import { renderHook, cleanup } from "@testing-library/react";
 
 import { useLayerRegistryStore } from "../state/layerRegistry";
 
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { createDocument, openDocument } from "../state/document";
 
 import { useBasemapStyle } from "./useBasemapStyle";
 
@@ -121,8 +121,7 @@ const POLY_FC: FeatureCollection = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
   resolveStyleMock.mockResolvedValue(FAKE_STYLE);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});

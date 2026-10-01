@@ -39,8 +39,6 @@ import { selectDocument } from "../selectDocument";
 import { loadShareDocument, tokenFromPath } from "../loadShareDocument";
 import { usePersistenceStore } from "../usePersistenceStore";
 import { useLayerRegistryStore } from "../layerRegistry";
-import { useDataLayerFCStore } from "../useDataLayerFCStore";
-import { useRasterImageStore } from "../useRasterImageStore";
 import { useMapInstanceStore } from "../mapInstance";
 import { useBasemapStore } from "../basemap";
 import { useSceneBinding, useSceneStore } from "../scene";
@@ -212,8 +210,6 @@ beforeEach(async () => {
   for (const id of reg.entries.map((e) => e.id)) {
     reg.remove(id);
   }
-  useDataLayerFCStore.getState().clear();
-  useRasterImageStore.getState().clear();
   usePersistenceStore.setState({ isDirty: false, isDraining: false });
   useMapInstanceStore.setState({ map: null });
   useBasemapStore.setState({ activeBasemapId: "protomaps-light" });

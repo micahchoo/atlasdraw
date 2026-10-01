@@ -25,7 +25,6 @@ import type { BinaryFileData, FileId, DataURL } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
-import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { useRasterImageStore } from "./useRasterImageStore";
 import { useDocumentTitleStore } from "./documentTitle";
 import { usePersistenceStore } from "./usePersistenceStore";
@@ -80,23 +79,9 @@ export async function hydrate(
   loaded: AtlasdrawDocument,
   excalidrawAPI: ExcalidrawImperativeAPI,
 ): Promise<void> {
-  // Step 1 — clear prior runtime state (idempotent on a fresh mount).
-  const registry = useLayerRegistryStore.getState();
-  const priorIds = registry.entries.map((e) => e.id);
-  for (const id of priorIds) {
-    // remove() also drops the FC mirror per layerRegistry.ts:206 — kind-agnostic.
-    registry.remove(id);
-  }
-  // Belt-and-braces: nuke any orphan FCs the registry didn't know about.
-  useDataLayerFCStore.getState().clear();
-  // FU-1: and the previous document's raster images. `clear` revokes every
-  // object URL, which is the part that matters — opening five documents in a
-  // session would otherwise hold every image any of them contained.
-  useRasterImageStore.getState().clear();
-
-  // Step 1a — the loaded file is now the open document: its id, creation
+  // Step 1 — the loaded file is now the open document: its id, creation
   // time and saved camera. A new Document, so nothing carries over from the
-  // previous one.
+  // previous one: its layers, payloads and object URLs go with it.
   const doc = createDocument({
     id: loaded.manifest.id,
     createdAt: loaded.manifest.createdAt,
@@ -113,6 +98,7 @@ export async function hydrate(
   useDocumentTitleStore.getState().setTitle(loaded.manifest.title);
 
   // Step 2 — replay manifest layer entries.
+  const registry = useLayerRegistryStore.getState();
   for (const entry of loaded.manifest.layers) {
     if (entry.kind === "raster") {
       // FU-1. This branch exists before anything can write a raster into a

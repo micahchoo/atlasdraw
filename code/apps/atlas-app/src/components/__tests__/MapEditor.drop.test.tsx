@@ -26,6 +26,8 @@ import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
+import { createDocument, openDocument } from "../../state/document";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -259,7 +261,7 @@ beforeEach(() => {
   // Reset spies + store between tests so assertions are isolated.
   vi.clearAllMocks();
   mapHandlers.clear();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
 });
 
 describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {

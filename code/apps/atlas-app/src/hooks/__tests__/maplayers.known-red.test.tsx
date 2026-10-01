@@ -44,6 +44,8 @@ import { StylePanel } from "../../components/StylePanel";
 import { ToastProvider } from "../../components/ToastProvider";
 import { AriaAnnouncer } from "../../components/AriaAnnouncer";
 
+import { createDocument, openDocument } from "../../state/document";
+
 import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import type { FeatureCollection } from "geojson";
@@ -336,9 +338,7 @@ function manifest(layers: Manifest["layers"]): Manifest {
 }
 
 function resetStores(): void {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
-  useRasterImageStore.getState().clear();
+  openDocument(createDocument());
 }
 
 beforeEach(resetStores);

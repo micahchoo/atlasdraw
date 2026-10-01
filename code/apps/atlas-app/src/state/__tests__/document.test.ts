@@ -4,7 +4,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createDocument } from "../document";
+import {
+  createDocument,
+  DEFAULT_DOCUMENT_TITLE,
+  type Document,
+  type RasterCorners,
+} from "../document";
+
+import type { FeatureCollection } from "geojson";
 
 const LOADED = {
   id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
@@ -58,5 +65,248 @@ describe("updatedAt", () => {
     const doc = createDocument(LOADED);
 
     expect(doc.stamp("k1", "2020-01-01T00:00:00.000Z")).toBe(LOADED.createdAt);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Commands: the map layers, their payloads, and the title
+// ---------------------------------------------------------------------------
+
+const fc = (n: number): FeatureCollection => ({
+  type: "FeatureCollection",
+  features: Array.from({ length: n }, (_, i) => ({
+    type: "Feature",
+    properties: { i },
+    geometry: { type: "Point", coordinates: [i, 0] },
+  })),
+});
+
+const CORNERS: RasterCorners = [
+  [0, 1],
+  [1, 1],
+  [1, 0],
+  [0, 0],
+];
+
+function addData(doc: Document, id: string, label = id): FeatureCollection {
+  const payload = fc(2);
+  doc.dispatch({ type: "add-data-layer", id, fc: payload, label, style: {} });
+  return payload;
+}
+
+function addRaster(doc: Document, id: string): Blob {
+  const image = new Blob(["png"]);
+  doc.dispatch({
+    type: "add-raster-layer",
+    id,
+    label: id,
+    corners: CORNERS,
+    imageKey: `${id}.png`,
+    image,
+  });
+  return image;
+}
+
+const ids = (doc: Document) => doc.snapshot().overlays.map((e) => e.id);
+
+describe("layer commands", () => {
+  it("add-data-layer stores the entry and its FeatureCollection", () => {
+    const doc = createDocument();
+    const payload = addData(doc, "dl:a", "Wells");
+
+    expect(doc.snapshot().overlays).toEqual([
+      {
+        kind: "data",
+        id: "dl:a",
+        label: "Wells",
+        visible: true,
+        order: 0,
+        featureCount: 2,
+        style: {},
+      },
+    ]);
+    expect(doc.snapshot().featureCollections["dl:a"]).toBe(payload);
+  });
+
+  it("refuses a data layer id without the dl: prefix", () => {
+    const doc = createDocument();
+    expect(() => addData(doc, "a")).toThrow(/dl:/);
+    expect(ids(doc)).toEqual([]);
+  });
+
+  it("ignores a second layer with the same id", () => {
+    const doc = createDocument();
+    addData(doc, "dl:a", "first");
+    const revision = doc.revision;
+    addData(doc, "dl:a", "second");
+
+    expect(doc.snapshot().overlays.map((e) => e.label)).toEqual(["first"]);
+    expect(doc.revision).toBe(revision);
+  });
+
+  it("add-raster-layer stores the entry and the image, fully opaque", () => {
+    const doc = createDocument();
+    const image = addRaster(doc, "rl:sheet");
+
+    expect(doc.snapshot().overlays[0]).toMatchObject({
+      kind: "raster",
+      id: "rl:sheet",
+      opacity: 1,
+      imageKey: "rl:sheet.png",
+    });
+    expect(doc.snapshot().images["rl:sheet"]).toBe(image);
+    expect(() => addRaster(doc, "sheet")).toThrow(/rl:/);
+  });
+
+  it("rename, visibility and restyle change one entry; the others keep their identity", () => {
+    const doc = createDocument();
+    addData(doc, "dl:a");
+    addData(doc, "dl:b");
+    const before = doc.snapshot().overlays;
+
+    doc.dispatch({ type: "rename-layer", id: "dl:a", label: "Roads" });
+    doc.dispatch({ type: "set-visibility", id: "dl:a", visible: false });
+    doc.dispatch({
+      type: "restyle",
+      id: "dl:a",
+      patch: { fillColor: "#f00" },
+    });
+
+    const [a, b] = doc.snapshot().overlays;
+    expect(a).toMatchObject({
+      label: "Roads",
+      visible: false,
+      style: { fillColor: "#f00" },
+    });
+    expect(b).toBe(before[1]);
+  });
+
+  it("reorder moves an entry within its own kind and clamps", () => {
+    const doc = createDocument();
+    addData(doc, "dl:a");
+    addRaster(doc, "rl:x");
+    addData(doc, "dl:b");
+    addData(doc, "dl:c");
+
+    doc.dispatch({ type: "reorder", id: "dl:a", order: 99 });
+
+    expect(ids(doc)).toEqual(["dl:b", "rl:x", "dl:c", "dl:a"]);
+    const orderOf = (id: string) =>
+      doc.snapshot().overlays.find((e) => e.id === id)?.order;
+    expect([orderOf("dl:b"), orderOf("dl:c"), orderOf("dl:a")]).toEqual([
+      0, 1, 2,
+    ]);
+    expect(orderOf("rl:x")).toBe(0);
+  });
+
+  it("remove-layer drops the entry with its FeatureCollection or image", () => {
+    const doc = createDocument();
+    addData(doc, "dl:a");
+    addRaster(doc, "rl:x");
+
+    doc.dispatch({ type: "remove-layer", id: "dl:a" });
+    doc.dispatch({ type: "remove-layer", id: "rl:x" });
+
+    expect(doc.snapshot()).toMatchObject({
+      overlays: [],
+      featureCollections: {},
+      images: {},
+    });
+  });
+
+  it("rename-document folds a blank title back to the default", () => {
+    const doc = createDocument();
+    doc.dispatch({ type: "rename-document", title: "Field notes" });
+    expect(doc.snapshot().title).toBe("Field notes");
+
+    doc.dispatch({ type: "rename-document", title: "   " });
+    expect(doc.snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
+  });
+});
+
+describe("revision and subscribers", () => {
+  it("rises by one on each real change and tells subscribers", () => {
+    const doc = createDocument();
+    let heard = 0;
+    doc.subscribe(() => {
+      heard += 1;
+    });
+
+    addData(doc, "dl:a");
+    doc.dispatch({ type: "rename-layer", id: "dl:a", label: "Roads" });
+
+    expect(doc.revision).toBe(2);
+    expect(heard).toBe(2);
+  });
+
+  it("does not move for a command that changes nothing", () => {
+    const doc = createDocument();
+    addData(doc, "dl:a");
+    const snapshot = doc.snapshot();
+    let heard = 0;
+    doc.subscribe(() => {
+      heard += 1;
+    });
+
+    doc.dispatch({ type: "set-visibility", id: "dl:a", visible: true });
+    doc.dispatch({ type: "rename-layer", id: "dl:missing", label: "x" });
+    doc.dispatch({ type: "reorder", id: "dl:a", order: 0 });
+    doc.dispatch({ type: "remove-layer", id: "dl:missing" });
+
+    expect(doc.revision).toBe(1);
+    expect(heard).toBe(0);
+    expect(doc.snapshot()).toBe(snapshot);
+  });
+
+  it("a save stamp is not a revision", () => {
+    const doc = createDocument();
+    doc.stamp("k1", "2030-01-01T00:00:00.000Z");
+    expect(doc.revision).toBe(0);
+  });
+
+  it("starts from a loaded state with revision 0", () => {
+    const loaded = createDocument({
+      ...LOADED,
+      title: "Field notes",
+      overlays: [
+        {
+          kind: "data",
+          id: "dl:a",
+          label: "a",
+          visible: false,
+          order: 0,
+          featureCount: 2,
+          style: {},
+        },
+      ],
+      featureCollections: { "dl:a": fc(2) },
+    });
+
+    expect(loaded.revision).toBe(0);
+    expect(loaded.snapshot()).toMatchObject({
+      title: "Field notes",
+      overlays: [{ id: "dl:a", visible: false }],
+    });
+  });
+});
+
+describe("provenance", () => {
+  it("rides on a data or raster entry, and a rename leaves it", () => {
+    const doc = createDocument();
+    const provenance = { sourceFile: "sites_2026.csv", droppedCount: 7 };
+    doc.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: fc(1),
+      label: "sites_2026.csv",
+      style: {},
+      provenance,
+    });
+    doc.dispatch({ type: "rename-layer", id: "dl:a", label: "Field sites" });
+
+    expect(doc.snapshot().overlays[0]).toMatchObject({
+      label: "Field sites",
+      provenance,
+    });
   });
 });

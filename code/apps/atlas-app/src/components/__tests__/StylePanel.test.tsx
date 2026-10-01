@@ -10,7 +10,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { StylePanel } from "../StylePanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
+
+import { createDocument, openDocument } from "../../state/document";
 
 import type { FeatureCollection } from "geojson";
 
@@ -73,8 +74,7 @@ function panelRuleBody(): string {
 }
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
   useLayerRegistryStore.getState().registerDataLayer({
     id: "dl:t1",
     fc: sampleFc,

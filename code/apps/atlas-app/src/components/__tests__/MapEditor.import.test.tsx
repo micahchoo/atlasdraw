@@ -24,6 +24,8 @@ import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
+import { createDocument, openDocument } from "../../state/document";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -259,7 +261,7 @@ function makeFile(name: string, text: string): File {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
 });
 
 afterEach(() => {

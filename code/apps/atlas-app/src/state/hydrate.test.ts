@@ -83,7 +83,6 @@ const sceneEl = (id: string, type = "rectangle"): SceneElement => ({
 
 beforeEach(() => {
   // Module singletons — wipe per test.
-  useDataLayerFCStore.getState().clear();
   // Registry: drop any entries from prior tests.
   const reg = useLayerRegistryStore.getState();
   for (const id of reg.entries.map((e) => e.id)) {

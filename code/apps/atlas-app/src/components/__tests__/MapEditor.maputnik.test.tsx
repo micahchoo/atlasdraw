@@ -22,8 +22,9 @@ import {
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useBasemapStore } from "../../state/basemap";
+
+import { createDocument, openDocument } from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -233,7 +234,7 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   useBasemapStore.setState({
     activeBasemapId: "protomaps-light",
     styleEditorOpen: false,

@@ -12,7 +12,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
+
+import { createDocument, openDocument } from "../../state/document";
 
 import type { FeatureCollection } from "geojson";
 
@@ -28,8 +29,7 @@ const emptyFc = (): FeatureCollection => ({
 });
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
 });
 
 afterEach(() => {

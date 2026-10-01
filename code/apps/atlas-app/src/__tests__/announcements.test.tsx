@@ -27,6 +27,8 @@ import { LayerPanel } from "../components/LayerPanel";
 import { CommentsLayer } from "../state/comments";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 
+import { createDocument, openDocument } from "../state/document";
+
 import type { FeatureCollection } from "geojson";
 
 const emptyFc = (count: number): FeatureCollection => ({
@@ -39,7 +41,7 @@ const emptyFc = (count: number): FeatureCollection => ({
 });
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   useAnnouncerStore.setState({ message: "", seq: 0 });
 });
 

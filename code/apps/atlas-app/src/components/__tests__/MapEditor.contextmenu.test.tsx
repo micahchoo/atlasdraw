@@ -33,6 +33,8 @@ import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
 import { useLayerRegistryStore } from "../../state/layerRegistry";
 
+import { createDocument, openDocument } from "../../state/document";
+
 import type maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
@@ -305,7 +307,7 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   currentScene = [fakeRectangleEl];
   currentSelectedIds = { "anno-1": true };
   capturedContextMenuItems.length = 0;

@@ -10,10 +10,8 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { selectDocument, documentFromExcalidrawJson } from "./selectDocument";
 
-import { useDataLayerFCStore } from "./useDataLayerFCStore";
-
 import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
-import { createDocument, openDocument } from "./document";
+import { createDocument, currentDocument, openDocument } from "./document";
 import { useBasemapStore } from "./basemap";
 
 import type { FeatureCollection } from "geojson";
@@ -59,7 +57,6 @@ const makeRegistry = (
 // inherit fcs registered by another test file in the same vitest worker.
 // Same for the title store: selectDocument now reads it for `manifest.title`.
 beforeEach(() => {
-  useDataLayerFCStore.getState().clear();
   useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
 });
 
@@ -193,14 +190,18 @@ describe("selectDocument", () => {
     expect(doc.layers.has("el-skip")).toBe(false);
   });
 
-  it("defaults to reading from the live FC store when fcMap is not provided", () => {
-    // Demonstrates the production wiring path: registry actions push to the
-    // FC store; selectDocument reads the singleton implicitly.
+  it("defaults to reading the open document's FeatureCollections when fcMap is not provided", () => {
     const fc: FeatureCollection = {
       type: "FeatureCollection",
       features: [],
     };
-    useDataLayerFCStore.getState().set("dl:from-store", fc);
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:from-store",
+      fc,
+      label: "Live",
+      style: {},
+    });
 
     const reg = makeRegistry([
       {
