@@ -1,6 +1,6 @@
 # Atlasdraw Licensing
 
-This project ships under three open-source licenses. The split balances protecting against SaaS-reseller capture (AGPL on the running app) with maximum embeddability of integration libraries (MIT on the SDK).
+This project ships under three open-source licenses. The split balances protecting against SaaS-reseller capture (AGPL on the running app) with maximum reuse of the file-format and geometry libraries (MIT).
 
 ## Per-package licenses
 
@@ -9,7 +9,6 @@ This project ships under three open-source licenses. The split balances protecti
 | `apps/atlas-app` | AGPL-3.0 | Running editor — copyleft prevents closed-source SaaS resale |
 | `apps/realtime` | AGPL-3.0 | Server component — same reason |
 | `apps/storage` | AGPL-3.0 | Server component — same reason |
-| `packages/sdk` | MIT | Embed widget — must drop into closed-source apps |
 | `packages/cli` | MIT | Headless tooling — must run in any pipeline |
 | `packages/geo` | MIT | Pure math/types — maximum reuse |
 | `packages/data` | MIT | File format I/O — maximum reuse, ecosystem leverage |
@@ -24,7 +23,7 @@ This project ships under three open-source licenses. The split balances protecti
 
 ### Embedding the iframe in your closed-source SaaS dashboard
 
-**Permitted.** The embed SDK is MIT. You can `npm install @atlasdraw/sdk`, drop `<AtlasdrawEmbed src="..." />` into your React app, and ship without disclosing source.
+**Permitted.** An `<iframe>` that points at the `/embed` route of an Atlasdraw deployment does not put Atlasdraw code into your app, so it does not change your app's license. If you modify Atlasdraw and host the result, the next example applies. There is no embed SDK package (ADR-0016).
 
 ### Modifying `apps/atlas-app` and hosting your fork as a public SaaS
 
@@ -40,7 +39,7 @@ This project ships under three open-source licenses. The split balances protecti
 
 ### Building a desktop Electron wrapper around `apps/atlas-app`
 
-**Triggers AGPL.** Even though Electron is local-only execution, AGPL §13 reaches "remote network interaction" — and any auto-updater pinging your server counts. Safer to build the wrapper around the embed SDK (MIT) instead.
+**Triggers AGPL.** Even though Electron is local-only execution, AGPL §13 reaches "remote network interaction" — and any auto-updater pinging your server counts.
 
 ## Contributing
 
@@ -48,7 +47,7 @@ By submitting a contribution to this repository, you agree your changes are lice
 
 ## Why three licenses instead of one?
 
-Single-AGPL would deter MIT-licensed projects from depending on our SDK or CLI (license incompatibility on linking). Single-MIT would let any cloud provider resell our editor as a managed service contributing nothing back. The split is deliberate and load-bearing.
+Single-AGPL would deter MIT-licensed projects from depending on our libraries or CLI (license incompatibility on linking). Single-MIT would let any cloud provider resell our editor as a managed service contributing nothing back. The split is deliberate and load-bearing.
 
 ## CI enforcement
 

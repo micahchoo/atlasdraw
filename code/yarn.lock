@@ -316,14 +316,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@atlasdraw/sdk@workspace:packages/sdk":
-  version: 0.0.0-use.local
-  resolution: "@atlasdraw/sdk@workspace:packages/sdk"
-  dependencies:
-    typescript: "npm:5.9.3"
-  languageName: unknown
-  linkType: soft
-
 "@atlasdraw/storage@workspace:apps/storage":
   version: 0.0.0-use.local
   resolution: "@atlasdraw/storage@workspace:apps/storage"
