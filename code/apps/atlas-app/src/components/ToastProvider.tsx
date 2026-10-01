@@ -84,6 +84,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     new Map(),
   );
   const exitTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // Work that ends after an unmount (an import, for example) can still close
+  // its toast. It must not start a timer that outlives the provider.
+  const mountedRef = useRef(true);
 
   const dismiss = useCallback((id: number) => {
     // Clear any pending auto-dismiss timer.
@@ -93,6 +96,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       timersRef.current.delete(id);
     }
 
+    if (!mountedRef.current) {
+      return;
+    }
     setToasts((prev) =>
       prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)),
     );
@@ -109,6 +115,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const add = useCallback(
     (kind: ToastKind, message: string, options: ToastOptions = {}): number => {
       const id = nextId++;
+      if (!mountedRef.current) {
+        return id;
+      }
 
       setToasts((prev) => [
         ...prev,
@@ -127,6 +136,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 
   const update = useCallback((id: number, message: string) => {
+    if (!mountedRef.current) {
+      return;
+    }
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, message } : t)));
   }, []);
 
@@ -134,7 +146,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const timers = timersRef.current;
     const exitTimers = exitTimersRef.current;
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       timers.forEach((t) => clearTimeout(t));
       exitTimers.forEach((t) => clearTimeout(t));
     };
