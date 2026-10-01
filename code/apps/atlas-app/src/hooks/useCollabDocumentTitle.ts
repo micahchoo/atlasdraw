@@ -20,7 +20,7 @@
 
 import { useEffect } from "react";
 
-import { useDocumentTitleStore } from "../state/documentTitle";
+import { currentDocument, dispatch, followDocument } from "../state/document";
 
 import type * as Y from "yjs";
 
@@ -40,24 +40,24 @@ export function useCollabDocumentTitle(yjsDoc: Y.Doc | null): void {
       if (typeof remote !== "string" || remote.trim() === "") {
         return;
       }
-      const store = useDocumentTitleStore.getState();
       // The equality check is what breaks the echo loop: our own write comes
       // back through `observe`, and without this it would bounce forever.
-      if (remote !== store.title) {
-        store.setTitle(remote);
+      if (remote !== currentDocument().snapshot().title) {
+        dispatch({ type: "rename-document", title: remote });
       }
     };
 
     if (typeof meta.get(TITLE_KEY) === "string") {
       pullFromRoom();
     } else {
-      meta.set(TITLE_KEY, useDocumentTitleStore.getState().title);
+      meta.set(TITLE_KEY, currentDocument().snapshot().title);
     }
 
     meta.observe(pullFromRoom);
-    const unsubscribe = useDocumentTitleStore.subscribe((state) => {
-      if (meta.get(TITLE_KEY) !== state.title) {
-        meta.set(TITLE_KEY, state.title);
+    const unsubscribe = followDocument((doc) => {
+      const { title } = doc.snapshot();
+      if (meta.get(TITLE_KEY) !== title) {
+        meta.set(TITLE_KEY, title);
       }
     });
 
