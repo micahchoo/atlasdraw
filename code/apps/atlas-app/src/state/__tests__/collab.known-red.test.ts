@@ -178,12 +178,10 @@ async function until(
   timeoutMs = 3000,
 ): Promise<void> {
   const start = Date.now();
-  while (!cond()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`not within ${timeoutMs}ms: ${what}`);
-    }
+  while (!cond() && Date.now() - start <= timeoutMs) {
     await new Promise((r) => setTimeout(r, 25));
   }
+  expect(cond(), `not within ${timeoutMs}ms: ${what}`).toBe(true);
 }
 
 function settle(ms: number): Promise<void> {
