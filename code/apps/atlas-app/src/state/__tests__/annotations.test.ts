@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   annotationRows,
+  generateLayerLabel,
   deleteAnnotation,
   moveAnnotation,
   renameAnnotation,
@@ -156,5 +157,54 @@ describe("the scene store", () => {
       "Ward 3",
     );
     unsub();
+  });
+});
+
+describe("generateLayerLabel", () => {
+  const geo = (anchor: Record<string, unknown>) => ({
+    schemaVersion: 1,
+    projection: "mercator",
+    scaleMode: "geographic",
+    geo: anchor,
+  });
+
+  it('formats "Type near lat, lng" when geo data is present', () => {
+    expect(
+      generateLayerLabel({
+        id: "x",
+        type: "rectangle",
+        customData: geo({
+          kind: "point",
+          lng: -74.006,
+          lat: 40.7128,
+          zRef: 10,
+        }),
+      }),
+    ).toBe("Rectangle near 40.7°N, 74.0°W");
+  });
+
+  it("uses only the type name when geo data is absent", () => {
+    expect(generateLayerLabel({ id: "x", type: "freedraw" })).toBe("Freehand");
+  });
+
+  it("falls back to id when type is missing", () => {
+    expect(generateLayerLabel({ id: "abc-123" })).toBe("abc-123");
+  });
+
+  it("extracts the center of a bbox anchor", () => {
+    expect(
+      generateLayerLabel({
+        id: "x",
+        type: "ellipse",
+        customData: geo({
+          kind: "bbox",
+          west: -0.2,
+          south: 51.4,
+          east: 0.0,
+          north: 51.6,
+          zRef: 10,
+        }),
+      }),
+    ).toBe("Ellipse near 51.5°N, 0.1°W");
   });
 });

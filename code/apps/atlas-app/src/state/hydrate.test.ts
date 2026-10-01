@@ -135,7 +135,7 @@ describe("hydrate", () => {
     expect(useDocumentTitleStore.getState().title).toBe("Bidar ward survey");
   });
 
-  it("registers annotation layers from the manifest", async () => {
+  it("registers no layer for an annotation entry: an annotation is its element", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
@@ -143,7 +143,7 @@ describe("hydrate", () => {
           { kind: "annotation", id: "anno-1", label: "Notes", visible: true },
         ],
       }),
-      scene: [],
+      scene: [sceneEl("anno-1")],
       layers: new Map(),
       styleRef: {},
       files: new Map(),
@@ -151,14 +151,8 @@ describe("hydrate", () => {
 
     await hydrate(loaded, api);
 
-    const entries = useLayerRegistryStore.getState().entries;
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      kind: "annotation",
-      id: "anno-1",
-      label: "Notes",
-      visible: true,
-    });
+    expect(useLayerRegistryStore.getState().entries).toEqual([]);
+    expect(api.getSceneElements().map((e) => e.id)).toEqual(["anno-1"]);
   });
 
   it("moves a v1 annotation entry's user label onto its element", async () => {
@@ -349,20 +343,25 @@ describe("hydrate", () => {
       label: "stale",
       style: { fillColor: "#000" },
     });
-    useLayerRegistryStore
-      .getState()
-      .registerAnnotation("anno-stale", "stale-anno");
-    expect(useLayerRegistryStore.getState().entries).toHaveLength(2);
+    expect(useLayerRegistryStore.getState().entries).toHaveLength(1);
     expect(useDataLayerFCStore.getState().get("dl:stale")).toBeDefined();
 
     const loaded: AtlasdrawDocument = {
       manifest: baseManifest({
         layers: [
-          { kind: "annotation", id: "fresh", label: "Fresh", visible: true },
+          {
+            kind: "data",
+            id: "dl:fresh",
+            label: "Fresh",
+            visible: true,
+            featureCount: 1,
+            style: {},
+            source: "data/layer-dl:fresh.geojson",
+          },
         ],
       }),
       scene: [],
-      layers: new Map(),
+      layers: new Map([["dl:fresh", sampleFC]]),
       styleRef: {},
       files: new Map(),
     };
@@ -371,7 +370,7 @@ describe("hydrate", () => {
 
     const entries = useLayerRegistryStore.getState().entries;
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.id).toBe("fresh");
+    expect(entries[0]?.id).toBe("dl:fresh");
     expect(useDataLayerFCStore.getState().get("dl:stale")).toBeUndefined();
   });
 
@@ -481,7 +480,6 @@ describe("hydrate ∘ selectDocument round-trip", () => {
       label: "Cities",
       style: { fillColor: "#fff" },
     });
-    reg.registerAnnotation("anno-1", "Note");
 
     const sceneElements: ReadonlyArray<SceneElement> = [sceneEl("el-A")];
     const { api } = makeAPI();
@@ -505,9 +503,7 @@ describe("hydrate ∘ selectDocument round-trip", () => {
 
     // Registry shape matches.
     const restored = useLayerRegistryStore.getState().entries;
-    expect(restored.map((e) => e.id).sort()).toEqual(
-      ["anno-1", "dl:source-of-truth"].sort(),
-    );
+    expect(restored.map((e) => e.id)).toEqual(["dl:source-of-truth"]);
     // FC store has the data layer's payload.
     expect(useDataLayerFCStore.getState().get("dl:source-of-truth")).toEqual(
       sampleFC,
@@ -533,7 +529,7 @@ describe("hydrate ∘ selectDocument round-trip", () => {
     // The rename that would otherwise destroy the only record of the filename.
     useLayerRegistryStore
       .getState()
-      .updateAnnotationLabel("dl:provenanced", "Field sites");
+      .renameLayer("dl:provenanced", "Field sites");
 
     const { api } = makeAPI();
     const snap = selectDocument(api, useLayerRegistryStore.getState());

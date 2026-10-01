@@ -7,6 +7,7 @@ import {
   buildLegendEntries,
   renderedDataLayerIds,
   visibleAnnotationIds,
+  type LegendSource,
 } from "../legend";
 
 import type { LayerRegistryEntry } from "../../state/layerRegistry";
@@ -27,18 +28,15 @@ function dataLayer(
   } as LayerRegistryEntry;
 }
 
-function annotation(
-  id: string,
-  overrides: Partial<Extract<LayerRegistryEntry, { kind: "annotation" }>> = {},
-): LayerRegistryEntry {
+function annotation(id: string): LegendSource {
   return {
     kind: "annotation",
     id,
     label: id,
     visible: true,
+    renamedByUser: false,
     order: 0,
-    ...overrides,
-  } as LayerRegistryEntry;
+  };
 }
 
 const APPSTATE = { scrollX: 0, scrollY: 0, zoom: { value: 1 } };

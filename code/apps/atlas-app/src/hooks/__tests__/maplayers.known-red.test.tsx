@@ -356,7 +356,7 @@ describe("raster layers follow the registry onto the map", () => {
   it.fails("hiding a raster sets visibility none on its map layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() =>
@@ -370,7 +370,7 @@ describe("raster layers follow the registry onto the map", () => {
   it.fails("deleting a raster removes its image source and layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() => useLayerRegistryStore.getState().remove("rl:sheet"));
@@ -386,7 +386,7 @@ describe("raster layers follow the registry onto the map", () => {
       registerRaster("rl:doc-a");
       const map = new FakeMapLibre();
       const { api } = fakeExcalidraw();
-      renderHook(() => useLayerRegistrySync(asMap(map), api));
+      renderHook(() => useLayerRegistrySync(asMap(map)));
       expect(map.draws("rl:doc-a")).toBe(true);
 
       const docB: AtlasdrawDocument = {
@@ -458,7 +458,7 @@ describe("data-layer panel order matches map z-order", () => {
   // KNOWN-RED (W5 map overlays): the Data Layers section lists order 0 at the top, but MapLibre draws order 0 at the bottom, so the top row is drawn underneath. Flip to it() when fixed.
   it.fails("the panel's top data row is the top data layer on the map", () => {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     const ids = ["dl:roads", "dl:rivers", "dl:wells"];
     act(() => {
       for (const id of ids) {
@@ -491,7 +491,7 @@ describe("data-layer panel order matches map z-order", () => {
 describe("a style MapLibre rejects is not committed", () => {
   function setup(fc: FeatureCollection) {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     act(() =>
       useLayerRegistryStore.getState().registerDataLayer({
         id: "dl:wells",

@@ -150,7 +150,7 @@ function mountEditor(
   return renderHook(() => {
     usePersistenceWiring(api, NOTIFY);
     useSceneBinding(api);
-    useLayerRegistrySync(map, api);
+    useLayerRegistrySync(map);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
       map,

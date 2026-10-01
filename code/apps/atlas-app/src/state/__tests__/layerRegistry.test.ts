@@ -21,6 +21,21 @@ const emptyFc = (count: number): FeatureCollection => ({
   })),
 });
 
+/** Register a raster layer: the registry's second kind, beside data. */
+function addRaster(id: string): void {
+  useLayerRegistryStore.getState().registerRasterLayer({
+    id,
+    label: id,
+    corners: [
+      [0, 1],
+      [1, 1],
+      [1, 0],
+      [0, 0],
+    ],
+    imageKey: `${id}.png`,
+  });
+}
+
 beforeEach(() => {
   useLayerRegistryStore.setState({ entries: [] });
   // Phase 4 W0 (atlasdraw-ad27): registry actions now mirror into the FC
@@ -30,88 +45,7 @@ beforeEach(() => {
 });
 
 describe("layerRegistry", () => {
-  describe("registerAnnotation", () => {
-    it("adds an AnnotationLayerEntry with visible:true and monotonic order", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerAnnotation("el-2", "Custom Label");
-
-      const { entries } = useLayerRegistryStore.getState();
-      expect(entries).toHaveLength(2);
-
-      expect(entries[0]).toMatchObject({
-        kind: "annotation",
-        id: "el-1",
-        label: "el-1",
-        visible: true,
-        order: 0,
-      });
-      expect(entries[1]).toMatchObject({
-        kind: "annotation",
-        id: "el-2",
-        label: "Custom Label",
-        visible: true,
-        order: 1,
-      });
-    });
-
-    it("is idempotent — second call with same id is a no-op", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "Original");
-      store.registerAnnotation("el-1", "Duplicate");
-
-      const { entries } = useLayerRegistryStore.getState();
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({ id: "el-1", label: "Original" });
-    });
-  });
-
-  describe("updateAnnotationLabel", () => {
-    it("updates the label of an existing annotation entry", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "Initial");
-      store.updateAnnotationLabel("el-1", "Updated Label");
-
-      const { entries } = useLayerRegistryStore.getState();
-      expect(entries[0]).toMatchObject({ id: "el-1", label: "Updated Label" });
-    });
-
-    it("is a no-op when the annotation does not exist", () => {
-      const store = useLayerRegistryStore.getState();
-      expect(() =>
-        store.updateAnnotationLabel("nonexistent", "X"),
-      ).not.toThrow();
-    });
-
-    it("leaves a user-renamed annotation alone", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "Rectangle");
-      store.renameLayer("el-1", "Ward 3");
-
-      // What useLayerRegistrySync's enrichment loop does on every scene
-      // change once the shape has a geo anchor. Before the guard it landed,
-      // and the rename was gone the first time the user nudged the shape.
-      store.updateAnnotationLabel("el-1", "Rectangle near 40.7°N, 74.0°W");
-
-      expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
-        label: "Ward 3",
-      });
-    });
-  });
-
   describe("renameLayer", () => {
-    it("sets the label and marks an annotation as user-renamed", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "Rectangle");
-      store.renameLayer("el-1", "Ward 3");
-
-      expect(useLayerRegistryStore.getState().entries[0]).toMatchObject({
-        id: "el-1",
-        label: "Ward 3",
-        renamedByUser: true,
-      });
-    });
-
     it("renames a data layer without inventing a renamedByUser flag", () => {
       const store = useLayerRegistryStore.getState();
       store.registerDataLayer({
@@ -223,46 +157,6 @@ describe("layerRegistry", () => {
       expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
     });
 
-    // The bug this guards is the one `reindexByKind`'s old ternary would have
-    // shipped: any kind that was not "data" shared the annotation counter, so
-    // a raster and an annotation both claimed order 0 and the panel could not
-    // say which was first in its own section. Three kinds at once is the only
-    // arrangement that catches it.
-    it("counts order per kind, with all three kinds present", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerRasterLayer({
-        id: "rl:r-1",
-        label: "plate 1",
-        corners: [...CORNERS] as never,
-        imageKey: "a.png",
-      });
-      store.registerAnnotation("el-2");
-      store.registerDataLayer({
-        id: "dl:d-1",
-        fc: emptyFc(1),
-        label: "parcels",
-        style: {},
-      });
-      store.registerRasterLayer({
-        id: "rl:r-2",
-        label: "plate 2",
-        corners: [...CORNERS] as never,
-        imageKey: "b.png",
-      });
-
-      const byId = Object.fromEntries(
-        useLayerRegistryStore.getState().entries.map((e) => [e.id, e.order]),
-      );
-      expect(byId).toEqual({
-        "el-1": 0,
-        "el-2": 1,
-        "dl:d-1": 0,
-        "rl:r-1": 0,
-        "rl:r-2": 1,
-      });
-    });
-
     it("ignores a duplicate id rather than stacking two entries on it", () => {
       const store = useLayerRegistryStore.getState();
       const args = {
@@ -295,55 +189,13 @@ describe("layerRegistry", () => {
   describe("setVisibility", () => {
     it("toggles visible on an entry by id", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
+      addRaster("rl:el-1");
 
-      store.setVisibility("el-1", false);
+      store.setVisibility("rl:el-1", false);
       expect(useLayerRegistryStore.getState().entries[0].visible).toBe(false);
 
-      store.setVisibility("el-1", true);
+      store.setVisibility("rl:el-1", true);
       expect(useLayerRegistryStore.getState().entries[0].visible).toBe(true);
-    });
-  });
-
-  describe("convertAnnotationToDataLayer", () => {
-    it("removes the annotation entry and adds a dl:-prefixed data layer with the same label", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "My Polygon");
-      store.registerAnnotation("el-2", "Other");
-
-      store.convertAnnotationToDataLayer("el-1", emptyFc(2));
-
-      const { entries } = useLayerRegistryStore.getState();
-      expect(entries).toHaveLength(2);
-
-      // Annotation for el-1 is gone.
-      expect(entries.find((e) => e.id === "el-1")).toBeUndefined();
-
-      // New data layer with same label.
-      const dataLayer = entries.find((e) => e.kind === "data");
-      expect(dataLayer).toBeDefined();
-      expect(dataLayer!.id).toMatch(/^dl:/);
-      expect(dataLayer!.label).toBe("My Polygon");
-      expect(dataLayer!.kind).toBe("data");
-      if (dataLayer!.kind === "data") {
-        expect(dataLayer!.featureCount).toBe(2);
-      }
-
-      // Other annotation untouched.
-      expect(entries.find((e) => e.id === "el-2")).toMatchObject({
-        kind: "annotation",
-        label: "Other",
-      });
-    });
-
-    it("is a no-op when the annotation does not exist", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      const before = useLayerRegistryStore.getState().entries;
-
-      store.convertAnnotationToDataLayer("nonexistent", emptyFc(0));
-
-      expect(useLayerRegistryStore.getState().entries).toEqual(before);
     });
   });
 
@@ -371,30 +223,20 @@ describe("layerRegistry", () => {
         });
       }
     });
-
-    it("is a no-op on an annotation", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "A");
-      const before = useLayerRegistryStore.getState().entries;
-
-      store.updateStyle("el-1", { fillColor: "#fff" });
-
-      expect(useLayerRegistryStore.getState().entries).toEqual(before);
-    });
   });
 
   describe("remove", () => {
     it("filters the entry by id", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerAnnotation("el-2");
-      store.registerAnnotation("el-3");
+      addRaster("rl:el-1");
+      addRaster("rl:el-2");
+      addRaster("rl:el-3");
 
-      store.remove("el-2");
+      store.remove("rl:el-2");
 
       const { entries } = useLayerRegistryStore.getState();
       expect(entries).toHaveLength(2);
-      expect(entries.map((e) => e.id)).toEqual(["el-1", "el-3"]);
+      expect(entries.map((e) => e.id)).toEqual(["rl:el-1", "rl:el-3"]);
     });
   });
 
@@ -432,82 +274,60 @@ describe("layerRegistry", () => {
       store.remove("dl:gone");
       expect(useDataLayerFCStore.getState().get("dl:gone")).toBeUndefined();
     });
-
-    it("remove on an annotation id does not throw (FC store delete is a no-op)", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-only");
-      expect(() => store.remove("el-only")).not.toThrow();
-      expect(useDataLayerFCStore.getState().getAll()).toEqual({});
-    });
-
-    it("convertAnnotationToDataLayer mirrors the FC under the new dl: id", () => {
-      const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1", "Polygon");
-      const fc = emptyFc(2);
-      store.convertAnnotationToDataLayer("el-1", fc);
-
-      const dataEntry = useLayerRegistryStore
-        .getState()
-        .entries.find((e) => e.kind === "data");
-      expect(dataEntry).toBeDefined();
-      expect(useDataLayerFCStore.getState().get(dataEntry!.id)).toBe(fc);
-      // Old annotation id never had an FC entry — confirm.
-      expect(useDataLayerFCStore.getState().get("el-1")).toBeUndefined();
-    });
   });
 
   describe("reorder", () => {
     it("moves entry to target position and auto-shifts intermediate entries", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerAnnotation("el-2");
-      store.registerAnnotation("el-3");
+      addRaster("rl:el-1");
+      addRaster("rl:el-2");
+      addRaster("rl:el-3");
 
       // Move el-1 from index 0 to index 2 (last position).
-      store.reorder("el-1", 2);
+      store.reorder("rl:el-1", 2);
 
       const entries = useLayerRegistryStore.getState().entries;
-      expect(entries[0].id).toBe("el-2");
+      expect(entries[0].id).toBe("rl:el-2");
       expect(entries[0].order).toBe(0);
-      expect(entries[1].id).toBe("el-3");
+      expect(entries[1].id).toBe("rl:el-3");
       expect(entries[1].order).toBe(1);
-      expect(entries[2].id).toBe("el-1");
+      expect(entries[2].id).toBe("rl:el-1");
       expect(entries[2].order).toBe(2);
     });
 
     it("clamps newOrder below 0 to 0", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerAnnotation("el-2");
+      addRaster("rl:el-1");
+      addRaster("rl:el-2");
 
-      store.reorder("el-2", -5);
+      store.reorder("rl:el-2", -5);
 
       const entries = useLayerRegistryStore.getState().entries;
-      expect(entries[0].id).toBe("el-2");
+      expect(entries[0].id).toBe("rl:el-2");
       expect(entries[0].order).toBe(0);
     });
 
     it("clamps newOrder past length-1 to last position", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
-      store.registerAnnotation("el-2");
+      addRaster("rl:el-1");
+      addRaster("rl:el-2");
 
-      store.reorder("el-1", 999);
+      store.reorder("rl:el-1", 999);
 
       const entries = useLayerRegistryStore.getState().entries;
-      expect(entries[1].id).toBe("el-1");
+      expect(entries[1].id).toBe("rl:el-1");
       expect(entries[1].order).toBe(1);
     });
 
     it("no-ops when id is not found", () => {
       const store = useLayerRegistryStore.getState();
-      store.registerAnnotation("el-1");
+      addRaster("rl:el-1");
 
       store.reorder("nonexistent", 0);
 
       const entries = useLayerRegistryStore.getState().entries;
       expect(entries).toHaveLength(1);
-      expect(entries[0].id).toBe("el-1");
+      expect(entries[0].id).toBe("rl:el-1");
     });
   });
 
@@ -530,9 +350,9 @@ describe("layerRegistry", () => {
         label: "D2",
         style: {},
       });
-      store.registerAnnotation("a1");
-      store.registerAnnotation("a2");
-      store.registerAnnotation("a3");
+      addRaster("rl:a1");
+      addRaster("rl:a2");
+      addRaster("rl:a3");
     };
     const ids = () => useLayerRegistryStore.getState().entries.map((e) => e.id);
     const orderOf = (id: string) =>
@@ -542,31 +362,31 @@ describe("layerRegistry", () => {
       seedMixed();
       expect(orderOf("dl:d1")).toBe(0);
       expect(orderOf("dl:d2")).toBe(1);
-      expect(orderOf("a1")).toBe(0);
-      expect(orderOf("a3")).toBe(2);
+      expect(orderOf("rl:a1")).toBe(0);
+      expect(orderOf("rl:a3")).toBe(2);
     });
 
-    it("moves the first annotation to the last annotation slot", () => {
+    it("moves the first raster to the last raster slot", () => {
       seedMixed();
-      useLayerRegistryStore.getState().reorder("a1", 2);
+      useLayerRegistryStore.getState().reorder("rl:a1", 2);
 
-      expect(ids()).toEqual(["dl:d1", "dl:d2", "a2", "a3", "a1"]);
-      expect(orderOf("a1")).toBe(2);
-      expect(orderOf("a2")).toBe(0);
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "rl:a2", "rl:a3", "rl:a1"]);
+      expect(orderOf("rl:a1")).toBe(2);
+      expect(orderOf("rl:a2")).toBe(0);
       // Data layers untouched.
       expect(orderOf("dl:d1")).toBe(0);
       expect(orderOf("dl:d2")).toBe(1);
     });
 
-    it("cannot splice an annotation into the data-layer stack", () => {
+    it("cannot splice a raster into the data-layer stack", () => {
       seedMixed();
-      // Index 0 of the annotation stack is where a1 already is → no-op.
-      useLayerRegistryStore.getState().reorder("a1", 0);
-      expect(ids()).toEqual(["dl:d1", "dl:d2", "a1", "a2", "a3"]);
+      // Index 0 of the raster stack is where a1 already is → no-op.
+      useLayerRegistryStore.getState().reorder("rl:a1", 0);
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "rl:a1", "rl:a2", "rl:a3"]);
 
       // Even a wildly out-of-range index only clamps inside the group.
-      useLayerRegistryStore.getState().reorder("a1", 99);
-      expect(ids()).toEqual(["dl:d1", "dl:d2", "a2", "a3", "a1"]);
+      useLayerRegistryStore.getState().reorder("rl:a1", 99);
+      expect(ids()).toEqual(["dl:d1", "dl:d2", "rl:a2", "rl:a3", "rl:a1"]);
       expect(
         useLayerRegistryStore
           .getState()
@@ -575,41 +395,24 @@ describe("layerRegistry", () => {
       ).toEqual(["dl:d1", "dl:d2"]);
     });
 
-    it("reordering data layers leaves annotation order alone", () => {
+    it("reordering data layers leaves raster order alone", () => {
       seedMixed();
       useLayerRegistryStore.getState().reorder("dl:d1", 1);
 
-      expect(ids()).toEqual(["dl:d2", "dl:d1", "a1", "a2", "a3"]);
+      expect(ids()).toEqual(["dl:d2", "dl:d1", "rl:a1", "rl:a2", "rl:a3"]);
       expect(orderOf("dl:d1")).toBe(1);
-      expect(orderOf("a1")).toBe(0);
-      expect(orderOf("a2")).toBe(1);
-      expect(orderOf("a3")).toBe(2);
+      expect(orderOf("rl:a1")).toBe(0);
+      expect(orderOf("rl:a2")).toBe(1);
+      expect(orderOf("rl:a3")).toBe(2);
     });
 
     it("keeps order contiguous per kind after a mid-stack remove", () => {
       seedMixed();
-      useLayerRegistryStore.getState().remove("a2");
+      useLayerRegistryStore.getState().remove("rl:a2");
 
-      expect(orderOf("a1")).toBe(0);
-      expect(orderOf("a3")).toBe(1);
+      expect(orderOf("rl:a1")).toBe(0);
+      expect(orderOf("rl:a3")).toBe(1);
       expect(orderOf("dl:d1")).toBe(0);
-    });
-
-    it("re-closes the annotation stack when one is converted to a data layer", () => {
-      seedMixed();
-      useLayerRegistryStore
-        .getState()
-        .convertAnnotationToDataLayer("a1", emptyFc(1));
-
-      expect(orderOf("a2")).toBe(0);
-      expect(orderOf("a3")).toBe(1);
-      // The converted layer lands on top of the data stack (3rd data layer).
-      const converted = useLayerRegistryStore
-        .getState()
-        .entries.find(
-          (e) => e.kind === "data" && e.id.startsWith("dl:") && e.order === 2,
-        );
-      expect(converted).toBeDefined();
     });
   });
 });

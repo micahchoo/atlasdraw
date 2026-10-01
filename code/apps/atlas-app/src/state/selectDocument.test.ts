@@ -110,13 +110,6 @@ describe("selectDocument", () => {
   it("maps layer registry entries into the manifest layer list", () => {
     const reg = makeRegistry([
       {
-        kind: "annotation",
-        id: "el-abc",
-        label: "Pin 1",
-        visible: true,
-        order: 0,
-      },
-      {
         kind: "data",
         id: "dl:abc-123",
         label: "Trails",
@@ -133,14 +126,8 @@ describe("selectDocument", () => {
     ]);
     const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
 
-    expect(doc.manifest.layers).toHaveLength(2);
-    expect(doc.manifest.layers[0]).toEqual({
-      kind: "annotation",
-      id: "el-abc",
-      label: "Pin 1",
-      visible: true,
-    });
-    expect(doc.manifest.layers[1]).toMatchObject({
+    expect(doc.manifest.layers).toHaveLength(1);
+    expect(doc.manifest.layers[0]).toMatchObject({
       kind: "data",
       id: "dl:abc-123",
       label: "Trails",
@@ -150,35 +137,8 @@ describe("selectDocument", () => {
     });
   });
 
-  it("carries renamedByUser on an annotation the user renamed", () => {
-    const reg = makeRegistry([
-      {
-        kind: "annotation",
-        id: "el-abc",
-        label: "Ward 3",
-        visible: true,
-        order: 0,
-        renamedByUser: true,
-      },
-    ]);
-    const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
-
-    // Without this the flag would die at the file boundary, and the reopened
-    // document would let the label generator take the name back.
-    expect(doc.manifest.layers[0]).toEqual({
-      kind: "annotation",
-      id: "el-abc",
-      label: "Ward 3",
-      visible: true,
-      renamedByUser: true,
-    });
-  });
-
-  it("layers Map is empty when no data layers exist (annotation-only registry)", () => {
-    const reg = makeRegistry([
-      { kind: "annotation", id: "el-1", label: "p", visible: true, order: 0 },
-    ]);
-    const doc = selectDocument(makeAPI(), reg, { now: () => NOW });
+  it("layers Map is empty when no data layers exist", () => {
+    const doc = selectDocument(makeAPI(), makeRegistry(), { now: () => NOW });
     expect(doc.layers).toBeInstanceOf(Map);
     expect(doc.layers.size).toBe(0);
   });
@@ -203,13 +163,6 @@ describe("selectDocument", () => {
       ],
     };
     const reg = makeRegistry([
-      {
-        kind: "annotation",
-        id: "el-skip",
-        label: "skipped",
-        visible: true,
-        order: 0,
-      },
       {
         kind: "data",
         id: "dl:trails-1",

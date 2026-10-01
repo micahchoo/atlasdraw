@@ -124,19 +124,6 @@ export function selectDocument(
   const elements = excalidrawAPI.getSceneElements();
 
   const manifestLayers = layerRegistryState.entries.map((entry) => {
-    if (entry.kind === "annotation") {
-      return {
-        kind: "annotation" as const,
-        id: entry.id,
-        label: entry.label,
-        visible: entry.visible,
-        // Rides along so a reopened document knows this label is the user's
-        // and keeps automatic naming off it — see AnnotationLayerEntry.
-        // Omitted rather than written as `false` so untouched annotations
-        // don't grow a field in every saved manifest.
-        ...(entry.renamedByUser ? { renamedByUser: true } : {}),
-      };
-    }
     if (entry.kind === "raster") {
       // FU-1. A raster carries geography and an asset key, not features and a
       // paint style. The image bytes themselves are already in the document's

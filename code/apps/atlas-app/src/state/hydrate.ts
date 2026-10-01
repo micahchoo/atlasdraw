@@ -157,9 +157,8 @@ export async function hydrate(
   // Step 2 — replay manifest layer entries.
   for (const entry of loaded.manifest.layers) {
     if (entry.kind === "annotation") {
-      // The label and visibility now live on the element (liftAnnotations
-      // below); the registry row only mirrors it.
-      registry.registerAnnotation(entry.id, entry.label);
+      // An annotation is its element; liftAnnotations below moves what the
+      // entry says onto it.
       continue;
     } else if (entry.kind === "raster") {
       // FU-1. This branch exists before anything can write a raster into a

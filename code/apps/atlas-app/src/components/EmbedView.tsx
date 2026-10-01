@@ -151,7 +151,7 @@ const EmbedCanvas: React.FC<{
   const { syncNow } = useCoordinateSync(map, api);
 
   // Render the document's GeoJSON data layers onto the map (registry → map).
-  useLayerRegistrySync(map, api);
+  useLayerRegistrySync(map);
 
   // Register the document's data layers into the registry so the sync above
   // draws them. Token-mode docs carry `layers` as a Map<id, FeatureCollection>;

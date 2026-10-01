@@ -1,23 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 2 Wave 0 Task T01 — LayerRegistry type contracts.
 //
-// Types only. Implementation lands in T11 (Phase 2 Wave 2). Consumed by
-// T11 (impl), T12 (LayerPanel), T13 (ImportDialog), T14 (Convert action).
+// The layer registry: the data and raster layers of the open document.
 //
-// Plan: docs/superpowers/plans/2026-05-03-atlasdraw-phase-2-tools-data-layers.md §T01
-// Audit: docs/decisions/opus-audit-2026-05-04-post-wave4.md
-
-// ---------------------------------------------------------------------------
-// T11 — LayerRegistry Zustand store implementation.
+// Annotations are not here. They are scene elements, and the layer panel
+// computes their rows from the scene (state/annotations.ts).
 //
-// Phase 2 Wave 2a. Backs LayerPanel (T12), ImportDialog (T13), Convert (T14).
-// Single source of truth for all layer state. Mutations route through the
-// store actions; consumers must not mutate `entries` directly.
-//
-// immer middleware: each action receives a draft and mutates in place. Zustand
-// produces an immutable next state. This keeps action bodies imperative and
-// readable while preserving referential equality where nothing changed.
-// ---------------------------------------------------------------------------
+// immer middleware: each action receives a draft and mutates in place.
+// Zustand produces an immutable next state, and an entry that did not change
+// keeps its identity, which the map bridge's diffs rely on.
 
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
@@ -34,29 +24,6 @@ import type { FeatureCollection } from "geojson";
 // 2a) — the local placeholder was inlined when basemap was missing the export
 // (closes atlasdraw-fc04).
 export type { LayerStyle };
-
-/**
- * Annotation layer — backed by a single Excalidraw element. id matches the element id.
- * Order is the z-index within the annotation group (annotation group sits above the
- * basemap and below modal UI).
- */
-export type AnnotationLayerEntry = {
-  kind: "annotation";
-  id: string;
-  label: string;
-  visible: boolean;
-  order: number;
-  /**
-   * `label` came from the user, not from generateLayerLabel.
-   *
-   * Annotation labels are generated from the element's type and geo-anchor,
-   * and useLayerRegistrySync re-generates them on scene changes — so without a
-   * marker, a rename would survive exactly until the shape next moved. Set by
-   * `renameLayer`, read by `updateAnnotationLabel` (the auto path), and
-   * persisted through the manifest so it also holds across a save/reopen.
-   */
-  renamedByUser?: boolean;
-};
 
 /**
  * Where a data layer came from, and what it cost to get here.
@@ -151,43 +118,14 @@ export type RasterLayerEntry = {
   provenance?: LayerProvenance;
 };
 
-export type LayerRegistryEntry =
-  | AnnotationLayerEntry
-  | DataLayerEntry
-  | RasterLayerEntry;
+export type LayerRegistryEntry = DataLayerEntry | RasterLayerEntry;
 
 /**
- * ILayerRegistry — the central authority over all layer state. Implementations
- * (T11) own the entries array; consumers (T12 LayerPanel, T13 ImportDialog,
- * T14 Convert) call methods on this interface. No direct mutation of entries.
- *
- * convertAnnotationToDataLayer is the T14 escape hatch: take an existing
- * annotation (a hand-drawn Excalidraw shape) and promote it to a data layer
- * by attaching a FeatureCollection. The annotation entry is removed atomically.
+ * The registry's actions. Consumers call these; nothing mutates `entries`
+ * directly.
  */
 export interface ILayerRegistry {
   entries: LayerRegistryEntry[];
-  registerAnnotation(elementId: string, label?: string): void;
-  /**
-   * The **generated**-label path: set an entry's display label from
-   * useLayerRegistrySync's `generateLayerLabel`, which re-runs whenever the
-   * scene changes.
-   *
-   * No-ops on an entry the user renamed (`renamedByUser`). The guard lives
-   * here rather than at the call site because this is the single choke point —
-   * a future caller cannot reintroduce the clobber by forgetting to check.
-   * User-initiated renames go through `renameLayer` instead.
-   */
-  updateAnnotationLabel(elementId: string, label: string): void;
-  /**
-   * The **user**-typed-label path: set an entry's display label and, for
-   * annotations, mark it as the user's, which permanently retires automatic
-   * naming for that entry. Kind-agnostic by id; on data layers it is a plain
-   * label write, since nothing regenerates those.
-   *
-   * There is deliberately no "back to auto" action. A name someone typed is a
-   * decision, and a name that reverts on its own is worse than no rename.
-   */
   renameLayer(id: string, label: string): void;
   registerDataLayer(opts: {
     id: string;
@@ -210,12 +148,10 @@ export interface ILayerRegistry {
     opacity?: number;
     provenance?: LayerProvenance;
   }): void;
-  convertAnnotationToDataLayer(elementId: string, fc: FeatureCollection): void;
   setVisibility(id: string, visible: boolean): void;
   /**
-   * Move `id` to `newOrder` **within its own kind**. Data layers and
-   * annotations are separate render stacks (MapLibre vs. the Excalidraw canvas
-   * above it), so a z-index that spans both has no meaning — `newOrder` lives
+   * Move `id` to `newOrder` **within its own kind**. Data layers and rasters
+   * are separate stacks, so a z-index that spans both has no meaning — `newOrder` lives
    * in the same 0..n-1 space as the entry's `order`, and the entry can never
    * leave its own group. Out-of-range values clamp to the group's bounds.
    */
@@ -225,11 +161,6 @@ export interface ILayerRegistry {
 }
 
 /**
- * Default style applied when an annotation is converted to a data layer (T14).
- * Distinct from any user-chosen import style so converted layers are visually
- * recognizable until the user customizes them via LayerPanel.
- */
-/**
  * Rasters land fully opaque. The alternative — arriving pre-faded so you can
  * "see it's a backdrop" — means the first thing a user does after every import
  * is drag a slider back to where they dropped it. Fading is a decision they
@@ -237,30 +168,18 @@ export interface ILayerRegistry {
  */
 const DEFAULT_RASTER_OPACITY = 1;
 
-const DEFAULT_CONVERTED_STYLE: LayerStyle = {
-  fillColor: "#0aa",
-  strokeColor: "#077",
-  strokeWidth: 1,
-  opacity: 0.5,
-};
-
 /**
  * Re-stamp `order` as the contiguous 0-based index of each entry *within its
  * own kind* — the meaning every entry type documents. Called after every
- * structural mutation (register / remove / convert / reorder) so `order` is
+ * structural mutation (register / remove / reorder) so `order` is
  * never sparse and never mixes the stacks; LayerPanel renders one section per
  * kind and relies on that to decide first/last.
  *
- * One counter per kind, keyed off `kind` itself. This used to be a ternary —
- * `kind === "data" ? dataIndex++ : annotationIndex++` — which silently gave any
- * future third kind the annotation counter, so a raster and an annotation would
- * both claim order 0 and the panel would disagree with itself about which was
- * first. A record cannot go quietly wrong that way: a new kind with no counter
+ * One counter per kind, keyed off `kind` itself. A new kind with no counter
  * is a type error here rather than a wrong number downstream.
  */
 function reindexByKind(entries: LayerRegistryEntry[]): void {
   const next: Record<LayerRegistryEntry["kind"], number> = {
-    annotation: 0,
     data: 0,
     raster: 0,
   };
@@ -273,10 +192,8 @@ export type LayerRegistryState = {
   entries: LayerRegistryEntry[];
   /**
    * Rises by one on every change a save must carry: a register, rename,
-   * restyle, reorder, visibility flip or removal. It does not rise for a
-   * generated annotation label, which is derived from the scene and carries
-   * no decision of the user. Persistence compares it to mark the document
-   * dirty.
+   * restyle, reorder, visibility flip or removal. Persistence compares it to
+   * mark the document dirty.
    */
   revision: number;
 } & Omit<ILayerRegistry, "entries">;
@@ -286,38 +203,6 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
     entries: [],
     revision: 0,
 
-    registerAnnotation: (elementId, label) =>
-      set((s) => {
-        if (s.entries.some((e) => e.id === elementId)) {
-          return;
-        }
-        s.entries.push({
-          kind: "annotation",
-          id: elementId,
-          label: label ?? elementId,
-          visible: true,
-          // Pushed to the end of `entries`, which reindexByKind turns into the
-          // *highest* order within the annotation stack. This literal is only a
-          // placeholder — reindexByKind below owns the real value, so the
-          // per-kind rule has exactly one definition.
-          order: 0,
-        });
-        reindexByKind(s.entries);
-        s.revision += 1;
-      }),
-    updateAnnotationLabel: (elementId, label) =>
-      set((s) => {
-        const e = s.entries.find((x) => x.id === elementId);
-        if (!e) {
-          return;
-        }
-        // See the interface doc: the generator loses to the user, always.
-        if (e.kind === "annotation" && e.renamedByUser) {
-          return;
-        }
-        e.label = label;
-      }),
-
     renameLayer: (id, label) =>
       set((s) => {
         const e = s.entries.find((x) => x.id === id);
@@ -325,9 +210,6 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           return;
         }
         e.label = label;
-        if (e.kind === "annotation") {
-          e.renamedByUser = true;
-        }
         s.revision += 1;
       }),
 
@@ -353,7 +235,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           id,
           label,
           visible: true,
-          order: 0, // see registerAnnotation — reindexByKind owns the value
+          order: 0, // reindexByKind owns the value
           featureCount: fc.features.length,
           style,
           ...(provenance ? { provenance } : {}),
@@ -385,7 +267,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           id,
           label,
           visible: true,
-          order: 0, // see registerAnnotation — reindexByKind owns the value
+          order: 0, // reindexByKind owns the value
           corners,
           imageKey,
           opacity: opacity ?? DEFAULT_RASTER_OPACITY,
@@ -394,48 +276,6 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         reindexByKind(s.entries);
         s.revision += 1;
       });
-    },
-
-    convertAnnotationToDataLayer: (elementId, fc) => {
-      // Mint the new dl: id outside `set()` so we can mirror it into the FC
-      // registry with the exact same id that lands on the entry. Doing it
-      // inside immer would force us to capture the id from a draft, which
-      // the freeze semantics make awkward.
-      const newId = `dl:${crypto.randomUUID()}`;
-      // Mirror into the FC registry (Phase 4 W0) before the store write, for the
-      // same reason as registerDataLayer: the registry subscriber reconciles the
-      // new dl: entry onto the map inside `set` and needs the geometry to be
-      // there already. Nothing can observe the mirror early — newId was minted
-      // one line ago.
-      const fcStore = useDataLayerFCStore.getState();
-      fcStore.set(newId, fc);
-      set((s) => {
-        const idx = s.entries.findIndex(
-          (e) => e.kind === "annotation" && e.id === elementId,
-        );
-        if (idx === -1) {
-          return;
-        }
-        const annotation = s.entries[idx] as AnnotationLayerEntry;
-        const label = annotation.label;
-        s.entries.splice(idx, 1);
-        s.entries.push({
-          kind: "data",
-          id: newId,
-          label,
-          visible: true,
-          order: 0, // see registerAnnotation — reindexByKind owns the value
-          featureCount: fc.features.length,
-          style: { ...DEFAULT_CONVERTED_STYLE },
-        });
-        // The annotation stack just lost a member; close the gap it left.
-        reindexByKind(s.entries);
-        s.revision += 1;
-      });
-      // Deleting the old elementId is a no-op in the FC store (annotation ids
-      // never had an FC), but kept for symmetry with `remove` — the call site
-      // shouldn't have to know which ids carry FCs.
-      fcStore.delete(elementId);
     },
 
     setVisibility: (id, visible) =>
@@ -492,7 +332,6 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
           Object.assign(e.style, patch);
           s.revision += 1;
         }
-        // annotations: no-op (no style field on AnnotationLayerEntry).
       }),
 
     remove: (id) => {
@@ -507,9 +346,7 @@ export const useLayerRegistryStore = create<LayerRegistryState>()(
         reindexByKind(s.entries);
         s.revision += 1;
       });
-      // Phase 4 W0: drop the FC if any. Unconditional delete — annotation ids
-      // never had an FC, so the call is a cheap no-op for them and keeps
-      // `remove` kind-agnostic at the call site (mx-91343d).
+      // Drop the FC if any; a raster id has none, so this is a no-op for it.
       useDataLayerFCStore.getState().delete(id);
       // FU-1: and the decoded image, on the same terms. This one is not merely
       // tidy — the store holds an object URL, which keeps its Blob alive until

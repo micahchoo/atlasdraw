@@ -1,65 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// useLayerRegistrySync — wires LayerRegistry state to actual rendering.
+// useLayerRegistrySync — the bridge from the layer registry to MapLibre.
 //
-// Phase 2 W-A. The LayerRegistry shipped state-only in T11; this hook closes
-// the loop in two directions:
+// MapLibre sources cannot be read back, so the registry is the truth for the
+// data and raster layers and this hook pushes its changes onto the map:
 //
-//   1. Excalidraw → registry (Bug A): subscribes to excalidrawAPI.onChange and
-//      diffs scene element IDs against the registry's annotation entries.
-//      New element → registerAnnotation. Vanished element → remove.
-//      Resize/drag/style changes are ignored — only the membership set drives
-//      registry mutations (avoids a registry write per pointermove).
+//   1. Visibility — a flipped `visible` sets the layer's layout visibility.
+//   2. Style — `updateStyle` changes `entry.style`; the compiled paint of the
+//      old and new style is diffed and only changed properties are pushed
+//      (applyStyleToMap / diffStyles).
+//   3. Membership — a MapLibre `setStyle()` drops every custom source and
+//      layer, and a document load fills the registry without touching the
+//      map. So map membership is diffed against the registry's set of data
+//      layer ids: added ids are reconciled onto the map, removed ids leave it.
+//      Geometry is read from the DataLayerFCStore.
+//   4. Order — a changed data-layer id sequence restacks the style
+//      (applyOrderToMap).
 //
-//   2. Registry → render (Bug B): subscribes to the Zustand store and watches
-//      per-entry visibility transitions.
-//        Annotation kind: rewrites the matching Excalidraw element's opacity
-//          (0 to hide, original to show). Original opacity is stashed on
-//          customData.atlasOriginalOpacity so multi-toggle round-trips.
-//        Data layer kind: calls map.setLayoutProperty(id, 'visibility', ...).
-//          Wrapped in try/catch — registry id may be out of sync with the
-//          MapLibre style if the user removed the layer manually.
+// Annotations are not in the registry; they are scene elements.
 //
-// Why opacity over isDeleted: isDeleted removes the element from the scene
-// entirely; we want hidden elements to come back when re-toggled. opacity:0
-// keeps the element addressable and round-trips cleanly.
-//
-// Two further registry→render gaps closed here (the registry was previously
-// state-only for both, so the LayerPanel's controls lied about the map):
-//
-//   3. Style edits → paint (P1): `updateStyle(id, patch)` only mutates
-//      `entry.style`. We diff the compiled paint block of the old and new
-//      style and push `setPaintProperty` for the properties that actually
-//      changed — see applyStyleToMap / diffStyles.
-//
-//   4. Data layers → map membership (P2): a MapLibre `setStyle()` drops every
-//      custom source and layer, and a document reload (state/hydrate.ts)
-//      repopulates the registry without ever touching the map. Registry
-//      entries outlive the style, so map membership is diffed against the
-//      registry's *set* of data-layer ids — added ids get reconciled onto the
-//      map, vanished ids get removed from it. Geometry is read from the
-//      DataLayerFCStore mirror, which exists precisely because MapLibre's
-//      source storage can't be read back as a plain FeatureCollection.
-//
-//   5. Reorder → map z-order (P3): `reorder` permutes the registry array and
-//      nothing else, so dragging a data layer used to change the panel and
-//      leave the map untouched. A changed data-layer id sequence now drives
-//      applyOrderToMap, which restacks the style with `moveLayer`.
-//
-// The core logic is exported as plain factory functions
-// (buildSceneDiffHandler / applyVisibilityToScene / applyStyleToMap /
-// diffVisibility / diffStyles / diffDataLayerIds) so tests can drive them
-// without a React renderer — same convention as useGeoAnchor /
-// useAtlasdrawTool (mx-8e3209). Everything that *writes* to the MapLibre style
-// lives in ../lib/dataLayerRender, shared with the import and basemap-swap
-// paths; this module owns the registry-snapshot diffs that decide when to call
-// it.
+// The diffs are plain exported functions so tests can drive them without a
+// React renderer. Everything that writes the MapLibre style lives in
+// ../lib/dataLayerRender, shared with the import and basemap-swap paths.
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 import { compilePaint } from "@atlasdraw/basemap";
 
-import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { LayerGeometryType } from "@atlasdraw/basemap";
 
 import {
@@ -70,7 +37,6 @@ import {
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { useRasterImageStore } from "../state/useRasterImageStore";
 
-import { generateLayerLabel } from "../state/annotations";
 import { inferGeometryType } from "../lib/geometryType";
 
 import {
@@ -95,196 +61,6 @@ function rasterUrlSnapshot(): Record<string, string> {
   return Object.fromEntries(
     Object.entries(images).map(([id, image]) => [id, image.url]),
   );
-}
-
-// ---------------------------------------------------------------------------
-// Loose scene-element shape — only the fields we read.
-// We deliberately don't import the full ExcalidrawElement type; the hook only
-// touches `id`, `isDeleted`, `opacity`, and `customData`. Tests can construct
-// minimal fixtures matching this shape.
-// ---------------------------------------------------------------------------
-
-export interface SyncSceneElement {
-  id: string;
-  type?: string;
-  isDeleted?: boolean;
-  opacity?: number;
-  customData?: Record<string, unknown>;
-}
-
-// ---------------------------------------------------------------------------
-// Bug A — scene-diff handler factory.
-// ---------------------------------------------------------------------------
-
-export interface SceneDiffDeps {
-  /** Mutable set of annotation IDs the registry currently knows about. */
-  knownIds: Set<string>;
-  /** Registry actions (a thin slice — we don't need the whole store). */
-  registerAnnotation: (elementId: string, label?: string) => void;
-  updateAnnotationLabel: (elementId: string, label: string) => void;
-  remove: (id: string) => void;
-  /**
-   * Check whether an id already exists in the registry. Used as a
-   * belt-and-suspenders guard against hydrate() races: hydrate adds
-   * entries to the registry between knownIds seed and the first
-   * onChange, so knownIds alone can't prevent duplicates.
-   */
-  existsInRegistry: (id: string) => boolean;
-}
-
-/**
- * True when the label looks like it still needs geo enrichment — it has a
- * tool-name prefix but no " near " segment.
- */
-function labelNeedsGeoEnrichment(label: string): boolean {
-  return !label.includes(" near ");
-}
-
-// ---------------------------------------------------------------------------
-// Bug A — scene-diff handler factory.
-// ---------------------------------------------------------------------------
-
-/**
- * Build the onChange callback that syncs scene-element membership into the
- * registry's annotation entries.
- *
- * Dedupe: only acts when the *set* of element IDs changes. Resize/drag/style
- * mutations on an existing element are no-ops here — the element id is still
- * in `knownIds`, so we skip.
- *
- * Filter: deleted elements (`isDeleted: true`) are treated as absent. This
- * matches Excalidraw's semantics — deleted elements remain in the scene array
- * for undo/history but are not visible. If the user undoes a deletion, the
- * element re-appears with isDeleted:false and we'll re-register it.
- *
- * Label enrichment: when an already-registered element later gains geo-anchor
- * data (stamped by useGeoAnchor on a subsequent onChange), the label is
- * updated to include the geographic area.
- *
- * Exported for unit testing.
- */
-export function buildSceneDiffHandler(
-  deps: SceneDiffDeps,
-): (elements: readonly SyncSceneElement[]) => void {
-  const { knownIds, registerAnnotation, updateAnnotationLabel, remove } = deps;
-  return (elements) => {
-    const incoming = new Set<string>();
-    const elementById = new Map<string, SyncSceneElement>();
-    for (const el of elements) {
-      if (el.isDeleted) {
-        continue;
-      }
-      incoming.add(el.id);
-      elementById.set(el.id, el);
-    }
-
-    // Additions. An id the registry already holds (a document load registers
-    // its rows) is not registered again, but it is tracked: otherwise its
-    // later deletion would leave a row behind.
-    for (const id of incoming) {
-      if (knownIds.has(id)) {
-        continue;
-      }
-      if (!deps.existsInRegistry(id)) {
-        const el = elementById.get(id);
-        const label = el ? generateLayerLabel(el) : id;
-        registerAnnotation(id, label);
-      }
-      knownIds.add(id);
-    }
-
-    // Label enrichment — update labels for known elements that now have geo
-    // data but whose label was generated before the geo-anchor was stamped.
-    for (const id of incoming) {
-      if (knownIds.has(id)) {
-        const el = elementById.get(id);
-        if (!el) {
-          continue;
-        }
-        const label = generateLayerLabel(el);
-        if (!labelNeedsGeoEnrichment(label)) {
-          // Label already includes geo — update it in case the element moved.
-          updateAnnotationLabel(id, label);
-        }
-      }
-    }
-
-    // Removals — known but not incoming.
-    for (const id of Array.from(knownIds)) {
-      if (!incoming.has(id)) {
-        remove(id);
-        knownIds.delete(id);
-      }
-    }
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Bug B — annotation visibility (opacity rewrite) factory.
-// ---------------------------------------------------------------------------
-
-/**
- * Stash key used on element.customData to remember the pre-hide opacity so
- * re-show can restore it. Namespaced to avoid collision with future custom
- * data fields.
- */
-export const ATLAS_ORIGINAL_OPACITY_KEY = "atlasOriginalOpacity";
-
-/**
- * Compute a new elements array where the element matching `entryId` has its
- * opacity adjusted to reflect `visible`.
- *
- *   visible:false → store current opacity in customData, set opacity:0.
- *   visible:true  → restore opacity from customData (default 100), drop the key.
- *
- * Idempotent: hiding an already-hidden element preserves the original stash
- * (won't overwrite with 0). Showing an already-visible element is a no-op.
- *
- * Returns a new array with a new object only for the matched element; all
- * other elements are referentially identical to the input. If no element
- * matches, returns the input array unchanged (referentially identical).
- *
- * Exported for unit testing.
- */
-export function applyVisibilityToScene(
-  elements: readonly SyncSceneElement[],
-  entryId: string,
-  visible: boolean,
-): readonly SyncSceneElement[] {
-  let matched = false;
-  const next = elements.map((el) => {
-    if (el.id !== entryId) {
-      return el;
-    }
-    matched = true;
-
-    const customData = { ...(el.customData ?? {}) };
-    const currentOpacity = el.opacity ?? 100;
-    const stashed = customData[ATLAS_ORIGINAL_OPACITY_KEY];
-
-    if (visible) {
-      // Show: restore from stash if present.
-      if (stashed === undefined) {
-        return el; // already visible, no-op
-      }
-      const restored = typeof stashed === "number" ? stashed : 100;
-      delete customData[ATLAS_ORIGINAL_OPACITY_KEY];
-      return { ...el, opacity: restored, customData };
-    }
-
-    // Hide: stash current opacity (only if not already stashed) and set to 0.
-    if (stashed !== undefined) {
-      // Already hidden; preserve original stash.
-      if (currentOpacity === 0) {
-        return el;
-      }
-      // Edge case: someone bumped opacity but left the stash. Re-apply 0.
-      return { ...el, opacity: 0, customData };
-    }
-    customData[ATLAS_ORIGINAL_OPACITY_KEY] = currentOpacity;
-    return { ...el, opacity: 0, customData };
-  });
-  return matched ? next : elements;
 }
 
 // ---------------------------------------------------------------------------
@@ -481,78 +257,11 @@ export function diffVisibility(
 }
 
 /**
- * Wires LayerRegistry state to renderers — Excalidraw scene elements (annotations)
- * and MapLibre layer visibility (data layers).
+ * Push the layer registry's data and raster layers onto the map.
  *
- * @param map            - MapLibre Map instance (null until map mounts)
- * @param excalidrawAPI  - Excalidraw imperative API (null until Excalidraw mounts)
+ * @param map - MapLibre Map instance (null until the map mounts)
  */
-export function useLayerRegistrySync(
-  map: maplibregl.Map | null,
-  excalidrawAPI: ExcalidrawImperativeAPI | null,
-): void {
-  // ---- Bug A: scene-diff → registry ---------------------------------------
-  // We hold the knownIds set in a ref so it survives re-renders while staying
-  // tied to this hook instance. Resetting when excalidrawAPI changes is fine —
-  // the Excalidraw mount is a one-time event in MapEditor.
-  const knownIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-
-    // Seed knownIds from the registry at mount so we don't double-register
-    // entries that the registry already knows about (e.g. after a hot reload).
-    const seedEntries = useLayerRegistryStore.getState().entries;
-    knownIdsRef.current = new Set(
-      seedEntries.filter((e) => e.kind === "annotation").map((e) => e.id),
-    );
-
-    // The handler asks about every element on every change, so lookups go
-    // through an id index. It is rebuilt only when the entries array changes.
-    let indexed: readonly LayerRegistryEntry[] | null = null;
-    let byId = new Map<string, LayerRegistryEntry>();
-    const entryById = (id: string): LayerRegistryEntry | undefined => {
-      const entries = useLayerRegistryStore.getState().entries;
-      if (entries !== indexed) {
-        indexed = entries;
-        byId = new Map(entries.map((e) => [e.id, e]));
-      }
-      return byId.get(id);
-    };
-
-    const handler = buildSceneDiffHandler({
-      knownIds: knownIdsRef.current,
-      registerAnnotation: (id, label) =>
-        useLayerRegistryStore.getState().registerAnnotation(id, label),
-      // Skip the store when the label would not change. A store write is a
-      // produce with a linear find, so writing every label on every change
-      // is quadratic in the number of shapes.
-      updateAnnotationLabel: (id, label) => {
-        const entry = entryById(id);
-        if (
-          !entry ||
-          entry.label === label ||
-          (entry.kind === "annotation" && entry.renamedByUser)
-        ) {
-          return;
-        }
-        useLayerRegistryStore.getState().updateAnnotationLabel(id, label);
-      },
-      remove: (id) => useLayerRegistryStore.getState().remove(id),
-      existsInRegistry: (id) => entryById(id) !== undefined,
-    });
-
-    const unsub = excalidrawAPI.onChange(
-      // The signature widens when typed against the canonical
-      // ExcalidrawElement readonly array; our handler only reads the fields
-      // declared on SyncSceneElement, so a structural cast is safe.
-      handler as Parameters<ExcalidrawImperativeAPI["onChange"]>[0],
-    );
-    return unsub;
-  }, [excalidrawAPI]);
-
+export function useLayerRegistrySync(map: maplibregl.Map | null): void {
   // ---- P2: registry → map, on a fresh map instance -------------------------
   // A document can be loaded before the map is ready — hydrate() populates the
   // registry with data-layer entries without ever touching MapLibre. Reconcile
@@ -570,7 +279,7 @@ export function useLayerRegistrySync(
     );
   }, [map]);
 
-  // ---- Bug B: registry → render -------------------------------------------
+  // ---- registry → map ------------------------------------------------------
   // Zustand subscribe with a manual diff against the previous entries snapshot.
   // We don't use a selector-form subscriber because we need both the kind and
   // the visibility — selecting just `entries` and diffing in a useEffect would
@@ -578,7 +287,7 @@ export function useLayerRegistrySync(
   // Subscribe-style still re-fires on those, but we filter via diffVisibility /
   // diffStyles, which only report actual changes.
   useEffect(() => {
-    if (!map && !excalidrawAPI) {
+    if (!map) {
       return;
     }
 
@@ -646,30 +355,7 @@ export function useLayerRegistrySync(
       }
 
       for (const entry of flips) {
-        if (entry.kind === "annotation") {
-          if (!excalidrawAPI) {
-            continue;
-          }
-          const scene = excalidrawAPI.getSceneElements();
-          const next = applyVisibilityToScene(
-            scene as readonly SyncSceneElement[],
-            entry.id,
-            entry.visible,
-          );
-          // Only call updateScene when something actually changed (referentially).
-          if (next !== scene) {
-            // updateScene's elements param is the canonical readonly
-            // ExcalidrawElement[] — our SyncSceneElement is a structural
-            // subset (only fields we touch). The element identity is
-            // preserved for non-matched entries; the rewritten one keeps all
-            // original fields via spread. Cast widens to the canonical type.
-            excalidrawAPI.updateScene({
-              elements: next as unknown as Parameters<
-                typeof excalidrawAPI.updateScene
-              >[0]["elements"],
-            });
-          }
-        } else if (entry.kind === "data") {
+        if (entry.kind === "data") {
           if (!map) {
             continue;
           }
@@ -678,5 +364,5 @@ export function useLayerRegistrySync(
       }
     });
     return unsub;
-  }, [map, excalidrawAPI]);
+  }, [map]);
 }

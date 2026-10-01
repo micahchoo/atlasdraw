@@ -97,6 +97,7 @@ import { useMapInstanceStore } from "../state/mapInstance";
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
+import { annotationRows } from "../state/annotations";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { selectDocument } from "../state/selectDocument";
 import { hydrate } from "../state/hydrate";
@@ -812,7 +813,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // W-A — wire LayerRegistry to actual rendering:
   //   Excalidraw scene-element IDs → registry annotation entries (Bug A)
   //   registry visibility flips → opacity rewrite (annotation) / setLayoutProperty (data) (Bug B)
-  useLayerRegistrySync(map, excalidrawAPI);
+  useLayerRegistrySync(map);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
@@ -1093,7 +1094,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       return [];
     }
     const canvas = map.getCanvas();
-    return buildLegendEntries(entries, {
+    // Annotations first: the panel lists them above the data layers.
+    const layers = [
+      ...annotationRows(excalidrawAPI.getSceneElements()),
+      ...entries,
+    ];
+    return buildLegendEntries(layers, {
       renderedDataLayerIds: renderedDataLayerIds(
         map,
         entries.filter((e) => e.kind === "data").map((e) => e.id),
