@@ -27,22 +27,22 @@ import {
   PRINT_DPI,
   exportPDF,
   printPixelRatio,
+  printViewOf,
   scaleUnitsForLocale,
   type LayerLegendEntry,
   type Orientation,
   type PageSize,
   type PrintOptions,
-  type PrintView,
 } from "../lib/print-pdf";
 import { safeFileName } from "../lib/safeFileName";
-
-import { creditLine } from "../lib/tileLayers";
 
 import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
 
 import { Modal } from "./Modal";
+
+import type { MapView } from "../lib/mapView";
 
 import type { GeoJsonExportOptions } from "../lib/dataLayerExport";
 
@@ -103,17 +103,17 @@ interface ExportDialogProps {
   onExportGeoJSON: (opts: GeoJsonExportOptions) => void;
   onExportAtlasdraw: () => void;
   /**
-   * The live view's CSS size and ground resolution (`measureView`), or null
-   * when the map is not ready. Sizes the PNG choices and the PDF layout.
+   * The live map as one value (lib/mapView#captureView), or null when the
+   * map is not ready. Sizes the PNG choices. The PDF captures it again at
+   * export time, so the image, the scale bar, the north arrow and the credit
+   * all describe the viewport of that moment.
    */
-  getView: () => PrintView | null;
+  captureView: () => MapView | null;
   /**
-   * Returns the composited view (map + Excalidraw annotations) rendered at
-   * `pixelRatio` and encoded as a `data:image/jpeg;base64,...` URL, or null
-   * if the map isn't ready yet. Called at export time so the PDF shows the
-   * current viewport, not the moment the dialog opened.
+   * The composited view (map + drawings) for `view`, rendered at
+   * `pixelRatio` and encoded as a `data:image/jpeg;base64,...` URL.
    */
-  getMapImageDataUrl: (pixelRatio: number) => Promise<string | null>;
+  renderImage: (view: MapView, pixelRatio: number) => Promise<string>;
   /**
    * Document layers projected to legend shape, evaluated at export time so
    * the legend and the image answer the same viewport. A snapshot
@@ -121,18 +121,6 @@ interface ExportDialogProps {
    * was still animating.
    */
   getLegendEntries: () => LayerLegendEntry[];
-  /**
-   * Screen rotation of geographic east, degrees, y-down — see
-   * `PrintOptions.cameraRotationDeg`. A callback for the same reason the two
-   * above are: it is read at export time, so a camera still settling cannot
-   * leave the north arrow describing a viewport the image does not show.
-   */
-  getCameraRotationDeg?: () => number;
-  /**
-   * The active basemap's credit, printed on the PDF page. The credit of each
-   * visible tile layer is added to it (lib/tileLayers#creditLine).
-   */
-  attribution?: string;
   /** Decides the PDF's scale-bar units. Default `navigator.language`. */
   locale?: string;
   /** Preselected format card (e.g. quick-actions "Export PDF"). */
@@ -151,11 +139,9 @@ export function ExportDialog({
   onExportPNG,
   onExportGeoJSON,
   onExportAtlasdraw,
-  getView,
-  getMapImageDataUrl,
+  captureView,
+  renderImage,
   getLegendEntries,
-  getCameraRotationDeg,
-  attribution,
   locale = navigator.language,
   initialFormat = "png",
   exportPDFImpl = exportPDF,
@@ -163,7 +149,7 @@ export function ExportDialog({
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
 
   // Read once on open: the dialog is modal, so the view cannot change under it.
-  const [view] = useState(getView);
+  const [view] = useState(captureView);
   const [pixelRatio, setPixelRatio] = useState<PngPixelRatio>(2);
 
   // PDF pane state.
@@ -194,31 +180,27 @@ export function ExportDialog({
       // same viewport. The legend is read before the image because its length
       // sets the size of the map frame, and the image is rendered for that
       // frame at PRINT_DPI.
-      const printView = getView();
-      if (!printView) {
+      const mapView = captureView();
+      if (!mapView) {
         setError("The map is not ready. Try again in a moment.");
         return;
       }
+      const printed = printViewOf(mapView);
       const layers = getLegendEntries();
       const page = { pageSize, orientation };
       // Compositing is async and can fail (no 2D context, image too large),
       // so it runs inside the try with the export itself.
-      const mapImageDataUrl = await getMapImageDataUrl(
-        printPixelRatio(page, printView, layers.length),
+      const mapImageDataUrl = await renderImage(
+        mapView,
+        printPixelRatio(page, printed.view, layers.length),
       );
-      if (!mapImageDataUrl) {
-        setError("The map is not ready. Try again in a moment.");
-        return;
-      }
       const blob = await exportPDFImpl({
         ...page,
+        ...printed,
         title: title.trim() || documentTitle,
         mapImageDataUrl,
-        view: printView,
         layers,
-        attribution: creditLine(attribution, overlays),
         units: scaleUnitsForLocale(locale),
-        cameraRotationDeg: getCameraRotationDeg?.() ?? 0,
       });
       const safeName = `${safeFileName(title.trim() || documentTitle)}.pdf`;
       const url = URL.createObjectURL(blob);
@@ -327,7 +309,7 @@ export function ExportDialog({
                 data-testid="export-png-pixel-ratio"
               >
                 {PNG_PIXEL_RATIOS.map((ratio) => {
-                  const px = view && exportSize(view, ratio);
+                  const px = view && exportSize(view.size, ratio);
                   return (
                     <option key={ratio} value={ratio}>
                       {px

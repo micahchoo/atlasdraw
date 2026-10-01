@@ -14,6 +14,8 @@ import {
   waitFor,
 } from "@testing-library/react";
 
+import { documentFrame } from "@atlasdraw/geo";
+
 import { ExportDialog } from "../ExportDialog";
 import {
   DEFAULT_DOCUMENT_TITLE,
@@ -21,10 +23,12 @@ import {
   currentDocument,
   openDocument,
 } from "../../state/document";
+
 import { exportSize } from "../../lib/export";
 import { jpegOfSize, readPdf } from "../../lib/__tests__/fixtures/print";
 
-import type { LayerLegendEntry, PrintView } from "../../lib/print-pdf";
+import type { LayerLegendEntry } from "../../lib/print-pdf";
+import type { MapView } from "../../lib/mapView";
 
 // The PDF title seeds from the document-name store, which is a module
 // singleton — reset it so a rename in one test can't leak into the next.
@@ -61,7 +65,14 @@ function captureDownloads(): { blobs: Blob[]; names: string[] } {
   return { blobs, names };
 }
 
-const VIEW: PrintView = { width: 1440, height: 900, metersPerPixel: 4 };
+const VIEW: MapView = {
+  center: { lng: 10, lat: 50 },
+  zoom: 14,
+  bearing: 0,
+  size: { width: 1440, height: 900 },
+  frame: documentFrame(10, 50),
+  credits: ["© Protomaps © OpenStreetMap"],
+};
 
 const LAYERS: LayerLegendEntry[] = [
   { id: "dl:a", name: "Trails", color: "#0aa" },
@@ -69,8 +80,8 @@ const LAYERS: LayerLegendEntry[] = [
 ];
 
 /** What the compositor returns: a JPEG of the view at `pixelRatio`. */
-async function compositeAt(pixelRatio: number): Promise<string> {
-  const { width, height } = exportSize(VIEW, pixelRatio);
+async function compositeAt(view: MapView, pixelRatio: number): Promise<string> {
+  const { width, height } = exportSize(view.size, pixelRatio);
   return jpegOfSize(width, height);
 }
 
@@ -82,10 +93,9 @@ function renderDialog(overrides: Overrides = {}) {
     onExportPNG: vi.fn(),
     onExportGeoJSON: vi.fn(),
     onExportAtlasdraw: vi.fn(),
-    getView: () => VIEW,
-    getMapImageDataUrl: compositeAt,
+    captureView: (): MapView | null => VIEW,
+    renderImage: compositeAt,
     getLegendEntries: () => LAYERS,
-    attribution: "© Protomaps © OpenStreetMap",
     locale: "en-GB",
     ...overrides,
   };
@@ -179,19 +189,26 @@ describe("ExportDialog — PDF", () => {
     expect(page.texts.join(" ")).not.toMatch(/ mi\b| ft\b/);
   });
 
-  it("prints the credit of each visible tile layer after the basemap's", async () => {
-    currentDocument().dispatch({
-      type: "add-tile-layer",
-      id: "tl:aerial",
-      label: "Aerial",
-      url: "https://tiles.example.org/{z}/{x}/{y}.png",
-      attribution: "© Example Aerials",
-    });
+  it("prints the view's credits, and renders the image for that same view", async () => {
+    const view: MapView = {
+      ...VIEW,
+      bearing: 30,
+      credits: ["© Protomaps © OpenStreetMap", "© Example Aerials"],
+    };
+    const rendered: MapView[] = [];
     const downloads = captureDownloads();
-    const props = renderDialog({ initialFormat: "pdf" });
+    const props = renderDialog({
+      initialFormat: "pdf",
+      captureView: () => view,
+      renderImage: (v, ratio) => {
+        rendered.push(v);
+        return compositeAt(v, ratio);
+      },
+    });
     fireEvent.click(screen.getByTestId("export-dialog-export"));
     await waitFor(() => expect(props.onCloseRequest).toHaveBeenCalled());
 
+    expect(rendered).toEqual([view]);
     const pdf = await readPdf(downloads.blobs[0]);
     expect(pdf.pages[0].texts).toContain(
       "© Protomaps © OpenStreetMap · © Example Aerials",
@@ -208,7 +225,10 @@ describe("ExportDialog — PDF", () => {
   });
 
   it("surfaces an error and stays open when the map is not ready", async () => {
-    const props = renderDialog({ initialFormat: "pdf", getView: () => null });
+    const props = renderDialog({
+      initialFormat: "pdf",
+      captureView: () => null,
+    });
     fireEvent.click(screen.getByTestId("export-dialog-export"));
     await waitFor(() =>
       expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
@@ -221,7 +241,7 @@ describe("ExportDialog — PDF", () => {
   it("surfaces the compositor's error and stays open", async () => {
     const props = renderDialog({
       initialFormat: "pdf",
-      getMapImageDataUrl: async () => {
+      renderImage: async () => {
         throw new Error("The map was drawn at 4096 × 2304 px");
       },
     });

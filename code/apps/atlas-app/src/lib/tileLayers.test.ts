@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Tile layers: which URL templates the editor accepts, and the credit line
-// that the status bar and the exports print.
+// Tile layers: which URL templates the editor accepts. The credit line is
+// tested in lib/__tests__/mapView.test.ts.
 
 import { describe, expect, it } from "vitest";
 
-import { creditLine, validateTileTemplate } from "./tileLayers";
-
-import type { OverlayEntry } from "../state/document";
+import { validateTileTemplate } from "./tileLayers";
 
 describe("validateTileTemplate", () => {
   it("accepts an https template with {z}, {x} and {y}", () => {
@@ -60,52 +58,5 @@ describe("validateTileTemplate", () => {
         reason: "Type a web address that starts with https://.",
       });
     }
-  });
-});
-
-describe("creditLine", () => {
-  const tile = (
-    id: string,
-    attribution: string | undefined,
-    visible = true,
-    order = 0,
-  ): OverlayEntry => ({
-    kind: "tile",
-    id,
-    label: id,
-    visible,
-    order,
-    opacity: 1,
-    url: "https://t.example.org/{z}/{x}/{y}.png",
-    ...(attribution !== undefined ? { attribution } : {}),
-  });
-
-  it("is the basemap's credit when there are no tile layers", () => {
-    expect(creditLine("© OpenStreetMap", [])).toBe("© OpenStreetMap");
-  });
-
-  it("adds the credit of each visible tile layer, top first, once each", () => {
-    expect(
-      creditLine("© OpenStreetMap", [
-        tile("tl:a", "© Aerial Co", true, 0),
-        tile("tl:b", "© Old Maps", true, 1),
-        tile("tl:c", "© Aerial Co", true, 2),
-        tile("tl:d", "© Hidden", false, 3),
-        tile("tl:e", undefined, true, 4),
-        tile("tl:f", "  ", true, 5),
-      ]),
-    ).toBe("© OpenStreetMap · © Aerial Co · © Old Maps");
-  });
-
-  it("drops a credit the basemap already gives", () => {
-    expect(
-      creditLine("© OpenStreetMap", [tile("tl:a", "© OpenStreetMap")]),
-    ).toBe("© OpenStreetMap");
-  });
-
-  it("works with no basemap credit", () => {
-    expect(creditLine(undefined, [tile("tl:a", "© Aerial Co")])).toBe(
-      "© Aerial Co",
-    );
   });
 });

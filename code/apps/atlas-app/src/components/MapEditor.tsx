@@ -21,7 +21,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useStore } from "zustand";
 
-import { MapCanvas, getBasemap } from "@atlasdraw/basemap";
+import { MapCanvas } from "@atlasdraw/basemap";
 import { atlasStampNewElements } from "@atlasdraw/element";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
@@ -295,13 +295,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
         menuHostRef={setMenuHost}
         tabs={<SheetRail excalidrawAPI={api} />}
         panelInset={panel.shrunk ? sheetPanelWidth : 0}
-        foot={
-          <StatusBar
-            map={map}
-            dirty={isDirty}
-            attribution={getBasemap(basemap)?.attribution}
-          />
-        }
+        foot={<StatusBar map={map} dirty={isDirty} />}
       >
         <div
           ref={rootRef}

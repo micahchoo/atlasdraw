@@ -403,4 +403,45 @@ describe("ShareDialog", () => {
     expect(screen.queryByTestId("share-dialog-pick-readonly")).not.toBeNull();
     expect(screen.queryByTestId("share-dialog-pick-collab")).toBeNull();
   });
+
+  it("offers a responsive embed, with a legend, a start view and a height to choose", async () => {
+    render(
+      <ShareDialog
+        onCloseRequest={() => {}}
+        getDoc={() => tinyDoc()}
+        client={stubClient()}
+        startRoom={null}
+      />,
+    );
+    await settle();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("share-dialog-pick-readonly"));
+    });
+    await waitFor(() =>
+      expect(screen.queryByTestId("embed-snippet")).not.toBeNull(),
+    );
+    const snippet = () =>
+      (screen.getByTestId("embed-snippet") as HTMLTextAreaElement).value;
+
+    // Full width, a 16:10 box, fitted to the content.
+    expect(snippet()).toMatch(/src="https:\/\/test\.example\/embed#v2:/);
+    expect(snippet()).toContain("width:100%;aspect-ratio:16 / 10");
+    expect(snippet()).not.toMatch(/width="800"/);
+
+    fireEvent.click(screen.getByLabelText("Show a legend"));
+    fireEvent.change(screen.getByLabelText("Start at"), {
+      target: { value: "saved" },
+    });
+    expect(snippet()).toMatch(/\/embed\?legend=1&amp;view=saved#v2:/);
+
+    fireEvent.change(screen.getByLabelText("Height (px)"), {
+      target: { value: "420" },
+    });
+    expect(snippet()).toContain("width:100%;height:420px");
+    // A height that is not a usable number keeps the aspect ratio.
+    fireEvent.change(screen.getByLabelText("Height (px)"), {
+      target: { value: "-3" },
+    });
+    expect(snippet()).toContain("aspect-ratio:16 / 10");
+  });
 });

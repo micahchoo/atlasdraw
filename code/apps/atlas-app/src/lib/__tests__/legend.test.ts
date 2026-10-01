@@ -130,6 +130,26 @@ describe("visibleAnnotationIds", () => {
     expect(ids).toEqual(new Set(["in", "straddle"]));
   });
 
+  it("turns the frame with the map: a turned export shows other corners", () => {
+    // 800 x 600 frame, turned 90 degrees about its centre (400, 300).
+    // Off the top when north is up, on the left edge when turned.
+    const offTopNorthUp = {
+      id: "top-in",
+      x: 380,
+      y: -100,
+      width: 40,
+      height: 40,
+    };
+    // In the top-right corner when north is up, off the top when turned.
+    const corner = { id: "corner", x: 720, y: 20, width: 60, height: 40 };
+    expect(
+      visibleAnnotationIds([offTopNorthUp, corner], APPSTATE, 800, 600),
+    ).toEqual(new Set(["corner"]));
+    expect(
+      visibleAnnotationIds([offTopNorthUp, corner], APPSTATE, 800, 600, 90),
+    ).toEqual(new Set(["top-in"]));
+  });
+
   it("applies scroll and zoom, not raw scene coordinates", () => {
     // Scene x=900 is off-frame at scroll 0, but scrolling the canvas left by
     // 400 brings it to screen x=500 — inside an 800px frame.

@@ -1,9 +1,9 @@
 # Atlasdraw — Product Requirements Document
 
-*An open-source, self-hostable collaborative web map studio, built on Excalidraw + MapLibre*
+_An open-source, self-hostable collaborative web map studio, built on Excalidraw + MapLibre_
 
 **Status:** Draft v0.1 — for circulation to founding contributors, design partners, and early users
-**Working name:** *Atlasdraw* (alternatives: Cartograph, Plotpaper, Open Felt, Foliomap — see §13)
+**Working name:** _Atlasdraw_ (alternatives: Cartograph, Plotpaper, Open Felt, Foliomap — see §13)
 **License intent:** AGPL-3.0 for the application, MIT/BSD-3 for client SDK and importable libraries
 **Target audience for this PRD:** founding maintainers, day-1 contributors, design partners, and OSS funders
 
@@ -23,44 +23,44 @@ This PRD is the vision, and its text stays as written. This section says what th
 
 ### Shipped
 
-| Item (§) | What exists |
-| --- | --- |
-| Map canvas (7.1) | Drawings are stored in world coordinates (Web Mercator at zoom 22) and never move when the camera moves. This replaces the `customData` anchor design (`docs/architecture/adr/0015-world-coordinates-gate.md`). |
-| Basemaps (7.1) | Light and Dark from a bundled PMTiles file; Bright (OpenFreeMap) and OSM from remote servers. An operator can turn the remote ones off. |
-| Drawing tools (7.1) | The Excalidraw toolbar on the map, plus a pin. The selection readout shows a shape's ground length, area and radius. |
-| Measure (7.3 extension) | A Measure tool for distance and area, geodesic on the ellipsoid, metric or imperial. |
-| Data import (7.1) | GeoJSON (`.geojson`, `.json`), CSV with coordinates, Shapefile zip, KML, KMZ, GPX and GeoTIFF. |
-| Layer panel (7.1) | Show, hide, reorder and style; drawings and data layers are separate. |
-| Tile layers | Raster tiles from an XYZ URL, with the credit shown in the status bar and in exports. |
-| Feature popups | A click on a feature shows its attributes, in the editor and in an unlocked embed. |
-| Data styling (7.2) | Categorical and graduated colour, labels from a property, and a filter by property. |
-| Real-time collaboration (7.1) | Rooms on one Y.Doc each, with cursors, names and comments. The relay keeps rooms in SQLite between sessions. |
-| Comments (7.2) | Anchored to a place or a shape, resolvable, kept in the room and in the `.atlasdraw` file. |
-| Sharing (7.1) | A read-only link (`/m`). A small map goes in the link; a large map goes to the server, and that link lasts until the owner stops it and shows the latest save. A room link lets anyone with it edit. |
-| Embed (7.2) | An `<iframe>` snippet in the Share dialog (`/embed`); `?lock=1` fixes the camera. |
-| File format (7.1) | `.atlasdraw`: `manifest.json` (version 2), `scene.excalidraw.json`, `data/layer-*.geojson`, `style.json`, `comments.json`, `files/`. Version 1 files migrate when they open. |
-| Export (7.1) | PNG at 1x, 2x or 3x; PDF; GeoJSON of the drawing, optionally with data layers; a data layer as GeoJSON or CSV; `.atlasdraw`. |
-| Print layout (7.2) | Letter, A4 or Tabloid: one map page with a title, credit, legend, scale bar and north arrow. A long legend continues on more pages. |
-| Style editor (7.2) | Maputnik in a modal. |
-| Asset library (7.2) | `.excalidrawlib` libraries and a built-in set. |
-| My maps | A list of the maps in this browser, and a restore from the server backup. |
-| Self-host (7.1) | Two Compose stacks (`infra/`); the relay is an optional profile. |
+| Item (§)                      | What exists                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Map canvas (7.1)              | Drawings are stored in world coordinates (Web Mercator at zoom 22) and never move when the camera moves. This replaces the `customData` anchor design (`docs/architecture/adr/0015-world-coordinates-gate.md`).                                                                                                                   |
+| Basemaps (7.1)                | Light and Dark from a bundled PMTiles file; Bright (OpenFreeMap) and OSM from remote servers. An operator can turn the remote ones off.                                                                                                                                                                                           |
+| Drawing tools (7.1)           | The Excalidraw toolbar on the map, plus a pin. The selection readout shows a shape's ground length, area and radius.                                                                                                                                                                                                              |
+| Measure (7.3 extension)       | A Measure tool for distance and area, geodesic on the ellipsoid, metric or imperial.                                                                                                                                                                                                                                              |
+| Data import (7.1)             | GeoJSON (`.geojson`, `.json`), CSV with coordinates, Shapefile zip, KML, KMZ, GPX and GeoTIFF.                                                                                                                                                                                                                                    |
+| Layer panel (7.1)             | Show, hide, reorder and style; drawings and data layers are separate.                                                                                                                                                                                                                                                             |
+| Tile layers                   | Raster tiles from an XYZ URL, with the credit shown in the status bar and in exports.                                                                                                                                                                                                                                             |
+| Feature popups                | A click on a feature shows its attributes, in the editor and in an unlocked embed.                                                                                                                                                                                                                                                |
+| Data styling (7.2)            | Categorical and graduated colour, labels from a property, and a filter by property.                                                                                                                                                                                                                                               |
+| Real-time collaboration (7.1) | Rooms on one Y.Doc each, with cursors, names and comments. The relay keeps rooms in SQLite between sessions.                                                                                                                                                                                                                      |
+| Comments (7.2)                | Anchored to a place or a shape, resolvable, kept in the room and in the `.atlasdraw` file.                                                                                                                                                                                                                                        |
+| Sharing (7.1)                 | A read-only link (`/m`). A small map goes in the link; a large map goes to the server, and that link lasts until the owner stops it and shows the latest save. A room link lets anyone with it edit.                                                                                                                              |
+| Embed (7.2)                   | An `<iframe>` snippet in the Share dialog (`/embed`): full width with a 16:10 box or a fixed height. It fits the content on load (`view=saved` keeps the author's view), uses cooperative gestures so it does not take the page's scroll, shows the map's credits, and shows a legend with `legend=1`. `lock=1` fixes the camera. |
+| File format (7.1)             | `.atlasdraw`: `manifest.json` (version 2), `scene.excalidraw.json`, `data/layer-*.geojson`, `style.json`, `comments.json`, `files/`. Version 1 files migrate when they open.                                                                                                                                                      |
+| Export (7.1)                  | PNG at 1x, 2x or 3x, with the credits in the corner; PDF; a turned map exports turned, with the drawing on its place; GeoJSON of the drawing, optionally with data layers; a data layer as GeoJSON or CSV; `.atlasdraw`.                                                                                                          |
+| Print layout (7.2)            | Letter, A4 or Tabloid: one map page with a title, credit, legend, scale bar and north arrow. A long legend continues on more pages.                                                                                                                                                                                               |
+| Style editor (7.2)            | Maputnik in a modal.                                                                                                                                                                                                                                                                                                              |
+| Asset library (7.2)           | `.excalidrawlib` libraries and a built-in set.                                                                                                                                                                                                                                                                                    |
+| My maps                       | A list of the maps in this browser, and a restore from the server backup.                                                                                                                                                                                                                                                         |
+| Self-host (7.1)               | Two Compose stacks (`infra/`); the relay is an optional profile.                                                                                                                                                                                                                                                                  |
 
 ### Partly shipped
 
-| Item (§) | What is missing |
-| --- | --- |
-| Pin (7.1) | No title, description, photo or link on a pin. |
-| GeoTIFF (7.1) | EPSG:4326 and EPSG:3857 only; the whole file is decoded, not read as a COG. |
-| Geocoding (7.1) | Address columns geocode only when the operator sets `VITE_GEOCODER_ENDPOINT`. There is no default public Photon, on purpose: no call-home. |
-| Collaboration privacy (7.1) | Rooms are not end-to-end encrypted. The relay can read every room (`docs/architecture/adr/0014-collab-trust-model.md`). |
-| Permissions (7.1) | No accounts. A write key in the owner's browser protects a saved map; a room link gives edit access to anyone who has it. |
-| Embed (7.2) | No legend or attribution parameters, no script tag, no SRI, no PNG fallback. |
-| Comments (7.2) | No replies, no mentions, no reopen. |
-| Data styling (7.2) | No point size by attribute. |
-| Print (7.2) | The map is a raster image, not vectors. |
-| Accessibility (7.2) | Focus traps, an announcer and a high-contrast mode exist; map features cannot be reached by keyboard. |
-| Drawing on a turned map | Drawing is blocked while the map's bearing is not 0. |
+| Item (§)                    | What is missing                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Pin (7.1)                   | No title, description, photo or link on a pin.                                                                                             |
+| GeoTIFF (7.1)               | EPSG:4326 and EPSG:3857 only; the whole file is decoded, not read as a COG.                                                                |
+| Geocoding (7.1)             | Address columns geocode only when the operator sets `VITE_GEOCODER_ENDPOINT`. There is no default public Photon, on purpose: no call-home. |
+| Collaboration privacy (7.1) | Rooms are not end-to-end encrypted. The relay can read every room (`docs/architecture/adr/0014-collab-trust-model.md`).                    |
+| Permissions (7.1)           | No accounts. A write key in the owner's browser protects a saved map; a room link gives edit access to anyone who has it.                  |
+| Embed (7.2)                 | No script tag, no SRI, no PNG fallback. The embed shows a turned map north-up.                                                             |
+| Comments (7.2)              | No replies, no mentions, no reopen.                                                                                                        |
+| Data styling (7.2)          | No point size by attribute.                                                                                                                |
+| Print (7.2)                 | The map is a raster image, not vectors.                                                                                                    |
+| Accessibility (7.2)         | Focus traps, an announcer and a high-contrast mode exist; map features cannot be reached by keyboard.                                      |
+| Drawing on a turned map     | Drawing is blocked while the map's bearing is not 0.                                                                                       |
 
 ### Not shipped
 
@@ -75,9 +75,9 @@ This PRD is the vision, and its text stays as written. This section says what th
 
 ## 1. Vision
 
-A map should be as easy to draft, share, and embed as a Google Doc — and as portable as a Markdown file. Atlasdraw is the open, self-hostable canvas for collaborative cartography. It treats the map as a *document*: a single shareable artifact combining a basemap, structured geographic data, freeform annotations, and a presentation layer, that can be exported, version-controlled, and run on a laptop in airplane mode.
+A map should be as easy to draft, share, and embed as a Google Doc — and as portable as a Markdown file. Atlasdraw is the open, self-hostable canvas for collaborative cartography. It treats the map as a _document_: a single shareable artifact combining a basemap, structured geographic data, freeform annotations, and a presentation layer, that can be exported, version-controlled, and run on a laptop in airplane mode.
 
-We are not building a GIS. We are building the **mapping equivalent of Excalidraw + Notion + Figma's commenting layer**, sitting one layer above the open-geo stack. Where QGIS optimizes for analytical depth and ArcGIS for institutional integration, Atlasdraw optimizes for the *speed from idea to shared map*. Most of our users will spend less than thirty minutes per map; their measure of success is whether a colleague, editor, councillor, or reader understood the point.
+We are not building a GIS. We are building the **mapping equivalent of Excalidraw + Notion + Figma's commenting layer**, sitting one layer above the open-geo stack. Where QGIS optimizes for analytical depth and ArcGIS for institutional integration, Atlasdraw optimizes for the _speed from idea to shared map_. Most of our users will spend less than thirty minutes per map; their measure of success is whether a colleague, editor, councillor, or reader understood the point.
 
 ---
 
@@ -90,7 +90,7 @@ The community response has been familiar: praise for what Felt was, frustration 
 - **uMap** (AGPL, Django/Leaflet) is the closest in spirit but feels dated, lacks real-time collaboration in the released version, and has limited drawing/annotation expressiveness.
 - **Kepler.gl** (MIT) is exceptional for large-scale visualization but is configuration-heavy, not collaborative, and not designed for sketch/annotate/share.
 - **QGIS** (GPL) is the desktop powerhouse but is exactly the tool the prosumer is trying to avoid.
-- **Maputnik** (MIT) is a basemap *style* editor, not a map *document* editor.
+- **Maputnik** (MIT) is a basemap _style_ editor, not a map _document_ editor.
 - **Mapeo** (Digital Democracy) is offline-first peer-to-peer for indigenous land defense — a brilliant but narrow product shape.
 - **Datawrapper** does choropleths beautifully but isn't a freeform map canvas.
 
@@ -146,32 +146,32 @@ These principles are a tiebreaker, not a feature list.
 
 A condensed view of the competitive map. We assess each on target user, license, self-hostability, and the "Felt-feel" — i.e., whether the tool achieves Felt's particular blend of polish, collaboration, and breadth.
 
-| Tool | Target | License | Self-host | Felt-feel | What we learn |
-|---|---|---|---|---|---|
-| **Felt (post-pivot)** | Enterprise GIS, AI-native | Proprietary | No | Was the gold standard | Free tier death is our market |
-| **Atlas.co** | SMB/teams | Proprietary SaaS | No | High; closest commercial heir | Validates the wedge; doesn't close it for OSS |
-| **Kepler.gl** | Data analysts | MIT | Yes (React app) | Low — viz-first, not annotation | Steal: deck.gl perf for large datasets |
-| **QGIS / QGIS Cloud** | GIS pros | GPL | Yes | None — desktop-first | Friend, not competitor; integrate via plugin |
-| **Mapbox Studio** | Designers/devs | Proprietary | No | Style-only | Steal: style spec elegance (use MapLibre's fork) |
-| **Google My Maps** | Casual consumers | Proprietary | No | Low | Floor we must clear easily |
-| **Datawrapper** | Journalists | Proprietary | Limited | Medium — chart-first | Steal: opinionated typography defaults |
-| **uMap** | OSM enthusiasts | AGPL | Yes | Medium — closest OSS sibling | Friend; we differ on collab, drawing, UX polish |
-| **Maputnik** | Cartographers | MIT | Yes | None — style editor | Embed it as our style editor; don't rebuild |
-| **Mapeo** | Indigenous communities | Various OSS | Yes (P2P) | None — offline-first vertical | Inspire: data-sovereignty messaging |
-| **Penpot** | Designers | MPL-2.0 | Yes | n/a | GTM model — open-source-as-Figma-alternative |
-| **Excalidraw** | Anyone | MIT | Yes | n/a | Our literal upstream |
+| Tool                  | Target                    | License          | Self-host       | Felt-feel                       | What we learn                                    |
+| --------------------- | ------------------------- | ---------------- | --------------- | ------------------------------- | ------------------------------------------------ |
+| **Felt (post-pivot)** | Enterprise GIS, AI-native | Proprietary      | No              | Was the gold standard           | Free tier death is our market                    |
+| **Atlas.co**          | SMB/teams                 | Proprietary SaaS | No              | High; closest commercial heir   | Validates the wedge; doesn't close it for OSS    |
+| **Kepler.gl**         | Data analysts             | MIT              | Yes (React app) | Low — viz-first, not annotation | Steal: deck.gl perf for large datasets           |
+| **QGIS / QGIS Cloud** | GIS pros                  | GPL              | Yes             | None — desktop-first            | Friend, not competitor; integrate via plugin     |
+| **Mapbox Studio**     | Designers/devs            | Proprietary      | No              | Style-only                      | Steal: style spec elegance (use MapLibre's fork) |
+| **Google My Maps**    | Casual consumers          | Proprietary      | No              | Low                             | Floor we must clear easily                       |
+| **Datawrapper**       | Journalists               | Proprietary      | Limited         | Medium — chart-first            | Steal: opinionated typography defaults           |
+| **uMap**              | OSM enthusiasts           | AGPL             | Yes             | Medium — closest OSS sibling    | Friend; we differ on collab, drawing, UX polish  |
+| **Maputnik**          | Cartographers             | MIT              | Yes             | None — style editor             | Embed it as our style editor; don't rebuild      |
+| **Mapeo**             | Indigenous communities    | Various OSS      | Yes (P2P)       | None — offline-first vertical   | Inspire: data-sovereignty messaging              |
+| **Penpot**            | Designers                 | MPL-2.0          | Yes             | n/a                             | GTM model — open-source-as-Figma-alternative     |
+| **Excalidraw**        | Anyone                    | MIT              | Yes             | n/a                             | Our literal upstream                             |
 
-**Our wedge:** the only tool that is *all* of (a) free, (b) self-hostable, (c) real-time collaborative, (d) excellent at freeform drawing on a real basemap, (e) supports prosumer-grade data import (CSV/GeoJSON/KML/Shapefile/GeoTIFF), and (f) embeds anywhere. uMap covers (a)–(b) and partially (c)–(f). Atlas covers (c)–(f) but not (a)–(b). The intersection is empty. That's the product.
+**Our wedge:** the only tool that is _all_ of (a) free, (b) self-hostable, (c) real-time collaborative, (d) excellent at freeform drawing on a real basemap, (e) supports prosumer-grade data import (CSV/GeoJSON/KML/Shapefile/GeoTIFF), and (f) embeds anywhere. uMap covers (a)–(b) and partially (c)–(f). Atlas covers (c)–(f) but not (a)–(b). The intersection is empty. That's the product.
 
 ---
 
 ## 7. Feature Scope by Phase
 
-The scope below is opinionated about what *must* ship together for the product to feel like a product, not a tech demo.
+The scope below is opinionated about what _must_ ship together for the product to feel like a product, not a tech demo.
 
 ### 7.1 MVP (target: ~3 months, single full-time-equivalent + community PRs)
 
-The MVP delivers JTBD #1 (import-and-share) and a simplified version of JTBD #2 (draw-and-annotate). It is the "minimum lovable" demo we'd post to *Show HN: Open Felt*.
+The MVP delivers JTBD #1 (import-and-share) and a simplified version of JTBD #2 (draw-and-annotate). It is the "minimum lovable" demo we'd post to _Show HN: Open Felt_.
 
 - **Map canvas.** MapLibre GL JS as the basemap layer, Excalidraw canvas overlaid in a coordinated coordinate space. Pan/zoom synchronized; Excalidraw shapes anchored to lng/lat (not screen pixels) by writing the geographic position into Excalidraw's `customData` field on each element.
 - **Default basemaps.** Three baked-in styles served via OpenFreeMap (free public tiles) and a one-line config to switch to self-hosted Protomaps PMTiles. MapTiler/Stadia listed as optional commercial alternatives.
@@ -239,7 +239,7 @@ The technical scaffold provided by the user remains authoritative for the integr
 
 **Real-time layer.** WebSocket server (Node + ws/Socket.IO), forking Excalidraw's `excalidraw-room` pattern. We extend the message schema with two new event types: `MAP_CAMERA_UPDATE` (throttled, last-write-wins) and `DATA_LAYER_MUTATION` (CRDT-merged via Yjs or Automerge for non-Excalidraw data). End-to-end encryption inherited from Excalidraw for the scene; data-layer encryption is opt-in (some self-hosters will want server-side processing).
 
-**Storage.** Default: PostgreSQL for metadata + S3-compatible blob (MinIO in the default Docker stack) for `.atlasdraw` payloads and uploaded files. Files >10 MB (typical GeoTIFFs, Shapefile bundles) are streamed to blob storage and referenced by URL in the manifest. PostGIS is *not* required for MVP; we add it as an optional service in v1.5 for direct DB layer sources.
+**Storage.** Default: PostgreSQL for metadata + S3-compatible blob (MinIO in the default Docker stack) for `.atlasdraw` payloads and uploaded files. Files >10 MB (typical GeoTIFFs, Shapefile bundles) are streamed to blob storage and referenced by URL in the manifest. PostGIS is _not_ required for MVP; we add it as an optional service in v1.5 for direct DB layer sources.
 
 **Basemap and tiles.** Default basemap is OpenFreeMap's public instance for zero-friction first run. Self-hosters get a one-line switch to Protomaps PMTiles (single-file world basemap, ~120 GB, served directly from S3/CloudFront via HTTP range requests with no tile server). For private/airgap deployments, we ship Tilemaker recipes to build regional PMTiles from OSM PBF extracts.
 
@@ -279,16 +279,17 @@ OSS GTM is reputation-and-distribution work, not advertising. We will execute th
 **Pre-launch (months 1–3):** Build in public on the GitHub repo from day one. Weekly "dev log" blog posts. Recruit 5–10 design partners across the four personas; ship them weekly TestFlight-style builds. Publish the PRD itself (this document) as the README's vision link. Reserve handles on X, Mastodon, Bluesky, GitHub org, and the npm scope.
 
 **Launch venues, sequenced:**
+
 1. **Show HN: "Open-source Felt alternative — Excalidraw + MapLibre"** — single most important launch surface. Post on a Tuesday morning ET. Headline must lead with the Felt comparison; HN rewards specificity.
 2. **r/gis, r/selfhosted, r/datajournalism, r/openstreetmap, r/urbanplanning.** Each gets a tailored framing.
 3. **Mapping Twitter/X and Bluesky** — tag the cartography crowd (Tim Wallace, Ken Field, Mapping Mashups crew, etc.); Felt's former community is unusually concentrated there.
 4. **MapLibre, Protomaps, OpenStreetMap forums** — frame as a downstream success story; avoid implying we replace them.
-5. **Newsletters and podcasts:** *Mapscaping*, *MapDive*, *Pointer*, *Source* (OpenNews), *console.dev*. Pitch each well in advance.
+5. **Newsletters and podcasts:** _Mapscaping_, _MapDive_, _Pointer_, _Source_ (OpenNews), _console.dev_. Pitch each well in advance.
 6. **Conference circuit:** NACIS, FOSS4G, SRCCON, IRE/NICAR. Lightning talks first, workshops by year 2.
 
-**Positioning headline:** *"The open-source map studio. Self-hostable. Permissively licensed. As easy as a Google Doc."* Avoid "Felt killer" framing in copy (legal risk + bad community optics) — but engineer the metadata so people searching "Felt alternative" find us.
+**Positioning headline:** _"The open-source map studio. Self-hostable. Permissively licensed. As easy as a Google Doc."_ Avoid "Felt killer" framing in copy (legal risk + bad community optics) — but engineer the metadata so people searching "Felt alternative" find us.
 
-**Naming.** *Atlasdraw* leads on three criteria: (a) implies the Excalidraw heritage clearly, (b) "atlas" carries cartographic weight without being literal, (c) `atlasdraw.org` and the npm scope appear available as of research date. Backup names: *Cartograph*, *Plotpaper*, *Foliomap*, *Kart* (Norwegian for map; pleasingly short). Avoid: anything with "map" + a generic suffix (overcrowded), anything trademark-adjacent to Felt or Atlas.co.
+**Naming.** _Atlasdraw_ leads on three criteria: (a) implies the Excalidraw heritage clearly, (b) "atlas" carries cartographic weight without being literal, (c) `atlasdraw.org` and the npm scope appear available as of research date. Backup names: _Cartograph_, _Plotpaper_, _Foliomap_, _Kart_ (Norwegian for map; pleasingly short). Avoid: anything with "map" + a generic suffix (overcrowded), anything trademark-adjacent to Felt or Atlas.co.
 
 **Monetization model.** Pure OSS for the project, with no hosted tier and no open-core split (ADR-0013). A lightweight sponsorship model (GitHub Sponsors, Open Collective) funds maintainer time from day one.
 
@@ -300,25 +301,25 @@ OSS GTM is reputation-and-distribution work, not advertising. We will execute th
 
 We catalog the credible risks now to keep them from becoming surprises.
 
-**Technical: Excalidraw–MapLibre coordinate drift.** The single hardest engineering problem is keeping freeform Excalidraw shapes geographically anchored under arbitrary zoom/pan, including tilt and rotation. Fonts and stroke widths must scale sensibly. *Mitigation:* commit to a clear semantic — "annotations are pinned at a reference zoom and scale linearly outside ±2 zoom levels" — and ship a visual debugging mode early. Lean on MapLibre's `project/unproject`, not custom math.
+**Technical: Excalidraw–MapLibre coordinate drift.** The single hardest engineering problem is keeping freeform Excalidraw shapes geographically anchored under arbitrary zoom/pan, including tilt and rotation. Fonts and stroke widths must scale sensibly. _Mitigation:_ commit to a clear semantic — "annotations are pinned at a reference zoom and scale linearly outside ±2 zoom levels" — and ship a visual debugging mode early. Lean on MapLibre's `project/unproject`, not custom math.
 
-**Technical: real-time merge conflicts on layered data.** Excalidraw's last-write-wins-by-version is fine for sketches but poor for structured layer edits. *Mitigation:* dual-track — keep Excalidraw's protocol for annotation elements; introduce a Yjs/Automerge document for data-layer mutations.
+**Technical: real-time merge conflicts on layered data.** Excalidraw's last-write-wins-by-version is fine for sketches but poor for structured layer edits. _Mitigation:_ dual-track — keep Excalidraw's protocol for annotation elements; introduce a Yjs/Automerge document for data-layer mutations.
 
-**Technical: bundle size and cold-start.** Excalidraw + MapLibre + Maputnik + Turf is bulky. *Mitigation:* code-split aggressively, lazy-load Maputnik and Turf, use a slim embed bundle distinct from the editor.
+**Technical: bundle size and cold-start.** Excalidraw + MapLibre + Maputnik + Turf is bulky. _Mitigation:_ code-split aggressively, lazy-load Maputnik and Turf, use a slim embed bundle distinct from the editor.
 
-**Market: Atlas.co dominates.** Atlas is well-funded and ships fast. *Mitigation:* we don't compete on features; we compete on *self-hosting and license*. The customer who wants Atlas will buy Atlas; the customer who wants ownership will pick us. Our roadmap explicitly does not chase Atlas's app-builder.
+**Market: Atlas.co dominates.** Atlas is well-funded and ships fast. _Mitigation:_ we don't compete on features; we compete on _self-hosting and license_. The customer who wants Atlas will buy Atlas; the customer who wants ownership will pick us. Our roadmap explicitly does not chase Atlas's app-builder.
 
-**Market: Felt revives a free tier.** Possible but unlikely given the enterprise pivot and Energize's investment thesis. *Mitigation:* file format portability — if Felt reopens, our users can move freely. We also offer a Felt importer in v1.0.
+**Market: Felt revives a free tier.** Possible but unlikely given the enterprise pivot and Energize's investment thesis. _Mitigation:_ file format portability — if Felt reopens, our users can move freely. We also offer a Felt importer in v1.0.
 
-**Legal: basemap and data licensing.** OSM data requires attribution; some commercial tile services prohibit certain redistribution patterns. *Mitigation:* default-on attribution that cannot be programmatically removed (only repositioned); a clear basemap-source matrix in docs; Protomaps/OpenFreeMap as the recommended defaults to sidestep entirely.
+**Legal: basemap and data licensing.** OSM data requires attribution; some commercial tile services prohibit certain redistribution patterns. _Mitigation:_ default-on attribution that cannot be programmatically removed (only repositioned); a clear basemap-source matrix in docs; Protomaps/OpenFreeMap as the recommended defaults to sidestep entirely.
 
-**Legal: AGPL fear.** Some adopters confuse AGPL with "you must open-source your whole company." *Mitigation:* a plain-English LICENSE-FAQ covering common scenarios (embedding the iframe in a closed-source SaaS is fine; modifying the server and exposing it as a SaaS is not).
+**Legal: AGPL fear.** Some adopters confuse AGPL with "you must open-source your whole company." _Mitigation:_ a plain-English LICENSE-FAQ covering common scenarios (embedding the iframe in a closed-source SaaS is fine; modifying the server and exposing it as a SaaS is not).
 
-**Operational: maintainer burnout.** The defining failure mode of OSS prosumer tools (uMap has felt this; Mapeo has too). *Mitigation:* a two-maintainer rule (no single point of failure on merge), explicit "no support SLA" framing for community users, GitHub Sponsors and Open Collective from day one, and a clearly communicated bus factor.
+**Operational: maintainer burnout.** The defining failure mode of OSS prosumer tools (uMap has felt this; Mapeo has too). _Mitigation:_ a two-maintainer rule (no single point of failure on merge), explicit "no support SLA" framing for community users, GitHub Sponsors and Open Collective from day one, and a clearly communicated bus factor.
 
-**Operational: scope creep into "we're rebuilding QGIS in a browser."** *Mitigation:* §13 is the firewall.
+**Operational: scope creep into "we're rebuilding QGIS in a browser."** _Mitigation:_ §13 is the firewall.
 
-**Reputational: AI-generated cartography backlash.** Cartographers are quick (rightly) to call out plausible-but-wrong AI maps. *Mitigation:* we treat AI as a styling/scaffolding helper, not a content generator. No "AI map this for me" button.
+**Reputational: AI-generated cartography backlash.** Cartographers are quick (rightly) to call out plausible-but-wrong AI maps. _Mitigation:_ we treat AI as a styling/scaffolding helper, not a content generator. No "AI map this for me" button.
 
 ---
 
@@ -362,6 +363,6 @@ If any of these milestones slip by more than 50%, the architecture or the team i
 
 ## 16. Closing Note
 
-The Felt window opened in 2021 and effectively closed for the prosumer in early 2025. The geospatial stack required to rebuild it as open-source — MapLibre's vector rendering, Protomaps' single-file world, Excalidraw's collaboration primitives, Tippecanoe and Planetiler's tile pipelines, Photon and Pelias for geocoding, Turf.js for spatial ops — is all there, mature, and permissively licensed. The technical work is meaningful but tractable for a small focused team. The product question is whether we have the discipline to *not* build a GIS, *not* chase the enterprise market, and *not* lose the hand-crafted, document-shaped feel that made Felt so loved in the first place.
+The Felt window opened in 2021 and effectively closed for the prosumer in early 2025. The geospatial stack required to rebuild it as open-source — MapLibre's vector rendering, Protomaps' single-file world, Excalidraw's collaboration primitives, Tippecanoe and Planetiler's tile pipelines, Photon and Pelias for geocoding, Turf.js for spatial ops — is all there, mature, and permissively licensed. The technical work is meaningful but tractable for a small focused team. The product question is whether we have the discipline to _not_ build a GIS, _not_ chase the enterprise market, and _not_ lose the hand-crafted, document-shaped feel that made Felt so loved in the first place.
 
 Atlasdraw's job is to keep that window open — for the journalist on deadline, the planner with a council meeting tomorrow, the researcher in a forest with no LTE, and the hobbyist who just wants their hike on a beautiful map. The rest follows from there.
