@@ -110,7 +110,7 @@ describe("ShareDialog", () => {
       expect(screen.queryByTestId("share-dialog-url")).not.toBeNull();
     });
     const input = screen.getByTestId("share-dialog-url") as HTMLInputElement;
-    expect(input.value.startsWith("https://test.example/m#v1:")).toBe(true);
+    expect(input.value.startsWith("https://test.example/m#v2:")).toBe(true);
     const hint = screen.getByTestId("share-dialog-mode-hint");
     expect(hint.getAttribute("data-mode")).toBe("hash");
   });

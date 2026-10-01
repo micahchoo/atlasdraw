@@ -523,65 +523,61 @@ function makeMemoryStorage(): HttpStorageClient {
 }
 
 describe("share links", () => {
-  // KNOWN-RED (W3 document owner): useShareLink sizes the document with JSON.stringify, which writes its layers and files Maps as {}, so a large GeoJSON layer looks small, takes hash mode, and is silently dropped. Flip to it() when fixed.
-  it.fails(
-    "a share link carries the data layers and files, or does not use hash mode",
-    async () => {
-      const fx = makeFakeExcalidraw([
-        geoRect("rect-1"),
-        {
-          ...geoRect("photo-1"),
-          type: "image",
-          fileId: "img-1",
-          status: "saved",
-        },
-      ]);
-      // The open document saves this drawing.
-      openDocument(createDocument({}, sceneOf(fx.api)));
-      fx.api.addFiles([
-        {
-          id: "img-1",
-          mimeType: "image/png",
-          dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
-          created: 0,
-        },
-      ] as unknown as Parameters<ExcalidrawImperativeAPI["addFiles"]>[0]);
-      // ~150 KB of GeoJSON: far over the 32 KiB hash threshold.
-      currentDocument().dispatch({
-        type: "add-data-layer",
-        id: "dl:wells",
-        fc: pointFC(2000),
-        label: "Wells",
-        style: STYLE,
-      });
+  it("a share link carries the data layers and files, or does not use hash mode", async () => {
+    const fx = makeFakeExcalidraw([
+      geoRect("rect-1"),
+      {
+        ...geoRect("photo-1"),
+        type: "image",
+        fileId: "img-1",
+        status: "saved",
+      },
+    ]);
+    // The open document saves this drawing.
+    openDocument(createDocument({}, sceneOf(fx.api)));
+    fx.api.addFiles([
+      {
+        id: "img-1",
+        mimeType: "image/png",
+        dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+        created: 0,
+      },
+    ] as unknown as Parameters<ExcalidrawImperativeAPI["addFiles"]>[0]);
+    // ~150 KB of GeoJSON: far over the 32 KiB hash threshold.
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:wells",
+      fc: pointFC(2000),
+      label: "Wells",
+      style: STYLE,
+    });
 
-      const client = makeMemoryStorage();
-      const { result } = renderHook(() =>
-        useShareLink({
-          getDoc: () => toFile(currentDocument()),
-          client,
-        }),
-      );
-      let url: string | null = null;
-      await act(async () => {
-        url = await result.current.generate();
-      });
-      expect(url).not.toBeNull();
-
-      // Open the link the way ShareView does.
-      const link = new URL(url as unknown as string);
-      const loaded = await loadShareDocument(
-        link.hash,
-        tokenFromPath(link.pathname, "/m/"),
+    const client = makeMemoryStorage();
+    const { result } = renderHook(() =>
+      useShareLink({
+        getDoc: () => toFile(currentDocument()),
         client,
-      );
-      expect(loaded.kind).toBe("ready");
-      const doc = loaded.kind === "ready" ? loaded.doc : null;
-      const wells =
-        doc?.layers instanceof Map ? doc.layers.get("dl:wells") : undefined;
-      expect(wells?.features.length).toBe(2000);
-      const files = doc?.files instanceof Map ? doc.files : undefined;
-      expect(files?.has("img-1")).toBe(true);
-    },
-  );
+      }),
+    );
+    let url: string | null = null;
+    await act(async () => {
+      url = await result.current.generate();
+    });
+    expect(url).not.toBeNull();
+
+    // Open the link the way ShareView does.
+    const link = new URL(url as unknown as string);
+    const loaded = await loadShareDocument(
+      link.hash,
+      tokenFromPath(link.pathname, "/m/"),
+      client,
+    );
+    expect(loaded.kind).toBe("ready");
+    const doc = loaded.kind === "ready" ? loaded.doc : null;
+    const wells =
+      doc?.layers instanceof Map ? doc.layers.get("dl:wells") : undefined;
+    expect(wells?.features.length).toBe(2000);
+    const files = doc?.files instanceof Map ? doc.files : undefined;
+    expect(files?.has("img-1")).toBe(true);
+  });
 });

@@ -93,6 +93,23 @@ export class AtlasdrawWriteCache {
 }
 
 /**
+ * A Blob's bytes. `Blob.prototype.arrayBuffer` is in every browser and in
+ * Node; jsdom's Blob lacks it, and there FileReader gives the same bytes.
+ */
+function blobBytes(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+/**
  * Serialize an `AtlasdrawDocument` to a `.atlasdraw` zip Blob.
  *
  * - text-ish entries (manifest, scene, geojson, style) are DEFLATE compressed;
@@ -172,7 +189,7 @@ export async function write(
   // costs a copy + CRC, no DEFLATE, so they are not worth cache-tracking.
   const binaryPaths = new Set<string>();
   for (const [name, blob] of doc.files) {
-    const buf = await blob.arrayBuffer();
+    const buf = await blobBytes(blob);
     const path = `${FILES_PREFIX}${name}`;
     binaryPaths.add(path);
     zip.file(path, buf, {
@@ -182,7 +199,7 @@ export async function write(
   }
 
   if (options.thumbnail) {
-    const thumbBuf = await options.thumbnail.arrayBuffer();
+    const thumbBuf = await blobBytes(options.thumbnail);
     binaryPaths.add(THUMBNAIL_PATH);
     zip.file(THUMBNAIL_PATH, thumbBuf, {
       compression: "STORE",
@@ -259,7 +276,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   try {
     // JSZip's Blob support is browser-only; in node test runtimes we hand it
     // an ArrayBuffer, which is universally supported.
-    const buf = await blob.arrayBuffer();
+    const buf = await blobBytes(blob);
     zip = await JSZip.loadAsync(buf);
   } catch (err) {
     throw new AtlasdrawFormatError(

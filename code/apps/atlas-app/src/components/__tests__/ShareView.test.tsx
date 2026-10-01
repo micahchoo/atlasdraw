@@ -15,6 +15,7 @@ import {
   ShareExpiredError,
   type HttpStorageClient,
 } from "../../services/createHttpStorageClient";
+import { savedManifest } from "../../state/__tests__/fixtures/documentWorld";
 
 // Excalidraw renders a heavy canvas in jsdom; mock it down to a sentinel.
 vi.mock("@atlasdraw/excalidraw", () => ({
@@ -41,10 +42,8 @@ describe("ShareView", () => {
   });
 
   it("hash form: decodes #v1:<encoded> and renders the read-only banner", async () => {
-    const doc = {
-      manifest: { id: "01ARZ3NDEKTSV4RRFFQ69G5FAV" },
-      scene: [],
-    };
+    // A link made before v2: the manifest and the drawing, as JSON.
+    const doc = { manifest: savedManifest(), scene: [] };
     const enc = LZString.compressToBase64(JSON.stringify(doc));
     render(
       <ShareView

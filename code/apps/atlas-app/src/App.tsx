@@ -11,7 +11,7 @@
 // capability via path mismatch.
 //
 // Routes:
-//   /m#v1:<encoded>      → ShareView (hash mode)
+//   /m#v2:<encoded>      → ShareView (hash mode; #v1: links still open)
 //   /m/<token>           → ShareView (upload mode)
 //   /m#room:...          → ShareView (defensive — Q-P5-2; treat as read-only)
 //   /#room:<id>,<key>    → MapEditor (collab session; URL key = write cap)
@@ -59,7 +59,7 @@ function pickView() {
   const path = window.location.pathname;
   const hash = window.location.hash;
   // D1: read-only MAP embed. Distinct from ShareView (`/m`) — mounts the full
-  // MapLibre stack chromeless for cross-origin <iframe> use. `/embed#v1:<lz>`
+  // MapLibre stack chromeless for cross-origin <iframe> use. `/embed#v2:<…>`
   // (hash) and `/embed/<token>` (token). Enabled by default; operators opt out
   // with VITE_EMBED_ENABLED=false.
   if (
@@ -73,7 +73,7 @@ function pickView() {
   if (path === "/m" && hash.startsWith("#room:")) {
     return <ShareView />;
   }
-  if (path === "/m" && hash.startsWith("#v1:")) {
+  if (path === "/m" && (hash.startsWith("#v2:") || hash.startsWith("#v1:"))) {
     return <ShareView />;
   }
   if (path.startsWith("/m/")) {
