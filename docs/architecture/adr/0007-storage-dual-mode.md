@@ -77,10 +77,18 @@ adapters stay; the workspace and billing methods leave `StorageClient`, which
 now has maps, share tokens, `getBlob`, `ping` and `close`. Three statements
 above no longer hold:
 
-- The schema is not ad-hoc DDL in each adapter. `apps/storage/src/db/
-  migrations.ts` is the one schema definition, and both adapters apply it at
-  startup through `db/migrate.ts`.
+- The schema is not ad-hoc DDL in each adapter.
+  `apps/storage/src/db/migrations.ts` is the one schema definition, and both
+  adapters apply it at startup through `db/migrate.ts`.
 - `postgres-minio` is not tested with mocks only. With `ATLASDRAW_TEST_PG_URL`
   set, the adapter contract and the migrations run against real Postgres; the
   CI job `storage-postgres` does this with a `postgres:16` service container.
 - The interface is not at `types.ts:44-50` with 5 methods. Read `types.ts`.
+
+## Amended by ADR-0019 (2026-10-01)
+
+`docs/architecture/adr/0019-bring-your-own-s3.md` removes MinIO from the full
+stack. The `postgres-minio` adapter stays, under the same name, and now means
+"Postgres and any S3-compatible bucket". The operator supplies the bucket.
+`forcePathStyle` is no longer fixed at `true`: `BLOB_FORCE_PATH_STYLE` sets
+it (default `true`; `false` for virtual-hosted URLs such as AWS S3).

@@ -46,8 +46,9 @@ Two Docker Compose stacks are in [`infra/`](infra/):
 
 - [`infra/docker-compose.minimal.yml`](infra/docker-compose.minimal.yml) —
   `web` and `storage` (SQLite and files). One port, `3000`.
-- [`infra/docker-compose.yml`](infra/docker-compose.yml) — `web`, `storage`
-  (Postgres and MinIO), `postgres`, `minio` and `caddy` (TLS). The relay for
+- [`infra/docker-compose.yml`](infra/docker-compose.yml) — `web`, `storage`,
+  `postgres` and `caddy` (TLS). Map bytes go to an S3-compatible bucket
+  that you supply; the stack runs no object store. The relay for
   live rooms starts with the `realtime` profile.
 
 First run: [`docs/self-host/README.md`](docs/self-host/README.md).
