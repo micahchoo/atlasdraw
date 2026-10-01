@@ -108,6 +108,9 @@ export function csvGeometryMode(fc: FeatureCollection): CsvGeometryMode {
 
 const NEEDS_QUOTES = /[",\r\n]/;
 
+/** First characters that make a spreadsheet treat a cell as a formula. */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 /** One RFC 4180 field. */
 function csvField(text: string): string {
   return NEEDS_QUOTES.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -123,7 +126,9 @@ function cellText(value: unknown): string {
     return "";
   }
   if (typeof value === "string") {
-    return value;
+    // A spreadsheet runs a cell that starts with one of these as a formula.
+    // Prefix ' so the cell opens as text. Numbers never take this path.
+    return FORMULA_START.test(value) ? `'${value}` : value;
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);

@@ -323,3 +323,29 @@ describe("toCSV — other geometry", () => {
     ).toBe("wkt");
   });
 });
+
+describe("toCSV — spreadsheet formulas", () => {
+  const one = (name: unknown, n: unknown): FeatureCollection => ({
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [1, 2] },
+        properties: { name, n },
+      },
+    ],
+  });
+
+  // A spreadsheet runs a cell that starts with = + - @ (or a tab or CR) as a
+  // formula. A text cell is prefixed with ' so it opens as text.
+  it("opens text that looks like a formula as text", () => {
+    const row = toCSV(one('=HYPERLINK("http://x","y")', 1)).split("\r\n")[1];
+    expect(row.startsWith("1,2,\"'=HYPERLINK")).toBe(true);
+  });
+
+  it("leaves numbers alone, so negative numbers still round-trip", async () => {
+    const back = await parseCSV(csvBlob(toCSV(one("plain", -3.5))));
+    expect(back.features[0]?.properties?.n).toBe(-3.5);
+    expect(back.features[0]?.properties?.name).toBe("plain");
+  });
+});
