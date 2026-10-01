@@ -1,45 +1,31 @@
-<div align="center">
-  <h1>Atlasdraw</h1>
-  <p>
-    A collaborative web map studio — hand-drawn annotation and sketching,
-    layered directly on real basemaps.
-  </p>
-</div>
+# Atlasdraw workspace
 
-## What it is
+This folder is the Atlasdraw code: a Yarn 4 workspace with three apps and eleven packages. What the product is and how to host it are in the [repository README](../README.md).
 
-Atlasdraw lets teams sketch, annotate, and collaborate on top of an actual map — routes, hazard zones, transit plans, site notes — with the same free-form, hand-drawn feel as a whiteboard, instead of forcing map markup into rigid GIS tooling.
+## Layout
 
-- 🗺️&nbsp;Real basemaps (MapLibre GL, vector tiles via PMTiles/Protomaps), not a static background image.
-- ✍️&nbsp;Hand-drawn sketching, shapes, text, and arrows anchored to real coordinates.
-- 🤼&nbsp;Real-time multiplayer collaboration (Yjs CRDT sync over Socket.IO).
-- 📍&nbsp;GeoJSON / shapefile import, asset libraries, and layer management.
-- 🖼️&nbsp;Export to PNG/SVG, and a portable `scene.json` + `data/*.geojson` + `style.json` bundle.
-
-## Repository layout
-
-This is a Yarn workspaces monorepo. See [`CLAUDE.md`](./CLAUDE.md) for the full development guide; in short:
-
-- `apps/atlas-app/` — the product (editor SPA).
-- `apps/realtime/` — collaboration server.
-- `apps/storage/` — backend API (map storage and share links).
-- `packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/` — atlasdraw-native packages.
-- `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/` — the forked [Excalidraw](https://github.com/excalidraw/excalidraw) canvas engine that powers the sketching layer.
+- `apps/atlas-app/` — the editor, the read-only viewer (`/m`) and the embed (`/embed`).
+- `apps/storage/` — the HTTP API for saved maps, write keys and share links.
+- `apps/realtime/` — the relay for live rooms.
+- `packages/geo/`, `packages/basemap/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/` — the Atlasdraw packages.
+- `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/` — the Excalidraw fork. Atlasdraw owns it; nothing syncs from upstream (`decisions/0010-own-the-fork.md`).
+- `bench/` — performance benchmarks and the CI regression gate.
+- `decisions/` — ADR 0001–0010 and the early research notes.
 
 ## Quick start
 
 ```bash
-corepack enable      # pins yarn@4 via packageManager
+corepack enable      # gives the yarn version that package.json pins
 yarn install
-yarn workspace @atlasdraw/atlas-app dev
+yarn start           # the editor on http://localhost:5174
 ```
 
-Run `yarn test:typecheck` and `yarn test` before committing.
+Before you commit, run `yarn test:typecheck` and `yarn test --watch=false`. [`CLAUDE.md`](CLAUDE.md) lists the other commands.
 
-## License
+## Licence
 
-Atlasdraw is multi-licensed by package — see [`LICENSING.md`](./LICENSING.md) for the breakdown (application code is AGPL-3.0, the CLI and file-format and geometry libraries are MIT, and the basemap/tools wrappers are MPL-2.0).
+Each package has its own licence. The apps are AGPL-3.0-only; `cli`, `geo`, `data` and `protocol` are MIT; `basemap` and `tools` are MPL-2.0. The table and the reasons are in [`LICENSING.md`](LICENSING.md).
 
 ## Credits
 
-The sketching engine is built on a fork of [Excalidraw](https://github.com/excalidraw/excalidraw), an excellent open-source whiteboard project — see [`LICENSE-EXCALIDRAW-UPSTREAM`](./LICENSE-EXCALIDRAW-UPSTREAM) for its original license terms. Map rendering is built on [MapLibre GL](https://maplibre.org/) and the [Protomaps](https://protomaps.com/) basemap format.
+The drawing engine is a fork of [Excalidraw](https://github.com/excalidraw/excalidraw); its licence is in [`LICENSE-EXCALIDRAW-UPSTREAM`](LICENSE-EXCALIDRAW-UPSTREAM). The map is [MapLibre GL](https://maplibre.org/), and the bundled basemap uses the [Protomaps](https://protomaps.com/) format.

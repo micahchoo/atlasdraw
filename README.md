@@ -1,213 +1,169 @@
 # Atlasdraw
 
-An open-source, self-hostable, real-time collaborative web map studio.
-Atlasdraw stacks an [Excalidraw](https://github.com/excalidraw/excalidraw)
-drawing surface on top of a [MapLibre GL JS](https://maplibre.org/) basemap
-so that hand-drawn annotations stay geographically anchored under pan,
-zoom, and collaborative editing.
+Atlasdraw is an open-source map studio that you host yourself. You draw on a
+real map with the [Excalidraw](https://github.com/excalidraw/excalidraw)
+tools, and every shape stays at its place on the ground when you pan, zoom or
+share. The map is [MapLibre GL JS](https://maplibre.org/).
 
-> [!NOTE] > **Status:** `v1.0.0` — released 2026-05-15. See [`CHANGELOG.md`](CHANGELOG.md).
+> [!NOTE]
+> Latest release: `v1.0.0` (2026-05-15). The changes since then are under
+> "Unreleased" in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Why Atlasdraw?
 
-You need a map where you can sketch, annotate, and collaborate — not just
-drop pins. Atlasdraw gives you a full drawing toolkit on a real GIS basemap.
-Annotations reproject on every camera move. Everything stays where you drew it.
+Use it when you must sketch, annotate and discuss a place, not only drop
+pins.
 
-- **Drawing meets GIS.** Freehand, polygons, routes, text — all geo-anchored.
-- **Self-host first.** Runs offline against a bundled PMTiles basemap. No calls home.
-- **Real-time collaboration.** CRDT-backed with cursor presence and anchored comments.
-- **Open data I/O.** Import GeoJSON, CSV, Shapefile. Export PNG, PDF, GeoJSON, `.atlasdraw`.
+- **Drawing on a map.** Freehand, shapes, arrows, text and pins. A drawing is
+  stored in world coordinates, so it does not drift when the map moves.
+- **Your data.** Import GeoJSON, CSV, Shapefile (zip), KML, KMZ, GPX and
+  GeoTIFF. Style a layer by a property, label it, filter it, and click a
+  feature to see its attributes. Add raster tiles from an XYZ URL.
+- **Measure.** Distance, area and radius, on the ellipsoid.
+- **Share and embed.** A read-only link or an `<iframe>` embed. A server link
+  lasts until you stop it, and it shows your latest save.
+- **Edit together.** Live rooms with cursors, names and comments. The relay
+  keeps a room between sessions.
+- **Open files.** Export PNG (1x, 2x, 3x), PDF, GeoJSON, CSV and the
+  `.atlasdraw` bundle (zipped JSON and GeoJSON).
+- **Self-host.** No telemetry. The default basemap is a file on your own
+  server.
 
 ## Quick start
 
-The monorepo lives under [`code/`](code/) and uses Yarn workspaces
-(`yarn@1.22`). Node >= 18.
+The code is a Yarn 4 workspace in [`code/`](code/). Use Node 20.
 
 ```bash
 cd code
+corepack enable        # gives the yarn version that package.json pins
 yarn install
-yarn --cwd apps/atlas-app dev          # editor on http://localhost:5173
+yarn start             # the editor on http://localhost:5174
 ```
 
 ## Self-host
 
-Two compose stacks in [`infra/`](infra/):
+Two Docker Compose stacks are in [`infra/`](infra/):
 
 - [`infra/docker-compose.minimal.yml`](infra/docker-compose.minimal.yml) —
-  2 services (`web` + `storage` in `sqlite-fs` mode). Bundled PMTiles basemap.
-  No outbound network calls in the default config.
-- [`infra/docker-compose.yml`](infra/docker-compose.yml) — full stack:
-  `web` + `storage` (postgres-minio mode) + `postgres` + `minio` + `caddy`.
-  Realtime service available via the `realtime` compose profile.
+  `web` and `storage` (SQLite and files). One port, `3000`.
+- [`infra/docker-compose.yml`](infra/docker-compose.yml) — `web`, `storage`
+  (Postgres and MinIO), `postgres`, `minio` and `caddy` (TLS). The relay for
+  live rooms starts with the `realtime` profile.
 
-Minimal first run: [`docs/self-host/README.md`](docs/self-host/README.md).
-Production deployment: `docs/self-host/`.
+First run: [`docs/self-host/README.md`](docs/self-host/README.md).
+Production: [`docs/self-host/production.md`](docs/self-host/production.md).
+
+The browser can call other servers. The default basemap loads its label
+fonts from `protomaps.github.io`. The "Bright" and "OSM" basemaps, the
+Maputnik style editor, and tile layers that a user adds load from their own
+servers. The self-host guide tells you how to turn these off.
 
 ## Architecture
 
-10 subsystems in a hub-and-spoke pattern — `atlas-app` consumes all packages;
-packages have minimal mutual coupling.
+`apps/atlas-app` uses every package. The packages depend on few others.
 
-```mermaid
-graph LR
-    A[atlas-app<br/>Editor SPA] --> G[geo]
-    A --> B[basemap]
-    A --> T[tools]
-    A --> D[data]
-    A --> P[protocol]
-    A --> E[excalidraw]
-    S[storage<br/>Fastify API] -.-> storage
-    R[realtime<br/>WS relay] -.-> ws
-```
-
-| Subsystem                  | Path                                                   | Boundary                       |
-| -------------------------- | ------------------------------------------------------ | ------------------------------ |
-| Editor SPA (hub)           | `code/apps/atlas-app`                                  | Porous — consumes all          |
-| Vendored Excalidraw Kernel | `code/packages/{excalidraw,element,math,common,utils}` | Tight — self-contained fork    |
-| Geospatial Engine          | `code/packages/geo`                                    | Tight — pure functions + types |
-| Drawing Tools              | `code/packages/tools`                                  | Loose — 8 independent tools    |
-| Map Renderer               | `code/packages/basemap`                                | Loose — 4 concerns             |
-| Data Interchange           | `code/packages/data`                                   | Loose — I/O + Yjs + geocoding  |
-| Collaboration Protocol     | `code/packages/protocol`                               | Tight — pure types             |
-| Storage Server             | `code/apps/storage`                                    | Tight — zero atlas imports     |
-| Collaboration Relay        | `code/apps/realtime`                                   | Tight — opaque relay           |
-| CLI Tooling                | `code/packages/cli`                                    | Tight — 2 commands             |
-
-Full system map: [`docs/architecture/overview.md`](docs/architecture/overview.md).
+| Part            | Path                                                   | What it does                                         |
+| --------------- | ------------------------------------------------------ | ---------------------------------------------------- |
+| Editor          | `code/apps/atlas-app`                                  | The editor, the read-only viewer and the embed       |
+| Excalidraw fork | `code/packages/{excalidraw,element,math,common,utils}` | The drawing engine. Owned outright, not tracked      |
+| Geo             | `code/packages/geo`                                    | World coordinates and measurement. Pure functions    |
+| Map             | `code/packages/basemap`                                | MapLibre host, basemaps, camera bridge, layer styles |
+| Tools           | `code/packages/tools`                                  | The pin tool, the measure session, unit text         |
+| Data            | `code/packages/data`                                   | `.atlasdraw` read and write, importers, exporters    |
+| Protocol        | `code/packages/protocol`                               | Room links and the comment schema                    |
+| Storage server  | `code/apps/storage`                                    | Fastify HTTP API: maps, write keys, share links      |
+| Relay           | `code/apps/realtime`                                   | One Y.Doc per room over y-websocket, saved to SQLite |
+| CLI             | `code/packages/cli`                                    | `lint` and `convert`. Frozen (ADR-0016)              |
 
 <details>
 <summary>Repository layout</summary>
 
 ```
 atlasdraw/
-├── code/                    # Yarn-workspace monorepo (forked from excalidraw/excalidraw)
+├── code/                    # Yarn 4 workspace
 │   ├── apps/
-│   │   ├── atlas-app/       # editor SPA — Vite + React 19
-│   │   ├── realtime/        # WebSocket relay — Socket.IO + y-websocket
-│   │   └── storage/         # Fastify HTTP API — map metadata + blobs
+│   │   ├── atlas-app/       # editor — Vite + React 19
+│   │   ├── realtime/        # relay — ws + y-protocols + SQLite
+│   │   └── storage/         # HTTP API — Fastify
 │   ├── packages/
-│   │   ├── geo/             # coord transforms, GeoJSON adapters
-│   │   ├── basemap/         # MapLibre wrapper, style registry
-│   │   ├── data/            # .atlasdraw / GeoJSON / KML / CSV / SHP I/O
-│   │   ├── tools/           # geo-aware drawing tools
-│   │   ├── protocol/        # collaboration message types
-│   │   ├── cli/             # headless lint / convert (frozen, ADR-0016)
-│   │   ├── excalidraw/      # vendored upstream (light patches)
-│   │   ├── element/         # vendored upstream
-│   │   ├── math/            # vendored upstream
-│   │   ├── common/          # vendored upstream
-│   │   └── utils/           # vendored upstream
+│   │   ├── geo/ basemap/ data/ tools/ protocol/ cli/
+│   │   └── excalidraw/ element/ math/ common/ utils/   # the fork
+│   ├── decisions/           # ADR 0001–0010: fork, licence, early design
 │   └── LICENSING.md
-├── infra/                   # docker-compose + Caddy configs
-├── docs/                    # architecture, ADRs, self-host, plans
-├── PRD.md
-├── atlasdraw-tech-spec.md
-├── VENDOR.md
-├── CHANGELOG.md
-└── CLAUDE.md
+├── docs/
+│   ├── architecture/adr/    # ADR 0013 and later: product decisions
+│   ├── self-host/           # operator guides
+│   ├── performance/
+│   └── security/
+├── infra/                   # Compose files, Caddyfile, Makefile
+├── PRD.md  PRFAQ.md  atlasdraw-tech-spec.md
+└── SECURITY.md  CHANGELOG.md  VENDOR.md
 ```
 
-The upstream Excalidraw fork is **inlined** under `code/` as plain
-files (no submodule). Resync procedure in [`VENDOR.md`](VENDOR.md).
+The Excalidraw fork is plain files in `code/`, with no submodule. The fork
+point, and how to port a security fix, are in [`VENDOR.md`](VENDOR.md).
 
 </details>
 
 ## Tech stack
 
-| Concern                         | Choice                              | Version               |
-| ------------------------------- | ----------------------------------- | --------------------- |
-| UI runtime                      | React                               | `19.0.0`              |
-| Drawing surface                 | `@excalidraw/excalidraw` (vendored) | `0.18.0`              |
-| Basemap                         | `maplibre-gl`                       | `^4.7.1`              |
-| Realtime rooms (doc + presence) | `yjs` + `y-websocket`               | `^13.6.20` / `^2.0.0` |
-| State                           | `zustand`                           | `5.0.13`              |
-| Local persistence               | `idb` (IndexedDB)                   | `^8.0.0`              |
-| Schemas                         | `zod`                               | `^3.22.0`             |
-| Accessibility                   | `@react-aria/focus`                 | `^3.20.0`             |
-| Print/PDF                       | `pdf-lib`                           | `^1.17.1`             |
-| Build                           | `vite`                              | `^5.0.12`             |
-| Tests                           | `vitest`, `@playwright/test`        | `3.0.6` / `^1.48.0`   |
-
-Server (`apps/storage`): Fastify, optional Postgres / SQLite, optional MinIO / S3.
-
-## Features
-
-- **Drawing + map composition.** MapLibre + Excalidraw with `CoordinateSync`
-  reprojecting elements on every camera move. Drawing tools retuned for maps:
-  pin, polygon, polyline/route, freehand, text, arrow, rectangle, circle.
-  `LayerPanel` separates annotations from GeoJSON-backed data layers.
-- **File format + I/O.** `.atlasdraw` bundle format (scene JSON + per-layer
-  GeoJSON + manifest). Import GeoJSON, CSV, Shapefile. Export PNG, PDF,
-  GeoJSON, `.atlasdraw`.
-- **Real-time collaboration.** WebSocket relay with Socket.IO presence +
-  y-websocket CRDT. Cursor presence, `MAP_CAMERA_UPDATE` events, anchored
-  comments on a per-room second `Y.Doc`.
-- **Maputnik style editing** — modal round-tripping edits into `@atlasdraw/basemap`.
-- **Categorical + graduated layer styling** with deterministic MapLibre
-  expression output.
-- **Print-to-PDF** layout panel built on `pdf-lib`.
-- **Excalidraw asset library** — `.excalidrawlib` reader with curated fixtures.
-- **Accessibility** — `@react-aria/focus` keyboard nav, `FocusTrap`, `AriaAnnouncer`.
-
-Full list and per-phase recaps: [`CHANGELOG.md`](CHANGELOG.md).
-
-### Out of scope for 1.0
-
-- AtlasdrawAPI and a scriptable embed SDK (ADR-0016). A read-only map embeds
-  through the `/embed` route.
-- Felt importer
-- Phase 7 plugin sandbox
+| Concern         | Choice                                        |
+| --------------- | --------------------------------------------- |
+| UI              | React 19                                      |
+| Drawing         | Excalidraw fork (`@atlasdraw/excalidraw`)     |
+| Map             | `maplibre-gl` 4, PMTiles                      |
+| Live rooms      | `yjs`, `y-websocket`                          |
+| State           | `zustand`                                     |
+| Local saves     | IndexedDB (`idb`)                             |
+| Schemas         | `zod`                                         |
+| PDF             | `pdf-lib`                                     |
+| Build and tests | Vite 5, Vitest 3, Playwright                  |
+| Storage server  | Fastify; SQLite and files, or Postgres and S3 |
+| Relay           | `ws`, `y-protocols`, `better-sqlite3`         |
 
 ## Development
 
-```bash
-cd code
-yarn install
-yarn --cwd apps/atlas-app dev              # dev server on http://localhost:5173
+Run these from `code/`:
 
-# Common commands
-yarn --cwd apps/atlas-app build            # production bundle
-yarn --cwd apps/atlas-app test             # vitest
-yarn --cwd apps/atlas-app test:typecheck   # TypeScript
-yarn --cwd apps/atlas-app e2e              # Playwright (chromium)
-yarn test:all                               # full suite (typecheck + lint + format + vitest)
+```bash
+yarn start                                # editor dev server, port 5174
+yarn build                                # production build of the editor
+yarn test:typecheck                       # TypeScript, all workspaces
+yarn test --watch=false                   # Vitest, all workspaces
+yarn test:all                             # typecheck, lint, prettier, vitest
+yarn workspace @atlasdraw/atlas-app e2e   # Playwright, chromium
 ```
 
 ## Contributing
 
-See [`code/CONTRIBUTING.md`](code/CONTRIBUTING.md) for contribution guidelines,
-local setup, and pull request expectations.
-
-Architecture decisions are recorded as ADRs in
-[`docs/decisions/`](docs/decisions/). For larger features, start with a
-discussion issue before writing code.
+Read [`code/CONTRIBUTING.md`](code/CONTRIBUTING.md). Decisions are ADRs in
+[`code/decisions/`](code/decisions/) and
+[`docs/architecture/adr/`](docs/architecture/adr/). The two series use some
+of the same numbers, so cite an ADR by its file path.
 
 ## Licensing
 
-Atlasdraw ships under three open-source licenses; the split is deliberate.
-Authoritative table: [`code/LICENSING.md`](code/LICENSING.md).
+Atlasdraw uses three open-source licences. The full table is
+[`code/LICENSING.md`](code/LICENSING.md).
 
-| Component                                                  | License        |
-| ---------------------------------------------------------- | -------------- |
-| `apps/atlas-app`                                           | MIT            |
-| `apps/realtime`, `apps/storage`                            | AGPL-3.0-only  |
-| `packages/cli`, `packages/geo`, `packages/data`            | MIT            |
-| `packages/basemap`, `packages/tools`                       | MPL-2.0        |
-| Vendored `packages/{excalidraw,element,math,common,utils}` | MIT (upstream) |
+| Component                                         | Licence        |
+| ------------------------------------------------- | -------------- |
+| `apps/atlas-app`, `apps/realtime`, `apps/storage` | AGPL-3.0-only  |
+| `packages/{cli,geo,data,protocol}`                | MIT            |
+| `packages/{basemap,tools}`                        | MPL-2.0        |
+| The fork: `packages/{excalidraw,element,math,common,utils}` | MIT (upstream) |
 
-License files: [`code/LICENSE-AGPL`](code/LICENSE-AGPL),
+Licence files: [`code/LICENSE-AGPL`](code/LICENSE-AGPL),
 [`code/LICENSE-MIT`](code/LICENSE-MIT),
 [`code/LICENSE-MPL`](code/LICENSE-MPL),
 [`code/LICENSE-EXCALIDRAW-UPSTREAM`](code/LICENSE-EXCALIDRAW-UPSTREAM).
 
 ## Further reading
 
-- [`PRD.md`](PRD.md) — product requirements
-- [`atlasdraw-tech-spec.md`](atlasdraw-tech-spec.md) — coordinate sync, scale modes, phase plan
-- [`docs/architecture/overview.md`](docs/architecture/overview.md) — architecture overview
-- [`docs/architecture/subsystems.md`](docs/architecture/subsystems.md) — per-subsystem responsibilities + contracts
-- [`docs/decisions/`](docs/decisions/) — ADRs
-- [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-phase implementation plans
-- [`VENDOR.md`](VENDOR.md) — upstream fork pin and resync procedure
+- [`PRD.md`](PRD.md) — product requirements, and what has shipped
+- [`PRFAQ.md`](PRFAQ.md) — the read-only map embed
+- [`atlasdraw-tech-spec.md`](atlasdraw-tech-spec.md) — the first engineering
+  spec. ADR-0015 replaces its coordinate model.
+- [`SECURITY.md`](SECURITY.md) — trust-boundary findings and their fixes
+- [`VENDOR.md`](VENDOR.md) — the Excalidraw fork point
 - [`CHANGELOG.md`](CHANGELOG.md) — release history
