@@ -144,6 +144,63 @@ describe("CameraBridge", () => {
     expect(map.center.lng).toBeGreaterThan(before.lng);
   });
 
+  it("an echo that Excalidraw normalised is still the echo", () => {
+    // Some Excalidraw paths store the zoom through getNormalizedZoom
+    // (scene/normalize.ts): clamped to [0.1, 30] and rounded to 6 decimals.
+    // This test's frame is at zoom 12, so at map zoom 12.3 the zoom value is
+    // 2^0.3, and the rounding changes it by about 3e-7 of itself. That is
+    // the bridge's own write, not a move.
+    const { map, scene, bridge } = setup();
+    const normalize = (z: number) =>
+      Math.min(30, Math.max(0.1, Math.round(z * 1e6) / 1e6));
+    scene.updateScene = ({ appState }) => {
+      scene.writes++;
+      scene.setViewport(
+        appState.scrollX,
+        appState.scrollY,
+        normalize(appState.zoom.value),
+      );
+    };
+    bridge.resetStats();
+    map.zoom = 12.3;
+    map.fire();
+    expect(scene.state.zoom.value).toBe(1.231144);
+    expect(map.jumps).toBe(0);
+    expect(map.zoom).toBe(12.3);
+    expect(bridge.stats).toEqual({
+      mapToScene: 1,
+      sceneToMap: 0,
+      suppressed: 1,
+    });
+  });
+
+  it("a scroll a ten-thousandth of a pixel off is still the echo", () => {
+    const { map, scene, bridge } = setup();
+    scene.updateScene = ({ appState }) => {
+      scene.writes++;
+      const z = appState.zoom.value;
+      scene.setViewport(
+        appState.scrollX + 1e-4 / z,
+        appState.scrollY - 1e-4 / z,
+        z,
+      );
+    };
+    bridge.resetStats();
+    map.center = { lng: 13.41, lat: 52.49 };
+    map.fire();
+    expect(map.jumps).toBe(0);
+    expect(bridge.stats.suppressed).toBe(1);
+  });
+
+  it("a move of one pixel is Excalidraw's own and reaches the map", () => {
+    const { map, scene, bridge } = setup();
+    bridge.resetStats();
+    const z = scene.state.zoom.value;
+    scene.setViewport(scene.state.scrollX + 1 / z, scene.state.scrollY, z);
+    expect(map.jumps).toBe(1);
+    expect(bridge.stats.sceneToMap).toBe(1);
+  });
+
   it("a moving map with a stuck scene never loops", () => {
     const { map, bridge } = setup();
     bridge.resetStats();
