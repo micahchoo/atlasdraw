@@ -1,6 +1,14 @@
 # Boot payload audit — atlas-app
 
 Date: 2026-09-13.
+
+> **Update (2026-10-01).** The numbers below are from 2026-09-13 and were not
+> measured again. Three things changed since: `ShareView` and `BillingPage`
+> are deleted (`App.tsx` lazy-loads two route roots, `MapEditor` and
+> `EmbedView`); `socket.io-client` is gone; and `y-websocket` is imported by
+> `state/room.ts`, which the editor imports. The cache policy and
+> the four serving surfaces are unchanged
+> (`.claude/rules/static-serving-cache-policy.md`).
 Method: checked atlas-app's build and serving config against the ranked fix
 list at `https://makefaster.dev/data/improvements.json` (67 fixes, 1343
 applications). Rank numbers below refer to that list.
@@ -177,10 +185,9 @@ page errors. Gate: `tsc --noEmit` clean, eslint clean, prettier clean,
   reverse-proxies rather than serving files, and Vercel and Pages compress on
   their own. Needs a brotli-capable image or moving static serving to Caddy's
   `file_server`. Not built, because it would have no consumer.
-- **`socket.io-client` and `y-websocket`** still load on boot even when
-  `VITE_REALTIME_ENABLED` is false. They sit in `state/sceneChannel.ts` and
-  `state/comments.ts`, not behind a component, so deferring them means moving
-  a module seam rather than wrapping a render site.
+- **`y-websocket`** loads with the editor even when rooms are off. It is
+  imported by `state/room.ts`. (`socket.io-client` was removed on
+  2026-10-01.)
 - The shared chunk is named `lz-string-*.js` after an incidental module while
   holding Excalidraw and MapLibre. Cosmetic, but it misleads anyone reading a
   waterfall.
