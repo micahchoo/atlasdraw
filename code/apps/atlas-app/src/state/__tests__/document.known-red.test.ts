@@ -64,7 +64,7 @@ import type { FeatureCollection } from "geojson";
 
 import type maplibregl from "maplibre-gl";
 
-// usePersistenceWiring's own IDB name and slot (state/persistence.ts).
+// usePersistenceWiring's own IDB name (state/persistence.ts).
 const DB_NAME = "atlasdraw-autosave";
 
 const NOTIFY = { error: () => {} };
@@ -119,10 +119,14 @@ async function seedAutosave(doc: AtlasdrawDocument): Promise<void> {
   await seed.close();
 }
 
-/** The raw bytes currently in the autosave slot. */
+/**
+ * The raw bytes of the autosaved document a reload opens. Each document has
+ * its own slot, `doc:<id>`; `lastOpened` names the one saved last.
+ */
 async function autosaveBytes(): Promise<Uint8Array> {
   const db = await openDB(DB_NAME, 1);
-  const stored = (await db.get("state", "current")) as { bytes: Uint8Array };
+  const id = (await db.get("state", "lastOpened")) as string;
+  const stored = (await db.get("state", `doc:${id}`)) as { bytes: Uint8Array };
   db.close();
   return new Uint8Array(stored.bytes);
 }
