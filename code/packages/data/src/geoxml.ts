@@ -17,6 +17,8 @@
 import { gpx, kmlWithFolders } from "@tmcw/togeojson";
 import JSZip from "jszip";
 
+import { DOMParser as XmlDomParser } from "@xmldom/xmldom";
+
 import type { F, Folder } from "@tmcw/togeojson";
 import type { Feature, FeatureCollection } from "geojson";
 
@@ -196,23 +198,47 @@ function keepDrawable(
 }
 
 function parseXml(text: string, format: GeoXmlFormat): Document {
-  if (typeof DOMParser === "undefined") {
-    throw new Error(
-      `${format} import needs a DOMParser. Run it in a browser, or install one on globalThis.`,
-    );
-  }
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  const error = doc.getElementsByTagName("parsererror")[0];
-  if (error) {
-    const detail = (error.textContent ?? "").trim().split("\n")[0];
-    throw new GeoXmlParseError(
+  const malformed = (detail: string) =>
+    new GeoXmlParseError(
       format,
       "MALFORMED_XML",
       `The file is not well-formed XML${detail ? ` (${detail})` : ""}. ` +
         `Repair the file, or export it again from the program that made it.`,
     );
+  // A browser page has DOMParser. A Web Worker (where import runs) and Node
+  // do not, so they use xmldom, which togeojson also accepts.
+  if (typeof DOMParser !== "undefined") {
+    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const error = doc.getElementsByTagName("parsererror")[0];
+    if (error) {
+      throw malformed((error.textContent ?? "").trim().split("\n")[0]);
+    }
+    return doc;
   }
-  return doc;
+  // xmldom reports an unclosed tag only as a warning; a browser refuses the
+  // file. Refuse it here too, so both paths agree.
+  let problem: string | null = null;
+  const doc = new XmlDomParser({
+    errorHandler: {
+      warning: (msg: string) => {
+        problem ??= msg;
+      },
+      error: (msg: string) => {
+        problem ??= msg;
+      },
+      fatalError: (msg: string) => {
+        problem ??= msg;
+      },
+    },
+  }).parseFromString(text, "application/xml");
+  if (problem !== null || !doc.documentElement) {
+    const detail = String(problem ?? "")
+      .replace(/^\[xmldom \w+\]\s*/, "")
+      .trim()
+      .split("\n")[0];
+    throw malformed(detail);
+  }
+  return doc as unknown as Document;
 }
 
 /** Make sure that the root element is `<kml>` or `<gpx>`. */

@@ -169,6 +169,7 @@ __metadata:
     "@types/geojson": "npm:*"
     "@types/jsdom": "npm:^21"
     "@types/papaparse": "npm:^5.3.0"
+    "@xmldom/xmldom": "npm:^0.8.3"
     geotiff: "npm:3.0.5"
     jsdom: "npm:22.1.0"
     jszip: "npm:^3.10.0"
