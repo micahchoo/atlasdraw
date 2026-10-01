@@ -57,7 +57,6 @@
 
 import { useEffect, useRef } from "react";
 
-import { isGeoCustomData, type GeoCustomData } from "@atlasdraw/geo";
 import { compilePaint } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
@@ -71,6 +70,7 @@ import {
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
 import { useRasterImageStore } from "../state/useRasterImageStore";
 
+import { generateLayerLabel } from "../state/annotations";
 import { inferGeometryType } from "../lib/geometryType";
 
 import {
@@ -130,78 +130,6 @@ export interface SceneDiffDeps {
    * onChange, so knownIds alone can't prevent duplicates.
    */
   existsInRegistry: (id: string) => boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Layer label generation
-// ---------------------------------------------------------------------------
-
-/**
- * Human-readable name for each Excalidraw element type used in layer labels.
- */
-const TOOL_NAMES: Record<string, string> = {
-  rectangle: "Rectangle",
-  ellipse: "Ellipse",
-  diamond: "Diamond",
-  freedraw: "Freehand",
-  arrow: "Arrow",
-  line: "Line",
-  text: "Text",
-  image: "Image",
-  frame: "Frame",
-  embeddable: "Embed",
-  iframe: "Embed",
-  magicframe: "Frame",
-  selection: "Selection",
-};
-
-/** Extract the approximate center from a GeoCustomData anchor. */
-function geoCenter(customData: unknown): { lat: number; lng: number } | null {
-  if (!isGeoCustomData(customData)) {
-    return null;
-  }
-  const geo = (customData as GeoCustomData).geo;
-  switch (geo.kind) {
-    case "point":
-      return { lat: geo.lat, lng: geo.lng };
-    case "bbox":
-      return {
-        lat: (geo.north + geo.south) / 2,
-        lng: (geo.east + geo.west) / 2,
-      };
-    case "polyline": {
-      const first = geo.coordinates[0];
-      return first ? { lng: first[0], lat: first[1] } : null;
-    }
-  }
-}
-
-/** Format coordinates as "40.7°N, 74.0°W". */
-function formatLatLng(lat: number, lng: number): string {
-  const latDir = lat >= 0 ? "N" : "S";
-  const lngDir = lng >= 0 ? "E" : "W";
-  return `${Math.abs(lat).toFixed(1)}°${latDir}, ${Math.abs(lng).toFixed(
-    1,
-  )}°${lngDir}`;
-}
-
-/**
- * Generate a layer label from an element's type and optional geo-anchor data.
- *
- * With geo:  "Rectangle near 40.7°N, 74.0°W"
- * Without:   "Rectangle"
- * Unknown type without geo: element id.
- */
-export function generateLayerLabel(el: SyncSceneElement): string {
-  const typeName = el.type ? TOOL_NAMES[el.type] ?? el.type : null;
-  const center = geoCenter(el.customData);
-  if (typeName && center) {
-    return `${typeName} near ${formatLatLng(center.lat, center.lng)}`;
-  }
-  if (typeName) {
-    return typeName;
-  }
-  return el.id;
 }
 
 /**

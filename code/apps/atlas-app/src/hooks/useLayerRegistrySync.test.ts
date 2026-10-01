@@ -17,10 +17,10 @@ import { renderHook, cleanup } from "@testing-library/react";
 
 import { useLayerRegistryStore } from "../state/layerRegistry";
 import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import { generateLayerLabel } from "../state/annotations";
 
 import {
   buildSceneDiffHandler,
-  generateLayerLabel,
   applyVisibilityToScene,
   applyStyleToMap,
   diffVisibility,
