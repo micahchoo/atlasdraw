@@ -15,8 +15,8 @@
 //       text selection      → false
 //       multi-selection     → false
 //   - invoke `perform(elements, appState)` with the polygon fixture and
-//     assert the same downstream pipeline (registerDataLayer →
-//     map.addSource/addLayer → updateScene) the W-B test exercised.
+//     assert the downstream pipeline (a data layer added to the document →
+//     map.addSource/addLayer → updateScene).
 //   - assert the unregister fn returned by the API is invoked on unmount.
 
 import React from "react";

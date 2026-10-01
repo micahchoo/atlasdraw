@@ -92,7 +92,7 @@ const mockFakeExcalidrawAPI = {
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
   toggleSidebar: mockToggleSidebarSpy,
-  // W-C — MapEditor calls excalidrawAPI.registerContextMenuItem in a
+  // MapEditor calls excalidrawAPI.registerContextMenuItem in a
   // useEffect to wire the Convert action. Stub returns an unregister fn.
   registerContextMenuItem: vi.fn(() => vi.fn()),
   // Sidebar-tab fork — MapEditor mounts LayerPanel as a tab inside

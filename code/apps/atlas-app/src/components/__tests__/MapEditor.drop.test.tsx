@@ -109,7 +109,7 @@ vi.mock("@atlasdraw/basemap", () => ({
 // Stub <Excalidraw> — renders children (LayerPanel + MainMenu items) but
 // never wires the imperative API. MapEditor's drop handler doesn't touch
 // excalidrawAPI, so leaving it null is fine. We must export MainMenu and
-// Sidebar (consumed by W-B's MainMenu items + LayerPanel) as passthrough
+// Sidebar (consumed by the MainMenu items + LayerPanel) as passthrough
 // stubs or React throws "type is invalid" at mount.
 vi.mock("@atlasdraw/excalidraw", () => ({
   Excalidraw: ({
