@@ -1,37 +1,72 @@
-name: Bench CI gate
+name: CI
+
+# One workflow is the gate for everything that reaches main. Pages deploys
+# only after this workflow succeeds on main (see pages.yml).
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  check:
+    name: Typecheck, lint, format, unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      # Must precede setup-node: its yarn cache step shells out to yarn, and
+      # classic yarn rejects the packageManager: yarn@4 pin without corepack.
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn test:typecheck
+      - run: yarn test:code
+      - run: yarn test:other
+      - run: yarn test:falsifiable
+      - run: yarn test:app --watch=false
+
   bench:
+    name: Bench regression gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn workspace @atlasdraw/bench bench
+      - run: yarn workspace @atlasdraw/bench ci-gate
+
+  self-host:
+    name: Self-host images build and run
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Must precede setup-node: its `cache: yarn` step shells out to yarn to
-      # locate the cache folder, and classic yarn 1.22 errors on the
-      # `packageManager: yarn@4` pin unless corepack has already shimmed yarn.
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "yarn"
-          cache-dependency-path: code/yarn.lock
-
-      - name: Install dependencies
-        run: yarn install --immutable
-        working-directory: code
-
-      - name: Run Phase 2 bench scenarios
-        run: yarn workspace @atlasdraw/bench bench
-        working-directory: code
-
-      - name: Assert regression gate
-        run: yarn workspace @atlasdraw/bench ci-gate
-        working-directory: code
+      - name: Minimal stack (web + storage) serves and saves a map
+        run: infra/smoke-minimal.sh
+      - name: Realtime image builds and answers /health
+        run: |
+          docker build -f code/apps/realtime/Dockerfile -t atlasdraw-realtime .
+          docker run -d --name realtime -p 4001:4001 atlasdraw-realtime
+          for i in $(seq 1 30); do curl -fsS localhost:4001/health && exit 0; sleep 1; done
+          docker logs realtime; exit 1

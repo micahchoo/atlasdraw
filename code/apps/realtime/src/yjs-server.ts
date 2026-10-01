@@ -34,7 +34,7 @@
 import { WebSocketServer } from "ws";
 import { setupWSConnection, docs } from "y-websocket/bin/utils";
 
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 
 import type http from "http";
 

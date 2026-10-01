@@ -13,11 +13,11 @@ import http from "http";
 
 import { Server as SocketIOServer } from "socket.io";
 
-import { logger } from "./logger";
-import { registerHealth } from "./health";
-import { registerSocketIOHandlers } from "./socket-io-server";
-import { registerYjsHandler } from "./yjs-server";
-import { attachRedisAdapterIfConfigured } from "./redis-adapter";
+import { logger } from "./logger.js";
+import { registerHealth } from "./health.js";
+import { registerSocketIOHandlers } from "./socket-io-server.js";
+import { registerYjsHandler } from "./yjs-server.js";
+import { attachRedisAdapterIfConfigured } from "./redis-adapter.js";
 
 const PORT = parseInt(process.env.PORT ?? "4001", 10);
 

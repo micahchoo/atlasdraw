@@ -7,7 +7,7 @@
   "scripts": {
     "bench": "yarn run -T vitest run --config ./vitest.config.ts",
     "ci-gate": "tsx ci-gate.ts",
-    "test:typecheck": "tsc --noEmit",
+    "test:typecheck": "yarn run -T tsc -p .",
     "rebaseline": "tsx rebaseline.ts"
   },
   "dependencies": {

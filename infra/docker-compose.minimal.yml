@@ -3,8 +3,9 @@
 # no reverse proxy. Run: docker compose -f infra/docker-compose.minimal.yml up
 #
 # What you get:
-#   - localhost:3000 — atlas-app (web)
-#   - localhost:4000 — storage server (HTTP API, /health, /maps, /share)
+#   - localhost:3000 — atlas-app (web). The storage API is on the same origin
+#     at /api (nginx proxies it), so the browser never calls another origin.
+#   - storage — internal only; not published to the host.
 #   - One named volume for the storage server's data (sqlite db + blobs).
 #
 # Operator overrides via .env or shell env:
@@ -22,10 +23,12 @@ services:
       PORT: "4000"
       PUBLIC_URL: ${PUBLIC_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # One hop: the web container's nginx.
+      TRUST_PROXY: "1"
     volumes:
       - atlas-storage-data:/data
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     restart: unless-stopped
 
   web:
@@ -34,10 +37,11 @@ services:
       dockerfile: code/apps/atlas-app/Dockerfile
       args:
         VITE_BUILD_TARGET: hosted
-        VITE_STORAGE_BASE_URL: http://localhost:4000
+        VITE_STORAGE_BASE_URL: /api
         VITE_PMTILES_PATH: /data/world-low-zoom.pmtiles
     depends_on:
-      - storage
+      storage:
+        condition: service_healthy
     ports:
       - "3000:3000"
     restart: unless-stopped

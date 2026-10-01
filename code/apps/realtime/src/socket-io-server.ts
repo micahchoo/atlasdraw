@@ -28,10 +28,10 @@ import type {
   SceneSnapshotEvent,
 } from "@atlasdraw/protocol";
 
-import { checkRateLimit } from "./rate-limit";
+import { checkRateLimit } from "./rate-limit.js";
 
 import type { Server as SocketIOServer, Socket } from "socket.io";
-import type { RateLimitedEvent } from "./rate-limit";
+import type { RateLimitedEvent } from "./rate-limit.js";
 
 // ---------------------------------------------------------------------------
 // LWW dedup state – per-room per-sender

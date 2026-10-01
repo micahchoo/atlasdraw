@@ -1,9 +1,12 @@
 name: GitHub Pages deploy
 
+# Deploys only a commit that passed CI. A push to main runs CI first; this
+# workflow starts when CI finishes, and skips the deploy unless CI succeeded.
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +20,13 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit CI tested, not whatever main points at now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # Must precede setup-node: its `cache: yarn` step shells out to yarn to
       # locate the cache folder, and classic yarn 1.22 errors on the
@@ -30,7 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
           cache: "yarn"
           cache-dependency-path: code/yarn.lock
 

@@ -21,7 +21,8 @@
     "socket.io": "^4.7.0",
     "ws": "^8.21.1",
     "y-protocols": "^1.0.6",
-    "y-websocket": "^2.0.0"
+    "y-websocket": "^2.0.0",
+    "yjs": "^13.6.20"
   },
   "devDependencies": {
     "@types/node": "*",

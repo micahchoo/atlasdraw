@@ -11,7 +11,7 @@
 import { createAdapter } from "@socket.io/redis-adapter";
 import { Redis } from "ioredis";
 
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 
 import type { Server as SocketIOServer } from "socket.io";
 

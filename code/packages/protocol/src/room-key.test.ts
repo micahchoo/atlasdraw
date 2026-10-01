@@ -9,7 +9,7 @@ import {
   buildRoomFragment,
   generateRoomKey,
   parseRoomFragment,
-} from "./room-key";
+} from "./room-key.js";
 
 /** Base64url-encode a Uint8Array (no padding). Test-only helper. */
 function bytesToBase64url(bytes: Uint8Array): string {

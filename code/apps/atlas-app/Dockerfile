@@ -6,15 +6,17 @@ ARG VITE_REALTIME_ENABLED=false
 ARG VITE_REALTIME_WS_URL=
 
 # --- build stage ---
+# Build from the repo root:  docker build -f code/apps/atlas-app/Dockerfile .
+# Yarn 4 installs against the whole workspace graph, so copy all of code/
+# (trimmed by /.dockerignore).
 FROM node:20-bookworm-slim AS build
-WORKDIR /repo
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
-COPY code/package.json code/yarn.lock ./code/
-COPY code/apps/atlas-app/package.json ./code/apps/atlas-app/
-COPY code/packages ./code/packages
 WORKDIR /repo/code
-RUN yarn install --frozen-lockfile
-COPY code/apps/atlas-app ./apps/atlas-app
+COPY code/ ./
+RUN yarn install --immutable
 ARG VITE_BUILD_TARGET
 ARG VITE_STORAGE_BASE_URL
 ARG VITE_PMTILES_PATH

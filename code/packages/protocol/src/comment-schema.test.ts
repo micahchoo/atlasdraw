@@ -7,7 +7,7 @@ import {
   buildCommentsDocPath,
   COMMENT_SCHEMA_VERSION,
   COMMENTS_ARRAY_KEY,
-} from "./comment-schema";
+} from "./comment-schema.js";
 
 describe("comment-schema", () => {
   it("exports a stable schema version literal", () => {

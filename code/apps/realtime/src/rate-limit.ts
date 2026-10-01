@@ -15,7 +15,7 @@
 // byte length only (Buffer.byteLength of the serialized JSON), never the
 // content.
 
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 
 import type { Socket } from "socket.io";
 

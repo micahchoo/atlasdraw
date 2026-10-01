@@ -1,21 +1,35 @@
 {
+  "extends": "../packages/tsconfig.base.json",
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "emitDeclarationOnly": false,
     "types": ["vitest/globals", "node"],
     "baseUrl": ".",
     "paths": {
+      "@atlasdraw/common": ["../packages/common/dist/types/common/src/index.d.ts"],
+      "@atlasdraw/common/*": ["../packages/common/dist/types/common/src/*"],
+      "@atlasdraw/element": ["../packages/element/dist/types/element/src/index.d.ts"],
+      "@atlasdraw/element/*": ["../packages/element/dist/types/element/src/*"],
+      "@atlasdraw/excalidraw": ["../packages/excalidraw/dist/types/excalidraw/index.d.ts"],
+      "@atlasdraw/excalidraw/*": ["../packages/excalidraw/dist/types/excalidraw/*"],
+      "@atlasdraw/math": ["../packages/math/dist/types/math/src/index.d.ts"],
+      "@atlasdraw/math/*": ["../packages/math/dist/types/math/src/*"],
+      "@atlasdraw/utils": ["../packages/utils/dist/types/utils/src/index.d.ts"],
+      "@atlasdraw/utils/*": ["../packages/utils/dist/types/utils/src/*"],
       "@atlasdraw/data": ["../packages/data/src/index.ts"],
       "@atlasdraw/geo": ["../packages/geo/src/index.ts"]
     }
   },
-  "include": ["scenarios/**/*.ts", "fixtures/**/*.ts", "vitest.config.ts", "ci-gate.ts"]
+  "include": ["scenarios/**/*.ts", "fixtures/**/*.ts", "*.ts", "../packages/data/src/shpjs.d.ts"]
 }

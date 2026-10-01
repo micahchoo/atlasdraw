@@ -1,0 +1,15 @@
+# Build context is the repo root (the per-app Dockerfiles live under code/apps/*
+# and are built with `context: ..` from infra/). Keep the context to sources.
+.git
+**/node_modules
+**/dist
+**/dev-dist
+**/coverage
+**/test-results
+**/playwright-report
+code/.yarn/cache
+code/.yarn/install-state.gz
+code/bench/results/current
+.agents
+.playwright
+.playwright-cli

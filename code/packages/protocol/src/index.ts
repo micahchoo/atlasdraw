@@ -14,21 +14,21 @@ export type {
   MapCameraPayload,
   CursorPayload,
   RealtimeConfig,
-} from "./realtime-events";
+} from "./realtime-events.js";
 
-export type { AwarenessState } from "./realtime-events";
-export type { RoomKey } from "./room-key";
+export type { AwarenessState } from "./realtime-events.js";
+export type { RoomKey } from "./room-key.js";
 export {
   parseRoomFragment,
   generateRoomKey,
   buildRoomFragment,
-} from "./room-key";
+} from "./room-key.js";
 
 // Phase 6 A2 — anchored-comment Yjs schema (separate Y.Doc from data layer).
-export type { CommentAnchor, CommentSchemaV1 } from "./comment-schema";
+export type { CommentAnchor, CommentSchemaV1 } from "./comment-schema.js";
 export {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
   buildCommentsDocPath,
   normalizeAnchor,
-} from "./comment-schema";
+} from "./comment-schema.js";
