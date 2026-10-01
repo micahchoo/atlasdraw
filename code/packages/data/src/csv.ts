@@ -154,9 +154,9 @@ export async function parseCSV(
   const addressCol = headers.find((h) => ADDRESS_NAME_RE.test(h));
   const hasCoordCols = latCol !== null && lngCol !== null && latCol !== lngCol;
 
-  // A8: if there are no coord columns but a geocoder + address column are
+  // If there are no coord columns but a geocoder + address column are
   // available, fall through to the geocoder pass instead of throwing.
-  // Without a geocoder, behaviour matches pre-A8 (throw).
+  // Without a geocoder, throw.
   if (!hasCoordCols && !(opts?.geocoder && addressCol !== undefined)) {
     throw new CSVParseError(
       "NO_COORD_COLUMNS",
@@ -205,8 +205,7 @@ export async function parseCSV(
     }
 
     // Missing/invalid coords. If a geocoder is wired and we have an
-    // address value, defer to pass 2. Otherwise the row is dropped
-    // (matches pre-A8 behaviour).
+    // address value, defer to pass 2. Otherwise the row is dropped.
     if (opts?.geocoder && addressCol !== undefined) {
       const addr = row[addressCol];
       if (typeof addr === "string" && addr.trim() !== "") {

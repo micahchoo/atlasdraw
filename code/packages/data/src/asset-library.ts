@@ -105,8 +105,8 @@ export function parseLibraryFile(
  *
  * Sourced from `code/packages/data/fixtures/libraries/*.excalidrawlib`.
  * Each fixture has a sibling `LICENSE.txt` declaring SPDX (MIT / ISC /
- * CC0-1.0 / Unlicense only — enforced by `scripts/check-license-libraries.sh`
- * per OQ7).
+ * CC0-1.0 / Unlicense only — enforced by the repository's
+ * `scripts/check-license-libraries.sh`).
  *
  * Loading strategy:
  *  - Vite build (atlas-app): `import.meta.glob(..., { eager: true, query: '?raw', import: 'default' })`

@@ -50,7 +50,7 @@ const DataLayerEntrySchema = z.object({
   // older files do not have it; a reader then takes it from the GeoJSON.
   geometryKind: z.enum(["fill", "line", "circle"]).optional(),
   style: LayerStyleSchema,
-  // Path within the zip to the layer's GeoJSON. Atlasdraw.ts writer follows
+  // Path within the zip to the layer's GeoJSON. The atlasdraw.ts writer follows
   // the convention `data/layer-<id>.geojson`.
   source: z.string().min(1),
   // Import provenance — the original file name and how many input records the
