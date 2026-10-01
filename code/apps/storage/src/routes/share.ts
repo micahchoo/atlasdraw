@@ -11,6 +11,7 @@
 
 import { ID_RE } from "../constants";
 
+import { isBlobBody, sendBlob } from "./blob-body";
 import { REFUSAL, writeKeyOrRefuse } from "./write-key";
 
 import type { FastifyInstance } from "fastify";
@@ -32,7 +33,7 @@ function expiryOf(body: unknown): number | null | "invalid" {
   if (body === undefined || body === null) {
     return null;
   }
-  if (typeof body !== "object") {
+  if (typeof body !== "object" || Array.isArray(body) || isBlobBody(body)) {
     return "invalid";
   }
   const days = (body as { expires_in_days?: unknown }).expires_in_days;
@@ -118,11 +119,7 @@ export function registerShareRoutes(
       }
       // no-cache: the bytes change on every save and a revoke ends the link,
       // so a cache must ask again each time.
-      return reply
-        .code(200)
-        .header("Content-Type", "application/octet-stream")
-        .header("Cache-Control", "no-cache")
-        .send(result.bytes);
+      return sendBlob(reply, result.blob, "no-cache");
     },
   );
 }

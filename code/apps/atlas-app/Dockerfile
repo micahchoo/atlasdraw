@@ -9,7 +9,9 @@ ARG VITE_REALTIME_WS_URL=
 # Build from the repo root:  docker build -f code/apps/atlas-app/Dockerfile .
 # Yarn 4 installs against the whole workspace graph, so copy all of code/
 # (trimmed by /.dockerignore).
-FROM node:20-bookworm-slim AS build
+# The build stage runs on the builder's own platform: its output is static
+# files, so a multi-platform build needs no emulated Node.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
@@ -30,7 +32,8 @@ ENV VITE_REALTIME_WS_URL=$VITE_REALTIME_WS_URL
 RUN yarn workspace @atlasdraw/atlas-app build
 
 # --- runtime stage ---
-FROM nginx:alpine AS runtime
+# nginx-unprivileged runs as uid 101 and listens on 3000 without root.
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 COPY --from=build /repo/code/apps/atlas-app/dist /usr/share/nginx/html
 # Serving policy (SPA fallback + cache classes) lives in a real conf file, not
 # a printf: the Cache-Control values are reviewable and greppable there.

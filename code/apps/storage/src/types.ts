@@ -3,6 +3,8 @@
 // service owns the policy: write keys, expiry, the size cap. An adapter only
 // stores rows and bytes.
 
+import type { Readable } from "node:stream";
+
 /**
  * Selects which adapter the storage server loads at startup.
  * - `postgres-minio`: full stack (Postgres for metadata, MinIO/S3 for blobs).
@@ -41,36 +43,98 @@ export interface ShareToken {
 export interface SweepResult {
   tokens: number;
   maps: number;
+  /** Blobs that no row pointed to. */
+  orphans: number;
 }
 
+export interface SweepOptions {
+  /**
+   * A map stored before write keys (no key) is kept until this long after
+   * the upgrade that added keys (migration 003), then swept once no live
+   * token reads it. LEGACY_MAP_GRACE_DAYS.
+   */
+  legacyGraceMs: number;
+  /**
+   * A blob no row points to, and a size reservation, older than this are
+   * work that a crash cut off: the sweep removes them. Longer than any
+   * request may take.
+   */
+  orphanGraceMs: number;
+}
+
+export interface WriteOptions {
+  /**
+   * The cap on stored bytes plus the bytes of writes in flight. A write
+   * that would pass it rejects with `storage full` and stores nothing.
+   * 0 or absent: no cap.
+   */
+  maxTotalBytes?: number;
+}
+
+/**
+ * Bytes on their way into the store: a stream and its announced length. The
+ * adapter stores exactly `size` bytes or nothing: a stream that ends early or
+ * runs long rejects with `BodySizeError` (lib/body.ts).
+ */
+export interface BlobBody {
+  stream: Readable;
+  size: number;
+}
+
+/** Bytes on their way out: a stream to pipe to the client, and its length. */
+export interface BlobRead {
+  stream: Readable;
+  size: number;
+}
+
+/**
+ * Writes and the size cap. Every write streams the bytes to a NEW blob, then
+ * swaps the row's pointer in one checked transaction, then deletes the old
+ * blob. The bytes are reserved against the cap before the first one is
+ * written, and the reservation and the row change commit together. So a
+ * crash at any point leaves the old map whole, the count exact, and at most
+ * an orphan blob and a stale reservation that the sweep removes.
+ */
 export interface StorageClient {
-  createMap(blob: Buffer, writeKeyHash: string | null): Promise<MapRecord>;
+  createMap(
+    body: BlobBody,
+    writeKeyHash: string | null,
+    opts?: WriteOptions,
+  ): Promise<MapRecord>;
   getMap(id: string): Promise<MapRecord | null>;
-  /** Replaces the bytes. Rejects with `not found:` for an unknown id. */
-  updateMap(id: string, blob: Buffer): Promise<MapRecord>;
+  /**
+   * Replaces the bytes. Rejects with `not found:` for an unknown id, also
+   * when the map is deleted while the bytes arrive; the new blob is removed.
+   */
+  updateMap(
+    id: string,
+    body: BlobBody,
+    opts?: WriteOptions,
+  ): Promise<MapRecord>;
   /** Rejects with `not found:` for an unknown map. */
   createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
   /** Deletes the token if it belongs to `mapId`. True if a row went. */
   deleteShareToken(mapId: string, token: string): Promise<boolean>;
   /**
-   * The bytes of a map. Null for a malformed id, a missing row, or a row
-   * whose blob is gone.
+   * The bytes of a map, as a stream. Null for a malformed id, a missing row,
+   * or a row whose blob is gone. The caller must consume or destroy it.
    */
-  getBlob(id: string): Promise<Buffer | null>;
+  getBlob(id: string): Promise<BlobRead | null>;
   /**
    * Deletes the map, its share tokens and its bytes. False when no map has
    * the id.
    */
   deleteMap(id: string): Promise<boolean>;
-  /** The sum of `byte_size` over every stored map. */
+  /** The sum of `byte_size` over every stored map (a counter, not a scan). */
   totalBytes(): Promise<number>;
   /**
-   * Deletes every share token that expired at or before `now`, then every
-   * map that has no write key and no remaining token, with its bytes. Such a
-   * map can never be read or written again.
+   * Deletes every share token that expired at or before `now`; then, once
+   * the legacy grace has passed, every map that has no write key and no
+   * remaining token, with its bytes; then blobs no row points to and stale
+   * reservations, both older than the orphan grace.
    */
-  sweep(now: Date): Promise<SweepResult>;
+  sweep(now: Date, opts: SweepOptions): Promise<SweepResult>;
 
   /**
    * Resolves when the adapter's dependencies answer right now: the database,

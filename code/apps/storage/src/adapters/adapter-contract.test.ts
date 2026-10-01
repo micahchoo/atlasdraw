@@ -3,33 +3,72 @@
 // these tests also prove that their queries match the migrated schema.
 //
 // The Postgres half runs only when ATLASDRAW_TEST_PG_URL names a database.
-// Each test works in a private schema that it drops afterwards. S3 is an
-// in-memory bucket here: this suite checks the SQL, not the blob store.
+// Each test works in a private schema that it drops afterwards. The blob
+// store is real S3 when ATLASDRAW_TEST_S3_URL names one
+// (`http://<access key>:<secret>@host:port`, e.g. a MinIO container), each
+// test in its own bucket; otherwise an in-memory bucket stands in for it.
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { PassThrough, Readable } from "node:stream";
+
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { Pool } from "pg";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { bodyOf, textOf } from "../test-support";
 
 import { createPostgresMinioAdapter } from "./postgres-minio";
 import { createSqliteFsAdapter } from "./sqlite-fs";
 
 import type { StorageClient } from "../types";
 
-const { bucket } = vi.hoisted(() => ({ bucket: new Map<string, Buffer>() }));
+const S3_URL = process.env.ATLASDRAW_TEST_S3_URL;
 
-vi.mock("@aws-sdk/client-s3", () => {
-  class Command {
-    constructor(public input: { Key?: string; Body?: Buffer }) {}
+const { bucket } = vi.hoisted(() => ({
+  bucket: new Map<string, { bytes: Buffer; modified: Date }>(),
+}));
+
+vi.mock("@aws-sdk/client-s3", async (importOriginal) => {
+  if (process.env.ATLASDRAW_TEST_S3_URL) {
+    return importOriginal();
   }
+  class Command {
+    constructor(
+      public input: { Key?: string; Body?: unknown; Prefix?: string },
+    ) {}
+  }
+  class HeadBucketCommand extends Command {}
   class CreateBucketCommand extends Command {}
-  class ListBucketsCommand extends Command {}
+  class ListObjectsV2Command extends Command {}
   class PutObjectCommand extends Command {}
   class GetObjectCommand extends Command {}
   class DeleteObjectCommand extends Command {}
   class S3Client {
-    async send(cmd: Command): Promise<unknown> {
+    async send(
+      cmd: Command,
+      opts?: { abortSignal?: AbortSignal },
+    ): Promise<unknown> {
       if (cmd instanceof PutObjectCommand) {
-        bucket.set(cmd.input.Key!, Buffer.from(cmd.input.Body!));
+        // Like the SDK: an abort ends the upload with a rejection.
+        const aborted = new Promise<never>((_, reject) =>
+          opts?.abortSignal?.addEventListener("abort", () =>
+            reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          ),
+        );
+        const chunks: Buffer[] = [];
+        const read = (async () => {
+          for await (const c of cmd.input.Body as AsyncIterable<Uint8Array>) {
+            chunks.push(Buffer.from(c));
+          }
+        })();
+        await Promise.race([read, aborted]);
+        bucket.set(cmd.input.Key!, {
+          bytes: Buffer.concat(chunks),
+          modified: new Date(),
+        });
         return {};
       }
       if (cmd instanceof DeleteObjectCommand) {
@@ -37,19 +76,31 @@ vi.mock("@aws-sdk/client-s3", () => {
         return {};
       }
       if (cmd instanceof GetObjectCommand) {
-        const bytes = bucket.get(cmd.input.Key!);
-        if (!bytes) {
+        const entry = bucket.get(cmd.input.Key!);
+        if (!entry) {
           throw Object.assign(new Error("missing"), { name: "NoSuchKey" });
         }
-        return { Body: { transformToByteArray: async () => bytes } };
+        return {
+          Body: Readable.from([entry.bytes]),
+          ContentLength: entry.bytes.byteLength,
+        };
+      }
+      if (cmd instanceof ListObjectsV2Command) {
+        return {
+          Contents: [...bucket.entries()]
+            .filter(([key]) => key.startsWith(cmd.input.Prefix ?? ""))
+            .map(([Key, e]) => ({ Key, LastModified: e.modified })),
+          IsTruncated: false,
+        };
       }
       return {};
     }
   }
   return {
     S3Client,
+    HeadBucketCommand,
     CreateBucketCommand,
-    ListBucketsCommand,
+    ListObjectsV2Command,
     PutObjectCommand,
     GetObjectCommand,
     DeleteObjectCommand,
@@ -59,8 +110,27 @@ vi.mock("@aws-sdk/client-s3", () => {
 /** Opens a client on one store. Every call reaches the same data. */
 interface Store {
   open(): StorageClient;
+  /** Puts a blob in the store that no row points to, as a crash would. */
+  plantOrphan(name: string): Promise<void>;
   dispose(): Promise<void>;
 }
+
+const HOUR_MS = 60 * 60 * 1000;
+/** Sweep options that delete every keyless map and every orphan at once. */
+const NO_GRACE = { legacyGraceMs: 0, orphanGraceMs: 0 };
+
+/** A body whose bytes the test releases: part now, the rest on `finish`. */
+function heldBody(size: number) {
+  const stream = new PassThrough();
+  stream.write(Buffer.alloc(size / 2, 1));
+  return {
+    body: { stream, size },
+    finish: () => stream.end(Buffer.alloc(size - size / 2, 2)),
+    fail: () => stream.destroy(new Error("connection reset")),
+  };
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 20));
 
 const UNKNOWN_ID = "a".repeat(21);
 const HASH = "f".repeat(64);
@@ -91,12 +161,12 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
 
     it("createMap stores the bytes and the key hash; getMap returns the record", async () => {
       const client = open();
-      const record = await client.createMap(Buffer.from("hello"), HASH);
+      const record = await client.createMap(bodyOf("hello"), HASH);
 
       expect(record.byte_size).toBe(5);
       expect(record.write_key_hash).toBe(HASH);
       expect(await client.getMap(record.id)).toEqual(record);
-      expect((await client.getBlob(record.id))?.toString()).toBe("hello");
+      expect(await textOf(client.getBlob(record.id))).toBe("hello");
     });
 
     it("getMap and getBlob return null for an unknown id", async () => {
@@ -108,29 +178,62 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
 
     it("updateMap replaces the bytes and keeps created_at and the key hash", async () => {
       const client = open();
-      const created = await client.createMap(Buffer.from("v1"), HASH);
+      const created = await client.createMap(bodyOf("v1"), HASH);
       await new Promise((r) => setTimeout(r, 5));
 
-      const updated = await client.updateMap(created.id, Buffer.from("v-two"));
+      const updated = await client.updateMap(created.id, bodyOf("v-two"));
 
       expect(updated.created_at).toBe(created.created_at);
       expect(updated.updated_at).not.toBe(created.updated_at);
       expect(updated.write_key_hash).toBe(HASH);
       expect(await client.getMap(created.id)).toEqual(updated);
-      expect((await client.getBlob(created.id))?.toString()).toBe("v-two");
+      expect(await textOf(client.getBlob(created.id))).toBe("v-two");
     });
 
     it("updateMap rejects an unknown id as not found", async () => {
       const client = open();
 
-      await expect(
-        client.updateMap(UNKNOWN_ID, Buffer.from("x")),
-      ).rejects.toThrow(/^not found:/);
+      await expect(client.updateMap(UNKNOWN_ID, bodyOf("x"))).rejects.toThrow(
+        /^not found:/,
+      );
+    });
+
+    it("getBlob gives the bytes as a stream with their size", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("streamed"), HASH);
+
+      const read = await client.getBlob(map.id);
+
+      expect(read?.size).toBe(8);
+      expect(await textOf(read)).toBe("streamed");
+    });
+
+    it("createMap refuses a body that ends before its size, and stores nothing", async () => {
+      const client = open();
+      const short = { stream: Readable.from([Buffer.from("abc")]), size: 5 };
+
+      await expect(client.createMap(short, HASH)).rejects.toThrow();
+
+      expect(await client.totalBytes()).toBe(0);
+    });
+
+    it("updateMap refuses a body longer than its size, and keeps the old bytes", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("old"), HASH);
+      const long = {
+        stream: Readable.from([Buffer.from("too long")]),
+        size: 3,
+      };
+
+      await expect(client.updateMap(map.id, long)).rejects.toThrow();
+
+      expect(await textOf(client.getBlob(map.id))).toBe("old");
+      expect((await client.getMap(map.id))?.byte_size).toBe(3);
     });
 
     it("createShareToken stores a token with no expiry by default", async () => {
       const client = open();
-      const map = await client.createMap(Buffer.from("blob"), HASH);
+      const map = await client.createMap(bodyOf("blob"), HASH);
 
       const token = await client.createShareToken(map.id, null);
 
@@ -142,7 +245,7 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
 
     it("createShareToken stores the expiry it is given", async () => {
       const client = open();
-      const map = await client.createMap(Buffer.from("blob"), HASH);
+      const map = await client.createMap(bodyOf("blob"), HASH);
       const expires = new Date(Date.now() + 7 * DAY_MS);
 
       const token = await client.createShareToken(map.id, expires);
@@ -161,8 +264,8 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
 
     it("deleteShareToken removes only a token of the named map", async () => {
       const client = open();
-      const mine = await client.createMap(Buffer.from("a"), HASH);
-      const theirs = await client.createMap(Buffer.from("b"), HASH);
+      const mine = await client.createMap(bodyOf("a"), HASH);
+      const theirs = await client.createMap(bodyOf("b"), HASH);
       const token = await client.createShareToken(theirs.id, null);
 
       expect(await client.deleteShareToken(mine.id, token.token)).toBe(false);
@@ -173,8 +276,8 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
 
     it("deleteMap removes the map, its tokens and its bytes, and nothing else", async () => {
       const client = open();
-      const gone = await client.createMap(Buffer.from("gone"), HASH);
-      const kept = await client.createMap(Buffer.from("kept"), HASH);
+      const gone = await client.createMap(bodyOf("gone"), HASH);
+      const kept = await client.createMap(bodyOf("kept"), HASH);
       const goneToken = await client.createShareToken(gone.id, null);
       const keptToken = await client.createShareToken(kept.id, null);
 
@@ -193,9 +296,9 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
     it("totalBytes sums the stored maps", async () => {
       const client = open();
       expect(await client.totalBytes()).toBe(0);
-      const map = await client.createMap(Buffer.from("12345"), HASH);
-      await client.createMap(Buffer.from("123"), null);
-      await client.updateMap(map.id, Buffer.from("1"));
+      const map = await client.createMap(bodyOf("12345"), HASH);
+      await client.createMap(bodyOf("123"), null);
+      await client.updateMap(map.id, bodyOf("1"));
 
       expect(await client.totalBytes()).toBe(4);
     });
@@ -206,22 +309,22 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       const past = new Date(now.getTime() - DAY_MS);
       const future = new Date(now.getTime() + DAY_MS);
       // Kept: the owner can come back with the key.
-      const owned = await client.createMap(Buffer.from("owned"), HASH);
+      const owned = await client.createMap(bodyOf("owned"), HASH);
       const ownedExpired = await client.createShareToken(owned.id, past);
       // Kept: a live link still reads it.
-      const linked = await client.createMap(Buffer.from("linked"), null);
+      const linked = await client.createMap(bodyOf("linked"), null);
       const live = await client.createShareToken(linked.id, future);
-      const forever = await client.createMap(Buffer.from("forever"), null);
+      const forever = await client.createMap(bodyOf("forever"), null);
       await client.createShareToken(forever.id, null);
       // Gone: no key and every link has expired.
-      const orphan = await client.createMap(Buffer.from("orphan"), null);
+      const orphan = await client.createMap(bodyOf("orphan"), null);
       const dead = await client.createShareToken(orphan.id, past);
       // Gone: no key and no link at all.
-      const bare = await client.createMap(Buffer.from("bare"), null);
+      const bare = await client.createMap(bodyOf("bare"), null);
 
-      const swept = await client.sweep(now);
+      const swept = await client.sweep(now, NO_GRACE);
 
-      expect(swept).toEqual({ tokens: 2, maps: 2 });
+      expect(swept).toEqual({ tokens: 2, maps: 2, orphans: 0 });
       expect(await client.resolveToken(ownedExpired.token)).toBeNull();
       expect(await client.resolveToken(dead.token)).toBeNull();
       expect(await client.resolveToken(live.token)).not.toBeNull();
@@ -232,12 +335,134 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
         expect(await client.getMap(gone.id)).toBeNull();
         expect(await client.getBlob(gone.id)).toBeNull();
       }
-      expect(await client.sweep(now)).toEqual({ tokens: 0, maps: 0 });
+      expect(await client.sweep(now, NO_GRACE)).toEqual({
+        tokens: 0,
+        maps: 0,
+        orphans: 0,
+      });
+    });
+
+    it("keeps a keyless map until the grace after the upgrade has passed", async () => {
+      const client = open();
+      const legacy = await client.createMap(bodyOf("pre-key map"), null);
+      const grace = { legacyGraceMs: 90 * DAY_MS, orphanGraceMs: HOUR_MS };
+
+      const early = await client.sweep(new Date(), grace);
+      const late = await client.sweep(
+        new Date(Date.now() + 91 * DAY_MS),
+        grace,
+      );
+
+      expect(early.maps).toBe(0);
+      expect(late.maps).toBe(1);
+      expect(await client.getMap(legacy.id)).toBeNull();
+    });
+
+    it("sweep removes a blob no row points to, once it is older than the grace", async () => {
+      const client = open();
+      const kept = await client.createMap(bodyOf("kept"), HASH);
+      await store.plantOrphan("zzzzzzzzzzzzzzzzzzzzz.orphan.atlasdraw");
+      const grace = { legacyGraceMs: 0, orphanGraceMs: HOUR_MS };
+
+      const fresh = await client.sweep(new Date(), grace);
+      const old = await client.sweep(new Date(Date.now() + 2 * HOUR_MS), grace);
+
+      expect(fresh.orphans).toBe(0);
+      expect(old.orphans).toBe(1);
+      expect(await textOf(client.getBlob(kept.id))).toBe("kept");
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("updateMap writes under a new blob and leaves no old one behind", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+
+      const updated = await client.updateMap(map.id, bodyOf("v2"));
+
+      expect(updated.blob_ref).not.toBe(map.blob_ref);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+      expect(await textOf(client.getBlob(map.id))).toBe("v2");
+    });
+
+    it("a write cut partway leaves the old map whole and counts nothing", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("old"), HASH);
+      const held = heldBody(64 * 1024);
+
+      const write = client.updateMap(map.id, held.body);
+      await tick();
+      held.fail();
+
+      await expect(write).rejects.toThrow();
+      expect(await textOf(client.getBlob(map.id))).toBe("old");
+      expect(await client.totalBytes()).toBe(3);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("a write that loses the race with a delete answers not found and leaves no blob", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("old"), HASH);
+      const held = heldBody(64 * 1024);
+
+      const write = client.updateMap(map.id, held.body);
+      await tick();
+      expect(await client.deleteMap(map.id)).toBe(true);
+      held.finish();
+
+      await expect(write).rejects.toThrow(/^not found:/);
+      expect(await client.getMap(map.id)).toBeNull();
+      expect(await client.totalBytes()).toBe(0);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("concurrent creates cannot pass the cap", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 1000 };
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 20 }, () =>
+          client.createMap(bodyOf(Buffer.alloc(100)), HASH, cap),
+        ),
+      );
+
+      const made = results.filter((r) => r.status === "fulfilled").length;
+      expect(made).toBe(10);
+      expect(await client.totalBytes()).toBe(1000);
+      for (const r of results) {
+        if (r.status === "rejected") {
+          expect(String(r.reason)).toMatch(/storage full/);
+        }
+      }
+    });
+
+    it("counts a rewrite by its growth, and refuses growth past the cap", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 10 };
+      const map = await client.createMap(bodyOf("12345678"), HASH, cap);
+
+      await client.updateMap(map.id, bodyOf("87654321"), cap);
+      await expect(
+        client.updateMap(map.id, bodyOf("12345678901"), cap),
+      ).rejects.toThrow(/storage full/);
+
+      expect(await textOf(client.getBlob(map.id))).toBe("87654321");
+      expect(await client.totalBytes()).toBe(8);
+    });
+
+    it("a failed write gives its reserved bytes back", async () => {
+      const client = open();
+      const cap = { maxTotalBytes: 10 };
+      const short = { stream: Readable.from([Buffer.from("abc")]), size: 10 };
+
+      await expect(client.createMap(short, HASH, cap)).rejects.toThrow();
+      await client.createMap(bodyOf("1234567890"), HASH, cap);
+
+      expect(await client.totalBytes()).toBe(10);
     });
 
     it("a restarted server reads what the first one wrote", async () => {
       const first = open();
-      const map = await first.createMap(Buffer.from("kept"), HASH);
+      const map = await first.createMap(bodyOf("kept"), HASH);
       const token = await first.createShareToken(map.id, null);
 
       const second = open();
@@ -256,6 +481,8 @@ describeContract("sqlite-fs", async () => {
   const dir = tmp.dirSync({ unsafeCleanup: true });
   return {
     open: () => createSqliteFsAdapter({ dataDir: dir.name }),
+    plantOrphan: async (name) =>
+      fs.writeFileSync(path.join(dir.name, "blobs", name), "orphan"),
     dispose: async () => dir.removeCallback(),
   };
 });
@@ -272,14 +499,44 @@ describe.skipIf(!PG_URL)("against real Postgres", () => {
     const url = new URL(PG_URL!);
     url.searchParams.set("options", `-c search_path=${schema}`);
     bucket.clear();
+    const s3 = S3_URL ? new URL(S3_URL) : null;
+    const blobBucket = `contract-${Date.now()}-${Math.floor(
+      Math.random() * 1e6,
+    )}`;
     return {
       open: () =>
         createPostgresMinioAdapter({
           databaseUrl: url.toString(),
-          blobEndpoint: "http://s3.invalid",
-          blobAccessKey: "k",
-          blobSecretKey: "s",
+          blobEndpoint: s3 ? s3.origin : "http://s3.invalid",
+          blobAccessKey: s3 ? decodeURIComponent(s3.username) : "k",
+          blobSecretKey: s3 ? decodeURIComponent(s3.password) : "s",
+          blobBucket,
+          blobRegion: "us-east-1",
         }),
+      plantOrphan: async (name) => {
+        if (!s3) {
+          bucket.set(`maps/${name}`, {
+            bytes: Buffer.from("orphan"),
+            modified: new Date(),
+          });
+          return;
+        }
+        await new S3Client({
+          endpoint: s3.origin,
+          region: "us-east-1",
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: decodeURIComponent(s3.username),
+            secretAccessKey: decodeURIComponent(s3.password),
+          },
+        }).send(
+          new PutObjectCommand({
+            Bucket: blobBucket,
+            Key: `maps/${name}`,
+            Body: "orphan",
+          }),
+        );
+      },
       dispose: async () => {
         await admin.query(`DROP SCHEMA ${schema} CASCADE`);
         await admin.end();

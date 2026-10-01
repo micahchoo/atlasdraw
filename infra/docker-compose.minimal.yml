@@ -1,6 +1,8 @@
 # Atlasdraw — minimal self-host stack.
-# Single-VPS deployment. SQLite + filesystem blobs. No postgres, no S3,
-# no reverse proxy. Run: docker compose -f infra/docker-compose.minimal.yml up
+# One machine on a network you trust (a laptop, a LAN, a VPN). SQLite +
+# filesystem blobs. No postgres, no S3, no TLS: do not put it on the internet
+# as it is; use docker-compose.yml and docs/self-host/production.md.
+# Run: docker compose -f infra/docker-compose.minimal.yml up
 #
 # What you get:
 #   - localhost:3000 — atlas-app (web). The storage API is on the same origin
@@ -8,9 +10,12 @@
 #   - storage — internal only; not published to the host.
 #   - One named volume for the storage server's data (sqlite db + blobs).
 #
-# Operator overrides via .env or shell env:
+# Operator overrides from the shell, or from a `.env` NEXT TO THIS FILE
+# (infra/.env) or one passed with --env-file:
 #   PUBLIC_URL=https://atlas.example.com  (used in share-link URLs)
 #   LOG_LEVEL=debug                       (storage server log level)
+# The storage limits keep the server's defaults (docs/self-host/production.md
+# "Storage limits"); add one to `environment` below to change it.
 
 services:
   storage:
@@ -29,6 +34,8 @@ services:
       - atlas-storage-data:/data
     expose:
       - "4000"
+    # A shutdown lets requests in flight finish (SHUTDOWN_TIMEOUT_MS, 25 s).
+    stop_grace_period: 30s
     restart: unless-stopped
 
   web:

@@ -14,6 +14,9 @@ import {
   hasServerMap,
   restoreFromServer,
   revokeShare,
+  saveAsNewServerCopy,
+  ServerMapRefusedError,
+  serverMapRefused,
   shareDocument,
 } from "../remoteMapIdCache";
 import { StorageHttpError } from "../../services/createHttpStorageClient";
@@ -125,7 +128,7 @@ describe("buildRemoteSaveCallback", () => {
   });
 
   it.each([401, 403, 404])(
-    "makes a new map when the server refuses the old one (%i)",
+    "tells the caller and makes no new map when the server refuses the old one (%i)",
     async (status) => {
       const { client, createMap, updateMap } = fakeClient();
       const save = buildRemoteSaveCallback(client);
@@ -134,16 +137,64 @@ describe("buildRemoteSaveCallback", () => {
         new StorageHttpError("updateMap", status),
       );
 
-      await save(bytes(), A);
-      await save(bytes(), A);
+      const refused = save(bytes(), A);
 
-      expect(createMap).toHaveBeenCalledTimes(2);
-      expect(updateMap.mock.calls[1]!.slice(0, 2)).toEqual([
-        "map000000000000000002",
-        "key-2",
-      ]);
+      await expect(refused).rejects.toBeInstanceOf(ServerMapRefusedError);
+      await expect(refused).rejects.toMatchObject({ status });
+      expect(createMap).toHaveBeenCalledTimes(1);
+      expect(await serverMapRefused(A)).toBe(true);
     },
   );
+
+  it("does not upload again to a map the server refused", async () => {
+    const { client, createMap, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await save(bytes(), A);
+    updateMap.mockRejectedValueOnce(new StorageHttpError("updateMap", 403));
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapRefusedError);
+
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapRefusedError);
+
+    // The first save created the map; the second was refused; the third
+    // did not reach the server.
+    expect(updateMap).toHaveBeenCalledTimes(1);
+    expect(createMap).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes a new server copy only when asked, and saves go to it", async () => {
+    const { client, createMap, updateMap, createShareToken } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await shareDocument(client, bytes(), A, null);
+    updateMap.mockRejectedValueOnce(new StorageHttpError("updateMap", 404));
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapRefusedError);
+
+    await saveAsNewServerCopy(client, bytes(), A);
+    await save(bytes(), A);
+    await shareDocument(client, bytes(), A, null);
+
+    expect(createMap).toHaveBeenCalledTimes(2);
+    expect(await serverMapRefused(A)).toBe(false);
+    expect(updateMap.mock.lastCall!.slice(0, 2)).toEqual([
+      "map000000000000000002",
+      "key-2",
+    ]);
+    // The old lasting link reads the old map; the new copy gets its own.
+    expect(createShareToken).toHaveBeenCalledTimes(2);
+    expect(createShareToken.mock.lastCall![0]).toBe("map000000000000000002");
+  });
+
+  it("refuses to share a map the server refused, and makes nothing", async () => {
+    const { client, createMap, updateMap, createShareToken } = fakeClient();
+    await shareDocument(client, bytes(), A, null);
+    updateMap.mockRejectedValueOnce(new StorageHttpError("updateMap", 403));
+
+    await expect(shareDocument(client, bytes(), A, 7)).rejects.toThrow(
+      ServerMapRefusedError,
+    );
+
+    expect(createMap).toHaveBeenCalledTimes(1);
+    expect(createShareToken).toHaveBeenCalledTimes(1);
+  });
 
   it("keeps the map when the server fails for another reason", async () => {
     const { client, createMap, updateMap } = fakeClient();

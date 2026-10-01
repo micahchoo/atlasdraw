@@ -1,14 +1,25 @@
 // @atlasdraw/storage — postgres-minio adapter.
 //
-// Full stack: Postgres for metadata, a MinIO/S3-compatible store for the
-// blobs. Same semantics as sqlite-fs. The bucket is made on first use. An S3
-// PUT replaces an object whole, so a write is atomic without a temp object.
+// Full stack: Postgres for metadata, an S3-compatible store (MinIO, AWS S3)
+// for the blobs. Same semantics as sqlite-fs: every write streams to a NEW
+// object (`maps/<id>.<random>.atlasdraw`), one transaction checks the row
+// still exists, points it at the new object and counts the size change, and
+// only then is the old object deleted. Bodies stream in and out with a known
+// length; no blob is held whole in memory. The size cap: see types.ts.
+//
+// The bucket is BLOB_BUCKET in BLOB_REGION. If it does not exist, the adapter
+// makes it; a bucket that another account owns is an error.
+
+import { randomBytes } from "node:crypto";
+import { PassThrough, Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
-  ListBucketsCommand,
+  HeadBucketCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -17,16 +28,29 @@ import { Pool } from "pg";
 
 import { ID_RE } from "../constants";
 import { migratePostgres } from "../db/migrate";
+import { WRITE_KEYS_MIGRATION } from "../db/migrations";
+import { measured } from "../lib/body";
+import { storageFull } from "../lib/errors";
 import { logger } from "../logger";
 
+import type { PoolClient } from "pg";
 import type {
+  BlobBody,
   MapRecord,
   ShareToken,
   StorageClient,
   SweepResult,
 } from "../types";
 
-const BUCKET = "atlasdraw-maps";
+export const DEFAULT_BUCKET = "atlasdraw-maps";
+const BLOB_PREFIX = "maps/";
+
+function newBlobRef(id: string): string {
+  return `${BLOB_PREFIX}${id}.${randomBytes(6).toString("hex")}.atlasdraw`;
+}
+
+type Queryable = Pick<PoolClient, "query">;
+export const DEFAULT_REGION = "us-east-1";
 
 interface MapRow {
   id: string;
@@ -78,7 +102,10 @@ export function createPostgresMinioAdapter(opts: {
   blobEndpoint: string;
   blobAccessKey: string;
   blobSecretKey: string;
+  blobBucket?: string;
+  blobRegion?: string;
 }): StorageClient {
+  const BUCKET = opts.blobBucket ?? DEFAULT_BUCKET;
   const pool = new Pool({ connectionString: opts.databaseUrl });
   // node-postgres requirement, not optional: an idle client that the server
   // drops (restart, `terminating connection due to administrator command`,
@@ -96,7 +123,7 @@ export function createPostgresMinioAdapter(opts: {
   });
   const s3 = new S3Client({
     endpoint: opts.blobEndpoint,
-    region: "us-east-1",
+    region: opts.blobRegion ?? DEFAULT_REGION,
     credentials: {
       accessKeyId: opts.blobAccessKey,
       secretAccessKey: opts.blobSecretKey,
@@ -124,36 +151,71 @@ export function createPostgresMinioAdapter(opts: {
     logger.warn({ err }, "postgres schema setup failed; will retry");
   });
 
-  async function ensureBucket(): Promise<void> {
-    if (bucketReady) {
-      return;
-    }
+  // HeadBucket first: an app user that may not create buckets (the compose
+  // stack's MinIO user) still works with a bucket made for it. A bucket that
+  // exists but is not ours is an error: on AWS, BucketAlreadyExists means
+  // another account owns the name.
+  async function headOrCreateBucket(): Promise<void> {
     try {
-      await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
     } catch (err: unknown) {
+      const status = (err as { $metadata?: { httpStatusCode?: number } })
+        .$metadata?.httpStatusCode;
       const name = (err as { name?: string })?.name ?? "";
-      // Ignore "already exists" variants from MinIO/S3.
-      if (
-        name !== "BucketAlreadyOwnedByYou" &&
-        name !== "BucketAlreadyExists"
-      ) {
-        // Surface any other error (e.g. credentials).
+      if (status !== 404 && name !== "NotFound" && name !== "NoSuchBucket") {
         throw err;
+      }
+      try {
+        await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      } catch (createErr: unknown) {
+        // Another server made it between the two calls.
+        if (
+          (createErr as { name?: string })?.name !== "BucketAlreadyOwnedByYou"
+        ) {
+          throw createErr;
+        }
       }
     }
     bucketReady = true;
   }
 
-  async function putBlob(key: string, blob: Buffer): Promise<void> {
+  async function ensureBucket(): Promise<void> {
+    if (!bucketReady) {
+      await headOrCreateBucket();
+    }
+  }
+
+  /** Streams `body` to `key`; exactly `body.size` bytes or a rejection. */
+  async function putBlob(key: string, body: BlobBody): Promise<void> {
     await ensureBucket();
-    await s3.send(
+    // The SDK must never read a stream that errors: it leaves that rejection
+    // unhandled. So the measured bytes reach it through `pipe`, which does
+    // not pass errors on, and a wrong length aborts the request instead.
+    const abort = new AbortController();
+    const meter = measured(body.size);
+    const toS3 = new PassThrough();
+    meter.pipe(toS3);
+    const pump = pipeline(body.stream, meter).catch((err: unknown) => {
+      abort.abort(err);
+      throw err;
+    });
+    const sent = s3.send(
       new PutObjectCommand({
         Bucket: BUCKET,
         Key: key,
-        Body: blob,
+        Body: toS3,
+        ContentLength: body.size,
         ContentType: "application/octet-stream",
       }),
+      { abortSignal: abort.signal },
     );
+    const [pumped, put] = await Promise.allSettled([pump, sent]);
+    if (pumped.status === "rejected") {
+      throw pumped.reason;
+    }
+    if (put.status === "rejected") {
+      throw put.reason;
+    }
   }
 
   async function deleteBlob(key: string): Promise<void> {
@@ -172,28 +234,164 @@ export function createPostgresMinioAdapter(opts: {
     return res.rows[0];
   }
 
+  /** Runs `fn` in one transaction on one pooled connection. */
+  async function inTransaction<T>(
+    fn: (db: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const db = await pool.connect();
+    try {
+      await db.query("BEGIN");
+      // Every write transaction takes the usage row first, so they queue in
+      // one order and cannot deadlock.
+      await db.query(`SELECT 1 FROM storage_usage WHERE id = 1 FOR UPDATE`);
+      const result = await fn(db);
+      await db.query("COMMIT");
+      return result;
+    } catch (err) {
+      await db.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      db.release();
+    }
+  }
+
+  async function usage(db: Queryable): Promise<{
+    counted: number;
+    inFlight: number;
+  }> {
+    const res = await db.query<{ counted: string; in_flight: string }>(
+      `SELECT (SELECT total_bytes FROM storage_usage WHERE id = 1) AS counted,
+              (SELECT COALESCE(SUM(bytes), 0) FROM storage_reservations) AS in_flight`,
+    );
+    return {
+      counted: Number(res.rows[0]?.counted ?? 0),
+      inFlight: Number(res.rows[0]?.in_flight ?? 0),
+    };
+  }
+
+  /** A reservation id, or null when `bytes` would pass `cap`. */
+  function reserve(bytes: number, cap: number): Promise<string | null> {
+    return inTransaction(async (db) => {
+      if (cap > 0) {
+        const { counted, inFlight } = await usage(db);
+        if (counted + inFlight + bytes > cap) {
+          return null;
+        }
+      }
+      const id = randomBytes(9).toString("base64url");
+      await db.query(
+        `INSERT INTO storage_reservations (id, bytes, created_at) VALUES ($1, $2, now())`,
+        [id, bytes],
+      );
+      return id;
+    });
+  }
+
+  async function release(reservation: string): Promise<void> {
+    await pool
+      .query(`DELETE FROM storage_reservations WHERE id = $1`, [reservation])
+      .catch((err: unknown) =>
+        // The sweep removes it later; the cap is only stricter until then.
+        logger.warn({ err }, "could not release a size reservation"),
+      );
+  }
+
+  /** Streams the bytes to a new blob under a reservation; null when full. */
+  async function writeReserved(
+    id: string,
+    body: BlobBody,
+    bytes: number,
+    cap: number,
+  ): Promise<{ ref: string; reservation: string } | null> {
+    await ensureSchema();
+    const reservation = await reserve(bytes, cap);
+    if (reservation === null) {
+      return null;
+    }
+    const ref = newBlobRef(id);
+    try {
+      await putBlob(ref, body);
+    } catch (err) {
+      await release(reservation);
+      // A put cut partway may still have left an object.
+      await deleteBlob(ref).catch(() => undefined);
+      throw err;
+    }
+    return { ref, reservation };
+  }
+
+  async function removeOrphans(olderThan: Date): Promise<number> {
+    await ensureBucket();
+    let removed = 0;
+    let token: string | undefined;
+    do {
+      const page = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: BUCKET,
+          Prefix: BLOB_PREFIX,
+          ContinuationToken: token,
+        }),
+      );
+      for (const object of page.Contents ?? []) {
+        if (
+          !object.Key ||
+          !object.LastModified ||
+          object.LastModified >= olderThan
+        ) {
+          continue;
+        }
+        const live = await pool.query(
+          `SELECT 1 FROM maps WHERE blob_ref = $1`,
+          [object.Key],
+        );
+        if (live.rowCount === 0) {
+          await deleteBlob(object.Key);
+          removed += 1;
+        }
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
+    return removed;
+  }
+
   return {
-    async createMap(blob, writeKeyHash) {
-      await ensureSchema();
+    async createMap(body, writeKeyHash, opts = {}) {
       const id = nanoid(21);
-      const blobRef = `maps/${id}.atlasdraw`;
-      await putBlob(blobRef, blob);
+      const written = await writeReserved(
+        id,
+        body,
+        body.size,
+        opts.maxTotalBytes ?? 0,
+      );
+      if (!written) {
+        throw storageFull();
+      }
       const now = new Date();
       try {
-        await pool.query(
-          `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [id, now, now, blobRef, blob.byteLength, writeKeyHash],
-        );
+        await inTransaction(async (db) => {
+          await db.query(
+            `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [id, now, now, written.ref, body.size, writeKeyHash],
+          );
+          await db.query(
+            `UPDATE storage_usage SET total_bytes = total_bytes + $1 WHERE id = 1`,
+            [body.size],
+          );
+          await db.query(`DELETE FROM storage_reservations WHERE id = $1`, [
+            written.reservation,
+          ]);
+        });
       } catch (err) {
-        await deleteBlob(blobRef).catch(() => undefined);
+        await release(written.reservation);
+        await deleteBlob(written.ref).catch(() => undefined);
         throw err;
       }
       return {
         id,
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
-        blob_ref: blobRef,
-        byte_size: blob.byteLength,
+        blob_ref: written.ref,
+        byte_size: body.size,
         write_key_hash: writeKeyHash,
       };
     },
@@ -207,25 +405,76 @@ export function createPostgresMinioAdapter(opts: {
       return row ? rowToMap(row) : null;
     },
 
-    async updateMap(id, blob) {
+    async updateMap(id, body, opts = {}) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
       await ensureSchema();
-      const row = await selectMap(id);
-      if (!row) {
+      const existing = await selectMap(id);
+      if (!existing) {
         throw new Error(`not found: ${id}`);
       }
-      await putBlob(row.blob_ref, blob);
+      const cap = opts.maxTotalBytes ?? 0;
+      const growth = Math.max(0, body.size - rowToMap(existing).byte_size);
+      const written = await writeReserved(id, body, growth, cap);
+      if (!written) {
+        throw storageFull();
+      }
       const now = new Date();
-      await pool.query(
-        `UPDATE maps SET updated_at = $1, byte_size = $2 WHERE id = $3`,
-        [now, blob.byteLength, id],
+      let swap:
+        | { kind: "swapped"; old: MapRecord }
+        | { kind: "missing" | "full" };
+      try {
+        swap = await inTransaction(async (db) => {
+          await db.query(`DELETE FROM storage_reservations WHERE id = $1`, [
+            written.reservation,
+          ]);
+          const res = await db.query<MapRow>(
+            `SELECT ${MAP_COLUMNS} FROM maps WHERE id = $1 FOR UPDATE`,
+            [id],
+          );
+          const row = res.rows[0];
+          if (!row) {
+            return { kind: "missing" as const };
+          }
+          const old = rowToMap(row);
+          const delta = body.size - old.byte_size;
+          if (cap > 0 && delta > growth) {
+            const { counted, inFlight } = await usage(db);
+            if (counted + inFlight + delta > cap) {
+              return { kind: "full" as const };
+            }
+          }
+          await db.query(
+            `UPDATE maps SET blob_ref = $1, byte_size = $2, updated_at = $3 WHERE id = $4`,
+            [written.ref, body.size, now, id],
+          );
+          await db.query(
+            `UPDATE storage_usage SET total_bytes = total_bytes + $1 WHERE id = 1`,
+            [delta],
+          );
+          return { kind: "swapped" as const, old };
+        });
+      } catch (err) {
+        await release(written.reservation);
+        await deleteBlob(written.ref).catch(() => undefined);
+        throw err;
+      }
+      if (swap.kind !== "swapped") {
+        await deleteBlob(written.ref).catch(() => undefined);
+        throw swap.kind === "full"
+          ? storageFull()
+          : new Error(`not found: ${id}`);
+      }
+      // The orphan sweep removes it if this delete fails.
+      await deleteBlob(swap.old.blob_ref).catch((err: unknown) =>
+        logger.warn({ err }, "could not delete a replaced blob"),
       );
       return {
-        ...rowToMap(row),
+        ...swap.old,
+        blob_ref: written.ref,
+        byte_size: body.size,
         updated_at: now.toISOString(),
-        byte_size: blob.byteLength,
       };
     },
 
@@ -283,23 +532,22 @@ export function createPostgresMinioAdapter(opts: {
         return false;
       }
       await ensureSchema();
-      const client = await pool.connect();
-      let blobRef: string | null = null;
-      try {
-        await client.query("BEGIN");
-        await client.query(`DELETE FROM share_tokens WHERE map_id = $1`, [id]);
-        const res = await client.query<{ blob_ref: string }>(
-          `DELETE FROM maps WHERE id = $1 RETURNING blob_ref`,
+      const blobRef = await inTransaction(async (db) => {
+        await db.query(`DELETE FROM share_tokens WHERE map_id = $1`, [id]);
+        const res = await db.query<{ blob_ref: string; byte_size: string }>(
+          `DELETE FROM maps WHERE id = $1 RETURNING blob_ref, byte_size`,
           [id],
         );
-        await client.query("COMMIT");
-        blobRef = res.rows[0]?.blob_ref ?? null;
-      } catch (err) {
-        await client.query("ROLLBACK");
-        throw err;
-      } finally {
-        client.release();
-      }
+        const row = res.rows[0];
+        if (!row) {
+          return null;
+        }
+        await db.query(
+          `UPDATE storage_usage SET total_bytes = total_bytes - $1 WHERE id = 1`,
+          [row.byte_size],
+        );
+        return row.blob_ref;
+      });
       if (blobRef === null) {
         return false;
       }
@@ -310,28 +558,58 @@ export function createPostgresMinioAdapter(opts: {
     async totalBytes() {
       await ensureSchema();
       const res = await pool.query<{ total: string | number }>(
-        `SELECT COALESCE(SUM(byte_size), 0) AS total FROM maps`,
+        `SELECT total_bytes AS total FROM storage_usage WHERE id = 1`,
       );
       return Number(res.rows[0]?.total ?? 0);
     },
 
-    async sweep(now): Promise<SweepResult> {
+    async sweep(now, opts): Promise<SweepResult> {
       await ensureSchema();
-      const tokens = await pool.query(
-        `DELETE FROM share_tokens
-         WHERE expires_at IS NOT NULL AND expires_at <= $1`,
-        [now],
-      );
-      const maps = await pool.query<{ blob_ref: string }>(
-        `DELETE FROM maps
-         WHERE write_key_hash IS NULL
-           AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)
-         RETURNING blob_ref`,
-      );
-      for (const row of maps.rows) {
-        await deleteBlob(row.blob_ref);
+      const stale = new Date(now.getTime() - opts.orphanGraceMs);
+      const { tokens, refs } = await inTransaction(async (db) => {
+        const expired = await db.query(
+          `DELETE FROM share_tokens
+           WHERE expires_at IS NOT NULL AND expires_at <= $1`,
+          [now],
+        );
+        const upgrade = await db.query<{ applied_at: Date }>(
+          `SELECT applied_at FROM schema_migrations WHERE name = $1`,
+          [WRITE_KEYS_MIGRATION],
+        );
+        const upgradedAt = upgrade.rows[0]?.applied_at;
+        const keyless =
+          opts.legacyGraceMs === 0 ||
+          !upgradedAt ||
+          now.getTime() >= new Date(upgradedAt).getTime() + opts.legacyGraceMs;
+        let gone: Array<{ blob_ref: string; byte_size: string }> = [];
+        if (keyless) {
+          const res = await db.query<{ blob_ref: string; byte_size: string }>(
+            `DELETE FROM maps
+             WHERE write_key_hash IS NULL
+               AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)
+             RETURNING blob_ref, byte_size`,
+          );
+          gone = res.rows;
+          const freed = gone.reduce((n, r) => n + Number(r.byte_size), 0);
+          await db.query(
+            `UPDATE storage_usage SET total_bytes = total_bytes - $1 WHERE id = 1`,
+            [freed],
+          );
+        }
+        await db.query(
+          `DELETE FROM storage_reservations WHERE created_at < $1`,
+          [stale],
+        );
+        return {
+          tokens: expired.rowCount ?? 0,
+          refs: gone.map((r) => r.blob_ref),
+        };
+      });
+      for (const ref of refs) {
+        await deleteBlob(ref);
       }
-      return { tokens: tokens.rowCount ?? 0, maps: maps.rows.length };
+      const orphans = await removeOrphans(stale);
+      return { tokens, maps: refs.length, orphans };
     },
 
     async getBlob(id) {
@@ -350,16 +628,16 @@ export function createPostgresMinioAdapter(opts: {
         const res = await s3.send(
           new GetObjectCommand({ Bucket: BUCKET, Key: key }),
         );
-        const body = (res as { Body?: unknown }).Body as
-          | {
-              transformToByteArray?: () => Promise<Uint8Array>;
-            }
-          | undefined;
-        if (!body || typeof body.transformToByteArray !== "function") {
+        // In Node the SDK's Body is an IncomingMessage: a Readable that
+        // streams from the socket.
+        const body = res.Body;
+        if (!(body instanceof Readable)) {
           return null;
         }
-        const bytes = await body.transformToByteArray();
-        return Buffer.from(bytes);
+        return {
+          stream: body,
+          size: res.ContentLength ?? rowToMap(row).byte_size,
+        };
       } catch (err: unknown) {
         const name = (err as { name?: string })?.name ?? "";
         if (name === "NoSuchKey" || name === "NotFound") {
@@ -370,12 +648,11 @@ export function createPostgresMinioAdapter(opts: {
     },
 
     async ping(): Promise<void> {
-      // Ping via ListBuckets, not HeadBucket on our own bucket — the bucket
-      // may not exist yet (lazily created on first write) even though MinIO
-      // itself is perfectly healthy. ListBuckets checks connectivity +
-      // credentials without depending on our bucket's existence.
+      // HeadBucket on our own bucket, every time: it checks the endpoint,
+      // the credentials and the bucket, and needs only the bucket rights
+      // the app user has (ListBuckets would need s3:ListAllMyBuckets).
       await pool.query("SELECT 1");
-      await s3.send(new ListBucketsCommand({}));
+      await headOrCreateBucket();
     },
 
     async close(): Promise<void> {

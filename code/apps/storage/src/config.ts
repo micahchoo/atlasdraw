@@ -46,14 +46,45 @@ const BaseSchema = z.object({
   // Defaults are generous — they exist to blunt abuse, not to shape normal use.
   RATE_LIMIT_MAX: z.coerce.number().int().nonnegative().default(120),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
-  // The cap on the sum of all stored map sizes, in bytes. A create or a
-  // write that would pass it gets 507. 0: no cap. POST /maps is open to
-  // anyone who reaches the API, so an internet-facing server should set one.
-  MAX_TOTAL_BYTES: z.coerce.number().int().nonnegative().default(0),
+  // The largest map one request may store, in bytes. A bigger body gets 413.
+  // A proxy in front must allow at least this much (nginx client_max_body_size).
+  MAX_MAP_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(50 * 1024 * 1024),
+  // Requests one client address may have open at once; past it, 429. An
+  // IPv6 client counts by its /64. 0: no limit.
+  MAX_CONCURRENT_PER_IP: z.coerce.number().int().nonnegative().default(16),
+  // A connection with no bytes moving either way for this long is closed: a
+  // body that stops arriving, or a reader that stops reading.
+  IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  // The longest a client may take to send a whole request, body included.
+  REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(300_000),
+  // The cap on the sum of all stored map sizes, in bytes, writes in flight
+  // included. A create or a write that would pass it gets 507. POST /maps is
+  // open to anyone who reaches the API, so the default is a cap, not none:
+  // 10 GiB. 0: no cap.
+  MAX_TOTAL_BYTES: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(10 * 1024 * 1024 * 1024),
+  // New maps one client address may create per NEW_MAPS_WINDOW_MS (an IPv6
+  // client counts by its /64); past it, 429. 0: no limit.
+  MAX_NEW_MAPS_PER_IP: z.coerce.number().int().nonnegative().default(60),
+  NEW_MAPS_WINDOW_MS: z.coerce.number().int().positive().default(3_600_000),
+  // Maps stored before write keys (no key: nobody can write them) are kept
+  // for this many days after the upgrade that added keys, then deleted by
+  // the sweep once no live share link reads them. 0: at the next sweep.
+  LEGACY_MAP_GRACE_DAYS: z.coerce.number().int().nonnegative().default(90),
   // How often the server deletes expired share tokens and the keyless maps
   // that no live token reads (see StorageClient.sweep). It also sweeps once at
   // start. 0: never.
   SWEEP_INTERVAL_MS: z.coerce.number().int().nonnegative().default(3_600_000),
+  // How long a shutdown waits for requests in flight before it exits anyway.
+  // Keep it below the container's stop grace period (compose: 30 s).
+  SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({
@@ -62,6 +93,10 @@ const PostgresMinioSchema = BaseSchema.extend({
   BLOB_ENDPOINT: z.string().min(1),
   BLOB_ACCESS_KEY: z.string().min(1),
   BLOB_SECRET_KEY: z.string().min(1),
+  // The bucket and its region. The adapter makes the bucket if it does not
+  // exist; a name another account owns is an error.
+  BLOB_BUCKET: z.string().min(3).default("atlasdraw-maps"),
+  BLOB_REGION: z.string().min(1).default("us-east-1"),
 });
 
 const SqliteFsSchema = BaseSchema.extend({

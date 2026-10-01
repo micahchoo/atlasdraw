@@ -26,10 +26,22 @@ the new images. Then:
 3. **Full stack with the relay: add the `roomsdata` volume.** The relay now
    saves rooms to SQLite at `/data/rooms.sqlite`. The new
    `infra/docker-compose.yml` declares the volume.
-4. **On a server that faces the internet,** set `MAX_TOTAL_BYTES` on the
-   storage server. `POST /maps` is open to anyone who reaches the API. The
-   relay has its own caps with defaults (`docs/self-host/production.md`,
-   "Realtime relay").
+4. **Give old volumes to the unprivileged users.** The storage, relay and
+   web images no longer run as root (Node 22). A volume an older image made
+   is root's. Before the first start, run once per volume, for example:
+   `docker compose -f infra/docker-compose.minimal.yml run --rm --user root --entrypoint chown storage -R node:node /data`
+   (the relay: the same with `realtime`; `docs/self-host/production.md`,
+   "Upgrading").
+5. **Full stack: set `MINIO_APP_PASSWORD` in `.env`.** The storage server
+   now uses its own MinIO user, which the new `minio-init` job makes with
+   access to the bucket only. Compose refuses to start without it. The
+   MinIO image is pinned by digest; see "Blob storage" in
+   `docs/self-host/production.md` if your host cannot pull it.
+6. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
+   and each client address may make 60 new maps an hour
+   (`MAX_NEW_MAPS_PER_IP`). `POST /maps` is open to anyone who reaches the
+   API. The relay has its own caps with defaults
+   (`docs/self-host/production.md`, "Realtime relay").
 
 What happens by itself:
 
@@ -39,13 +51,22 @@ What happens by itself:
   build cannot open a version 2 file.
 - **Maps saved on the server before write keys become read-only.** Migration
   `003_write_keys_and_lasting_links` gives them no key, so nobody can write
-  them. Their share links work until their 7-day expiry, then the sweep
-  deletes the map and its blob. The owner's browser creates a new map with a
-  key at its next save. The server does not let anyone claim a key for an old
-  map, because its id may have leaked (SECURITY.md row 10).
+  them. The owner's browser creates a new map with a key at its next save.
+  The server does not let anyone claim a key for an old map, because its id
+  may have leaked (SECURITY.md row 10).
+- **Those old maps are kept for `LEGACY_MAP_GRACE_DAYS` (default 90) after
+  the upgrade.** Then the sweep deletes each one that no live share link
+  reads, with its blob. Their share links still work until their 7-day
+  expiry. Set a longer grace before the first start if you want to keep the
+  copies on the volume longer; `0` deletes them at the first sweep.
 - **The storage schema migrates at start.** It drops the `workspace_id`
-  columns and the `workspaces` table, and records each step in
-  `schema_migrations`. Maps and share links stay.
+  columns and the `workspaces` table, adds the size counter
+  (`storage_usage`, `storage_reservations`), and records each step in
+  `schema_migrations`. Every map and share link stays through the
+  migration; only the sweep above removes old maps, after the grace.
+- **The size cap is on by default: 10 GiB** (`MAX_TOTAL_BYTES`). A server
+  that holds more than that already refuses new maps and growing saves (507)
+  until you raise it or set `0` for no cap.
 - **The browser's autosave moves to one slot per map.** The old single slot
   opens on the next reload and moves at the next save.
 - **Rooms start empty.** The old relay kept nothing after the last person
@@ -121,6 +142,12 @@ A script that calls the storage API must now keep the `write_key` from
   regression gate and chromium end-to-end tests.
 
 ### Changed
+
+- **A refused save no longer makes a new server map by itself.** When the
+  server answers 401, 403 or 404 for a document's map, the save stops and
+  the user is told. A new map would have left every share link and embed on
+  the old bytes without a word. `saveAsNewServerCopy` makes the new copy
+  when the user asks (`state/remoteMapIdCache.ts`).
 
 - **The editor reads every `VITE_*` variable through one schema**
   (`config/app-config.ts`). A bad value stops the app at boot and names the

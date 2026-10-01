@@ -14,6 +14,13 @@
 // it, a share link holder cannot. An older build kept bare map ids under
 // `remoteMapId` and `remoteMapId:<document id>`; they have no key, so they are
 // deleted and the document gets a new map.
+//
+// When the server refuses the map (401, 403, 404: it is gone, or the key no
+// longer opens it), nothing makes a new map by itself. A new map would leave
+// every share link and embed on the old bytes with no word to the user. The
+// save rejects with `ServerMapRefusedError`, the entry is kept and marked,
+// and later saves reject at once without an upload. `saveAsNewServerCopy`
+// makes the new map when the user asks for it.
 
 import { openDB } from "idb";
 
@@ -40,10 +47,28 @@ interface RemoteMap {
   writeKey: string;
   /** The lasting link last made for the document, reused by the next share. */
   share?: ShareLinkToken;
+  /** The HTTP status with which the server last refused this map. */
+  refused?: number;
+}
+
+/**
+ * The server refused the document's map, so the save or share did not
+ * happen. Links made from the map still show its last saved version. The
+ * user decides: `saveAsNewServerCopy`, after which old links stay behind.
+ */
+export class ServerMapRefusedError extends Error {
+  constructor(readonly status: number) {
+    super(
+      status === 404
+        ? "The server no longer has this map. Your changes are saved in this browser. Links you shared show the last version the server had. Save a new server copy to go on sharing; old links will not follow it."
+        : "The server no longer accepts this browser's key for this map. Your changes are saved in this browser. Links you shared show the last version the server had. Save a new server copy to go on sharing; old links will not follow it.",
+    );
+    this.name = "ServerMapRefusedError";
+  }
 }
 
 /** The server refused the map: it is gone, or the key no longer opens it. */
-function refused(err: unknown): boolean {
+function refused(err: unknown): err is StorageHttpError {
   return (
     err instanceof StorageHttpError && [401, 403, 404].includes(err.status)
   );
@@ -118,27 +143,45 @@ function serial<T>(documentId: string, step: () => Promise<T>): Promise<T> {
   return next;
 }
 
-/** Sends the bytes to the document's server map, creating it if needed. */
+/** Makes a new server map for the document and keeps its key. */
+async function create(
+  client: StorageClient,
+  bytes: Blob | Uint8Array,
+  documentId: string,
+): Promise<RemoteMap> {
+  const created = await client.createMap(bytes);
+  const entry = { mapId: created.map.id, writeKey: created.writeKey };
+  await store(documentId, entry);
+  return entry;
+}
+
+/**
+ * Sends the bytes to the document's server map, creating it the first time.
+ * Rejects with `ServerMapRefusedError`, and creates nothing, when the server
+ * refuses the map the document already has.
+ */
 async function push(
   client: StorageClient,
   bytes: Blob | Uint8Array,
   documentId: string,
 ): Promise<RemoteMap> {
   const known = await load(documentId);
-  if (known) {
-    try {
-      await client.updateMap(known.mapId, known.writeKey, bytes);
-      return known;
-    } catch (err) {
-      if (!refused(err)) {
-        throw err;
-      }
-    }
+  if (!known) {
+    return create(client, bytes, documentId);
   }
-  const created = await client.createMap(bytes);
-  const entry = { mapId: created.map.id, writeKey: created.writeKey };
-  await store(documentId, entry);
-  return entry;
+  if (known.refused !== undefined) {
+    throw new ServerMapRefusedError(known.refused);
+  }
+  try {
+    await client.updateMap(known.mapId, known.writeKey, bytes);
+    return known;
+  } catch (err) {
+    if (!refused(err)) {
+      throw err;
+    }
+    await store(documentId, { ...known, refused: err.status });
+    throw new ServerMapRefusedError(err.status);
+  }
 }
 
 /** The autosave's remote step: push the document to its server map. */
@@ -178,6 +221,26 @@ export function shareDocument(
   });
 }
 
+/**
+ * The user's answer to `ServerMapRefusedError`: make a new server map for the
+ * document and send the bytes there. Links made from the old map stay on its
+ * last version; the next lasting share is a new link.
+ */
+export function saveAsNewServerCopy(
+  client: StorageClient,
+  bytes: Blob | Uint8Array,
+  documentId: string,
+): Promise<void> {
+  return serial(documentId, async () => {
+    await create(client, bytes, documentId);
+  });
+}
+
+/** True when the server refused the document's map and no copy was made yet. */
+export async function serverMapRefused(documentId: string): Promise<boolean> {
+  return (await load(documentId))?.refused !== undefined;
+}
+
 /** End a read link made from the document. */
 export function revokeShare(
   client: StorageClient,
@@ -191,7 +254,8 @@ export function revokeShare(
     }
     await client.revokeShareToken(entry.mapId, entry.writeKey, token);
     if (entry.share?.token === token) {
-      await store(documentId, { mapId: entry.mapId, writeKey: entry.writeKey });
+      const { share: _ended, ...rest } = entry;
+      await store(documentId, rest);
     }
   });
 }

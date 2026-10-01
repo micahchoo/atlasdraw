@@ -1,5 +1,12 @@
 name: Publish Docker
 
+# The published image is the self-host web image (code/apps/atlas-app/
+# Dockerfile): Yarn 4, nginx with the SPA fallback and the cache classes, run
+# as a non-root user. It is the local-only build: maps stay in the browser,
+# and a deep link (/m/<token>, /m#..., /embed/...) serves the app.
+# The build stage runs on the runner's own platform; only the nginx stage is
+# per-platform, so the arm64 image needs no emulated Node build.
+
 on:
   workflow_dispatch:
 
@@ -25,7 +32,10 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./code
+          context: .
+          file: code/apps/atlas-app/Dockerfile
+          build-args: |
+            VITE_BUILD_TARGET=local-only
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |

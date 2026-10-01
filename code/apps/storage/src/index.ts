@@ -1,30 +1,24 @@
 // @atlasdraw/storage — entry point.
 //
-// Fastify HTTP server with two adapters (postgres-minio + sqlite-fs). The
-// adapter is picked from STORAGE_MODE env at startup; both implement the
-// StorageClient contract from ./types. Routes call the map service
-// (./service/maps.ts), which owns write keys, expiry and the size cap.
+// Reads the config, picks the adapter (STORAGE_MODE), builds the app
+// (app.ts) and listens. On SIGTERM or SIGINT it closes the app: requests in
+// flight finish first, then the store closes. A shutdown that takes longer
+// than SHUTDOWN_TIMEOUT_MS exits anyway; a write cut there leaves the old
+// map whole (see the adapters).
 
 import * as Sentry from "@sentry/node";
-import Fastify, { type FastifyInstance } from "fastify";
 
 import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
+import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { logger } from "./logger";
-import { registerRateLimitMiddleware } from "./middleware/rate-limit";
-import { registerHealthRoute } from "./routes/health";
-import { registerMapRoutes } from "./routes/maps";
-import { registerShareRoutes } from "./routes/share";
-import { createMapService } from "./service/maps";
 
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  // Opt-in Sentry. No-op when SENTRY_DSN is unset; see
-  // docs/architecture/adr/0009-error-capture.md.
-  // beforeSend scrubs Authorization headers and request IPs — operators who
-  // wire this DSN should still document the data flow in their privacy notice.
+  // Opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009. beforeSend
+  // drops the Authorization header and the client address.
   if (config.SENTRY_DSN) {
     Sentry.init({
       dsn: config.SENTRY_DSN,
@@ -42,28 +36,6 @@ async function main(): Promise<void> {
     logger.info("Sentry initialized");
   }
 
-  // Fastify v5: pass a pre-built pino instance via loggerInstance, not
-  // logger. The `logger` key only accepts boolean | pino-options-object
-  // and rejects an instantiated logger with FST_ERR_LOG_INVALID_LOGGER_CONFIG.
-  // Assert to the plain FastifyInstance. The concrete instance Fastify()
-  // infers from `loggerInstance` carries a specific pino Logger generic that
-  // is structurally incompatible with the FastifyInstance param every
-  // registerX(app, …) helper takes — a known Fastify-v5 typing friction. The
-  // instance is compatible at runtime; the assertion collapses the spurious
-  // variance error that otherwise fires at each registration call site.
-  const app = Fastify({
-    loggerInstance: logger,
-    bodyLimit: 50 * 1024 * 1024, // 50 MiB
-    // `request.ip` feeds the rate limiter. See TRUST_PROXY in config.ts.
-    trustProxy: config.TRUST_PROXY,
-  }) as unknown as FastifyInstance;
-
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
-  );
-
   const client =
     config.STORAGE_MODE === "sqlite-fs"
       ? createSqliteFsAdapter({ dataDir: config.DATA_DIR })
@@ -72,64 +44,34 @@ async function main(): Promise<void> {
           blobEndpoint: config.BLOB_ENDPOINT,
           blobAccessKey: config.BLOB_ACCESS_KEY,
           blobSecretKey: config.BLOB_SECRET_KEY,
+          blobBucket: config.BLOB_BUCKET,
+          blobRegion: config.BLOB_REGION,
         });
 
-  const service = createMapService(client, {
-    maxTotalBytes: config.MAX_TOTAL_BYTES,
-  });
-
-  registerHealthRoute(app, config.STORAGE_MODE, client);
-  // Per-IP rate limit for the internet-facing HTTP API (SECURITY.md row 7).
-  // onRequest hook — runs before body parsing; /health is exempt internally.
-  registerRateLimitMiddleware(app, {
-    max: config.RATE_LIMIT_MAX,
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-  });
-  registerMapRoutes(app, service);
-  registerShareRoutes(app, service, config.PUBLIC_URL);
-
-  // Wire Sentry into Fastify error handling. Sentry is opt-in (no-op when
-  // SENTRY_DSN is unset); captureException is a no-op if init was skipped.
-  app.setErrorHandler((error, _request, reply) => {
-    Sentry.captureException(error);
-    const err = error as { statusCode?: number; message?: string };
-    reply.status(err.statusCode || 500).send({
-      error: err.message || "Internal Server Error",
-    });
-  });
-
+  const app = buildApp({ config, client });
   await app.listen({ host: "0.0.0.0", port: config.PORT });
   app.log.info(
     `Storage started in ${config.STORAGE_MODE} mode on :${config.PORT}`,
   );
 
-  // Delete expired share tokens and the keyless maps no live token reads.
-  const sweep = () =>
-    service
-      .sweep()
-      .then((swept) => {
-        if (swept.tokens > 0 || swept.maps > 0) {
-          app.log.info({ swept }, "storage sweep");
-        }
-      })
-      .catch((err: unknown) => app.log.warn({ err }, "storage sweep failed"));
-  void sweep();
-  const sweepTimer =
-    config.SWEEP_INTERVAL_MS > 0
-      ? setInterval(() => void sweep(), config.SWEEP_INTERVAL_MS)
-      : null;
-  sweepTimer?.unref();
-
-  // Graceful shutdown: close the adapter (DB pools, blob clients) then
-  // close the HTTP server so in-flight requests drain before exit.
-  const shutdown = async (signal: string) => {
-    app.log.info(`Received ${signal} — shutting down`);
-    if (sweepTimer) {
-      clearInterval(sweepTimer);
+  let stopping = false;
+  const shutdown = (signal: string): void => {
+    if (stopping) {
+      return;
     }
-    await client.close();
-    await app.close();
-    process.exit(0);
+    stopping = true;
+    app.log.info(`Received ${signal}; draining requests, then closing`);
+    setTimeout(() => {
+      app.log.warn("shutdown timed out; exiting with requests in flight");
+      process.exit(1);
+    }, config.SHUTDOWN_TIMEOUT_MS).unref();
+    app.close().then(
+      () => process.exit(0),
+      (err: unknown) => {
+        app.log.error({ err }, "shutdown failed");
+        process.exit(1);
+      },
+    );
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));

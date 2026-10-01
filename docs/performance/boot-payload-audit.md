@@ -9,9 +9,9 @@ Date: 2026-09-13.
 > `state/room.ts`, which the editor imports. The cache policy and
 > the four serving surfaces are unchanged
 > (`.claude/rules/static-serving-cache-policy.md`).
-Method: checked atlas-app's build and serving config against the ranked fix
-list at `https://makefaster.dev/data/improvements.json` (67 fixes, 1343
-applications). Rank numbers below refer to that list.
+> Method: checked atlas-app's build and serving config against the ranked fix
+> list at `https://makefaster.dev/data/improvements.json` (67 fixes, 1343
+> applications). Rank numbers below refer to that list.
 
 Read the list as an ORDERING, not as a promise. `count` is how often people
 applied a fix, not how often it worked, and the millisecond figures are
@@ -192,20 +192,12 @@ page errors. Gate: `tsc --noEmit` clean, eslint clean, prettier clean,
   holding Excalidraw and MapLibre. Cosmetic, but it misleads anyone reading a
   waterfall.
 
-## Open — a fourth serving surface
+## Closed — the fourth serving surface (2026-10-01)
 
-`code/Dockerfile` also builds an nginx image from the same `dist`, and it is
-the one CI publishes (`ghcr.io/micahchoo/atlasdraw:latest`, from
-`publish-docker.yml`, context `./code`). `code/apps/atlas-app/Dockerfile` — the
-one this audit examined and fixed — is used only by
-`infra/docker-compose.yml`.
-
-The published image ships stock nginx config: no cache headers, and no SPA
-fallback either, so a deep link 404s there. Fixing its headers means deciding
-the fallback question at the same time, which is a behaviour change, not a
-header change. Left alone deliberately. The new `nginx.conf` is reachable from
-that build context as `apps/atlas-app/nginx.conf`, so adopting it is one
-`COPY` line once someone decides the two images should agree.
-
-`code/vercel.json` has no `rewrites`, so SPA deep links likely 404 on Vercel
-too. Same class of gap. Not touched.
+`code/Dockerfile` built the image CI published (`ghcr.io/micahchoo/atlasdraw`)
+with stock nginx: no cache headers and no SPA fallback, so a deep link
+404ed. It is deleted. `publish-docker.yml` now builds
+`code/apps/atlas-app/Dockerfile` (local-only target), which serves this
+`nginx.conf`, so the published image and the self-host image agree.
+`code/vercel.json` gained a `rewrites` entry for the same deep links; it
+skips `/assets/`, so a missing chunk still answers 404.

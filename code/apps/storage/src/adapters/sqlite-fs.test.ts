@@ -4,6 +4,8 @@ import * as path from "node:path";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { bodyOf, bytesOf } from "../test-support";
+
 import { createSqliteFsAdapter } from "./sqlite-fs";
 
 describe("sqlite-fs adapter", () => {
@@ -20,11 +22,13 @@ describe("sqlite-fs adapter", () => {
   it("createMap writes blob + row, then getMap roundtrips", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     const blob = Buffer.from("hello, atlas");
-    const record = await client.createMap(blob, null);
+    const record = await client.createMap(bodyOf(blob), null);
 
     expect(record.id).toMatch(/^[A-Za-z0-9_-]{21}$/);
     expect(record.byte_size).toBe(blob.byteLength);
-    expect(record.blob_ref).toBe(`blobs/${record.id}.atlasdraw`);
+    expect(record.blob_ref).toMatch(
+      new RegExp(`^blobs/${record.id}\\.[0-9a-f]{12}\\.atlasdraw$`),
+    );
     expect(record.created_at).toBe(record.updated_at);
 
     // Blob actually written to disk.
@@ -50,12 +54,12 @@ describe("sqlite-fs adapter", () => {
 
   it("updateMap changes byte_size, updated_at, and the blob bytes", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const created = await client.createMap(Buffer.from("v1"), null);
+    const created = await client.createMap(bodyOf("v1"), null);
     // Sleep a tick so the ISO string differs.
     await new Promise((r) => setTimeout(r, 10));
 
     const v2 = Buffer.from("version two — longer");
-    const updated = await client.updateMap(created.id, v2);
+    const updated = await client.updateMap(created.id, bodyOf(v2));
 
     expect(updated.id).toBe(created.id);
     expect(updated.byte_size).toBe(v2.byteLength);
@@ -68,14 +72,14 @@ describe("sqlite-fs adapter", () => {
 
   it("updateMap throws not-found for unknown id", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    await expect(
-      client.updateMap("a".repeat(21), Buffer.from("x")),
-    ).rejects.toThrow(/not found/);
+    await expect(client.updateMap("a".repeat(21), bodyOf("x"))).rejects.toThrow(
+      /not found/,
+    );
   });
 
   it("createShareToken links to map and sets mode=read", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const map = await client.createMap(Buffer.from("blob"), null);
+    const map = await client.createMap(bodyOf("blob"), null);
     const token = await client.createShareToken(map.id, null);
 
     expect(token.token).toMatch(/^[A-Za-z0-9_-]{21}$/);
@@ -85,11 +89,12 @@ describe("sqlite-fs adapter", () => {
 
   it("writes a blob through a temp file and leaves none behind", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const map = await client.createMap(Buffer.from("v1"), null);
-    await client.updateMap(map.id, Buffer.from("v2"));
+    const map = await client.createMap(bodyOf("v1"), null);
+    await client.updateMap(map.id, bodyOf("v2"));
 
+    const updated = await client.getMap(map.id);
     expect(fs.readdirSync(path.join(scratch.name, "blobs"))).toEqual([
-      `${map.id}.atlasdraw`,
+      path.basename(updated!.blob_ref),
     ]);
   });
 
@@ -108,7 +113,7 @@ describe("sqlite-fs adapter", () => {
 
   it("resolveToken returns the token row when it exists", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
-    const map = await client.createMap(Buffer.from("blob"), null);
+    const map = await client.createMap(bodyOf("blob"), null);
     const created = await client.createShareToken(map.id, null);
     const resolved = await client.resolveToken(created.token);
     expect(resolved).toEqual(created);
@@ -118,10 +123,9 @@ describe("sqlite-fs adapter", () => {
   it("getBlob returns the original bytes for an existing map", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     const payload = Buffer.from("scene-bytes-roundtrip");
-    const map = await client.createMap(payload, null);
-    const fetched = await client.getBlob(map.id);
-    expect(fetched).not.toBeNull();
-    expect(fetched!.equals(payload)).toBe(true);
+    const map = await client.createMap(bodyOf(payload), null);
+    const fetched = await bytesOf(client.getBlob(map.id));
+    expect(fetched?.equals(payload)).toBe(true);
   });
 
   it("getBlob returns null for unknown id (well-formed)", async () => {

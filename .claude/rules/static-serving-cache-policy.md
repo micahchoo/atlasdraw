@@ -2,23 +2,30 @@
 paths:
   - code/apps/atlas-app/nginx.conf
   - code/vercel.json
-  - code/Dockerfile
   - code/apps/atlas-app/Dockerfile
+  - .github/workflows/publish-docker.yml
 tags: [performance, caching, deploy]
 priority: normal
 source: hand-written
 ---
 
-# One cache policy, four serving surfaces — change one, change the others
+# One cache policy, three serving configs — change one, change the others
 
-atlas-app's `dist` is served by four things that share no config mechanism:
+atlas-app's `dist` is served by four surfaces through three configs that
+share no mechanism:
 
-| surface         | config                                   | built by                               |
-| --------------- | ---------------------------------------- | -------------------------------------- |
-| self-host nginx | `code/apps/atlas-app/nginx.conf`         | `infra/docker-compose.yml`             |
-| published image | `code/Dockerfile` (stock nginx, no conf) | `publish-docker.yml`, context `./code` |
-| Vercel          | `code/vercel.json`                       | `vercel.json` `buildCommand`           |
-| GitHub Pages    | none possible                            | `pages.yml`                            |
+| surface         | config                           | built by                                                             |
+| --------------- | -------------------------------- | -------------------------------------------------------------------- |
+| self-host nginx | `code/apps/atlas-app/nginx.conf` | `infra/docker-compose*.yml`                                          |
+| published image | the same `nginx.conf`            | `publish-docker.yml`, `apps/atlas-app/Dockerfile` (local-only build) |
+| Vercel          | `code/vercel.json`               | `vercel.json` `buildCommand`                                         |
+| GitHub Pages    | none possible                    | `pages.yml`                                                          |
+
+The SPA fallback is part of the policy: `/m/<token>`, `/m#...` and
+`/embed/...` must serve `index.html`. nginx does it with `try_files`;
+Vercel with the `rewrites` entry, which skips `/assets/` so a missing chunk
+still 404s. Before 2026-10-01 the published image (`code/Dockerfile`, now
+deleted) had stock nginx and Vercel had no rewrite, so deep links 404ed.
 
 The policy is two paired rules, and they are only correct together:
 

@@ -1,22 +1,34 @@
 // @atlasdraw/storage — sqlite-fs adapter.
 //
-// Minimal stack: SQLite for metadata, the filesystem for blobs. A blob is
-// written to a temp file, flushed to disk and renamed over the old one, so a
-// crash leaves the old bytes or the new bytes, never a mix.
+// Minimal stack: SQLite for metadata, the filesystem for blobs. Every write
+// streams to a NEW file (`blobs/<id>.<random>.atlasdraw`) through a flushed
+// temp file and a rename; one transaction then checks the row still exists,
+// points it at the new file and counts the size change; only then is the old
+// file deleted. A crash at any point leaves the old map whole. Reads stream
+// from an open file; no blob is ever held whole in memory.
+//
+// The size cap (types.ts#StorageClient): bytes are reserved in
+// storage_reservations before the first one is written, and the reservation
+// turns into counted bytes (storage_usage) in the same transaction as the
+// row change.
 
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
+import { pipeline } from "node:stream/promises";
 
 import Database from "better-sqlite3";
 import { nanoid } from "nanoid";
 
 import { ID_RE } from "../constants";
 import { migrateSqlite } from "../db/migrate";
+import { WRITE_KEYS_MIGRATION } from "../db/migrations";
+import { measured } from "../lib/body";
+import { storageFull } from "../lib/errors";
 
 import type {
-  MapRecord,
+  BlobBody,
   ShareToken,
   StorageClient,
   SweepResult,
@@ -41,33 +53,24 @@ interface ShareRow {
 
 const TEMP_SUFFIX = ".tmp";
 
-/** Writes `bytes` to `target` through a flushed temp file and a rename. */
-async function writeAtomic(target: string, bytes: Buffer): Promise<void> {
-  const temp = `${target}.${randomBytes(6).toString("hex")}${TEMP_SUFFIX}`;
+function newBlobRef(id: string): string {
+  return `blobs/${id}.${randomBytes(6).toString("hex")}.atlasdraw`;
+}
+
+/** Streams `body` to `target` through a flushed temp file and a rename. */
+async function writeAtomic(target: string, body: BlobBody): Promise<void> {
+  const temp = `${target}${TEMP_SUFFIX}`;
   try {
-    const handle = await fsp.open(temp, "w");
-    try {
-      await handle.writeFile(bytes);
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
+    await pipeline(
+      body.stream,
+      measured(body.size),
+      fs.createWriteStream(temp, { flush: true }),
+    );
     await fsp.rename(temp, target);
   } catch (err) {
     await fsp.rm(temp, { force: true });
     throw err;
   }
-}
-
-function rowToMap(row: MapRow): MapRecord {
-  return {
-    id: row.id,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    blob_ref: row.blob_ref,
-    byte_size: row.byte_size,
-    write_key_hash: row.write_key_hash,
-  };
 }
 
 function rowToShare(row: ShareRow): ShareToken {
@@ -85,6 +88,7 @@ export function createSqliteFsAdapter(opts: {
 }): StorageClient {
   const { dataDir } = opts;
   const blobsDir = path.join(dataDir, "blobs");
+  const blobPath = (ref: string) => path.join(dataDir, ref);
   fs.mkdirSync(blobsDir, { recursive: true });
   // A temp file left by a crash mid-write belongs to no map.
   for (const name of fs.readdirSync(blobsDir)) {
@@ -95,15 +99,21 @@ export function createSqliteFsAdapter(opts: {
 
   const db = new Database(path.join(dataDir, "atlas.db"));
   db.pragma("journal_mode = WAL");
+  // Two servers on one file would otherwise wait forever on each other.
+  db.pragma("busy_timeout = 5000");
   migrateSqlite(db);
 
+  const selectMap = db.prepare(`SELECT * FROM maps WHERE id = ?`);
   const insertMap = db.prepare(
     `INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size, write_key_hash)
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
-  const selectMap = db.prepare(`SELECT * FROM maps WHERE id = ?`);
-  const updateMapRow = db.prepare(
-    `UPDATE maps SET updated_at = ?, byte_size = ? WHERE id = ?`,
+  const pointMap = db.prepare(
+    `UPDATE maps SET blob_ref = ?, byte_size = ?, updated_at = ? WHERE id = ?`,
+  );
+  const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
+  const deleteMapShares = db.prepare(
+    `DELETE FROM share_tokens WHERE map_id = ?`,
   );
   const insertShare = db.prepare(
     `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
@@ -113,22 +123,98 @@ export function createSqliteFsAdapter(opts: {
   const deleteShare = db.prepare(
     `DELETE FROM share_tokens WHERE token = ? AND map_id = ?`,
   );
-  const sumBytes = db.prepare(
-    `SELECT COALESCE(SUM(byte_size), 0) AS total FROM maps`,
-  );
   const deleteExpired = db.prepare(
     `DELETE FROM share_tokens WHERE expires_at IS NOT NULL AND expires_at <= ?`,
   );
   const selectUnreachable = db.prepare(
-    `SELECT id, blob_ref FROM maps
+    `SELECT id, blob_ref, byte_size FROM maps
      WHERE write_key_hash IS NULL
        AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)`,
   );
-  const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
-
-  const deleteMapShares = db.prepare(
-    `DELETE FROM share_tokens WHERE map_id = ?`,
+  const selectRefs = db.prepare(`SELECT blob_ref FROM maps`);
+  const upgradedAt = db.prepare(
+    `SELECT applied_at FROM schema_migrations WHERE name = ?`,
   );
+
+  const usage = db.prepare(
+    `SELECT total_bytes FROM storage_usage WHERE id = 1`,
+  );
+  const addUsage = db.prepare(
+    `UPDATE storage_usage SET total_bytes = total_bytes + ? WHERE id = 1`,
+  );
+  const reserved = db.prepare(
+    `SELECT COALESCE(SUM(bytes), 0) AS bytes FROM storage_reservations`,
+  );
+  const insertReservation = db.prepare(
+    `INSERT INTO storage_reservations (id, bytes, created_at) VALUES (?, ?, ?)`,
+  );
+  const deleteReservation = db.prepare(
+    `DELETE FROM storage_reservations WHERE id = ?`,
+  );
+  const deleteStaleReservations = db.prepare(
+    `DELETE FROM storage_reservations WHERE created_at < ?`,
+  );
+
+  const counted = () => (usage.get() as { total_bytes: number }).total_bytes;
+  const inFlight = () => (reserved.get() as { bytes: number }).bytes;
+
+  /** A reservation id, or null when `bytes` would pass `cap`. */
+  const reserve = db.transaction((bytes: number, cap: number) => {
+    if (cap > 0 && counted() + inFlight() + bytes > cap) {
+      return null;
+    }
+    const id = randomBytes(9).toString("base64url");
+    insertReservation.run(id, bytes, new Date().toISOString());
+    return id;
+  });
+
+  const commitCreate = db.transaction((row: MapRow, reservation: string) => {
+    insertMap.run(
+      row.id,
+      row.created_at,
+      row.updated_at,
+      row.blob_ref,
+      row.byte_size,
+      row.write_key_hash,
+    );
+    addUsage.run(row.byte_size);
+    deleteReservation.run(reservation);
+  });
+
+  type Swap =
+    | { kind: "swapped"; old: MapRow }
+    | { kind: "missing" }
+    | { kind: "full" };
+
+  /**
+   * Points the map at its new blob, if the map still exists and the size
+   * change still fits. `growth` is what the reservation holds.
+   */
+  const commitSwap = db.transaction(
+    (
+      id: string,
+      ref: string,
+      size: number,
+      at: string,
+      reservation: string,
+      growth: number,
+      cap: number,
+    ): Swap => {
+      deleteReservation.run(reservation);
+      const row = selectMap.get(id) as MapRow | undefined;
+      if (!row) {
+        return { kind: "missing" };
+      }
+      const delta = size - row.byte_size;
+      if (cap > 0 && delta > growth && counted() + inFlight() + delta > cap) {
+        return { kind: "full" };
+      }
+      pointMap.run(ref, size, at, id);
+      addUsage.run(delta);
+      return { kind: "swapped", old: row };
+    },
+  );
+
   const deleteMapRows = db.transaction((id: string) => {
     const row = selectMap.get(id) as MapRow | undefined;
     if (!row) {
@@ -136,42 +222,104 @@ export function createSqliteFsAdapter(opts: {
     }
     deleteMapShares.run(id);
     deleteMapRow.run(id);
+    addUsage.run(-row.byte_size);
     return row.blob_ref;
   });
 
-  const sweepRows = db.transaction((nowIso: string) => {
-    const tokens = deleteExpired.run(nowIso).changes;
-    const maps = selectUnreachable.all() as Array<{
-      id: string;
-      blob_ref: string;
-    }>;
-    for (const map of maps) {
-      deleteMapRow.run(map.id);
+  const sweepRows = db.transaction(
+    (nowIso: string, keyless: boolean, staleIso: string) => {
+      const tokens = deleteExpired.run(nowIso).changes;
+      const maps = keyless
+        ? (selectUnreachable.all() as Array<{
+            id: string;
+            blob_ref: string;
+            byte_size: number;
+          }>)
+        : [];
+      for (const map of maps) {
+        deleteMapRow.run(map.id);
+        addUsage.run(-map.byte_size);
+      }
+      deleteStaleReservations.run(staleIso);
+      return { tokens, refs: maps.map((m) => m.blob_ref) };
+    },
+  );
+
+  /** Streams the bytes to a new blob under a reservation; null when full. */
+  async function writeReserved(
+    id: string,
+    body: BlobBody,
+    bytes: number,
+    cap: number,
+  ): Promise<{ ref: string; reservation: string } | null> {
+    const reservation = reserve.immediate(bytes, cap);
+    if (reservation === null) {
+      return null;
     }
-    return { tokens, maps };
-  });
+    const ref = newBlobRef(id);
+    try {
+      await writeAtomic(blobPath(ref), body);
+    } catch (err) {
+      deleteReservation.run(reservation);
+      throw err;
+    }
+    return { ref, reservation };
+  }
+
+  async function removeOrphans(olderThan: number): Promise<number> {
+    const live = new Set(
+      (selectRefs.all() as Array<{ blob_ref: string }>).map((r) =>
+        path.basename(r.blob_ref),
+      ),
+    );
+    let removed = 0;
+    for (const name of await fsp.readdir(blobsDir)) {
+      if (live.has(name) || name.endsWith(TEMP_SUFFIX)) {
+        continue;
+      }
+      const file = path.join(blobsDir, name);
+      const stat = await fsp.stat(file).catch(() => null);
+      // Checked again: a write may have pointed a row at it since.
+      if (stat && stat.mtimeMs < olderThan && !isReferenced(name)) {
+        await fsp.rm(file, { force: true });
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+  const refCount = db.prepare(`SELECT 1 FROM maps WHERE blob_ref = ?`);
+  const isReferenced = (name: string) =>
+    refCount.get(`blobs/${name}`) !== undefined;
 
   return {
-    async createMap(blob, writeKeyHash) {
+    async createMap(body, writeKeyHash, opts = {}) {
       const id = nanoid(21);
-      const now = new Date().toISOString();
-      const blobRef = `blobs/${id}.atlasdraw`;
-      const fullPath = path.join(dataDir, blobRef);
-      await writeAtomic(fullPath, blob);
-      try {
-        insertMap.run(id, now, now, blobRef, blob.byteLength, writeKeyHash);
-      } catch (err) {
-        await fsp.rm(fullPath, { force: true });
-        throw err;
+      const written = await writeReserved(
+        id,
+        body,
+        body.size,
+        opts.maxTotalBytes ?? 0,
+      );
+      if (!written) {
+        throw storageFull();
       }
-      return {
+      const now = new Date().toISOString();
+      const row: MapRow = {
         id,
         created_at: now,
         updated_at: now,
-        blob_ref: blobRef,
-        byte_size: blob.byteLength,
+        blob_ref: written.ref,
+        byte_size: body.size,
         write_key_hash: writeKeyHash,
       };
+      try {
+        commitCreate.immediate(row, written.reservation);
+      } catch (err) {
+        deleteReservation.run(written.reservation);
+        await fsp.rm(blobPath(written.ref), { force: true });
+        throw err;
+      }
+      return { ...row };
     },
 
     async getMap(id) {
@@ -179,10 +327,10 @@ export function createSqliteFsAdapter(opts: {
         return null;
       }
       const row = selectMap.get(id) as MapRow | undefined;
-      return row ? rowToMap(row) : null;
+      return row ? { ...row } : null;
     },
 
-    async updateMap(id, blob) {
+    async updateMap(id, body, opts = {}) {
       if (!ID_RE.test(id)) {
         throw new Error(`not found: ${id}`);
       }
@@ -190,13 +338,35 @@ export function createSqliteFsAdapter(opts: {
       if (!existing) {
         throw new Error(`not found: ${id}`);
       }
+      const cap = opts.maxTotalBytes ?? 0;
+      const growth = Math.max(0, body.size - existing.byte_size);
+      const written = await writeReserved(id, body, growth, cap);
+      if (!written) {
+        throw storageFull();
+      }
       const now = new Date().toISOString();
-      await writeAtomic(path.join(dataDir, existing.blob_ref), blob);
-      updateMapRow.run(now, blob.byteLength, id);
+      const swap = commitSwap.immediate(
+        id,
+        written.ref,
+        body.size,
+        now,
+        written.reservation,
+        growth,
+        cap,
+      );
+      if (swap.kind !== "swapped") {
+        await fsp.rm(blobPath(written.ref), { force: true });
+        throw swap.kind === "full"
+          ? storageFull()
+          : new Error(`not found: ${id}`);
+      }
+      // A reader that opened the old file keeps reading it.
+      await fsp.rm(blobPath(swap.old.blob_ref), { force: true });
       return {
-        ...rowToMap(existing),
+        ...swap.old,
+        blob_ref: written.ref,
+        byte_size: body.size,
         updated_at: now,
-        byte_size: blob.byteLength,
       };
     },
 
@@ -244,12 +414,23 @@ export function createSqliteFsAdapter(opts: {
       if (!row) {
         return null;
       }
+      let handle: fsp.FileHandle;
       try {
-        return await fsp.readFile(path.join(dataDir, row.blob_ref));
+        handle = await fsp.open(blobPath(row.blob_ref), "r");
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "ENOENT") {
           return null;
         }
+        throw err;
+      }
+      // The open handle keeps the bytes readable even if a later write
+      // replaces the file. The stream closes the handle when it ends or is
+      // destroyed.
+      try {
+        const { size } = await handle.stat();
+        return { stream: handle.createReadStream(), size };
+      } catch (err) {
+        await handle.close();
         throw err;
       }
     },
@@ -258,24 +439,38 @@ export function createSqliteFsAdapter(opts: {
       if (!ID_RE.test(id)) {
         return false;
       }
-      const blobRef = deleteMapRows(id);
+      const blobRef = deleteMapRows.immediate(id);
       if (blobRef === null) {
         return false;
       }
-      await fsp.rm(path.join(dataDir, blobRef), { force: true });
+      await fsp.rm(blobPath(blobRef), { force: true });
       return true;
     },
 
     async totalBytes() {
-      return (sumBytes.get() as { total: number }).total;
+      return counted();
     },
 
-    async sweep(now): Promise<SweepResult> {
-      const { tokens, maps } = sweepRows(now.toISOString());
-      for (const map of maps) {
-        await fsp.rm(path.join(dataDir, map.blob_ref), { force: true });
+    async sweep(now, opts): Promise<SweepResult> {
+      const upgrade = upgradedAt.get(WRITE_KEYS_MIGRATION) as
+        | { applied_at: string }
+        | undefined;
+      const keyless =
+        opts.legacyGraceMs === 0 ||
+        !upgrade ||
+        now.getTime() >=
+          new Date(upgrade.applied_at).getTime() + opts.legacyGraceMs;
+      const stale = now.getTime() - opts.orphanGraceMs;
+      const { tokens, refs } = sweepRows.immediate(
+        now.toISOString(),
+        keyless,
+        new Date(stale).toISOString(),
+      );
+      for (const ref of refs) {
+        await fsp.rm(blobPath(ref), { force: true });
       }
-      return { tokens, maps: maps.length };
+      const orphans = await removeOrphans(stale);
+      return { tokens, maps: refs.length, orphans };
     },
 
     async ping() {

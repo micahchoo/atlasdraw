@@ -119,12 +119,40 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("BLOB_BUCKET and BLOB_REGION", () => {
+    const base = {
+      STORAGE_MODE: "postgres-minio",
+      DATABASE_URL: "x",
+      BLOB_ENDPOINT: "x",
+      BLOB_ACCESS_KEY: "x",
+      BLOB_SECRET_KEY: "x",
+    };
+    it("default to the bucket and region the compose stack makes", () => {
+      const cfg = loadConfig(base);
+      expect(cfg).toMatchObject({
+        BLOB_BUCKET: "atlasdraw-maps",
+        BLOB_REGION: "us-east-1",
+      });
+    });
+    it("read an operator's bucket and region", () => {
+      const cfg = loadConfig({
+        ...base,
+        BLOB_BUCKET: "maps-prod",
+        BLOB_REGION: "eu-central-1",
+      });
+      expect(cfg).toMatchObject({
+        BLOB_BUCKET: "maps-prod",
+        BLOB_REGION: "eu-central-1",
+      });
+    });
+  });
+
   describe("MAX_TOTAL_BYTES and SWEEP_INTERVAL_MS", () => {
     const base = { STORAGE_MODE: "sqlite-fs", DATA_DIR: "/tmp/x" };
 
-    it("default to no cap and an hourly sweep", () => {
+    it("default to a 10 GiB cap and an hourly sweep", () => {
       const cfg = loadConfig(base);
-      expect(cfg.MAX_TOTAL_BYTES).toBe(0);
+      expect(cfg.MAX_TOTAL_BYTES).toBe(10 * 1024 ** 3);
       expect(cfg.SWEEP_INTERVAL_MS).toBe(3_600_000);
     });
 

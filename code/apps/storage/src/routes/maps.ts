@@ -1,5 +1,6 @@
-// /maps routes. Bodies are raw octet-stream (parsed at server init); the
-// 50 MiB bodyLimit answers 413 before a handler runs.
+// /maps routes. A body is raw octet-stream with a Content-Length, streamed
+// to the store (blob-body.ts): 411 without the length, 413 past
+// MAX_MAP_BYTES, both before a handler runs.
 //
 //   POST /maps            create; answers the map and its write key, once
 //   PUT  /maps/:id        replace the bytes            (write key)
@@ -9,7 +10,10 @@
 // There is no route that returns a map's record: nothing needs one.
 
 import { ID_RE } from "../constants";
+import { clientKey } from "../middleware/client-key";
+import { FixedWindow } from "../middleware/rate-limit";
 
+import { isBlobBody, sendBlob } from "./blob-body";
 import { REFUSAL, writeKeyOrRefuse } from "./write-key";
 
 import type { FastifyInstance } from "fastify";
@@ -21,13 +25,36 @@ interface IdParams {
 
 const NOT_OCTETS = { error: "Content-Type must be application/octet-stream" };
 
+export interface NewMapLimit {
+  /** New maps per address per window. 0: no limit. */
+  maxNewMaps: number;
+  windowMs: number;
+}
+
 export function registerMapRoutes(
   fastify: FastifyInstance,
   service: MapService,
+  limit: NewMapLimit = { maxNewMaps: 0, windowMs: 1 },
 ): void {
+  // POST /maps hands anyone a key; this bounds how many per address.
+  const newMaps =
+    limit.maxNewMaps > 0
+      ? new FixedWindow(limit.maxNewMaps, limit.windowMs)
+      : null;
+  if (newMaps) {
+    fastify.addHook("onClose", async () => newMaps.stop());
+  }
+
   fastify.post("/maps", async (request, reply) => {
-    if (!Buffer.isBuffer(request.body)) {
+    if (!isBlobBody(request.body)) {
       return reply.code(415).send(NOT_OCTETS);
+    }
+    const client = clientKey(request.ip);
+    if (newMaps && !newMaps.take(client)) {
+      return reply
+        .code(429)
+        .header("Retry-After", String(newMaps.retryAfter(client)))
+        .send({ error: "too many new maps from this address" });
     }
     const result = await service.create(request.body);
     if (result.kind === "full") {
@@ -48,7 +75,7 @@ export function registerMapRoutes(
     if (writeKey === null) {
       return reply;
     }
-    if (!Buffer.isBuffer(request.body)) {
+    if (!isBlobBody(request.body)) {
       return reply.code(415).send(NOT_OCTETS);
     }
     const result = await service.write(id, writeKey, request.body);
@@ -92,11 +119,7 @@ export function registerMapRoutes(
         const refusal = REFUSAL[result.kind];
         return reply.code(refusal.status).send(refusal.body);
       }
-      return reply
-        .code(200)
-        .header("Content-Type", "application/octet-stream")
-        .header("Cache-Control", "no-store")
-        .send(result.bytes);
+      return sendBlob(reply, result.blob, "no-store");
     },
   );
 }

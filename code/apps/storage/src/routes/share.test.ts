@@ -7,37 +7,17 @@
 import * as path from "node:path";
 
 import Database from "better-sqlite3";
-import Fastify, { type FastifyInstance } from "fastify";
 import * as tmp from "tmp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createSqliteFsAdapter } from "../adapters/sqlite-fs";
-import { createMapService } from "../service/maps";
+import { OCTETS, bearer, makeTestApp } from "../test-support";
 
-import { registerMapRoutes } from "./maps";
-import { registerShareRoutes } from "./share";
+import type { FastifyInstance } from "fastify";
 
-const OCTETS = { "content-type": "application/octet-stream" };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function bearer(key: string): Record<string, string> {
-  return { authorization: `Bearer ${key}` };
-}
-
 function makeApp(scratchDir: string, publicUrl: string): FastifyInstance {
-  const app = Fastify({ logger: false, bodyLimit: 50 * 1024 * 1024 });
-  app.addContentTypeParser(
-    "application/octet-stream",
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
-  );
-  const service = createMapService(
-    createSqliteFsAdapter({ dataDir: scratchDir }),
-    { maxTotalBytes: 0 },
-  );
-  registerMapRoutes(app, service);
-  registerShareRoutes(app, service, publicUrl);
-  return app;
+  return makeTestApp({ PUBLIC_URL: publicUrl }, { dataDir: scratchDir }).app;
 }
 
 describe("share routes", () => {
@@ -187,6 +167,22 @@ describe("share routes", () => {
       expect(res.headers["content-type"]).toBe("application/octet-stream");
       expect(res.headers["cache-control"]).toBe("no-cache");
       expect(res.body).toBe("hello, atlas world");
+    });
+
+    it("serves the bytes as a download that no browser renders or runs", async () => {
+      const { id, writeKey } = await createMap("<script>alert(1)</script>");
+      const { token } = await share(id, writeKey);
+
+      const res = await readShared(token);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["x-content-type-options"]).toBe("nosniff");
+      expect(res.headers["content-disposition"]).toMatch(/^attachment/);
+      expect(res.headers["content-security-policy"]).toMatch(/\bsandbox\b/);
+      expect(res.headers["content-security-policy"]).toContain(
+        "default-src 'none'",
+      );
+      expect(res.headers["content-length"]).toBe("25");
     });
 
     it("serves the latest bytes: a write updates every link", async () => {

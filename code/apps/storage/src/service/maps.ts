@@ -9,9 +9,15 @@
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { isNotFoundError } from "../lib/errors";
+import { isFullError, isNotFoundError } from "../lib/errors";
 
-import type { MapRecord, StorageClient, SweepResult } from "../types";
+import type {
+  BlobBody,
+  BlobRead,
+  MapRecord,
+  StorageClient,
+  SweepResult,
+} from "../types";
 
 /** What a client may see of a map. */
 export interface PublicMap {
@@ -24,16 +30,16 @@ export interface PublicMap {
 export type Forbidden = { kind: "forbidden" };
 export type Missing = { kind: "missing" };
 export type Full = { kind: "full" };
-export type Bytes = { kind: "bytes"; bytes: Buffer };
+export type Bytes = { kind: "bytes"; blob: BlobRead };
 
 export interface MapService {
   create(
-    bytes: Buffer,
+    body: BlobBody,
   ): Promise<{ kind: "created"; map: PublicMap; writeKey: string } | Full>;
   write(
     id: string,
     writeKey: string,
-    bytes: Buffer,
+    body: BlobBody,
   ): Promise<{ kind: "saved"; map: PublicMap } | Forbidden | Missing | Full>;
   /** The owner's backup: the map's latest bytes. */
   read(id: string, writeKey: string): Promise<Bytes | Forbidden | Missing>;
@@ -64,10 +70,18 @@ export interface MapService {
 export interface MapServiceOptions {
   /** The cap on the sum of all stored map sizes. 0: no cap. */
   maxTotalBytes: number;
+  /** How long keyless maps from before write keys are kept. Default 90 days. */
+  legacyGraceDays?: number;
   now?: () => Date;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Orphan blobs and size reservations older than this are left by a crash:
+ * no request lives this long (REQUEST_TIMEOUT_MS is minutes).
+ */
+export const ORPHAN_GRACE_MS = 60 * 60 * 1000;
 
 export function hashWriteKey(writeKey: string): string {
   return createHash("sha256").update(writeKey, "utf8").digest("hex");
@@ -97,13 +111,9 @@ export function createMapService(
 ): MapService {
   const now = opts.now ?? (() => new Date());
 
-  /** True if the store can take `growth` more bytes. */
-  async function fits(growth: number): Promise<boolean> {
-    if (opts.maxTotalBytes <= 0 || growth <= 0) {
-      return true;
-    }
-    return (await store.totalBytes()) + growth <= opts.maxTotalBytes;
-  }
+  // The store checks the cap in the same transaction that reserves the
+  // bytes, so concurrent writes cannot pass it together.
+  const cap = { maxTotalBytes: opts.maxTotalBytes };
 
   /** The map, if `writeKey` opens it. */
   async function owned(
@@ -124,31 +134,35 @@ export function createMapService(
   }
 
   return {
-    async create(bytes) {
-      if (!(await fits(bytes.byteLength))) {
-        return { kind: "full" };
-      }
+    async create(body) {
       const writeKey = randomBytes(32).toString("base64url");
-      const map = await store.createMap(bytes, hashWriteKey(writeKey));
-      return { kind: "created", map: publicMap(map), writeKey };
+      try {
+        const map = await store.createMap(body, hashWriteKey(writeKey), cap);
+        return { kind: "created", map: publicMap(map), writeKey };
+      } catch (err) {
+        if (isFullError(err)) {
+          return { kind: "full" };
+        }
+        throw err;
+      }
     },
 
-    async write(id, writeKey, bytes) {
+    async write(id, writeKey, body) {
       const map = await owned(id, writeKey);
       if (refused(map)) {
         return map;
       }
-      if (!(await fits(bytes.byteLength - map.byte_size))) {
-        return { kind: "full" };
-      }
       try {
         return {
           kind: "saved",
-          map: publicMap(await store.updateMap(id, bytes)),
+          map: publicMap(await store.updateMap(id, body, cap)),
         };
       } catch (err) {
         if (isNotFoundError(err)) {
           return { kind: "missing" };
+        }
+        if (isFullError(err)) {
+          return { kind: "full" };
         }
         throw err;
       }
@@ -159,8 +173,8 @@ export function createMapService(
       if (refused(map)) {
         return map;
       }
-      const bytes = await store.getBlob(id);
-      return bytes ? { kind: "bytes", bytes } : { kind: "missing" };
+      const blob = await store.getBlob(id);
+      return blob ? { kind: "bytes", blob } : { kind: "missing" };
     },
 
     async share(id, writeKey, expiresInDays) {
@@ -199,8 +213,8 @@ export function createMapService(
         return { kind: "expired" };
       }
       // A token whose map or bytes are gone reads as expired: it worked once.
-      const bytes = await store.getBlob(share.map_id);
-      return bytes ? { kind: "bytes", bytes } : { kind: "expired" };
+      const blob = await store.getBlob(share.map_id);
+      return blob ? { kind: "bytes", blob } : { kind: "expired" };
     },
 
     async revoke(id, writeKey, token) {
@@ -224,7 +238,10 @@ export function createMapService(
     },
 
     sweep() {
-      return store.sweep(now());
+      return store.sweep(now(), {
+        legacyGraceMs: (opts.legacyGraceDays ?? 90) * DAY_MS,
+        orphanGraceMs: ORPHAN_GRACE_MS,
+      });
     },
   };
 }
