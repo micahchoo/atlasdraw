@@ -1,5 +1,9 @@
 import { reseed } from "@atlasdraw/common";
 
+import { exportToCanvas, exportToSvg } from "@atlasdraw/utils";
+
+import { actionCopy } from "../actions/actionClipboard";
+import { actionSelectAll } from "../actions/actionSelectAll";
 import { Excalidraw } from "../index";
 
 import { API } from "./helpers/api";
@@ -104,5 +108,80 @@ describe("an element hidden by customData.atlas.hidden", () => {
     );
 
     expect(h.app.visibleElements.map((e) => e.id)).toEqual(["el"]);
+  });
+});
+
+describe("a hidden element is left out of every whole-scene path", () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    reseed(7);
+    await render(<Excalidraw handleKeyboardGlobally={true} />);
+    API.setElements([]);
+  });
+
+  /** A 100x100 shape at the origin, and a hidden one far away. */
+  const scene = () => [
+    API.createElement({
+      type: "rectangle",
+      id: "shown",
+      width: 100,
+      height: 100,
+    }),
+    hide(
+      API.createElement({
+        type: "rectangle",
+        id: "hidden",
+        x: 500,
+        y: 500,
+        width: 100,
+        height: 100,
+      }),
+    ),
+  ];
+
+  it("select all does not select it", () => {
+    act(() => API.setElements(scene()));
+    act(() => {
+      h.app.actionManager.executeAction(actionSelectAll);
+    });
+    expect(API.getSelectedElements().map((e) => e.id)).toEqual(["shown"]);
+  });
+
+  it("a canvas export (PNG, PDF, copy as PNG) does not draw it", async () => {
+    const canvas = await exportToCanvas({
+      elements: scene(),
+      files: null,
+      exportPadding: 0,
+    });
+    expect([canvas.width, canvas.height]).toEqual([100, 100]);
+  });
+
+  it("an SVG export does not draw it", async () => {
+    const svg = await exportToSvg({
+      elements: scene(),
+      files: null,
+      exportPadding: 0,
+    });
+    expect(svg.getAttribute("width")).toBe("100");
+  });
+
+  it("a copy does not carry it", async () => {
+    const [shown, hidden] = scene();
+    // A group selection can hold a hidden member.
+    act(() =>
+      API.setElements([
+        { ...shown, groupIds: ["g"] },
+        { ...hidden, groupIds: ["g"] },
+      ]),
+    );
+    API.setSelectedElements(h.elements.slice());
+    const event = new ClipboardEvent("copy", {
+      clipboardData: new DataTransfer(),
+    });
+    await act(() =>
+      h.app.actionManager.executeAction(actionCopy, "keyboard", event),
+    );
+    const copied = JSON.parse(event.clipboardData!.getData("text/plain"));
+    expect(copied.elements.map((e: { id: string }) => e.id)).toEqual(["shown"]);
   });
 });

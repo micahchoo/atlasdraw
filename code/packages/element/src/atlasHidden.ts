@@ -6,8 +6,11 @@
 // not draw it, and hit-testing and box selection do not find it. Text bound
 // to a hidden container is hidden with it.
 //
-// The three call sites are scene/Renderer.ts (draw), App.getElementsAtPosition
-// (click), and selection.ts shouldIgnoreElementFromSelection (box select).
+// `isAtlasHidden` is the one predicate. Its call sites: scene/Renderer.ts
+// (draw), App.getElementsAtPosition (click), selection.ts
+// shouldIgnoreElementFromSelection (box select), actionSelectAll (select
+// all), scene/export.ts prepareElementsForRender (every PNG, PDF, SVG and
+// copy-as-image export) and actionCopy (the clipboard).
 
 import type { ElementsMap, ExcalidrawElement } from "./types";
 

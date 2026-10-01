@@ -15,7 +15,11 @@ import {
   applyDarkModeFilter,
 } from "@atlasdraw/common";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@atlasdraw/element";
+import {
+  getCommonBounds,
+  getElementAbsoluteCoords,
+  isAtlasHidden,
+} from "@atlasdraw/element";
 
 import {
   getInitializedImageElements,
@@ -144,7 +148,7 @@ const getFrameRenderingConfig = (
 };
 
 const prepareElementsForRender = ({
-  elements,
+  elements: allElements,
   exportingFrame,
   frameRendering,
   exportWithDarkMode,
@@ -155,6 +159,11 @@ const prepareElementsForRender = ({
   exportWithDarkMode: AppState["exportWithDarkMode"];
 }) => {
   let nextElements: readonly ExcalidrawElement[];
+
+  // Atlasdraw: every export (PNG, PDF, SVG, copy as PNG or SVG) leaves out
+  // what the layer panel hid (element/src/atlasHidden.ts).
+  const allMap = arrayToMap(allElements);
+  const elements = allElements.filter((el) => !isAtlasHidden(el, allMap));
 
   if (exportingFrame) {
     nextElements = getElementsOverlappingFrame(
