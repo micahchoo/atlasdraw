@@ -95,7 +95,9 @@ vi.mock("@atlasdraw/data", () => ({
   requireHomogeneousGeometry: vi.fn(),
 }));
 
-vi.mock("@atlasdraw/tools", () => ({
+// The real measuring exports (W9) pass through; the rest is stubbed.
+vi.mock("@atlasdraw/tools", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@atlasdraw/tools")>()),
   PinTool: { name: "pin" },
   annotationToFeatureCollection: vi.fn(),
   drawingToFeatureCollection: vi.fn(),

@@ -13,6 +13,13 @@ describe("formatLength", () => {
     expect(formatLength(1_234_567, "metric")).toBe("1,235 km");
   });
 
+  it("takes the larger unit when the smaller one would round up to it", () => {
+    expect(formatLength(999.6, "metric")).toBe("1 km");
+    expect(formatLength(304.7, "imperial")).toBe("0.189 mi");
+    expect(formatArea(9_999.7, "metric")).toBe("1 ha");
+    expect(formatArea(999_600, "metric")).toBe("1 km²");
+  });
+
   it("gives feet below 1,000 ft and miles above", () => {
     expect(formatLength(100, "imperial")).toBe("328 ft");
     expect(formatLength(304.8, "imperial")).toBe("0.189 mi");

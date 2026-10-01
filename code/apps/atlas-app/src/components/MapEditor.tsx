@@ -65,6 +65,7 @@ import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useCommentMode, toggleCommentMode } from "../state/commentMode";
+import { useMeasureStore } from "../state/measure";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
@@ -124,6 +125,8 @@ import { StatusBar } from "./StatusBar";
 import { GeoSearchControl } from "./GeoSearchControl";
 import { MapCompass } from "./MapCompass";
 import { PinToolButton } from "./PinToolButton";
+import { MeasureToolButton } from "./MeasureToolButton";
+import { MeasureLayer } from "./MeasureLayer";
 import { CommentModeButton } from "./CommentModeButton";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
@@ -1124,6 +1127,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                       setActiveAtlasTool(isPinActive ? null : PinTool)
                     }
                   />
+                  <MeasureToolButton />
                   <CommentModeButton
                     active={commentMode}
                     onToggle={toggleCommentMode}
@@ -1365,6 +1369,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </>
           )}
 
+          {/* W9 — the Measure tool's overlay and the selection readout. */}
+          <MeasureLayer
+            map={map}
+            excalidrawAPI={excalidrawAPI}
+            otherToolActive={activeAtlasTool !== null || commentMode}
+            onStart={() => setActiveAtlasTool(null)}
+          />
+
           {/* Phase 6 A12 — Asset library info panel. Same root-level pattern as
           the basemap picker / Maputnik modal — MainMenu auto-close on item
           click would otherwise unmount it. Panel mounts → pushes the 3
@@ -1502,6 +1514,14 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                   category: "Tools",
                   keywords: ["marker", "point"],
                   onSelect: () => setActiveAtlasTool(PinTool),
+                },
+                {
+                  id: "measure",
+                  label: "Measure distance",
+                  category: "Tools",
+                  hint: "M",
+                  keywords: ["ruler", "length", "area", "distance"],
+                  onSelect: () => useMeasureStore.getState().setActive(true),
                 },
                 {
                   id: "layers",

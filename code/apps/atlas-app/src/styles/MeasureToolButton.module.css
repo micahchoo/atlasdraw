@@ -1,0 +1,15 @@
+/* MeasureToolButton — the Measure toggle on the collar tool strip. The same
+ * button as PinToolButton, so it composes that module's classes rather than
+ * copying them. */
+
+.button {
+  composes: button from "./PinToolButton.module.css";
+}
+
+.buttonActive {
+  composes: buttonActive from "./PinToolButton.module.css";
+}
+
+.icon {
+  composes: icon from "./PinToolButton.module.css";
+}
