@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-license.sh — Fail CI if any workspace package.json has wrong or missing license.
-# Per ADR 0002 (license split): AGPL-3.0-only for apps/root, MIT for SDK/CLI/vendored, MPL-2.0 for basemap/tools.
+# Per ADR 0002 (license split): AGPL-3.0-only for apps/root, MIT for CLI/libraries/vendored, MPL-2.0 for basemap/tools.
 #
 # Usage: run from repo root — bash scripts/check-license.sh
 set -euo pipefail
@@ -14,7 +14,6 @@ declare -A EXPECTED_LICENSE
 EXPECTED_LICENSE["package.json"]="AGPL-3.0-only"
 EXPECTED_LICENSE["apps/atlas-app/package.json"]="AGPL-3.0-only"
 EXPECTED_LICENSE["apps/realtime/package.json"]="AGPL-3.0-only"
-EXPECTED_LICENSE["packages/sdk/package.json"]="MIT"
 EXPECTED_LICENSE["packages/cli/package.json"]="MIT"
 EXPECTED_LICENSE["packages/geo/package.json"]="MIT"
 EXPECTED_LICENSE["packages/data/package.json"]="MIT"

@@ -47,7 +47,7 @@ Production deployment: `docs/self-host/`.
 
 ## Architecture
 
-11 subsystems in a hub-and-spoke pattern — `atlas-app` consumes all packages;
+10 subsystems in a hub-and-spoke pattern — `atlas-app` consumes all packages;
 packages have minimal mutual coupling.
 
 ```mermaid
@@ -58,7 +58,6 @@ graph LR
     A --> D[data]
     A --> P[protocol]
     A --> E[excalidraw]
-    A --> S[sdk]
     S[storage<br/>Fastify API] -.-> storage
     R[realtime<br/>WS relay] -.-> ws
 ```
@@ -75,7 +74,6 @@ graph LR
 | Storage Server | `code/apps/storage` | Tight — zero atlas imports |
 | Collaboration Relay | `code/apps/realtime` | Tight — opaque relay |
 | CLI Tooling | `code/packages/cli` | Tight — 2 commands |
-| Embed SDK | `code/packages/sdk` | N/A — stub |
 
 Full system map: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
@@ -95,8 +93,7 @@ atlasdraw/
 │   │   ├── data/            # .atlasdraw / GeoJSON / KML / CSV / SHP I/O
 │   │   ├── tools/           # geo-aware drawing tools
 │   │   ├── protocol/        # collaboration message types
-│   │   ├── sdk/             # embed surface (stub)
-│   │   ├── cli/             # headless lint / convert / render
+│   │   ├── cli/             # headless lint / convert (frozen, ADR-0016)
 │   │   ├── excalidraw/      # vendored upstream (light patches)
 │   │   ├── element/         # vendored upstream
 │   │   ├── math/            # vendored upstream
@@ -153,14 +150,14 @@ Server (`apps/storage`): Fastify, optional Postgres / SQLite, optional MinIO / S
   expression output.
 - **Print-to-PDF** layout panel built on `pdf-lib`.
 - **Excalidraw asset library** — `.excalidrawlib` reader with curated fixtures.
-- **Workspace abstraction** — `WorkspaceId` throughout storage routes.
 - **Accessibility** — `@react-aria/focus` keyboard nav, `FocusTrap`, `AriaAnnouncer`.
 
 Full list and per-phase recaps: [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Out of scope for 1.0
 
-- AtlasdrawAPI / SDK / embed widget (`packages/sdk` is a stub)
+- AtlasdrawAPI and a scriptable embed SDK (ADR-0016). A read-only map embeds
+  through the `/embed` route.
 - Felt importer
 - Phase 7 plugin sandbox
 
@@ -197,7 +194,7 @@ Authoritative table: [`code/LICENSING.md`](code/LICENSING.md).
 |---|---|
 | `apps/atlas-app` | MIT |
 | `apps/realtime`, `apps/storage` | AGPL-3.0-only |
-| `packages/sdk`, `packages/cli`, `packages/geo`, `packages/data` | MIT |
+| `packages/cli`, `packages/geo`, `packages/data` | MIT |
 | `packages/basemap`, `packages/tools` | MPL-2.0 |
 | Vendored `packages/{excalidraw,element,math,common,utils}` | MIT (upstream) |
 

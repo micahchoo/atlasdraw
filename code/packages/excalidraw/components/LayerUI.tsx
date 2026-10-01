@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import {
   CLASSES,
   DEFAULT_SIDEBAR,
-  TOOL_TYPE,
   arrayToMap,
   capitalizeString,
   isShallowEqual,
@@ -51,7 +50,6 @@ import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
 import { sidebarRightIcon } from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
-import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
 import ElementLinkDialog from "./ElementLinkDialog";
 import { ErrorDialog } from "./ErrorDialog";
@@ -62,7 +60,6 @@ import { HintViewer } from "./HintViewer";
 import { ImageExportDialog } from "./ImageExportDialog";
 import { Island } from "./Island";
 import { JSONExportDialog } from "./JSONExportDialog";
-import { LaserPointerButton } from "./LaserPointerButton";
 import { Toast } from "./Toast";
 
 import "./LayerUI.scss";
@@ -105,7 +102,6 @@ interface LayerUIProps {
   renderWelcomeScreen: boolean;
   children?: React.ReactNode;
   app: AppClassProperties;
-  isCollaborating: boolean;
   generateLinkForSelection?: AppProps["generateLinkForSelection"];
 }
 
@@ -169,7 +165,6 @@ const LayerUI = ({
   renderWelcomeScreen,
   children,
   app,
-  isCollaborating,
   generateLinkForSelection,
 }: LayerUIProps) => {
   const editorInterface = useEditorInterface();
@@ -184,7 +179,6 @@ const LayerUI = ({
         toolbarRowGap: 1,
         toolbarInnerRowGap: 0.5,
         islandPadding: 1,
-        collabMarginLeft: 8,
       }
     : {
         menuTopGap: 6,
@@ -192,7 +186,6 @@ const LayerUI = ({
         toolbarRowGap: 1,
         toolbarInnerRowGap: 1,
         islandPadding: 1,
-        collabMarginLeft: 8,
       };
 
   const TunnelsJotaiProvider = tunnels.tunnelsJotai.Provider;
@@ -320,9 +313,8 @@ const LayerUI = ({
   // toolbar (renderFixedSideContainer) and the collar strip
   // (renderCollarToolbar). Single home for tool ORDERING: pen mode, lock,
   // divider, shapes switcher, then the atlas-app renderToolbarExtras slot
-  // (geo-search / pin). The LaserPointerButton and undo/redo differ in
-  // wrapping between the two hosts (separate Island vs. inline strip), so they
-  // stay in each caller. `isMobile` is the first arg passed to
+  // (geo-search / pin). Undo/redo differ in wrapping between the two hosts,
+  // so they stay in each caller. `isMobile` is the first arg passed to
   // renderToolbarExtras (always false in collar mode — desktop/tablet only).
   const renderToolbarToolButtons = (isMobile: boolean) => (
     <>
@@ -433,26 +425,6 @@ const LayerUI = ({
                           )}
                         </Stack.Row>
                       </Island>
-                      {isCollaborating && (
-                        <Island
-                          style={{
-                            marginLeft: spacing.collabMarginLeft,
-                            alignSelf: "center",
-                            height: "fit-content",
-                          }}
-                        >
-                          <LaserPointerButton
-                            title={t("toolBar.laser")}
-                            checked={
-                              appState.activeTool.type === TOOL_TYPE.laser
-                            }
-                            onChange={() =>
-                              app.setActiveTool({ type: TOOL_TYPE.laser })
-                            }
-                            isMobile
-                          />
-                        </Island>
-                      )}
                     </Stack.Row>
                   </Stack.Col>
                 </div>
@@ -567,19 +539,6 @@ const LayerUI = ({
               {heading}
               {/* collar mode is desktop/tablet only — isMobile is false */}
               {renderToolbarToolButtons(false)}
-              {isCollaborating && (
-                <>
-                  <div className="App-toolbar__divider" />
-                  <LaserPointerButton
-                    title={t("toolBar.laser")}
-                    checked={appState.activeTool.type === TOOL_TYPE.laser}
-                    onChange={() =>
-                      app.setActiveTool({ type: TOOL_TYPE.laser })
-                    }
-                    isMobile
-                  />
-                </>
-              )}
               {/* Undo/redo live in the collar near the tools — the floating
                 bottom-left Footer cluster is not rendered in collar mode. */}
               <UndoRedoActions
@@ -690,7 +649,6 @@ const LayerUI = ({
         tab={DEFAULT_SIDEBAR.defaultTab}
       />
       <DefaultOverwriteConfirmDialog />
-      {appState.openDialog?.name === "ttd" && <TTDDialog __fallback />}
       {/* ------------------------------------------------------------------ */}
 
       {appState.isLoading && <LoadingMessage delay={250} />}

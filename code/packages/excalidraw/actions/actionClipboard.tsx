@@ -20,6 +20,8 @@ import { t } from "../i18n";
 import { actionDeleteSelected } from "./actionDeleteSelected";
 import { register } from "./register";
 
+import type { AppClassProperties } from "../types";
+
 export const actionCopy = register<ClipboardEvent | null>({
   name: "copy",
   label: "labels.copy",
@@ -121,6 +123,11 @@ export const actionCut = register<ClipboardEvent | null>({
   keyTest: (event) => event[KEYS.CTRL_OR_CMD] && event.key === KEYS.X,
 });
 
+// Copying an image is an image export, so `canvasActions.saveAsImage`
+// closes it together with the image export dialog.
+const isCopyAsImageEnabled = (app: AppClassProperties) =>
+  !!app.props.UIOptions.canvasActions.saveAsImage;
+
 export const actionCopyAsSvg = register({
   name: "copyAsSvg",
   label: "labels.copyAsSvg",
@@ -183,8 +190,12 @@ export const actionCopyAsSvg = register({
       };
     }
   },
-  predicate: (elements) => {
-    return probablySupportsClipboardWriteText && elements.length > 0;
+  predicate: (elements, appState, props, app) => {
+    return (
+      probablySupportsClipboardWriteText &&
+      elements.length > 0 &&
+      isCopyAsImageEnabled(app)
+    );
   },
   keywords: ["svg", "clipboard", "copy"],
 });
@@ -216,7 +227,6 @@ export const actionCopyAsPng = register({
         ...appState,
         exportingFrame,
         name: app.getName(),
-        backgroundCanvas: app.props.getBackgroundCanvas?.() ?? null,
       });
       return {
         appState: {
@@ -245,10 +255,18 @@ export const actionCopyAsPng = register({
       };
     }
   },
-  predicate: (elements) => {
-    return probablySupportsClipboardBlob && elements.length > 0;
+  predicate: (elements, appState, props, app) => {
+    return (
+      probablySupportsClipboardBlob &&
+      elements.length > 0 &&
+      isCopyAsImageEnabled(app)
+    );
   },
-  keyTest: (event) => event.code === CODES.C && event.altKey && event.shiftKey,
+  keyTest: (event, appState, elements, app) =>
+    event.code === CODES.C &&
+    event.altKey &&
+    event.shiftKey &&
+    isCopyAsImageEnabled(app),
   keywords: ["png", "clipboard", "copy"],
 });
 

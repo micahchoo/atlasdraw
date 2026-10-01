@@ -2,7 +2,7 @@
  * SettingsDialog — tabbed settings modal.
  *
  * Consolidates basemap selection + storage config + collaboration defaults
- * + workspace info into a single surface. Replaces the standalone
+ * into a single surface. Replaces the standalone
  * BasemapPickerDialog as the primary basemap selection UI.
  *
  * Design: drafting-room settings card — tabs for categorization, vellum
@@ -27,21 +27,18 @@ interface SettingsDialogProps {
   activeBasemapId: string;
   onBasemapChange: (id: BasemapConfig["id"]) => void;
   onCloseRequest: () => void;
-  /** Managed-mode workspace id; empty string in self-host. */
-  workspaceId?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------------
 
-type Tab = "basemap" | "storage" | "collaboration" | "workspace";
+type Tab = "basemap" | "storage" | "collaboration";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "basemap", label: "Basemap" },
   { id: "storage", label: "Storage" },
   { id: "collaboration", label: "Collab" },
-  { id: "workspace", label: "Workspace" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -50,7 +47,6 @@ export function SettingsDialog({
   activeBasemapId,
   onBasemapChange,
   onCloseRequest,
-  workspaceId,
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<Tab>("basemap");
 
@@ -116,9 +112,6 @@ export function SettingsDialog({
             )}
             {activeTab === "storage" && <StorageTab />}
             {activeTab === "collaboration" && <CollaborationTab />}
-            {activeTab === "workspace" && (
-              <WorkspaceTab workspaceId={workspaceId} />
-            )}
           </div>
 
           {/* Footer */}
@@ -284,30 +277,6 @@ function CollaborationTab() {
             ? "Cursor + viewport sharing enabled"
             : "Disabled — no realtime server configured"}
         </span>
-      </div>
-    </div>
-  );
-}
-
-function WorkspaceTab({ workspaceId }: { workspaceId?: string }) {
-  if (!workspaceId) {
-    return (
-      <div>
-        <h3 className={styles.sectionTitle}>Workspace</h3>
-        <p className={styles.fieldLabel}>
-          Self-host mode — single default workspace. Workspace management is
-          available in managed (hosted) deployments.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h3 className={styles.sectionTitle}>Workspace</h3>
-      <div className={styles.fieldGroup}>
-        <span className={styles.fieldLabel}>Current workspace</span>
-        <span className={styles.fieldValue}>{workspaceId}</span>
       </div>
     </div>
   );

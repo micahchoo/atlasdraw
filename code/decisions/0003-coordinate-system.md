@@ -3,6 +3,8 @@
 **Status:** Accepted  
 **Date:** 2026-05-03
 
+> **Note (2026-10-01):** The code does not do what the Decision below says. It holds Excalidraw at scroll 0,0 and zoom 1 and rewrites every geo element on each camera event. The measured gate that decides between the two designs is `docs/architecture/adr/0015-world-coordinates-gate.md` (repository root). Read it before you change the coordinate code.
+
 ## Context
 
 Two coordinate systems must coexist:

@@ -140,7 +140,7 @@ v1.0 closes JTBD #3 (present-and-embed) and brings the polish that earns the "Fe
 - **Print layout.** Multi-page PDF with title block, legend, scale bar, north arrow, custom page sizes (US Letter / A4 / Tabloid).
 - **Asset library.** Reusable annotation libraries (`.excalidrawlib` compatible) — wildfire icons, transit symbols, hazard markers, custom team brand kits — including a curated default set under MIT.
 - **Accessibility pass.** Keyboard nav, screen-reader announcements for selected features, high-contrast mode (we get a head start from MapLibre's a11y work).
-- **Hosted multi-tenant mode.** Optional, off-by-default "managed mode" config that adds workspaces, billing hooks, and rate limits — for teams who want to run a small SaaS for their org or for the OSS-hosted-by-the-project flagship.
+- ~~**Hosted multi-tenant mode.**~~ Removed. Atlasdraw is self-host only, one trusted tenant per deployment (`docs/architecture/adr/0013-self-host-only.md`). A hosted tier is a new decision that starts from tenant isolation and authentication.
 
 ### 7.3 v1.5 (target: +6 months)
 
@@ -208,7 +208,6 @@ We measure impact, not vanity, but we are honest that for an OSS project with no
 **Year 1 targets (aspirational, calibrated against Plausible/Penpot/uMap reference points):**
 
 - **Adoption:** 5,000 GitHub stars; 500 self-hosted installs reporting (anonymous, opt-in heartbeat) within Y1.
-- **Hosted flagship (if we run one):** 3,000 monthly active map editors; 25,000 unique embed views; <8% week-1 to week-4 churn on free accounts.
 - **Quality and engagement:** ≥40% of new maps reach "shared" state (proxy for completion); ≥1 collaborator on ≥20% of maps; median time-to-first-map under 8 minutes.
 - **Community health:** ≥40 external contributors (≥1 merged PR); ≥3 maintained downstream forks/integrations; one public reference deployment per persona (a newsroom, a planning shop, a research lab, a hobbyist community).
 - **Format portability proof:** ≥1 third-party tool reads/writes `.atlasdraw` natively.
@@ -235,7 +234,7 @@ OSS GTM is reputation-and-distribution work, not advertising. We will execute th
 
 **Naming.** *Atlasdraw* leads on three criteria: (a) implies the Excalidraw heritage clearly, (b) "atlas" carries cartographic weight without being literal, (c) `atlasdraw.org` and the npm scope appear available as of research date. Backup names: *Cartograph*, *Plotpaper*, *Foliomap*, *Kart* (Norwegian for map; pleasingly short). Avoid: anything with "map" + a generic suffix (overcrowded), anything trademark-adjacent to Felt or Atlas.co.
 
-**Monetization model.** Pure OSS for the project; an optional managed-hosting flagship in v1.0 funded by usage tiers (free for personal/edu, $9–19/mo for pro hosted, custom for orgs). All managed-hosting features ship in the OSS code under AGPL — no open-core split. Revenue funds maintainer time on the core. We follow Plausible's model more than n8n's: feature parity is a brand value. A lightweight sponsorship model (GitHub Sponsors, Open Collective) supplements from day one.
+**Monetization model.** Pure OSS for the project, with no hosted tier and no open-core split (ADR-0013). A lightweight sponsorship model (GitHub Sponsors, Open Collective) funds maintainer time from day one.
 
 **License rationale.** AGPL-3.0 for the application protects against hyperscaler resale; MIT for the embed SDK and `.atlasdraw` CLI tools maximizes ecosystem adoption. We document this choice prominently — license confusion is the single biggest issue raised in OSS-tool HN threads (per the Plausible and Windmill discourse).
 
@@ -287,7 +286,7 @@ These are the live debates founders should resolve in the first six weeks.
 - **Does the WebSocket server become a hard dependency or is "single-player + file save" a first-class deployment mode?** Strong argument for the latter — the laptop-airplane-mode story is differentiating. Probable answer: yes, ship a single-binary mode.
 - **Yjs or Automerge for data-layer CRDT?** Yjs has the larger ecosystem; Automerge has cleaner semantics. Spike both in week one.
 - **Default basemap: ship with OpenFreeMap or self-host Protomaps day one?** OpenFreeMap is faster to ship but introduces a third-party dependency in our default config. Recommended: use OpenFreeMap as the demo default with a prominent "self-host this" callout, and make Protomaps PMTiles a one-line config switch.
-- **Hosted flagship: do we run one?** Strongly yes, by v1.0 — it funds maintainer time and acts as the canonical demo. Run it under a separate brand (`atlasdraw.app` or `studio.atlasdraw.org`) so the OSS project stays pristine.
+- **Hosted flagship: do we run one?** Decided no (ADR-0013). Atlasdraw is self-host only; a hosted tier is a new decision.
 - **AGPL vs MPL-2.0 for the app?** AGPL is a stronger moat against SaaS-resellers; MPL is more contribution-friendly. Recommendation: AGPL for the app, MPL/MIT for SDK and CLI.
 
 ---

@@ -37,6 +37,7 @@ import type { JSONExportData } from "../data/json";
 
 import type {
   AppClassProperties,
+  AppProps,
   AppState,
   BinaryFiles,
   ExcalidrawProps,
@@ -279,11 +280,8 @@ function prepareDataForJSONExport(
       // so we resolve to orig data
     }
 
-    const exportedElements = _exportTransformer
-      ? (_exportTransformer(elements) as readonly ExcalidrawElement[])
-      : elements;
     resolve({
-      elements: exportedElements,
+      elements,
       appState,
       // return latest files in case they finished loading during onExport
       files: app.files,
@@ -294,23 +292,6 @@ function prepareDataForJSONExport(
     abortController,
     data: dataPromise,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Export element transformer — host apps can normalize elements before the
-// JSON payload is written to disk (e.g. to canonical geo coordinates).
-// ---------------------------------------------------------------------------
-
-type ExportElementTransformer = (
-  elements: readonly ExcalidrawElement[],
-) => readonly unknown[];
-
-let _exportTransformer: ExportElementTransformer | null = null;
-
-export function setExportElementTransformer(
-  fn: ExportElementTransformer | null,
-): void {
-  _exportTransformer = fn;
 }
 
 // ---------------------------------------------------------------------------
@@ -392,12 +373,21 @@ export const actionSaveToActiveFile = register({
     event.key === KEYS.S && event[KEYS.CTRL_OR_CMD] && !event.shiftKey,
 });
 
+// `saveFileToDisk` is not a `canvasActions` key, so the action manager
+// cannot gate it by name. The host closes it with `canvasActions.export`.
+const isSaveFileToDiskEnabled = (props: AppProps) => {
+  const exportOpts = props.UIOptions.canvasActions.export;
+  return !!exportOpts && !!exportOpts.saveFileToDisk;
+};
+
 export const actionSaveFileToDisk = register({
   name: "saveFileToDisk",
   label: "exportDialog.disk_title",
   icon: ExportIcon,
   viewMode: true,
   trackEvent: { category: "export" },
+  predicate: (elements, appState, props, app) =>
+    isSaveFileToDiskEnabled(app.props),
   perform: async (elements, appState, value, app) => {
     if (onExportInProgress) {
       return false;
@@ -439,10 +429,11 @@ export const actionSaveFileToDisk = register({
       onExportInProgress = false;
     }
   },
-  keyTest: (event) =>
+  keyTest: (event, appState, elements, app) =>
     event.key.toLowerCase() === KEYS.S &&
     event.shiftKey &&
-    event[KEYS.CTRL_OR_CMD],
+    event[KEYS.CTRL_OR_CMD] &&
+    isSaveFileToDiskEnabled(app.props),
   PanelComponent: ({ updateData }) => (
     <ToolButton
       type="button"

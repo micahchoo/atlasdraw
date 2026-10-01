@@ -22,8 +22,8 @@ This is a Yarn workspaces monorepo. See [`CLAUDE.md`](./CLAUDE.md) for the full 
 
 - `apps/atlas-app/` — the product (editor SPA).
 - `apps/realtime/` — collaboration server.
-- `apps/storage/` — backend API (auth, storage, billing).
-- `packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/sdk/`, `packages/cli/` — atlasdraw-native packages.
+- `apps/storage/` — backend API (map storage and share links).
+- `packages/basemap/`, `packages/geo/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/` — atlasdraw-native packages.
 - `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/` — the forked [Excalidraw](https://github.com/excalidraw/excalidraw) canvas engine that powers the sketching layer.
 
 ## Quick start
@@ -38,7 +38,7 @@ Run `yarn test:typecheck` and `yarn test` before committing.
 
 ## License
 
-Atlasdraw is multi-licensed by package — see [`LICENSING.md`](./LICENSING.md) for the breakdown (application code is AGPL-3.0, the SDK/integration libraries are MIT, and the basemap/tools wrappers are MPL-2.0).
+Atlasdraw is multi-licensed by package — see [`LICENSING.md`](./LICENSING.md) for the breakdown (application code is AGPL-3.0, the CLI and file-format and geometry libraries are MIT, and the basemap/tools wrappers are MPL-2.0).
 
 ## Credits
 

@@ -131,8 +131,6 @@ export type ActionName =
   | "selectAllElementsInFrame"
   | "removeAllElementsFromFrame"
   | "updateFrameRendering"
-  | "setFrameAsActiveTool"
-  | "setEmbeddableAsActiveTool"
   | "createContainerFromText"
   | "wrapTextInContainer"
   | "commandPalette"

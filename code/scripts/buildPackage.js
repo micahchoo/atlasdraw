@@ -5,17 +5,14 @@ const { pathToFileURL } = require("url");
 const { build } = require("esbuild");
 const { sassPlugin } = require("esbuild-sass-plugin");
 
-const { parseEnvVariables } = require("../packages/excalidraw/env.cjs");
+const pkg = require("../packages/excalidraw/package.json");
 
+// `import.meta.env` for the esbuild bundles. The package reads only these
+// keys and the VITE_APP_* flags, which stay unset here.
+const PKG_ENV = { PKG_NAME: pkg.name, PKG_VERSION: pkg.version };
 const ENV_VARS = {
-  development: {
-    ...parseEnvVariables(`${__dirname}/../.env.development`),
-    DEV: true,
-  },
-  production: {
-    ...parseEnvVariables(`${__dirname}/../.env.production`),
-    PROD: true,
-  },
+  development: { ...PKG_ENV, MODE: "development", DEV: true },
+  production: { ...PKG_ENV, MODE: "production", PROD: true },
 };
 
 // Resolve a relative path from the source file's directory

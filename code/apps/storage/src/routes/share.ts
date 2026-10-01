@@ -44,24 +44,7 @@ export function registerShareRoutes(
         return reply.code(404).send({ error: "not found" });
       }
       try {
-        // Phase 6 A9: the token is TAGGED with the requesting workspace (or
-        // null in self-host) and a `workspace_scoped` event emits per
-        // ADR-0011 when the context is non-null.
-        //
-        // SECURITY (managed mode): "tagged" is not "ownership-checked". The
-        // getMap presence check above does not compare the map's workspace_id
-        // to request.workspace, so in MANAGED_MODE=true any caller can mint a
-        // public read token for ANY map by id, then read it unauthenticated at
-        // /share/:token. Unenforced by design — see
-        // docs/security/managed-mode-trust-boundary.md (SECURITY.md row 2).
-        const workspaceId = request.workspace ?? null;
-        const token = await client.createShareToken(id, { workspaceId });
-        if (workspaceId) {
-          request.log.info(
-            { workspaceId, route: "/maps/:id/share", method: "POST" },
-            "workspace_scoped",
-          );
-        }
+        const token = await client.createShareToken(id);
         return reply.code(201).send({
           token: token.token,
           url: `${publicUrl}/m/${token.token}`,

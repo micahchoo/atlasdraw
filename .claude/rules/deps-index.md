@@ -48,7 +48,6 @@ data. If `freshness` is `very-stale` and the answer is load-bearing, call
 | `nanoid` | `main` | 2026-05-16 | stale | https://github.com/ai/nanoid |
 | `pg` | `master` | 2026-05-16 | stale | https://github.com/brianc/node-postgres |
 | `pino` | `main` | 2026-05-16 | stale | https://github.com/pinojs/pino |
-| `stripe` | `master` | 2026-05-16 | stale | https://github.com/stripe/stripe-node |
 | `tmp` | `master` | 2026-05-16 | stale | https://github.com/raszi/node-tmp |
 | `pmtiles` | `main` | 2026-05-26 | fresh | https://github.com/protomaps/pmtiles |
 | `protomaps-themes-base` | `main` | 2026-05-26 | fresh | https://github.com/protomaps/basemaps |

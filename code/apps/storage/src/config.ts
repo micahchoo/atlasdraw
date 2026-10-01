@@ -20,41 +20,9 @@ const BaseSchema = z.object({
   // ("fatal","error","warn","info","debug","trace","silent").
   LOG_LEVEL: z.string().default("info"),
   // T18: optional Sentry DSN. When unset, Sentry init is a no-op — the
-  // server runs identically without any third-party data egress. Hosted
-  // operators opt in by setting this env (see ADR-0009).
+  // server runs identically without any third-party data egress. An
+  // operator opts in by setting this env (see ADR-0009).
   SENTRY_DSN: z.string().optional(),
-  // Phase 6 A9: hosted-mode flag. When `MANAGED_MODE=true` the workspace
-  // middleware requires `X-Workspace-ID` on protected routes and route
-  // handlers emit `workspace_scoped` events per ADR-0011. Default false
-  // preserves self-host behaviour identically to Phase 4.
-  MANAGED_MODE: z
-    .union([z.boolean(), z.string()])
-    .optional()
-    .transform((v) => {
-      if (typeof v === "boolean") {
-        return v;
-      }
-      if (typeof v !== "string") {
-        return false;
-      }
-      return v.toLowerCase() === "true" || v === "1";
-    }),
-  // ─── Phase 6 A13b: per-workspace quotas ─────────────────────────────
-  // Map-count limits per plan. Self-host (MANAGED_MODE=false) bypasses
-  // quota checks entirely; these env vars are only consulted in managed
-  // mode. Defaults match the original Task 17 spec (3 / 100).
-  QUOTA_FREE_MAPS: z.coerce.number().int().positive().default(3),
-  QUOTA_PRO_MAPS: z.coerce.number().int().positive().default(100),
-  // ─── Phase 6 A13c: Stripe checkout + webhook ────────────────────────
-  // All three are optional — managed-mode deployments that haven't yet
-  // wired Stripe still come up. Routes that require them raise a clear
-  // 503 at request time. Values flow straight through to the Stripe
-  // SDK; never logged.
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_PRICE_PRO: z.string().optional(),
-  // Site URL used for Stripe checkout success/cancel redirects.
-  SITE_URL: z.string().default("http://localhost:3000"),
   // Which proxies may set X-Forwarded-For (Fastify `trustProxy`). Off by
   // default: with no proxy in front, a client could otherwise choose its own
   // IP and step around the rate limiter. Behind one reverse proxy, set "1".

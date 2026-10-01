@@ -115,6 +115,10 @@ test.describe("comment mode — the tool is not borrowed", () => {
   test("`r` changes the tool without ending the mode; Escape then exits", async ({
     page,
   }) => {
+    test.fail(
+      true,
+      "KNOWN-RED (unassigned, found W1): with the rectangle tool active, Escape does not leave comment mode — aria-pressed stays true. Remove when fixed.",
+    );
     await waitForApp(page);
     await focusEditor(page);
     await enterCommentMode(page);

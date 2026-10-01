@@ -33,11 +33,7 @@ import { MapCanvas } from "@atlasdraw/basemap";
 import { getBasemap } from "@atlasdraw/basemap";
 
 // @atlasdraw/data imports removed (unused after refactor)
-import {
-  Excalidraw,
-  MainMenu,
-  setExportElementTransformer,
-} from "@atlasdraw/excalidraw";
+import { Excalidraw, MainMenu } from "@atlasdraw/excalidraw";
 
 import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
@@ -47,7 +43,6 @@ import {
   cameraRotation,
   computeSceneBounds,
   isGeoCustomData,
-  normalizeElementsForExport,
 } from "@atlasdraw/geo";
 
 import type {
@@ -87,7 +82,6 @@ import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { CollabState } from "../state/collab";
 
-import { asWorkspaceId, resolveWorkspaceFromEnv } from "../state/workspace";
 import { LayersIcon } from "../lib/icons";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
@@ -128,7 +122,6 @@ import { CollarShell } from "./CollarShell";
 import { SheetRail } from "./SheetRail";
 import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { ShareDialog } from "./ShareDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
@@ -251,10 +244,10 @@ function buildGeoJsonExport(elements: readonly unknown[]): FeatureCollection {
 // The .atlasdraw bundle is the canonical format and these two handlers are
 // the ONLY save/open surfaces: the "Open…" / "Save" MainMenu items and the
 // Cmd+O / Cmd+S bindings all route here. Excalidraw's own persistence
-// actions (LoadScene, SaveToActiveFile, the JSONExportDialog) are disabled
-// via UIOptions.canvasActions — see EXCALIDRAW_UI_OPTIONS below — which
-// also disables their built-in keyboard shortcuts (action `predicate`
-// gates both, actions/manager.tsx). Rendering/format export (PNG, PDF,
+// actions (LoadScene, SaveToActiveFile, SaveFileToDisk, the image and JSON
+// export dialogs) are disabled via UIOptions.canvasActions — see
+// EXCALIDRAW_UI_OPTIONS below — which also disables their keyboard
+// shortcuts. Rendering/format export (PNG, PDF,
 // GeoJSON, .atlasdraw) lives in the atlas ExportDialog ("Export…" item).
 //
 // Exported for unit tests (MapEditor.atlasdraw-export.test.tsx) — the same
@@ -362,15 +355,18 @@ const EXCALIDRAW_INITIAL_DATA = {
   },
 } as const;
 
-// One format, one door: disable Excalidraw's own persistence actions
-// (.excalidraw load/save + the JSONExportDialog). The `predicate` on each
-// action gates its keyboard shortcut too, so Cmd+O / Cmd+S fall through to
-// the atlas handlers wired in MapEditor's own onKeyDown.
+// One format, one door: disable Excalidraw's own persistence and export
+// (.excalidraw load/save, the JSONExportDialog, the image export dialog).
+// These keys also close the matching shortcuts (Cmd+Shift+S, Cmd+Shift+E)
+// and command-palette entries, so Cmd+O / Cmd+S fall through to the atlas
+// handlers in MapEditor's own onKeyDown. Tested in the fork:
+// packages/excalidraw/tests/closedExportDoors.test.tsx.
 const EXCALIDRAW_UI_OPTIONS = {
   canvasActions: {
     loadScene: false,
     saveToActiveFile: false,
     export: false as const,
+    saveAsImage: false,
   },
 } as const;
 
@@ -459,10 +455,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   //                    paint: { 'background-color': color } }, firstLayerId)
   //   else
   //     map.setPaintProperty('atlas-bg', 'background-color', color)
-  // That path ensures the color appears in the live map tile rendering AND in
-  // the raw canvas captured by getBackgroundCanvas. CSS on root is sufficient
-  // for now because the composite export draws the MapLibre canvas directly —
-  // any map-level background layer would already be baked into that canvas.
+  // That path puts the color into the MapLibre canvas itself. CSS on root is
+  // sufficient for now because the composite export (lib/export.ts) takes
+  // `backgroundColor` and paints it under the map canvas.
   const [mapBg, setMapBg] = useState("transparent");
   // Basemap state lives in the shared store (state/basemap.ts) — the picker
   // and Maputnik trigger moved into LayerPanel's Basemap section (basemap =
@@ -485,17 +480,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // PrintDialog modal is gone.
   const [exportDialogFormat, setExportDialogFormat] =
     useState<ExportFormat | null>(null);
-  // Phase 6 A13a — active workspace (managed mode only). Seeded from the
-  // A9 env resolver so the boot path still works; the WorkspaceSwitcher
-  // updates this when the user picks one. Self-host: stays at the env-
-  // resolved value (typically null) and the switcher renders nothing.
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(
-    () =>
-      resolveWorkspaceFromEnv(
-        import.meta.env as Record<string, string | undefined>,
-      ).id,
-  );
-
   // Phase 5 collab integration (Step 6) — a single CollabState instance owned
   // by MapEditor. The lifecycle is component-scoped: instantiated on mount,
   // disconnected on unmount. Both useCollabRoom (URL → connect) and
@@ -580,20 +564,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
-  // Phase 6 A13a: thread `getWorkspaceId` so storage requests carry the
-  // X-Workspace-ID header for the currently-selected workspace. We use a
-  // ref to the active id so re-renders don't rebuild the client.
-  const activeWorkspaceIdRef = useRef<string | null>(activeWorkspaceId);
-  useEffect(() => {
-    activeWorkspaceIdRef.current = activeWorkspaceId;
-  }, [activeWorkspaceId]);
   const shareClientRef = useRef<HttpStorageClient | null>(null);
   function getShareClient(): HttpStorageClient {
     if (!shareClientRef.current) {
       const cfg = getAppConfig();
       shareClientRef.current = createHttpStorageClient({
         baseUrl: cfg.storageBaseUrl ?? "",
-        getWorkspaceId: () => activeWorkspaceIdRef.current,
       });
     }
     return shareClientRef.current;
@@ -762,17 +738,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Phase 4 T6/T7 — basemap style application (extracted to useBasemapStyle).
   useBasemapStyle(map, activeBasemapId, getAppConfig().allowRemoteBasemaps);
-
-  // Normalize geo-anchored element coords to canonical Web Mercator (zoom 0)
-  // before .excalidraw file saves so saved files are viewport-independent.
-  useEffect(() => {
-    setExportElementTransformer(
-      normalizeElementsForExport as Parameters<
-        typeof setExportElementTransformer
-      >[0],
-    );
-    return () => setExportElementTransformer(null);
-  }, []);
 
   // Dev-only window expose for Playwright E2E. Production builds skip this
   // branch via `import.meta.env.DEV` (Vite replaces it with `false` in prod,
@@ -1052,13 +1017,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     spaceHeldRef,
   });
 
-  // Provide the live MapLibre canvas to Excalidraw's native Save as Image /
-  // Copy as PNG so they composite basemap + annotations in a single export.
-  const getBackgroundCanvas = useCallback(
-    (): HTMLCanvasElement | null => (map ? map.getCanvas() : null),
-    [map],
-  );
-
   // The PDF export's image source: the SAME composite the PNG export uses, so
   // the two formats cannot disagree about what an export contains. Passing
   // `map.getCanvas()` here is what dropped every drawn shape from the PDF
@@ -1193,7 +1151,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               gridModeEnabled={false}
               onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
               onChange={handleExcalidrawChange}
-              getBackgroundCanvas={getBackgroundCanvas}
               UIOptions={EXCALIDRAW_UI_OPTIONS}
               // Collar mode: toolbar + main menu render flush in the collar
               // frame (portal hosts provided by CollarShell above). Geo-search
@@ -1385,25 +1342,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           {collabValue.active && (
             <>
               <CursorOverlay />
-              {/* PresenceList shares WorkspaceSwitcher's top-right z:10 slot
-              (top:12/right:12) — offset below it in managed mode so the two
-              don't overlap when both are showing (hosted collab session). */}
-              <PresenceList
-                topOffset={getAppConfig().managed ? 56 : undefined}
-              />
+              <PresenceList />
             </>
           )}
-
-          {/* Phase 6 A13a — workspace switcher. Self-host (managed=false)
-          renders null; managed-mode renders a top-right dropdown that
-          lists workspaces and routes free-tier users to /billing for an
-          upgrade. The HTTP client is the same shared instance used by
-          ShareDialog so X-Workspace-ID flows through autosave too. */}
-          <WorkspaceSwitcher
-            client={getShareClient()}
-            activeId={activeWorkspaceId}
-            onSelect={(id) => setActiveWorkspaceId(asWorkspaceId(id))}
-          />
 
           {/* Sheet-panel resize handle, at the panel's left edge. Mounted only
           while the panel is open — its whole position is "the panel's edge",
@@ -1506,7 +1447,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 activeBasemapId={activeBasemapId}
                 onBasemapChange={setActiveBasemapId}
                 onCloseRequest={() => setShowSettings(false)}
-                workspaceId={activeWorkspaceId ?? undefined}
               />
             </Suspense>
           )}

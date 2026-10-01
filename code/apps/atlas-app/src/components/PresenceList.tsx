@@ -31,17 +31,6 @@ function truncate(name: string, max = 12): string {
   return `${name.slice(0, max)}…`;
 }
 
-export interface PresenceListProps {
-  /**
-   * Vertical offset (px) for the top-right anchor, overriding the CSS
-   * module's default `top: 12px`. Both PresenceList and WorkspaceSwitcher
-   * anchor to the same top-right slot (z-index 10) — pass a larger offset
-   * when WorkspaceSwitcher is also mounted (managed mode) so the two don't
-   * overlap.
-   */
-  topOffset?: number;
-}
-
 /**
  * Compact sidebar collaborator list.
  *
@@ -50,7 +39,7 @@ export interface PresenceListProps {
  * (dots in a row) to conserve screen space. Returns null when there are no
  * peers (collab inactive or empty room).
  */
-export function PresenceList({ topOffset }: PresenceListProps = {}) {
+export function PresenceList() {
   const { peers } = useCollab();
   const entries = Array.from(peers.values());
   const count = entries.length;
@@ -59,16 +48,11 @@ export function PresenceList({ topOffset }: PresenceListProps = {}) {
     return null;
   }
 
-  const style = topOffset === undefined ? undefined : { top: topOffset };
   const compact = count >= 4;
 
   if (compact) {
     return (
-      <div
-        className={styles.rootCompact}
-        style={style}
-        data-testid="presence-list-compact"
-      >
+      <div className={styles.rootCompact} data-testid="presence-list-compact">
         {entries.map((peer) => (
           <span
             key={peer.id}
@@ -85,7 +69,7 @@ export function PresenceList({ topOffset }: PresenceListProps = {}) {
   const headerText = count === 1 ? "1 collaborator" : `${count} collaborators`;
 
   return (
-    <div className={styles.root} style={style} data-testid="presence-list">
+    <div className={styles.root} data-testid="presence-list">
       <h3 className={styles.header} data-testid="presence-list-header">
         {headerText}
       </h3>

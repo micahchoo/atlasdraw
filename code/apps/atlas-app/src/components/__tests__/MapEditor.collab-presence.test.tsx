@@ -8,8 +8,7 @@
 // two complete, working components with zero non-test consumers. This test
 // locks the re-wired mount: gated on collab.active, independent of peer
 // count for CursorOverlay, gated on peer count for PresenceList (its own
-// internal early return), and offset below WorkspaceSwitcher in managed
-// mode so the two top-right z:10 widgets don't overlap.
+// internal early return).
 //
 // Issue 9 rewrite: this file used to wrap MapEditor in an OUTER fake
 // <CollabContext.Provider> to simulate "a Provider mounted somewhere" — that
@@ -239,7 +238,6 @@ vi.mock("@atlasdraw/excalidraw", () => {
     },
     MainMenu: MainMenuStub,
     Sidebar: SidebarStub,
-    setExportElementTransformer: vi.fn(),
   };
 });
 
@@ -318,7 +316,6 @@ const BASE_CONFIG: AppConfig = {
   storageBaseUrl: "",
   maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
-  managed: false,
   allowRemoteBasemaps: false,
 };
 
@@ -392,55 +389,5 @@ describe("MapEditor — collab cursor + presence UI (Phase 5 T11 re-wire, Issue 
     await waitFor(() => {
       expect(getByTestId("presence-list")).toBeTruthy();
     });
-  });
-
-  it("offsets PresenceList below WorkspaceSwitcher's slot in managed mode", async () => {
-    vi.spyOn(appConfig, "getAppConfig").mockReturnValue({
-      ...BASE_CONFIG,
-      managed: true,
-      realtime: { enabled: true, wsUrl: undefined },
-    });
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    await waitFor(() => expect(latestInstance).not.toBeNull());
-    act(() => {
-      latestInstance!.setPeers(new Map([["peer-1", makePeer()]]));
-    });
-    const presence = await waitFor(() => {
-      const el = document.querySelector('[data-testid="presence-list"]');
-      if (!el) {
-        throw new Error("not yet rendered");
-      }
-      return el as HTMLElement;
-    });
-    expect(presence.style.top).toBe("56px");
-  });
-
-  it("does not offset PresenceList in self-host mode (managed=false)", async () => {
-    vi.spyOn(appConfig, "getAppConfig").mockReturnValue({
-      ...BASE_CONFIG,
-      realtime: { enabled: true, wsUrl: undefined },
-    });
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    await waitFor(() => expect(latestInstance).not.toBeNull());
-    act(() => {
-      latestInstance!.setPeers(new Map([["peer-1", makePeer()]]));
-    });
-    const presence = await waitFor(() => {
-      const el = document.querySelector('[data-testid="presence-list"]');
-      if (!el) {
-        throw new Error("not yet rendered");
-      }
-      return el as HTMLElement;
-    });
-    // No inline `top` override — falls back to the CSS module's 12px.
-    expect(presence.style.top).toBe("");
   });
 });
