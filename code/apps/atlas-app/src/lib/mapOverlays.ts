@@ -293,12 +293,26 @@ export function overlaySpec(
       rejected.push({ overlayId: entry.id, reason: problem });
       continue;
     }
+    // A style stored before every path checked it can still throw while it
+    // compiles. It stops its own overlay, never the others.
+    let specs: LayerSpecification[];
+    try {
+      specs = compileLayers(entry.id, entry.style, entry.geometryKind, {
+        labelFont: options.labelFont ?? undefined,
+      }).map((l) => withVisibility(l, entry.visible));
+    } catch (err) {
+      rejected.push({
+        overlayId: entry.id,
+        reason: `The style cannot be drawn: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      });
+      continue;
+    }
     add(
       entry.id,
       { id: entry.id, type: "geojson", data: fc, version: versionOf(fc) },
-      compileLayers(entry.id, entry.style, entry.geometryKind, {
-        labelFont: options.labelFont ?? undefined,
-      }).map((l) => withVisibility(l, entry.visible)),
+      specs,
     );
   }
 

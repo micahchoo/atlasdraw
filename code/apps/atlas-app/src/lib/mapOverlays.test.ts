@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { labelLayerId, outlineLayerId } from "@atlasdraw/basemap";
+import { geometryKindOf } from "@atlasdraw/data";
 
 import { createDocument } from "../state/document";
 
@@ -80,6 +81,29 @@ function doc() {
   return { d, spec };
 }
 
+/**
+ * A document holding one data layer as a stored file holds it: made from
+ * its state, past the commands, so a style the reducer now refuses can be
+ * there.
+ */
+function storedLayer(id: string, fc: FeatureCollection, style: object) {
+  return createDocument({
+    overlays: [
+      {
+        kind: "data",
+        id,
+        label: id,
+        visible: true,
+        order: 0,
+        featureCount: fc.features.length,
+        geometryKind: geometryKindOf(fc),
+        style,
+      },
+    ],
+    featureCollections: { [id]: fc },
+  });
+}
+
 /** A basemap with one fill layer under one label layer. */
 function basemap(): FakeMapLibre {
   const map = new FakeMapLibre();
@@ -133,27 +157,30 @@ describe("overlaySpec", () => {
   });
 
   it("rejects an overlay whose style MapLibre would reject, with the reason", () => {
-    const { d, spec } = doc();
-    d.dispatch({
-      type: "add-data-layer",
-      id: "dl:a",
-      fc: POINTS,
-      label: "a",
-      style: {
-        ...STYLE,
-        expression: {
-          kind: "categorical",
-          property: "kind",
-          stops: [
-            { value: "", color: "#111111" },
-            { value: "", color: "#222222" },
-          ],
-          fallback: "#000000",
-        },
+    const style = {
+      ...STYLE,
+      expression: {
+        kind: "categorical" as const,
+        property: "kind",
+        stops: [
+          { value: "", color: "#111111" },
+          { value: "", color: "#222222" },
+        ],
+        fallback: "#000000",
       },
-    });
+    };
+    // The reducer refuses it; a document stored before it did still has it.
+    expect(
+      createDocument().dispatch({
+        type: "add-data-layer",
+        id: "dl:a",
+        fc: POINTS,
+        label: "a",
+        style,
+      }).ok,
+    ).toBe(false);
 
-    const s = spec();
+    const s = overlaySpec(storedLayer("dl:a", POINTS, style).snapshot());
     expect(s.layers).toEqual([]);
     expect(s.rejected).toEqual([
       { overlayId: "dl:a", reason: expect.stringMatching(/unique/i) },
@@ -473,15 +500,7 @@ describe("labels and filter (W9d)", () => {
   const LABEL = { property: "name", size: 12, halo: true };
 
   function labelled(style: Record<string, unknown> = {}) {
-    const d = createDocument();
-    d.dispatch({
-      type: "add-data-layer",
-      id: "dl:a",
-      fc: NAMED,
-      label: "a",
-      style: { ...STYLE, ...style },
-    });
-    return d;
+    return storedLayer("dl:a", NAMED, { ...STYLE, ...style });
   }
 
   /** A basemap whose style has glyphs and a label layer in FONT. */
@@ -606,5 +625,60 @@ describe("labels and filter (W9d)", () => {
         "fill",
       ),
     ).toEqual(["Choose a property to filter by."]);
+  });
+});
+
+describe("overlaySpec: one malformed overlay never stops the others", () => {
+  it("reports a style that throws while it compiles, and draws the rest", () => {
+    // A style that reached the document past every check (an older build
+    // stored it): overlaySpec must not throw for it.
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { n: 1 },
+          geometry: { type: "Point", coordinates: [0, 0] },
+        },
+      ],
+    };
+    const entry = (id: string, order: number, style: object) => ({
+      kind: "data" as const,
+      id,
+      label: id,
+      visible: true,
+      order,
+      featureCount: 1,
+      geometryKind: "circle" as const,
+      style,
+    });
+    const spec = overlaySpec({
+      overlays: [
+        entry("dl:bad-filter", 0, {
+          filter: { property: "n", op: "contains", value: 5 },
+        }),
+        entry("dl:no-stops", 1, {
+          expression: {
+            kind: "graduated",
+            property: "n",
+            method: "linear",
+            fallback: "#000",
+          },
+        }),
+        entry("dl:good", 2, { fillColor: "#0aa" }),
+      ],
+      featureCollections: {
+        "dl:bad-filter": fc,
+        "dl:no-stops": fc,
+        "dl:good": fc,
+      },
+      images: {},
+    });
+
+    expect(spec.sources.map((s) => s.id)).toEqual(["dl:good"]);
+    expect(spec.rejected.map((r) => r.overlayId).sort()).toEqual([
+      "dl:bad-filter",
+      "dl:no-stops",
+    ]);
   });
 });

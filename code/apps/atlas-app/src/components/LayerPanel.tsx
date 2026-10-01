@@ -78,6 +78,7 @@ import { AddTileLayerForm } from "./AddTileLayerForm";
 
 import type {
   DataLayerEntry,
+  DispatchResult,
   LayerStyle,
   OverlayEntry,
   RasterLayerEntry,
@@ -290,7 +291,7 @@ type Mutators = {
   setVisibility: (id: string, visible: boolean) => void;
   /** `newOrder` is the target index within the row's own section (= its kind). */
   reorder: (id: string, newOrder: number) => void;
-  updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
+  updateStyle: (id: string, patch: Partial<LayerStyle>) => DispatchResult;
 };
 
 /** The per-layer actions of the ⋯ menu and the expanded card. */
@@ -953,15 +954,24 @@ function ProvenanceSection({
   );
 }
 
-/** Fill / stroke / width / opacity, applied live, plus StylePanel's ramps. */
+/**
+ * Fill / stroke / width / opacity, applied live, plus StylePanel's ramps. A
+ * value the map cannot draw is refused by the document, and the reason
+ * shows under the boxes.
+ */
 function SymbologySection({
   entry,
-  updateStyle,
+  updateStyle: dispatchStyle,
 }: {
   entry: DataLayerEntry;
-  updateStyle: (id: string, patch: Partial<LayerStyle>) => void;
+  updateStyle: (id: string, patch: Partial<LayerStyle>) => DispatchResult;
 }) {
   const { id, style } = entry;
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const updateStyle = (layerId: string, patch: Partial<LayerStyle>) => {
+    const result = dispatchStyle(layerId, patch);
+    setRefusal(result.ok ? null : result.reason);
+  };
   return (
     <div data-testid={`layer-symbology-${id}`}>
       <div className={styles.styleGrid}>
@@ -1013,6 +1023,15 @@ function SymbologySection({
           onChange={(e) => updateStyle(id, { opacity: Number(e.target.value) })}
         />
       </div>
+      {refusal && (
+        <p
+          role="alert"
+          className={styles.styleRefused}
+          data-testid={`layer-style-refused-${id}`}
+        >
+          {`Not applied: ${refusal}`}
+        </p>
+      )}
       {/* In normal flow, the rest of this section: a floating dialog is
           clipped by this panel's own overflow. See StylePanel.tsx's header. */}
       <StylePanel layerId={id} />
@@ -1737,7 +1756,7 @@ export function LayerPanel() {
         moveAnnotation(api, id, newOrder);
       }
     },
-    updateStyle: () => {},
+    updateStyle: () => ({ ok: true }),
   };
 
   const actions: LayerActions = {

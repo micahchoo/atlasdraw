@@ -777,3 +777,29 @@ describe("LayerPanel — row selection", () => {
     });
   });
 });
+
+describe("LayerPanel — a style the map cannot draw", () => {
+  it("keeps the layer's width when the width box gets -5, and says why", () => {
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:roads",
+      fc: emptyFc(2),
+      label: "Roads",
+      style: { strokeColor: "#000000", strokeWidth: 2 },
+    });
+    render(withSession(<LayerPanel />));
+    fireEvent.click(screen.getByTestId("layer-disclosure-dl:roads"));
+
+    fireEvent.change(screen.getByTestId("layer-width-dl:roads"), {
+      target: { value: "-5" },
+    });
+
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:roads");
+    expect(entry?.kind === "data" && entry.style.strokeWidth).toBe(2);
+    expect(
+      screen.getByTestId("layer-style-refused-dl:roads").textContent,
+    ).toMatch(/width/i);
+  });
+});

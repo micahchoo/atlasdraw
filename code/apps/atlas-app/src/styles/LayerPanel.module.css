@@ -575,6 +575,14 @@
   flex-shrink: 0;
 }
 
+.styleRefused {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ad-danger);
+  overflow-wrap: anywhere;
+}
+
 .styleGrid {
   display: grid;
   grid-template-columns: auto 1fr;
