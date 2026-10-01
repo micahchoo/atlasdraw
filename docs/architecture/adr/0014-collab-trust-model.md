@@ -99,6 +99,13 @@ Every point of the decision is in the code:
 - **Conflicts** resolve per element as Excalidraw's reconcile does: the
   higher `version` wins, then the lower `versionNonce`
   (`apps/atlas-app/src/state/roomScene.ts`).
+- **A room doc is untrusted input** (W6b). The token admits a client; it
+  does not make what the client writes valid. Every record read from the
+  room doc goes through `apps/atlas-app/src/state/roomValidation.ts` before
+  the editor, the Document or the map sees it. A record that fails is
+  skipped, logged once per peer, and left in the room for clients that can
+  read it. The relay limits abuse of its memory and disk (SECURITY.md
+  row 14).
 
 ### What the relay can see
 
