@@ -47,6 +47,52 @@
   opacity: 0.9;
 }
 
+/* The legend (legend=1): the layers in view, top-left, above the drawing
+ * layer like the credit. A <details>, so a reader can close it. */
+.legend {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  max-width: min(240px, calc(100% - 16px));
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  padding: 4px 8px;
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.legendTitle {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.legendList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.legendSwatch {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
 /* --- share page: a head bar like the editor's collar, then the map ------- */
 
 .shareRoot {

@@ -28,7 +28,7 @@ import type { AtlasdrawDocument } from "@atlasdraw/data";
 
 import { getAppConfig } from "../config/app-config";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
-import { toEmbedUrl } from "../routes";
+import { embedSnippet, type EmbedChoices } from "../lib/embed";
 
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Modal } from "./Modal";
@@ -459,15 +459,38 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
 // ---------------------------------------------------------------------------
 // Embed snippet — a read-only share URL doubles as a map embed. The embed
-// route (`/embed…`) mounts the same document chromeless for cross-origin
-// <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
+// route (`/embed…`) mounts the same document without the title bar, for an
+// <iframe> on another site. The choices become URL parameters
+// (lib/embed.ts); the frame is full width with a 16:10 box, or a fixed
+// height the author types.
 // ---------------------------------------------------------------------------
+
+const embedLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  fontSize: "0.75rem",
+  color: "var(--ad-ink-secondary, #495057)",
+};
+
+/** A height the author typed, or null for the aspect-ratio box. */
+function heightOf(text: string): number | null {
+  const n = Math.round(Number(text));
+  return text.trim() !== "" && Number.isFinite(n) && n >= 100 && n <= 4000
+    ? n
+    : null;
+}
 
 const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
   const [copied, setCopied] = useState(false);
-  const snippet = `<iframe src="${toEmbedUrl(
-    shareUrl,
-  )}" width="800" height="500" style="border:0;border-radius:8px" loading="lazy" title="Atlasdraw map"></iframe>`;
+  const [legend, setLegend] = useState(false);
+  const [view, setView] = useState<EmbedChoices["view"]>("fit");
+  const [height, setHeight] = useState("");
+  const snippet = embedSnippet(shareUrl, {
+    legend,
+    view,
+    height: heightOf(height),
+  });
 
   const copy = async () => {
     try {
@@ -482,6 +505,7 @@ const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
   return (
     <div data-testid="embed-snippet-section" style={{ marginTop: "0.25rem" }}>
       <label
+        htmlFor="embed-snippet"
         style={{
           display: "block",
           margin: "0 0 0.25rem 0",
@@ -492,12 +516,57 @@ const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
       >
         Embed this map
       </label>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "0.375rem 1rem",
+          margin: "0 0 0.375rem 0",
+        }}
+      >
+        <label style={embedLabel}>
+          Start at
+          <select
+            value={view}
+            onChange={(e) => setView(e.target.value as EmbedChoices["view"])}
+            data-testid="embed-view"
+            style={{ fontSize: "0.75rem" }}
+          >
+            <option value="fit">All of the map content</option>
+            <option value="saved">The view you see now</option>
+          </select>
+        </label>
+        <label style={embedLabel}>
+          <input
+            type="checkbox"
+            checked={legend}
+            onChange={(e) => setLegend(e.target.checked)}
+            data-testid="embed-legend-toggle"
+          />
+          Show a legend
+        </label>
+        <label style={embedLabel}>
+          Height (px)
+          <input
+            type="number"
+            min={100}
+            max={4000}
+            step={10}
+            value={height}
+            placeholder="Auto"
+            onChange={(e) => setHeight(e.target.value)}
+            data-testid="embed-height"
+            style={{ width: "5rem", fontSize: "0.75rem" }}
+          />
+        </label>
+      </div>
       <textarea
+        id="embed-snippet"
         readOnly
         value={snippet}
         data-testid="embed-snippet"
         onFocus={(e) => e.currentTarget.select()}
-        rows={2}
+        rows={3}
         style={{
           width: "100%",
           boxSizing: "border-box",
@@ -511,6 +580,17 @@ const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
           resize: "vertical",
         }}
       />
+      <p
+        data-testid="embed-snippet-hint"
+        style={{
+          margin: "0.25rem 0 0 0",
+          fontSize: "0.75rem",
+          color: "var(--ad-ink-secondary, #495057)",
+        }}
+      >
+        The map fills the width of the page. Readers zoom with Ctrl or ⌘ and the
+        scroll wheel, and move it with two fingers on a touch screen.
+      </p>
       <button
         type="button"
         onClick={copy}

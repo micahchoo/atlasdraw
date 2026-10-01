@@ -66,7 +66,7 @@ export interface ViewportState {
  * than fires; today's path returns `[]` and needs no catch.
  */
 export function renderedDataLayerIds(
-  map: maplibregl.Map,
+  map: Pick<maplibregl.Map, "queryRenderedFeatures">,
   layerIds: readonly string[],
 ): Set<string> {
   const rendered = new Set<string>();
@@ -214,9 +214,15 @@ export function buildLegendEntries(
  * is hidden or not on the page. Read at export time, like the image, so both
  * answer the same viewport.
  */
+/** The parts of the map the legend asks. */
+export type LegendMapSurface = Pick<
+  maplibregl.Map,
+  "getCanvas" | "getBearing" | "project" | "queryRenderedFeatures"
+>;
+
 export function exportLegendEntries(
   entries: readonly LegendSource[],
-  map: maplibregl.Map,
+  map: LegendMapSurface,
   excalidrawAPI: ExcalidrawImperativeAPI,
 ): LayerLegendEntry[] {
   const canvas = map.getCanvas();

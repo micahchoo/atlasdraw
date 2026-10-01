@@ -193,6 +193,18 @@ describe("fitMapToLayer", () => {
 });
 
 describe("fitMapToBox", () => {
+  it("jumps with no animation when asked, for a view that opens there", () => {
+    const map = makeMap();
+    fitMapToBox(
+      map,
+      { west: 0, south: 0, east: 1, north: 1 },
+      { animate: false },
+    );
+    const [, opts] = (map.fitBounds as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    expect(opts.duration).toBe(0);
+  });
+
   it("returns false without touching the camera when the map is not ready", () => {
     expect(fitMapToBox(null, { west: 0, south: 0, east: 0, north: 0 })).toBe(
       false,

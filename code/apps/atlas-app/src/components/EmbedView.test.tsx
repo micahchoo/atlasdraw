@@ -19,7 +19,7 @@ import {
 } from "../services/createHttpStorageClient";
 import { buildRoute, type SharedMap } from "../routes";
 
-import { EmbedView, parseEmbedOptions } from "./EmbedView";
+import { EmbedView } from "./EmbedView";
 
 vi.mock("@atlasdraw/excalidraw", () => ({
   Excalidraw: () => null,
@@ -192,17 +192,5 @@ describe("EmbedView", () => {
       <EmbedView chrome="minimal" map={hashMap(mapDoc)} search="?lock=1" />,
     );
     expect(await screen.findByTestId("viewer-canvas")).toBeTruthy();
-  });
-});
-
-describe("parseEmbedOptions", () => {
-  it("defaults lock to false", () => {
-    expect(parseEmbedOptions("")).toEqual({ lock: false });
-  });
-  it("enables lock on ?lock=1", () => {
-    expect(parseEmbedOptions("?lock=1")).toEqual({ lock: true });
-  });
-  it("treats any other lock value as false", () => {
-    expect(parseEmbedOptions("?lock=yes")).toEqual({ lock: false });
   });
 });

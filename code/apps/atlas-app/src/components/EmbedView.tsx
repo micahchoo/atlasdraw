@@ -12,24 +12,26 @@
 // "share" for a page of its own, with the map's title and a link that opens
 // a copy in the editor.
 //
-// URL params: ?lock=1 disables map pan/zoom (camera-locked presentation).
-// It also turns off the attribute popup: a locked embed takes no clicks.
-// Unlocked, a click on a feature shows its attributes (FeaturePopup).
+// URL params (lib/embed.ts): lock=1 fixes the camera and turns off the
+// attribute popup; legend=1 shows a legend; view=fit|saved says where the
+// camera opens. An /embed fits its content by default; /m opens at the saved
+// view. Unlocked, the map uses cooperative gestures (useEmbedCamera), so it
+// never takes the page's scroll, and a click on a feature shows its
+// attributes (FeaturePopup).
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  MapCanvas,
-  disableCameraRotation,
-  type MapCanvasInitialView,
-} from "@atlasdraw/basemap";
+import { MapCanvas, type MapCanvasInitialView } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
+import type { LngLatBox } from "@atlasdraw/geo";
+
 import { useMapRef } from "../hooks/useMapRef";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useCameraBridge } from "../hooks/useCameraBridge";
+import { useEmbedCamera } from "../hooks/useEmbedCamera";
 import { useMapOverlays } from "../hooks/useMapOverlays";
 import {
   useFeaturePopup,
@@ -37,6 +39,12 @@ import {
   type PopupMap,
 } from "../hooks/useFeaturePopup";
 import { creditText, documentCredits } from "../lib/mapView";
+import {
+  contentBox,
+  parseEmbedOptions,
+  type EmbedOptions,
+  type ViewerChrome,
+} from "../lib/embed";
 import { fromFile, loadDocument } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import { buildRoute, type SharedMap } from "../routes";
@@ -47,6 +55,7 @@ import {
 import mapStyles from "../styles/MapEditor.module.css";
 import styles from "../styles/EmbedView.module.css";
 
+import { EmbedLegend } from "./EmbedLegend";
 import { FeaturePopup } from "./FeaturePopup";
 
 // Read-only: disable Excalidraw's own persistence actions, and its help:
@@ -63,18 +72,7 @@ const EMBED_UI_OPTIONS = {
 
 type ViewState = { kind: "loading" } | ShareLoadResult;
 
-interface EmbedOptions {
-  /** ?lock=1 — disable map pan/zoom for a fixed-camera presentation. */
-  lock: boolean;
-}
-
-export function parseEmbedOptions(search: string): EmbedOptions {
-  const params = new URLSearchParams(search);
-  return { lock: params.get("lock") === "1" };
-}
-
-/** What goes around the map. */
-export type ViewerChrome = "minimal" | "share";
+export type { ViewerChrome };
 
 export interface EmbedViewProps {
   chrome: ViewerChrome;
@@ -108,8 +106,8 @@ export const EmbedView: React.FC<EmbedViewProps> = ({
   }, [client, map]);
 
   const options = useMemo(
-    () => parseEmbedOptions(search ?? window.location.search),
-    [search],
+    () => parseEmbedOptions(search ?? window.location.search, chrome),
+    [search, chrome],
   );
 
   if (state.kind === "loading") {
@@ -207,42 +205,23 @@ const EmbedCanvas: React.FC<{
   // Open the document the way the editor opens a file (documentIO): its
   // layers, rasters and drawing. One loader, so the embed shows what the
   // editor shows.
+  // The box of what it holds is read once it is open, for the fit.
+  const [box, setBox] = useState<LngLatBox | null>(null);
   useEffect(() => {
     if (!api) {
       return;
     }
     const abort = new AbortController();
-    void loadDocument(doc, api, { signal: abort.signal });
+    void loadDocument(doc, api, { signal: abort.signal }).then((opened) => {
+      if (opened && !abort.signal.aborted) {
+        setBox(contentBox(opened.snapshot(), api.getSceneElements()));
+      }
+    });
     return () => abort.abort();
   }, [doc, api]);
 
-  // ?lock=1 — pin the camera. Disable every MapLibre interaction handler.
-  useEffect(() => {
-    if (!map || !options.lock) {
-      return;
-    }
-    const handlers = [
-      map.dragPan,
-      map.scrollZoom,
-      map.boxZoom,
-      map.dragRotate,
-      map.keyboard,
-      map.doubleClickZoom,
-      map.touchZoomRotate,
-    ];
-    for (const h of handlers) {
-      h?.disable?.();
-    }
-    return () => {
-      for (const h of handlers) {
-        h?.enable?.();
-      }
-      // The blanket re-enable above would resurrect the rotation gestures
-      // MapCanvas turned off at mount (the embed has no compass), so
-      // re-apply the lock.
-      disableCameraRotation(map);
-    };
-  }, [map, options.lock]);
+  // Lock or cooperative gestures, and the fit to the content.
+  useEmbedCamera(map, options, box);
 
   const initialData = useMemo(
     () => ({ appState: { viewBackgroundColor: "transparent" } }),
@@ -279,6 +258,7 @@ const EmbedCanvas: React.FC<{
         />
       </div>
       <FeaturePopup popup={featurePopup.popup} onClose={featurePopup.close} />
+      {options.legend && <EmbedLegend map={map} api={api} />}
       {credit && (
         <div className={styles.credit} data-testid="viewer-credit">
           {credit}

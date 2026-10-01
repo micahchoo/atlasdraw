@@ -155,6 +155,7 @@ export function fitMapToLayer(
 export function fitMapToBox(
   map: FitBoundsSurface | null,
   box: LngLatBox,
+  opts: { animate?: boolean } = {},
 ): boolean {
   if (!map) {
     return false;
@@ -164,7 +165,12 @@ export function fitMapToBox(
       [box.west, box.south],
       [box.east, box.north],
     ],
-    { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM, duration: FIT_DURATION_MS },
+    {
+      padding: FIT_PADDING,
+      maxZoom: FIT_MAX_ZOOM,
+      // A view that opens on the box jumps there; a user's "zoom to" glides.
+      duration: opts.animate === false ? 0 : FIT_DURATION_MS,
+    },
   );
   return true;
 }
