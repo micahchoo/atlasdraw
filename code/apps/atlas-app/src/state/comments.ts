@@ -12,10 +12,11 @@ import * as Y from "yjs";
 import {
   COMMENTS_ARRAY_KEY,
   COMMENT_SCHEMA_VERSION,
-  normalizeAnchor,
   type CommentAnchor,
   type CommentSchemaV1,
 } from "@atlasdraw/protocol";
+
+import { checkComment, rejectFrom, writerOfType } from "./roomValidation";
 
 // ---------------------------------------------------------------------------
 // Public-facing comment record (plain object)
@@ -228,35 +229,38 @@ export class CommentsLayer {
   private _indexOf(commentId: string): number {
     const arr = this._array();
     for (let i = 0; i < arr.length; i++) {
-      if (arr.get(i).get("id") === commentId) {
+      const m: unknown = arr.get(i);
+      if (m instanceof Y.Map && m.get("id") === commentId) {
         return i;
       }
     }
     return -1;
   }
 
+  /**
+   * The valid rows. In a room any client can write the array, so a row is
+   * checked first (roomValidation.ts#checkComment); a row that fails is
+   * skipped. A v1 `{ kind: "element" }` anchor reads as the v2 canonical
+   * `{ kind: "annotation", source: "element" }`.
+   */
   private _compute(): ReadonlyArray<Comment> {
     const arr = this._array();
     const out: Comment[] = [];
     for (let i = 0; i < arr.length; i++) {
-      const m = arr.get(i);
-      const a = m.get("anchor") as Y.Map<unknown> | undefined;
-      // v1 clients wrote `{ kind: "element" }` anchors; normalize to the v2
-      // canonical `{ kind: "annotation", source: "element" }` on every read.
-      const anchor: CommentAnchor =
-        a !== undefined
-          ? normalizeAnchor(Object.fromEntries(a.entries()) as CommentAnchor)
-          : ({ kind: "map", lng: 0, lat: 0 } as CommentAnchor);
-      out.push({
-        id: (m.get("id") as string) ?? "",
-        authorId: (m.get("authorId") as string) ?? "",
-        authorName: (m.get("authorName") as string) ?? "",
-        text: (m.get("text") as string) ?? "",
-        createdAt: (m.get("createdAt") as number) ?? 0,
-        anchor,
-        resolved: (m.get("resolved") as boolean) ?? false,
-        schemaVersion: COMMENT_SCHEMA_VERSION,
-      });
+      const m: unknown = arr.get(i);
+      const a = m instanceof Y.Map ? m.get("anchor") : undefined;
+      const comment =
+        m instanceof Y.Map
+          ? checkComment(
+              (key) => m.get(key),
+              a instanceof Y.Map ? Object.fromEntries(a.entries()) : null,
+            )
+          : null;
+      if (comment) {
+        out.push(comment);
+      } else {
+        rejectFrom(this.doc, writerOfType(m), "comment");
+      }
     }
     return out;
   }

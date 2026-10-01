@@ -19,13 +19,28 @@
 
 import http from "http";
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import { WebsocketProvider } from "y-websocket";
+import * as Y from "yjs";
 
 import {
   read as readAtlasdraw,
   write as writeAtlasdraw,
 } from "@atlasdraw/data";
-import { newRoomLink, type RoomLink } from "@atlasdraw/protocol";
+import {
+  newRoomLink,
+  roomToken,
+  withRoomToken,
+  type RoomLink,
+} from "@atlasdraw/protocol";
 
 import type { BinaryFileData } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
@@ -356,6 +371,281 @@ describe("collaboration between two clients", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// A peer that writes what no honest client writes
+// ---------------------------------------------------------------------------
+
+/**
+ * A peer that speaks the protocol with the link's token and writes straight
+ * into the room doc, past every API of state/room.ts.
+ */
+interface Rogue {
+  doc: Y.Doc;
+  leave(): void;
+}
+
+const rogues = new Set<Rogue>();
+afterEach(() => {
+  for (const r of rogues) {
+    r.leave();
+  }
+});
+
+async function openRogue(link: RoomLink): Promise<Rogue> {
+  const doc = new Y.Doc();
+  const provider = new WebsocketProvider(`${relayUrl}/yjs`, link.roomId, doc, {
+    disableBc: true,
+    WebSocketPolyfill: withRoomToken(WebSocket, await roomToken(link)),
+  });
+  const rogue: Rogue = {
+    doc,
+    leave() {
+      provider.destroy();
+      doc.destroy();
+      rogues.delete(rogue);
+    },
+  };
+  rogues.add(rogue);
+  await until("the rogue is synced", () => provider.synced);
+  return rogue;
+}
+
+function writeRaw(rogue: Rogue, write: (doc: Y.Doc) => void): void {
+  rogue.doc.transact(() => write(rogue.doc));
+}
+
+function textElement(id: string, text: string): ExcalidrawElement {
+  return {
+    ...rectangle(id),
+    type: "text",
+    text,
+    originalText: text,
+    fontSize: 20,
+    fontFamily: 1,
+    textAlign: "left",
+    verticalAlign: "top",
+    containerId: null,
+    lineHeight: 1.25,
+    autoResize: true,
+  } as unknown as ExcalidrawElement;
+}
+
+/** Elements a rogue writes: two valid (one to repair), the rest malformed. */
+function writeMalformedElements(rogue: Rogue): void {
+  writeRaw(rogue, (doc) => {
+    const elements = doc.getMap<unknown>("elements");
+    elements.set("ok", rectangle("ok"));
+    elements.set("repair", {
+      ...rectangle("repair"),
+      strokeColor: { evil: true },
+      opacity: "full",
+    });
+    elements.set("bad-type", { ...rectangle("bad-type"), type: "nonsense" });
+    elements.set("bad-x", { ...rectangle("bad-x"), x: "10" });
+    elements.set("nan-version", { ...rectangle("nan-version"), version: "1" });
+    elements.set("huge", textElement("huge", "x".repeat(2_000_000)));
+    elements.set("not-its-id", rectangle("someone-else"));
+    elements.set("not-an-object", "hello");
+    elements.set("bad-points", {
+      ...rectangle("bad-points"),
+      type: "line",
+      points: [
+        [0, 0],
+        ["a", 1],
+      ],
+    });
+  });
+}
+
+const sceneIds = (c: Client) => c.scene.map((e) => e.id).sort();
+
+describe("what a peer writes is checked before it reaches the editor", () => {
+  it("malformed elements are dropped, repairable ones repaired, and the editor keeps working", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const link = newRoomLink();
+    const a = openClient(link);
+    await joined(a);
+    const rogue = await openRogue(link);
+
+    writeMalformedElements(rogue);
+
+    await until("A shows the valid elements", () =>
+      ["ok", "repair"].every((id) => a.scene.some((e) => e.id === id)),
+    );
+    expect(sceneIds(a)).toEqual(["ok", "repair"]);
+    const repaired = a.scene.find((e) => e.id === "repair")!;
+    expect(typeof repaired.strokeColor).toBe("string");
+    expect(typeof repaired.opacity).toBe("number");
+
+    const fromRogue = warn.mock.calls.filter((args) =>
+      String(args[0]).includes(`peer ${rogue.doc.clientID}`),
+    );
+    expect(fromRogue, "one warning per peer, not per record").toHaveLength(1);
+
+    // A keeps working: its next shape reaches the room and a new joiner.
+    a.draw(rectangle("after"));
+    const b = openClient(link);
+    await until("a new joiner receives A's next shape", () =>
+      b.scene.some((e) => e.id === "after"),
+    );
+    warn.mockRestore();
+    a.leave();
+    b.leave();
+  });
+
+  it("a client that joins a room holding malformed elements shows the valid ones", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const link = newRoomLink();
+    const rogue = await openRogue(link);
+    writeMalformedElements(rogue);
+
+    const late = openClient(link);
+    await until("the late joiner shows the valid elements", () =>
+      late.scene.some((e) => e.id === "ok"),
+    );
+    expect(sceneIds(late)).toEqual(["ok", "repair"]);
+    vi.mocked(console.warn).mockRestore();
+    late.leave();
+  });
+
+  it("malformed layers, features, images, title, basemap and comments are ignored", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const link = newRoomLink();
+    const a = openClient(link);
+    await joined(a);
+    documentOf(a).dispatch({ type: "rename-document", title: "Survey" });
+    const rogue = await openRogue(link);
+    await until(
+      "the rogue has A's title",
+      () => rogue.doc.getMap("meta").get("title") === "Survey",
+    );
+
+    const goodFc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "Point", coordinates: [13.4, 52.5] },
+        },
+      ],
+    };
+    const dataEntry = (id: string) => ({
+      kind: "data",
+      id,
+      label: id,
+      visible: true,
+      order: 0,
+      featureCount: 1,
+      geometryKind: "circle",
+      style: {},
+    });
+    writeRaw(rogue, (doc) => {
+      const overlays = doc.getMap<unknown>("overlays");
+      const features = doc.getMap<unknown>("features");
+      const images = doc.getMap<unknown>("images");
+      const meta = doc.getMap<unknown>("meta");
+      overlays.set("dl:good", dataEntry("dl:good"));
+      features.set("dl:good", goodFc);
+      // A data layer whose features are not a FeatureCollection.
+      overlays.set("dl:bad-fc", dataEntry("dl:bad-fc"));
+      features.set("dl:bad-fc", { type: "FeatureCollection", features: "x" });
+      // Coordinates that are not numbers.
+      overlays.set("dl:bad-coords", dataEntry("dl:bad-coords"));
+      features.set("dl:bad-coords", {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "Point", coordinates: ["13", null] },
+          },
+        ],
+      });
+      // An id without its kind's prefix, and a key that is not the id.
+      overlays.set("layer-1", { ...dataEntry("layer-1") });
+      overlays.set("dl:other-key", dataEntry("dl:not-the-key"));
+      // A tile layer with a script URL, and a raster whose image is no image.
+      overlays.set("tl:evil", {
+        kind: "tile",
+        id: "tl:evil",
+        label: "Evil",
+        visible: true,
+        order: 0,
+        opacity: 1,
+        url: ["javascript", "alert(1)"].join(":"),
+      });
+      overlays.set("rl:fake", {
+        kind: "raster",
+        id: "rl:fake",
+        label: "Fake",
+        visible: true,
+        order: 0,
+        corners: [
+          [0, 1],
+          [1, 1],
+          [1, 0],
+          [0, 0],
+        ],
+        opacity: 1,
+        imageKey: "fake.png",
+      });
+      images.set("rl:fake", { mimeType: "text/html", bytes: "<script>" });
+      meta.set("title", 12345);
+      meta.set("basemap", { id: "dark" });
+      const comments = doc.getArray<unknown>("comments");
+      const valid = new Y.Map<unknown>();
+      const anchor = new Y.Map<unknown>();
+      anchor.set("kind", "map");
+      anchor.set("lng", 13.4);
+      anchor.set("lat", 52.5);
+      for (const [k, v] of Object.entries({
+        id: "c-valid",
+        authorId: "r",
+        authorName: "R",
+        text: "valid note",
+        createdAt: 1,
+        resolved: false,
+        schemaVersion: 2,
+      })) {
+        valid.set(k, v);
+      }
+      valid.set("anchor", anchor);
+      const wrong = new Y.Map<unknown>();
+      wrong.set("id", "c-wrong");
+      wrong.set("text", { not: "text" });
+      comments.push(["just a string", wrong, valid]);
+    });
+
+    await until("A shows the valid comment", () =>
+      commentTexts(a).includes("valid note"),
+    );
+    await until("A shows the valid layer", () =>
+      documentOf(a)
+        .snapshot()
+        .overlays.some((e) => e.id === "dl:good"),
+    );
+    const state = documentOf(a).snapshot();
+    expect(state.overlays.map((e) => e.id)).toEqual(["dl:good"]);
+    expect(Object.keys(state.featureCollections)).toEqual(["dl:good"]);
+    expect(state.title).toBe("Survey");
+    expect(commentTexts(a)).toEqual(["valid note"]);
+
+    // A keeps working, and its own edits do not delete what it ignored.
+    addComment(a, "after the noise");
+    await until("the rogue receives A's comment", () =>
+      rogue.doc
+        .getArray<unknown>("comments")
+        .toArray()
+        .some((m) => m instanceof Y.Map && m.get("text") === "after the noise"),
+    );
+    expect(rogue.doc.getMap("overlays").has("tl:evil")).toBe(true);
+    expect(rogue.doc.getMap("overlays").has("dl:good")).toBe(true);
+    vi.mocked(console.warn).mockRestore();
+    a.leave();
+  });
+});
+
 describe("the relay's abuse limits reach the user", () => {
   it("a client over the relay's new-room limit is told so and stops trying", async () => {
     const limitedServer = http.createServer();
@@ -370,10 +660,10 @@ describe("the relay's abuse limits reach the user", () => {
     }`;
     try {
       const first = joinRoom(newRoomLink(), relayTransport(url));
+      await until("the first room is made", () => first.document !== null);
       const second = joinRoom(newRoomLink(), relayTransport(url));
       const seen: string[] = [];
       second.status((s) => seen.push(s));
-      await until("the first room is made", () => first.document !== null);
       await until("the second is refused as limited", () =>
         seen.includes("limited"),
       );
