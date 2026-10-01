@@ -4,10 +4,6 @@
 // octet-stream (octets parsed at server init via addContentTypeParser). The
 // 50 MiB body limit is enforced by Fastify's bodyLimit option; oversize
 // uploads return 413 before the handler runs.
-//
-// Phase 6 A9: when the workspace middleware attaches `request.workspace`,
-// `createMap` is scoped to that workspace and a `workspace_scoped` event
-// emits via the request's pino logger per ADR-0011.
 
 import { ID_RE } from "../constants";
 import { isNotFoundError } from "../lib/errors";
@@ -35,27 +31,10 @@ export function registerMapRoutes(
         .code(415)
         .send({ error: "Content-Type must be application/octet-stream" });
     }
-    const workspaceId = request.workspace ?? null;
-    const record = await client.createMap(body, { workspaceId });
-    if (workspaceId) {
-      // ADR-0011: server-side workspace-scoped event. Emits only when a
-      // workspace context is attached (managed mode or self-host where
-      // the operator passed the header).
-      request.log.info(
-        { workspaceId, route: "/maps", method: "POST" },
-        "workspace_scoped",
-      );
-    }
+    const record = await client.createMap(body);
     return reply.code(201).send(publicRecord(record));
   });
 
-  // SECURITY (managed mode): the GET and PUT below resolve a map by id ALONE.
-  // They do NOT compare the map's stored workspace_id to request.workspace, so
-  // in MANAGED_MODE=true any accepted X-Workspace-ID can read or overwrite any
-  // map by knowing its id. This is unenforced by design — managed mode is not
-  // multi-tenant-safe. See docs/security/managed-mode-trust-boundary.md
-  // (SECURITY.md row 1). Do not add an ownership check here in isolation; it
-  // must be threaded through the adapter getMap/updateMap contract.
   fastify.get<{ Params: IdParams }>(
     "/maps/:id",
     async (request: FastifyRequest<{ Params: IdParams }>, reply) => {

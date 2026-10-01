@@ -11,36 +11,13 @@ import { createPostgresMinioAdapter } from "./adapters/postgres-minio";
 import { createSqliteFsAdapter } from "./adapters/sqlite-fs";
 import { loadConfig } from "./config";
 import { logger } from "./logger";
-import { registerQuotaMiddleware } from "./middleware/quota";
 import { registerRateLimitMiddleware } from "./middleware/rate-limit";
-import { registerWorkspaceMiddleware } from "./middleware/workspace";
-import { registerBillingRoutes } from "./routes/billing";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
-import { registerWorkspaceRoutes } from "./routes/workspaces";
-
-export * from "./middleware/workspace";
-
-export * from "./types";
-export * from "./config";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-
-  // Managed mode ships the *surface* of multi-tenancy (X-Workspace-ID,
-  // per-workspace quotas, billing) but does NOT enforce cross-tenant
-  // isolation on map read/update/share, the realtime relay, or workspace
-  // enumeration — see docs/security/managed-mode-trust-boundary.md. Announce
-  // that boundary loudly at boot so it can't be mistaken for tenant-safe.
-  if (config.MANAGED_MODE) {
-    logger.warn(
-      "MANAGED_MODE is ON. This mode is NOT multi-tenant-safe: map " +
-        "read/update/share are not workspace-scoped and the realtime relay " +
-        "is unauthenticated. Do NOT expose to untrusted tenants. See " +
-        "docs/security/managed-mode-trust-boundary.md.",
-    );
-  }
 
   // T18: opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009.
   // beforeSend scrubs Authorization headers and request IPs — operators who
@@ -101,38 +78,8 @@ async function main(): Promise<void> {
     max: config.RATE_LIMIT_MAX,
     windowMs: config.RATE_LIMIT_WINDOW_MS,
   });
-  // Phase 6 A9: workspace middleware runs as a global preHandler. It
-  // bypasses /health internally and either requires (managed) or attaches
-  // (self-host) `X-Workspace-ID` for every other route.
-  registerWorkspaceMiddleware(app, { managed: config.MANAGED_MODE });
-  // Phase 6 A13b: quota guard runs after the workspace middleware. In
-  // self-host it's a no-op; in managed mode it 402s POST /maps when the
-  // workspace's map count would exceed its plan cap.
-  registerQuotaMiddleware(app, {
-    managed: config.MANAGED_MODE,
-    client,
-    limits: {
-      free: config.QUOTA_FREE_MAPS,
-      pro: config.QUOTA_PRO_MAPS,
-    },
-  });
   registerMapRoutes(app, client);
   registerShareRoutes(app, client, config.PUBLIC_URL);
-  // Phase 6 A13b/A13c: workspaces + billing routes. Both 404 in
-  // self-host. Billing routes also 503 in managed mode if Stripe env
-  // isn't fully configured (don't fail boot — fail at request time).
-  registerWorkspaceRoutes(app, {
-    managed: config.MANAGED_MODE,
-    client,
-  });
-  registerBillingRoutes(app, {
-    managed: config.MANAGED_MODE,
-    client,
-    stripeSecretKey: config.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: config.STRIPE_WEBHOOK_SECRET,
-    stripePricePro: config.STRIPE_PRICE_PRO,
-    siteUrl: config.SITE_URL,
-  });
 
   // Wire Sentry into Fastify error handling. Sentry is opt-in (no-op when
   // SENTRY_DSN is unset); captureException is a no-op if init was skipped.
