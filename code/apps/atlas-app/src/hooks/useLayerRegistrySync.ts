@@ -82,7 +82,7 @@ function samePaintValue(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Apply a registry data-layer style change to the MapLibre style by pushing
+ * Apply a data-layer style change to the MapLibre style by pushing
  * `setPaintProperty` for each paint property whose compiled value changed.
  *
  * Only the *differences* are pushed — mirroring how diffVisibility filters to
@@ -92,7 +92,7 @@ function samePaintValue(a: unknown, b: unknown): boolean {
  * `geometryType` is the caller's (the layer was added with that same kind, so
  * the paint property names are fixed for its lifetime).
  *
- * Per-property try/catch, same reasoning as applyVisibilityToMap: the registry
+ * Per-property try/catch, same reasoning as applyVisibilityToMap: the layer
  * id may have drifted from the style, and one rejected value shouldn't drop
  * the rest of the patch.
  *
@@ -125,13 +125,14 @@ export function applyStyleToMap(
 }
 
 /**
- * Compute per-entry style changes between two snapshots of the registry's
- * entries array. Only data layers carry a style.
+ * Compute per-entry style changes between two snapshots of the document's
+ * layer list. Only data layers carry a style.
  *
- * The store runs on immer, so an entry whose style was not touched keeps the
- * same `style` object identity across snapshots — a referential check is
- * therefore an exact "did updateStyle run on this entry" test, and the
- * property-level filtering happens in applyStyleToMap.
+ * The document's reducer keeps every entry it did not change, object for
+ * object, so an entry whose style was not touched keeps the same `style`
+ * object across snapshots — a referential check is an exact "was this entry
+ * restyled" test, and the property-level filtering happens in
+ * applyStyleToMap.
  *
  * New entries are skipped: their style is already baked into the addLayer spec.
  *
@@ -169,7 +170,7 @@ export function diffStyles(
 // P2/P3 — data-layer membership + stacking diff.
 // ---------------------------------------------------------------------------
 
-/** The registry's data-layer ids, in array order (= intended z-order). */
+/** The layer list's data-layer ids, in array order (= intended z-order). */
 function dataLayerIds(entries: readonly OverlayEntry[]): string[] {
   const out: string[] = [];
   for (const entry of entries) {
@@ -181,15 +182,14 @@ function dataLayerIds(entries: readonly OverlayEntry[]): string[] {
 }
 
 /**
- * Compare two registry snapshots by their data-layer id *sequence* — which ids
+ * Compare two layer-list snapshots by their data-layer id *sequence* — which ids
  * appeared, which vanished, and whether the survivors changed places.
  *
  * A length comparison is not enough, and that was a real bug on both sides:
- *   - `convertAnnotationToDataLayer` removes one entry and pushes one in a
- *     single draft, so the array length never changes and the new data layer
- *     never reached the map;
- *   - a `hydrate()` of a different document swaps one set of ids for another,
- *     which needs removals, not just adds.
+ *   - one entry out and one in leaves the array length unchanged, and the
+ *     new data layer would never reach the map;
+ *   - opening a different document swaps one set of ids for another, which
+ *     needs removals, not just adds.
  *
  * `orderChanged` compares only the ids present in *both* snapshots, so a pure
  * add or remove doesn't masquerade as a reorder.
@@ -219,7 +219,7 @@ export function diffDataLayerIds(
 
 /**
  * Compute per-entry visibility transitions between two snapshots of the
- * registry's entries array. Returns the entries whose `visible` flipped.
+ * layer list. Returns the entries whose `visible` flipped.
  *
  * Exported for unit testing.
  */
@@ -309,8 +309,8 @@ export function useLayerRegistrySync(map: maplibregl.Map | null): void {
         }
       }
 
-      // P2 — map membership follows the registry's set of data-layer ids.
-      // Removals first: a hydrate() that swaps documents both drops old ids and
+      // Map membership follows the document's set of data-layer ids.
+      // Removals first: opening another document both drops old ids and
       // adds new ones, and MapLibre won't drop a source a layer still uses.
       if (map && idChanges.removed.length > 0) {
         removeDataLayersFromMap(map, idChanges.removed);
@@ -327,7 +327,7 @@ export function useLayerRegistrySync(map: maplibregl.Map | null): void {
       }
       // P3 — restack. Needed after a reorder, and also after add/remove:
       // reconcile appends to the top of the style regardless of where the entry
-      // sits in the registry array. applyOrderToMap diffs against the live
+      // sits in the layer list. applyOrderToMap diffs against the live
       // style, so a call that has nothing to fix issues no moveLayer.
       if (
         map &&

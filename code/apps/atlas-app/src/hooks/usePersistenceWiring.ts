@@ -31,8 +31,8 @@ export interface PersistenceWiringNotify {
 
 /**
  * Wires the persistence lifecycle to `excalidrawAPI`: constructs the
- * PersistenceStore (with optional backend remote-save), loads + hydrates any
- * previously-persisted document, starts auto-save, and mirrors dirty/drain
+ * PersistenceStore (with optional backend remote-save), loads and opens the
+ * last autosaved document, starts auto-save, and mirrors dirty/drain
  * state into the Zustand usePersistenceStore for the MainMenu indicator and
  * useShareLink's pre-share flush.
  */
@@ -109,7 +109,7 @@ export function usePersistenceWiring(
           if (!opened) {
             return;
           }
-          // hydrate moved the map if there was one. The autosave can load
+          // loadDocument moved the map if there was one. The autosave can load
           // before the map exists; then the saved camera waits for the map,
           // for as long as this editor is mounted.
           if (!useMapInstanceStore.getState().map) {
@@ -120,7 +120,7 @@ export function usePersistenceWiring(
             });
           }
           // eslint-disable-next-line no-console
-          console.info("[atlasdraw] persisted document hydrated", {
+          console.info("[atlasdraw] autosaved document opened", {
             id: loaded.manifest.id,
             layerCount: loaded.manifest.layers.length,
             sceneLength: loaded.scene.length,

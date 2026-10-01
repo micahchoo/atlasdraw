@@ -771,8 +771,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
   }, [map, excalidrawAPI]);
 
-  // T9 — Persistence wiring (extracted to usePersistenceWiring hook): creates
-  // the PersistenceStore, loads + hydrates any previously-persisted document,
+  // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
+  // opens the last autosaved document,
   // starts auto-save, and mirrors dirty/drain state into Zustand.
   usePersistenceWiring(excalidrawAPI, documentNotify);
   // Publish the scene for the layer panel's annotation rows and commands.
@@ -790,9 +790,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
   useGeoAnchor(map, excalidrawAPI);
 
-  // W-A — wire LayerRegistry to actual rendering:
-  //   Excalidraw scene-element IDs → registry annotation entries (Bug A)
-  //   registry visibility flips → opacity rewrite (annotation) / setLayoutProperty (data) (Bug B)
+  // Draw the open document's data and raster layers on the map.
   useLayerRegistrySync(map);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
@@ -1504,9 +1502,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
           {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw).
           The PDF pane needs the live MapLibre canvas (at export time, so the
-          PDF reflects the current viewport) and the layer registry projected
-          to legend shape: annotation entries have no color of their own → use
-          a neutral grey; data layers carry style.fillColor. */}
+          PDF reflects the current viewport) and the layers projected to legend
+          shape: annotations have no color of their own → use a neutral grey;
+          data layers carry style.fillColor. */}
           {exportDialogFormat && (
             <Suspense fallback={null}>
               <ExportDialog

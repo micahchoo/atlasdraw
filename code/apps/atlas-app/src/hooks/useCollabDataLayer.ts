@@ -46,7 +46,7 @@ function ensureOnMap(map: maplibregl.Map, features: FeatureCollection): void {
  * `features` is null when collab is inactive or the layer is empty — in
  * that state any existing source/layer is removed.
  *
- * FU-3 — this layer is NOT in the LayerRegistry, so `reconcileDataLayers` (the
+ * FU-3 — this layer is NOT in the open document's layers, so `reconcileDataLayers` (the
  * thing that puts every other custom layer back after `setStyle` drops it)
  * never sees it. Before the `styledata` listener below, switching the basemap
  * in a shared session made every collaborator's shapes disappear from the map

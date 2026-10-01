@@ -2,7 +2,7 @@
 //
 // dataLayerRender — every write the app makes to the `dl:` data layers inside a
 // MapLibre style: add, remove, visibility, stacking order, and the whole-style
-// reconcile that rebuilds them from the LayerRegistry.
+// reconcile that rebuilds them from the open document's layers.
 //
 // Call sites:
 //   - useDataFileImport    — a freshly imported/dropped file;
@@ -181,10 +181,10 @@ export interface DataLayerRemovalSurface {
 /**
  * Drop the given data-layer ids out of the MapLibre style, source and all.
  *
- * The reconcile direction is add-only, so without this a `hydrate()` that
- * swaps in a different document left the previous document's layers rendered
- * underneath the new one — the registry no longer listed them, so nothing
- * would ever toggle, restyle or remove them again.
+ * The reconcile direction is add-only, so without this opening a different
+ * document left the previous document's layers rendered underneath the new
+ * one — the document no longer listed them, so nothing would ever toggle,
+ * restyle or remove them again.
  *
  * Per-id try/catch, same reasoning as applyVisibilityToMap: a registry id can
  * legitimately be absent from the style, and one failure must not strand the
@@ -360,7 +360,7 @@ export function reconcileDataLayers(
     if (!url) {
       // Same shape as the missing-FC case below: an entry with no image cannot
       // render, and a raster in the panel that draws nothing is worse than one
-      // that is honestly absent. hydrate() already skips these at load.
+      // that is honestly absent. Opening a file already skips these.
       // eslint-disable-next-line no-console
       console.warn(
         "[dataLayerRender] no decoded image for raster layer, skipping",
