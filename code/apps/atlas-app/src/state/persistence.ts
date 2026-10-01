@@ -17,6 +17,7 @@ import {
   read,
   write,
   type AtlasdrawDocument,
+  type Camera,
 } from "@atlasdraw/data";
 
 import { safeFileName } from "../lib/safeFileName";
@@ -189,8 +190,11 @@ export interface PersistenceStore {
   remove(id: string): Promise<void>;
   /** Open a save dialog (FSA) or trigger a download anchor. */
   saveToDisk(doc: AtlasdrawDocument): Promise<void>;
-  /** Open an open dialog (FSA) or a file input. Null on user cancel. */
-  openFromDisk(): Promise<AtlasdrawDocument | null>;
+  /**
+   * Open an open dialog (FSA) or a file input. Null on user cancel. A bare
+   * `.excalidraw` drawing comes in at `camera`, where the user is looking.
+   */
+  openFromDisk(camera?: Camera | null): Promise<AtlasdrawDocument | null>;
   /** Register a callback invoked when `markDirty()` fires. */
   onDirty(cb: () => void): () => void;
   /** Mark the in-memory state as ahead of the persisted state. */
@@ -521,9 +525,8 @@ export function createPersistenceStore(
   const saveToDisk = async (doc: AtlasdrawDocument): Promise<void> => {
     return enqueueWrite(async () => {
       const blob = await write(doc, { cache: writeCache });
-      // The document names its own file. This module stays framework-free
-      // (see usePersistenceStore's header), so the title arrives on the doc
-      // rather than by reaching into the title store.
+      // The document names its own file: the title arrives on the doc, so
+      // this module stays framework-free.
       const suggestedName = `${safeFileName(doc.manifest.title)}.atlasdraw`;
       const w = fsaWindow();
       if (hasFSA() && w && w.showSaveFilePicker) {
@@ -553,7 +556,9 @@ export function createPersistenceStore(
     });
   };
 
-  const openFromDisk = async (): Promise<AtlasdrawDocument | null> => {
+  const openFromDisk = async (
+    camera: Camera | null = null,
+  ): Promise<AtlasdrawDocument | null> => {
     const w = fsaWindow();
     let blob: Blob | null = null;
     let fileName = "";
@@ -602,7 +607,7 @@ export function createPersistenceStore(
     // no handle: Save asks for a .atlasdraw file and never writes zip bytes
     // over the source drawing.
     if (fileName.toLowerCase().endsWith(".excalidraw")) {
-      return documentFromExcalidrawJson(await blob.text());
+      return documentFromExcalidrawJson(await blob.text(), camera);
     }
     const doc = await read(blob);
     if (openedHandle) {

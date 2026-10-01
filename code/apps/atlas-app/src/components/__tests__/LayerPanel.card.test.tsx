@@ -25,8 +25,10 @@ import {
 import { toScene } from "@atlasdraw/geo";
 
 import { LayerPanel } from "../LayerPanel";
-
-import { useMapInstanceStore } from "../../state/mapInstance";
+import {
+  testSession,
+  withSession,
+} from "../../session/__tests__/sessionFixture";
 
 import {
   createDocument,
@@ -36,7 +38,6 @@ import {
 
 import { bindScene } from "../../state/scene";
 import { useOverlayReport } from "../../hooks/useMapOverlays";
-import { useSelectedLayerStore } from "../../state/selectedLayer";
 import { makeFakeExcalidraw } from "../../state/__tests__/fixtures/documentWorld";
 
 import { seedScene, unbindPanelScene } from "./fixtures/panelScene";
@@ -133,7 +134,6 @@ function seedMany(n: number, prefix = "layer") {
 
 beforeEach(() => {
   openDocument(createDocument());
-  useMapInstanceStore.setState({ map: null });
 });
 
 afterEach(() => {
@@ -144,7 +144,7 @@ afterEach(() => {
 describe("data layer card — disclosure", () => {
   it("starts collapsed with aria-expanded=false and no body", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     const caret = screen.getByTestId(`layer-disclosure-${id}`);
     expect(caret.getAttribute("aria-expanded")).toBe("false");
@@ -153,7 +153,7 @@ describe("data layer card — disclosure", () => {
 
   it("aria-controls names the element the disclosure actually reveals", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     const caret = screen.getByTestId(`layer-disclosure-${id}`);
     fireEvent.click(caret);
@@ -170,7 +170,7 @@ describe("data layer card — disclosure", () => {
 
   it("toggling the eye does not expand the card", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId(`layer-visibility-${id}`));
 
@@ -186,7 +186,7 @@ describe("data layer card — disclosure", () => {
 describe("data layer card — provenance", () => {
   it("shows geometry type, source filename and dropped count when expanded", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId(`layer-disclosure-${id}`));
 
     const prov = screen.getByTestId(`layer-provenance-${id}`);
@@ -205,7 +205,7 @@ describe("data layer card — provenance", () => {
       style: {},
       provenance: { sourceFile: "clean.geojson", droppedCount: 0 },
     });
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:clean"));
 
     expect(
@@ -222,7 +222,7 @@ describe("data layer card — provenance", () => {
       label: "Converted shape",
       style: {},
     });
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:converted"));
 
     const prov = screen.getByTestId("layer-provenance-dl:converted");
@@ -259,7 +259,7 @@ describe("data layer card — provenance", () => {
       label: "mixed",
       style: {},
     });
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:nullfirst"));
 
     expect(
@@ -271,7 +271,7 @@ describe("data layer card — provenance", () => {
 describe("data layer card — attribute preview", () => {
   it("renders a header row per property and 'Showing N of M'", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId(`layer-disclosure-${id}`));
 
     const table = screen.getByTestId(`layer-attrs-${id}`);
@@ -285,7 +285,7 @@ describe("data layer card — attribute preview", () => {
 
   it("says so instead of rendering an empty table when features carry no properties", () => {
     seedMany(1, "bare");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:bare-0"));
 
     const attrs = screen.getByTestId("layer-attrs-dl:bare-0");
@@ -298,11 +298,9 @@ describe("data layer card — the three missing actions", () => {
   it("zoom to layer fits the map to the layer's own bbox", () => {
     const id = seedParcels();
     const fitBounds = vi.fn();
-    useMapInstanceStore.setState({
-      map: { fitBounds } as unknown as maplibregl.Map,
-    });
+    const map = { fitBounds } as unknown as maplibregl.Map;
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, testSession({ map })));
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-zoom-${id}`));
 
@@ -338,12 +336,10 @@ describe("data layer card — the three missing actions", () => {
       unbind = bindScene(fx.api);
     });
     const fitBounds = vi.fn();
-    useMapInstanceStore.setState({
-      map: { fitBounds } as unknown as maplibregl.Map,
-    });
-    useSelectedLayerStore.getState().clearSelection();
+    const map = { fitBounds } as unknown as maplibregl.Map;
+    const session = testSession({ map });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
     fireEvent.click(screen.getByTestId("layer-menu-g1"));
     fireEvent.click(screen.getByTestId("layer-zoom-g1"));
 
@@ -353,13 +349,13 @@ describe("data layer card — the three missing actions", () => {
     expect(east).toBeGreaterThanOrEqual(13.4);
     expect(south).toBeLessThanOrEqual(52.5);
     expect(north).toBeGreaterThanOrEqual(52.5);
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({});
+    expect(session.view.getState().selection).toEqual({});
     unbind();
   });
 
   it("zoom to layer is a no-op — not a crash — with no map yet", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     expect(() =>
       fireEvent.click(screen.getByTestId(`layer-zoom-${id}`)),
@@ -368,7 +364,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("rename writes the new label to the store and the PDF-legend name follows", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-rename-${id}`));
@@ -387,7 +383,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("rename keeps the original source filename in provenance", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId(`layer-disclosure-${id}`));
     fireEvent.click(screen.getByTestId(`layer-rename-inline-${id}`));
 
@@ -403,7 +399,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("Escape abandons a rename", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-rename-${id}`));
 
@@ -420,7 +416,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("delete takes two clicks and removes the layer plus its FeatureCollection", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
@@ -436,7 +432,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("cancelling the delete confirm leaves the layer alone", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
@@ -448,7 +444,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("the ⋯ trigger and its menu carry accessible names", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     const trigger = screen.getByTestId(`layer-menu-${id}`);
     expect(trigger.getAttribute("aria-label")).toBe(
@@ -466,7 +462,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("Escape closes the ⋯ menu and returns focus to its trigger", () => {
     const id = seedParcels();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     const trigger = screen.getByTestId(`layer-menu-${id}`);
     fireEvent.click(trigger);
@@ -492,7 +488,7 @@ describe("data layer card — the three missing actions", () => {
 
     it("focuses the first item on open", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       expect(document.activeElement).toBe(screen.getByTestId(items(id)[0]));
@@ -500,7 +496,7 @@ describe("data layer card — the three missing actions", () => {
 
     it("ArrowDown walks the menu and wraps at the end", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       for (const testid of [...items(id).slice(1), items(id)[0]]) {
@@ -513,7 +509,7 @@ describe("data layer card — the three missing actions", () => {
 
     it("ArrowUp from the first item wraps to the last", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       fireEvent.keyDown(document.activeElement as Element, { key: "ArrowUp" });
@@ -522,7 +518,7 @@ describe("data layer card — the three missing actions", () => {
 
     it("Home and End jump to the ends", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       fireEvent.keyDown(document.activeElement as Element, { key: "End" });
@@ -533,7 +529,7 @@ describe("data layer card — the three missing actions", () => {
 
     it("only the focused item is tabbable", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 
       const tabIndices = items(id).map((t) =>
@@ -546,7 +542,7 @@ describe("data layer card — the three missing actions", () => {
     // two-step delete guard becomes a keyboard trap rather than a safety net.
     it("moves focus into the confirm step when the list swaps", () => {
       const id = seedParcels();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
       fireEvent.keyDown(document.activeElement as Element, { key: "End" });
       fireEvent.click(document.activeElement as Element);
@@ -565,7 +561,7 @@ describe("data layer card — the three missing actions", () => {
 
   it("deleting the expanded layer does not leave a neighbour expanded", () => {
     seedMany(2, "d");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:d-0"));
     expect(screen.getByTestId("layer-detail-dl:d-0")).toBeTruthy();
 
@@ -580,7 +576,7 @@ describe("data layer card — the three missing actions", () => {
 describe("scale (step 6)", () => {
   it("opening a second card closes the first — one at a time", () => {
     seedMany(3, "acc");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:acc-0"));
     expect(screen.getByTestId("layer-detail-dl:acc-0")).toBeTruthy();
@@ -594,17 +590,17 @@ describe("scale (step 6)", () => {
 
   it("hides the filter below 10 data layers and shows it at 10", () => {
     seedMany(9, "few");
-    const { rerender } = render(<LayerPanel />);
+    const { rerender } = render(withSession(<LayerPanel />));
     expect(screen.queryByTestId("layer-filter")).toBeNull();
 
     seedMany(1, "one-more");
-    rerender(<LayerPanel />);
+    rerender(withSession(<LayerPanel />));
     expect(screen.getByTestId("layer-filter")).toBeTruthy();
   });
 
   it("the filter has a programmatic label, not just a placeholder", () => {
     seedMany(12, "many");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(screen.getByLabelText("Filter layers by name")).toBe(
       screen.getByTestId("layer-filter"),
@@ -613,7 +609,7 @@ describe("scale (step 6)", () => {
 
   it("filtering narrows the list case-insensitively and says so when nothing matches", () => {
     seedMany(12, "Road");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.change(screen.getByTestId("layer-filter"), {
       target: { value: "road 1" },
@@ -630,7 +626,7 @@ describe("scale (step 6)", () => {
   it("annotations are unaffected by the data-layer filter", () => {
     seedMany(12, "Road");
     seedScene(["el-1", "A note"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.change(screen.getByTestId("layer-filter"), {
       target: { value: "zzz" },
@@ -640,7 +636,7 @@ describe("scale (step 6)", () => {
 
   it("reorder still addresses real stack positions while a filter hides rows", () => {
     seedMany(12, "Road");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.change(screen.getByTestId("layer-filter"), {
       target: { value: "Road 5" },
     });
@@ -711,7 +707,7 @@ describe("the panel is its own scroll port (step 6)", () => {
 
   it("declares overflow-y and the min-height that makes it mean anything", () => {
     seedMany(25, "District");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     // Ties the rule to the element actually rendered.
     expect(screen.getByTestId("layer-panel-body").className).toContain("body");
 
@@ -726,7 +722,7 @@ describe("the panel is its own scroll port (step 6)", () => {
     // The clipping was invisible to the DOM, which is why it survived step 4:
     // all 25 rows were present and 11 of them were off the bottom.
     seedMany(25, "District");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     expect(screen.getAllByTestId(/^layer-row-header-/)).toHaveLength(25);
   });
 
@@ -756,7 +752,7 @@ describe("the panel is its own scroll port (step 6)", () => {
       }
     };
     seedMany(25, "District");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-8"));
 
@@ -769,7 +765,7 @@ describe("the panel is its own scroll port (step 6)", () => {
     // verified pinned at the port's top edge in Chromium. The marker is what
     // this can check; the CSS that consumes it is asserted below.
     seedMany(3, "District");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     expect(document.querySelectorAll("[data-sticky]")).toHaveLength(0);
 
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
@@ -793,7 +789,7 @@ describe("the panel is its own scroll port (step 6)", () => {
 
   it("does not leave the pin behind when the card closes", () => {
     seedMany(3, "District");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:District-1"));
     expect(document.querySelectorAll("[data-sticky]")).toHaveLength(0);
@@ -803,7 +799,7 @@ describe("the panel is its own scroll port (step 6)", () => {
 describe("annotations are not data layers", () => {
   it("renders a row — no disclosure, no card body, no symbology", () => {
     seedScene(["el-1", "MyShape"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(screen.queryByTestId("layer-disclosure-el-1")).toBeNull();
     // The ⋯ menu is per-row for every layer kind now — rename / delete / zoom
@@ -825,7 +821,7 @@ describe("an overlay the map did not draw", () => {
       ]),
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(
       screen.getByTestId(`layer-rejected-${id}`).getAttribute("aria-label"),

@@ -16,23 +16,32 @@ import { documentFrame } from "@atlasdraw/geo";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
+import type { AtlasdrawDocument } from "@atlasdraw/data";
 
-import { useBasemapStore } from "./basemap";
 import {
   DEFAULT_CAMERA,
   DEFAULT_DOCUMENT_TITLE,
   currentDocument,
 } from "./document";
-import { decode, hasUnsavedWork, loadDocument } from "./documentIO";
-import { useMapInstanceStore } from "./mapInstance";
+import {
+  decode,
+  hasUnsavedWork,
+  liveCamera,
+  loadDocument,
+  type CameraSource,
+} from "./documentIO";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
-import { usePersistenceStore } from "./usePersistenceStore";
 
+import type { PersistenceStateStore } from "./persistenceState";
 import type { StorageClient } from "../services/createHttpStorageClient";
+import type maplibregl from "maplibre-gl";
 
 export interface MapActionContext {
   api: ExcalidrawImperativeAPI;
+  /** The editor's autosave: the maps saved in this browser. */
+  persistence: PersistenceStateStore;
+  /** The editor's map: a new map starts where it looks, an opened one moves it. */
+  map?: (CameraSource & Pick<maplibregl.Map, "jumpTo">) | null;
   notify?: { success: (msg: string) => void; error: (msg: string) => void };
   /**
    * Asked when the open map's changes cannot be kept. True lets the action
@@ -46,7 +55,7 @@ export interface MapActionContext {
  * not be saved and the user did not agree to lose them.
  */
 async function keepOpenMap(ctx: MapActionContext): Promise<boolean> {
-  const persistence = usePersistenceStore.getState();
+  const persistence = ctx.persistence.getState();
   if (!persistence.persistenceStore?.isDirty()) {
     return true;
   }
@@ -68,7 +77,7 @@ export async function openSavedMap(
   ctx: MapActionContext,
   id: string,
 ): Promise<boolean> {
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = ctx.persistence.getState().persistenceStore;
   if (!store || id === currentDocument().id) {
     return false;
   }
@@ -81,7 +90,7 @@ export async function openSavedMap(
       ctx.notify?.error("This map is not saved in this browser now.");
       return false;
     }
-    const opened = await loadDocument(file, ctx.api);
+    const opened = await loadDocument(file, ctx.api, { map: ctx.map });
     if (!opened) {
       return false;
     }
@@ -95,24 +104,10 @@ export async function openSavedMap(
   }
 }
 
-/** Where the map is looking now, so a new map starts there. */
-function cameraNow(): Camera {
-  const map = useMapInstanceStore.getState().map;
-  if (!map) {
-    return DEFAULT_CAMERA;
-  }
-  const center = map.getCenter();
-  return {
-    center: [center.lng, center.lat],
-    zoom: map.getZoom(),
-    bearing: map.getBearing(),
-    pitch: map.getPitch(),
-  };
-}
-
-function blankFile(): AtlasdrawDocument {
+function blankFile(ctx: MapActionContext): AtlasdrawDocument {
   const now = new Date().toISOString();
-  const camera = cameraNow();
+  // A new map starts where the user is looking.
+  const camera = liveCamera(ctx.map ?? null) ?? DEFAULT_CAMERA;
   return {
     manifest: {
       id: ulid(),
@@ -120,10 +115,7 @@ function blankFile(): AtlasdrawDocument {
       title: DEFAULT_DOCUMENT_TITLE,
       createdAt: now,
       updatedAt: now,
-      basemap: {
-        type: "registry",
-        id: useBasemapStore.getState().activeBasemapId,
-      },
+      basemap: { type: "registry", id: currentDocument().snapshot().basemap },
       camera,
       // The world frame starts where the user is looking (ADR-0015).
       world: documentFrame(camera.center[0], camera.center[1]),
@@ -191,11 +183,11 @@ export async function startNewMap(ctx: MapActionContext): Promise<boolean> {
   if (!(await keepOpenMap(ctx))) {
     return false;
   }
-  const opened = await loadDocument(blankFile(), ctx.api);
+  const opened = await loadDocument(blankFile(ctx), ctx.api, { map: ctx.map });
   if (!opened) {
     return false;
   }
-  usePersistenceStore.getState().markDirty();
+  ctx.persistence.getState().markDirty();
   return true;
 }
 
@@ -211,7 +203,7 @@ export async function deleteSavedMap(
   id: string,
   opts: { server?: StorageClient } = {},
 ): Promise<void> {
-  const store = usePersistenceStore.getState().persistenceStore;
+  const store = ctx.persistence.getState().persistenceStore;
   if (!store) {
     return;
   }
@@ -231,11 +223,13 @@ export async function deleteSavedMap(
   }
   if (id === currentDocument().id) {
     // Its changes go with it: nothing to keep, nothing to ask.
-    const opened = await loadDocument(blankFile(), ctx.api);
+    const opened = await loadDocument(blankFile(ctx), ctx.api, {
+      map: ctx.map,
+    });
     if (!opened) {
       return;
     }
-    usePersistenceStore.getState().markDirty();
+    ctx.persistence.getState().markDirty();
   }
   try {
     await store.remove(id);
@@ -287,11 +281,11 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
     ctx.notify?.error("The server backup is damaged. Your map did not change.");
     return;
   }
-  const opened = await loadDocument(decoded.file, ctx.api);
+  const opened = await loadDocument(decoded.file, ctx.api, { map: ctx.map });
   if (!opened) {
     return;
   }
-  usePersistenceStore.getState().markDirty();
+  ctx.persistence.getState().markDirty();
   ctx.notify?.success(
     `Restored "${decoded.file.manifest.title}" from the server backup`,
   );

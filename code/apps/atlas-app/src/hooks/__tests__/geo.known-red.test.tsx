@@ -36,7 +36,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
-import { usePersistenceStore } from "../../state/usePersistenceStore";
+import { createPersistenceState } from "../../state/persistenceState";
 import {
   createDocument,
   currentDocument,
@@ -45,6 +45,7 @@ import {
 import { buildToolContext } from "../useAtlasdrawTool";
 import { useCameraBridge } from "../useCameraBridge";
 import { useExcalidrawChangeHandler } from "../useExcalidrawChangeHandler";
+import { createViewStore } from "../../session/view";
 
 import { FakeMercatorMap } from "./fakeMercatorMap";
 
@@ -135,6 +136,9 @@ interface World {
   readonly el: (id: string) => ExcalidrawElement;
 }
 
+/** The editor's autosave state; a new one for every mount. */
+let persistence = createPersistenceState();
+
 function Harness({
   map,
   onApi,
@@ -146,10 +150,13 @@ function Harness({
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const asMap = map as unknown as maplibregl.Map;
   const { bridge, onZoomAction } = useCameraBridge(asMap, api, layer);
+  const [view] = useState(() => createViewStore());
   const onChange = useExcalidrawChangeHandler({
     excalidrawAPI: api,
     announceMapEditor: () => {},
     setMapBg: () => {},
+    view,
+    persistence,
   });
   return (
     <div ref={setLayer} style={{ width: 1024, height: 768 }}>
@@ -172,6 +179,7 @@ function Harness({
 }
 
 async function mount(zoom = 10): Promise<World> {
+  persistence = createPersistenceState();
   openDocument(
     createDocument({ camera: { center: [0, 0], zoom, bearing: 0, pitch: 0 } }),
   );
@@ -331,11 +339,11 @@ describe("geography survives undo, pins, pans (audit 01)", () => {
     const w = await mount(10);
     draw(w, rectangle());
     w.pan(0, 0);
-    act(() => usePersistenceStore.getState().clearDirty());
+    act(() => persistence.getState().clearDirty());
 
     w.pan(200, 0);
 
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(persistence.getState().isDirty).toBe(false);
   });
 
   it("a pure pan leaves every element's scene geometry and version alone", async () => {

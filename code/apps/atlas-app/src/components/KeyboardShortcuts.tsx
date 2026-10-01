@@ -1,8 +1,9 @@
 /**
  * KeyboardShortcuts — searchable shortcut reference, summoned with `?`.
  *
- * Renders a scrim + centered panel listing all keyboard shortcuts, grouped
- * by category. Type to filter. Esc or click-outside to dismiss.
+ * Renders a scrim + centered panel listing the rows it is given (the
+ * drawing's keys and every command's, commands.ts#shortcutRows), grouped.
+ * Type to filter. Esc or click-outside to dismiss.
  *
  * Design: instrumental reference card — dense, searchable, mono for keys.
  * Feels like the quick-reference card that came with a drafting instrument.
@@ -12,147 +13,14 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 
 import styles from "../styles/KeyboardShortcuts.module.css";
 
-// ---------------------------------------------------------------------------
-// Shortcut registry
-// ---------------------------------------------------------------------------
+import { SHORTCUT_GROUPS, type ShortcutRow } from "../commands/commands";
 
-export interface Shortcut {
-  keys: string[];
-  label: string;
-  category: string;
-}
-
-export const SHORTCUTS: Shortcut[] = [
-  // --- Map ---
-  // A drag with the selection tool selects; it does not pan (classifyTool,
-  // decision atlasdraw-dd91). Space or the hand tool pans.
-  {
-    keys: ["Drag"],
-    label: "Select shapes in a box",
-    category: "Map",
-  },
-  {
-    keys: ["Space", "Drag"],
-    label: "Pan the map",
-    category: "Map",
-  },
-  {
-    keys: ["H"],
-    label: "Hand tool: a drag pans the map",
-    category: "Map",
-  },
-  {
-    keys: ["Scroll"],
-    label: "Zoom in / out",
-    category: "Map",
-  },
-  {
-    keys: ["Shift", "Drag"],
-    label: "Box zoom (hand tool)",
-    category: "Map",
-  },
-
-  // --- Drawing --- (the digits of packages/excalidraw/components/shapes.tsx)
-  { keys: ["1"], label: "Selection tool (default)", category: "Drawing" },
-  { keys: ["2"], label: "Rectangle", category: "Drawing" },
-  { keys: ["3"], label: "Diamond", category: "Drawing" },
-  { keys: ["4"], label: "Ellipse", category: "Drawing" },
-  { keys: ["5"], label: "Arrow", category: "Drawing" },
-  { keys: ["6"], label: "Line", category: "Drawing" },
-  { keys: ["7"], label: "Free draw", category: "Drawing" },
-  { keys: ["8"], label: "Text", category: "Drawing" },
-  { keys: ["9"], label: "Insert image", category: "Drawing" },
-  { keys: ["0"], label: "Eraser (or E)", category: "Drawing" },
-
-  // --- Editing ---
-  {
-    keys: ["Delete", "Backspace"],
-    label: "Delete selected element",
-    category: "Editing",
-  },
-  {
-    keys: ["Ctrl", "Z"],
-    label: "Undo",
-    category: "Editing",
-  },
-  {
-    keys: ["Ctrl", "Shift", "Z"],
-    label: "Redo",
-    category: "Editing",
-  },
-  {
-    keys: ["Ctrl", "C"],
-    label: "Copy",
-    category: "Editing",
-  },
-  {
-    keys: ["Ctrl", "V"],
-    label: "Paste",
-    category: "Editing",
-  },
-  {
-    keys: ["Ctrl", "D"],
-    label: "Duplicate selection",
-    category: "Editing",
-  },
-
-  // --- Atlas ---
-  {
-    // Step 5. Bare `c` was verified unbound in Excalidraw before being taken —
-    // its only C bindings are Ctrl/Cmd+Alt+C (copy styles), Alt+Shift+C (copy
-    // as PNG) and the native Ctrl+C copy, all of which still work.
-    keys: ["C"],
-    label: "Comment mode (Esc to exit)",
-    category: "Atlas",
-  },
-  {
-    // W9. Bare `m` is unbound in Excalidraw: shapes.tsx binds
-    // h v r d o a l p x t e k and digits, and no action tests KEYS.M.
-    keys: ["M"],
-    label: "Measure distance (Esc to exit)",
-    category: "Atlas",
-  },
-  {
-    keys: ["Escape"],
-    label: "Cancel active atlas tool",
-    category: "Atlas",
-  },
-  {
-    keys: ["?"],
-    label: "Show keyboard shortcuts",
-    category: "Atlas",
-  },
-
-  // --- View ---
-  {
-    keys: ["Ctrl", "0"],
-    label: "Reset zoom / fit to content",
-    category: "View",
-  },
-  {
-    keys: ["Ctrl", "+"],
-    label: "Zoom in",
-    category: "View",
-  },
-  {
-    keys: ["Ctrl", "-"],
-    label: "Zoom out",
-    category: "View",
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Group shortcuts by category in order
-// ---------------------------------------------------------------------------
-
-const CATEGORY_ORDER = ["Map", "Drawing", "Editing", "Atlas", "View"];
-
-function groupByCategory(shortcuts: Shortcut[]): Map<string, Shortcut[]> {
-  const map = new Map<string, Shortcut[]>();
-  for (const s of shortcuts) {
-    const list = map.get(s.category) ?? [];
-    list.push(s);
-    map.set(s.category, list);
+function groupRows(rows: readonly ShortcutRow[]): Map<string, ShortcutRow[]> {
+  const map = new Map<string, ShortcutRow[]>();
+  for (const r of rows) {
+    const list = map.get(r.group) ?? [];
+    list.push(r);
+    map.set(r.group, list);
   }
   return map;
 }
@@ -161,7 +29,13 @@ function groupByCategory(shortcuts: Shortcut[]): Map<string, Shortcut[]> {
 // Component
 // ---------------------------------------------------------------------------
 
-export function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
+export function KeyboardShortcuts({
+  rows,
+  onClose,
+}: {
+  rows: readonly ShortcutRow[];
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -179,14 +53,14 @@ export function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const grouped = useMemo(() => groupByCategory(SHORTCUTS), []);
+  const grouped = useMemo(() => groupRows(rows), [rows]);
 
   const filtered = useMemo(() => {
     if (query.trim() === "") {
       return grouped;
     }
     const q = query.toLowerCase();
-    const result = new Map<string, Shortcut[]>();
+    const result = new Map<string, ShortcutRow[]>();
     for (const [category, items] of grouped) {
       const matches = items.filter(
         (s) =>
@@ -236,11 +110,15 @@ export function KeyboardShortcuts({ onClose }: { onClose: () => void }) {
           {filtered.size === 0 ? (
             <div className={styles.empty}>No shortcuts match "{query}"</div>
           ) : (
-            CATEGORY_ORDER.filter((c) => filtered.has(c)).map((category) => (
+            SHORTCUT_GROUPS.filter((c) => filtered.has(c)).map((category) => (
               <div key={category} className={styles.category}>
                 <div className={styles.categoryTitle}>{category}</div>
                 {filtered.get(category)!.map((s, i) => (
-                  <div key={i} className={styles.row}>
+                  <div
+                    key={i}
+                    className={styles.row}
+                    data-testid={`shortcut-row-${s.label}`}
+                  >
                     <span className={styles.label}>{s.label}</span>
                     <span className={styles.kbd}>
                       {s.keys.map((k, j) => (

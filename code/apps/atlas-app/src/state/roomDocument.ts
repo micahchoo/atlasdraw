@@ -29,7 +29,6 @@ import { documentFrame, type WorldFrame } from "@atlasdraw/geo";
 
 import type { Camera } from "@atlasdraw/data";
 
-import { useBasemapStore } from "./basemap";
 import { seedComments } from "./comments";
 import {
   DEFAULT_CAMERA,
@@ -38,7 +37,6 @@ import {
   type Document,
   type OverlayEntry,
 } from "./document";
-import { liveCamera } from "./documentIO";
 import { writeScene, type RoomEditor } from "./roomScene";
 
 import {
@@ -148,6 +146,20 @@ function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
   };
 }
 
+/** The room's basemap, or null when it has none or a malformed one. */
+function readBasemap(doc: Y.Doc): string | null {
+  const meta = maps(doc).meta;
+  const raw = meta.get("basemap");
+  if (raw === undefined) {
+    return null;
+  }
+  const basemap = checkBasemap(raw);
+  if (!basemap) {
+    rejectFrom(doc, writerOfKey(meta, "basemap"), "basemap");
+  }
+  return basemap;
+}
+
 async function imageRecord(blob: Blob): Promise<RoomImage> {
   return {
     mimeType: blob.type || "image/png",
@@ -163,6 +175,7 @@ export async function seedRoom(
   doc: Y.Doc,
   seed: Document,
   origin: unknown,
+  camera: Camera | null = null,
 ): Promise<void> {
   const state = seed.snapshot();
   const rasters = await Promise.all(
@@ -177,8 +190,8 @@ export async function seedRoom(
     m.meta.set("id", ulid());
     m.meta.set("title", state.title);
     m.meta.set("world", state.world);
-    m.meta.set("camera", liveCamera() ?? state.camera);
-    m.meta.set("basemap", useBasemapStore.getState().activeBasemapId);
+    m.meta.set("camera", camera ?? state.camera);
+    m.meta.set("basemap", state.basemap);
     for (const [id, image] of rasters) {
       m.images.set(id, image);
     }
@@ -256,6 +269,7 @@ export function bindRoomDocument(
     {
       id: checkDocumentId(m.meta.get("id")) ?? undefined,
       ...content,
+      basemap: readBasemap(doc) ?? undefined,
       world,
       camera,
     },
@@ -264,19 +278,6 @@ export function bindRoomDocument(
   );
   // Raster images the room holds, so a raster is not written back.
   const known = new WeakSet<Blob>(Object.values(content.images));
-
-  const applyBasemap = (): void => {
-    const raw = m.meta.get("basemap");
-    const basemap = raw === undefined ? null : checkBasemap(raw);
-    if (raw !== undefined && !basemap) {
-      rejectFrom(doc, writerOfKey(m.meta, "basemap"), "basemap");
-    }
-    const store = useBasemapStore.getState();
-    if (basemap && basemap !== store.activeBasemapId) {
-      store.setActiveBasemapId(basemap);
-    }
-  };
-  applyBasemap();
 
   // A remote transaction runs observers before `afterTransaction`. The
   // comments' observer changes the Document, and toRoom then runs while the
@@ -302,7 +303,10 @@ export function bindRoomDocument(
           known.add(blob);
         }
         document.dispatch({ type: "replace-content", ...next });
-        applyBasemap();
+        const basemap = readBasemap(doc);
+        if (basemap) {
+          document.dispatch({ type: "set-basemap", id: basemap });
+        }
       }
     } finally {
       remote = null;
@@ -320,6 +324,9 @@ export function bindRoomDocument(
     doc.transact(() => {
       if (m.meta.get("title") !== state.title) {
         m.meta.set("title", state.title);
+      }
+      if (m.meta.get("basemap") !== state.basemap) {
+        m.meta.set("basemap", state.basemap);
       }
       for (const entry of state.overlays) {
         if (m.overlays.get(entry.id) === entry) {
@@ -370,22 +377,12 @@ export function bindRoomDocument(
   };
   const unsubscribeDocument = document.subscribe(toRoom);
 
-  const unsubscribeBasemap = useBasemapStore.subscribe((state, prev) => {
-    if (
-      state.activeBasemapId !== prev.activeBasemapId &&
-      m.meta.get("basemap") !== state.activeBasemapId
-    ) {
-      doc.transact(() => m.meta.set("basemap", state.activeBasemapId), origin);
-    }
-  });
-
   return {
     document,
     unbind: () => {
       doc.off("beforeTransaction", beforeTransaction);
       doc.off("afterTransaction", fromRoom);
       unsubscribeDocument();
-      unsubscribeBasemap();
       document.comments.destroy();
     },
   };

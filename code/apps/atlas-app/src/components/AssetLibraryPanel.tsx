@@ -26,7 +26,7 @@
 // Q-P6-1 (no AtlasdrawAPI in v1): we use `excalidrawAPI` (the Excalidraw
 // imperative API) directly — there is no atlasdraw-side automation surface.
 //
-// Modal pattern mirrors AboutDialog / MaputnikDialog: root-level mount,
+// Modal pattern mirrors AboutDialog: root-level mount,
 // inline styles, Escape/focus trap inline.
 
 import React, { useEffect, useMemo, useRef } from "react";
@@ -131,7 +131,7 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
     );
   }, [excalidrawAPI, items, toast]);
 
-  // Focus management + Escape to close. Same pattern as MaputnikDialog.
+  // Focus management + Escape to close. Same pattern as AboutDialog.
   useEffect(() => {
     const panel = panelRef.current;
     if (!panel) {

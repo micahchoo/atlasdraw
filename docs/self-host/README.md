@@ -121,7 +121,6 @@ Vite reads that file during the image build.
 | Variable                     | Default                              | Effect                                       |
 | ---------------------------- | ------------------------------------ | -------------------------------------------- |
 | `VITE_ALLOW_REMOTE_BASEMAPS` | `true`                               | `false` removes "Bright", "OSM" and the USGS tile preset |
-| `VITE_MAPUTNIK_URL`          | `https://maputnik.github.io/editor/` | The style editor that "Edit basemap style" opens |
 | `VITE_GEOCODER_ENDPOINT`     | empty (off)                          | A Photon server for CSV address columns      |
 | `VITE_EMBED_ENABLED`         | `true`                               | `false` makes `/embed` open the editor       |
 
@@ -133,8 +132,6 @@ The editor sends no telemetry. These requests leave your server:
   their glyphs from `protomaps.github.io`. There is no setting for this yet.
 - **The "Bright" and "OSM" basemaps**, when a user picks one. Turn them off
   with `VITE_ALLOW_REMOTE_BASEMAPS=false`.
-- **Maputnik**, when a user opens the style editor. Point
-  `VITE_MAPUTNIK_URL` at your own copy.
 - **Tile layers** that a user adds (next section).
 - **The geocoder**, only if you set `VITE_GEOCODER_ENDPOINT`.
 

@@ -9,6 +9,7 @@
 //   identity   — id and createdAt, fixed when the document is created or
 //                loaded, never minted again; updatedAt (see `stamp`)
 //   title      — the sheet name
+//   basemap    — the registry id of the map under the drawing
 //   camera     — the camera the document was saved with
 //   world      — the world frame: what a scene coordinate means (ADR-0015),
 //                fixed when the document is created
@@ -26,6 +27,7 @@
 
 import { useSyncExternalStore } from "react";
 import { create } from "zustand";
+import { createStore, type StoreApi } from "zustand/vanilla";
 import { ulid } from "ulid";
 
 import { geometryKindOf } from "@atlasdraw/data";
@@ -44,6 +46,9 @@ import type { FeatureCollection } from "geojson";
 export type { LayerStyle };
 
 export const DEFAULT_DOCUMENT_TITLE = "Untitled map";
+
+/** The basemap of a new document: a registry id (packages/basemap). */
+export const DEFAULT_BASEMAP_ID = "protomaps-light";
 
 /** Where a document opens when nothing better is known. */
 export const DEFAULT_CAMERA: Camera = {
@@ -165,6 +170,8 @@ export interface DocumentState {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly title: string;
+  /** The basemap under the drawing: a registry id (packages/basemap). */
+  readonly basemap: string;
   /**
    * The camera the document was saved with. The live map owns the camera
    * while the editor runs; this value is used only when no map can be read.
@@ -185,6 +192,7 @@ export interface DocumentState {
 
 export type DocumentCommand =
   | { type: "rename-document"; title: string }
+  | { type: "set-basemap"; id: string }
   | {
       type: "add-data-layer";
       id: string;
@@ -350,6 +358,10 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
       const title = command.title.trim() || DEFAULT_DOCUMENT_TITLE;
       return title === state.title ? state : { ...state, title };
     }
+    case "set-basemap":
+      return command.id === state.basemap
+        ? state
+        : { ...state, basemap: command.id };
     case "add-data-layer": {
       if (!command.id.startsWith("dl:")) {
         throw new Error(
@@ -543,6 +555,7 @@ export function createDocument(
     createdAt,
     updatedAt: initial.updatedAt ?? createdAt,
     title: initial.title?.trim() || DEFAULT_DOCUMENT_TITLE,
+    basemap: initial.basemap ?? DEFAULT_BASEMAP_ID,
     camera: initial.camera ?? DEFAULT_CAMERA,
     world:
       initial.world ??
@@ -621,9 +634,17 @@ export function createDocument(
 // ---------------------------------------------------------------------------
 
 /**
- * The document the editor has open. Opening a file replaces it with a new
- * Document; nothing edits the identity of the one that is open.
+ * Which document is open. Opening a file replaces the Document; nothing
+ * edits the identity of the one that is open.
  */
+export type DocumentStore = StoreApi<{ doc: Document }>;
+
+/** A store with a new, empty document open. */
+export function createDocumentStore(): DocumentStore {
+  return createStore<{ doc: Document }>()(() => ({ doc: createDocument() }));
+}
+
+/** The editor's open document. */
 export const useDocumentStore = create<{ doc: Document }>(() => ({
   doc: createDocument(),
 }));

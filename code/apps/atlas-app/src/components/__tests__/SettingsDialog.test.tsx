@@ -20,7 +20,6 @@ const BASE_CONFIG: AppConfig = {
   enableBackendPersistence: false,
   showDemoBadge: false,
   storageBaseUrl: "",
-  maputnikUrl: "https://maputnik.github.io/editor/",
   geocoder: undefined,
   allowRemoteBasemaps: false,
   embedEnabled: true,
@@ -50,13 +49,7 @@ afterEach(() => {
 describe("SettingsDialog — StorageTab", () => {
   it("shows local-only mode and never fetches when no backend is configured", () => {
     vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue(BASE_CONFIG);
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
     openStorageTab();
 
     expect(screen.getByTestId("storage-mode").textContent).toContain(
@@ -74,13 +67,7 @@ describe("SettingsDialog — StorageTab", () => {
     });
     vi.mocked(fetch).mockResolvedValue({ ok: true } as Response);
 
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
     openStorageTab();
 
     expect(fetch).toHaveBeenCalledWith("https://api.example.test/health");
@@ -95,13 +82,7 @@ describe("SettingsDialog — StorageTab", () => {
     });
     vi.mocked(fetch).mockRejectedValue(new Error("network error"));
 
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
     openStorageTab();
 
     await screen.findByText("Unreachable");
@@ -111,13 +92,7 @@ describe("SettingsDialog — StorageTab", () => {
 describe("SettingsDialog — CollaborationTab", () => {
   it("shows Disabled when realtime isn't configured, not a nonexistent env var", () => {
     vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue(BASE_CONFIG);
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
     openCollabTab();
 
     expect(screen.getByTestId("realtime-url").textContent).toContain(
@@ -133,13 +108,7 @@ describe("SettingsDialog — CollaborationTab", () => {
       ...BASE_CONFIG,
       realtime: { enabled: true, wsUrl: "wss://realtime.example.test" },
     });
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
     openCollabTab();
 
     expect(screen.getByTestId("realtime-url").textContent).toBe(
@@ -150,22 +119,15 @@ describe("SettingsDialog — CollaborationTab", () => {
 });
 
 describe("SettingsDialog — tabs", () => {
-  it("offers basemap, storage and collaboration, and no workspace tab", () => {
+  it("offers storage and collaboration; the basemap is chosen in the Layers panel", () => {
     vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue(BASE_CONFIG);
-    render(
-      <SettingsDialog
-        activeBasemapId="protomaps-light"
-        onBasemapChange={() => {}}
-        onCloseRequest={() => {}}
-      />,
-    );
+    render(<SettingsDialog onCloseRequest={() => {}} />);
 
     const tabs = screen
       .getAllByRole("button")
       .map((b) => b.getAttribute("data-testid"))
       .filter((id) => id?.startsWith("settings-tab-"));
     expect(tabs).toEqual([
-      "settings-tab-basemap",
       "settings-tab-storage",
       "settings-tab-collaboration",
     ]);

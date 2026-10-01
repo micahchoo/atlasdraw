@@ -8,7 +8,6 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { exportPNG, type PngPixelRatio } from "../lib/export";
 import { creditLine } from "../lib/tileLayers";
-import { useBasemapStore } from "../state/basemap";
 import { currentDocument } from "../state/document";
 
 import type maplibregl from "maplibre-gl";
@@ -37,9 +36,10 @@ export function useExportPNG(
       }
       void (async () => {
         try {
+          const state = currentDocument().snapshot();
           const credit = creditLine(
-            getBasemap(useBasemapStore.getState().activeBasemapId)?.attribution,
-            currentDocument().snapshot().overlays,
+            getBasemap(state.basemap)?.attribution,
+            state.overlays,
           );
           const blob = await exportPNG(map, excalidrawAPI, {
             pixelRatio,

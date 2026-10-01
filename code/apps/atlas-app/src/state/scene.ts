@@ -2,8 +2,8 @@
 //
 // The drawing, published for views that are not in MapEditor's render tree.
 //
-// The layer panel mounts inside Excalidraw's sidebar (see state/mapInstance.ts
-// for why it cannot take props), and it needs two things from the scene: the
+// The layer panel mounts inside Excalidraw's sidebar, as an element registered
+// once, so it cannot take props. It needs two things from the scene: the
 // elements, to compute its annotation rows, and the API, to write an element.
 // This store holds both.
 //

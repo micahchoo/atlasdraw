@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Step 5 — the side of comment mode that touches the editor.
 //
-// `state/commentMode.ts` holds the boolean; this hook is everything that has
-// to happen at the two edges of it. MapEditor mounts it exactly once.
+// The session view holds the boolean; this hook is everything that has to
+// happen at the two edges of it. MapEditor mounts it exactly once.
 //
 // ENTER
 //   * drop any one-shot atlas tool (Pin) — two pointer consumers on the same
@@ -31,16 +31,20 @@
 // every time the user re-armed it.
 
 import { useEffect, useRef } from "react";
+import { useStore } from "zustand";
 
 import type { AtlasdrawTool } from "@atlasdraw/tools";
 
-import { useCommentMode } from "../state/commentMode";
 import {
   clearAnchorPicker,
   setAnchorMode,
 } from "../state/comments-anchor-picker";
 
+import type { ViewStore } from "../session/view";
+
 export interface CommentModeToolParams {
+  /** The session view that holds the mode. */
+  view: ViewStore;
   /** `activeAtlasTool` from useAtlasdrawTool — dropped on enter, put back on exit. */
   atlasTool: AtlasdrawTool | null;
   /** `setActiveAtlasTool` from useAtlasdrawTool. */
@@ -48,10 +52,11 @@ export interface CommentModeToolParams {
 }
 
 export function useCommentModeTool({
+  view,
   atlasTool,
   setAtlasTool,
 }: CommentModeToolParams): void {
-  const active = useCommentMode();
+  const active = useStore(view, (s) => s.commentMode);
 
   // Mirrored into a ref instead of being a dependency of the effect below: as a
   // dependency it would tear the mode down and re-enter it every time the atlas

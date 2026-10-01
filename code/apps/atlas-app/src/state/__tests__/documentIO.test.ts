@@ -30,13 +30,12 @@ import {
   encode,
   fromFile,
   hasUnsavedWork,
+  liveCamera,
   loadDocument,
   markSavedToFile,
   toFile,
 } from "../documentIO";
 import { sceneOf } from "../scene";
-import { useBasemapStore } from "../basemap";
-import { useMapInstanceStore } from "../mapInstance";
 
 import {
   FakeCameraMap,
@@ -47,7 +46,6 @@ import {
 } from "./fixtures/documentWorld";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
 
 const FC: FeatureCollection = {
   type: "FeatureCollection",
@@ -104,10 +102,7 @@ beforeAll(() => {
   }
 });
 
-beforeEach(() => {
-  useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
-  useMapInstanceStore.setState({ map: null });
-});
+beforeEach(() => {});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -122,20 +117,18 @@ describe("toFile", () => {
           id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
           createdAt: "2026-05-06T00:00:00.000Z",
           title: "Field notes",
+          basemap: "protomaps-dark",
         },
         sceneOf(fx.api),
       ),
     );
-    useBasemapStore.setState({ activeBasemapId: "protomaps-dark" });
-    useMapInstanceStore.setState({
-      map: new FakeCameraMap({
-        center: [-74, 40.7],
-        zoom: 12.5,
-        bearing: 15,
-      }) as unknown as maplibregl.Map,
+    const map = new FakeCameraMap({
+      center: [-74, 40.7],
+      zoom: 12.5,
+      bearing: 15,
     });
 
-    const file = toFile(doc, "2026-10-01T09:00:00.000Z");
+    const file = toFile(doc, "2026-10-01T09:00:00.000Z", liveCamera(map));
 
     expect(file.manifest).toMatchObject({
       id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
@@ -490,7 +483,7 @@ describe("loadDocument", () => {
     expect(doc?.id).toBe("01HZ8KQR5Z3MV7BJ4N6XPYD9TF");
     expect(doc?.revision).toBe(0);
     expect(doc?.snapshot().title).toBe("Field notes");
-    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(doc?.snapshot().basemap).toBe("protomaps-dark");
     expect(fx.api.getSceneElements().map((e) => e.id)).toEqual(["rect-1"]);
   });
 
@@ -604,7 +597,7 @@ describe("unsaved work", () => {
 
   it("loading alone does not say the document is in a file", async () => {
     // loadDocument also opens the autosave and share links; only Open from
-    // a file marks it saved (MapEditor.openAtlasDocument).
+    // a file marks it saved (session/fileActions.ts#openMap).
     const fx = makeFakeExcalidraw();
     const doc = await loadDocument(savedDocument(), fx.api);
     expect(doc && hasUnsavedWork(doc)).toBe(true);

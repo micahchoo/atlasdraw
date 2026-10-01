@@ -52,10 +52,8 @@ import { getBasemap, listBasemaps } from "@atlasdraw/basemap";
 import type { BasemapConfig } from "@atlasdraw/basemap";
 
 import { useOpenThreadCount } from "../hooks/useOpenThreadCount";
-import { useBasemapStore } from "../state/basemap";
-import { useMapInstanceStore } from "../state/mapInstance";
+import { useSession, useView } from "../session/SessionContext";
 import { currentDocument, dispatch, useDocument } from "../state/document";
-import { useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneStore } from "../state/scene";
 import {
   deleteAnnotation,
@@ -1522,7 +1520,7 @@ function TileLayersSection({
   tiles: TileLayerEntry[];
   mutators: Mutators;
   actions: LayerActions;
-  selectedLayerIds: Record<string, true>;
+  selectedLayerIds: Readonly<Record<string, true>>;
   selectLayer: (id: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -1604,17 +1602,14 @@ function ThreadsSection() {
   );
 }
 
-// Basemap section — IA restructure (2026-07-18): the basemap IS a layer, the
-// bottom of the stack, so it's managed here — not from the MainMenu (which
-// previously held a "Basemap: …" item + standalone BasemapPickerDialog) and
-// not only from the Settings tab. Reads/writes the shared basemap store;
-// "Edit style" raises the store flag that mounts MaputnikDialog in MapEditor.
+// Basemap section: the basemap is the bottom of the layer stack, and this is
+// the one place to choose it. The choice is part of the document.
 // ---------------------------------------------------------------------------
 
 function BasemapSection() {
-  const activeBasemapId = useBasemapStore((s) => s.activeBasemapId);
-  const setActiveBasemapId = useBasemapStore((s) => s.setActiveBasemapId);
-  const setStyleEditorOpen = useBasemapStore((s) => s.setStyleEditorOpen);
+  const activeBasemapId = useDocument((s) => s.basemap);
+  const setActiveBasemapId = (id: string) =>
+    dispatch({ type: "set-basemap", id });
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const active = getBasemap(activeBasemapId);
@@ -1644,15 +1639,6 @@ function BasemapSection() {
             {active?.label ?? activeBasemapId}
           </span>
           {sourceBadge(active?.requiresRemote ?? false)}
-        </button>
-        <button
-          type="button"
-          className={styles.detailBtn}
-          onClick={() => setStyleEditorOpen(true)}
-          data-testid="layer-basemap-edit-style"
-          title="Open the Maputnik style editor"
-        >
-          Edit style
         </button>
       </div>
       {pickerOpen && (
@@ -1697,6 +1683,7 @@ function BasemapSection() {
 const topFirst = (a: OverlayEntry, b: OverlayEntry) => b.order - a.order;
 
 export function LayerPanel() {
+  const session = useSession();
   const entries = useDocument((s) => s.overlays);
   /** `index` is the row's position in its top-first section. */
   const reorder = (id: string, index: number) => {
@@ -1718,8 +1705,8 @@ export function LayerPanel() {
   /** The scene, for the annotation commands. Null before Excalidraw mounts. */
   const scene = () => useSceneStore.getState().api;
 
-  const selectedLayerIds = useSelectedLayerStore((s) => s.selectedLayerIds);
-  const selectLayer = useSelectedLayerStore((s) => s.selectLayer);
+  const selectedLayerIds = useView((s) => s.selection);
+  const selectLayer = useView((s) => s.select);
 
   // Accordion: at most one card open. See the header note — multi-open is the
   // unbounded-growth failure mode this design is most exposed to.
@@ -1801,12 +1788,12 @@ export function LayerPanel() {
     zoomTo: (id) => {
       const name = labelOf(id);
       const entry = entries.find((e) => e.id === id);
-      const map = useMapInstanceStore.getState().map;
+      const map = session.view.getState().map;
 
       if (entry?.kind === "data") {
         const fc = currentDocument().snapshot().featureCollections[id];
-        // Read both through getState() rather than subscribing: the panel does
-        // not render differently because a map exists, and subscribing to every
+        // Read both at the click rather than subscribing: the panel does not
+        // render differently because a map exists, and subscribing to every
         // FC would re-render all 25 cards on any import.
         if (fitMapToLayer(map, fc)) {
           announce(`Zoomed to "${name}"`);

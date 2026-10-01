@@ -83,8 +83,8 @@ export function SheetNameField() {
           e.preventDefault();
           commit();
         } else if (e.key === "Escape") {
-          // Don't let Escape reach the window-level handler in
-          // useMapEditorKeyboard — cancelling the rename is the whole event.
+          // Don't let Escape reach the editor's window-level handler
+          // (useCommandKeys): cancelling the rename is the whole event.
           e.stopPropagation();
           setDraft(null);
         }

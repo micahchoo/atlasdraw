@@ -44,9 +44,9 @@ import type { LngLat, ShapeMeasure, WorldFrame } from "@atlasdraw/geo";
 import type { UnitSystem } from "@atlasdraw/tools";
 
 import { buildToolContext } from "../hooks/useAtlasdrawTool";
-import { setCommentMode } from "../state/commentMode";
 import { currentDocument } from "../state/document";
-import { useMeasureStore } from "../state/measure";
+import { isTypingTarget } from "../commands/keys";
+import { useSession, useView } from "../session/SessionContext";
 import styles from "../styles/MeasureLayer.module.css";
 
 import { ToolOptionsBar } from "./ToolOptionsBar";
@@ -80,17 +80,6 @@ export interface MeasureLayerProps {
   otherToolActive: boolean;
   /** Called when the Measure tool turns on: drop the other atlas tool. */
   onStart: () => void;
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return (
-    !!el?.tagName &&
-    (el.tagName === "INPUT" ||
-      el.tagName === "TEXTAREA" ||
-      el.tagName === "SELECT" ||
-      el.isContentEditable === true)
-  );
 }
 
 const frame = (): WorldFrame => currentDocument().snapshot().world;
@@ -446,10 +435,11 @@ export function MeasureLayer({
   otherToolActive,
   onStart,
 }: MeasureLayerProps) {
-  const active = useMeasureStore((s) => s.active);
-  const units = useMeasureStore((s) => s.units);
-  const setActive = useMeasureStore((s) => s.setActive);
-  const toggleUnits = useMeasureStore((s) => s.toggleUnits);
+  const { view } = useSession();
+  const active = useView((s) => s.measuring);
+  const units = useView((s) => s.units);
+  const setActive = useView((s) => s.setMeasuring);
+  const toggleUnits = useView((s) => s.toggleUnits);
   const selected = useSelectedElement(excalidrawAPI);
 
   // Turning on takes the click from the other tools.
@@ -457,10 +447,10 @@ export function MeasureLayer({
   onStartRef.current = onStart;
   useEffect(() => {
     if (active) {
-      setCommentMode(false);
+      view.getState().setCommentMode(false);
       onStartRef.current();
     }
-  }, [active]);
+  }, [active, view]);
 
   // Another tool starting turns the Measure tool off. Only the change counts:
   // at the moment Measure turns on, the other tool is still on for one render.
@@ -471,26 +461,6 @@ export function MeasureLayer({
     }
     otherWas.current = otherToolActive;
   }, [otherToolActive, setActive]);
-
-  // `m` turns the tool on and off.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (
-        e.key.toLowerCase() === "m" &&
-        !e.repeat &&
-        !e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        !e.shiftKey &&
-        !isTypingTarget(e.target)
-      ) {
-        e.preventDefault();
-        useMeasureStore.getState().toggleActive();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   const exit = useCallback(() => setActive(false), [setActive]);
 

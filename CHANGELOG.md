@@ -132,6 +132,21 @@ A script that calls the storage API must now keep the `write_key` from
   failed schema setup instead of failing every request until a restart.
 - **The PDF and PNG panes say what the file holds.** The PDF is a page with a
   map image, a legend and a scale; it was called a "vector document".
+- **One list of commands** feeds the main menu, the Ctrl+K palette, the
+  keys and the keyboard shortcuts panel, so the four agree. The palette now
+  holds every command (Import data, Settings, Clear the drawing, the zoom
+  commands and more). Ctrl+K opens the palette with a shape selected too.
+- **The basemap belongs to the map.** It is saved with the map and follows
+  a room; your own map keeps its basemap when you leave a room.
+- **"Clear the drawing" asks first and keeps the layers.** Undo brings the
+  shapes back. It was the drawing editor's own reset.
+- **Ctrl+Arrow no longer adds a flowchart node.** The node landed on the
+  shape at map scale and its arrow had no head. The key moves the selection
+  like an arrow key.
+- **`?` in the viewer (`/m`, `/embed`) opens nothing.** The viewer has no
+  editing keys to explain.
+- **The page frame painted before the app loads** is the editor's collar,
+  or the viewer's head bar, so the page does not change shape at mount.
 
 ### Removed
 
@@ -151,6 +166,11 @@ A script that calls the storage API must now keep the `write_key` from
   locale except English, and the upstream image export and `.excalidraw`
   save. Old documents with those element types still load (`VENDOR.md`).
 - **The `ShareView` component.** `/m` uses the same viewer as `/embed`.
+- **"Edit style" (Maputnik) and `VITE_MAPUTNIK_URL`.** The dialog sent
+  Maputnik a `/styles/…` URL that no server serves, and Maputnik could not
+  send an edit back. The basemap is chosen in the Layers panel.
+- **The Settings "Basemap" tab.** The Layers panel is the one basemap
+  picker.
 
 ## [1.0.0] — 2026-05-15
 

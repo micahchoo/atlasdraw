@@ -385,6 +385,23 @@ describe("collaboration between two clients", () => {
     a.leave();
     b.leave();
   });
+
+  it("the basemap one client chooses reaches the other", async () => {
+    const link = newRoomLink();
+    const a = openClient(link);
+    const b = openClient(link);
+    await joined(a, b);
+
+    // What the Layers panel's basemap picker does.
+    documentOf(a).dispatch({ type: "set-basemap", id: "protomaps-dark" });
+
+    await until(
+      "B's document has the basemap A chose",
+      () => documentOf(b).snapshot().basemap === "protomaps-dark",
+    );
+    a.leave();
+    b.leave();
+  });
 });
 
 // ---------------------------------------------------------------------------

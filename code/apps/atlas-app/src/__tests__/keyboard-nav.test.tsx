@@ -8,7 +8,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { MaputnikDialog } from "../components/MaputnikDialog";
 import { ExportDialog } from "../components/ExportDialog";
 
 afterEach(() => {
@@ -34,22 +33,6 @@ function renderExportDialog(onClose: () => void = () => {}) {
 }
 
 describe("keyboard nav — focus on open", () => {
-  it("MaputnikDialog auto-focuses the close button on mount", () => {
-    render(
-      <MaputnikDialog
-        activeStyleUrl="https://example.org/style.json"
-        maputnikUrl="https://maputnik.github.io/editor/"
-        onCloseRequest={() => {}}
-      />,
-    );
-    // The dialog focuses the close button (`maputnik-dialog-close`) via
-    // closeBtnRef.current?.focus() in its own effect. FocusTrap's autoFocus
-    // doesn't fight that — react-aria's FocusScope honours a manual focus
-    // call once mounted.
-    const close = screen.getByTestId("maputnik-dialog-close");
-    expect(document.activeElement).toBe(close);
-  });
-
   it("ExportDialog auto-focuses inside the dialog on mount", () => {
     renderExportDialog();
     // FocusTrap (react-aria FocusScope, autoFocus) moves focus to the first
@@ -60,19 +43,6 @@ describe("keyboard nav — focus on open", () => {
 });
 
 describe("keyboard nav — Escape closes", () => {
-  it("MaputnikDialog: Escape triggers onCloseRequest", () => {
-    const onClose = vi.fn();
-    render(
-      <MaputnikDialog
-        activeStyleUrl="https://example.org/style.json"
-        maputnikUrl="https://maputnik.github.io/editor/"
-        onCloseRequest={onClose}
-      />,
-    );
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(onClose).toHaveBeenCalled();
-  });
-
   it("ExportDialog: Escape triggers onCloseRequest", () => {
     const onClose = vi.fn();
     renderExportDialog(onClose);

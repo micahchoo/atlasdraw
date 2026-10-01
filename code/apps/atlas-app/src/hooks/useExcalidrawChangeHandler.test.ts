@@ -2,14 +2,15 @@
 // Tests for useExcalidrawChangeHandler. One describe block per numbered
 // concern in the handler's comments.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { OrderedExcalidrawElement } from "@atlasdraw/element/types";
 import type { AppState, BinaryFiles } from "@atlasdraw/excalidraw/types";
 
-import { usePersistenceStore } from "../state/usePersistenceStore";
+import { createViewStore } from "../session/view";
+import { createPersistenceState } from "../state/persistenceState";
 
 import { useExcalidrawChangeHandler } from "./useExcalidrawChangeHandler";
 
@@ -43,13 +44,11 @@ function makeParams(
     excalidrawAPI,
     announceMapEditor: vi.fn(),
     setMapBg: vi.fn(),
+    view: createViewStore(),
+    persistence: createPersistenceState(),
     ...overrides,
   };
 }
-
-beforeEach(() => {
-  usePersistenceStore.setState({ isDirty: false, isDraining: false });
-});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -113,7 +112,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
     const { result } = renderHook(() => useExcalidrawChangeHandler(params));
 
     result.current(fakeElements([{ id: "el1" }]), makeAppState(), NO_FILES);
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(params.persistence.getState().isDirty).toBe(false);
   });
 
   it("marks dirty when an element is added", () => {
@@ -127,7 +126,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("marks dirty when an element's version rises (an edit)", () => {
@@ -145,7 +144,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("marks dirty when an element is deleted", () => {
@@ -163,7 +162,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(true);
+    expect(params.persistence.getState().isDirty).toBe(true);
   });
 
   it("does not mark dirty for a camera move (a viewport change, same elements)", () => {
@@ -180,7 +179,7 @@ describe("useExcalidrawChangeHandler — 2. autosave markDirty gate", () => {
       NO_FILES,
     );
 
-    expect(usePersistenceStore.getState().isDirty).toBe(false);
+    expect(params.persistence.getState().isDirty).toBe(false);
   });
 });
 
@@ -248,5 +247,39 @@ describe("useExcalidrawChangeHandler — 3. selection aria-live announce", () =>
 
     expect(params.announceMapEditor).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+});
+
+describe("useExcalidrawChangeHandler — 4. the canvas selection reaches the panel", () => {
+  it("the selected elements become the selection; a panel-selected data layer stays", () => {
+    const params = makeParams();
+    params.view.getState().setSelection({ "dl:roads": true, old: true });
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", type: "rectangle" }]),
+      makeAppState({ selectedElementIds: { el1: true } }),
+      NO_FILES,
+    );
+
+    expect(params.view.getState().selection).toEqual({
+      "dl:roads": true,
+      el1: true,
+    });
+  });
+
+  it("an unchanged selection writes nothing", () => {
+    const params = makeParams();
+    params.view.getState().setSelection({ el1: true });
+    const before = params.view.getState().selection;
+    const { result } = renderHook(() => useExcalidrawChangeHandler(params));
+
+    result.current(
+      fakeElements([{ id: "el1", type: "rectangle" }]),
+      makeAppState({ selectedElementIds: { el1: true } }),
+      NO_FILES,
+    );
+
+    expect(params.view.getState().selection).toBe(before);
   });
 });

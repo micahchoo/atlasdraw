@@ -39,9 +39,8 @@ import { toFile } from "../documentIO";
 import { sceneOf } from "../scene";
 import { loadShareDocument } from "../loadShareDocument";
 import { parseRoute } from "../../routes";
-import { usePersistenceStore } from "../usePersistenceStore";
-import { useMapInstanceStore } from "../mapInstance";
-import { useBasemapStore } from "../basemap";
+import { createPersistenceState } from "../persistenceState";
+import { createViewStore } from "../../session/view";
 import { useSceneBinding, useSceneStore } from "../scene";
 import {
   annotationRows,
@@ -165,6 +164,9 @@ async function autosaveDocument(): Promise<AtlasdrawDocument> {
   return doc;
 }
 
+/** The editor's autosave state; a new one for every case. */
+let persistence = createPersistenceState();
+
 /**
  * Mount the editor's document wiring the way MapEditor does: persistence,
  * the registry <-> scene bridge, and the onChange handler that marks dirty.
@@ -173,14 +175,18 @@ function mountEditor(
   api: ExcalidrawImperativeAPI,
   map: maplibregl.Map | null = null,
 ) {
+  // The editor's view holds the map; a save reads its camera from there.
+  const view = createViewStore({ map });
   return renderHook(() => {
-    usePersistenceWiring(api, NOTIFY);
+    usePersistenceWiring({ view, persistence }, api, NOTIFY, null);
     useSceneBinding(api);
     useMapOverlays(map);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
       announceMapEditor: () => {},
       setMapBg: () => {},
+      view,
+      persistence,
     });
     useEffect(
       () =>
@@ -208,13 +214,13 @@ async function waitForHydrate(api: ExcalidrawImperativeAPI): Promise<void> {
 /** Save now and treat the result as the clean baseline. */
 async function saveAndSettle(): Promise<void> {
   await act(async () => {
-    await usePersistenceStore.getState().forceSave();
+    await persistence.getState().forceSave();
   });
-  usePersistenceStore.getState().clearDirty();
+  persistence.getState().clearDirty();
 }
 
 function isDirty(): boolean {
-  const s = usePersistenceStore.getState();
+  const s = persistence.getState();
   return s.isDirty || (s.persistenceStore?.isDirty() ?? false);
 }
 
@@ -232,9 +238,7 @@ beforeEach(async () => {
   db.close();
   // A new, empty open document for every case.
   openDocument(createDocument());
-  usePersistenceStore.setState({ isDirty: false, isDraining: false });
-  useMapInstanceStore.setState({ map: null });
-  useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
+  persistence = createPersistenceState();
 });
 
 afterEach(() => {
@@ -254,11 +258,11 @@ describe("document identity", () => {
     await waitForHydrate(fx.api);
 
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const first = await autosaveDocument();
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const second = await autosaveDocument();
 
@@ -285,13 +289,13 @@ describe("save determinism", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const first = await autosaveBytes();
 
     vi.setSystemTime(new Date("2026-10-01T09:00:10.000Z"));
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const second = await autosaveBytes();
 
@@ -312,15 +316,14 @@ describe("camera and basemap persistence", () => {
       bearing: 15,
       pitch: 0,
     });
-    useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
-    mountEditor(fx.api);
+    mountEditor(fx.api, map as unknown as maplibregl.Map);
     act(() => {
-      useBasemapStore.getState().setActiveBasemapId("protomaps-dark");
+      currentDocument().dispatch({ type: "set-basemap", id: "protomaps-dark" });
     });
 
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const saved = await autosaveDocument();
 
@@ -334,12 +337,11 @@ describe("camera and basemap persistence", () => {
   it("restores the saved camera and basemap on reload", async () => {
     await seedAutosave(savedDocument()); // camera [13.4, 52.5] z11 b30, protomaps-dark
     const map = cameraMap({ center: [0, 0], zoom: 2 });
-    useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
     const fx = makeFakeExcalidraw();
     mountEditor(fx.api, map as unknown as maplibregl.Map);
     await waitForHydrate(fx.api);
 
-    expect(useBasemapStore.getState().activeBasemapId).toBe("protomaps-dark");
+    expect(currentDocument().snapshot().basemap).toBe("protomaps-dark");
     expect(map.getCenter().lng).toBeCloseTo(13.4, 6);
     expect(map.getCenter().lat).toBeCloseTo(52.5, 6);
     expect(map.getZoom()).toBeCloseTo(11, 6);
@@ -501,7 +503,7 @@ describe("annotation rows after reload and undo", () => {
 
     expect(panelRows().map((r) => r.id)).toEqual([]);
     await act(async () => {
-      await usePersistenceStore.getState().forceSave();
+      await persistence.getState().forceSave();
     });
     const saved = await autosaveDocument();
     expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);

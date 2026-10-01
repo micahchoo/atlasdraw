@@ -16,22 +16,29 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import { usePersistenceStore } from "../state/usePersistenceStore";
 import { sceneSignature } from "../state/sceneSignature";
-import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
+import { isOverlayId } from "../state/selectedLayer";
 
-import type { Dispatch, SetStateAction } from "react";
+import type { PersistenceStateStore } from "../state/persistenceState";
+import type { ViewStore } from "../session/view";
 
 export interface ExcalidrawChangeHandlerParams {
   excalidrawAPI: ExcalidrawImperativeAPI | null;
   announceMapEditor: (msg: string) => void;
-  setMapBg: Dispatch<SetStateAction<string>>;
+  /** Receives the canvas colour the user chose in the drawing's menu. */
+  setMapBg: (color: string) => void;
+  /** The session view whose layer selection follows the canvas. */
+  view: ViewStore;
+  /** The session's autosave state, marked dirty by a drawing change. */
+  persistence: PersistenceStateStore;
 }
 
 export function useExcalidrawChangeHandler({
   excalidrawAPI,
   announceMapEditor,
   setMapBg,
+  view,
+  persistence,
 }: ExcalidrawChangeHandlerParams): NonNullable<
   React.ComponentProps<typeof Excalidraw>["onChange"]
 > {
@@ -85,7 +92,7 @@ export function useExcalidrawChangeHandler({
       const prevSignature = prevSignatureRef.current;
       prevSignatureRef.current = signature;
       if (prevSignature !== null && signature !== prevSignature) {
-        usePersistenceStore.getState().markDirty();
+        persistence.getState().markDirty();
       }
 
       // --- 3. Selection-change aria-live announcement.
@@ -116,7 +123,7 @@ export function useExcalidrawChangeHandler({
       }
 
       // --- 4. Mirror annotation selection to layer store ---
-      // Keep the panel's selectedLayerIds in step with what is selected on the
+      // Keep the panel's selection in step with what is selected on the
       // canvas. Only annotation ids (Excalidraw element ids) flow this way;
       // data/raster selections made from the panel are preserved. The
       // key-set comparison before writing breaks the feedback loop with
@@ -128,8 +135,8 @@ export function useExcalidrawChangeHandler({
       for (const id of Object.keys(appState.selectedElementIds ?? {})) {
         annotationIds[id] = true;
       }
-      const storeState = useSelectedLayerStore.getState();
-      const existing = { ...storeState.selectedLayerIds };
+      const viewState = view.getState();
+      const existing = { ...viewState.selection };
       for (const key of Object.keys(existing)) {
         if (!isOverlayId(key) && !annotationIds[key]) {
           delete existing[key];
@@ -137,14 +144,12 @@ export function useExcalidrawChangeHandler({
       }
       const merged = { ...existing, ...annotationIds };
       // Guard: only write if changed
-      const currentKeys = Object.keys(storeState.selectedLayerIds)
-        .sort()
-        .join(",");
+      const currentKeys = Object.keys(viewState.selection).sort().join(",");
       const mergedKeys = Object.keys(merged).sort().join(",");
       if (currentKeys !== mergedKeys) {
-        storeState.setSelectedLayerIds(merged);
+        viewState.setSelection(merged);
       }
     },
-    [excalidrawAPI, announceMapEditor, setMapBg],
+    [excalidrawAPI, announceMapEditor, setMapBg, view, persistence],
   );
 }

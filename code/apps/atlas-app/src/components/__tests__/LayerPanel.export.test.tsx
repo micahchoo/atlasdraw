@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
+import { withSession } from "../../session/__tests__/sessionFixture";
 import {
   createDocument,
   currentDocument,
@@ -94,7 +95,7 @@ function addDataLayer(id: string, fc: FeatureCollection, label: string) {
 }
 
 function openMenu(id: string) {
-  render(<LayerPanel />);
+  render(withSession(<LayerPanel />));
   fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
 }
 

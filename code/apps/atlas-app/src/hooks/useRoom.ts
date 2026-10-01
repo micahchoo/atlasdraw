@@ -9,7 +9,7 @@
 // Once the room has joined, the editor opens the room's Document and shows
 // the room's drawing; the user's own document waits in memory and comes
 // back when the editor unmounts. A room joined before the autosave opened
-// the user's own map waits for it (usePersistenceStore#ownMapLoaded): the
+// the user's own map waits for it (persistenceState.ts#ownMapLoaded): the
 // map that waits in memory must be theirs, not the blank start. Opening another document leaves the room. Nothing in the room is written to
 // the user's own map: the autosave skips a room's document.
 //
@@ -28,7 +28,6 @@ import {
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { getAppConfig } from "../config/app-config";
 import { routeUrl } from "../routes";
 import {
   currentDocument,
@@ -36,18 +35,18 @@ import {
   useDocumentStore,
   type Document,
 } from "../state/document";
-import { restoreCamera } from "../state/documentIO";
+import { liveCamera, restoreCamera } from "../state/documentIO";
 import {
   joinRoom,
-  relayTransport,
   type Peer,
   type Room,
   type RoomStatus,
+  type RoomTransport,
 } from "../state/room";
 import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
-import { usePersistenceStore } from "../state/usePersistenceStore";
 
+import type { PersistenceStateStore } from "../state/persistenceState";
 import type maplibregl from "maplibre-gl";
 
 export interface RoomSession {
@@ -79,26 +78,40 @@ const NO_PEERS: readonly Peer[] = [];
 export function useRoom(
   api: ExcalidrawImperativeAPI | null,
   map: maplibregl.Map | null,
+  /**
+   * The session's room transport (null: this editor has no rooms) and its
+   * autosave state, which a room waits for.
+   */
+  session: {
+    transport: RoomTransport | null;
+    persistence: PersistenceStateStore;
+  },
 ): RoomSession {
-  const realtime = getAppConfig().realtime;
+  const { transport, persistence } = session;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
   const [self, setSelf] = useState<Identity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
+  const mapRef = useRef(map);
+  mapRef.current = map;
 
   const join = useCallback(
-    (link: RoomLink, seed?: Document): Room => {
-      const transport = relayTransport(
-        realtime.wsUrl || window.location.origin,
+    (link: RoomLink, seed?: Document): Room | null => {
+      if (!transport) {
+        return null;
+      }
+      const next = joinRoom(
+        link,
+        transport,
+        seed ? { seed, seedCamera: liveCamera(mapRef.current) } : {},
       );
-      const next = joinRoom(link, transport, seed ? { seed } : {});
       roomRef.current = next;
       setRoom(next);
       return next;
     },
-    [realtime.wsUrl],
+    [transport],
   );
 
   // A room link in the URL, read once when the editor is ready.
@@ -110,7 +123,7 @@ export function useRoom(
     if (!hash.startsWith("#room:")) {
       return;
     }
-    if (!realtime.enabled) {
+    if (!transport) {
       setError("This editor is not set up for shared maps.");
       return;
     }
@@ -143,10 +156,10 @@ export function useRoom(
       if (previous || !roomDocument) {
         return;
       }
-      const persistence = usePersistenceStore.getState();
-      if (!persistence.ownMapLoaded) {
+      const own = persistence.getState();
+      if (!own.ownMapLoaded) {
         stopWaiting();
-        stopWaiting = usePersistenceStore.subscribe((state) => {
+        stopWaiting = persistence.subscribe((state) => {
           if (state.ownMapLoaded) {
             stopWaiting();
             enter();
@@ -155,15 +168,15 @@ export function useRoom(
         return;
       }
       // Write the user's unsaved changes before their map leaves the editor.
-      if (persistence.isDirty) {
-        void persistence.forceSave();
+      if (own.isDirty) {
+        void own.forceSave();
       }
       previous = {
         doc: currentDocument(),
         elements: api.getSceneElementsIncludingDeleted(),
       };
       openDocument(roomDocument);
-      restoreCamera(roomDocument.snapshot().camera);
+      restoreCamera(mapRef.current, roomDocument.snapshot().camera);
       detach = room.attach(editorOf(api));
       api.history?.clear();
     };
@@ -216,7 +229,7 @@ export function useRoom(
       setSelf(null);
       setStatus(null);
     };
-  }, [room, api]);
+  }, [room, api, persistence]);
 
   // Presence: the camera after each move, the pointer while over the map.
   useEffect(() => {
@@ -279,7 +292,7 @@ export function useRoom(
   );
 
   return {
-    available: realtime.enabled,
+    available: transport !== null,
     room,
     status,
     peers,
@@ -288,4 +301,23 @@ export function useRoom(
     error,
     start,
   };
+}
+
+/** Why the editor cannot be in the room, in the user's words; null when it can. */
+export function roomProblem(room: Pick<RoomSession, "error" | "status">) {
+  if (room.error) {
+    return room.error;
+  }
+  switch (room.status) {
+    case "denied":
+      return "This shared map link was refused. Ask for a new link.";
+    case "full":
+      return "This shared map is full. Try again later.";
+    case "limited":
+      return "Too many shared maps were opened from your network. Try again in an hour.";
+    case "no-space":
+      return "The server has no space for shared maps. Tell the person who runs it.";
+    default:
+      return null;
+  }
 }

@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Measuring (W9): whether the Measure tool is on, and the units every
-// measurement is shown in.
-//
-// A store, not component state: the toolbar button, the ⌘K palette, the `m`
-// key and MeasureLayer all read the same two values, and none of them is an
-// ancestor of the others. The units are a per-user preference, kept in
-// localStorage as `state/sheetPanel.ts` keeps its width: read once, written
-// in the setter, and a throwing Storage only loses the memory, never the
-// switch.
-
-import { create } from "zustand";
+// The units every measurement is shown in: a per-user preference, kept in
+// this browser. A throwing Storage only loses the memory, never the switch.
+// Whether the Measure tool is on is session view state (session/view.ts).
 
 import { unitSystemForLocale } from "@atlasdraw/tools";
 
@@ -33,35 +25,10 @@ export function loadUnitSystem(
   return unitSystemForLocale(locale);
 }
 
-function saveUnitSystem(units: UnitSystem): void {
+export function saveUnitSystem(units: UnitSystem): void {
   try {
     localStorage.setItem(MEASURE_UNITS_KEY, units);
   } catch {
     // Storage unavailable: the choice applies for this session only.
   }
 }
-
-export type MeasureStoreState = {
-  /** True while the Measure tool is on. */
-  active: boolean;
-  units: UnitSystem;
-  setActive: (active: boolean) => void;
-  toggleActive: () => void;
-  toggleUnits: () => void;
-};
-
-export const useMeasureStore = create<MeasureStoreState>((set, get) => ({
-  active: false,
-  units: loadUnitSystem(),
-  setActive: (active) => {
-    if (get().active !== active) {
-      set({ active });
-    }
-  },
-  toggleActive: () => set({ active: !get().active }),
-  toggleUnits: () => {
-    const units = get().units === "metric" ? "imperial" : "metric";
-    set({ units });
-    saveUnitSystem(units);
-  },
-}));

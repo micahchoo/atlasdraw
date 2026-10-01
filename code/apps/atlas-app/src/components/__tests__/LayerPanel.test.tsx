@@ -14,7 +14,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
-import { useSelectedLayerStore } from "../../state/selectedLayer";
+import {
+  testSession,
+  withSession,
+} from "../../session/__tests__/sessionFixture";
 
 import {
   createDocument,
@@ -59,7 +62,7 @@ function seedTwo() {
 
 describe("LayerPanel", () => {
   it("renders both Data Layers and Annotations sections", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     expect(screen.getByLabelText("Data Layers")).toBeTruthy();
     expect(screen.getByLabelText("Annotations")).toBeTruthy();
   });
@@ -73,7 +76,7 @@ describe("LayerPanel", () => {
       style: { fillColor: "#ff0000", strokeColor: "#000000", opacity: 1 },
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(screen.getByLabelText("Data layer")).toBeTruthy();
     expect(screen.getByText("Roads")).toBeTruthy();
@@ -82,7 +85,7 @@ describe("LayerPanel", () => {
   it("renders an AnnotationLayerRow with the 'Annotation' badge", () => {
     seedScene(["el-1", "MyShape"]);
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(screen.getByLabelText("Annotation")).toBeTruthy();
     expect(screen.getByText("MyShape")).toBeTruthy();
@@ -97,7 +100,7 @@ describe("LayerPanel", () => {
       style: { opacity: 1 },
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     // Pre: visible=true → button label is "Hide <label>". The label carries the
     // layer name now: at 25 layers, 25 buttons all called "Hide layer" is not
@@ -120,7 +123,7 @@ describe("LayerPanel", () => {
       style: { fillColor: "#000000", opacity: 1 },
     });
 
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     // Symbology lives in the card body now, so it has to be opened first.
     fireEvent.click(screen.getByTestId("layer-disclosure-dl:test-3"));
@@ -140,7 +143,7 @@ describe("LayerPanel", () => {
   describe("drag-and-drop reorder", () => {
     it("renders a drag handle per annotation row with accessible label", () => {
       seedTwo();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       const handle = screen.getByTestId("layer-drag-el-1");
       expect(handle).toBeTruthy();
@@ -149,7 +152,7 @@ describe("LayerPanel", () => {
 
     it("renders up/down chevron buttons with disabled state at bounds", () => {
       seedTwo();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       // First entry: up should be disabled, down enabled.
       const upBtn = screen.getByTestId("layer-up-el-1") as HTMLButtonElement;
@@ -168,7 +171,7 @@ describe("LayerPanel", () => {
 
     it("clicking the down button on the first entry reorders via splice", () => {
       seedTwo();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       const downBtn = screen.getByTestId("layer-down-el-1");
       fireEvent.click(downBtn);
@@ -185,7 +188,7 @@ describe("LayerPanel", () => {
     // row does not — or a future revert only fails one of them.
     it("puts draggable on the grip and not on the row", () => {
       seedTwo();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       expect(
         screen.getByTestId("layer-drag-el-1").getAttribute("draggable"),
@@ -198,7 +201,7 @@ describe("LayerPanel", () => {
     // The drop target stays the row: you aim a drop at a row, not at its grip.
     it("still reorders when a drop lands on the row body", () => {
       seedTwo();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       const target = screen.getByTestId("layer-row-el-2");
       const data = new Map<string, string>();
@@ -299,7 +302,7 @@ describe("LayerPanel", () => {
 
     it("clamps arrow buttons to each section's own bounds", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       // Top of the annotation section — even though it is not entry 0 of the
       // registry, it cannot move above the section.
@@ -325,7 +328,7 @@ describe("LayerPanel", () => {
 
     it("arrow 'down' moves an annotation past its neighbour and nothing else", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       fireEvent.click(screen.getByTestId("layer-down-a1"));
 
@@ -335,7 +338,7 @@ describe("LayerPanel", () => {
 
     it("dragging the first annotation below the last one moves it to the bottom", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       dragOnto("a1", "a3", "below");
 
@@ -345,7 +348,7 @@ describe("LayerPanel", () => {
 
     it("dragging the last annotation above the middle one lands it between", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       dragOnto("a3", "a2", "above");
 
@@ -354,7 +357,7 @@ describe("LayerPanel", () => {
 
     it("dragging a data layer never touches the annotation stack", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       // The list is [d2, d1], top first. Dropping d2 below d1 puts d2 at the
       // bottom of the stack.
@@ -366,7 +369,7 @@ describe("LayerPanel", () => {
 
     it("a drop from the other section is ignored", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       // dl:d1 is not in the annotation section's id list.
       dragOnto("dl:d1", "a2", "above");
@@ -377,14 +380,14 @@ describe("LayerPanel", () => {
 
     it("arrow 'down' and the equivalent drag agree", () => {
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       dragOnto("a2", "a3", "below");
       const viaDrag = annotationIds();
 
       cleanup();
       openDocument(createDocument());
       seedMixed();
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
       fireEvent.click(screen.getByTestId("layer-down-a2"));
 
       expect(viaDrag).toEqual(annotationIds());
@@ -406,7 +409,7 @@ describe("LayerPanel", () => {
         label: "Two",
         style: {},
       });
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       // The list is [Two, One], top first. One above Two puts One on top.
       dragOnto("dl:only-1", "dl:only-2", "above");
@@ -416,7 +419,7 @@ describe("LayerPanel", () => {
 
     it("works on an annotation-only document", () => {
       seedScene(["s1", "S1"], ["s2", "S2"], ["s3", "S3"]);
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       dragOnto("s1", "s3", "below");
       expect(annotationIds()).toEqual(["s2", "s3", "s1"]);
@@ -427,7 +430,7 @@ describe("LayerPanel", () => {
 
     it("a single-row section has both arrows disabled", () => {
       seedScene(["solo", "Solo"]);
-      render(<LayerPanel />);
+      render(withSession(<LayerPanel />));
 
       expect(
         (screen.getByTestId("layer-up-solo") as HTMLButtonElement).disabled,
@@ -451,7 +454,7 @@ describe("LayerPanel", () => {
 
 describe("LayerPanel — Threads section (Step 5)", () => {
   it("offers Threads in the Sheet scope, alongside the other sections", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     expect(screen.getByLabelText("Threads")).toBeTruthy();
     expect(screen.getByLabelText("Data Layers")).toBeTruthy();
     expect(screen.getByLabelText("Annotations")).toBeTruthy();
@@ -459,7 +462,7 @@ describe("LayerPanel — Threads section (Step 5)", () => {
   });
 
   it("is collapsed by default and discloses the list on demand", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     const disclosure = screen.getByTestId("threads-disclosure");
     expect(disclosure.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByTestId("comments-panel")).toBe(null);
@@ -486,7 +489,7 @@ describe("LayerPanel — Threads section (Step 5)", () => {
 describe("LayerPanel — rename via the ⋯ menu", () => {
   it("opens the rename editor from an annotation's ⋯ menu and commits on Enter", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-rename-el-1"));
@@ -503,7 +506,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
 
   it("commits an annotation rename on blur", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-rename-el-1"));
@@ -516,7 +519,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
 
   it("Escape abandons an annotation rename and leaves no flag behind", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-rename-el-1"));
@@ -533,7 +536,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
 
   it("treats a cleared box as a cancel, not as a blank name", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-rename-el-1"));
@@ -552,7 +555,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
       label: "parcels.geojson",
       style: { fillColor: "#ff0000", opacity: 1 },
     });
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId("layer-menu-dl:test-1"));
     fireEvent.click(screen.getByTestId("layer-rename-dl:test-1"));
@@ -569,7 +572,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
 
   it("leaves the open rename box with no draggable ancestor", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     // A draggable ancestor turns a press-and-sweep over the input's text into a
     // row drag, so the name you meant to replace can't be selected. This used
@@ -615,7 +618,7 @@ describe("LayerPanel — raster layers", () => {
 
   it("hides the section entirely when there is no imagery", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     // Most documents have no raster. An empty section in a 294px column is a
     // row of nothing, and the panel already carries three headings.
@@ -624,7 +627,7 @@ describe("LayerPanel — raster layers", () => {
 
   it("lists a raster with a visibility toggle and a name", () => {
     const id = seedRaster();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(screen.getByRole("region", { name: "Images" })).toBeTruthy();
     expect(screen.getByTestId(`layer-name-${id}`).textContent).toBe(
@@ -643,7 +646,7 @@ describe("LayerPanel — raster layers", () => {
 
   it("removes a raster from the registry via the ⋯ menu", () => {
     const id = seedRaster();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
     fireEvent.click(screen.getByTestId(`layer-delete-${id}`));
@@ -665,7 +668,7 @@ describe("LayerPanel — raster layers", () => {
       label: "parcels",
       style: {},
     });
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     const headings = screen
       .getAllByRole("heading", { level: 3 })
@@ -684,7 +687,7 @@ describe("LayerPanel — raster layers", () => {
     // be enabled and moving it would address the wrong stack.
     seedScene(["el-1"]);
     const id = seedRaster();
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
 
     expect(
       (screen.getByTestId(`layer-up-${id}`) as HTMLButtonElement).disabled,
@@ -693,7 +696,7 @@ describe("LayerPanel — raster layers", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Bidirectional selection — the panel reads/writes useSelectedLayerStore
+// Selection — the panel reads and writes the session view's selection
 // ---------------------------------------------------------------------------
 //
 // A row click is the single-select gesture: it replaces the selection set with
@@ -702,8 +705,9 @@ describe("LayerPanel — raster layers", () => {
 // the highlight must not move while you toggle a layer.
 
 describe("LayerPanel — row selection", () => {
+  let session = testSession();
   beforeEach(() => {
-    useSelectedLayerStore.setState({ selectedLayerIds: {} });
+    session = testSession();
   });
 
   function seedData(id: string, label: string) {
@@ -718,11 +722,11 @@ describe("LayerPanel — row selection", () => {
 
   it("selects the clicked row (single-select replace)", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-1": true,
     });
   });
@@ -730,33 +734,33 @@ describe("LayerPanel — row selection", () => {
   it("switches selection to the newly clicked row", () => {
     seedData("dl:sel-1", "parcels.geojson");
     seedData("dl:sel-2", "roads.geojson");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-2"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-2": true,
     });
   });
 
   it("row controls do not change the selection", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
     fireEvent.click(screen.getByTestId("layer-row-header-dl:sel-1"));
 
     fireEvent.click(screen.getByTestId("layer-visibility-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1"));
     fireEvent.click(screen.getByTestId("layer-menu-dl:sel-1")); // close again
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "dl:sel-1": true,
     });
   });
 
   it("marks the selected row's header with the rowSelected class", () => {
     seedData("dl:sel-1", "parcels.geojson");
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
 
     const header = screen.getByTestId("layer-row-header-dl:sel-1");
     expect(header.className).not.toContain("rowSelected");
@@ -768,11 +772,11 @@ describe("LayerPanel — row selection", () => {
 
   it("selects an annotation row by clicking its name label", () => {
     seedScene(["el-1"]);
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />, session));
 
     fireEvent.click(screen.getByTestId("layer-name-el-1"));
 
-    expect(useSelectedLayerStore.getState().selectedLayerIds).toEqual({
+    expect(session.view.getState().selection).toEqual({
       "el-1": true,
     });
   });

@@ -30,6 +30,8 @@ import { roomToken, withRoomToken, type RoomLink } from "@atlasdraw/protocol";
 
 import type { Camera } from "@atlasdraw/data";
 
+import { getAppConfig } from "../config/app-config";
+
 import { MAX_NAME_LENGTH, localIdentity, type Identity } from "./identity";
 import {
   bindRoomDocument,
@@ -105,6 +107,17 @@ export type RoomTransport = (args: {
   awareness: Awareness;
   events: TransportEvents;
 }) => { close(): void };
+
+/**
+ * The transport this build uses: the configured relay, or the page's own
+ * origin when no URL is set. Null when this build has no rooms.
+ */
+export function configuredTransport(): RoomTransport | null {
+  const { realtime } = getAppConfig();
+  return realtime.enabled
+    ? relayTransport(realtime.wsUrl || window.location.origin)
+    : null;
+}
 
 /**
  * The relay at `baseUrl` (http(s) or ws(s)), over the y-websocket protocol
@@ -314,6 +327,8 @@ export interface JoinOptions {
    * empty: a room that exists already keeps its content.
    */
   seed?: Document;
+  /** Where the seed's user is looking: the camera a joiner starts at. */
+  seedCamera?: Camera | null;
   identity?: Identity;
   /** The drawing the room's Document saves with. Default: the editor's. */
   scene?: SceneAccess;
@@ -363,7 +378,7 @@ export function joinRoom(
   const open = async (): Promise<void> => {
     if (!roomIsMade(doc)) {
       if (options.seed) {
-        await seedRoom(doc, options.seed, local);
+        await seedRoom(doc, options.seed, local, options.seedCamera ?? null);
       } else {
         makeEmptyRoom(doc, local);
       }

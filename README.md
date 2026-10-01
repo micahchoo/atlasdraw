@@ -54,9 +54,8 @@ First run: [`docs/self-host/README.md`](docs/self-host/README.md).
 Production: [`docs/self-host/production.md`](docs/self-host/production.md).
 
 The browser can call other servers. The default basemap loads its label
-fonts from `protomaps.github.io`. The "Bright" and "OSM" basemaps, the
-Maputnik style editor, and tile layers that a user adds load from their own
-servers. The self-host guide tells you how to turn these off.
+fonts from `protomaps.github.io`. The "Bright" and "OSM" basemaps and the
+tile layers that a user adds load from their own servers. The self-host guide tells you how to turn these off.
 
 ## Architecture
 

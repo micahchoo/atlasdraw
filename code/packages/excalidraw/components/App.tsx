@@ -4805,7 +4805,12 @@ class App extends React.Component<AppProps, AppState> {
 
         const arrowKeyPressed = isArrowKey(event.key);
 
-        if (event[KEYS.CTRL_OR_CMD] && arrowKeyPressed && !event.shiftKey) {
+        if (
+          event[KEYS.CTRL_OR_CMD] &&
+          arrowKeyPressed &&
+          !event.shiftKey &&
+          this.props.flowchart !== false
+        ) {
           event.preventDefault();
 
           const selectedElements = getSelectedElements(

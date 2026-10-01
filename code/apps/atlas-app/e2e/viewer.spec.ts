@@ -118,3 +118,20 @@ test("Open in Atlasdraw opens a copy of the shared map in the editor", async ({
   await expect.poll(() => new URL(viewer.url()).hash).toBe("");
   await visitor.close();
 });
+
+test("? opens no help in the viewer: it has no editor keys to explain", async ({
+  page,
+}) => {
+  const url = await shareLink(page);
+  const viewer = await page.context().newPage();
+  for (const path of ["/m", "/embed"]) {
+    await viewer.goto(path + url.slice(url.indexOf("#")));
+    await expect(viewer.locator("canvas.maplibregl-canvas")).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    // Focus in the drawing, where the drawing's own keys are heard.
+    await viewer.locator(".excalidraw").first().press("Shift+?");
+    await viewer.waitForTimeout(300);
+    await expect(viewer.locator(".HelpDialog"), path).toHaveCount(0);
+  }
+});

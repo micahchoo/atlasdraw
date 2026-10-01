@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
+import { withSession } from "../../session/__tests__/sessionFixture";
 import {
   createDocument,
   currentDocument,
@@ -34,7 +35,7 @@ const tiles = () =>
     .overlays.filter((e) => e.kind === "tile");
 
 function openForm() {
-  render(<LayerPanel />);
+  render(withSession(<LayerPanel />));
   fireEvent.click(screen.getByTestId("tile-add-open"));
 }
 
@@ -125,13 +126,13 @@ describe("a tile layer row", () => {
   });
 
   it("hides and shows the layer", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-visibility-tl:a"));
     expect(tiles()[0]?.visible).toBe(false);
   });
 
   it("fades the layer with its opacity slider", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.change(screen.getByTestId("layer-opacity-tl:a"), {
       target: { value: "0.3" },
     });
@@ -139,7 +140,7 @@ describe("a tile layer row", () => {
   });
 
   it("deletes the layer after the confirm step", () => {
-    render(<LayerPanel />);
+    render(withSession(<LayerPanel />));
     fireEvent.click(screen.getByTestId("layer-menu-tl:a"));
     fireEvent.click(screen.getByTestId("layer-delete-tl:a"));
     fireEvent.click(screen.getByTestId("layer-delete-confirm-tl:a"));
