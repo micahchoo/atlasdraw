@@ -262,26 +262,52 @@ TLS. For production exposure, also consider:
   `tcpdump` outbound traffic — the only legitimate destinations are the
   ACME endpoints and the (optional) Sentry ingestion URL.
 
-### Future: real-time relay trust boundary (Phase 5+)
+## Realtime relay
 
-Phase 5 will add an optional real-time collaboration relay (`apps/realtime`,
-disabled by default). When you enable it via `[realtime] enabled = true`,
-the relay process **can read your data-layer geometry** (Yjs CRDT ops) in
-plaintext. Scene drawings and comments remain end-to-end encrypted via
-Socket.IO — only the *map layer* geometry is visible to the relay.
+The relay (`apps/realtime`, compose profile `realtime`) holds the shared
+maps that people edit together ("rooms"). Start it with
+`docker compose --profile realtime --env-file .env -f infra/docker-compose.yml up -d`
+and build the web image with `VITE_REALTIME_ENABLED=true`.
 
-This is a deliberate, bounded trade-off documented in
-[ADR-0010](../architecture/adr/0010-yjs-e2ee-threat-model.md). If you do
-not want the relay process to see your geometry data, either:
+### What the relay can see
 
-1. Don't enable real-time (single-player mode remains a first-class
-   deployment target), or
-2. Run your own relay — the trust boundary is "relay operator," which
-   for self-hosters is you.
+The relay can read everything in a room: the drawing, the layers and the
+comments. The key in the room link, not the room id, lets a person in
+(ADR-0014). If the operator must not read the rooms, do not enable the
+relay, or run your own.
 
-Full end-to-end encryption of data-layer ops (Option B in the ADR) is
-deferred to Phase 6 evaluation. This disclosure will be expanded with
-concrete operator-facing guidance when Phase 5 ships.
+### Limits
+
+Anyone who can reach the relay can make a room. These limits stop one
+client from filling the memory or the disk. Each refusal closes the
+WebSocket with a code and a reason, and the editor tells the user why.
+
+| Var | Default | What it limits |
+|---|---|---|
+| `MAX_TOTAL_ROOM_BYTES` | `2147483648` (2 GiB) | The bytes of all stored rooms together. When the total is at the cap, a new room is refused (4507, "relay storage full"). A save that would pass the cap is not written, and the room's connections close with 4507. `0`: no cap |
+| `MAX_NEW_ROOMS_PER_IP` | `30` | New rooms that one client address can make in one hour (4429, "too many new rooms"). Joining a room that exists is not counted. `0`: no limit |
+| `MAX_CONNECTIONS_PER_IP` | `64` | Open connections from one client address (4429, "too many connections"). `0`: no limit |
+| `ROOM_EXPIRY_DAYS` | `90` | The relay deletes a room that nobody was in for this many days. A deleted room's link then opens a new, empty room. `0`: never |
+| `ROOM_SWEEP_INTERVAL_MS` | `3600000` (1 h) | How often the expiry sweep runs. It also runs once at start |
+| `MAX_ROOMS` | `1000` | Rooms in memory at one time (4409) |
+| `MAX_ROOM_SIZE` | `50` | Connections to one room (4409) |
+| `MAX_ROOM_BYTES` | `67108864` (64 MiB) | One room. A larger room is not saved (4413) |
+| `MAX_MESSAGE_BYTES` | `16777216` (16 MiB) | One message from a client |
+| `TRUST_PROXY` | `1` in compose, else `false` | Which proxies can give the client address in `X-Forwarded-For`: `true`, `false` or the number of proxies in front |
+
+The per-address limits use the address that the relay sees. Behind Caddy,
+that address is Caddy's, so the compose file sets `TRUST_PROXY=1`. Do not
+set `TRUST_PROXY` on a relay that clients can reach directly: then a client
+can write any address in the header and step around the limits.
+
+People behind one network address (an office or a school) share the
+per-address limits. If they open many shared maps together, increase
+`MAX_CONNECTIONS_PER_IP`.
+
+### Back up the rooms
+
+All rooms are in one SQLite file in the `roomsdata` volume
+(`/data/rooms.sqlite`, with its `-wal` file). Copy the file to back it up.
 
 ## Topology
 
@@ -289,6 +315,8 @@ concrete operator-facing guidance when Phase 5 ships.
                 ┌────────────┐
    internet ──► │  caddy:443 │ ──► Caddy (TLS terminator, reverse proxy)
                 └─────┬──────┘
+                      │
+                      ├──── /yjs/* ──► realtime:4001 (relay, optional)
                       │
                       ├──── /api/* ──► storage:4000 (Fastify)
                       │                    │

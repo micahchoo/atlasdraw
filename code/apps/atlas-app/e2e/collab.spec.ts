@@ -161,6 +161,17 @@ test.describe("a room between two browsers", () => {
       "1 collaborator",
     );
 
+    // B sets the name the others see; it stays in B's browser.
+    await b.getByTestId("presence-self-name").fill("Bea");
+    await b.getByTestId("presence-self-name").press("Enter");
+    await expect(a.getByTestId("presence-list")).toContainText("Bea");
+    expect(
+      await b.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("atlasdraw:identity") ?? "{}").name,
+      ),
+    ).toBe("Bea");
+
     // Strokes.
     await drawBox(a, 600, 300);
     await expect.poll(async () => (await elementIds(b)).length).toBe(2);

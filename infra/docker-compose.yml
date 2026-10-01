@@ -121,6 +121,18 @@ services:
     environment:
       PORT: "4001"
       ROOMS_DB: /data/rooms.sqlite
+      # Caddy is the one proxy in front: read the client address it saw.
+      TRUST_PROXY: "1"
+      # Empty means the relay's default (docs/self-host/production.md).
+      MAX_ROOMS: ${MAX_ROOMS:-}
+      MAX_ROOM_SIZE: ${MAX_ROOM_SIZE:-}
+      MAX_MESSAGE_BYTES: ${MAX_MESSAGE_BYTES:-}
+      MAX_ROOM_BYTES: ${MAX_ROOM_BYTES:-}
+      MAX_TOTAL_ROOM_BYTES: ${MAX_TOTAL_ROOM_BYTES:-}
+      MAX_NEW_ROOMS_PER_IP: ${MAX_NEW_ROOMS_PER_IP:-}
+      MAX_CONNECTIONS_PER_IP: ${MAX_CONNECTIONS_PER_IP:-}
+      ROOM_EXPIRY_DAYS: ${ROOM_EXPIRY_DAYS:-}
+      ROOM_SWEEP_INTERVAL_MS: ${ROOM_SWEEP_INTERVAL_MS:-}
     volumes:
       - roomsdata:/data
     restart: unless-stopped

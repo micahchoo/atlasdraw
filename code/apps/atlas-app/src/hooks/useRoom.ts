@@ -8,7 +8,9 @@
 //
 // Once the room has joined, the editor opens the room's Document and shows
 // the room's drawing; the user's own document waits in memory and comes
-// back when the editor unmounts. Opening another document leaves the room. Nothing in the room is written to
+// back when the editor unmounts. A room joined before the autosave opened
+// the user's own map waits for it (usePersistenceStore#ownMapLoaded): the
+// map that waits in memory must be theirs, not the blank start. Opening another document leaves the room. Nothing in the room is written to
 // the user's own map: the autosave skips a room's document.
 //
 // Presence: the pointer's place on the map (map.unproject) and the camera
@@ -41,6 +43,7 @@ import {
   type Room,
   type RoomStatus,
 } from "../state/room";
+import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
@@ -53,6 +56,10 @@ export interface RoomSession {
   readonly status: RoomStatus | null;
   /** Everyone else in the room. */
   readonly peers: readonly Peer[];
+  /** This person as the room sees them; null outside a room. */
+  readonly self: Identity | null;
+  /** Set this person's display name: saved in this browser, shown to the room. */
+  rename(name: string): void;
   /** Why the link in the URL cannot be joined; null when it can. */
   readonly error: string | null;
   /**
@@ -77,6 +84,7 @@ export function useRoom(
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
+  const [self, setSelf] = useState<Identity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
 
@@ -128,14 +136,28 @@ export function useRoom(
       >;
     } | null = null;
     let detach: (() => void) | null = null;
+    let stopWaiting: () => void = () => {};
 
     const enter = (): void => {
       const roomDocument = room.document;
       if (previous || !roomDocument) {
         return;
       }
-      // Write the user's own map before it leaves the editor.
-      void usePersistenceStore.getState().forceSave();
+      const persistence = usePersistenceStore.getState();
+      if (!persistence.ownMapLoaded) {
+        stopWaiting();
+        stopWaiting = usePersistenceStore.subscribe((state) => {
+          if (state.ownMapLoaded) {
+            stopWaiting();
+            enter();
+          }
+        });
+        return;
+      }
+      // Write the user's unsaved changes before their map leaves the editor.
+      if (persistence.isDirty) {
+        void persistence.forceSave();
+      }
       previous = {
         doc: currentDocument(),
         elements: api.getSceneElementsIncludingDeleted(),
@@ -155,6 +177,7 @@ export function useRoom(
     const unsubscribePeers = room.presence.subscribe(() =>
       setPeers(room.presence.peers()),
     );
+    setSelf(room.presence.self);
     // Another document opened in the editor (a file, My maps, a new map):
     // the editor leaves the room at once, before that document's drawing
     // reaches Excalidraw, so none of it is written to the room.
@@ -172,6 +195,7 @@ export function useRoom(
     });
 
     return () => {
+      stopWaiting();
       unsubscribeStatus();
       unsubscribePeers();
       unsubscribeDocument();
@@ -189,6 +213,7 @@ export function useRoom(
         api.history?.clear();
       }
       setPeers(NO_PEERS);
+      setSelf(null);
       setStatus(null);
     };
   }, [room, api]);
@@ -244,11 +269,22 @@ export function useRoom(
     return roomUrl(link);
   }, [join]);
 
+  const rename = useCallback(
+    (name: string): void => {
+      const next = setDisplayName(name);
+      room?.presence.setName(next.name);
+      setSelf(room ? room.presence.self : null);
+    },
+    [room],
+  );
+
   return {
     available: realtime.enabled,
     room,
     status,
     peers,
+    self,
+    rename,
     error,
     start,
   };

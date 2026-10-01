@@ -22,22 +22,6 @@
   font-family: system-ui, sans-serif;
 }
 
-/* Collapsed (icon-only) variant — narrower, no border, dot cluster */
-.rootCompact {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 8px;
-  background: var(--ad-surface-raised);
-  border: 1px solid #adb5bd;
-  border-radius: var(--ad-radius-md);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
-
 .header {
   font-size: 12px;
   font-weight: 600;
@@ -93,4 +77,49 @@
 .peerButton:focus-visible {
   outline: 2px solid var(--ad-focus-ring);
   outline-offset: 2px;
+}
+
+/* Peers as dots alone, at four or more. */
+.dotRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* This person's row: their dot and an editable name. */
+.selfRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.selfName {
+  min-width: 0;
+  width: 112px;
+  padding: 2px 4px;
+  border: 1px solid #adb5bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #212529;
+  font: inherit;
+  font-size: 12px;
+}
+
+.selfName:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 1px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }

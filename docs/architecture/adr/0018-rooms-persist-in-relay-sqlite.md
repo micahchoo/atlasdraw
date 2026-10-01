@@ -65,5 +65,10 @@ statement, and `better-sqlite3` is already built for `apps/storage`.
 - Backups of the relay are a copy of one file (with SQLite's WAL files).
 - The operator can read every room in the file (ADR-0014, "What the relay
   can see").
-- A room is never deleted. A deployment that needs expiry adds a sweep on
-  `updated_at`; none exists yet.
+- A room nobody was in for `ROOM_EXPIRY_DAYS` (default 90) is deleted by a
+  sweep on `updated_at`, at start and every `ROOM_SWEEP_INTERVAL_MS`. A
+  room is saved when its last connection closes, so `updated_at` is also
+  when someone was last in it. A room in memory is never swept. The id of a
+  deleted room is free again: its old link makes a new, empty room.
+- `MAX_TOTAL_ROOM_BYTES` caps the file's room states together (W6b,
+  SECURITY.md row 14).

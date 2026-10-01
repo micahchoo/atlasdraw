@@ -16,6 +16,12 @@
 // A room lives in memory while it has connections. Edits are saved to the
 // store after a short delay and when the last connection closes; then the
 // room leaves memory. The relay reads everything in a room doc.
+//
+// Abuse limits (SECURITY.md row 14), each closed with a code and a reason:
+// connections per client address (4429), new rooms per client address per
+// hour (4429), and the bytes of all stored rooms together (4507). A room
+// nobody was in for `expireAfterMs` is deleted by a sweep at start and on an
+// interval, and its id is free again.
 
 import { createHash, timingSafeEqual } from "crypto";
 
@@ -36,12 +42,16 @@ import type { Duplex } from "stream";
 export const CLOSE_DENIED = 4403;
 export const CLOSE_FULL = 4409;
 export const CLOSE_TOO_LARGE = 4413;
+export const CLOSE_LIMITED = 4429;
+export const CLOSE_NO_SPACE = 4507;
 
 const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 const MESSAGE_TOKEN = 3;
 const PING_INTERVAL_MS = 30_000;
 const AUTH_TIMEOUT_MS = 10_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
 
 /** A room id is a UUID, as `crypto.randomUUID()` makes it. */
 const ROOM_ID =
@@ -61,6 +71,25 @@ export interface RoomServerOptions {
   maxRoomBytes?: number;
   /** Delay between an edit and the save that follows it. */
   saveDelayMs?: number;
+  /** New rooms one client address may make in an hour. 0: no limit. */
+  maxNewRoomsPerIp?: number;
+  /** Open connections from one client address. 0: no limit. */
+  maxConnectionsPerIp?: number;
+  /** The bytes of all stored rooms together. 0: no limit. */
+  maxTotalBytes?: number;
+  /** Delete a room nobody was in for this long. 0: never. */
+  expireAfterMs?: number;
+  /** How often the expiry sweep runs. It also runs once at start. */
+  sweepIntervalMs?: number;
+  /**
+   * Which proxies may say who the client is with X-Forwarded-For. `false`
+   * (the default) reads only the socket address, so a client cannot choose
+   * its own address. `n`: n proxies in front, trust the n last entries.
+   * `true`: trust every entry, and take the first.
+   */
+  trustProxy?: boolean | number;
+  /** The clock for the rate window and the expiry. Tests move it by hand. */
+  now?: () => number;
 }
 
 export interface RoomServer {
@@ -111,14 +140,73 @@ function positiveInt(raw: string | undefined, fallback: number): number {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
+/** Like positiveInt, but "0" is kept: for limits where 0 turns them off. */
+function countOrOff(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw.trim() === "") {
+    return fallback;
+  }
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
+}
+
+/** TRUST_PROXY: "true", "false" or a hop count. Anything else is false. */
+export function parseTrustProxy(raw: string | undefined): boolean | number {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (v === "true") {
+    return true;
+  }
+  if (/^\d+$/.test(v)) {
+    return Number(v) > 0 ? Number(v) : false;
+  }
+  if (v !== "" && v !== "false") {
+    logger.warn(
+      { TRUST_PROXY: raw },
+      "TRUST_PROXY must be true, false or a hop count; X-Forwarded-For is not read",
+    );
+  }
+  return false;
+}
+
 /** Defaults, with the environment variables that change them. */
 export function roomLimitsFromEnv(): Omit<RoomServerOptions, "store"> {
+  const env = process.env;
   return {
-    maxRooms: positiveInt(process.env.MAX_ROOMS, 1000),
-    maxPeersPerRoom: positiveInt(process.env.MAX_ROOM_SIZE, 50),
-    maxMessageBytes: positiveInt(process.env.MAX_MESSAGE_BYTES, 16 << 20),
-    maxRoomBytes: positiveInt(process.env.MAX_ROOM_BYTES, 64 << 20),
+    maxRooms: positiveInt(env.MAX_ROOMS, 1000),
+    maxPeersPerRoom: positiveInt(env.MAX_ROOM_SIZE, 50),
+    maxMessageBytes: positiveInt(env.MAX_MESSAGE_BYTES, 16 << 20),
+    maxRoomBytes: positiveInt(env.MAX_ROOM_BYTES, 64 << 20),
+    maxNewRoomsPerIp: countOrOff(env.MAX_NEW_ROOMS_PER_IP, 30),
+    maxConnectionsPerIp: countOrOff(env.MAX_CONNECTIONS_PER_IP, 64),
+    maxTotalBytes: countOrOff(env.MAX_TOTAL_ROOM_BYTES, 2 * 1024 ** 3),
+    expireAfterMs: countOrOff(env.ROOM_EXPIRY_DAYS, 90) * DAY_MS,
+    sweepIntervalMs: positiveInt(env.ROOM_SWEEP_INTERVAL_MS, HOUR_MS),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
   };
+}
+
+/**
+ * The client's address: the socket's, or with `trustProxy` the entry of
+ * X-Forwarded-For that the last trusted proxy saw.
+ */
+export function clientAddress(
+  request: http.IncomingMessage,
+  trustProxy: boolean | number,
+): string {
+  const socketAddress = request.socket.remoteAddress ?? "unknown";
+  const header = request.headers["x-forwarded-for"];
+  if (!trustProxy || !header) {
+    return socketAddress;
+  }
+  const forwarded = (Array.isArray(header) ? header.join(",") : header)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  // The chain as the relay sees it: the client first, the socket last.
+  const chain = [...forwarded, socketAddress];
+  if (trustProxy === true) {
+    return chain[0]!;
+  }
+  return chain[Math.max(0, chain.length - 1 - trustProxy)]!;
 }
 
 /**
@@ -135,8 +223,19 @@ export function registerRoomServer(
     maxMessageBytes = 16 << 20,
     maxRoomBytes = 64 << 20,
     saveDelayMs = 2000,
+    maxNewRoomsPerIp = 0,
+    maxConnectionsPerIp = 0,
+    maxTotalBytes = 0,
+    expireAfterMs = 90 * DAY_MS,
+    sweepIntervalMs = HOUR_MS,
+    trustProxy = false,
+    now = Date.now,
   } = options;
   const rooms = new Map<string, Room>();
+  /** Client address → its open connections, authenticated or not. */
+  const connectionsByIp = new Map<string, number>();
+  /** Client address → the new rooms it made in the current hour. */
+  const newRoomsByIp = new Map<string, { start: number; count: number }>();
   let closed = false;
   const wss = new WebSocketServer({
     noServer: true,
@@ -156,6 +255,21 @@ export function registerRoomServer(
       );
       for (const conn of room.conns.keys()) {
         conn.close(CLOSE_TOO_LARGE, "room too large");
+      }
+      return;
+    }
+    const growth = state.byteLength - store.bytesOf(room.name);
+    if (
+      maxTotalBytes > 0 &&
+      growth > 0 &&
+      store.totalBytes() + growth > maxTotalBytes
+    ) {
+      logger.warn(
+        { room: room.name, total: store.totalBytes(), growth },
+        "stored rooms are at the total limit, not saved",
+      );
+      for (const conn of room.conns.keys()) {
+        conn.close(CLOSE_NO_SPACE, "relay storage full");
       }
       return;
     }
@@ -329,8 +443,31 @@ export function registerRoomServer(
     }
   };
 
+  /** True when `ip` may make one more room this hour; counts it if so. */
+  const takeNewRoom = (ip: string): boolean => {
+    if (maxNewRoomsPerIp <= 0) {
+      return true;
+    }
+    const t = now();
+    let window = newRoomsByIp.get(ip);
+    if (!window || t - window.start >= HOUR_MS) {
+      window = { start: t, count: 0 };
+      newRoomsByIp.set(ip, window);
+    }
+    if (window.count >= maxNewRoomsPerIp) {
+      return false;
+    }
+    window.count += 1;
+    return true;
+  };
+
   /** Admit `ws` to room `name` with `token`, or close it with the reason. */
-  const admit = (ws: WebSocket, name: string, token: string): void => {
+  const admit = (
+    ws: WebSocket,
+    name: string,
+    token: string,
+    ip: string,
+  ): void => {
     const verifier = verifierOf(token);
     let room = rooms.get(name);
     if (!room) {
@@ -342,6 +479,16 @@ export function registerRoomServer(
       if (stored && !sameVerifier(stored.verifier, verifier)) {
         ws.close(CLOSE_DENIED, "denied");
         return;
+      }
+      if (!stored) {
+        if (maxTotalBytes > 0 && store.totalBytes() >= maxTotalBytes) {
+          ws.close(CLOSE_NO_SPACE, "relay storage full");
+          return;
+        }
+        if (!takeNewRoom(ip)) {
+          ws.close(CLOSE_LIMITED, "too many new rooms");
+          return;
+        }
       }
       room = openRoom(name, verifier);
     } else if (!sameVerifier(room.verifier, verifier)) {
@@ -365,8 +512,23 @@ export function registerRoomServer(
       socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
       return;
     }
+    const ip = clientAddress(request, trustProxy);
     wss.handleUpgrade(request, socket, head, (ws) => {
       ws.binaryType = "arraybuffer";
+      const open = connectionsByIp.get(ip) ?? 0;
+      if (maxConnectionsPerIp > 0 && open >= maxConnectionsPerIp) {
+        ws.close(CLOSE_LIMITED, "too many connections");
+        return;
+      }
+      connectionsByIp.set(ip, open + 1);
+      ws.once("close", () => {
+        const left = (connectionsByIp.get(ip) ?? 1) - 1;
+        if (left > 0) {
+          connectionsByIp.set(ip, left);
+        } else {
+          connectionsByIp.delete(ip);
+        }
+      });
       // The token is the first message, never part of the URL: a URL is
       // written to proxy access logs.
       const timer = setTimeout(
@@ -380,10 +542,34 @@ export function registerRoomServer(
           ws.close(CLOSE_DENIED, "no token");
           return;
         }
-        admit(ws, name, token);
+        admit(ws, name, token, ip);
       });
     });
   });
+
+  /** Delete expired rooms that nobody is in, and forget old rate windows. */
+  const sweep = (): void => {
+    const t = now();
+    for (const [ip, window] of Array.from(newRoomsByIp)) {
+      if (t - window.start >= HOUR_MS) {
+        newRoomsByIp.delete(ip);
+      }
+    }
+    if (expireAfterMs <= 0) {
+      return;
+    }
+    try {
+      const deleted = store.sweep(t - expireAfterMs, new Set(rooms.keys()));
+      if (deleted.length > 0) {
+        logger.info({ rooms: deleted.length }, "expired rooms deleted");
+      }
+    } catch (err) {
+      logger.error({ err }, "room expiry sweep failed");
+    }
+  };
+  sweep();
+  const sweepTimer = setInterval(sweep, sweepIntervalMs);
+  sweepTimer.unref();
 
   return {
     rooms: () => rooms.size,
@@ -391,6 +577,7 @@ export function registerRoomServer(
       Array.from(rooms.values()).reduce((n, r) => n + r.conns.size, 0),
     close() {
       closed = true;
+      clearInterval(sweepTimer);
       for (const room of Array.from(rooms.values())) {
         save(room);
         for (const conn of room.conns.keys()) {

@@ -17,6 +17,12 @@
 //
 // A raster entry goes into the room only together with its image: a
 // collaborator never sees a raster row with nothing to draw.
+//
+// Any client can write any value into the room doc, so every entry read from
+// it goes through roomValidation.ts. An entry that fails is left out of the
+// Document (a data layer without valid features, a raster without a valid
+// image, too), and this client never deletes it from the room: a newer
+// client may have written a kind this one does not know.
 
 import { ulid } from "ulid";
 import { documentFrame, type WorldFrame } from "@atlasdraw/geo";
@@ -35,6 +41,20 @@ import {
 import { liveCamera } from "./documentIO";
 import { writeScene, type RoomEditor } from "./roomScene";
 
+import {
+  checkBasemap,
+  checkCamera,
+  checkDocumentId,
+  checkFeatures,
+  checkImage,
+  checkOverlay,
+  checkTitle,
+  checkWorld,
+  rejectFrom,
+  writerOfKey,
+  type RoomImage,
+} from "./roomValidation";
+
 import type { SceneAccess } from "./scene";
 import type { FeatureCollection } from "geojson";
 import type * as Y from "yjs";
@@ -44,17 +64,12 @@ export const OVERLAYS_KEY = "overlays";
 export const FEATURES_KEY = "features";
 export const IMAGES_KEY = "images";
 
-interface RoomImage {
-  mimeType: string;
-  bytes: Uint8Array;
-}
-
 function maps(doc: Y.Doc) {
   return {
     meta: doc.getMap<unknown>(META_KEY),
-    overlays: doc.getMap<OverlayEntry>(OVERLAYS_KEY),
-    features: doc.getMap<FeatureCollection>(FEATURES_KEY),
-    images: doc.getMap<RoomImage>(IMAGES_KEY),
+    overlays: doc.getMap<unknown>(OVERLAYS_KEY),
+    features: doc.getMap<unknown>(FEATURES_KEY),
+    images: doc.getMap<unknown>(IMAGES_KEY),
   };
 }
 
@@ -76,28 +91,57 @@ function blobOf(image: RoomImage): Blob {
   return blob;
 }
 
-/** The content of the room, as Document data. */
-function readContent(doc: Y.Doc) {
+/** The valid content of the room, as Document data. */
+function readContent(doc: Y.Doc, fallbackTitle = DEFAULT_DOCUMENT_TITLE) {
   const m = maps(doc);
+  const reject = (map: Y.Map<unknown>, key: string, what: string): null => {
+    rejectFrom(doc, writerOfKey(map, key), what);
+    return null;
+  };
+  const featureCollections: Record<string, FeatureCollection> = {};
+  for (const id of m.features.keys()) {
+    const fc =
+      checkFeatures(id, m.features.get(id)) ??
+      reject(m.features, id, "data layer");
+    if (fc) {
+      featureCollections[id] = fc;
+    }
+  }
   const overlays: OverlayEntry[] = [];
   const images: Record<string, Blob> = {};
-  for (const entry of m.overlays.values()) {
+  for (const key of m.overlays.keys()) {
+    const entry =
+      checkOverlay(key, m.overlays.get(key)) ??
+      reject(m.overlays, key, "layer");
+    if (!entry) {
+      continue;
+    }
     if (entry.kind === "raster") {
-      const image = m.images.get(entry.id);
+      // A raster's image may still be on its way from an honest writer
+      // (toRoom below), so a missing one is no reason to warn.
+      const raw = m.images.get(entry.id);
+      const image =
+        raw === undefined
+          ? null
+          : checkImage(entry.id, raw) ??
+            reject(m.images, entry.id, "raster image");
       if (!image) {
         continue;
       }
       images[entry.id] = blobOf(image);
     }
+    if (entry.kind === "data" && !featureCollections[entry.id]) {
+      continue;
+    }
     overlays.push(entry);
   }
-  const featureCollections: Record<string, FeatureCollection> = {};
-  for (const [id, fc] of m.features.entries()) {
-    featureCollections[id] = fc;
-  }
-  const title = m.meta.get("title");
+  const rawTitle = m.meta.get("title");
+  const title =
+    rawTitle === undefined
+      ? DEFAULT_DOCUMENT_TITLE
+      : checkTitle(rawTitle) ?? reject(m.meta, "title", "title");
   return {
-    title: typeof title === "string" ? title : DEFAULT_DOCUMENT_TITLE,
+    title: title ?? fallbackTitle,
     overlays,
     featureCollections,
     images,
@@ -200,14 +244,20 @@ export function bindRoomDocument(
 ): { document: Document; unbind: () => void } {
   const m = maps(doc);
   const content = readContent(doc);
-  const camera = m.meta.get("camera") as Camera | undefined;
-  const id = m.meta.get("id");
+  const camera: Camera = checkCamera(m.meta.get("camera")) ?? DEFAULT_CAMERA;
+  let world = checkWorld(m.meta.get("world")) as WorldFrame | null;
+  if (!world) {
+    // Every element is measured in the frame. Without a valid one the
+    // drawing cannot be placed; the default keeps the editor working.
+    rejectFrom(doc, writerOfKey(m.meta, "world"), "world frame");
+    world = documentFrame(DEFAULT_CAMERA.center[0], DEFAULT_CAMERA.center[1]);
+  }
   const document = createDocument(
     {
-      id: typeof id === "string" ? id : undefined,
+      id: checkDocumentId(m.meta.get("id")) ?? undefined,
       ...content,
-      world: m.meta.get("world") as WorldFrame,
-      camera: camera ?? DEFAULT_CAMERA,
+      world,
+      camera,
     },
     scene,
     doc,
@@ -216,31 +266,54 @@ export function bindRoomDocument(
   const known = new WeakSet<Blob>(Object.values(content.images));
 
   const applyBasemap = (): void => {
-    const basemap = m.meta.get("basemap");
+    const raw = m.meta.get("basemap");
+    const basemap = raw === undefined ? null : checkBasemap(raw);
+    if (raw !== undefined && !basemap) {
+      rejectFrom(doc, writerOfKey(m.meta, "basemap"), "basemap");
+    }
     const store = useBasemapStore.getState();
-    if (typeof basemap === "string" && basemap !== store.activeBasemapId) {
+    if (basemap && basemap !== store.activeBasemapId) {
       store.setActiveBasemapId(basemap);
     }
   };
   applyBasemap();
+
+  // A remote transaction runs observers before `afterTransaction`. The
+  // comments' observer changes the Document, and toRoom then runs while the
+  // Document does not hold the transaction's layers yet: it would delete a
+  // peer's new layer. So toRoom waits while a remote transaction is open.
+  let remote: Y.Transaction | null = null;
+  const beforeTransaction = (tr: Y.Transaction): void => {
+    if (tr.origin !== origin) {
+      remote = tr;
+    }
+  };
+  doc.on("beforeTransaction", beforeTransaction);
 
   const watched = new Set<unknown>([m.meta, m.overlays, m.features, m.images]);
   const fromRoom = (tr: Y.Transaction): void => {
     if (tr.origin === origin) {
       return;
     }
-    if (Array.from(tr.changed.keys()).some((type) => watched.has(type))) {
-      const next = readContent(doc);
-      for (const blob of Object.values(next.images)) {
-        known.add(blob);
+    try {
+      if (Array.from(tr.changed.keys()).some((type) => watched.has(type))) {
+        const next = readContent(doc, document.snapshot().title);
+        for (const blob of Object.values(next.images)) {
+          known.add(blob);
+        }
+        document.dispatch({ type: "replace-content", ...next });
+        applyBasemap();
       }
-      document.dispatch({ type: "replace-content", ...next });
-      applyBasemap();
+    } finally {
+      remote = null;
     }
   };
   doc.on("afterTransaction", fromRoom);
 
   const toRoom = (): void => {
+    if (remote) {
+      return;
+    }
     const state = document.snapshot();
     const ids = new Set(state.overlays.map((e) => e.id));
     const rasters: Array<{ entry: OverlayEntry; blob: Blob }> = [];
@@ -259,8 +332,10 @@ export function bindRoomDocument(
         }
         m.overlays.set(entry.id, entry);
       }
+      // Only an entry this client could read was removed by its user; an
+      // entry it skipped stays for the clients that can read it.
       for (const key of Array.from(m.overlays.keys())) {
-        if (!ids.has(key)) {
+        if (!ids.has(key) && checkOverlay(key, m.overlays.get(key))) {
           m.overlays.delete(key);
           m.images.delete(key);
         }
@@ -271,7 +346,10 @@ export function bindRoomDocument(
         }
       }
       for (const key of Array.from(m.features.keys())) {
-        if (!(key in state.featureCollections)) {
+        if (
+          !(key in state.featureCollections) &&
+          checkFeatures(key, m.features.get(key))
+        ) {
           m.features.delete(key);
         }
       }
@@ -304,6 +382,7 @@ export function bindRoomDocument(
   return {
     document,
     unbind: () => {
+      doc.off("beforeTransaction", beforeTransaction);
       doc.off("afterTransaction", fromRoom);
       unsubscribeDocument();
       unsubscribeBasemap();

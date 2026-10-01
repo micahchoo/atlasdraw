@@ -14,6 +14,10 @@
 //
 // Excalidraw changes elements in place, so a record goes into the doc as a
 // copy and comes out as a copy.
+//
+// Any client can write any value into the room doc. Every element and file
+// read from it goes through roomValidation.ts first: a record that fails is
+// not shown, and a local copy of the same id wins over it.
 
 import { CaptureUpdateAction } from "@atlasdraw/element";
 
@@ -22,6 +26,14 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
+
+import {
+  checkElement,
+  checkFile,
+  rejectFrom,
+  writerOfKey,
+  type RoomFile,
+} from "./roomValidation";
 
 import type * as Y from "yjs";
 
@@ -73,9 +85,6 @@ function copy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-/** A file as the room doc keeps it: what Excalidraw's BinaryFileData holds. */
-type RoomFile = Pick<BinaryFileData, "mimeType" | "dataURL" | "created">;
-
 /**
  * Write every element and file of `editor` that the room does not hold, or
  * holds an older copy of, into `doc` as one transaction with `origin`.
@@ -85,12 +94,13 @@ export function writeScene(
   editor: Pick<RoomEditor, "elements" | "files">,
   origin: unknown,
 ): void {
-  const elements = doc.getMap<ExcalidrawElement>(ELEMENTS_KEY);
-  const files = doc.getMap<RoomFile>(FILES_KEY);
+  const elements = doc.getMap<unknown>(ELEMENTS_KEY);
+  const files = doc.getMap<unknown>(FILES_KEY);
   const used = new Set<string>();
   const changed: ExcalidrawElement[] = [];
   for (const el of editor.elements()) {
-    const held = elements.get(el.id);
+    // A record that fails the check is no copy at all: the local one wins.
+    const held = checkElement(el.id, elements.get(el.id));
     if (!held || wins(el, held)) {
       changed.push(el);
     }
@@ -101,7 +111,7 @@ export function writeScene(
   }
   const editorFiles = editor.files();
   const newFiles = Array.from(used).filter(
-    (id) => !files.has(id) && editorFiles[id],
+    (id) => !checkFile(id, files.get(id)) && editorFiles[id],
   );
   if (changed.length === 0 && newFiles.length === 0) {
     return;
@@ -160,32 +170,71 @@ export function bindScene(
   editor: RoomEditor,
   origin: unknown,
 ): () => void {
-  const elements = doc.getMap<ExcalidrawElement>(ELEMENTS_KEY);
-  const files = doc.getMap<RoomFile>(FILES_KEY);
+  const elements = doc.getMap<unknown>(ELEMENTS_KEY);
+  const files = doc.getMap<unknown>(FILES_KEY);
 
-  const allFiles = Array.from(files.entries()).map(([id, f]) =>
-    binaryFile(id, f),
-  );
+  /** The valid element under `id`, or null after saying so once per peer. */
+  const elementAt = (id: string): ExcalidrawElement | null => {
+    const el = checkElement(id, elements.get(id));
+    if (!el) {
+      rejectFrom(doc, writerOfKey(elements, id), "element");
+    }
+    return el;
+  };
+  const fileAt = (id: string): RoomFile | null => {
+    const f = checkFile(id, files.get(id));
+    if (!f) {
+      rejectFrom(doc, writerOfKey(files, id), "file");
+    }
+    return f;
+  };
+
+  const allFiles = Array.from(files.keys()).flatMap((id) => {
+    const f = fileAt(id);
+    return f ? [binaryFile(id, f)] : [];
+  });
   if (allFiles.length > 0) {
     editor.addFiles(allFiles);
   }
-  editor.apply(inOrder(Array.from(elements.values()).map(copy)));
+  editor.apply(
+    inOrder(
+      Array.from(elements.keys()).flatMap((id) => {
+        const el = elementAt(id);
+        return el ? [copy(el)] : [];
+      }),
+    ),
+  );
 
-  const onElements = (event: Y.YMapEvent<ExcalidrawElement>): void => {
+  // An observer runs inside the Yjs transaction of the relay's message; an
+  // error here must not reach the provider or the editor.
+  const guarded =
+    <E>(handle: (event: E) => void) =>
+    (event: E): void => {
+      try {
+        handle(event);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("[atlasdraw] room: a remote change was not applied", err);
+      }
+    };
+
+  const onElements = guarded((event: Y.YMapEvent<unknown>): void => {
     if (event.transaction.origin === origin) {
       return;
     }
     const byId = new Map(editor.elements().map((el) => [el.id, el]));
     let touched = false;
     for (const id of event.keysChanged) {
-      const remote = elements.get(id);
       const local = byId.get(id);
-      if (!remote) {
+      if (!elements.has(id)) {
         if (local) {
           byId.delete(id);
           touched = true;
         }
-      } else if (!local || wins(remote, local)) {
+        continue;
+      }
+      const remote = elementAt(id);
+      if (remote && (!local || wins(remote, local))) {
         byId.set(id, copy(remote));
         touched = true;
       }
@@ -195,14 +244,14 @@ export function bindScene(
     }
     // A local copy that beat the remote one goes back to the room.
     writeScene(doc, editor, origin);
-  };
-  const onFiles = (event: Y.YMapEvent<RoomFile>): void => {
+  });
+  const onFiles = guarded((event: Y.YMapEvent<unknown>): void => {
     if (event.transaction.origin === origin) {
       return;
     }
     const added: BinaryFileData[] = [];
     for (const id of event.keysChanged) {
-      const f = files.get(id);
+      const f = files.has(id) ? fileAt(id) : null;
       if (f) {
         added.push(binaryFile(id, f));
       }
@@ -210,7 +259,7 @@ export function bindScene(
     if (added.length > 0) {
       editor.addFiles(added);
     }
-  };
+  });
 
   elements.observe(onElements);
   files.observe(onFiles);

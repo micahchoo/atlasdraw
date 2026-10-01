@@ -30,7 +30,7 @@ import { roomToken, withRoomToken, type RoomLink } from "@atlasdraw/protocol";
 
 import type { Camera } from "@atlasdraw/data";
 
-import { localIdentity, type Identity } from "./identity";
+import { MAX_NAME_LENGTH, localIdentity, type Identity } from "./identity";
 import {
   bindRoomDocument,
   makeEmptyRoom,
@@ -43,17 +43,48 @@ import { editorScene, type SceneAccess } from "./scene";
 
 import type { Document } from "./document";
 
+/**
+ * Where the room stands. The last four are refusals: the relay closed the
+ * connection with a reason, and the room does not try again.
+ *
+ *   denied    the link's key is not the room's
+ *   full      too many people in the room or rooms on the relay, or the
+ *             room is over the relay's size limit
+ *   limited   too many connections or new rooms from this network
+ *   no-space  the relay's storage for rooms is full
+ */
 export type RoomStatus =
   | "connecting"
   | "joined"
   | "offline"
   | "denied"
-  | "full";
+  | "full"
+  | "limited"
+  | "no-space";
 
 /** Close codes the relay uses (apps/realtime/src/rooms.ts). */
 const CLOSE_DENIED = 4403;
 const CLOSE_FULL = 4409;
 const CLOSE_TOO_LARGE = 4413;
+const CLOSE_LIMITED = 4429;
+const CLOSE_NO_SPACE = 4507;
+
+/** The status a refusal close code means; null for any other close. */
+function refusal(code: number): RoomStatus | null {
+  switch (code) {
+    case CLOSE_DENIED:
+      return "denied";
+    case CLOSE_FULL:
+    case CLOSE_TOO_LARGE:
+      return "full";
+    case CLOSE_LIMITED:
+      return "limited";
+    case CLOSE_NO_SPACE:
+      return "no-space";
+    default:
+      return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -97,11 +128,7 @@ export function relayTransport(baseUrl: string): RoomTransport {
     });
     provider.on("connection-close", (event: CloseEvent | null) => {
       const code = event?.code ?? 1006;
-      if (
-        code === CLOSE_DENIED ||
-        code === CLOSE_FULL ||
-        code === CLOSE_TOO_LARGE
-      ) {
+      if (refusal(code)) {
         provider.shouldConnect = false;
       }
       events.closed(code);
@@ -128,7 +155,10 @@ export interface Peer {
 }
 
 export interface Presence {
+  /** This person, as the others see them. */
   readonly self: Identity;
+  /** Show the others this name from now on. */
+  setName(name: string): void;
   /** Everyone else in the room. The same array until something changes. */
   peers(): readonly Peer[];
   subscribe(listener: () => void): () => void;
@@ -176,13 +206,18 @@ function peerOf(clientId: number, state: Record<string, unknown>): Peer | null {
   }
   return {
     clientId,
-    user: { id: user.id, name: user.name.slice(0, 64), color: user.color },
+    user: {
+      id: user.id,
+      name: user.name.slice(0, MAX_NAME_LENGTH),
+      color: user.color,
+    },
     cursor: isLngLat(state.cursor) ? state.cursor : null,
     camera: isCamera(state.camera) ? state.camera : null,
   };
 }
 
-function createPresence(awareness: Awareness, self: Identity): Presence {
+function createPresence(awareness: Awareness, initial: Identity): Presence {
+  let self = initial;
   awareness.setLocalState({ user: self, cursor: null, camera: null });
   let peers: readonly Peer[] = [];
   const listeners = new Set<() => void>();
@@ -215,7 +250,17 @@ function createPresence(awareness: Awareness, self: Identity): Presence {
   };
 
   return {
-    self,
+    get self() {
+      return self;
+    },
+    setName(name) {
+      const clean = name.trim().slice(0, MAX_NAME_LENGTH);
+      if (!clean || clean === self.name) {
+        return;
+      }
+      self = { ...self, name: clean };
+      awareness.setLocalStateField("user", self);
+    },
     peers: () => peers,
     subscribe(listener) {
       listeners.add(listener);
@@ -311,6 +356,8 @@ export function joinRoom(
   let unbindDocument: (() => void) | null = null;
   let making: Promise<void> | null = null;
   let left = false;
+  /** The relay refused this client; the status stays the refusal. */
+  let refused = false;
   let connection: { close(): void } | null = null;
 
   const open = async (): Promise<void> => {
@@ -343,17 +390,17 @@ export function joinRoom(
         synced: () => {
           making ??= open();
           void making.then(() => {
-            if (!left && status !== "denied" && status !== "full") {
+            if (!left && !refused) {
               setStatus("joined");
             }
           });
         },
         closed: (code) => {
-          if (code === CLOSE_DENIED) {
-            setStatus("denied");
-          } else if (code === CLOSE_FULL || code === CLOSE_TOO_LARGE) {
-            setStatus("full");
-          } else if (status !== "denied" && status !== "full") {
+          const reason = refusal(code);
+          if (reason) {
+            refused = true;
+            setStatus(reason);
+          } else if (!refused) {
             setStatus("offline");
           }
         },
