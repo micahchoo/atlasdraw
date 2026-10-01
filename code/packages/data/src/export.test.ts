@@ -349,3 +349,28 @@ describe("toCSV — spreadsheet formulas", () => {
     expect(back.features[0]?.properties?.name).toBe("plain");
   });
 });
+
+describe("toCSV — a property named like a geometry column", () => {
+  it("writes one header per column, and the property under its own name", async () => {
+    const text = toCSV(
+      fc(point(13.4, 52.5, { Longitude: 99, latitude: "n/a", name: "A" })),
+    );
+    const header = text.split("\r\n")[0]!.split(",");
+    expect(header).toEqual([
+      "longitude",
+      "latitude",
+      "Longitude (property)",
+      "latitude (property)",
+      "name",
+    ]);
+    const back = await parseCSV(new Blob([text]));
+    expect(back.features[0]!.geometry).toEqual({
+      type: "Point",
+      coordinates: [13.4, 52.5],
+    });
+    expect(back.features[0]!.properties).toMatchObject({
+      "Longitude (property)": 99,
+      "latitude (property)": "n/a",
+    });
+  });
+});

@@ -160,7 +160,9 @@ test("an iframe element with script HTML renders nothing", async ({ page }) => {
     sceneFile([element("evil", "iframe", SCRIPT), element("ok", "rectangle")]),
   );
   await expect.poll(() => sceneIds(page)).toEqual(["ok"]);
-  await expect(page.getByText(/Removed 1 embedded web page/)).toBeVisible();
+  await expect(
+    page.getByText(/were left out: 1 drawing element\./),
+  ).toBeVisible();
   await expect(page.locator("iframe")).toHaveCount(0);
 
   // Straight into the scene, past every check: the renderer draws no page.

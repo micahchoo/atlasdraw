@@ -180,4 +180,59 @@ describe("atlasdraw lint", () => {
     expect(out.join("")).toBe("");
     expect(err.join("")).toContain(`File not found: ${file}`);
   });
+
+  it("reports the cause in a version 1 file, not the fields the migration adds", async () => {
+    // A v1 manifest whose title is empty: the migration adds `world`, and
+    // the one error is the title.
+    const v1 = {
+      id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      version: 1,
+      title: "",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-02T00:00:00.000Z",
+      basemap: { type: "registry", id: "default" },
+      camera: { center: [0, 0], zoom: 1, bearing: 0, pitch: 0 },
+      layers: [],
+      permissions: { publicView: false },
+    };
+    const file = path.join(tmpDir, "v1.atlasdraw");
+    await fs.writeFile(file, await buildFixtureWithRawManifest(v1));
+
+    const { streams, err } = makeStreams();
+    const code = await runLint({ file }, streams);
+
+    expect(code).toBe(1);
+    const text = err.join("");
+    expect(text).toMatch(/title/);
+    expect(text).not.toMatch(/version|world/);
+  });
+
+  it("reports a layer that has no payload: it would not open", async () => {
+    const doc = makeDoc();
+    const withLayer: AtlasdrawDocument = {
+      ...doc,
+      manifest: makeManifest({
+        layers: [
+          {
+            kind: "data",
+            id: "dl:wells",
+            label: "Wells",
+            visible: true,
+            featureCount: 1,
+            style: {},
+            source: "data/layer-dl:wells.geojson",
+          },
+        ],
+      }),
+    };
+    const blob = await write(withLayer);
+    const file = path.join(tmpDir, "no-payload.atlasdraw");
+    await fs.writeFile(file, Buffer.from(await blob.arrayBuffer()));
+
+    const { streams, err } = makeStreams();
+    const code = await runLint({ file }, streams);
+
+    expect(code).toBe(1);
+    expect(err.join("")).toMatch(/dl:wells/);
+  });
 });
