@@ -65,8 +65,13 @@ export interface DrawingHistory {
 
 /** The History, and what the editor does to it. */
 export interface EditorHistory extends History {
-  /** A new step, newest. Ignored while a step's own undo or redo runs. */
-  record(step: HistoryStep): void;
+  /**
+   * A new step, newest. Ignored while a step's own undo or redo runs.
+   * `merge`: a step with the same key as the newest step, recorded soon
+   * after it and with no save between, joins it, so a drag of a slider or
+   * the digits typed into one field are one step.
+   */
+  record(step: HistoryStep, options?: { merge?: string }): void;
   /** The steps recorded while `run` runs are one step. */
   group(run: () => void): void;
   /** The drawing whose entries share the order; null detaches it. */
@@ -78,11 +83,24 @@ export interface EditorHistory extends History {
   reset(): void;
 }
 
-type DocumentStep = { serial: number; step: HistoryStep };
+type DocumentStep = {
+  serial: number;
+  step: HistoryStep;
+  merge?: string;
+  at: number;
+};
+
+export interface HistoryOptions {
+  /** The clock merges are measured with. */
+  now?: () => number;
+  /** How soon a step must follow the newest to join it. */
+  mergeWindowMs?: number;
+}
 /** A drawing entry; `content` false for one that changed no element. */
 type DrawingMark = { serial: number; content: boolean };
 
-export function createHistory(): EditorHistory {
+export function createHistory(options: HistoryOptions = {}): EditorHistory {
+  const { now = Date.now, mergeWindowMs = 1000 } = options;
   let serial = 0;
   let undoSteps: DocumentStep[] = [];
   let redoSteps: DocumentStep[] = [];
@@ -166,7 +184,10 @@ export function createHistory(): EditorHistory {
     }
   };
 
-  const record = (step: HistoryStep): void => {
+  const record = (
+    step: HistoryStep,
+    recordOptions: { merge?: string } = {},
+  ) => {
     if (replaying) {
       return;
     }
@@ -174,7 +195,31 @@ export function createHistory(): EditorHistory {
       grouping.push(step);
       return;
     }
-    undoSteps.push({ serial: ++serial, step });
+    const { merge } = recordOptions;
+    const at = now();
+    const top = undoSteps[undoSteps.length - 1];
+    const topMark = undoMarks[undoMarks.length - 1];
+    if (
+      merge !== undefined &&
+      top?.merge === merge &&
+      at - top.at <= mergeWindowMs &&
+      (!topMark || topMark.serial < top.serial) &&
+      positionNow() !== saved
+    ) {
+      // One step: undo goes back to before the first, redo to after the
+      // last. A new serial, so the position moves and stays dirty.
+      undoSteps[undoSteps.length - 1] = {
+        serial: ++serial,
+        step: { undo: top.step.undo, redo: step.redo },
+        merge,
+        at,
+      };
+      redoSteps = [];
+      drawing?.clearRedo();
+      notify();
+      return;
+    }
+    undoSteps.push({ serial: ++serial, step, merge, at });
     redoSteps = [];
     // A new edit makes the drawing's redo entries unreachable too.
     drawing?.clearRedo();

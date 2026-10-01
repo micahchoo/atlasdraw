@@ -74,6 +74,21 @@ describe("document steps", () => {
     expect(doc().snapshot().featureCollections["dl:a"]).toBe(points);
   });
 
+  it("a slider dragged, or digits typed, is one step", () => {
+    const { history, doc } = setup();
+    addLayer(doc(), "dl:a");
+    const before = doc().snapshot().overlays[0];
+    for (const strokeWidth of [1, 12]) {
+      doc().dispatch({ type: "restyle", id: "dl:a", patch: { strokeWidth } });
+    }
+
+    history.undo();
+    expect(doc().snapshot().overlays[0]).toBe(before);
+    history.redo();
+    const after = doc().snapshot().overlays[0];
+    expect(after.kind === "data" && after.style.strokeWidth).toBe(12);
+  });
+
   it("undo of a delete puts the layer back where it was, with its payload", () => {
     const { history, doc } = setup();
     addLayer(doc(), "dl:a");

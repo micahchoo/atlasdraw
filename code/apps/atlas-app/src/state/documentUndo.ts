@@ -66,6 +66,23 @@ function layerAsItWas(id: string, before: DocumentState): DocumentCommand {
   };
 }
 
+/**
+ * The key that joins a run of one command into one step: a slider dragged
+ * or digits typed into one field of one layer.
+ */
+export function mergeKeyOf(command: DocumentCommand): string | undefined {
+  switch (command.type) {
+    case "restyle":
+      return `restyle:${command.id}:${Object.keys(command.patch)
+        .sort()
+        .join(",")}`;
+    case "set-opacity":
+      return `opacity:${command.id}`;
+    default:
+      return undefined;
+  }
+}
+
 /** Record the document's local commands and comment edits. */
 function recordSteps(doc: Document, history: EditorHistory): () => void {
   const stopCommands = doc.onCommand(
@@ -77,10 +94,13 @@ function recordSteps(doc: Document, history: EditorHistory): () => void {
       if (!inverse) {
         return;
       }
-      history.record({
-        undo: () => void doc.dispatch(inverse),
-        redo: () => void doc.dispatch(command),
-      });
+      history.record(
+        {
+          undo: () => void doc.dispatch(inverse),
+          redo: () => void doc.dispatch(command),
+        },
+        { merge: mergeKeyOf(command) },
+      );
     },
   );
   const stopComments = doc.comments.trackUndo((step) => history.record(step));

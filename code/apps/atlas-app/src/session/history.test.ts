@@ -159,6 +159,39 @@ describe("History: one order over two sources", () => {
     expect(log.slice(2)).toEqual(["redo add layer", "redo delete shape"]);
   });
 
+  it("steps with one merge key, close in time, are one step", () => {
+    let t = 0;
+    const history = createHistory({ now: () => t });
+    const log: string[] = [];
+    history.record(step("width 1", log), { merge: "width" });
+    t += 300;
+    history.record(step("width 12", log), { merge: "width" });
+
+    history.undo();
+    expect(log).toEqual(["undo width 1"]);
+    expect(history.canUndo).toBe(false);
+    history.redo();
+    expect(log).toEqual(["undo width 1", "redo width 12"]);
+  });
+
+  it("a merge key does not reach across a pause, another key, or a save", () => {
+    let t = 0;
+    const history = createHistory({ now: () => t });
+    const log: string[] = [];
+    history.record(step("a", log), { merge: "width" });
+    t += 5000;
+    history.record(step("b", log), { merge: "width" });
+    history.record(step("c", log), { merge: "fill" });
+    history.markSaved();
+    history.record(step("d", log), { merge: "fill" });
+    expect(history.dirty).toBe(true);
+
+    for (let i = 0; i < 4; i++) {
+      history.undo();
+    }
+    expect(log).toEqual(["undo d", "undo c", "undo b", "undo a"]);
+  });
+
   it("a step does not record what its own undo or redo does", () => {
     const { history } = setup();
     let inner = 0;

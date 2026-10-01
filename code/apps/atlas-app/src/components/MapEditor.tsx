@@ -233,7 +233,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useMapOverlays(map);
   useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
-  useConvertToDataLayer(api, addDataLayer, toast);
+  useConvertToDataLayer(api, addDataLayer, session.history, toast);
   useCommandKeys(session);
 
   // Drawing is off while the camera is turned. Unprojecting the corners of a

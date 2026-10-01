@@ -215,6 +215,31 @@ describe("useShareLink", () => {
     expect(back.files.has("img-1")).toBe(true);
   });
 
+  it("a small document goes to the server when an expiry is chosen: a hash link cannot expire", async () => {
+    const client = makeMockClient();
+
+    const { link, captured } = await share(doc(), client, 7);
+
+    expect(captured().mode).toBe("upload");
+    expect(link?.url).toBe("https://test.example/m/tokentokentokentokenA");
+    expect(link?.expiresAt).toBe("2026-05-17T00:00:00.000Z");
+    expect(client.createShareTokenSpy).toHaveBeenCalledWith(
+      "abcdefghij1234567890K",
+      "write-key",
+      7,
+    );
+  });
+
+  it("says why when an expiring link cannot be stored", async () => {
+    const client = makeMockClient({ fail: true });
+
+    const { url, captured } = await share(doc(), client, 7);
+
+    expect(url).toBeNull();
+    expect(captured().error).toMatch(/expires/i);
+    expect(captured().error).toMatch(/until you stop it/i);
+  });
+
   it("a document whose encoded bytes do not fit goes to the server", async () => {
     const client = makeMockClient();
 

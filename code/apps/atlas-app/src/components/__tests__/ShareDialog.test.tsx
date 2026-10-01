@@ -295,6 +295,31 @@ describe("ShareDialog", () => {
     );
   });
 
+  it("a small map with an expiry gets a link that expires, not a hash link", async () => {
+    const client = stubClient();
+    render(
+      <ShareDialog
+        onCloseRequest={() => {}}
+        getDoc={() => tinyDoc()}
+        client={client}
+        startRoom={stubStartRoom()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("share-dialog-expiry"), {
+      target: { value: "7" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("share-dialog-pick-readonly"));
+    });
+
+    const url = await screen.findByTestId("share-dialog-url");
+    expect((url as HTMLInputElement).value).not.toMatch(/#v2:/);
+    expect(screen.getByTestId("share-dialog-mode-hint").textContent).toMatch(
+      /stops working/i,
+    );
+  });
+
   it("copy button writes the URL to navigator.clipboard", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", {

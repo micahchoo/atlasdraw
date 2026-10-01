@@ -285,7 +285,11 @@ export type DocumentInit = Partial<DocumentState> & {
 export interface Document {
   /** Fixed at creation. */
   readonly id: string;
-  /** The drawing this document is saved with. */
+  /**
+   * The drawing this document is saved with. While the document is open it
+   * is the editor's drawing; once another document opens, it is the drawing
+   * as it was then (`openDocument`), never the drawing of the other one.
+   */
   readonly scene: SceneAccess;
   /** The comments. A change to them raises the revision. */
   readonly comments: CommentsLayer;
@@ -694,6 +698,16 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
 }
 
 /**
+ * How `openDocument` holds a document's scene: the live drawing while the
+ * document is open, a copy of it while another is.
+ */
+interface SceneHold {
+  freeze(): void;
+  thaw(): void;
+}
+const sceneHolds = new WeakMap<Document, SceneHold>();
+
+/**
  * A new document. Its comments live in `commentsDoc` when one is given (a
  * room passes its own Y.Doc, already holding the room's comments), and
  * otherwise in a Y.Doc of the document's own, seeded with `initial.comments`.
@@ -743,9 +757,18 @@ export function createDocument(
     notify();
   });
 
-  return {
+  let frozen: {
+    elements: ReturnType<SceneAccess["elements"]>;
+    files: ReturnType<SceneAccess["files"]>;
+  } | null = null;
+  const ownScene: SceneAccess = {
+    elements: () => frozen?.elements ?? scene.elements(),
+    files: () => frozen?.files ?? scene.files(),
+  };
+
+  const created: Document = {
     id: state.id,
-    scene,
+    scene: ownScene,
     comments,
     get revision() {
       return revision;
@@ -797,6 +820,18 @@ export function createDocument(
       return state.updatedAt;
     },
   };
+  sceneHolds.set(created, {
+    freeze: () => {
+      frozen ??= {
+        elements: [...scene.elements()],
+        files: { ...scene.files() },
+      };
+    },
+    thaw: () => {
+      frozen = null;
+    },
+  });
+  return created;
 }
 
 // ---------------------------------------------------------------------------
@@ -823,7 +858,16 @@ export function currentDocument(): Document {
   return useDocumentStore.getState().doc;
 }
 
+/**
+ * Open `doc` in the editor. The document it replaces keeps the drawing it
+ * had: the editor is about to show another.
+ */
 export function openDocument(doc: Document): void {
+  const before = currentDocument();
+  if (before !== doc) {
+    sceneHolds.get(before)?.freeze();
+    sceneHolds.get(doc)?.thaw();
+  }
   useDocumentStore.setState({ doc });
 }
 
