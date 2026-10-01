@@ -71,7 +71,6 @@ import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
-import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
@@ -88,12 +87,10 @@ import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
 import { useMapInstanceStore } from "../state/mapInstance";
-import { useLayerRegistryStore } from "../state/layerRegistry";
 import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
-import { currentDocument } from "../state/document";
+import { currentDocument, dispatch } from "../state/document";
 import { loadDocument, toFile } from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
@@ -142,7 +139,7 @@ import { OnboardingTips, useOnboarding } from "./OnboardingTips";
 import type { ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
-import type { RasterCorners } from "../state/layerRegistry";
+import type { DocumentCommand, RasterCorners } from "../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -618,7 +615,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       }
       // Annotation ids are Excalidraw element ids; data and raster ids are
       // not, and Excalidraw must not be asked to select them.
-      const registryEntries = useLayerRegistryStore.getState().entries;
+      const registryEntries = currentDocument().snapshot().overlays;
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(state.selectedLayerIds)) {
         if (!isOverlayId(id)) {
@@ -639,7 +636,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       for (const id of Object.keys(state.selectedLayerIds)) {
         const entry = registryEntries.find((e) => e.id === id);
         if (entry?.kind === "data") {
-          const fc = useDataLayerFCStore.getState().fcs[id];
+          const fc = currentDocument().snapshot().featureCollections[id];
           const m = useMapInstanceStore.getState().map;
           if (m) {
             // fitMapToLayer returns false (camera untouched) when the FC is
@@ -693,7 +690,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         return;
       }
 
-      const registryEntries = useLayerRegistryStore.getState().entries;
+      const registryEntries = currentDocument().snapshot().overlays;
       const dataLayerIds = registryEntries
         .filter((e) => e.kind === "data")
         .map((e) => e.id);
@@ -865,7 +862,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // hook). ISSUES.md Direction 1: also exposes importFile() for the
   // deliberate "Import…" menu action below (native file picker), so both
   // trigger paths funnel through the same parse+dispatch pipeline.
-  const registry = useLayerRegistry();
+  // Imports and conversions add layers to the open document.
+  const addDataLayer = useCallback(
+    (
+      layer: Omit<Extract<DocumentCommand, { type: "add-data-layer" }>, "type">,
+    ) => dispatch({ type: "add-data-layer", ...layer }),
+    [],
+  );
+  const addRasterLayer = useCallback(
+    (
+      layer: Omit<
+        Extract<DocumentCommand, { type: "add-raster-layer" }>,
+        "type"
+      >,
+    ) => dispatch({ type: "add-raster-layer", ...layer }),
+    [],
+  );
   // Design doc §5 — the panel defaults closed (Priya's four-minute map never
   // opens it) but a successful import is the one moment both personas want it:
   // it is the "what did I just get?" beat, and where provenance lives. Once per
@@ -896,9 +908,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { importFile } = useDataFileImport(
     rootRef,
     map,
-    registry.registerDataLayer,
+    addDataLayer,
     openSheetPanelForImport,
-    registry.registerRasterLayer,
+    addRasterLayer,
   );
 
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
@@ -948,7 +960,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // context menu (registered internally). Extracted to useConvertToDataLayer
   // hook; its returned currentConvertibleSelection/handleConvert pair has no
   // consumer here today (no MainMenu item wires it — see the hook's header).
-  useConvertToDataLayer(map, excalidrawAPI, registry, toast);
+  useConvertToDataLayer(map, excalidrawAPI, addDataLayer, toast);
 
   // Register the LayerPanel as a tab inside Excalidraw's DefaultSidebar
   // (the sidebar that hosts Library + canvas Search). Replaces the
@@ -1045,7 +1057,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // layers and layers with nothing painted in this view are left out. Read at
   // export time, like the image, so both answer the same viewport.
   const getLegendEntries = useCallback((): LayerLegendEntry[] => {
-    const entries = useLayerRegistryStore.getState().entries;
+    const entries = currentDocument().snapshot().overlays;
     if (!map || !excalidrawAPI) {
       return [];
     }

@@ -21,7 +21,6 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useConvertToDataLayer } from "./useConvertToDataLayer";
 
-import type { LayerRegistryState } from "../state/layerRegistry";
 import type maplibregl from "maplibre-gl";
 
 vi.mock("@atlasdraw/tools", async (importOriginal) => {
@@ -58,10 +57,7 @@ const fakeApi = {
   registerContextMenuItem: vi.fn(() => vi.fn()),
 } as unknown as ExcalidrawImperativeAPI;
 
-const registry: Pick<LayerRegistryState, "registerDataLayer" | "remove"> = {
-  registerDataLayer: vi.fn(),
-  remove: vi.fn(),
-};
+const addDataLayer = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -83,7 +79,7 @@ describe("useConvertToDataLayer — error handling", () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
 
     const { result } = renderHook(() =>
-      useConvertToDataLayer(map, fakeApi, registry, notify),
+      useConvertToDataLayer(map, fakeApi, addDataLayer, notify),
     );
     result.current.handleConvert(EL);
 
@@ -106,7 +102,7 @@ describe("useConvertToDataLayer — error handling", () => {
       .mockImplementation(() => {});
 
     const { result } = renderHook(() =>
-      useConvertToDataLayer(map, fakeApi, registry, notify),
+      useConvertToDataLayer(map, fakeApi, addDataLayer, notify),
     );
 
     expect(() => result.current.handleConvert(EL)).not.toThrow();

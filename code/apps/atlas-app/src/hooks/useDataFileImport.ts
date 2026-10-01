@@ -59,7 +59,7 @@ import type {
   LayerProvenance,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 
 type DataFileExt = "geojson" | "csv" | "zip" | "geotiff";
 
@@ -214,6 +214,8 @@ export function useDataFileImport(
     label: string;
     corners: RasterCorners;
     imageKey: string;
+    /** The decoded PNG; the document keeps it and saves it. */
+    image: Blob;
     provenance?: LayerProvenance;
   }) => void,
 ): UseDataFileImportResult {
@@ -257,6 +259,7 @@ export function useDataFileImport(
           label: file.name,
           corners: decoded.corners,
           imageKey,
+          image: png,
           provenance: { sourceFile: file.name, droppedCount: 0 },
         });
 
