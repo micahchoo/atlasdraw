@@ -29,12 +29,24 @@ module store.
   `commands.test.ts` fails when two commands take one key, when a command
   takes a key the drawing keeps (`EDITOR_KEYS`), or when a menu entry is
   not registered. Add a key there, never in a component's own `keydown`.
-- **`useCommandKeys` listens on the window in the capture phase.** The
+- **A key goes to one scope** (`commands/keyScopes.ts`, `session.keys`).
+  The stack has one listener, on the window in the capture phase: the
   drawing stops the keys it handles at its own root, and it binds ⌘K (link)
-  and `?` (help); a bubbling listener does not hear them. A key that a
-  command takes never reaches the drawing.
+  and `?` (help), so a bubbling listener does not hear them. The newest
+  dialog hears a key first; with no dialog, the tools (Measure, the Pin,
+  comment mode) from the newest down; the commands (`useCommandKeys`) hear
+  what is left. A tool that needs keys pushes a `tool` scope while it is
+  on (`useKeyScope`), never a `keydown` listener of its own: that is how
+  Measure took a dialog's Enter.
 - **One dialog at a time**: `view.dialog`, shown by `EditorDialogs`. A
-  yes/no question is `view.ask()`, which resolves with the answer.
+  yes/no question is `view.ask()`, which resolves with the answer. A
+  question that loses the slot is answered no. While the slot is set, no
+  command runs, unless the dialog on top names it (`Modal`'s `commands`).
+- **Every dialog renders through `components/Modal.tsx`**, a question inside
+  a dialog too. It owns the role, the name, focus in and back, Tab, Escape,
+  the scrim and the inert page. A dialog that writes its own `keydown` for
+  Escape or its own focus trap is the seven-copies defect coming back.
+  Focus goes back to `view.returnFocus`, read when the dialog opens.
 
 Still module-level, on purpose or not yet moved: the open document
 (`state/document.ts#useDocumentStore`, injected as `session.store`), the
@@ -43,4 +55,5 @@ comment anchor picker and focus event buses, and the app-wide announcer
 (`AriaAnnouncer`, one live region for the page).
 
 Verify with `cd code && npx vitest run apps/atlas-app/src/session
-apps/atlas-app/src/commands`, then `e2e/command-surfaces.spec.ts`.
+apps/atlas-app/src/commands`, then `e2e/command-surfaces.spec.ts` and
+`e2e/keyboard.spec.ts` (focus order is the browser's; jsdom cannot show it).
