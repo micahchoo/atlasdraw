@@ -10,13 +10,15 @@
  * Source-of-truth assertion: customData.geo is byte-stable across pan.
  * Position assertion: scene x/y shifts by ~−panBy in pixels (within ±5px).
  *
- * Test A (pin) — uses the Atlas-side PinTool path (kind: "point", scaleMode: "screen").
+ * Test A (pin) — uses the Atlas-side PinTool path (kind: "point", scaleMode: "geographic").
  * Test B (rectangle) — uses Excalidraw's stock rectangle + useGeoAnchor stamp
  * (kind: "bbox", scaleMode: "geographic"). Programmatic drag in Excalidraw is
  * finicky in headless; if the rectangle never materializes, fixme.
  */
 
 import { test, expect, type Page } from "@playwright/test";
+
+import { skipOnboarding } from "./helpers/onboarding";
 
 interface AtlasdrawWindow {
   __atlasdraw__?: {
@@ -102,6 +104,10 @@ async function getRectElement(page: Page): Promise<SceneElement | undefined> {
 }
 
 test.describe("Phase 1 — geo foundation stays glued", () => {
+  test.beforeEach(async ({ page }) => {
+    await skipOnboarding(page);
+  });
+
   test("pin stays glued during pan", async ({ page }) => {
     await page.goto("/");
 
@@ -137,7 +143,9 @@ test.describe("Phase 1 — geo foundation stays glued", () => {
     expect(typeof geo1.lat).toBe("number");
     expect(Number.isFinite(geo1.lng)).toBe(true);
     expect(Number.isFinite(geo1.lat)).toBe(true);
-    expect(pin1!.customData?.scaleMode).toBe("screen");
+    // Geographic is the only creation mode since e5ed36f (maintainer decision
+    // 2026-07-19, packages/tools/src/PinTool.ts); "screen" is legacy render-only.
+    expect(pin1!.customData?.scaleMode).toBe("geographic");
     expect(pin1!.customData?.projection).toBe("mercator");
     expect(pin1!.customData?.schemaVersion).toBe(1);
 
