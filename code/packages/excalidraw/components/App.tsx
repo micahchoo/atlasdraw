@@ -498,6 +498,7 @@ import type {
   EmbedsValidationStatus,
   ElementsPendingErasure,
   ExcalidrawImperativeAPIEventMap,
+  NormalizedZoomValue,
   NullableGridSize,
   Offsets,
   ProjectContextMenuItem,
@@ -5621,6 +5622,17 @@ class App extends React.Component<AppProps, AppState> {
     gesture.initialScale = this.state.zoom.value;
   });
 
+  /**
+   * Atlasdraw (ADR-0015): the zoom a pinch asks for. A host that owns the
+   * camera (`onZoomAction`) takes it unclamped through `onScrollChange`:
+   * Excalidraw's clamp to [0.1, 30] jumps a map zoom many levels.
+   */
+  private pinchZoom(zoom: number): NormalizedZoomValue {
+    return this.props.onZoomAction
+      ? (zoom as NormalizedZoomValue)
+      : getNormalizedZoom(zoom);
+  }
+
   // fires only on Safari
   private onGestureChange = withBatchedUpdates((event: GestureEvent) => {
     event.preventDefault();
@@ -5645,7 +5657,7 @@ class App extends React.Component<AppProps, AppState> {
           {
             viewportX: this.lastViewportPosition.x,
             viewportY: this.lastViewportPosition.y,
-            nextZoom: getNormalizedZoom(initialScale * event.scale),
+            nextZoom: this.pinchZoom(initialScale * event.scale),
           },
           state,
         ),
@@ -6736,7 +6748,7 @@ class App extends React.Component<AppProps, AppState> {
           : distance / gesture.initialDistance;
 
       const nextZoom = scaleFactor
-        ? getNormalizedZoom(initialScale * scaleFactor)
+        ? this.pinchZoom(initialScale * scaleFactor)
         : this.state.zoom.value;
 
       this.setState((state) => {

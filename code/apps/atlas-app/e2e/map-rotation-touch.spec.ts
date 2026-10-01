@@ -15,8 +15,10 @@
  * MapLibre through the Excalidraw plate. The plate is `pointer-events: none`
  * only when `classifyTool` says the active tool is map-interactive, and
  * `classifyTool` is `toolType !== "hand"` — so under the default selection
- * tool the plate is opaque and **no pointer gesture on the canvas reaches the
- * camera**: not the twist, not a pinch, not a plain mouse drag. The first test
+ * tool the plate is opaque and **no pointer gesture on the canvas reaches
+ * MapLibre**: not the twist, not a plain mouse drag. (A pinch reaches the
+ * camera another way, through Excalidraw and the bridge:
+ * `pinch-zoom-touch.spec.ts`.) The first test
  * below pins that; the rest pick up the hand tool first, because that is the
  * state the gesture exists in.
  *

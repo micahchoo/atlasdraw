@@ -7,7 +7,7 @@ import { Excalidraw } from "../index";
 import { pickerStyleValue, scaleForeignElements } from "../atlasStyleScale";
 
 import { API } from "./helpers/api";
-import { Keyboard, UI } from "./helpers/ui";
+import { Keyboard, Pointer, UI } from "./helpers/ui";
 import { act, render } from "./test-utils";
 
 import type { NormalizedZoomValue, ZoomAction } from "../types";
@@ -321,5 +321,42 @@ describe("onZoomAction", () => {
       Keyboard.codeDown(CODES.EQUAL);
     });
     expect(h.state.zoom.value).toBeGreaterThan(before);
+  });
+});
+
+describe("touch pinch with a host camera", () => {
+  // At map zoom 12 the editor's zoom value is 2^-10, below Excalidraw's
+  // clamp of [0.1, 30]. A clamped pinch jumped the map to zoom 18.7 on the
+  // first frame. With `onZoomAction` the host owns the camera, so the pinch
+  // passes the zoom on unclamped and the bridge moves the map.
+  const MAP_ZOOM = (2 ** -10) as NormalizedZoomValue;
+
+  const pinch = () => {
+    const a = new Pointer("touch", 1);
+    const b = new Pointer("touch", 2);
+    a.downAt(300, 300);
+    b.downAt(400, 300);
+    // Fingers twice as far apart: twice the zoom.
+    b.moveTo(500, 300);
+    a.upAt();
+    b.upAt();
+  };
+
+  it("doubles the zoom value, not the clamp", async () => {
+    await render(<Excalidraw onZoomAction={() => true} />);
+    act(() => {
+      API.setAppState({ zoom: { value: MAP_ZOOM } });
+    });
+    pinch();
+    expect(h.state.zoom.value).toBeCloseTo(MAP_ZOOM * 2, 12);
+  });
+
+  it("without the prop, the pinch is clamped as upstream", async () => {
+    await render(<Excalidraw />);
+    act(() => {
+      API.setAppState({ zoom: { value: MAP_ZOOM } });
+    });
+    pinch();
+    expect(h.state.zoom.value).toBe(0.1);
   });
 });
