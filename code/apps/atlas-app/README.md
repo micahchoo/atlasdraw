@@ -15,7 +15,16 @@ The Atlasdraw web app: the editor, the read-only viewer and the embed. It stacks
 | `/m#v2:<bytes>` or `/m/<token>` | The read-only viewer: the map in the link, or on the server |
 | `/embed#v2:<bytes>` or `/embed/<token>` | The same viewer without its title bar, for an `<iframe>` |
 
-`?lock=1` on a viewer URL fixes the camera.
+Options on a viewer URL, in the query string before the hash (`src/lib/embed.ts`):
+
+| Option | Effect |
+| --- | --- |
+| `lock=1` | The camera does not move, and a click shows no feature popup. |
+| `legend=1` | Shows a legend of the layers in view. |
+| `view=fit` | Fits the camera to the map's content. This is the default on `/embed`. |
+| `view=saved` | Opens at the camera saved in the share. This is the default on `/m`. |
+
+An unlocked embed zooms only with Ctrl (⌘ on a Mac) and the wheel, and pans with two fingers on a touch screen, so the page around it keeps its scroll.
 
 ## Run it
 
