@@ -132,6 +132,12 @@ A script that calls the storage API must now keep the `write_key` from
 
 ### Changed
 
+- **A refused save no longer makes a new server map by itself.** When the
+  server answers 401, 403 or 404 for a document's map, the save stops and
+  the user is told. A new map would have left every share link and embed on
+  the old bytes without a word. `saveAsNewServerCopy` makes the new copy
+  when the user asks (`state/remoteMapIdCache.ts`).
+
 - **The editor reads every `VITE_*` variable through one schema**
   (`config/app-config.ts`). A bad value stops the app at boot and names the
   variable. Every link the app makes works under the build's base path.
