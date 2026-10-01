@@ -2,12 +2,11 @@
 // Phase 4 T13 — HTTP client for the @atlasdraw/storage server.
 //
 // The atlas-app SPA talks to the storage HTTP API (Phase 4 T3+T4+T8) through
-// this thin client. Six methods, all routed to fetch():
+// this thin client. Five methods, all routed to fetch():
 //   - createMap        POST /maps               body: octet-stream  → MapRecord
 //   - getMap           GET  /maps/:id                                → MapRecord | null
 //   - updateMap        PUT  /maps/:id           body: octet-stream  → MapRecord
 //   - createShareToken POST /maps/:id/share                          → ShareToken
-//   - resolveToken     GET  /share/:token                            → ShareToken | null
 //   - getShareBlob     GET  /share/:token/blob                       → ArrayBuffer | null
 //
 // `getShareBlob` is HTTP-only — not part of the shared `StorageClient`
@@ -29,7 +28,6 @@ export interface MapRecord {
   id: string;
   created_at: string;
   updated_at: string;
-  blob_ref: string;
   byte_size: number;
 }
 
@@ -56,7 +54,6 @@ export interface StorageClient {
   getMap(id: string): Promise<MapRecord | null>;
   updateMap(id: string, blob: Blob | Uint8Array): Promise<MapRecord>;
   createShareToken(mapId: string): Promise<ShareToken>;
-  resolveToken(token: string): Promise<ShareToken | null>;
 }
 
 /**
@@ -182,7 +179,7 @@ async function expectJsonOrThrow<T>(res: Response, op: string): Promise<T> {
 
 /**
  * Build an HTTP-backed `StorageClient`. All methods throw on non-2xx (the
- * caller surfaces toasts); `getMap` and `resolveToken` translate 404 → null
+ * caller surfaces toasts); `getMap` translates 404 → null
  * because "missing" is a normal, expected outcome.
  */
 export function createHttpStorageClient(
@@ -263,32 +260,6 @@ export function createHttpStorageClient(
         mode: "read",
         expires_at: body.expires_at,
         created_at: new Date().toISOString(),
-      };
-    },
-
-    async resolveToken(token) {
-      const res = await fetchImpl(
-        joinUrl(baseUrl, `/share/${encodeURIComponent(token)}`),
-        { method: "GET", headers: withWorkspaceHeader() },
-      );
-      if (res.status === 404 || res.status === 410) {
-        return null;
-      }
-      // T13: T8/T9 will consume the { map, mode } body. For autosave we
-      // never call resolveToken — the contract surface is here for
-      // interface completeness only.
-      const body = await expectJsonOrThrow<{
-        map: MapRecord;
-        mode: "read";
-        expires_at?: string;
-      }>(res, "resolveToken");
-      return {
-        token,
-        map_id: body.map.id,
-        mode: body.mode,
-        expires_at:
-          body.expires_at ?? new Date(Date.now() + 7 * 86400_000).toISOString(),
-        created_at: body.map.created_at,
       };
     },
 

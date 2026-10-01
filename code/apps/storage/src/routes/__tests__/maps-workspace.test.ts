@@ -66,30 +66,6 @@ describe("workspace-scoped persistence", () => {
       });
       expect(fetched.json().workspace_id).toBeNull();
     });
-
-    it("createShareToken without header persists workspace_id=null", async () => {
-      const create = await app.inject({
-        method: "POST",
-        url: "/maps",
-        headers: { "content-type": "application/octet-stream" },
-        payload: Buffer.from("for-share"),
-      });
-      const id = create.json().id;
-      const share = await app.inject({
-        method: "POST",
-        url: `/maps/${id}/share`,
-      });
-      expect(share.statusCode).toBe(201);
-      // The share response only echoes token/url/expires_at — workspace_id
-      // is internal-only. Resolve via /share/:token to surface the map row
-      // and confirm both records still null-workspace.
-      const resolved = await app.inject({
-        method: "GET",
-        url: `/share/${share.json().token}`,
-      });
-      expect(resolved.statusCode).toBe(200);
-      expect(resolved.json().map.workspace_id).toBeNull();
-    });
   });
 
   describe("managed mode (managed=true)", () => {
@@ -121,32 +97,6 @@ describe("workspace-scoped persistence", () => {
       });
       expect(res.statusCode).toBe(401);
       expect(res.json()).toEqual({ error: "WORKSPACE_REQUIRED" });
-    });
-
-    it("createShareToken with workspace header scopes the token", async () => {
-      const create = await app.inject({
-        method: "POST",
-        url: "/maps",
-        headers: {
-          "content-type": "application/octet-stream",
-          "x-workspace-id": "ws-beta",
-        },
-        payload: Buffer.from("beta"),
-      });
-      const id = create.json().id;
-      const share = await app.inject({
-        method: "POST",
-        url: `/maps/${id}/share`,
-        headers: { "x-workspace-id": "ws-beta" },
-      });
-      expect(share.statusCode).toBe(201);
-      const resolved = await app.inject({
-        method: "GET",
-        url: `/share/${share.json().token}`,
-        headers: { "x-workspace-id": "ws-beta" },
-      });
-      expect(resolved.statusCode).toBe(200);
-      expect(resolved.json().map.workspace_id).toBe("ws-beta");
     });
   });
 });

@@ -74,10 +74,8 @@ async function main(): Promise<void> {
   const app = Fastify({
     loggerInstance: logger,
     bodyLimit: 50 * 1024 * 1024, // 50 MiB
-    // The API sits behind Caddy — trust the proxy so `request.ip` (used by the
-    // rate limiter) is the real client address from X-Forwarded-For, not
-    // Caddy's.
-    trustProxy: true,
+    // `request.ip` feeds the rate limiter. See TRUST_PROXY in config.ts.
+    trustProxy: config.TRUST_PROXY,
   }) as unknown as FastifyInstance;
 
   app.addContentTypeParser(

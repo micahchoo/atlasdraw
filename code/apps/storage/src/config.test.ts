@@ -64,6 +64,23 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("TRUST_PROXY", () => {
+    const base = { STORAGE_MODE: "sqlite-fs" } as const;
+    it("trusts no proxy by default, so X-Forwarded-For cannot pick the client IP", () => {
+      expect(loadConfig(base).TRUST_PROXY).toBe(false);
+    });
+    it.each([
+      ["true", true],
+      ["false", false],
+      ["1", 1],
+      ["10.0.0.0/8,127.0.0.1", "10.0.0.0/8,127.0.0.1"],
+    ])("parses %s", (raw, expected) => {
+      expect(loadConfig({ ...base, TRUST_PROXY: raw }).TRUST_PROXY).toBe(
+        expected,
+      );
+    });
+  });
+
   it("throws a named-var error when STORAGE_MODE is invalid", () => {
     expect(() => loadConfig({ STORAGE_MODE: "redis" })).toThrow(
       /STORAGE_MODE.*"redis"/,

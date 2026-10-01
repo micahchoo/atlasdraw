@@ -52,7 +52,6 @@ function stubClient(): HttpStorageClient {
     getMap: vi.fn(),
     updateMap: vi.fn(),
     createShareToken: vi.fn(),
-    resolveToken: vi.fn(),
     getShareBlob: vi.fn(),
     listWorkspaces: vi.fn(),
     createCheckoutSession: vi.fn(),

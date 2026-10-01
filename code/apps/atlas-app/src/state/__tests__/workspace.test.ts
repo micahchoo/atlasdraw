@@ -66,7 +66,6 @@ describe("HTTP client workspace wiring", () => {
             id: "abcdefghij1234567890K",
             created_at: "2026-05-15T00:00:00.000Z",
             updated_at: "2026-05-15T00:00:00.000Z",
-            blob_ref: "x",
             byte_size: 4,
           }),
           { status: 201, headers: { "Content-Type": "application/json" } },
@@ -141,7 +140,7 @@ describe("HTTP client workspace wiring", () => {
     expect(second["X-Workspace-ID"]).toBe("ws-2");
   });
 
-  it("attaches header on GET-only routes (getMap, resolveToken, getShareBlob)", async () => {
+  it("attaches header on GET-only routes (getMap, getShareBlob)", async () => {
     const fetchSpy = vi.fn(
       async () =>
         new Response("{}", {
@@ -156,7 +155,6 @@ describe("HTTP client workspace wiring", () => {
     });
 
     await client.getMap("aaaaaaaaaaaaaaaaaaaaa");
-    await client.resolveToken("bbbbbbbbbbbbbbbbbbbbb");
     await client.getShareBlob("ccccccccccccccccccccc");
 
     for (const call of fetchSpy.mock.calls) {

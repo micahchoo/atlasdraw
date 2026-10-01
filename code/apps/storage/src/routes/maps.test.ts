@@ -41,6 +41,27 @@ describe("/maps routes", () => {
     expect(body.byte_size).toBe(9);
   });
 
+  it("never exposes where the blob is stored", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/maps",
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from("first map"),
+    });
+    const id: string = created.json().id;
+    const read = await app.inject({ method: "GET", url: `/maps/${id}` });
+    const updated = await app.inject({
+      method: "PUT",
+      url: `/maps/${id}`,
+      headers: { "content-type": "application/octet-stream" },
+      payload: Buffer.from("second"),
+    });
+    for (const res of [created, read, updated]) {
+      expect(res.json()).not.toHaveProperty("blob_ref");
+      expect(res.body).not.toContain(scratch.name);
+    }
+  });
+
   it("GET /maps/:id returns 400 for malformed id", async () => {
     const res = await app.inject({ method: "GET", url: "/maps/not-a-nanoid" });
     expect(res.statusCode).toBe(400);

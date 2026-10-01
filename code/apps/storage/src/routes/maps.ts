@@ -13,7 +13,12 @@ import { ID_RE } from "../constants";
 import { isNotFoundError } from "../lib/errors";
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { StorageClient } from "../types";
+import type { MapRecord, StorageClient } from "../types";
+
+/** A map record as clients see it: `blob_ref` is a server-side location. */
+function publicRecord({ blob_ref: _, ...rest }: MapRecord) {
+  return rest;
+}
 
 interface IdParams {
   id: string;
@@ -41,7 +46,7 @@ export function registerMapRoutes(
         "workspace_scoped",
       );
     }
-    return reply.code(201).send(record);
+    return reply.code(201).send(publicRecord(record));
   });
 
   // SECURITY (managed mode): the GET and PUT below resolve a map by id ALONE.
@@ -62,7 +67,7 @@ export function registerMapRoutes(
       if (!record) {
         return reply.code(404).send({ error: "not found" });
       }
-      return reply.code(200).send(record);
+      return reply.code(200).send(publicRecord(record));
     },
   );
 
@@ -81,7 +86,7 @@ export function registerMapRoutes(
       }
       try {
         const record = await client.updateMap(id, body);
-        return reply.code(200).send(record);
+        return reply.code(200).send(publicRecord(record));
       } catch (err) {
         if (isNotFoundError(err)) {
           return reply.code(404).send({ error: "not found" });

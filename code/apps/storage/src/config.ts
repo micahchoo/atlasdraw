@@ -55,6 +55,22 @@ const BaseSchema = z.object({
   STRIPE_PRICE_PRO: z.string().optional(),
   // Site URL used for Stripe checkout success/cancel redirects.
   SITE_URL: z.string().default("http://localhost:3000"),
+  // Which proxies may set X-Forwarded-For (Fastify `trustProxy`). Off by
+  // default: with no proxy in front, a client could otherwise choose its own
+  // IP and step around the rate limiter. Behind one reverse proxy, set "1".
+  // Accepts "true", "false", a hop count, or a comma-separated IP/CIDR list.
+  TRUST_PROXY: z
+    .string()
+    .optional()
+    .transform((v): boolean | number | string => {
+      if (v === undefined || v === "" || v.toLowerCase() === "false") {
+        return false;
+      }
+      if (v.toLowerCase() === "true") {
+        return true;
+      }
+      return /^\d+$/.test(v) ? Number(v) : v;
+    }),
   // Per-IP fixed-window rate limit for the HTTP API. RATE_LIMIT_MAX requests
   // per RATE_LIMIT_WINDOW_MS window; /health is always exempt. Set
   // RATE_LIMIT_MAX=0 to disable (e.g. when an upstream proxy already throttles).

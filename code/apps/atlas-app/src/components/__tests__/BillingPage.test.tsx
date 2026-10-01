@@ -27,7 +27,6 @@ function makeClient(
     getMap: fail,
     updateMap: fail,
     createShareToken: fail,
-    resolveToken: fail,
     getShareBlob: fail,
     listWorkspaces: async () => [],
     createCheckoutSession: async () => ({

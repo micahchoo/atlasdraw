@@ -1,20 +1,13 @@
-// @atlasdraw/storage — Phase 4 T4 + T8 amendment: /maps/:id/share +
-// /share/:token + /share/:token/blob routes.
+// @atlasdraw/storage — share routes.
 //
-// Three endpoints:
 //   POST /maps/:id/share      — mint a 7-day read token for an existing map.
-//   GET  /share/:token        — resolve a token to its MapRecord, gated by
-//                               expiry. `mode` is hard-coded "read" in the
-//                               response (Phase 4 only mints read tokens;
-//                               never echoed from request body/query).
-//   GET  /share/:token/blob   — return the raw map blob bytes for a token.
-//                               Same validation gates as the JSON route plus
-//                               a defensive 410 if the blob is missing on
-//                               storage (orphan-row variant).
+//   GET  /share/:token/blob   — return the map bytes for a valid token.
 //
-// TTL is owned by the adapter (T3 hard-codes 7 days inside
-// createShareToken). T4 only validates inputs, formats response URLs,
-// and enforces expiry/orphaned-token semantics.
+// A token holder must never learn the map id: PUT /maps/:id needs nothing
+// but the id, so the id is the write capability. That is why there is no
+// route that resolves a token to its map record.
+//
+// TTL is owned by the adapter (createShareToken hard-codes 7 days).
 
 import { ID_RE } from "../constants";
 import { isNotFoundError } from "../lib/errors";
@@ -80,32 +73,6 @@ export function registerShareRoutes(
         }
         throw err;
       }
-    },
-  );
-
-  fastify.get<{ Params: TokenParams }>(
-    "/share/:token",
-    async (request: FastifyRequest<{ Params: TokenParams }>, reply) => {
-      const { token } = request.params;
-      if (!ID_RE.test(token)) {
-        return reply.code(400).send({ error: "invalid token" });
-      }
-      const shareToken = await client.resolveToken(token);
-      if (!shareToken) {
-        return reply.code(404).send({ error: "not found" });
-      }
-      if (new Date(shareToken.expires_at).getTime() <= Date.now()) {
-        return reply.code(410).send({ error: "expired" });
-      }
-      const map = await client.getMap(shareToken.map_id);
-      if (!map) {
-        // Orphaned token: map was deleted out from under it. Same wire
-        // shape as expiry — caller can't act on it either way.
-        return reply.code(410).send({ error: "expired" });
-      }
-      // `mode` is server-set, never echoed from request input. Phase 4
-      // only has read tokens.
-      return reply.code(200).send({ map, mode: "read" as const });
     },
   );
 

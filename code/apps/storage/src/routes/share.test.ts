@@ -11,7 +11,7 @@ import { registerMapRoutes } from "./maps";
 
 import { registerShareRoutes } from "./share";
 
-import type { ShareToken, StorageClient } from "../types";
+import type { StorageClient } from "../types";
 
 // Spy-wrapping StorageClient — increments counters on the methods the
 // share routes touch so we can assert that route-level validation rejects
@@ -171,118 +171,42 @@ describe("/share routes", () => {
     );
   });
 
-  // ─── GET /share/:token ──────────────────────────────────────────────────
+  // ─── A share token is read-only ─────────────────────────────────────────
+  //
+  // PUT /maps/:id needs only the map id, so the id is the write capability.
+  // Nothing a token holder can fetch may contain it.
 
-  describe("GET /share/:token", () => {
-    async function mintTokenForFreshMap(): Promise<{
-      mapId: string;
-      token: string;
-    }> {
+  describe("a share token holder", () => {
+    it("can fetch the bytes but never learns the map id", async () => {
       const create = await app.inject({
         method: "POST",
         url: "/maps",
         headers: { "content-type": "application/octet-stream" },
         payload: Buffer.from("scene-bytes"),
       });
-      const map = create.json();
+      const mapId: string = create.json().id;
       const share = await app.inject({
         method: "POST",
-        url: `/maps/${map.id}/share`,
+        url: `/maps/${mapId}/share`,
       });
-      const body = share.json();
-      return { mapId: map.id, token: body.token };
-    }
+      const { token } = share.json();
 
-    it("returns 200 with {map, mode:'read'} for a valid token (roundtrip)", async () => {
-      const { mapId, token } = await mintTokenForFreshMap();
-      const callsBefore = spy.calls.resolveToken;
-      const res = await app.inject({
+      const record = await app.inject({
         method: "GET",
         url: `/share/${token}`,
       });
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.mode).toBe("read");
-      expect(body.map.id).toBe(mapId);
-      expect(body.map.byte_size).toBe(11);
-      expect(spy.calls.resolveToken).toBe(callsBefore + 1);
-    });
-
-    it("mode is always 'read' even when caller passes ?mode=write", async () => {
-      const { token } = await mintTokenForFreshMap();
-      const res = await app.inject({
+      const blob = await app.inject({
         method: "GET",
-        url: `/share/${token}?mode=write`,
-        // Fastify GET ignores body but we exercise the assertion anyway.
-        payload: { mode: "write" },
+        url: `/share/${token}/blob`,
       });
-      expect(res.statusCode).toBe(200);
-      expect(res.json().mode).toBe("read");
+
+      expect(blob.statusCode).toBe(200);
+      expect(blob.body).toBe("scene-bytes");
+      for (const res of [record, blob]) {
+        expect(res.body).not.toContain(mapId);
+        expect(JSON.stringify(res.headers)).not.toContain(mapId);
+      }
     });
-
-    it("returns 404 for an unknown but well-formed token", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: `/share/${"z".repeat(21)}`,
-      });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it("returns 410 when token is expired", async () => {
-      const { token } = await mintTokenForFreshMap();
-      // Backdate the row directly — the adapter contract doesn't expose
-      // a TTL knob, so we drop to SQL. Same db path the adapter opened.
-      const db = new Database(dbPath);
-      const pastIso = new Date(Date.now() - 60_000).toISOString();
-      const updated = db
-        .prepare("UPDATE share_tokens SET expires_at = ? WHERE token = ?")
-        .run(pastIso, token);
-      expect(updated.changes).toBe(1);
-      db.close();
-
-      const res = await app.inject({
-        method: "GET",
-        url: `/share/${token}`,
-      });
-      expect(res.statusCode).toBe(410);
-    });
-
-    it("returns 410 for an orphaned token (map deleted under it)", async () => {
-      const { mapId, token } = await mintTokenForFreshMap();
-      // Phase 4 has no DELETE /maps route — drop the row directly. The
-      // schema declares a FOREIGN KEY share_tokens.map_id → maps.id, so
-      // we disable FK enforcement on this connection to simulate the
-      // orphaned state (e.g. operator-level delete, future Phase work).
-      const db = new Database(dbPath);
-      db.pragma("foreign_keys = OFF");
-      const result = db.prepare("DELETE FROM maps WHERE id = ?").run(mapId);
-      expect(result.changes).toBe(1);
-      db.close();
-
-      const res = await app.inject({
-        method: "GET",
-        url: `/share/${token}`,
-      });
-      expect(res.statusCode).toBe(410);
-    });
-
-    it.each([
-      ["..etcpasswd", "traversal-flat"],
-      ["short", "too-short"],
-      ["!".repeat(21), "illegal-chars"],
-      ["a".repeat(22), "too-long"],
-    ])(
-      "returns 400 for invalid token format (%s — %s) without invoking adapter",
-      async (badToken) => {
-        const before = spy.calls.resolveToken;
-        const res = await app.inject({
-          method: "GET",
-          url: `/share/${encodeURIComponent(badToken)}`,
-        });
-        expect(res.statusCode).toBe(400);
-        expect(spy.calls.resolveToken).toBe(before);
-      },
-    );
   });
 
   // ─── GET /share/:token/blob ─────────────────────────────────────────────
@@ -379,33 +303,5 @@ describe("/share routes", () => {
         expect(spy.calls.resolveToken).toBe(before);
       },
     );
-  });
-
-  // Belt-and-suspenders: the share-record itself never leaks `mode` from
-  // a tampered DB row (T3 already hard-codes "read" in rowToShare, but
-  // since T4 also literal-pins "read" in the response, double-confirm).
-  it("response mode stays 'read' even if the DB row has been tampered to 'write'", async () => {
-    const create = await app.inject({
-      method: "POST",
-      url: "/maps",
-      headers: { "content-type": "application/octet-stream" },
-      payload: Buffer.from("xx"),
-    });
-    const map = create.json();
-    const share = await app.inject({
-      method: "POST",
-      url: `/maps/${map.id}/share`,
-    });
-    const { token } = share.json() as ShareToken & { url: string };
-
-    const db = new Database(dbPath);
-    db.prepare("UPDATE share_tokens SET mode = 'write' WHERE token = ?").run(
-      token,
-    );
-    db.close();
-
-    const res = await app.inject({ method: "GET", url: `/share/${token}` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().mode).toBe("read");
   });
 });

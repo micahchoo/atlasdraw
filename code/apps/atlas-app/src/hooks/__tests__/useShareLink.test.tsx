@@ -80,7 +80,6 @@ function makeMockClient(): HttpStorageClient & {
     id: "abcdefghij1234567890K",
     created_at: "2026-05-10T00:00:00.000Z",
     updated_at: "2026-05-10T00:00:00.000Z",
-    blob_ref: "blobs/abcdefghij1234567890K.atlasdraw",
     byte_size: 42,
   }));
   const createShareTokenSpy = vi.fn(async () => ({
@@ -95,7 +94,6 @@ function makeMockClient(): HttpStorageClient & {
     getMap: vi.fn(async () => null),
     updateMap: vi.fn(),
     createShareToken: createShareTokenSpy,
-    resolveToken: vi.fn(async () => null),
     getShareBlob: vi.fn(async () => null),
     listWorkspaces: vi.fn(),
     createCheckoutSession: vi.fn(),
