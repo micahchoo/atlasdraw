@@ -12,7 +12,11 @@ import { getBindingGap, maxBindingDistance_simple } from "../src/binding";
 import { computeContainerDimensionForBoundText } from "../src/textElement";
 import { getArrowheadPoints } from "../src/bounds";
 import { newArrowElement, newElement } from "../src/newElement";
-import { ShapeCache, generateRoughOptions } from "../src/shape";
+import {
+  ShapeCache,
+  generateRoughOptions,
+  toggleLinePolygonState,
+} from "../src/shape";
 import { getCornerRadius } from "../src/utils";
 
 import type { ExcalidrawLinearElement } from "../src/types";
@@ -160,6 +164,27 @@ describe("distances in the element's and the editor's unit", () => {
     expect(getBindingGap(target, { elbowed: false, ...withUnit(UNIT) })).toBe(
       plain * UNIT,
     );
+  });
+
+  it("a line's ends 10 px apart merge when it becomes a polygon", () => {
+    const pointsAfter = (unit?: number) => {
+      const u = unit ?? 1;
+      const line = newElement({
+        type: "line",
+        x: 0,
+        y: 0,
+        ...withUnit(unit),
+      }) as unknown as Parameters<typeof toggleLinePolygonState>[0];
+      const points = [
+        [0, 0],
+        [100 * u, 0],
+        [100 * u, 100 * u],
+        [10 * u, 0],
+      ].map(([x, y]) => pointFrom<LocalPoint>(x, y));
+      return toggleLinePolygonState({ ...line, points }, true)!.points.length;
+    };
+    expect(pointsAfter()).toBe(4);
+    expect(pointsAfter(UNIT)).toBe(4);
   });
 
   it("bound-text padding is in the container's unit", () => {

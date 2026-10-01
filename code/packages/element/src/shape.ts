@@ -1167,7 +1167,8 @@ export const toggleLinePolygonState = (
     );
 
     if (
-      distance > LINE_POLYGON_POINT_MERGE_DISTANCE ||
+      // Atlasdraw: in the element's pixel unit (atlasStyleUnit.ts).
+      distance > LINE_POLYGON_POINT_MERGE_DISTANCE * styleUnit(element) ||
       updatedPoints.length < 4
     ) {
       updatedPoints.push(pointFrom(firstPoint[0], firstPoint[1]));

@@ -192,6 +192,8 @@ type _CommonCanvasAppState = {
   offsetLeft: AppState["offsetLeft"];
   offsetTop: AppState["offsetTop"];
   theme: AppState["theme"];
+  // Atlasdraw: the link icon is drawn in the editor's unit.
+  screenSizedStyles: AppState["screenSizedStyles"];
 };
 
 export type StaticCanvasAppState = Readonly<
@@ -224,8 +226,6 @@ export type InteractiveCanvasAppState = Readonly<
     newElement: AppState["newElement"];
     isBindingEnabled: AppState["isBindingEnabled"];
     isMidpointSnappingEnabled: AppState["isMidpointSnappingEnabled"];
-    // Atlasdraw: the binding reach is drawn in the editor's unit.
-    screenSizedStyles: AppState["screenSizedStyles"];
     suggestedBinding: AppState["suggestedBinding"];
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];

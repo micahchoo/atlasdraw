@@ -1,7 +1,7 @@
 import { pointFrom, pointRotateRads } from "@atlasdraw/math";
 
 import { MIME_TYPES } from "@atlasdraw/common";
-import { getElementAbsoluteCoords } from "@atlasdraw/element";
+import { editorUnit, getElementAbsoluteCoords } from "@atlasdraw/element";
 import { hitElementBoundingBox } from "@atlasdraw/element";
 
 import type { GlobalPoint, Radians } from "@atlasdraw/math";
@@ -29,10 +29,13 @@ ELEMENT_LINK_IMG.src = `data:${MIME_TYPES.svg}, ${encodeURIComponent(
 export const getLinkHandleFromCoords = (
   [x1, y1, x2, y2]: Bounds,
   angle: Radians,
-  appState: Pick<UIAppState, "zoom">,
+  appState: Pick<UIAppState, "zoom" | "screenSizedStyles">,
 ): Bounds => {
+  // Atlasdraw: sizes in the editor's unit, zoom relative to it (atlasStyleUnit.ts).
+  const unit = editorUnit(appState);
+  const relativeZoom = appState.zoom.value * unit;
+  const zoom = (relativeZoom > 1 ? relativeZoom : 1) / unit;
   const size = DEFAULT_LINK_SIZE;
-  const zoom = appState.zoom.value > 1 ? appState.zoom.value : 1;
   const linkWidth = size / zoom;
   const linkHeight = size / zoom;
   const linkMarginY = size / zoom;

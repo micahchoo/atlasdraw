@@ -96,6 +96,7 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     frameRendering: appState.frameRendering,
     selectedElementIds: appState.selectedElementIds,
     frameToHighlight: appState.frameToHighlight,
+    screenSizedStyles: appState.screenSizedStyles, // Atlasdraw
     editingGroupId: appState.editingGroupId,
     currentHoveredFontFamily: appState.currentHoveredFontFamily,
     croppingElementId: appState.croppingElementId,

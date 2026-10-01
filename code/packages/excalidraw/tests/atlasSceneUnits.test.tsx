@@ -3,8 +3,9 @@ import React from "react";
 import { KEYS, arrayToMap } from "@atlasdraw/common";
 import { lineSegment, pointFrom } from "@atlasdraw/math";
 
-import type { GlobalPoint, LocalPoint } from "@atlasdraw/math";
+import type { GlobalPoint, LocalPoint, Radians } from "@atlasdraw/math";
 
+import { getLinkHandleFromCoords } from "../components/hyperlink/helpers";
 import { eraserTest } from "../eraser";
 import { Excalidraw } from "../index";
 
@@ -223,5 +224,23 @@ describe("the eraser reaches as far as upstream's at zoom 1", () => {
     }
     expect(reaches(type, 1, UPSTREAM)).toBe(true);
     expect(reaches(type, 40, UPSTREAM)).toBe(false);
+  });
+});
+
+describe("the link icon is the size upstream's is at zoom 1", () => {
+  it("in the editor's unit", () => {
+    const handle = (mode: Mode) =>
+      inPixels(
+        getLinkHandleFromCoords(
+          [100 * mode.unit, 100 * mode.unit, 300 * mode.unit, 200 * mode.unit],
+          0 as Radians,
+          {
+            zoom: { value: (1 / mode.unit) as NormalizedZoomValue },
+            screenSizedStyles: mode.atlas,
+          },
+        ),
+        mode.unit,
+      );
+    expect(handle(ATLAS)).toEqual(handle(UPSTREAM));
   });
 });

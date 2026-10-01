@@ -251,10 +251,94 @@ stamp, foreign elements, fitting `scrollToContent`),
 `renderElement.ts`, `utils.ts`, `textMeasurements.ts`, `elbowArrow.ts`,
 `newElement.ts`; `packages/common/src/constants.ts`.
 
-Not fixed: touch pinch while a drawing tool is active still zooms
-Excalidraw, which clamps; other upstream scene-unit constants (binding
-gaps, bound-text padding, elbow-arrow routing padding) scale with the map
-and are near zero where people draw.
+W4 left two things open: touch pinch under a drawing tool, and the other
+upstream scene-unit constants. W4b (branch `w4b/units`) closes them; see
+the next section.
+
+### Leftovers fixed (W4b)
+
+**Scene-unit distances.** Each upstream distance in scene units is now in
+one of two units, so that the editor at any map zoom looks and behaves as
+upstream does at zoom 1:
+
+- The element's unit, `customData.atlas.unit`, for distances that are part
+  of the drawing. They scale with the map, like an arrowhead.
+- The editor's unit, `editorUnit` (one screen pixel at the current zoom with
+  `screenSizedStyles`, else 1), for distances of the interaction. The fork
+  mirrors the prop into `AppState.screenSizedStyles` (not saved), because
+  the element package and the renderers see `appState`, not props.
+
+Without a unit, and without the prop, every formula is upstream's.
+
+| Constant (where)                                                                                                                | Unit                                   | Before W4b, at map zoom 12                                       |
+| ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
+| `BASE_BINDING_GAP`, `BASE_BINDING_GAP_ELBOW` (`binding.ts#getBindingGap`, the elbow fallback)                                   | arrow                                  | arrowhead touched the target                                     |
+| `maxBindingDistance_simple` (binding reach, its highlight, mid-point snap, elbow endpoint drag)                                 | editor                                 | 0.03 px: an end bound only inside the shape                      |
+| `BASE_ARROW_MIN_LENGTH`, `snapToMid` limits 5..80 (`binding.ts`)                                                                | arrow                                  | near zero                                                        |
+| `BOUND_TEXT_PADDING` (`textElement.ts`, `textMeasurements.ts` min sizes, `renderElement.ts` arrow label, `actionBoundText.tsx`) | container (text for wrap-in-container) | text touched its container                                       |
+| `BASE_PADDING`, its `+ 5`, the `±2` end boxes (`elbowArrow.ts`); the elbow hover reach, which upstream gives no zoom            | arrow                                  | routes hugged shapes                                             |
+| Eraser (`eraser/index.ts`): free-draw box 15 and floor 2.25; line tolerance `2·stroke/zoom` with the zoom relative to the unit  | element                                | an arrow erased from 4,000 px away; free draw only on a crossing |
+| `LINE_POLYGON_POINT_MERGE_DISTANCE` (`shape.ts#toggleLinePolygonState`)                                                         | line                                   | ends 10 px apart did not merge                                   |
+| `ELEMENT_TRANSLATE_AMOUNT`, `ELEMENT_SHIFT_TRANSLATE_AMOUNT` (arrow keys)                                                       | editor                                 | moved 0.001 px                                                   |
+| `TEXT_TO_CENTER_SNAP_THRESHOLD`                                                                                                 | editor                                 | near zero                                                        |
+| `DEFAULT_LINK_SIZE` (`hyperlink/helpers.ts#getLinkHandleFromCoords`; upstream never grows it below zoom 1)                      | editor                                 | link icon 0.012 px                                               |
+
+Kept, because upstream already divides them by the zoom (screen pixels at
+any zoom): the hit threshold (`DEFAULT_COLLISION_THRESHOLD`), `SNAP_DISTANCE`,
+transform handles (`transformHandleSizes`, `DEFAULT_TRANSFORM_HANDLE_SPACING`,
+`SIDE_RESIZING_THRESHOLD`), `FOCUS_POINT_SIZE`, `POINT_HANDLE_SIZE`,
+`LINE_CONFIRM_THRESHOLD`, `DRAGGING_THRESHOLD`, `TEXT_AUTOWRAP_THRESHOLD`,
+`MINIMUM_ARROW_SIZE`, the eraser's `5 / zoom`. `DOUBLE_TAP_POSITION_THRESHOLD`
+is in client pixels.
+
+Kept in scene units, on purpose:
+
+- `DEDUP_TRESHOLD` (elbow arrows, 1 unit): it only drops shorter segments;
+  smaller keeps more points and changes nothing visible.
+- `DEFAULT_GRID_SIZE`, `DEFAULT_GRID_STEP`: the atlas has no grid.
+- `INVISIBLY_SMALL_ELEMENT_SIZE` (0.1): a click with no drag is still 0.
+- `MINIMAL_CROP_SIZE` (10, image crop): a crop can go smaller than 10 px.
+  Not seen as a problem; change it with the image's unit if it is.
+- `DEFAULT_EXPORT_PADDING` (10): Excalidraw's own exports. The atlas exports
+  through its own PNG and PDF paths.
+- `getNormalizedZoom`'s clamp: Excalidraw's own zoom never runs (below).
+
+Test: `excalidraw/tests/atlasSceneUnits.test.tsx` makes the same screen
+gestures in upstream's editor at zoom 1 and in the atlas editor at zoom
+1/1024, and compares the geometry in pixels: an arrow ending 10 px from a
+shape binds at the same gap, bound text sits at the same padding, an elbow
+arrow takes the same route, arrow keys nudge 1 and 5 px, the eraser and the
+link icon reach as far. `element/tests/atlasStyleUnit.test.ts` holds the
+unit rules.
+
+**Touch pinch.** Under the selection tool and every drawing tool the plate
+takes the pointers, so a pinch reaches Excalidraw's pinch handler, which
+clamped to [0.1, 30] and rounded to 6 places: at map zoom 4 the first frame
+sent the map to 18.68. With `onZoomAction` (the host owns the camera) the
+pinch zoom goes unclamped to the camera bridge, which moves the map; Safari's
+gesture zoom too (`App.tsx#pinchZoom`). Tests: `atlasWorldScale.test.tsx`;
+`e2e/pinch-zoom-touch.spec.ts` (fingers twice as far apart, one map level,
+under selection and rectangle).
+
+**Ctrl+0.** Excalidraw's reset zoom is its 100%, map zoom 22. A map has no
+100%, so on the map it frames everything drawn, as zoom-to-fit does, and
+does nothing on an empty drawing (`useCameraBridge.ts#zoomActionOnMap`).
+The only zoom readout in the map views is the status bar's map zoom:
+Excalidraw's percentage control is not rendered in the collar shell and is
+hidden in the embed. Tests: `zoomActionOnMap.test.ts`, `e2e/zoom-reset.spec.ts`.
+
+**SVG text above 10000px.** Measured in Chromium: an SVG `<text>` is clamped
+to 10000px by its own font-size (a 20480px text drew at 10000px, even shown
+at 200 px wide), while a 1000px text in `scale(20.48)` draws at the full
+size. Firefox does not clamp. SVG export is reachable with atlas text:
+library previews and the publish dialog, and copy-as-SVG in the embed, which
+does not close `saveAsImage`. `staticSvgScene.ts` writes text above
+`MAX_CANVAS_FONT_SIZE` at that size in a scaled `<text>`. Test:
+`atlasWorldScale.test.tsx`.
+
+Still open: `ShareView` mounts a bare Excalidraw with no map and no camera
+bridge, so a world-coordinate document opens there at zoom 1 (map zoom 22)
+and shows Excalidraw's percentage. It predates W4.
 
 ### Production measurements (W4)
 
