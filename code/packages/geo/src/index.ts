@@ -26,3 +26,11 @@ export type {
 } from "./world.js";
 export { migrateElementV1, savedCameraTurn } from "./migrateV1.js";
 export type { V1Element } from "./migrateV1.js";
+export { areaOf, geodesicDistance, lengthOf } from "./measure.js";
+export type { LngLat } from "./measure.js";
+export {
+  measureShape,
+  scenePathLength,
+  sceneRingArea,
+} from "./sceneMeasure.js";
+export type { MeasurableShape, ShapeMeasure } from "./sceneMeasure.js";

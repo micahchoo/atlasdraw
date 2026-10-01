@@ -10,6 +10,7 @@ Workspace-internal package (not published). Consumed by `@atlasdraw/basemap`, `@
 
 - **World frame** (`world.ts`): `documentFrame`, `toScene` / `toLngLat`, `viewportFor` / `cameraFor` (map camera to Excalidraw scroll and zoom), `sceneUnitsPerPixel`.
 - **Scene geometry** (`sceneGeometry.ts`, `bounds.ts`): the outline of an element as Excalidraw draws it, and the lng/lat box of a drawing.
+- **Measurement** (`measure.ts`, `sceneMeasure.ts`): geodesic length (Vincenty, WGS84, 0.5 mm) and area (exact on the ellipsoid for edges that are meridians or parallels); `measureShape` gives the ground length, area, perimeter and semi-axes of a drawn element.
 - **Version 1 migration** (`migrateV1.ts`): a version 1 element (screen pixels plus `customData.geo`) to world coordinates.
 
 ## Usage

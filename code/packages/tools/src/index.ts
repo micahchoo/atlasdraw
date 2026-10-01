@@ -64,3 +64,8 @@ export function listTools(): readonly AtlasdrawTool[] {
 for (const tool of [PinTool] as const) {
   registerTool(tool);
 }
+// W9 — measuring.
+export { formatArea, formatLength, unitSystemForLocale } from "./units.js";
+export type { UnitSystem } from "./units.js";
+export { IDLE_MEASURE, measureStep, shownPath } from "./measureSession.js";
+export type { MeasureEvent, MeasureState } from "./measureSession.js";
