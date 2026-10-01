@@ -1,7 +1,16 @@
 # @atlasdraw/realtime
 
-Atlasdraw real-time collaboration relay. Socket.IO for scene/camera/cursor (Excalidraw-style LWW); y-websocket for data-layer Yjs CRDT operations.
+The Atlasdraw relay. It holds one Y.Doc per room and syncs it to every connection over the y-websocket protocol (`/yjs/<roomId>`). The relay reads everything in a room; the room link's key, not the room id, is what lets a client in (ADR-0014). Rooms are saved to a SQLite file (ADR-0018).
 
 **License:** AGPL-3.0-only.
 
-**Status:** Phase 0 stub. Real relay lands Phase 5. E-01 blocker (Yjs E2EE boundary) must be resolved before Phase 5 Task 8 wires encryption — see [decisions/escalations.md](../../decisions/escalations.md).
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PORT` | `4001` | HTTP port: `GET /health` and the WebSocket upgrade on `/yjs/` |
+| `ROOMS_DB` | `./data/rooms.sqlite` | The SQLite file rooms are saved to |
+| `MAX_ROOMS` | `1000` | Rooms held in memory at one time |
+| `MAX_ROOM_SIZE` | `50` | Connections to one room |
+| `MAX_MESSAGE_BYTES` | `16777216` | The largest message a client may send |
+| `MAX_ROOM_BYTES` | `67108864` | The largest room the relay saves |
+
+Run it with `yarn workspace @atlasdraw/realtime dev`; test it with `npx vitest run apps/realtime` from `code/`.

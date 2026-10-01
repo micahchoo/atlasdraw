@@ -26,7 +26,6 @@ import React, {
   useMemo,
   useRef,
   useCallback,
-  useSyncExternalStore,
 } from "react";
 import { MapCanvas } from "@atlasdraw/basemap";
 
@@ -41,10 +40,7 @@ import { PinTool, drawingToFeatureCollection } from "@atlasdraw/tools";
 
 import { toLngLat, toScene } from "@atlasdraw/geo";
 
-import type {
-  ExcalidrawElement,
-  ExcalidrawImperativeAPI,
-} from "@atlasdraw/excalidraw";
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 
@@ -67,16 +63,12 @@ import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMeasureStore } from "../state/measure";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
-import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
-import { useCollabRoom } from "../hooks/useCollabRoom";
-import { useYjsLayer } from "../hooks/useYjsLayer";
+import { useRoom } from "../hooks/useRoom";
 import { useBrowserTabTitle } from "../hooks/useBrowserTabTitle";
-import { useCollabDocumentTitle } from "../hooks/useCollabDocumentTitle";
 import { useDataFileImport } from "../hooks/useDataFileImport";
 import { useExportPNG } from "../hooks/useExportPNG";
 import { useBasemapStyle } from "../hooks/useBasemapStyle";
 import { useServerBackup } from "../hooks/useServerBackup";
-import { CollabState } from "../state/collab";
 
 import { LayersIcon } from "../lib/icons";
 
@@ -87,7 +79,7 @@ import { useMapInstanceStore } from "../state/mapInstance";
 import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 import { useSceneBinding } from "../state/scene";
 import { annotationRows } from "../state/annotations";
-import { currentDocument, dispatch } from "../state/document";
+import { currentDocument, dispatch, useDocumentStore } from "../state/document";
 import {
   hasUnsavedWork,
   loadDocument,
@@ -446,87 +438,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // PrintDialog modal is gone.
   const [exportDialogFormat, setExportDialogFormat] =
     useState<ExportFormat | null>(null);
-  // Phase 5 collab integration (Step 6) — a single CollabState instance owned
-  // by MapEditor. The lifecycle is component-scoped: instantiated on mount,
-  // disconnected on unmount. Both useCollabRoom (URL → connect) and
-  // ShareDialog (manual collab share) call into this same instance so there
-  // is only ever one live socket per room.
-  //
-  // ISSUES.md Issue 9: this used to be the ONLY place the real, connected
-  // instance was used — useCollab() (below) built and read its own separate,
-  // never-connected fallback CollabState because no CollabContext.Provider
-  // was ever mounted. useYjsLayer, CursorOverlay, and PresenceList all read
-  // that disconnected fallback, so remote peer/data-layer updates never
-  // reached them. Fixed by deriving `collabValue` from THIS instance via
-  // useSyncExternalStore (subscribe/getSnapshot — see state/collab.ts) and
-  // wrapping the return tree in <CollabContext.Provider value={collabValue}>
-  // below, so every useCollab() call in this subtree reads the real session.
-  const collabState = useMemo(() => new CollabState(), []);
-
-  const collabSnapshot = useSyncExternalStore(
-    collabState.subscribe,
-    collabState.getSnapshot,
-  );
-  const collabValue = useMemo<CollabContextValue>(
-    () => ({
-      active: collabState.active,
-      peers: collabSnapshot.peers,
-      localCursor: collabSnapshot.localCursor,
-      yjsDoc: collabSnapshot.yjsDoc,
-      commentsLayer: collabSnapshot.commentsLayer,
-      connect: collabState.connect.bind(collabState),
-      disconnect: collabState.disconnect.bind(collabState),
-    }),
-    [collabState, collabSnapshot],
-  );
-
-  // Phase 5 collab integration (Step 5) — fragment → connect bridge.
-  // Reads window.location.hash and connects when it's a `#room:` fragment.
-  // Surfaces an inline banner if the fragment is malformed.
-  const { error: collabRoomError } = useCollabRoom(collabState);
-
-  // Phase 5 collab integration — wire Excalidraw <-> CollabState for Q-P5-1
-  // snapshot pull. setSceneAccessor lets THIS client serve REQUEST_SNAPSHOT
-  // when the relay elects us; setSceneReceiver applies an inbound
-  // SCENE_SNAPSHOT to the local Excalidraw scene.
+  // Rooms (hooks/useRoom.ts): a `#room:` link joins one when the editor is
+  // ready; Share → Collaborate makes one from this map.
+  const roomSession = useRoom(excalidrawAPI, map);
   useEffect(() => {
-    if (!excalidrawAPI) {
-      return;
-    }
-    collabState.setSceneAccessor(
-      () => excalidrawAPI.getSceneElements() as ExcalidrawElement[],
-    );
-    collabState.setSceneReceiver((elements) => {
-      // The scene is now the room's, not the user's own map. Stop autosave
-      // from writing it over their saved document for the rest of the
-      // session; their map comes back on the next visit without the room
-      // link.
-      usePersistenceStore.getState().persistenceStore?.suspendWrites();
-      excalidrawAPI.updateScene({ elements });
+    if (roomSession.status === "joined") {
       toast.success(
-        "You joined a shared map. Your own map stays saved and unchanged.",
+        "You are in a shared map. Your own map stays saved and unchanged.",
       );
-    });
-  }, [collabState, excalidrawAPI, toast]);
+    }
+  }, [roomSession.status, toast]);
+  const roomProblem =
+    roomSession.error ??
+    (roomSession.status === "denied"
+      ? "This shared map link was refused. Ask for a new link."
+      : roomSession.status === "full"
+      ? "This shared map is full. Try again later."
+      : null);
 
-  // Unmount cleanup — close the live session if any. Safe when no connection
-  // was ever opened (disconnect() is idempotent).
-  useEffect(() => {
-    return () => {
-      collabState.disconnect();
-    };
-  }, [collabState]);
-
-  // Phase 5 Task 9 — YjsLayer React binding. When collab is active and
-  // connected, returns the GeoJSON FeatureCollection snapshot and CRUD
-  // mutators from the shared Y.Doc. When inactive, returns nulls.
-  // The map re-projection effect below syncs features to the MapLibre source.
-  const yjsLayer = useYjsLayer(collabValue);
-
-  // Document name: mirror it into the browser tab, and — when a room is
-  // live — into the shared Y.Doc so collaborators see the same sheet name.
   useBrowserTabTitle();
-  useCollabDocumentTitle(collabValue.yjsDoc);
 
   // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
   // dialog opens (avoids hitting fetch in the local-only / pages tiers).
@@ -710,9 +640,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Excalidraw in any non-hand tool.
   useMapWheelRouter(rootRef.current, map);
 
-  // Draw the open document's overlays, and the live collaboration layer, on
-  // the map. This is the only writer of the overlay part of the style.
-  useMapOverlays(map, yjsLayer.features);
+  // Draw the open document's overlays on the map. This is the only writer of
+  // the overlay part of the style.
+  useMapOverlays(map);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
@@ -758,17 +688,16 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     atlasTool: activeAtlasTool,
     setAtlasTool: setActiveAtlasTool,
   });
-  // Badge count — derived from the live CommentsLayer, no parallel counter.
-  // Passed explicitly: MapEditor provides CollabContext, so the context-reading
-  // variant would construct a second, disconnected CollabState here.
-  const openThreadCount = useOpenThreadCountFor(collabValue.commentsLayer);
+  // Badge count — derived from the open document's comments.
+  const comments = useDocumentStore((state) => state.doc.comments);
+  const openThreadCount = useOpenThreadCountFor(comments);
 
   // Canvas search reaches comment text through this prop — the search menu
   // lives in the vendored editor and cannot see the comments Y.Doc otherwise.
   // Memoized inside the hook: <Excalidraw> is React.memo'd on a shallow
   // compare, so an unstable array would re-render the editor constantly.
   const commentSearchSources = useCommentSearchSources({
-    commentsLayer: collabValue.commentsLayer,
+    commentsLayer: comments,
     map,
     excalidrawAPI,
   });
@@ -1032,7 +961,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   }, [map, excalidrawAPI]);
 
   return (
-    <CollabContext.Provider value={collabValue}>
+    <>
       {/* Collar shell (variant A) — the printed map-sheet frame. The plate
         (children) hosts the MapLibre + Excalidraw stack; head bar carries
         the wordmark, sheet name and geo-search; marginalia grows out of
@@ -1309,16 +1238,21 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </div>
           )}
 
-          {/* Phase 5 T11 — collab cursor + presence UI. Gated on collab.active
-          (no-op for single-player deployments, Q1). Both components already
-          no-op internally when there are no peers; the active gate just
-          skips mounting them at all when realtime is disabled. Wiring was
-          orphaned when CollabWrapper (the original Task 11 mount point) was
-          deleted 2026-05-25 as an unused gateway — see ledgers/DEADWOOD.md. */}
-          {collabValue.active && (
+          {/* Who else is in the room, and where their pointers are. */}
+          {roomSession.room && (
             <>
-              <CursorOverlay />
-              <PresenceList />
+              <CursorOverlay map={map} peers={roomSession.peers} />
+              <PresenceList
+                peers={roomSession.peers}
+                onGoTo={(camera) =>
+                  map?.jumpTo({
+                    center: camera.center,
+                    zoom: camera.zoom,
+                    bearing: camera.bearing,
+                    pitch: camera.pitch,
+                  })
+                }
+              />
             </>
           )}
 
@@ -1476,30 +1410,26 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           )}
           {serverBackup.dialog}
 
-          {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
-          (the share reads the drawing). Phase 5 collab integration:
-          opens to a mode picker (read-only / Collaborate) instead of auto-
-          firing the read-only generate. Receives the editor's CollabState so
-          the Collaborate path reuses the same socket as the editor. */}
+          {/* ShareDialog. Mounted only when excalidrawAPI is ready (the share
+          reads the drawing). Collaborate makes a room from this map, or
+          shows the link of the room the editor is in. */}
           {showShareDialog && excalidrawAPI && (
             <ShareDialog
               onCloseRequest={() => setShowShareDialog(false)}
               getDoc={() => toFile(currentDocument())}
               client={getShareClient()}
-              collabState={collabState}
+              startRoom={roomSession.available ? roomSession.start : null}
             />
           )}
 
-          {/* Phase 5 collab integration — inline banner when the URL fragment
-          carries a malformed `#room:` link. Surfaces useCollabRoom's parse
-          error to the user without blocking the editor. */}
-          {collabRoomError && (
+          {/* Why a room link cannot be joined, without blocking the editor. */}
+          {roomProblem && (
             <div
               data-testid="collab-room-error"
               role="alert"
               className={styles.collabRoomError}
             >
-              {collabRoomError}
+              {roomProblem}
             </div>
           )}
 
@@ -1659,6 +1589,6 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           )}
         </div>
       </CollarShell>
-    </CollabContext.Provider>
+    </>
   );
 }

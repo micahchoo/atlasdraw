@@ -9,11 +9,10 @@ import { describe, expect, it } from "vitest";
 
 import { labelLayerId, outlineLayerId } from "@atlasdraw/basemap";
 
-import { createDocument, type DocumentState } from "../state/document";
+import { createDocument } from "../state/document";
 
 import { FakeMapLibre } from "./__tests__/fixtures/fakeMapLibre";
 import {
-  COLLAB_OVERLAY_ID,
   createMapOverlays,
   labelFontOf,
   overlaySpec,
@@ -160,22 +159,6 @@ describe("overlaySpec", () => {
       { overlayId: "dl:a", reason: expect.stringMatching(/unique/i) },
     ]);
   });
-
-  it("draws the collaboration layer on top", () => {
-    const { d } = doc();
-    d.dispatch({
-      type: "add-data-layer",
-      id: "dl:a",
-      fc: POINTS,
-      label: "a",
-      style: STYLE,
-    });
-    const s = overlaySpec(d.snapshot(), { collab: SQUARE });
-    expect(s.layers.map((l) => l.spec.id).slice(-2)).toEqual([
-      COLLAB_OVERLAY_ID,
-      outlineLayerId(COLLAB_OVERLAY_ID),
-    ]);
-  });
 });
 
 describe("validateLayerStyle", () => {
@@ -320,29 +303,48 @@ describe("createMapOverlays — apply", () => {
   it("replaces a layer's data when the FeatureCollection changes", () => {
     const map = basemap();
     const overlays = createMapOverlays(asTarget(map));
-    overlays.apply(
-      overlaySpec(createDocument().snapshot(), { collab: POINTS }),
-    );
+    const { d } = doc();
+    d.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: POINTS,
+      label: "a",
+      style: STYLE,
+    });
+    overlays.apply(overlaySpec(d.snapshot()));
 
     const next: FeatureCollection = {
       ...POINTS,
       features: [...POINTS.features, ...POINTS.features],
     };
-    overlays.apply(overlaySpec(createDocument().snapshot(), { collab: next }));
+    const held = d.snapshot();
+    d.dispatch({
+      type: "replace-content",
+      title: held.title,
+      overlays: held.overlays,
+      featureCollections: { "dl:a": next },
+      images: held.images,
+    });
+    overlays.apply(overlaySpec(d.snapshot()));
 
-    expect(map.getSource(COLLAB_OVERLAY_ID)).toMatchObject({ data: next });
-    expect(map.draws(COLLAB_OVERLAY_ID)).toBe(true);
+    expect(map.getSource("dl:a")).toMatchObject({ data: next });
+    expect(map.draws("dl:a")).toBe(true);
 
-    overlays.apply(overlaySpec(createDocument().snapshot(), { collab: null }));
-    expect(map.getSource(COLLAB_OVERLAY_ID)).toBeUndefined();
+    d.dispatch({ type: "remove-layer", id: "dl:a" });
+    overlays.apply(overlaySpec(d.snapshot()));
+    expect(map.getSource("dl:a")).toBeUndefined();
   });
 
   it("reports a layer MapLibre rejects with the reason from its error event", () => {
-    const state: Pick<
-      DocumentState,
-      "overlays" | "featureCollections" | "images"
-    > = { overlays: [], featureCollections: {}, images: {} };
-    const s = overlaySpec(state, { collab: POINTS });
+    const { d } = doc();
+    d.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: POINTS,
+      label: "a",
+      style: STYLE,
+    });
+    const s = overlaySpec(d.snapshot());
     // A paint value no validator in this module saw.
     const bad: OverlaySpec = {
       ...s,
@@ -355,11 +357,11 @@ describe("createMapOverlays — apply", () => {
 
     const report = createMapOverlays(asTarget(map)).apply(bad);
 
-    expect(report.get(COLLAB_OVERLAY_ID)).toEqual({
+    expect(report.get("dl:a")).toEqual({
       status: "rejected",
       reason: expect.stringMatching(/number expected/i),
     });
-    expect(map.getLayer(COLLAB_OVERLAY_ID)).toBeUndefined();
+    expect(map.getLayer("dl:a")).toBeUndefined();
   });
 });
 

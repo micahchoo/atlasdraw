@@ -32,9 +32,9 @@ import type { Comment, CommentsLayer } from "../state/comments";
 // submission. For Phase 6 we accept the anchor as a parent-provided prop:
 //
 //   <CommentsPanel
-//     commentsLayer={collab.commentsLayer}
-//     authorId={socketId}
-//     authorName={username}
+//     commentsLayer={currentDocument().comments}
+//     authorId={localIdentity().id}
+//     authorName={localIdentity().name}
 //     pendingAnchor={pendingAnchor}
 //     onRequestAnchor={(kind) => setAnchorMode(kind)}
 //   />
@@ -42,7 +42,7 @@ import type { Comment, CommentsLayer } from "../state/comments";
 
 export interface CommentsPanelProps {
   commentsLayer: CommentsLayer | null;
-  /** Author identity. socket.id at create time; rotates on reconnect. */
+  /** Author identity: this browser's (state/identity.ts). */
   authorId: string;
   authorName: string;
   /**

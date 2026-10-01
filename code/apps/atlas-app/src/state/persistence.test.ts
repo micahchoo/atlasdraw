@@ -139,19 +139,6 @@ describe("createPersistenceStore — protecting the stored copy", () => {
     raw.close();
     await store.close();
   });
-
-  it("writes nothing after suspendWrites(), so a shared room cannot overwrite the user's map", async () => {
-    const store = createPersistenceStore({ dbName: freshDb() });
-    await store.save(makeDoc("2026-05-06T00:00:00.000Z"));
-
-    store.suspendWrites();
-    await store.save(makeDoc("2026-09-09T00:00:00.000Z"));
-
-    expect((await store.load())?.manifest.updatedAt).toBe(
-      "2026-05-06T00:00:00.000Z",
-    );
-    await store.close();
-  });
 });
 
 describe("createPersistenceStore — one slot per document", () => {

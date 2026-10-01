@@ -1,7 +1,7 @@
 {
   "name": "@atlasdraw/data",
   "version": "0.0.0",
-  "description": "File format I/O: geojson/kml/gpx/csv/shapefile/atlasdraw + Yjs layer wrapper",
+  "description": "File format I/O: geojson/kml/gpx/csv/shapefile/atlasdraw",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
@@ -23,7 +23,6 @@
     "papaparse": "^5.4.0",
     "shpjs": "^6.2.0",
     "ulid": "^2.3.0",
-    "yjs": "^13.6.20",
     "zod": "^3.22.0"
   },
   "devDependencies": {

@@ -17,13 +17,7 @@ import { CommentsLayer } from "../comments";
 function makeLayer(doc: Y.Doc): CommentsLayer {
   // Pass a no-op provider factory — we bypass the WebSocket and exercise
   // CRDT semantics directly via Y.applyUpdate between docs.
-  return new CommentsLayer({
-    wsUrl: "ws://test.invalid",
-    roomId: "test-room",
-    workspaceId: null,
-    doc,
-    providerFactory: () => null,
-  });
+  return new CommentsLayer(doc);
 }
 
 describe("CommentsLayer", () => {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// ShareDialog — Phase 4 T8 + Phase 5 collab integration (Step 7).
+// ShareDialog — share the map read-only, or make it a shared room.
 //
 // Mirrors AboutDialog: inline styles, root-level mount, no @excalidraw/Dialog
 // dependency, fully testable in jsdom outside the Excalidraw provider tree.
@@ -9,21 +9,19 @@
 // the capability; hash vs upload is a size-based decision). An upload link
 // reads the document's server map, so a save updates the link and every
 // embed; it lasts until the owner stops it, unless the owner chose an
-// expiry. Collaborate goes through generateRoomKey() + CollabState.
+// expiry. Collaborate makes a room from the open map (hooks/useRoom.ts) and
+// shows its link; in a room it shows the link of that room.
 //
 // The dialog closes on a press on its backdrop, tested at mousedown on the
 // backdrop element itself. A document-level click test is wrong here: the
 // picker button unmounts while React handles its click, and a detached
 // target is "outside" every panel.
 //
-// Q-P5-2: a `#room:` URL grants write capability — anyone with the link can
-// edit. Existing share URLs (`/m#v2:`, `/m#v1:`, `/m/<token>`) remain read-only via the
-// ShareView path. The hint text in the collab success state surfaces this
-// explicitly to the user.
+// A `#room:` link lets anyone who has it edit; the room id alone grants
+// nothing (ADR-0014). Read-only links (`/m#v2:`, `/m#v1:`, `/m/<token>`) stay
+// read-only. The hint in the collab success state says so.
 
 import React, { useEffect, useRef, useState } from "react";
-
-import { generateRoomKey } from "@atlasdraw/protocol";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
@@ -33,18 +31,16 @@ import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 import { FocusTrap } from "./FocusTrap";
 
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
-import type { CollabState } from "../state/collab";
 
 export interface ShareDialogProps {
   onCloseRequest: () => void;
   getDoc: () => AtlasdrawDocument;
   client: HttpStorageClient;
   /**
-   * CollabState owned by MapEditor. The dialog reuses this instance so the
-   * resulting collab session is the same socket as the editor's live session
-   * — no double-connect to the same room.
+   * Make a room from the open map, or keep the editor's room; resolves with
+   * its URL. Null when the editor offers no rooms: Collaborate is not shown.
    */
-  collabState: CollabState;
+  startRoom: (() => Promise<string>) | null;
 }
 
 type DialogView =
@@ -85,16 +81,14 @@ function uploadHint(expiresAt: string | null): string {
   return `Anyone with this link can view the map. ${updates} ${lasts}`;
 }
 
-// Q-P5-2: this hint text surfaces the write-capability semantics of the
-// collab link to the user. Anyone holding the URL can edit; there is no
-// server-side auth in Phase 5.
+// The capability of a room link, said to the person who shares it.
 const COLLAB_HINT = "Collaborative — anyone with this link can edit.";
 
 export const ShareDialog: React.FC<ShareDialogProps> = ({
   onCloseRequest,
   getDoc,
   client,
-  collabState,
+  startRoom,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -147,14 +141,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const startCollab = async () => {
     setView({ kind: "collab-loading" });
     try {
-      const { roomId, key, fragment } = await generateRoomKey();
-      // Reuse the editor's CollabState instance — opens the live session for
-      // THIS tab too so any subsequent edits broadcast immediately.
-      collabState.connect(roomId, key);
-      // `fragment` already starts with `#`; concatenating onto origin yields
-      // a same-path `/#room:...` URL (editor route).
-      const url = `${window.location.origin}/${fragment}`;
-      setView({ kind: "collab-success", url });
+      if (!startRoom) {
+        throw new Error("Shared maps are not available here.");
+      }
+      setView({ kind: "collab-success", url: await startRoom() });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start collaboration.";
@@ -288,34 +278,36 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                   ))}
                 </select>
               </label>
-              <button
-                type="button"
-                onClick={startCollab}
-                data-testid="share-dialog-pick-collab"
-                style={{
-                  padding: "10px 14px",
-                  border: "1px solid var(--ad-accent, #1971c2)",
-                  borderRadius: "4px",
-                  background: "var(--ad-accent, #1971c2)",
-                  color: "var(--ad-ink-inverse, #ffffff)",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                Collaborate
-                <div
+              {startRoom && (
+                <button
+                  type="button"
+                  onClick={startCollab}
+                  data-testid="share-dialog-pick-collab"
                   style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 400,
-                    color: "#dbeafe",
-                    marginTop: "2px",
+                    padding: "10px 14px",
+                    border: "1px solid var(--ad-accent, #1971c2)",
+                    borderRadius: "4px",
+                    background: "var(--ad-accent, #1971c2)",
+                    color: "var(--ad-ink-inverse, #ffffff)",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textAlign: "left",
                   }}
                 >
-                  Live editing — anyone with the link can edit.
-                </div>
-              </button>
+                  Collaborate
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 400,
+                      color: "#dbeafe",
+                      marginTop: "2px",
+                    }}
+                  >
+                    Live editing — anyone with the link can edit.
+                  </div>
+                </button>
+              )}
             </div>
           )}
 

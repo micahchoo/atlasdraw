@@ -48,10 +48,7 @@ interface CommentSearchSourcesArgs {
  * Live, memoized `searchSources` for `<Excalidraw>`.
  *
  * `undefined` — not an empty array — when there is nothing to search, so the
- * editor takes its untouched fast path. There is nothing to search whenever
- * collab is off: `CommentsLayer` is created by `CollabState.connect`, so a
- * solo sheet has no comments doc at all. That is not a regression, just an
- * empty well.
+ * editor takes its untouched fast path.
  */
 export function useCommentSearchSources({
   commentsLayer,

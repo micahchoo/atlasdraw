@@ -19,6 +19,7 @@ import { useBasemapStore } from "../state/basemap";
 import { currentDocument, followDocument } from "../state/document";
 import { loadDocument, restoreCamera, toFile } from "../state/documentIO";
 import { useMapInstanceStore } from "../state/mapInstance";
+import { isRoomDocument } from "../state/room";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
@@ -79,10 +80,18 @@ export function usePersistenceWiring(
     // call store.save(getDoc())). useShareLink consumes this via
     // usePersistenceStore to guarantee a fresh snapshot before
     // share-link minting.
-    const getDoc = () => toFile(currentDocument());
+    // A room's document is the relay's to keep (ADR-0018): the autosave
+    // writes only the user's own maps.
+    const getDoc = () => {
+      const doc = currentDocument();
+      return isRoomDocument(doc) ? null : toFile(doc);
+    };
     usePersistenceStore.getState().setForceSave(async () => {
       try {
-        await store.save(getDoc());
+        const doc = getDoc();
+        if (doc) {
+          await store.save(doc);
+        }
         usePersistenceStore.getState().setLastSavedAt(Date.now());
         usePersistenceStore.getState().setDraining(false);
       } catch (err) {
@@ -102,7 +111,8 @@ export function usePersistenceWiring(
         if (cancelled) {
           return;
         }
-        if (loaded) {
+        // A room joined while the autosave was read: the room stays open.
+        if (loaded && !isRoomDocument(currentDocument())) {
           const opened = await loadDocument(loaded, excalidrawAPI, {
             signal: abort.signal,
           });
@@ -189,8 +199,9 @@ export function usePersistenceWiring(
     // autosave delay. 'visibilitychange' to hidden comes first and leaves the
     // most time; 'pagehide' covers a close that skips it.
     const flushOnLeave = () => {
-      if (store.isDirty()) {
-        void store.save(getDoc()).catch((err) => {
+      const doc = store.isDirty() ? getDoc() : null;
+      if (doc) {
+        void store.save(doc).catch((err) => {
           // eslint-disable-next-line no-console
           console.error("[persistence] save on leave failed", err);
         });

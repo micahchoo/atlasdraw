@@ -20,7 +20,6 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import * as Y from "yjs";
 
 import { toScene } from "@atlasdraw/geo";
 
@@ -28,9 +27,8 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawTool } from "@atlasdraw/tools";
 
-import { CollabContext } from "../../hooks/useCollab";
 import { useCommentModeTool } from "../../hooks/useCommentModeTool";
-import { CommentsLayer } from "../../state/comments";
+
 import {
   __resetForTest as __resetCommentMode,
   isCommentModeActive,
@@ -49,17 +47,15 @@ import {
   openDocument,
 } from "../../state/document";
 
-import type { CollabContextValue } from "../../hooks/useCollab";
+import type { CommentsLayer } from "../../state/comments";
+
 import type maplibregl from "maplibre-gl";
 
+/** Open a new document; its comments are the layer the overlay reads. */
 function makeLayer(): CommentsLayer {
-  return new CommentsLayer({
-    wsUrl: "ws://test.invalid",
-    roomId: "test-room",
-    workspaceId: null,
-    doc: new Y.Doc(),
-    providerFactory: () => null,
-  });
+  const doc = createDocument();
+  openDocument(doc);
+  return doc.comments;
 }
 
 /**
@@ -234,18 +230,13 @@ describe("useCommentModeTool — arms the picker, manages the atlas tool", () =>
 
 describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
   const renderOverlay = (
-    commentsLayer: CommentsLayer | null,
+    commentsLayer: CommentsLayer,
     map: ReturnType<typeof makeFakeMap>["map"],
     api: ExcalidrawImperativeAPI,
   ) => {
-    const value = { commentsLayer } as unknown as CollabContextValue;
+    expect(currentDocument().comments).toBe(commentsLayer);
     return render(
-      <CollabContext.Provider value={value}>
-        <CommentAnchorsOverlay
-          map={map as never}
-          excalidrawAPI={api as never}
-        />
-      </CollabContext.Provider>,
+      <CommentAnchorsOverlay map={map as never} excalidrawAPI={api as never} />,
     );
   };
 
@@ -408,7 +399,7 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     // Seeded here, and this test runs after the bare-map tests: the raster's
     // projected corners (10,20)-(30,60) enclose the (10,20) click those tests
     // use, so registering it earlier would steal their map fallback.
-    openDocument(createDocument());
+    const layer = makeLayer();
     currentDocument().dispatch({
       type: "add-raster-layer",
       image: new Blob(["png"]),
@@ -422,7 +413,6 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
       ],
       imageKey: "k",
     });
-    const layer = makeLayer();
     const fakeMap = makeFakeMap();
     const { api } = makeFakeAPI();
     renderOverlay(layer, fakeMap.map, api);

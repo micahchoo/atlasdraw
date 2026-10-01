@@ -240,3 +240,42 @@ describe("atlasdraw.read — error mapping", () => {
     }
   });
 });
+
+describe("atlasdraw comments", () => {
+  const comment = {
+    id: "c1",
+    authorId: "u1",
+    authorName: "Ada",
+    text: "survey marker is 2 m east",
+    createdAt: 1_700_000_000_000,
+    resolved: false,
+    anchor: { kind: "map", lng: 13.4, lat: 52.5 },
+    schemaVersion: 2,
+  };
+
+  it("writes the comments as comments.json and reads them back", async () => {
+    const doc = { ...synthAtlasdrawDocument(), comments: [comment] };
+    const blob = await write(doc);
+
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    expect(zip.file("comments.json")).not.toBeNull();
+    expect((await read(blob)).comments).toEqual([comment]);
+  });
+
+  it("writes no comments.json for a document without comments", async () => {
+    const blob = await write(synthAtlasdrawDocument());
+
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    expect(zip.file("comments.json")).toBeNull();
+    expect((await read(blob)).comments).toEqual([]);
+  });
+
+  it("leaves out a comment it cannot read, and keeps the others", async () => {
+    const blob = await write({
+      ...synthAtlasdrawDocument(),
+      comments: [comment, { id: 7 } as unknown as typeof comment],
+    });
+
+    expect((await read(blob)).comments).toEqual([comment]);
+  });
+});

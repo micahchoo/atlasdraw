@@ -27,19 +27,19 @@
 // (a symbol layer, W9d): they go on top of everything, above the basemap's
 // own labels, because MapLibre gives the upper label the place when two
 // collide, and a label the user asked for must not lose to a street name. Tile layers (XYZ map tiles) are the bottom
-// band, rasters (georeferenced pictures) are above them, data layers above
-// those, and the collaboration layer is on top.
+// band, rasters (georeferenced pictures) are above them, and data layers
+// above those.
 
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
 
 import {
   compileLayers,
-  defaultLayerStyle,
   filterProblem,
   labelProblem,
   type LayerStyle,
 } from "@atlasdraw/basemap";
-import { geometryKindOf, type AtlasGeometryKind } from "@atlasdraw/data";
+
+import type { AtlasGeometryKind } from "@atlasdraw/data";
 
 import { rasterUrl } from "../state/rasterUrls";
 
@@ -101,12 +101,7 @@ export interface OverlaySpec {
   rejected: ReadonlyArray<{ overlayId: string; reason: string }>;
 }
 
-/** The id of the collaboration layer's source and layer. */
-export const COLLAB_OVERLAY_ID = "collab-data";
-
 export interface OverlaySpecOptions {
-  /** The live collaboration layer, drawn on top of the document's layers. */
-  collab?: FeatureCollection | null;
   /** An object URL for a raster's image. */
   imageUrl?: (id: string, image: Blob) => string;
   /**
@@ -269,9 +264,9 @@ const TILE_SIZE = 256;
 
 /**
  * The overlays the document asks for. Tile layers first, then rasters, then
- * data layers, each band in the document's order (0 at the bottom), then the
- * collaboration layer. An overlay whose layers MapLibre would reject, or whose payload is
- * missing, is in `rejected` and has no layers.
+ * data layers, each band in the document's order (0 at the bottom). An
+ * overlay whose layers MapLibre would reject, or whose payload is missing, is
+ * in `rejected` and has no layers.
  */
 export function overlaySpec(
   state: Pick<DocumentState, "overlays" | "featureCollections" | "images">,
@@ -393,24 +388,6 @@ export function overlaySpec(
       compileLayers(entry.id, entry.style, entry.geometryKind, {
         labelFont: options.labelFont ?? undefined,
       }).map((l) => withVisibility(l, entry.visible)),
-    );
-  }
-
-  if (options.collab) {
-    const fc = options.collab;
-    add(
-      COLLAB_OVERLAY_ID,
-      {
-        id: COLLAB_OVERLAY_ID,
-        type: "geojson",
-        data: fc,
-        version: versionOf(fc),
-      },
-      compileLayers(
-        COLLAB_OVERLAY_ID,
-        defaultLayerStyle(fc),
-        geometryKindOf(fc),
-      ).map((l) => withVisibility(l, true)),
     );
   }
 

@@ -14,7 +14,6 @@ import {
   openDocument,
 } from "../state/document";
 import { FakeMapLibre } from "../lib/__tests__/fixtures/fakeMapLibre";
-import { COLLAB_OVERLAY_ID } from "../lib/mapOverlays";
 
 import { useMapOverlays, useOverlayReport } from "./useMapOverlays";
 
@@ -107,22 +106,12 @@ describe("useMapOverlays", () => {
     const map = new StyledMap();
     map.loadBasemap();
     addPoints("dl:a");
-    renderHook(() => useMapOverlays(asMap(map), POINTS));
-    expect(map.getLayersOrder()).toEqual([
-      "land",
-      "dl:a",
-      COLLAB_OVERLAY_ID,
-      "places",
-    ]);
+    renderHook(() => useMapOverlays(asMap(map)));
+    expect(map.getLayersOrder()).toEqual(["land", "dl:a", "places"]);
 
     act(() => map.loadBasemap());
 
-    expect(map.getLayersOrder()).toEqual([
-      "land",
-      "dl:a",
-      COLLAB_OVERLAY_ID,
-      "places",
-    ]);
+    expect(map.getLayersOrder()).toEqual(["land", "dl:a", "places"]);
     expect(map.errors).toEqual([]);
   });
 

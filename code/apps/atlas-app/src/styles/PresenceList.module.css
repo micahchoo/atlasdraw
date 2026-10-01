@@ -77,3 +77,20 @@
   text-overflow: ellipsis;
   max-width: 96px;
 }
+
+/* A peer row that moves the map to the peer's camera. */
+.peerButton {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.peerButton:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}

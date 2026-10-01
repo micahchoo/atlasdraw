@@ -3,8 +3,9 @@
 # Routes:
 #   /api/*       → storage (Caddy strips the /api prefix; storage serves its
 #                  own routes at /maps, /share, /health, etc.)
-#   /socket.io/* → realtime relay (Socket.IO; WebSocket upgrade proxied)
-#   /yjs/*       → realtime relay (y-websocket; WebSocket upgrade proxied)
+#   /yjs/*       → realtime relay (y-websocket; WebSocket upgrade proxied).
+#                  The URL carries only the room id; the room token is the
+#                  first WebSocket message, so access logs never hold it.
 #   /*           → web (atlas-app dist via nginx on port 3000)
 #
 # The realtime routes only respond when the `realtime` compose profile is up;
@@ -23,13 +24,8 @@
 		reverse_proxy storage:4000
 	}
 
-	# Realtime relay — full path preserved (relay serves /socket.io and
-	# /yjs/:roomId verbatim). Caddy proxies the WebSocket Upgrade handshake
-	# automatically, so both transports get TLS terminated here.
-	handle /socket.io/* {
-		reverse_proxy realtime:4001
-	}
-
+	# Realtime relay — full path preserved (the relay serves /yjs/<roomId>).
+	# Caddy proxies the WebSocket Upgrade handshake, so TLS ends here.
 	handle /yjs/* {
 		reverse_proxy realtime:4001
 	}

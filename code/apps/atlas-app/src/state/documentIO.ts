@@ -15,6 +15,11 @@
 // so there is one way to apply a file.
 
 import { ulid } from "ulid";
+import {
+  COMMENT_SCHEMA_VERSION,
+  normalizeAnchor,
+  type CommentAnchor,
+} from "@atlasdraw/protocol";
 
 import { CaptureUpdateAction, syncInvalidIndices } from "@atlasdraw/element";
 import {
@@ -44,7 +49,7 @@ import {
   openDocument,
   type Document,
   type DataLayerEntry,
-  type DocumentState,
+  type DocumentInit,
   type OverlayEntry,
   type RasterLayerEntry,
   type TileLayerEntry,
@@ -70,7 +75,7 @@ interface CameraSource {
 }
 
 /** The live camera, or null when no map is mounted. */
-function liveCamera(): Camera | null {
+export function liveCamera(): Camera | null {
   const map = useMapInstanceStore.getState().map as CameraSource | null;
   if (!map) {
     return null;
@@ -225,6 +230,7 @@ export function toFile(
     layers,
     styleRef: {},
     files,
+    comments: doc.comments.comments,
   };
 }
 
@@ -259,7 +265,9 @@ export function markSavedToFile(doc: Document): void {
  */
 export function hasUnsavedWork(doc: Document): boolean {
   const blank =
-    doc.scene.elements().length === 0 && doc.snapshot().overlays.length === 0;
+    doc.scene.elements().length === 0 &&
+    doc.snapshot().overlays.length === 0 &&
+    doc.comments.comments.length === 0;
   return !blank && fileKeys.get(doc) !== contentKey(doc);
 }
 
@@ -288,7 +296,7 @@ export async function decode(bytes: Blob): Promise<DecodeResult> {
  * data layer with no GeoJSON, a raster with no image) is left out: a row in
  * the panel that can never draw is worse than no row.
  */
-export function fromFile(file: AtlasdrawDocument): Partial<DocumentState> {
+export function fromFile(file: AtlasdrawDocument): DocumentInit {
   const overlays: OverlayEntry[] = [];
   const featureCollections: Record<string, FeatureCollection> = {};
   const images: Record<string, Blob> = {};
@@ -367,6 +375,11 @@ export function fromFile(file: AtlasdrawDocument): Partial<DocumentState> {
     overlays,
     featureCollections,
     images,
+    comments: (file.comments ?? []).map((c) => ({
+      ...c,
+      anchor: normalizeAnchor(c.anchor as unknown as CommentAnchor),
+      schemaVersion: COMMENT_SCHEMA_VERSION,
+    })),
   };
 }
 

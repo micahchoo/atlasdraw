@@ -71,3 +71,51 @@ the server could not persist or compact rooms, so comments could not outlive
 the session without client-side storage, and it needs a custom replacement for
 the Yjs sync protocol. Reopen only on real demand from deployments that cannot
 trust their own operator.
+
+## Implementation (W6, 2026-10-01)
+
+Every point of the decision is in the code:
+
+- **One transport.** `apps/realtime/src/rooms.ts` serves one Y.Doc per room
+  over the y-websocket protocol at `/yjs/<roomId>`. The client is
+  `apps/atlas-app/src/state/room.ts` (`joinRoom`). The Socket.IO relay, its
+  rate limiter and Redis adapter, `collab/scene-crypto.ts` and
+  `packages/data/src/yjs-crypto.ts` are deleted.
+- **The link key is the capability.** The client derives the room token
+  with HKDF-SHA256 (salt: the room id; info: `atlasdraw-room-auth`) from the
+  32-byte secret in the fragment (`packages/protocol/src/room-link.ts`) and
+  sends it as the first WebSocket message, never in the URL, so proxy access
+  logs hold only the room id. The first connection to a room stores
+  SHA-256(token) as its verifier; any other token is closed with code 4403.
+- **Rooms persist** in the relay's SQLite file (ADR-0018), comments with
+  them.
+
+- **Undo stays Excalidraw's.** A collaborator's change reaches the editor
+  with `CaptureUpdateAction.NEVER`, so Excalidraw's history holds only this
+  user's own changes, as per-element deltas. An undo is then a new local
+  edit with a higher version, and it reaches the room like any other edit.
+  A `Y.UndoManager` would duplicate that history and would need Excalidraw's
+  undo actions rerouted inside the fork.
+- **Conflicts** resolve per element as Excalidraw's reconcile does: the
+  higher `version` wins, then the lower `versionNonce`
+  (`apps/atlas-app/src/state/roomScene.ts`).
+
+### What the relay can see
+
+Everything in the room doc, in plaintext, and so can anyone who reads the
+relay's SQLite file:
+
+| Data                                                              | Visible to the relay                                       |
+| ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| Every drawn element, with its scene (world) coordinates           | Yes                                                        |
+| Pasted images (data URLs) and raster images (PNG bytes)           | Yes                                                        |
+| Data layers (GeoJSON), tile layer URLs, layer names and styles    | Yes                                                        |
+| Title, world frame, basemap, the camera the room was made at      | Yes                                                        |
+| Comments: text, author name, anchor (lng/lat or element id)       | Yes                                                        |
+| Presence: each person's name, colour, cursor (lng/lat) and camera | Yes, while they are connected; not stored                  |
+| The room id, connection times, message sizes                      | Yes                                                        |
+| The link secret                                                   | No: the fragment never leaves the browser                  |
+| The room token                                                    | Yes, in memory during a connection; stored only as SHA-256 |
+
+The room id alone grants nothing: it appears in URLs and logs, and the relay
+refuses a connection that does not present the room's token.

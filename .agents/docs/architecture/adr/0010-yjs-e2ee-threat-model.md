@@ -6,7 +6,7 @@
 - **Date:** 2026-05-11
 - **Phase:** 5 (constraint-setting deliverable; Phase 5 Task 0 hard gate per plan)
 - **Supersedes:** none
-- **Superseded by:** none
+- **Superseded by:** ADR-0014 (`docs/architecture/adr/0014-collab-trust-model.md`): the relay is trusted, one Y.Doc per room, no end-to-end encryption. Its "What the relay can see" table replaces the one here.
 - **Relates to:** ADR-0006 (telemetry policy), ADR-0008 (share-link encoding), E-01 + E-02 (`docs/decisions/escalations.md`)
 
 ## Context

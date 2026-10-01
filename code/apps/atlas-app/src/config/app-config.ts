@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import type { RealtimeConfig } from "@atlasdraw/protocol";
-
 const BuildTargetSchema = z.enum(["pages", "local-only", "hosted"]);
 export type BuildTarget = z.infer<typeof BuildTargetSchema>;
 
@@ -32,11 +30,17 @@ const EnvSchema = z.object({
   VITE_ALLOW_REMOTE_BASEMAPS: z.enum(["true", "false"]).default("true"),
 });
 
+/** Whether rooms are offered, and where the relay is. */
+export type RealtimeConfig = {
+  enabled: boolean;
+  /** The relay's base URL; same origin when unset. */
+  wsUrl?: string;
+};
+
 export type AppConfig = {
   buildTarget: BuildTarget;
   enableShareUI: boolean;
-  /** Phase 5+: typed feature-flag. When `enabled` is false the collab client
-   *  never opens a WebSocket and collab UI components render null. */
+  /** When `enabled` is false no room is joined and no collab UI shows. */
   realtime: RealtimeConfig;
   enableBackendPersistence: boolean;
   showDemoBadge: boolean;

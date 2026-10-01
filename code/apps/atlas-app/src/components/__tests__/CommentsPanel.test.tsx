@@ -20,13 +20,7 @@ import { CommentsPanel } from "../CommentsPanel";
 import { CommentsLayer } from "../../state/comments";
 
 function makeLayer(doc?: Y.Doc): CommentsLayer {
-  return new CommentsLayer({
-    wsUrl: "ws://test.invalid",
-    roomId: "test-room",
-    workspaceId: null,
-    doc: doc ?? new Y.Doc(),
-    providerFactory: () => null,
-  });
+  return new CommentsLayer(doc ?? new Y.Doc());
 }
 
 afterEach(() => {

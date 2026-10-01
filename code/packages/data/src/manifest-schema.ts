@@ -208,6 +208,23 @@ export interface SceneElement {
 }
 
 /**
+ * A comment as the file stores it (`comments.json`). The anchor is kept as
+ * written; the app normalises it (protocol `normalizeAnchor`).
+ */
+export const SavedCommentSchema = z.object({
+  id: z.string(),
+  authorId: z.string(),
+  authorName: z.string(),
+  text: z.string(),
+  createdAt: z.number(),
+  resolved: z.boolean(),
+  anchor: z.record(z.unknown()),
+  schemaVersion: z.number(),
+});
+
+export type SavedComment = z.infer<typeof SavedCommentSchema>;
+
+/**
  * Runtime in-memory representation of an atlasdraw document. The zip writer
  * accepts this; the reader returns it. `styleRef` is still typed as `unknown`
  * since basemap shape is a Phase 4 contract still in motion.
@@ -218,4 +235,6 @@ export interface AtlasdrawDocument {
   readonly layers: Map<string, FeatureCollection>;
   readonly styleRef: unknown;
   readonly files: Map<string, Blob>;
+  /** Written to `comments.json` only when there is one. */
+  readonly comments?: ReadonlyArray<SavedComment>;
 }

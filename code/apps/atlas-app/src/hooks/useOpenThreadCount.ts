@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 
-import { useCollab } from "./useCollab";
+import { useDocumentStore } from "../state/document";
 
 import type { Comment, CommentsLayer } from "../state/comments";
 
@@ -35,17 +35,7 @@ export function countOpenThreads(comments: ReadonlyArray<Comment>): number {
   return n;
 }
 
-/**
- * Live count of unresolved threads on an explicitly-supplied layer.
- *
- * MapEditor uses this one, because it OWNS the CollabContext.Provider and so
- * must not go through `useCollab()`: outside its own provider that hook
- * constructs a second, disconnected `CollabState` as its no-provider
- * fallback. Harmless in isolation, but it means MapEditor would instantiate a
- * stray session on every mount — and MapEditor.collab-presence.test.tsx,
- * which identifies the live instance as "the last CollabState constructed",
- * would start driving the wrong one.
- */
+/** Live count of unresolved threads on a comments layer. */
 export function useOpenThreadCountFor(
   commentsLayer: CommentsLayer | null,
 ): number {
@@ -67,11 +57,7 @@ export function useOpenThreadCountFor(
   return count;
 }
 
-/**
- * The same count, read from the CollabContext. For consumers rendered INSIDE
- * MapEditor's provider — LayerPanel's Threads section, and anything else that
- * grows a thread count later.
- */
+/** The same count for the open document's comments. */
 export function useOpenThreadCount(): number {
-  return useOpenThreadCountFor(useCollab().commentsLayer);
+  return useOpenThreadCountFor(useDocumentStore((s) => s.doc.comments));
 }
