@@ -68,7 +68,7 @@ const STEPS: Step[] = [
   },
   {
     title: "You're ready",
-    body: "Import data by dragging GeoJSON or CSV files onto the map. Your work saves automatically. Share a link to collaborate in real time.",
+    body: "Import data by dragging GeoJSON, CSV, KML, GPX or zipped shapefiles onto the map. Your work saves automatically. Share a link to collaborate in real time.",
     position: { top: 80, left: 24 },
   },
 ];

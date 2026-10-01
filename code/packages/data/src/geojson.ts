@@ -22,7 +22,13 @@
 //   - bbox / foreign members
 //   - CRS objects (RFC 7946 deprecated them; we tolerate their presence)
 
-import type { Feature, FeatureCollection } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  GeometryCollection,
+  Position,
+} from "geojson";
 
 /**
  * Error type for GeoJSON parse failures. Carries optional `line` (for JSON
@@ -170,6 +176,129 @@ export function requireHomogeneousGeometry(fc: FeatureCollection): void {
 
 /** Atlas's MapLibre layer-kind taxonomy. */
 export type AtlasGeometryKind = "fill" | "line" | "circle";
+
+/** One part of a FeatureCollection, with features of one geometry kind. */
+export interface GeometryKindPart {
+  kind: AtlasGeometryKind;
+  fc: FeatureCollection;
+}
+
+/** Order of the parts: areas below lines, lines below points. */
+const KIND_ORDER: readonly AtlasGeometryKind[] = ["fill", "line", "circle"];
+
+/**
+ * Divide a FeatureCollection into one FeatureCollection per geometry kind,
+ * so that each part passes `requireHomogeneousGeometry`.
+ *
+ * Use this for formats where mixed kinds are normal, for example a GPX file
+ * with waypoints and tracks. The parts come in the order fill, line, circle.
+ * An empty kind gives no part.
+ *
+ * A GeometryCollection is divided by kind. Each piece becomes a feature with
+ * the properties of the original feature. Two or more pieces of one kind
+ * become one Multi* geometry. Features with a `null` geometry are left out.
+ *
+ * If all features are of one kind, the function returns the input
+ * FeatureCollection as the one part.
+ */
+export function splitByGeometryKind(fc: FeatureCollection): GeometryKindPart[] {
+  const byKind = new Map<AtlasGeometryKind, Feature[]>();
+  const add = (kind: AtlasGeometryKind, feature: Feature) => {
+    const list = byKind.get(kind);
+    if (list) {
+      list.push(feature);
+    } else {
+      byKind.set(kind, [feature]);
+    }
+  };
+
+  let changed = false;
+  for (const feature of fc.features) {
+    const g = feature.geometry;
+    if (g === null) {
+      changed = true;
+      continue;
+    }
+    if (g.type !== "GeometryCollection") {
+      const kind = atlasKindOf(g.type);
+      if (kind !== null) {
+        add(kind, feature);
+      }
+      continue;
+    }
+    changed = true;
+    for (const [kind, geometry] of mergeByKind(leafGeometries(g))) {
+      add(kind, { ...feature, geometry });
+    }
+  }
+
+  if (!changed && byKind.size === 1) {
+    const [kind] = byKind.keys();
+    return [{ kind, fc }];
+  }
+  return KIND_ORDER.filter((kind) => byKind.has(kind)).map((kind) => ({
+    kind,
+    fc: { type: "FeatureCollection", features: byKind.get(kind)! },
+  }));
+}
+
+/** The geometries in a GeometryCollection, with nested collections opened. */
+function leafGeometries(g: GeometryCollection): Geometry[] {
+  return g.geometries.flatMap((member) =>
+    member.type === "GeometryCollection" ? leafGeometries(member) : [member],
+  );
+}
+
+/** One geometry per kind: one member as it is, more members as Multi*. */
+function mergeByKind(
+  geometries: Geometry[],
+): Array<[AtlasGeometryKind, Geometry]> {
+  const groups = new Map<AtlasGeometryKind, Geometry[]>();
+  for (const g of geometries) {
+    const kind = atlasKindOf(g.type);
+    if (kind !== null) {
+      groups.set(kind, [...(groups.get(kind) ?? []), g]);
+    }
+  }
+  return KIND_ORDER.filter((kind) => groups.has(kind)).map((kind) => {
+    const members = groups.get(kind)!;
+    return [kind, members.length === 1 ? members[0] : toMulti(kind, members)];
+  });
+}
+
+function toMulti(kind: AtlasGeometryKind, members: Geometry[]): Geometry {
+  if (kind === "circle") {
+    const coordinates: Position[] = [];
+    for (const m of members) {
+      if (m.type === "Point") {
+        coordinates.push(m.coordinates);
+      } else if (m.type === "MultiPoint") {
+        coordinates.push(...m.coordinates);
+      }
+    }
+    return { type: "MultiPoint", coordinates };
+  }
+  if (kind === "line") {
+    const coordinates: Position[][] = [];
+    for (const m of members) {
+      if (m.type === "LineString") {
+        coordinates.push(m.coordinates);
+      } else if (m.type === "MultiLineString") {
+        coordinates.push(...m.coordinates);
+      }
+    }
+    return { type: "MultiLineString", coordinates };
+  }
+  const coordinates: Position[][][] = [];
+  for (const m of members) {
+    if (m.type === "Polygon") {
+      coordinates.push(m.coordinates);
+    } else if (m.type === "MultiPolygon") {
+      coordinates.push(...m.coordinates);
+    }
+  }
+  return { type: "MultiPolygon", coordinates };
+}
 
 function atlasKindOf(t: string): AtlasGeometryKind | null {
   if (t === "Polygon" || t === "MultiPolygon") {
