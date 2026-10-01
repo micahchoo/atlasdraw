@@ -25,10 +25,15 @@ vi.mock("@aws-sdk/client-s3", () => {
   class ListBucketsCommand extends Command {}
   class PutObjectCommand extends Command {}
   class GetObjectCommand extends Command {}
+  class DeleteObjectCommand extends Command {}
   class S3Client {
     async send(cmd: Command): Promise<unknown> {
       if (cmd instanceof PutObjectCommand) {
         bucket.set(cmd.input.Key!, Buffer.from(cmd.input.Body!));
+        return {};
+      }
+      if (cmd instanceof DeleteObjectCommand) {
+        bucket.delete(cmd.input.Key!);
         return {};
       }
       if (cmd instanceof GetObjectCommand) {
@@ -47,6 +52,7 @@ vi.mock("@aws-sdk/client-s3", () => {
     ListBucketsCommand,
     PutObjectCommand,
     GetObjectCommand,
+    DeleteObjectCommand,
   };
 });
 
@@ -57,7 +63,8 @@ interface Store {
 }
 
 const UNKNOWN_ID = "a".repeat(21);
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const HASH = "f".repeat(64);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function describeContract(name: string, makeStore: () => Promise<Store>) {
   describe(`${name} adapter contract`, () => {
@@ -82,11 +89,12 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       await store.dispose();
     });
 
-    it("createMap stores the bytes and getMap returns the record", async () => {
+    it("createMap stores the bytes and the key hash; getMap returns the record", async () => {
       const client = open();
-      const record = await client.createMap(Buffer.from("hello"));
+      const record = await client.createMap(Buffer.from("hello"), HASH);
 
       expect(record.byte_size).toBe(5);
+      expect(record.write_key_hash).toBe(HASH);
       expect(await client.getMap(record.id)).toEqual(record);
       expect((await client.getBlob(record.id))?.toString()).toBe("hello");
     });
@@ -98,15 +106,16 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       expect(await client.getBlob(UNKNOWN_ID)).toBeNull();
     });
 
-    it("updateMap replaces the bytes and keeps created_at", async () => {
+    it("updateMap replaces the bytes and keeps created_at and the key hash", async () => {
       const client = open();
-      const created = await client.createMap(Buffer.from("v1"));
+      const created = await client.createMap(Buffer.from("v1"), HASH);
       await new Promise((r) => setTimeout(r, 5));
 
       const updated = await client.updateMap(created.id, Buffer.from("v-two"));
 
       expect(updated.created_at).toBe(created.created_at);
       expect(updated.updated_at).not.toBe(created.updated_at);
+      expect(updated.write_key_hash).toBe(HASH);
       expect(await client.getMap(created.id)).toEqual(updated);
       expect((await client.getBlob(created.id))?.toString()).toBe("v-two");
     });
@@ -119,33 +128,98 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       ).rejects.toThrow(/^not found:/);
     });
 
-    it("createShareToken stores a 7-day read token that resolveToken returns", async () => {
+    it("createShareToken stores a token with no expiry by default", async () => {
       const client = open();
-      const map = await client.createMap(Buffer.from("blob"));
+      const map = await client.createMap(Buffer.from("blob"), HASH);
 
-      const token = await client.createShareToken(map.id);
+      const token = await client.createShareToken(map.id, null);
 
       expect(token.map_id).toBe(map.id);
       expect(token.mode).toBe("read");
-      expect(
-        new Date(token.expires_at).getTime() -
-          new Date(token.created_at).getTime(),
-      ).toBe(SEVEN_DAYS_MS);
+      expect(token.expires_at).toBeNull();
+      expect(await client.resolveToken(token.token)).toEqual(token);
+    });
+
+    it("createShareToken stores the expiry it is given", async () => {
+      const client = open();
+      const map = await client.createMap(Buffer.from("blob"), HASH);
+      const expires = new Date(Date.now() + 7 * DAY_MS);
+
+      const token = await client.createShareToken(map.id, expires);
+
+      expect(token.expires_at).toBe(expires.toISOString());
       expect(await client.resolveToken(token.token)).toEqual(token);
     });
 
     it("createShareToken rejects an unknown map as not found", async () => {
       const client = open();
 
-      await expect(client.createShareToken(UNKNOWN_ID)).rejects.toThrow(
+      await expect(client.createShareToken(UNKNOWN_ID, null)).rejects.toThrow(
         /^not found:/,
       );
     });
 
+    it("deleteShareToken removes only a token of the named map", async () => {
+      const client = open();
+      const mine = await client.createMap(Buffer.from("a"), HASH);
+      const theirs = await client.createMap(Buffer.from("b"), HASH);
+      const token = await client.createShareToken(theirs.id, null);
+
+      expect(await client.deleteShareToken(mine.id, token.token)).toBe(false);
+      expect(await client.resolveToken(token.token)).not.toBeNull();
+      expect(await client.deleteShareToken(theirs.id, token.token)).toBe(true);
+      expect(await client.resolveToken(token.token)).toBeNull();
+    });
+
+    it("totalBytes sums the stored maps", async () => {
+      const client = open();
+      expect(await client.totalBytes()).toBe(0);
+      const map = await client.createMap(Buffer.from("12345"), HASH);
+      await client.createMap(Buffer.from("123"), null);
+      await client.updateMap(map.id, Buffer.from("1"));
+
+      expect(await client.totalBytes()).toBe(4);
+    });
+
+    it("sweep deletes expired tokens and the keyless maps no live token reads", async () => {
+      const client = open();
+      const now = new Date();
+      const past = new Date(now.getTime() - DAY_MS);
+      const future = new Date(now.getTime() + DAY_MS);
+      // Kept: the owner can come back with the key.
+      const owned = await client.createMap(Buffer.from("owned"), HASH);
+      const ownedExpired = await client.createShareToken(owned.id, past);
+      // Kept: a live link still reads it.
+      const linked = await client.createMap(Buffer.from("linked"), null);
+      const live = await client.createShareToken(linked.id, future);
+      const forever = await client.createMap(Buffer.from("forever"), null);
+      await client.createShareToken(forever.id, null);
+      // Gone: no key and every link has expired.
+      const orphan = await client.createMap(Buffer.from("orphan"), null);
+      const dead = await client.createShareToken(orphan.id, past);
+      // Gone: no key and no link at all.
+      const bare = await client.createMap(Buffer.from("bare"), null);
+
+      const swept = await client.sweep(now);
+
+      expect(swept).toEqual({ tokens: 2, maps: 2 });
+      expect(await client.resolveToken(ownedExpired.token)).toBeNull();
+      expect(await client.resolveToken(dead.token)).toBeNull();
+      expect(await client.resolveToken(live.token)).not.toBeNull();
+      for (const kept of [owned, linked, forever]) {
+        expect(await client.getMap(kept.id)).not.toBeNull();
+      }
+      for (const gone of [orphan, bare]) {
+        expect(await client.getMap(gone.id)).toBeNull();
+        expect(await client.getBlob(gone.id)).toBeNull();
+      }
+      expect(await client.sweep(now)).toEqual({ tokens: 0, maps: 0 });
+    });
+
     it("a restarted server reads what the first one wrote", async () => {
       const first = open();
-      const map = await first.createMap(Buffer.from("kept"));
-      const token = await first.createShareToken(map.id);
+      const map = await first.createMap(Buffer.from("kept"), HASH);
+      const token = await first.createShareToken(map.id, null);
 
       const second = open();
 

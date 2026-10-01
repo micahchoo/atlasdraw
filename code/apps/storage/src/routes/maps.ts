@@ -1,77 +1,84 @@
-// @atlasdraw/storage — Phase 4 T3: /maps routes.
+// /maps routes. Bodies are raw octet-stream (parsed at server init); the
+// 50 MiB bodyLimit answers 413 before a handler runs.
 //
-// Three endpoints — POST (create), GET (read), PUT (update). Body is raw
-// octet-stream (octets parsed at server init via addContentTypeParser). The
-// 50 MiB body limit is enforced by Fastify's bodyLimit option; oversize
-// uploads return 413 before the handler runs.
+//   POST /maps            create; answers the map and its write key, once
+//   PUT  /maps/:id        replace the bytes            (write key)
+//   GET  /maps/:id/blob   the owner's backup           (write key)
+//
+// There is no route that returns a map's record: nothing needs one.
 
 import { ID_RE } from "../constants";
-import { isNotFoundError } from "../lib/errors";
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { MapRecord, StorageClient } from "../types";
+import { REFUSAL, writeKeyOrRefuse } from "./write-key";
 
-/** A map record as clients see it: `blob_ref` is a server-side location. */
-function publicRecord({ blob_ref: _, ...rest }: MapRecord) {
-  return rest;
-}
+import type { FastifyInstance } from "fastify";
+import type { MapService } from "../service/maps";
 
 interface IdParams {
   id: string;
 }
 
+const NOT_OCTETS = { error: "Content-Type must be application/octet-stream" };
+
 export function registerMapRoutes(
   fastify: FastifyInstance,
-  client: StorageClient,
+  service: MapService,
 ): void {
   fastify.post("/maps", async (request, reply) => {
-    const body = request.body;
-    if (!Buffer.isBuffer(body)) {
-      return reply
-        .code(415)
-        .send({ error: "Content-Type must be application/octet-stream" });
+    if (!Buffer.isBuffer(request.body)) {
+      return reply.code(415).send(NOT_OCTETS);
     }
-    const record = await client.createMap(body);
-    return reply.code(201).send(publicRecord(record));
+    const result = await service.create(request.body);
+    if (result.kind === "full") {
+      return reply.code(REFUSAL.full.status).send(REFUSAL.full.body);
+    }
+    return reply
+      .code(201)
+      .header("Cache-Control", "no-store")
+      .send({ ...result.map, write_key: result.writeKey });
+  });
+
+  fastify.put<{ Params: IdParams }>("/maps/:id", async (request, reply) => {
+    const { id } = request.params;
+    if (!ID_RE.test(id)) {
+      return reply.code(400).send({ error: "invalid id" });
+    }
+    const writeKey = writeKeyOrRefuse(request, reply);
+    if (writeKey === null) {
+      return reply;
+    }
+    if (!Buffer.isBuffer(request.body)) {
+      return reply.code(415).send(NOT_OCTETS);
+    }
+    const result = await service.write(id, writeKey, request.body);
+    if (result.kind !== "saved") {
+      const refusal = REFUSAL[result.kind];
+      return reply.code(refusal.status).send(refusal.body);
+    }
+    return reply.code(200).send(result.map);
   });
 
   fastify.get<{ Params: IdParams }>(
-    "/maps/:id",
-    async (request: FastifyRequest<{ Params: IdParams }>, reply) => {
+    "/maps/:id/blob",
+    async (request, reply) => {
       const { id } = request.params;
       if (!ID_RE.test(id)) {
         return reply.code(400).send({ error: "invalid id" });
       }
-      const record = await client.getMap(id);
-      if (!record) {
-        return reply.code(404).send({ error: "not found" });
+      const writeKey = writeKeyOrRefuse(request, reply);
+      if (writeKey === null) {
+        return reply;
       }
-      return reply.code(200).send(publicRecord(record));
-    },
-  );
-
-  fastify.put<{ Params: IdParams }>(
-    "/maps/:id",
-    async (request: FastifyRequest<{ Params: IdParams }>, reply) => {
-      const { id } = request.params;
-      if (!ID_RE.test(id)) {
-        return reply.code(400).send({ error: "invalid id" });
+      const result = await service.read(id, writeKey);
+      if (result.kind !== "bytes") {
+        const refusal = REFUSAL[result.kind];
+        return reply.code(refusal.status).send(refusal.body);
       }
-      const body = request.body;
-      if (!Buffer.isBuffer(body)) {
-        return reply
-          .code(415)
-          .send({ error: "Content-Type must be application/octet-stream" });
-      }
-      try {
-        const record = await client.updateMap(id, body);
-        return reply.code(200).send(publicRecord(record));
-      } catch (err) {
-        if (isNotFoundError(err)) {
-          return reply.code(404).send({ error: "not found" });
-        }
-        throw err;
-      }
+      return reply
+        .code(200)
+        .header("Content-Type", "application/octet-stream")
+        .header("Cache-Control", "no-store")
+        .send(result.bytes);
     },
   );
 }

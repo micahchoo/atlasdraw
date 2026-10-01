@@ -8,6 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **`GET /maps/:id`.** Nothing used the map record. The owner reads the
+  bytes with `GET /maps/:id/blob`.
 - **Managed (hosted) mode.** Atlasdraw is self-host only, one trusted
   tenant per deployment (ADR-0013). The storage server loses the
   `/api/workspaces` and `/api/billing/*` routes, the `X-Workspace-ID`
@@ -20,8 +22,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`packages/sdk`.** It was a stub that nothing imported (ADR-0016). A
   read-only map embeds through the `/embed` route.
 
+### Added
+
+- **Maps carry a write key** (ADR-0017). `POST /maps` returns
+  `write_key` once. `PUT /maps/:id`, `POST /maps/:id/share` and the new
+  `DELETE /maps/:id/share/:token` and `GET /maps/:id/blob` need
+  `Authorization: Bearer <write_key>`: none is 401, a wrong one is 403.
+  A share token never opens a write.
+- **Restore from the server.** `GET /maps/:id/blob` returns a map's
+  latest bytes to its key holder. The client has
+  `restoreFromServer(client, documentId)`; no menu item calls it yet.
+- **Stop sharing.** The Share dialog has "Stop sharing this link", which
+  revokes the token.
+- **`MAX_TOTAL_BYTES`** caps the total stored size (507 past it), and
+  **`SWEEP_INTERVAL_MS`** sets how often expired links and unreachable
+  maps are deleted.
+
 ### Changed
 
+- **Share links last, and follow the map.** A link lives until its owner
+  stops it, unless the owner chose a 7- or 30-day expiry. It serves the
+  map's latest saved bytes, so a save updates every link and embed. The
+  Share dialog says so. The client shares the document's own server map
+  instead of making a new map for every share.
+- **Blob writes are atomic.** The SQLite/filesystem adapter writes to a
+  flushed temp file and renames it, with async I/O.
 - **One owner for the storage schema.** Both storage adapters apply the
   migrations in `apps/storage/src/db/migrations.ts` at startup, and record
   them in a `schema_migrations` table. The Postgres adapter now retries a
@@ -36,6 +61,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Remove `MANAGED_MODE`, `QUOTA_FREE_MAPS`, `QUOTA_PRO_MAPS`, `STRIPE_*`,
   `SITE_URL` and `VITE_MANAGED_MODE` from your environment. The server
   ignores them.
+- **Existing maps become read-only.** Migration
+  `003_write_keys_and_lasting_links` adds `maps.write_key_hash` and makes
+  `share_tokens.expires_at` nullable. A map stored before it has no write
+  key, so nobody can write it. Its share links work until their 7-day
+  expiry; then the sweep deletes the map and its blob. Each browser makes
+  a new map with a key at its next save, so you do nothing. The id that
+  old clients hold may have leaked through share links (SECURITY.md row
+  10), so the server does not let anyone claim a key with it.
+- A script that calls the storage API must keep the `write_key` from
+  `POST /maps` and send it as `Authorization: Bearer <key>`.
+  `infra/smoke-minimal.sh` shows the flow.
+- Set `MAX_TOTAL_BYTES` on a server that faces the internet.
 
 - **"Pro+" billing tier.** `pro_25` was a separate `WorkspacePlan` with its
   own Stripe price ID but an identical map quota to `pro` — no code ever

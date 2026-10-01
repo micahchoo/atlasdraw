@@ -1,29 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 4 T13 — HTTP client for the @atlasdraw/storage server.
 //
-// The atlas-app SPA talks to the storage HTTP API (Phase 4 T3+T4+T8) through
-// this thin client. Five methods, all routed to fetch():
-//   - createMap        POST /maps               body: octet-stream  → MapRecord
-//   - getMap           GET  /maps/:id                                → MapRecord | null
-//   - updateMap        PUT  /maps/:id           body: octet-stream  → MapRecord
-//   - createShareToken POST /maps/:id/share                          → ShareToken
-//   - getShareBlob     GET  /share/:token/blob                       → ArrayBuffer | null
+// HTTP client for the @atlasdraw/storage server. Every method is one fetch:
 //
-// `getShareBlob` is HTTP-only — not part of the shared `StorageClient`
-// contract. It hangs off the returned object so the ShareView consumer can
-// fetch raw map bytes without coupling the server-side adapter contract to
-// browser-only types like ArrayBuffer.
+//   createMap        POST   /maps                    → map + write key
+//   updateMap        PUT    /maps/:id                (write key)
+//   readMap          GET    /maps/:id/blob           (write key) → bytes
+//   createShareToken POST   /maps/:id/share          (write key) → token
+//   revokeShareToken DELETE /maps/:id/share/:token   (write key)
+//   getShareBlob     GET    /share/:token/blob       → bytes | null
 //
-// Why mirror types here instead of importing `@atlasdraw/storage`: the storage
-// workspace publishes types via `dist/types.d.ts` but has no `main`/`types`
-// field, so module resolution from atlas-app would fail. Mirroring is cheap —
-// types are 5 fields total — and avoids a cross-workspace runtime dep on a
-// Node-only package (better-sqlite3, pg).
+// The write key goes in `Authorization: Bearer <key>`. Only the server map's
+// owner holds it (state/remoteMapIdCache.ts keeps it per document); a share
+// token never opens a write. See ADR-0017.
+//
+// Types mirror `code/apps/storage/src/service/maps.ts#PublicMap` by hand: the
+// storage workspace is Node-only (better-sqlite3, pg) and has no `types`
+// entry to import from.
 
-/**
- * Mirror of `@atlasdraw/storage`'s MapRecord. Keep in lock-step with
- * `code/apps/storage/src/types.ts:19`.
- */
+/** A server map as the server shows it. */
 export interface MapRecord {
   id: string;
   created_at: string;
@@ -31,35 +25,49 @@ export interface MapRecord {
   byte_size: number;
 }
 
-/**
- * Mirror of `@atlasdraw/storage`'s ShareToken. Keep in lock-step with
- * `code/apps/storage/src/types.ts:31`.
- */
-export interface ShareToken {
+/** A map just created, with the write key the server shows only once. */
+export interface CreatedMap {
+  map: MapRecord;
+  writeKey: string;
+}
+
+/** A read link. `expiresAt` null: it lives until it is revoked. */
+export interface ShareLinkToken {
   token: string;
-  map_id: string;
-  mode: "read";
-  expires_at: string;
-  created_at: string;
+  expiresAt: string | null;
 }
 
-/**
- * Atlas-app-facing storage contract. Identical shape to
- * `@atlasdraw/storage`'s `StorageClient`. The `Blob | Uint8Array` parameter
- * on write methods reflects the browser-native types — Node's `Buffer` is
- * not available in the SPA.
- */
+/** The owner's side of the storage API. */
 export interface StorageClient {
-  createMap(blob: Blob | Uint8Array): Promise<MapRecord>;
-  getMap(id: string): Promise<MapRecord | null>;
-  updateMap(id: string, blob: Blob | Uint8Array): Promise<MapRecord>;
-  createShareToken(mapId: string): Promise<ShareToken>;
+  createMap(blob: Blob | Uint8Array): Promise<CreatedMap>;
+  updateMap(
+    id: string,
+    writeKey: string,
+    blob: Blob | Uint8Array,
+  ): Promise<MapRecord>;
+  readMap(id: string, writeKey: string): Promise<ArrayBuffer>;
+  createShareToken(
+    id: string,
+    writeKey: string,
+    expiresInDays: number | null,
+  ): Promise<ShareLinkToken>;
+  revokeShareToken(id: string, writeKey: string, token: string): Promise<void>;
+}
+
+/** A non-2xx answer. `status` tells a refusal (401, 403, 404) from a fault. */
+export class StorageHttpError extends Error {
+  constructor(op: string, readonly status: number, detail = "") {
+    super(
+      `[storage-http] ${op} failed: ${status}${detail ? ` — ${detail}` : ""}`,
+    );
+    this.name = "StorageHttpError";
+  }
 }
 
 /**
- * Thrown by `getShareBlob` when the server returns 410 Gone (token expired
- * or orphaned). Distinguishes "missing" (404 → null) from "was-here-now-gone"
- * (410 → error) so the ShareView UI can render distinct messages.
+ * Thrown by `getShareBlob` on 410 Gone (the token expired, or its map is
+ * gone). 404 (never existed, or revoked) is null instead, so ShareView can
+ * show two messages.
  */
 export class ShareExpiredError extends Error {
   constructor() {
@@ -68,17 +76,8 @@ export class ShareExpiredError extends Error {
   }
 }
 
-/**
- * Extended HTTP client — `StorageClient` plus the share-blob retrieval
- * helper that's HTTP-only (no server-side adapter equivalent surfaced to
- * the SPA). Returned by `createHttpStorageClient`.
- */
+/** `StorageClient` plus the reader's side: a share link's bytes. */
 export interface HttpStorageClient extends StorageClient {
-  /**
-   * Fetch raw map bytes for a share token. Returns `null` on 404 (token
-   * never existed or already-cleaned-up); throws `ShareExpiredError` on
-   * 410 (was-here-now-gone). Throws on any other non-2xx.
-   */
   getShareBlob(token: string): Promise<ArrayBuffer | null>;
 }
 
@@ -88,16 +87,11 @@ export interface HttpStorageClientOptions {
    * string means same-origin (production deploy behind a reverse proxy).
    */
   baseUrl: string;
-  /**
-   * Override the global `fetch` (tests inject a spy). Defaults to the
-   * runtime `fetch` at call time.
-   */
+  /** Override the global `fetch` (tests inject a spy). */
   fetch?: typeof fetch;
 }
 
-const OCTET_STREAM_HEADERS = {
-  "Content-Type": "application/octet-stream",
-};
+const OCTET_STREAM = "application/octet-stream";
 
 function joinUrl(base: string, path: string): string {
   if (!base) {
@@ -106,90 +100,108 @@ function joinUrl(base: string, path: string): string {
   return `${base.replace(/\/+$/, "")}${path}`;
 }
 
-async function expectJsonOrThrow<T>(res: Response, op: string): Promise<T> {
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = await res.text();
-    } catch {
-      /* response body unreadable — surface status only */
-    }
-    throw new Error(
-      `[storage-http] ${op} failed: ${res.status} ${res.statusText}${
-        detail ? ` — ${detail}` : ""
-      }`,
-    );
-  }
-  return (await res.json()) as T;
+function bearer(writeKey: string): Record<string, string> {
+  return { Authorization: `Bearer ${writeKey}` };
 }
 
-/**
- * Build an HTTP-backed `StorageClient`. All methods throw on non-2xx (the
- * caller surfaces toasts); `getMap` translates 404 → null
- * because "missing" is a normal, expected outcome.
- */
+async function failure(res: Response, op: string): Promise<StorageHttpError> {
+  let detail = "";
+  try {
+    detail = await res.text();
+  } catch {
+    /* body unreadable — the status is enough */
+  }
+  return new StorageHttpError(op, res.status, detail);
+}
+
+async function okOrThrow(res: Response, op: string): Promise<Response> {
+  if (!res.ok) {
+    throw await failure(res, op);
+  }
+  return res;
+}
+
 export function createHttpStorageClient(
   opts: HttpStorageClientOptions,
 ): HttpStorageClient {
   const baseUrl = opts.baseUrl;
-  // Capture once at construction so test injections are stable even if the
-  // global `fetch` is later patched.
+  // Captured once so a test's injected fetch stays stable.
   const fetchImpl = opts.fetch ?? ((...args) => fetch(...args));
+  const mapUrl = (id: string, rest = "") =>
+    joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}${rest}`);
 
   return {
     async createMap(blob) {
-      const res = await fetchImpl(joinUrl(baseUrl, "/maps"), {
-        method: "POST",
-        headers: OCTET_STREAM_HEADERS,
-        body: blob as BodyInit,
-      });
-      return expectJsonOrThrow<MapRecord>(res, "createMap");
-    },
-
-    async getMap(id) {
-      const res = await fetchImpl(
-        joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`),
-        { method: "GET" },
-      );
-      if (res.status === 404) {
-        return null;
-      }
-      return expectJsonOrThrow<MapRecord>(res, "getMap");
-    },
-
-    async updateMap(id, blob) {
-      const res = await fetchImpl(
-        joinUrl(baseUrl, `/maps/${encodeURIComponent(id)}`),
-        {
-          method: "PUT",
-          headers: OCTET_STREAM_HEADERS,
+      const res = await okOrThrow(
+        await fetchImpl(joinUrl(baseUrl, "/maps"), {
+          method: "POST",
+          headers: { "Content-Type": OCTET_STREAM },
           body: blob as BodyInit,
-        },
+        }),
+        "createMap",
       );
-      return expectJsonOrThrow<MapRecord>(res, "updateMap");
+      const { write_key: writeKey, ...map } =
+        (await res.json()) as MapRecord & {
+          write_key: string;
+        };
+      return { map, writeKey };
     },
 
-    async createShareToken(mapId) {
-      const res = await fetchImpl(
-        joinUrl(baseUrl, `/maps/${encodeURIComponent(mapId)}/share`),
-        { method: "POST" },
+    async updateMap(id, writeKey, blob) {
+      const res = await okOrThrow(
+        await fetchImpl(mapUrl(id), {
+          method: "PUT",
+          headers: { "Content-Type": OCTET_STREAM, ...bearer(writeKey) },
+          body: blob as BodyInit,
+        }),
+        "updateMap",
       );
-      // The server returns { token, url, expires_at } — only `token` and
-      // `expires_at` map onto the ShareToken interface; the others are
-      // synthesized so consumers get the full shape. `map_id` is mapId
-      // (we already know it); `created_at` is now (server doesn't echo).
-      const body = await expectJsonOrThrow<{
+      return (await res.json()) as MapRecord;
+    },
+
+    async readMap(id, writeKey) {
+      const res = await okOrThrow(
+        await fetchImpl(mapUrl(id, "/blob"), {
+          method: "GET",
+          headers: bearer(writeKey),
+        }),
+        "readMap",
+      );
+      return res.arrayBuffer();
+    },
+
+    async createShareToken(id, writeKey, expiresInDays) {
+      const res = await okOrThrow(
+        await fetchImpl(
+          mapUrl(id, "/share"),
+          expiresInDays === null
+            ? { method: "POST", headers: bearer(writeKey) }
+            : {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...bearer(writeKey),
+                },
+                body: JSON.stringify({ expires_in_days: expiresInDays }),
+              },
+        ),
+        "createShareToken",
+      );
+      const body = (await res.json()) as {
         token: string;
-        url: string;
-        expires_at: string;
-      }>(res, "createShareToken");
-      return {
-        token: body.token,
-        map_id: mapId,
-        mode: "read",
-        expires_at: body.expires_at,
-        created_at: new Date().toISOString(),
+        expires_at: string | null;
       };
+      return { token: body.token, expiresAt: body.expires_at };
+    },
+
+    async revokeShareToken(id, writeKey, token) {
+      await okOrThrow(
+        await fetchImpl(mapUrl(id, `/share/${encodeURIComponent(token)}`), {
+          method: "DELETE",
+          headers: bearer(writeKey),
+        }),
+        "revokeShareToken",
+      );
     },
 
     async getShareBlob(token) {
@@ -203,12 +215,8 @@ export function createHttpStorageClient(
       if (res.status === 410) {
         throw new ShareExpiredError();
       }
-      if (!res.ok) {
-        throw new Error(
-          `[storage-http] getShareBlob failed: ${res.status} ${res.statusText}`,
-        );
-      }
-      return await res.arrayBuffer();
+      await okOrThrow(res, "getShareBlob");
+      return res.arrayBuffer();
     },
   };
 }

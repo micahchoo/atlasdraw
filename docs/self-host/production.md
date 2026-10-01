@@ -82,6 +82,13 @@ Optional:
   their privacy notice — see ADR-0009.
 - `POSTGRES_USER`, `POSTGRES_DB`, `MINIO_ROOT_USER` — defaults are
   `atlasdraw`. Override if you need to match existing infra.
+- `MAX_TOTAL_BYTES` — the cap on the sum of all stored map sizes, in
+  bytes. A save or a new map that would pass it gets `507`. `0` (the
+  default) is no cap. Set it on a server that faces the internet; see
+  "Storage capacity" below.
+- `SWEEP_INTERVAL_MS` — how often the storage server deletes expired
+  share links and the maps nobody can reach any more (default `3600000`,
+  one hour; `0` turns it off). It also sweeps once at start.
 
 ## Bring it up
 
@@ -191,6 +198,12 @@ Volumes survive. The storage server applies schema migrations when it
 starts. Some migrations remove columns (for example, the managed-mode
 workspace columns), so back up the volumes before you upgrade.
 
+Maps stored before write keys (migration `003_write_keys_and_lasting_links`)
+get no key. Nobody can write them. Their existing share links work until
+they expire, then the sweep deletes them. Each owner's browser makes a new
+map with a key at its next save, so no owner action is necessary. See
+ADR-0017.
+
 For major version bumps (`v0.x → v1.x`), check the release notes for
 explicit migration steps.
 
@@ -202,17 +215,36 @@ explicit migration steps.
 - **Caddy access logs**: emitted as structured JSON on stdout. Pipe to
   your log aggregator via the standard Docker logging drivers
   (`gelf`, `journald`, `awslogs`, etc.).
-- **Share-link TTL**: 7 days, hardcoded in this release. ADR-0008
-  documents the future `SHARE_TOKEN_TTL_DAYS` env knob.
-- **Storage capacity planning**: average atlasdraw document is 30–500 KB
+- **Share links last until the owner stops them.** The Share dialog can
+  give a link a 7- or 30-day expiry instead. A link always shows the
+  map's latest saved version, so a save updates every link and every
+  embed made from it. Links made before this release keep their 7-day
+  expiry.
+- **Write keys.** Each map has a write key that only the owner's browser
+  holds (ADR-0017). Without it, nobody can change the map, and a share
+  link never gives it. There is no key recovery: if a browser loses its
+  storage, its next save makes a new map.
+- **Storage capacity.** An average atlasdraw document is 30–500 KB
   compressed; basemap pmtiles (43 MB) is baked into the web image, not
-  the volume. A 10 GB MinIO volume holds ~30–100k maps.
+  the volume. A 10 GB MinIO volume holds ~30–100k maps. The policy:
+  - Each upload is at most 50 MiB.
+  - `MAX_TOTAL_BYTES` caps the total. The check is a sum before the
+    write, so concurrent uploads can pass it by up to one upload each.
+  - A map with a write key is never deleted by the server, because its
+    owner may come back. A map without a key (stored before write keys)
+    is deleted when no live share link reads it.
+  - Each document has one server map. Sharing again updates it; it does
+    not make a new one.
 
 ## Security hardening (recommended)
 
 The default compose ships with passwords from `.env` and Caddy-managed
 TLS. For production exposure, also consider:
 
+- **Cap the storage.** `POST /api/maps` is open to anyone who can reach
+  the server; the write key protects existing maps, not your disk. Set
+  `MAX_TOTAL_BYTES`, and put the site behind your own auth (VPN, SSO
+  proxy, basic auth) if only your team should create maps.
 - **Restrict MinIO console access.** The default compose doesn't expose
   port 9001 externally; keep it that way. Use `docker compose exec` for
   admin tasks.

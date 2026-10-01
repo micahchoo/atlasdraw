@@ -45,6 +45,14 @@ const BaseSchema = z.object({
   // Defaults are generous — they exist to blunt abuse, not to shape normal use.
   RATE_LIMIT_MAX: z.coerce.number().int().nonnegative().default(120),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  // The cap on the sum of all stored map sizes, in bytes. A create or a
+  // write that would pass it gets 507. 0: no cap. POST /maps is open to
+  // anyone who reaches the API, so an internet-facing server should set one.
+  MAX_TOTAL_BYTES: z.coerce.number().int().nonnegative().default(0),
+  // How often the server deletes expired share tokens and the keyless maps
+  // that no live token reads (see StorageClient.sweep). It also sweeps once at
+  // start. 0: never.
+  SWEEP_INTERVAL_MS: z.coerce.number().int().nonnegative().default(3_600_000),
 });
 
 const PostgresMinioSchema = BaseSchema.extend({
