@@ -184,7 +184,6 @@ describe("loadAppConfig", () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       "false",
     );
     expect(cfg.allowRemoteBasemaps).toBe(false);
