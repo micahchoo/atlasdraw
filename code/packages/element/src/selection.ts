@@ -39,6 +39,7 @@ import {
 import { LinearElementEditor } from "./linearElementEditor";
 import { selectGroupsForSelectedElements } from "./groups";
 import { getBoundTextElement } from "./textElement";
+import { isAtlasHidden } from "./atlasHidden";
 
 import type {
   ElementsMap,
@@ -51,7 +52,7 @@ import type {
 
 const shouldIgnoreElementFromSelection = (
   element: NonDeletedExcalidrawElement,
-) => element.locked || isBoundToContainer(element);
+) => element.locked || isBoundToContainer(element) || isAtlasHidden(element);
 
 const excludeElementsFromFrames = <T extends ExcalidrawElement>(
   selectedElements: readonly T[],
