@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// ExportDialog tests — ported from PrintDialog.test.tsx when the PDF pane
-// was absorbed into the unified export surface (IA restructure).
-//
-// Don't exercise real pdf-lib here — print-pdf.test.ts already covers the
-// generator. The PDF pane is tested with an injected `exportPDFImpl` mock so
-// we can assert which PrintOptions the dialog forwards.
+// ExportDialog tests. The PDF cases run the real pdf-lib generator and read
+// the file the dialog hands to the download back out (page size, text,
+// embedded image size), so they test what a user gets. The map image comes
+// from a stand-in for the compositor that returns a JPEG of exactly the size
+// the real one would draw at the requested pixel ratio.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -20,8 +19,10 @@ import {
   DEFAULT_DOCUMENT_TITLE,
   useDocumentTitleStore,
 } from "../../state/documentTitle";
+import { exportSize } from "../../lib/export";
+import { jpegOfSize, readPdf } from "../../lib/__tests__/fixtures/print";
 
-import type { LayerLegendEntry, PrintOptions } from "../../lib/print-pdf";
+import type { LayerLegendEntry, PrintView } from "../../lib/print-pdf";
 
 // The PDF title seeds from the document-name store, which is a module
 // singleton — reset it so a rename in one test can't leak into the next.
@@ -31,43 +32,47 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
-// jsdom doesn't implement URL.createObjectURL / anchor.click side-effects;
-// stub the two so submit can complete without runtime errors. We assign
-// before spying because vi.spyOn requires the property to exist.
-function stubUrlAndAnchorClick() {
-  if (
-    typeof (URL as unknown as { createObjectURL?: unknown }).createObjectURL !==
-    "function"
+/**
+ * jsdom has no object URLs and no download. Capture the blob the dialog
+ * offers for download instead; that blob is the export.
+ */
+function captureDownloads(): { blobs: Blob[]; names: string[] } {
+  const blobs: Blob[] = [];
+  const names: string[] = [];
+  const url = URL as unknown as {
+    createObjectURL?: (b: Blob) => string;
+    revokeObjectURL?: (u: string) => void;
+  };
+  url.createObjectURL ??= () => "";
+  url.revokeObjectURL ??= () => {};
+  vi.spyOn(URL, "createObjectURL").mockImplementation((b) => {
+    blobs.push(b as Blob);
+    return "blob:export";
+  });
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement,
   ) {
-    (URL as unknown as { createObjectURL: () => string }).createObjectURL =
-      () => "blob:mock";
-  }
-  if (
-    typeof (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL !==
-    "function"
-  ) {
-    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL =
-      () => {};
-  }
-  const createUrl = vi
-    .spyOn(URL, "createObjectURL")
-    .mockReturnValue("blob:mock");
-  const revokeUrl = vi
-    .spyOn(URL, "revokeObjectURL")
-    .mockImplementation(() => {});
-  const click = vi
-    .spyOn(HTMLAnchorElement.prototype, "click")
-    .mockImplementation(() => {});
-  return { createUrl, revokeUrl, click };
+    names.push(this.download);
+  });
+  return { blobs, names };
 }
+
+const VIEW: PrintView = { width: 1440, height: 900, metersPerPixel: 4 };
 
 const LAYERS: LayerLegendEntry[] = [
   { id: "dl:a", name: "Trails", color: "#0aa" },
+  { id: "rl:b", name: "1910 survey sheet", color: "#868e96" },
 ];
 
-const COMPOSITE_DATA_URL = "data:image/jpeg;base64,/9j/4AAQ";
+/** What the compositor returns: a JPEG of the view at `pixelRatio`. */
+async function compositeAt(pixelRatio: number): Promise<string> {
+  const { width, height } = exportSize(VIEW, pixelRatio);
+  return jpegOfSize(width, height);
+}
 
 type Overrides = Partial<React.ComponentProps<typeof ExportDialog>>;
 
@@ -77,43 +82,150 @@ function renderDialog(overrides: Overrides = {}) {
     onExportPNG: vi.fn(),
     onExportGeoJSON: vi.fn(),
     onExportAtlasdraw: vi.fn(),
-    getMapImageDataUrl: async () => COMPOSITE_DATA_URL,
+    getView: () => VIEW,
+    getMapImageDataUrl: compositeAt,
     getLegendEntries: () => LAYERS,
+    attribution: "© Protomaps © OpenStreetMap",
+    locale: "en-GB",
     ...overrides,
   };
   render(<ExportDialog {...props} />);
   return props;
 }
 
-describe("ExportDialog", () => {
-  it("defaults to the PNG card; export runs the PNG handler and closes", () => {
+describe("ExportDialog — PNG", () => {
+  it("offers 1x, 2x and 3x with the pixel size of each", () => {
+    renderDialog();
+    const select = screen.getByTestId(
+      "export-png-pixel-ratio",
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("2");
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "1× — 1440 × 900 px",
+      "2× — 2880 × 1800 px",
+      "3× — 4320 × 2700 px",
+    ]);
+  });
+
+  it("exports at the chosen size and closes", () => {
     const props = renderDialog();
-    expect(screen.getByRole("dialog")).toBeTruthy();
+    fireEvent.change(screen.getByTestId("export-png-pixel-ratio"), {
+      target: { value: "3" },
+    });
     fireEvent.click(screen.getByTestId("export-dialog-export"));
-    expect(props.onExportPNG).toHaveBeenCalledTimes(1);
+    expect(props.onExportPNG).toHaveBeenCalledWith(3);
     expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
   });
 
-  it("initialFormat preselects the format card", () => {
-    renderDialog({ initialFormat: "pdf" });
-    // The PDF pane's settings are visible without clicking the card.
-    expect(screen.getByTestId("export-pdf-page-size")).toBeTruthy();
+  it("has no setting that does nothing", () => {
+    renderDialog();
+    expect(screen.queryByText(/include basemap/i)).toBeNull();
+  });
+});
+
+describe("ExportDialog — PDF", () => {
+  it("says the map on the page is an image, not vector", () => {
+    renderDialog();
+    expect(screen.getByTestId("export-format-pdf").textContent).not.toMatch(
+      /vector document/i,
+    );
+    fireEvent.click(screen.getByTestId("export-format-pdf"));
+    expect(screen.getByTestId("export-pdf-note").textContent).toMatch(
+      /image at 300 dpi.*not vector/i,
+    );
   });
 
-  it("PDF pane renders form fields with correct defaults", () => {
+  it("pane renders form fields with correct defaults", () => {
     renderDialog({ initialFormat: "pdf" });
     expect(
       (screen.getByTestId("export-pdf-page-size") as HTMLSelectElement).value,
     ).toBe("letter");
-    // Orientation defaults to landscape (more common for maps).
     expect(
       (screen.getByTestId("export-pdf-orientation") as HTMLSelectElement).value,
     ).toBe("landscape");
-    // Seeded from the document name, not a standalone "Untitled map".
     expect(
       (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,
     ).toBe(DEFAULT_DOCUMENT_TITLE);
-    expect(screen.getByTestId("export-dialog-export")).toBeTruthy();
+  });
+
+  it("downloads a PDF with the chosen page, title, legend, credit and a 300 dpi map", async () => {
+    const downloads = captureDownloads();
+    const props = renderDialog({ initialFormat: "pdf" });
+    fireEvent.change(screen.getByTestId("export-pdf-page-size"), {
+      target: { value: "a4" },
+    });
+    fireEvent.change(screen.getByTestId("export-pdf-orientation"), {
+      target: { value: "portrait" },
+    });
+    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
+      target: { value: "Trail map" },
+    });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() => expect(props.onCloseRequest).toHaveBeenCalled());
+
+    expect(downloads.names).toEqual(["Trail map.pdf"]);
+    const pdf = await readPdf(downloads.blobs[0]);
+    expect(pdf.pages).toHaveLength(1);
+    const [page] = pdf.pages;
+    expect(page.width).toBeCloseTo(595.28, 1);
+    expect(page.height).toBeCloseTo(841.89, 1);
+    expect(page.texts).toContain("Trail map");
+    expect(page.texts).toContain("Trails");
+    expect(page.texts).toContain("1910 survey sheet");
+    expect(page.texts).toContain("© Protomaps © OpenStreetMap");
+    const [image] = page.images;
+    expect(image.pixelWidth / (image.width / 72)).toBeGreaterThan(299);
+    // en-GB: metric only.
+    expect(page.texts.join(" ")).not.toMatch(/ mi\b| ft\b/);
+  });
+
+  it("adds feet and miles to the scale for a US locale", async () => {
+    const downloads = captureDownloads();
+    const props = renderDialog({ initialFormat: "pdf", locale: "en-US" });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() => expect(props.onCloseRequest).toHaveBeenCalled());
+    const pdf = await readPdf(downloads.blobs[0]);
+    expect(pdf.pages[0].texts.join(" ")).toMatch(/ (mi|ft)\b/);
+  });
+
+  it("surfaces an error and stays open when the map is not ready", async () => {
+    const props = renderDialog({ initialFormat: "pdf", getView: () => null });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() =>
+      expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
+        /not ready/i,
+      ),
+    );
+    expect(props.onCloseRequest).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the compositor's error and stays open", async () => {
+    const props = renderDialog({
+      initialFormat: "pdf",
+      getMapImageDataUrl: async () => {
+        throw new Error("The map was drawn at 4096 × 2304 px");
+      },
+    });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() =>
+      expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
+        /4096 × 2304 px/,
+      ),
+    );
+    expect(props.onCloseRequest).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the document name when the title is whitespace", async () => {
+    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
+    const downloads = captureDownloads();
+    const props = renderDialog({ initialFormat: "pdf" });
+    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("export-dialog-export"));
+    await waitFor(() => expect(props.onCloseRequest).toHaveBeenCalled());
+    const pdf = await readPdf(downloads.blobs[0]);
+    expect(pdf.pages[0].texts).toContain("Bidar ward survey");
   });
 
   it("PDF title seeds from the current document name", () => {
@@ -123,7 +235,9 @@ describe("ExportDialog", () => {
       (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,
     ).toBe("Bidar ward survey");
   });
+});
 
+describe("ExportDialog — closing", () => {
   it("Escape closes the dialog", () => {
     const props = renderDialog();
     fireEvent.keyDown(document, { key: "Escape" });
@@ -134,97 +248,5 @@ describe("ExportDialog", () => {
     const props = renderDialog();
     fireEvent.click(screen.getByTestId("export-dialog-cancel"));
     expect(props.onCloseRequest).toHaveBeenCalledTimes(1);
-  });
-
-  it("PDF export calls exportPDFImpl with the chosen options and closes", async () => {
-    const handles = stubUrlAndAnchorClick();
-    const exportMock = vi
-      .fn<(opts: PrintOptions) => Promise<Blob>>()
-      .mockResolvedValue(
-        new Blob([new Uint8Array([1, 2, 3])], { type: "application/pdf" }),
-      );
-    const props = renderDialog({
-      initialFormat: "pdf",
-      getMapImageDataUrl: async () => COMPOSITE_DATA_URL,
-      exportPDFImpl: exportMock,
-    });
-
-    // Change a few fields.
-    fireEvent.change(screen.getByTestId("export-pdf-page-size"), {
-      target: { value: "a4" },
-    });
-    fireEvent.change(screen.getByTestId("export-pdf-orientation"), {
-      target: { value: "portrait" },
-    });
-    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
-      target: { value: "Trail map" },
-    });
-
-    // Submit.
-    fireEvent.click(screen.getByTestId("export-dialog-export"));
-    // waitFor, not a fixed number of microtask flushes: the export awaits the
-    // composite AND the PDF, so a flush count is a guess that happens to hold
-    // in isolation and fails under a full suite run.
-    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
-    const opts = exportMock.mock.calls[0][0];
-    expect(opts.pageSize).toBe("a4");
-    expect(opts.orientation).toBe("portrait");
-    expect(opts.title).toBe("Trail map");
-    expect(opts.mapImageDataUrl).toBe(COMPOSITE_DATA_URL);
-    expect(opts.layers).toEqual(LAYERS);
-
-    // Download path side-effects ran.
-    expect(handles.createUrl).toHaveBeenCalled();
-    expect(handles.click).toHaveBeenCalled();
-    expect(handles.revokeUrl).toHaveBeenCalled();
-    expect(props.onCloseRequest).toHaveBeenCalled();
-
-    handles.createUrl.mockRestore();
-    handles.revokeUrl.mockRestore();
-    handles.click.mockRestore();
-  });
-
-  it("surfaces an error when the composited image isn't ready", async () => {
-    const exportMock = vi.fn<(opts: PrintOptions) => Promise<Blob>>();
-    const props = renderDialog({
-      initialFormat: "pdf",
-      getMapImageDataUrl: async () => null,
-      exportPDFImpl: exportMock,
-    });
-    fireEvent.click(screen.getByTestId("export-dialog-export"));
-    // The composite is awaited before exportPDF is called, so the error
-    // lands a tick later than it did when the canvas was read synchronously.
-    await waitFor(() =>
-      expect(screen.getByTestId("export-pdf-error").textContent).toMatch(
-        /not ready/i,
-      ),
-    );
-    expect(exportMock).not.toHaveBeenCalled();
-    // Errors keep the dialog open so the user can retry.
-    expect(props.onCloseRequest).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the document name when the title is whitespace", async () => {
-    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
-    const handles = stubUrlAndAnchorClick();
-    const exportMock = vi
-      .fn<(opts: PrintOptions) => Promise<Blob>>()
-      .mockResolvedValue(new Blob([], { type: "application/pdf" }));
-    renderDialog({
-      initialFormat: "pdf",
-      getLegendEntries: () => [],
-      exportPDFImpl: exportMock,
-    });
-    fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
-      target: { value: "   " },
-    });
-    fireEvent.click(screen.getByTestId("export-dialog-export"));
-    await waitFor(() => expect(exportMock).toHaveBeenCalledTimes(1));
-
-    expect(exportMock.mock.calls[0][0].title).toBe("Bidar ward survey");
-
-    handles.createUrl.mockRestore();
-    handles.revokeUrl.mockRestore();
-    handles.click.mockRestore();
   });
 });

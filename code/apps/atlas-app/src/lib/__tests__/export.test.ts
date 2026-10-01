@@ -1,368 +1,250 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Composite export tests. jsdom has no canvas, so the fakes below are small
+// models of the real contracts, not call recorders:
+//
+// - FakeOffscreenCanvas keeps the list of layers drawn into it, with each
+//   layer's source size and the size it covers. That list IS the output
+//   image's make-up: a layer whose source is smaller than what it covers was
+//   upscaled.
+// - The fake map renderer returns a canvas of the size a real MapLibre map
+//   would give at that pixel ratio (or a smaller one, to model the GPU limit).
+// - The fake `exportToCanvas` sizes its canvas through `getDimensions`, as
+//   the vendored implementation does, and falls back to 1 px per CSS px.
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-// jsdom 22 has no OffscreenCanvas / convertToBlob; stub them.
-// Also stub the package-level `exportToCanvas` from @atlasdraw/excalidraw
-// so we don't pull in the entire renderer.
+import type { MapRenderer } from "../export";
 
-const exportToCanvasMock = vi.fn();
+type Sized = { width: number; height: number; label: string };
+
 vi.mock("@atlasdraw/excalidraw", () => ({
-  exportToCanvas: (opts: unknown) => exportToCanvasMock(opts),
+  exportToCanvas: async (opts: {
+    viewport: { width: number; height: number };
+    getDimensions?: (
+      w: number,
+      h: number,
+    ) => { width: number; height: number; scale?: number };
+  }): Promise<Sized> => {
+    const { width, height } = opts.viewport;
+    const dims = opts.getDimensions?.(width, height) ?? { width, height };
+    return { width: dims.width, height: dims.height, label: "drawings" };
+  },
 }));
 
-// Capture the most recently-constructed OffscreenCanvas so tests can assert
-// on its width/height and the captured 2D context.
-type FakeCtx = {
-  scale: ReturnType<typeof vi.fn>;
-  drawImage: ReturnType<typeof vi.fn>;
-  fillRect: ReturnType<typeof vi.fn>;
-  fillStyle?: string;
-};
-type FakeOffscreen = {
+interface Layer {
+  label: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  /** Size the layer covers in the output. */
   width: number;
   height: number;
-  ctx: FakeCtx | null;
-  getContext: ReturnType<typeof vi.fn>;
-  convertToBlob: ReturnType<typeof vi.fn>;
-};
+}
 
-let lastOffscreen: FakeOffscreen | null = null;
-let nextContextOverride: FakeCtx | null | undefined;
-/** Bytes the next `convertToBlob` resolves with. Empty when undefined. */
-let nextBlobPayload: Uint8Array<ArrayBuffer> | undefined;
-
-class StubOffscreenCanvas {
-  width: number;
-  height: number;
-  ctx: FakeCtx | null;
-  getContext: ReturnType<typeof vi.fn>;
-  convertToBlob: ReturnType<typeof vi.fn>;
-  constructor(width: number, height: number) {
-    this.width = width;
-    this.height = height;
-    const ctx: FakeCtx = {
-      scale: vi.fn(),
-      drawImage: vi.fn(),
-      fillRect: vi.fn(),
+class FakeOffscreenCanvas {
+  static last: FakeOffscreenCanvas | null = null;
+  static contextAvailable = true;
+  layers: Layer[] = [];
+  fills: { width: number; height: number; color: string }[] = [];
+  encoded: { type: string; quality?: number } | null = null;
+  constructor(public width: number, public height: number) {
+    FakeOffscreenCanvas.last = this;
+  }
+  getContext() {
+    if (!FakeOffscreenCanvas.contextAvailable) {
+      return null;
+    }
+    // Only an untransformed context is modelled: the export draws in output
+    // pixels, so a scale() call would be a defect and throws here.
+    const ctx = {
+      fillStyle: "",
+      fillRect: (_x: number, _y: number, width: number, height: number) => {
+        this.fills.push({ width, height, color: ctx.fillStyle });
+      },
+      drawImage: (src: Sized, _x: number, _y: number, w?: number, h?: number) =>
+        this.layers.push({
+          label: src.label,
+          sourceWidth: src.width,
+          sourceHeight: src.height,
+          width: w ?? src.width,
+          height: h ?? src.height,
+        }),
     };
-    this.ctx = nextContextOverride === undefined ? ctx : nextContextOverride;
-    this.getContext = vi.fn(() => this.ctx);
-    this.convertToBlob = vi.fn(async ({ type }: { type: string }) =>
-      nextBlobPayload === undefined
-        ? new Blob([], { type })
-        : new Blob([nextBlobPayload], { type }),
-    );
-    lastOffscreen = this as unknown as FakeOffscreen;
+    return ctx;
+  }
+  async convertToBlob(opts: { type: string; quality?: number }) {
+    this.encoded = opts;
+    return new Blob([new Uint8Array(30)], { type: opts.type });
   }
 }
 
-// Build a mock MapLibre Map exposing only what exportPNG touches.
-function makeMap(opts: {
-  width: number;
-  height: number;
-  clientWidth: number;
-  clientHeight: number;
-}) {
-  const canvas = {
-    width: opts.width,
-    height: opts.height,
-    clientWidth: opts.clientWidth,
-    clientHeight: opts.clientHeight,
-    // Marker so we can identify this object came from the map layer.
-    __isMapCanvas: true,
-  };
+/** The live map: only its CSS size is read; the renderer does the drawing. */
+function liveMap(width: number, height: number) {
   return {
-    getCanvas: () => canvas,
-    canvas,
-    // unused by exportPNG but typed by maplibregl.Map
-  } as unknown as import("maplibre-gl").Map & {
-    canvas: typeof canvas;
+    getCanvas: () => ({ clientWidth: width, clientHeight: height }),
+  } as unknown as import("maplibre-gl").Map;
+}
+
+const excalidrawAPI = {
+  getSceneElements: () => [],
+  getAppState: () => ({ scrollX: 0, scrollY: 0, zoom: { value: 1 } }),
+  getFiles: () => ({}),
+} as unknown as import("@atlasdraw/excalidraw").ExcalidrawImperativeAPI;
+
+let disposed = 0;
+
+/** Renders like MapLibre: floor(css × ratio), capped at `maxPixels` a side. */
+function mapRenderer(maxPixels = Infinity): MapRenderer {
+  return async (map, pixelRatio) => {
+    const { clientWidth, clientHeight } = map.getCanvas();
+    const cap = Math.min(
+      1,
+      maxPixels / (clientWidth * pixelRatio),
+      maxPixels / (clientHeight * pixelRatio),
+    );
+    return {
+      canvas: {
+        width: Math.floor(clientWidth * pixelRatio * cap),
+        height: Math.floor(clientHeight * pixelRatio * cap),
+        label: "map",
+      } as unknown as HTMLCanvasElement,
+      dispose: () => {
+        disposed++;
+      },
+    };
   };
 }
 
-function makeExcalidrawAPI(appStateOverrides: Record<string, unknown> = {}) {
-  // exportToCanvas mock returns this; tests use it to identify the
-  // second drawImage argument.
-  const fakeExcalidrawCanvas = { __isExcalidrawCanvas: true };
-  exportToCanvasMock.mockResolvedValue(fakeExcalidrawCanvas);
-  const appState = {
-    viewBackgroundColor: "#fff",
-    scrollX: 0,
-    scrollY: 0,
-    zoom: { value: 1 as const },
-    ...appStateOverrides,
-  };
-  return {
-    api: {
-      getSceneElements: () => [{ id: "el-1" }],
-      getAppState: () => appState,
-      getFiles: () => ({}),
-    } as unknown as import("@atlasdraw/excalidraw").ExcalidrawImperativeAPI,
-    fakeExcalidrawCanvas,
-    appState,
-  };
-}
+beforeEach(() => {
+  FakeOffscreenCanvas.last = null;
+  FakeOffscreenCanvas.contextAvailable = true;
+  disposed = 0;
+  vi.stubGlobal("OffscreenCanvas", FakeOffscreenCanvas);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("exportPNG", () => {
-  beforeEach(() => {
-    lastOffscreen = null;
-    nextContextOverride = undefined;
-    exportToCanvasMock.mockReset();
-    vi.stubGlobal("OffscreenCanvas", StubOffscreenCanvas);
-  });
+  for (const ratio of [1, 2, 3]) {
+    it(`at ${ratio}x is the view times ${ratio}, every layer drawn at that size`, async () => {
+      const { exportPNG } = await import("../export");
+      const blob = await exportPNG(liveMap(1440, 900), excalidrawAPI, {
+        pixelRatio: ratio,
+        renderMap: mapRenderer(),
+      });
+      expect(blob.type).toBe("image/png");
+      const out = FakeOffscreenCanvas.last!;
+      expect(out.width).toBe(1440 * ratio);
+      expect(out.height).toBe(900 * ratio);
+      expect(out.layers.map((l) => l.label)).toEqual(["map", "drawings"]);
+      for (const layer of out.layers) {
+        // Not upscaled: the source has as many pixels as it covers.
+        expect(layer, layer.label).toMatchObject({
+          sourceWidth: out.width,
+          sourceHeight: out.height,
+          width: out.width,
+          height: out.height,
+        });
+      }
+    });
+  }
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("draws map first, then Excalidraw annotations on top", async () => {
+  it("fails, and says why, when the map cannot be drawn that large", async () => {
     const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api, fakeExcalidrawCanvas } = makeExcalidrawAPI();
-
-    await exportPNG(map, api);
-
-    expect(lastOffscreen).not.toBeNull();
-    const ctx = lastOffscreen!.ctx!;
-    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
-    // First drawImage gets the map canvas; second gets the excalidraw canvas.
-    expect(ctx.drawImage.mock.calls[0][0]).toBe(map.canvas);
-    expect(ctx.drawImage.mock.calls[1][0]).toBe(fakeExcalidrawCanvas);
+    await expect(
+      exportPNG(liveMap(2560, 1440), excalidrawAPI, {
+        pixelRatio: 3,
+        renderMap: mapRenderer(4096),
+      }),
+    ).rejects.toThrow(/4096 × 2304 px, not 7680 × 4320 px/);
+    // The offscreen map is released on failure too.
+    expect(disposed).toBe(1);
   });
 
-  it("returns a Blob with type image/png", async () => {
+  it("releases the offscreen map after a good export", async () => {
     const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
+    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+      pixelRatio: 2,
+      renderMap: mapRenderer(),
     });
-    const { api } = makeExcalidrawAPI();
-
-    const blob = await exportPNG(map, api);
-
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.type).toBe("image/png");
+    expect(disposed).toBe(1);
   });
 
-  it("defaults scale to 2x of CSS pixels", async () => {
+  it("fills the background colour across the whole output", async () => {
     const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
+    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+      pixelRatio: 2,
+      backgroundColor: "#102030",
+      renderMap: mapRenderer(),
     });
-    const { api } = makeExcalidrawAPI();
-
-    await exportPNG(map, api);
-
-    expect(lastOffscreen!.width).toBe(1600);
-    expect(lastOffscreen!.height).toBe(1200);
-    expect(lastOffscreen!.ctx!.scale).toHaveBeenCalledWith(2, 2);
+    expect(FakeOffscreenCanvas.last!.fills).toEqual([
+      { width: 1600, height: 1200, color: "#102030" },
+    ]);
   });
 
-  it("respects custom scale", async () => {
+  it("leaves a transparent background transparent", async () => {
     const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
+    await exportPNG(liveMap(800, 600), excalidrawAPI, {
+      renderMap: mapRenderer(),
     });
-    const { api } = makeExcalidrawAPI();
-
-    await exportPNG(map, api, { scale: 1 });
-
-    expect(lastOffscreen!.width).toBe(800);
-    expect(lastOffscreen!.height).toBe(600);
-    expect(lastOffscreen!.ctx!.scale).toHaveBeenCalledWith(1, 1);
-  });
-
-  it("uses CSS logical pixels (clientWidth/Height), not physical pixels", async () => {
-    const { exportPNG } = await import("../export");
-    // DPR=2 retina: physical canvas 1600x1200, CSS box 800x600.
-    const map = makeMap({
-      width: 1600,
-      height: 1200,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-
-    await exportPNG(map, api);
-
-    // Default scale 2 x CSS 800/600 = 1600/1200, NOT 3200/2400 (which would
-    // be physical * scale, a 4x logical-resolution bug).
-    expect(lastOffscreen!.width).toBe(1600);
-    expect(lastOffscreen!.height).toBe(1200);
-  });
-
-  it("passes live viewport (scroll + zoom) to exportToCanvas", async () => {
-    const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api, appState } = makeExcalidrawAPI({
-      scrollX: 123,
-      scrollY: -45,
-      zoom: { value: 1.5 as const },
-    });
-
-    await exportPNG(map, api);
-
-    const opts = exportToCanvasMock.mock.calls[0][0] as {
-      viewport?: {
-        scrollX: number;
-        scrollY: number;
-        zoom: { value: number };
-        width: number;
-        height: number;
-      };
-    };
-    expect(opts.viewport).toMatchObject({
-      width: 800,
-      height: 600,
-      scrollX: appState.scrollX,
-      scrollY: appState.scrollY,
-      zoom: appState.zoom,
-    });
-  });
-
-  it("fills backgroundColor before map layer when not transparent", async () => {
-    const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-
-    await exportPNG(map, api, { backgroundColor: "#000000" });
-
-    const ctx = lastOffscreen!.ctx!;
-    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
-    expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 800, 600);
-    // Map and Excalidraw layers still composited on top.
-    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
-  });
-
-  it("skips fillRect when backgroundColor is transparent (default)", async () => {
-    const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-
-    await exportPNG(map, api);
-
-    expect(lastOffscreen!.ctx!.fillRect).not.toHaveBeenCalled();
+    expect(FakeOffscreenCanvas.last!.fills).toEqual([]);
   });
 
   it("throws a clear error when the 2D context is unavailable", async () => {
-    nextContextOverride = null;
+    FakeOffscreenCanvas.contextAvailable = false;
     const { exportPNG } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-
-    await expect(exportPNG(map, api)).rejects.toThrow(/context unavailable/i);
+    await expect(
+      exportPNG(liveMap(800, 600), excalidrawAPI, {
+        renderMap: mapRenderer(),
+      }),
+    ).rejects.toThrow(/context unavailable/i);
   });
 });
 
-// FU-12 — the PDF export drew `map.getCanvas()` directly, so every Excalidraw
-// shape was missing from the document while the export still reported success.
-// These pin the composite that fix depends on: the encoded image the PDF path
-// consumes must contain BOTH layers. Delete the `drawImage(excalidrawCanvas)`
-// line in export.ts and the first assertion here goes red.
+describe("exportSize", () => {
+  it("is the CSS view times the ratio, rounded down as MapLibre sizes its canvas", async () => {
+    const { exportSize } = await import("../export");
+    expect(exportSize({ width: 1441, height: 901 }, 1.5)).toEqual({
+      width: 2161,
+      height: 1351,
+    });
+  });
+});
+
 describe("exportCompositeDataURL", () => {
-  beforeEach(() => {
-    lastOffscreen = null;
-    nextContextOverride = undefined;
-    nextBlobPayload = undefined;
-    exportToCanvasMock.mockReset();
-    vi.stubGlobal("OffscreenCanvas", StubOffscreenCanvas);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("composites the Excalidraw scene over the map, like exportPNG", async () => {
+  it("is a high-quality JPEG of the same composite", async () => {
     const { exportCompositeDataURL } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
+    const url = await exportCompositeDataURL(liveMap(800, 600), excalidrawAPI, {
+      pixelRatio: 2.5,
+      renderMap: mapRenderer(),
     });
-    const { api, fakeExcalidrawCanvas } = makeExcalidrawAPI();
-
-    await exportCompositeDataURL(map, api);
-
-    const ctx = lastOffscreen!.ctx!;
-    expect(ctx.drawImage).toHaveBeenCalledTimes(2);
-    expect(ctx.drawImage.mock.calls[0][0]).toBe(map.canvas);
-    expect(ctx.drawImage.mock.calls[1][0]).toBe(fakeExcalidrawCanvas);
+    expect(url.startsWith("data:image/jpeg;base64,")).toBe(true);
+    const out = FakeOffscreenCanvas.last!;
+    expect(out.encoded).toEqual({ type: "image/jpeg", quality: 0.92 });
+    expect([out.width, out.height]).toEqual([2000, 1500]);
+    expect(out.layers.map((l) => l.label)).toEqual(["map", "drawings"]);
   });
+});
 
-  it("encodes JPEG at 0.85 by default", async () => {
-    const { exportCompositeDataURL } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-
-    const dataUrl = await exportCompositeDataURL(map, api);
-
-    expect(lastOffscreen!.convertToBlob).toHaveBeenCalledWith({
-      type: "image/jpeg",
-      quality: 0.85,
-    });
-    expect(dataUrl.startsWith("data:image/jpeg;base64,")).toBe(true);
-  });
-
-  it("encodes a full-size payload without truncating or mis-padding", async () => {
-    const { exportCompositeDataURL } = await import("../export");
-    const map = makeMap({
-      width: 800,
-      height: 600,
-      clientWidth: 800,
-      clientHeight: 600,
-    });
-    const { api } = makeExcalidrawAPI();
-    // ~40KB, the order of a real export's JPEG. Guards the encode path
-    // against truncation regardless of how it is implemented. Size is a
-    // multiple of 3 so correct base64 carries no padding at all — any "="
-    // in the output means bytes went missing.
-    nextBlobPayload = new Uint8Array(39_999).fill(0x41);
-
-    const dataUrl = await exportCompositeDataURL(map, api);
-
-    const b64 = dataUrl.slice("data:image/jpeg;base64,".length);
-    // 39999 bytes / 3 * 4 = 53332 base64 chars, no padding.
-    expect(b64).toHaveLength(53332);
-    // "AAA" (0x41 x3) encodes to "QUFB".
-    expect(b64.startsWith("QUFBQUFB")).toBe(true);
-    expect(b64.includes("=")).toBe(false);
+describe("measureView", () => {
+  it("measures ground metres per CSS pixel across the centre of the view", async () => {
+    const { measureView } = await import("../export");
+    // A view at 60° N where each CSS px is 0.0001° of longitude. Along a
+    // parallel that is R · cos(lat) · 0.0001° in radians.
+    const degPerPx = 0.0001;
+    const map = {
+      getCanvas: () => ({ clientWidth: 1000, clientHeight: 500 }),
+      unproject: ([x]: [number, number]) => ({
+        lng: 10 + x * degPerPx,
+        lat: 60,
+      }),
+    } as unknown as import("maplibre-gl").Map;
+    const view = measureView(map);
+    const expected =
+      6371008.8 * Math.cos((60 * Math.PI) / 180) * ((degPerPx * Math.PI) / 180);
+    expect(view.width).toBe(1000);
+    expect(view.height).toBe(500);
+    expect(view.metersPerPixel / expected).toBeCloseTo(1, 4);
   });
 });

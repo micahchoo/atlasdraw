@@ -4,7 +4,7 @@ import { useCallback } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { exportPNG } from "../lib/export";
+import { exportPNG, type PngPixelRatio } from "../lib/export";
 
 import type maplibregl from "maplibre-gl";
 
@@ -12,32 +12,43 @@ export interface ExportPNGNotify {
   error: (msg: string) => void;
 }
 
+/**
+ * Returns a callback that downloads a PNG of the view at `pixelRatio`
+ * (default 2: the quick action has no size picker). The name carries the
+ * size, `atlasdraw-<time>@3x.png`, so files of one view are told apart.
+ */
 export function useExportPNG(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   backgroundColor: string,
   notify: ExportPNGNotify,
-): () => void {
-  return useCallback(() => {
-    if (!map || !excalidrawAPI) {
-      return;
-    }
-    void (async () => {
-      try {
-        const blob = await exportPNG(map, excalidrawAPI, { backgroundColor });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `atlasdraw-${Date.now()}.png`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        notify.error(
-          `PNG export failed: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
+): (pixelRatio?: PngPixelRatio) => void {
+  return useCallback(
+    (pixelRatio: PngPixelRatio = 2) => {
+      if (!map || !excalidrawAPI) {
+        return;
       }
-    })();
-  }, [map, excalidrawAPI, backgroundColor, notify]);
+      void (async () => {
+        try {
+          const blob = await exportPNG(map, excalidrawAPI, {
+            pixelRatio,
+            backgroundColor,
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `atlasdraw-${Date.now()}@${pixelRatio}x.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          notify.error(
+            `PNG export failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      })();
+    },
+    [map, excalidrawAPI, backgroundColor, notify],
+  );
 }
