@@ -79,6 +79,11 @@ export {
 } from "./csv";
 export type { CsvReadOptions, CsvImportStats } from "./csv";
 
+// W9 — FeatureCollection → the text of a GeoJSON or CSV file, for the
+// layer panel's "Export as …" items. The inverse of `parse` and `parseCSV`.
+export { toGeoJSONText, toCSV, toWKT, csvGeometryMode } from "./export";
+export type { CsvGeometryMode, GeoJSONTextOptions } from "./export";
+
 // Phase 6 A7 — Photon-compatible geocoder client + LRU cache.
 // Operator-configured; no default endpoint (ADR-0006 / ADR-0011).
 export {
