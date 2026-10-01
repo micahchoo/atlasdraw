@@ -1,4 +1,4 @@
-/* MapCompass — RT-3. Bottom-left of the plate.
+/* MapCompass — bottom-left of the plate.
  *
  * Placement: the plate's other furniture is bottom-centre (.commentModeHint),
  * top-centre (.collabRoomError) and top-right (PresenceList). Bottom-left is
@@ -54,7 +54,7 @@
   cursor: default;
 }
 
-/* Turned away from north — the state RT-9 blocks drawing in. Tinted so the
+/* Turned away from north — the state that blocks drawing. Tinted so the
    compass reads as the explanation for the blocked toolbar, not as decoration
    that happens to be nearby. */
 .compass[data-rotated="true"] {

@@ -1,17 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentsPanel.
+// CommentsPanel.
 //
 // The chronological list of all comments, with resolve/delete actions and a
 // compose-bar carrying the map/element anchor toggle.
 //
-// Mount: no longer a sidebar tab of its own. Step 5 made comments a MODE (rail
-// toggle + `c`), and demoted this list to the collapsed Threads section of the
-// Layers tab — LayerPanel's ThreadsSection renders <CommentsPanelHost/>. It is
-// the review surface (read every thread, resolve the stale ones), not the
-// default one.
+// Mount: not a sidebar tab of its own. Comments are a MODE (the toolbar toggle
+// + `c`); this list is the collapsed Threads section of the Layers tab —
+// LayerPanel's ThreadsSection renders <CommentsPanelHost/>. It is the review
+// surface (read every thread, resolve the stale ones), not the default one.
 //
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
-// Design (Step 5): PLANS/ATLASDRAW_SIDEBAR_DESIGN.md §3
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";
@@ -27,9 +24,9 @@ import type { Comment, CommentsLayer } from "../state/comments";
 //
 // CommentsPanel itself is presentation. The compose-bar's anchor selection
 // requires global UI state (drop-pin on map / select-element from canvas)
-// owned by MapEditor — so the panel exposes a callback when the user picks
-// an anchor mode, and the parent supplies the resolved anchor before
-// submission. For Phase 6 we accept the anchor as a parent-provided prop:
+// owned outside the panel — so the panel exposes a callback when the user
+// picks an anchor mode, and the parent supplies the resolved anchor before
+// submission, as a prop:
 //
 //   <CommentsPanel
 //     commentsLayer={currentDocument().comments}
@@ -109,16 +106,12 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
   const [draftText, setDraftText] = useState("");
   const [anchorMode, setAnchorMode] = useState<"map" | "element">("map");
 
-  // Step 5 — the mount-time `onRequestAnchor("map")` is GONE.
-  //
-  // It existed because this panel WAS the comments tab: it was on screen only
-  // when the user had chosen comments, so arming the map-click picker on mount
-  // was a fair guess. The panel now lives inside the Layers tab's Threads
-  // section, i.e. inside the Sheet scope a user opens to rename a layer — and
-  // arming there would silently make the next map click drop a comment anchor.
-  // It would also narrow comment MODE's "any" back to "map" just by opening
-  // the section. The picker is armed by the Map / Element buttons below, and
-  // by entering comment mode; both are things the user actually asked for.
+  // Never arm the picker on mount (`onRequestAnchor("map")`). The panel lives
+  // inside the Layers tab's Threads section, the Sheet scope a user opens to
+  // rename a layer — arming there would silently make the next map click drop
+  // a comment anchor, and would narrow comment MODE's "any" back to "map" just
+  // by opening the section. The picker is armed by the Map / Element buttons
+  // below, and by entering comment mode; both are things the user asked for.
 
   const visible = showResolved ? comments : comments.filter((c) => !c.resolved);
 

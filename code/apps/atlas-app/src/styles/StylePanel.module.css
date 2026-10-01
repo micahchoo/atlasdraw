@@ -3,12 +3,9 @@
  * Symbology section of a LayerPanel data-layer card. In normal flow, sized by
  * the card — NOT a floating dialog.
  *
- * It used to be `position:absolute; top:20px; right:20px; width:280px;
- * z-index:100`, rendered inside a ~294px `overflow:hidden` sidebar body at
- * z-120 — wider than its container and beneath a stacking context above it, so
- * it was clipped and occluded simultaneously. Sheet-panel step 4 folded it into
- * the card; the rule that caused the defect is gone rather than tuned. Do not
- * reintroduce position/width/z-index here: the card owns layout.
+ * Do not add position/width/z-index here: the card owns layout. Inside the
+ * ~294px `overflow:hidden` sidebar body, under a stacking context above it, a
+ * positioned box is clipped and occluded at once.
  *
  * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
  *   - `--ad-*` tokens only.
@@ -241,7 +238,7 @@
   overflow-wrap: anywhere;
 }
 
-/* --- labels and filter (W9d) ------------------------------------------------
+/* --- labels and filter ------------------------------------------------------
  * Two sections under the colour tabs. They combine with any colour mode, so
  * they are sections, not tabs. */
 

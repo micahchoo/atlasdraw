@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// ISSUES.md Direction 1 — "Import…" menu action integration test.
+// "Import…" menu action integration test.
 //
 // useDataFileImport.test.ts already drives importFile() in isolation via a
 // minimal harness; this file exercises the real end-to-end path MapEditor
@@ -89,10 +89,10 @@ vi.mock("@atlasdraw/basemap", () => ({
 // inline arrow (a fresh function every render), so if the stub called
 // setExcalidrawAPI with a freshly-allocated object on every effect fire, the
 // state change would re-render MapEditor, produce a new inline arrow,
-// re-trigger the effect (deps=[onExcalidrawAPI]), and loop forever (OOM'd
-// this file until fixed — same reference in means setState no-ops and React
-// bails out of re-rendering, exactly like MapEditor.contextmenu.test.tsx's
-// mockFakeExcalidrawAPI const already does it).
+// re-trigger the effect (deps=[onExcalidrawAPI]), and loop forever until the
+// test runs out of memory. Same reference in means setState no-ops and React
+// bails out of re-rendering, exactly as MapEditor.contextmenu.test.tsx's
+// mockFakeExcalidrawAPI const does.
 const EMPTY_SIDEBAR_TABS: never[] = [];
 
 const mockFakeExcalidrawAPI = {
@@ -206,8 +206,8 @@ const mockMap = {
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
-  // RT-3 — useCameraRotation reads the live camera on mount, via
-  // useCameraRotation reads it. A map without it is not a map.
+  // useCameraRotation reads the live camera's bearing on mount. A map
+  // without getBearing is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,

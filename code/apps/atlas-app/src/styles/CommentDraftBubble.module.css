@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: AGPL-3.0-only
- * Step 5 — CommentDraftBubble styles.
+ * CommentDraftBubble styles.
  *
  * Positioned absolutely inside CommentAnchorsOverlay; left/top are inline
  * style values from the same projection that places a finished CommentAnchor,

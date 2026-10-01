@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A3 — CommentAnchorsOverlay.
+// CommentAnchorsOverlay.
 //
 // Iterates the live CommentsLayer.comments list and renders one
 // <CommentAnchor /> per row, projected to screen-space coordinates:
@@ -16,16 +16,14 @@
 // While comment mode is active and no anchor is pending, a full-overlay
 // click-intercept div captures every click and runs the hit-test cascade —
 // Excalidraw element → raster layer → bare map point — publishing the result
-// as the pendingAnchor (annotation form on a hit, map form otherwise). This
-// replaces the old map.once("click") and element-selection pickers: the whole
-// gesture happens on the plate.
+// as the pendingAnchor (annotation form on a hit, map form otherwise). The
+// whole gesture happens on the plate.
 //
 // Mounted by MapEditor as a sibling of the Excalidraw canvas. Pointer events
 // are scoped to the rendered anchors themselves and the transient intercept
 // (z-index 10 per atlasdraw-ui-conventions) — the surrounding container is
 // pointer-events:none.
 //
-// Plan: docs/superpowers/plans/2026-05-15-atlasdraw-phase-6-amended-scope.md §A3
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, { useEffect, useState } from "react";
@@ -60,11 +58,9 @@ import { CommentDraftBubble } from "./CommentDraftBubble";
 import type { Comment } from "../state/comments";
 import type maplibregl from "maplibre-gl";
 
-// ExcalidrawImperativeAPI is not re-exported from @atlasdraw/excalidraw in
-// v0.18 (see .claude/rules/excalidraw-api.md). We type-erase here — the
-// methods we touch (onChange, getSceneElements, getAppState) are stable in
-// production but pre-Phase-6 unit-test mocks may omit `onChange`; we guard
-// at call sites for that.
+// The structural subset of ExcalidrawImperativeAPI the overlay touches
+// (onChange, getSceneElements, getAppState). Unit-test mocks may omit
+// `onChange`; call sites guard for that.
 type ExcalidrawAPIShape = {
   onChange?: (
     cb: (elements: unknown, appState: unknown) => void,
@@ -288,7 +284,7 @@ export function CommentAnchorsOverlay(
     setPendingAnchor({ kind: "map", lng: lngLat.lng, lat: lngLat.lat });
   };
 
-  // The draft bubble is the mode's composer, so the overlay can no longer
+  // The draft bubble is the mode's composer, so the overlay cannot
   // bail purely on "no comments yet" — placing the FIRST thread happens in
   // exactly that state, and the click-intercept div must stay up to catch the
   // pick. It still bails when there is no session, because then there is

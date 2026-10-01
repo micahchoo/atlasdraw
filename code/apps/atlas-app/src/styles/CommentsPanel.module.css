@@ -1,11 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-only
- * Phase 6 A3 — CommentsPanel styles.
+ * CommentsPanel styles.
  *
- * Step 5 (2026-07-30): this is no longer a whole sidebar tab body. Comments
- * are a mode; the list is the Threads SECTION of the Layers tab, a sibling of
- * Basemap / Data Layers / Annotations. Two rules had to change with it, both
- * for the same reason — the panel used to own the full column height and now
- * owns a slice of a flowing stack. See .root and .list.
+ * Not a whole sidebar tab body. Comments are a mode; the list is the Threads
+ * SECTION of the Layers tab, a sibling of Basemap / Data Layers / Annotations.
+ * It owns a slice of a flowing stack, not the full column height. See .root
+ * and .list.
  *
  * Colors and spacing follow .claude/skills/atlasdraw-ui-conventions/SKILL.md.
  */
@@ -50,9 +49,9 @@
 
 .list {
   flex: 1 1 auto;
-  /* `flex: 1` used to be handed the whole column. As a section it must not
-   * grow without bound — 40 threads would push Annotations and Basemap off
-   * the panel entirely — so it scrolls inside a cap instead. */
+  /* As a section it must not grow without bound — 40 threads would push
+   * Annotations and Basemap off the panel entirely — so it scrolls inside a
+   * cap. */
   max-height: 320px;
   overflow-y: auto;
   padding: var(--ad-space-1) 0;

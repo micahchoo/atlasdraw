@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 2 Wave 2b T12 — LayerPanel tests.
+// LayerPanel tests.
 //
-// LayerPanel now renders body-only — no Sidebar wrapper. The parent
-// surface (DefaultSidebar via excalidrawAPI.registerSidebarTab) provides
-// the dockable shell; LayerPanel just renders sections. So we no longer
-// need to mock @atlasdraw/excalidraw — the component imports nothing
-// from there.
+// LayerPanel renders body-only — no Sidebar wrapper. The parent surface
+// (DefaultSidebar via excalidrawAPI.registerSidebarTab) provides the dockable
+// shell; LayerPanel just renders sections. So these tests do not mock
+// @atlasdraw/excalidraw — the component imports nothing from there.
 //
 // Each test starts with a new, empty open document (test-setup.ts); layers
 // are added with document commands and annotations with a seeded scene.
@@ -181,10 +180,10 @@ describe("LayerPanel", () => {
       expect(sceneRow("el-1")?.order).toBe(1);
     });
 
-    // FU-4. The grip is the only drag source. `draggable` on the row made every
+    // The grip is the only drag source. `draggable` on the row makes every
     // control inside an expanded card a drag source too, because the browser
     // looks UP the tree for a draggable ancestor: reaching for the colour input
-    // reordered the layer instead. Assert both halves — the grip has it, the
+    // reorders the layer instead. Assert both halves — the grip has it, the
     // row does not — or a future revert only fails one of them.
     it("puts draggable on the grip and not on the row", () => {
       seedTwo();
@@ -304,8 +303,8 @@ describe("LayerPanel", () => {
       seedMixed();
       render(withSession(<LayerPanel />));
 
-      // Top of the annotation section — even though it is not entry 0 of the
-      // registry, it cannot move above the section.
+      // Top of the annotation section — even though it is not the first
+      // entry of the panel, it cannot move above the section.
       expect(
         (screen.getByTestId("layer-up-a1") as HTMLButtonElement).disabled,
       ).toBe(true);
@@ -443,16 +442,15 @@ describe("LayerPanel", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Step 5 — the demoted comments list
+// The comments list
 //
-// CommentsPanel used to be its own sidebar tab. Comments are a mode now, and
-// the "read every thread" pass (Marcus's JTBD) survives one level down, as a
-// section of the Sheet scope alongside Basemap / Data Layers / Annotations.
+// Comments are a mode, and the "read every thread" pass is one level down, as
+// a section of the Sheet scope alongside Basemap / Data Layers / Annotations.
 // These cases pin that it is REACHABLE and that it is not the default — an
-// always-open chronological list is exactly the 90%-empty column the tab was.
+// always-open chronological list is a mostly empty column.
 // ---------------------------------------------------------------------------
 
-describe("LayerPanel — Threads section (Step 5)", () => {
+describe("LayerPanel — Threads section", () => {
   it("offers Threads in the Sheet scope, alongside the other sections", () => {
     render(withSession(<LayerPanel />));
     expect(screen.getByLabelText("Threads")).toBeTruthy();
@@ -575,11 +573,9 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
     render(withSession(<LayerPanel />));
 
     // A draggable ancestor turns a press-and-sweep over the input's text into a
-    // row drag, so the name you meant to replace can't be selected. This used
-    // to be handled by dropping `draggable` off the row while renaming; since
-    // FU-4 moved `draggable` onto the grip there is no ancestor to drop, and
-    // the suspension mechanism is gone. Walk the real chain rather than
-    // asserting the absence of a prop that no longer exists.
+    // row drag, so the name you meant to replace can't be selected. Only the
+    // grip is draggable, so there is no draggable ancestor here. Walk the real
+    // chain rather than asserting the absence of one prop.
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
     fireEvent.click(screen.getByTestId("layer-rename-el-1"));
     let node: HTMLElement | null = screen.getByTestId(
@@ -593,7 +589,7 @@ describe("LayerPanel — rename via the ⋯ menu", () => {
 });
 
 // ---------------------------------------------------------------------------
-// FU-1 — the Images section.
+// The Images section.
 // ---------------------------------------------------------------------------
 
 describe("LayerPanel — raster layers", () => {

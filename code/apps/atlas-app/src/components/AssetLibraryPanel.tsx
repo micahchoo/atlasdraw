@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A12 — Asset library info panel + dialog.
+// Asset library info panel + dialog.
 //
-// PATH A (per Phase 6 amended scope §A12 + original §Task 14b audit-amended):
 // We extend Excalidraw's OWN library UI via `excalidrawAPI.updateLibrary({
 // libraryItems, merge: true })`. We do NOT create a parallel `<Sidebar
 // name="library">` — that name (and "libraries") is reserved by Excalidraw
@@ -21,13 +20,13 @@
 //      `toggleSidebar({ name: DEFAULT_SIDEBAR.name, tab: LIBRARY_SIDEBAR_TAB })`.
 //      (NOT `toggleSidebar({ name: "library" })` — the addressable form is a
 //      tab on DEFAULT_SIDEBAR; see ui-conventions skill + library.ts:302.)
-//   4. Renders MIT-license attribution footer per OQ7.
+//   4. Renders an MIT-license attribution footer.
 //
-// Q-P6-1 (no AtlasdrawAPI in v1): we use `excalidrawAPI` (the Excalidraw
-// imperative API) directly — there is no atlasdraw-side automation surface.
+// We use `excalidrawAPI` (the Excalidraw imperative API) directly — there is
+// no atlasdraw-side automation surface.
 //
-// Modal pattern mirrors AboutDialog: root-level mount,
-// inline styles, Escape/focus trap inline.
+// Modal pattern: root-level mount, inline styles, Escape handled inline,
+// focus held by FocusTrap.
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { DEFAULT_SIDEBAR, LIBRARY_SIDEBAR_TAB } from "@atlasdraw/common";

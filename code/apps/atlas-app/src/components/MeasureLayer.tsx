@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// MeasureLayer (W9) — everything that measures, in one mount:
+// MeasureLayer — everything that measures, in one mount:
 //
 //   * the Measure tool. While it is on, an overlay above the drawing (the
 //     atlas-tool band, z 5) takes the clicks: each click adds a point, a

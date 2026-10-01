@@ -30,9 +30,8 @@
   --ad-accent-subtle: #e5eef6; /* accent tint — slightly warmer */
 
   /* Hairlines — border progression.
-   * RGBA blends with whatever surface they sit on. Slightly softer than
-   * the previous values to feel more organic (paper fiber gaps, not
-   * pixel-precise digital lines). */
+   * RGBA blends with whatever surface they sit on. Soft on purpose, to read
+   * as paper fiber gaps, not pixel-precise digital lines. */
 
   --ad-hairline: rgba(0, 0, 0, 0.06); /* whisper */
   --ad-rule: rgba(0, 0, 0, 0.11); /* standard */

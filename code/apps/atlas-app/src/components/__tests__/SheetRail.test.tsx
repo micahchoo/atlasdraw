@@ -129,13 +129,12 @@ const DEFAULT_FAKE_TABS: readonly SidebarTabDescriptor[] = [
     icon: <svg data-testid="icon-layers" />,
     stock: false,
   },
-  // Step 5: the `comments` entry is GONE from this fixture, because MapEditor
-  // no longer calls registerSidebarTab({name: "comments"}) — comments became a
-  // mode (design doc §3). The fixture's job is to model what the fork's
-  // `getSidebarTabs()` actually returns for this app; leaving a tab in it that
+  // No `comments` entry: MapEditor registers no "comments" tab — comments
+  // are a mode. The fixture's job is to model what the fork's
+  // `getSidebarTabs()` actually returns for this app; a tab in it that
   // nothing registers would make every assertion below pin a fiction. Three
-  // tabs still exercises everything four did: stock-before-registered
-  // ordering, roving focus with wrap, and one-expanded-at-a-time.
+  // tabs exercise stock-before-registered ordering, roving focus with wrap,
+  // and one-expanded-at-a-time.
 ];
 
 /**
@@ -190,10 +189,9 @@ const makeFakeAPI = (
 /**
  * Accessible names of the rail's TAB buttons, in DOM order.
  *
- * Step 5 narrowed this from `[data-testid^=sheet-rail-]` to the `tab` items.
- * The rail now hosts two kinds of control and the selector had to learn the
- * difference rather than lump them: a tab discloses a sidebar panel
- * (`aria-expanded`), a mode changes what a plate click does (`aria-pressed`).
+ * Only the `tab` items, not `[data-testid^=sheet-rail-]`: a tab discloses a
+ * sidebar panel (`aria-expanded`), and the selector must not lump in any
+ * other control.
  * Every assertion this helper feeds is still asserting the same thing it
  * always was — "the rail is exactly the API's tab list, in API order" — which
  * is why the expected arrays below are unchanged apart from `comments`
@@ -224,11 +222,9 @@ describe("SheetRail — driven by the API tab list", () => {
     expect(screen.getByTestId(`sheet-rail-${CANVAS_SEARCH_TAB}`)).toBeTruthy();
   });
 
-  // Step 5. The rail is DERIVED, so demoting comments out of the tab list is
-  // the only thing needed to remove it from the rail — there is no second
-  // hardcoded array to keep in sync. That is the property the CollarSheetTabs
-  // rewrite bought, asserted from the other direction.
-  it("has no comments TAB, because nothing registers one any more", () => {
+  // The rail is DERIVED from the registered tabs, so a tab nothing registers
+  // is not on it — there is no second hardcoded array to keep in sync.
+  it("has no comments TAB, because nothing registers one", () => {
     const { api } = makeFakeAPI();
     render(<SheetRail excalidrawAPI={api} />);
     expect(screen.queryByTestId("sheet-rail-comments")).toBe(null);
@@ -591,11 +587,10 @@ describe("SheetRail × real DefaultSidebar (unmocked cross-seam)", () => {
         null,
       );
 
-      // REGRESSION: with the trigger row gone, `RadixTabs.Content`'s
-      // `aria-labelledby` pointed at a trigger that no longer exists, leaving
-      // the panel with NO accessible name — a regression against both rails
-      // this replaced, and one `aria-controls` on the rail does not fix. The
-      // panel is now named from the tab's own label. `getByRole(name:)` runs
+      // Hazard: with no trigger row, `RadixTabs.Content`'s `aria-labelledby`
+      // points at a trigger that does not exist, leaving the panel with NO
+      // accessible name, and an `aria-controls` on the rail does not fix
+      // that. The panel is named from the tab's own label. `getByRole(name:)` runs
       // the accessible-name computation, so it fails if the name is missing.
       expect(screen.getByRole("tabpanel", { name: "Layers" })).toBe(
         container.querySelector("[role=tabpanel]:not([hidden])"),

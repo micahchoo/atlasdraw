@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// AboutDialog — Phase 4 T14. Telemetry policy + version + license surface.
+// AboutDialog — telemetry policy + version + license surface.
 //
-// Modal pattern mirrors BasemapPickerDialog (inline styles, root-level mount,
-// no @excalidraw/Dialog dependency) so it's testable in jsdom outside the
-// Excalidraw provider tree.
+// Inline styles, root-level mount and no @excalidraw/Dialog dependency, so
+// it is testable in jsdom outside the Excalidraw provider tree.
 
 import React, { useEffect, useRef } from "react";
 

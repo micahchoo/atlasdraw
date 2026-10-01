@@ -1,22 +1,19 @@
 /**
  * ExportDialog — unified export surface for all formats.
  *
- * Single dialog replacing 4 separate export paths (PNG menu item, PrintDialog,
- * GeoJSON menu item, renderCustomUI .atlasdraw cards). Format selector cards
- * at top, format-specific settings below, export button in footer.
+ * One dialog for every export format. Format selector cards at top,
+ * format-specific settings below, export button in footer.
  *
  * The PDF pane owns the full PDF export (page size / orientation / title →
- * lib/print-pdf) — absorbed from the former PrintDialog, which used to open
- * as a SECOND modal chained behind this one and asked for the same settings
- * this dialog displayed as unwired placeholders (IA restructure, 2026-07-18).
+ * lib/print-pdf). Do not chain a second modal for it: one dialog asks for
+ * each setting once.
  *
  * Design: drafting-room output panel — all formats visible at once, settings
  * appear for the selected format, single export action.
  *
- * Wording rule: say what the file contains. The PDF hint once said "vector
- * document" over a JPEG; the PNG pane once showed a "Resolution" row that
- * could not be changed. Every row here is a setting that changes the file,
- * or a plain statement of what the file is.
+ * Wording rule: say what the file contains. Every row here is a setting that
+ * changes the file, or a plain statement of what the file is — never a label
+ * the file contradicts ("vector" over a JPEG) or a row that cannot change.
  */
 
 import React, { useEffect, useState } from "react";
@@ -118,8 +115,8 @@ interface ExportDialogProps {
    */
   getMapImageDataUrl: (pixelRatio: number) => Promise<string | null>;
   /**
-   * Registry entries projected to legend shape, evaluated at export time so
-   * the legend and the image answer the same viewport (FU-13). A snapshot
+   * Document layers projected to legend shape, evaluated at export time so
+   * the legend and the image answer the same viewport. A snapshot
    * taken when the dialog opened could disagree with the image if the camera
    * was still animating.
    */
@@ -165,9 +162,8 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const [format, setFormat] = useState<ExportFormat>(initialFormat);
 
-  // Escape to close (FocusTrap deliberately leaves Escape to each modal).
-  // Carried over from the absorbed PrintDialog; the pre-merge ExportDialog
-  // only closed via scrim click / × button.
+  // Escape to close (FocusTrap deliberately leaves Escape to each modal), as
+  // well as scrim click and the × button.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -182,7 +178,7 @@ export function ExportDialog({
   const [view] = useState(getView);
   const [pixelRatio, setPixelRatio] = useState<PngPixelRatio>(2);
 
-  // PDF pane state (absorbed from PrintDialog).
+  // PDF pane state.
   const [pageSize, setPageSize] = useState<PageSize>("letter");
   const [orientation, setOrientation] = useState<Orientation>("landscape");
   // Seeded from the document name, then editable — a one-off PDF title

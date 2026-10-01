@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for SettingsDialog's Storage + Collaboration tabs (ISSUES.md Issue 7
-// — silence audit). Before this fix, StorageTab read a VITE_STORAGE_MODE env
-// var that doesn't exist anywhere in app-config.ts's schema and always
-// rendered a hardcoded "Connected" status regardless of real reachability;
-// CollaborationTab read a similarly nonexistent VITE_REALTIME_URL. Both now
-// read the real AppConfig, and storage status is a live check.
+// Tests for SettingsDialog's Storage + Collaboration tabs. Both read the real
+// AppConfig (an env var outside app-config.ts's schema reads as undefined),
+// and storage status is a live check, never a hardcoded "Connected".
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

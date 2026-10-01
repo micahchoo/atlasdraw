@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14a — FocusTrap tests.
+// FocusTrap tests.
 //
 // Assertions:
 //   - Tab cycles within the trapped region.

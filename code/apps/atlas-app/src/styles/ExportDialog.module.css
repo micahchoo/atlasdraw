@@ -183,7 +183,7 @@
   background: var(--ad-accent-hover);
 }
 
-/* --- PDF pane (absorbed from the former PrintDialog) -------------------- */
+/* --- PDF pane ------------------------------------------------------------ */
 
 .settingInput {
   font-family: var(--ad-font-sans);

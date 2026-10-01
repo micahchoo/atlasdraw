@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // CollarShell — the sheet-name slot.
 //
-// Regression guard: `sheetName` used to be a string the shell wrapped in its
-// own styled span. It is now a slot, and the shell must render it bare — a
-// leftover wrapper would double the styling and duplicate the test id on the
+// `sheetName` is a slot, and the shell must render it bare: a wrapper span of
+// the shell's own would double the styling and duplicate the test id on the
 // field's own button.
 
 import React from "react";

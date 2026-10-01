@@ -2,17 +2,16 @@
 // CommentsPanelHost.
 //
 // Thin wrapper that gives <CommentsPanel/> the open document's comments and
-// this browser's identity (state/identity.ts) as the author. Pending-anchor coordination flows through
-// the comments-anchor-picker store: the panel signals "I want a map/element
-// anchor" via onRequestAnchor → setAnchorMode; the canvas overlay
-// (CommentsAnchorPicker, owned by MapEditor) listens for the next map click
-// or element selection, resolves the anchor, and writes it back via
-// setPendingAnchor. After a successful submit the panel fires onSubmitted
-// which clears the picker so the next comment starts fresh.
-//
+// this browser's identity (state/identity.ts) as the author. Pending-anchor
+// coordination flows through the comments-anchor-picker store: the panel
+// signals "I want a map/element anchor" via onRequestAnchor → setAnchorMode;
+// the canvas overlay (CommentAnchorsOverlay) takes the next click on the plate,
+// resolves the anchor, and writes it back via setPendingAnchor. After a
+// successful submit the panel fires onSubmitted which clears the picker so the
+// next comment starts fresh.
 // Mounted by LayerPanel's ThreadsSection, inside the Layers tab. There is no
-// "comments" Sidebar tab any more — Step 5 turned comments into a mode and
-// demoted the list one level down.
+// "comments" Sidebar tab: comments are a mode, and this list is one level
+// down.
 
 import React, { useCallback } from "react";
 

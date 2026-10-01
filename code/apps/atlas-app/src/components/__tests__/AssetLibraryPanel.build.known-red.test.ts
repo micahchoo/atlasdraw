@@ -1,7 +1,7 @@
 // @vitest-environment node
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Build-output check for the Asset Library (audit-04, U3/M7).
+// Build-output check for the Asset Library.
 //
 // AssetLibraryPanel.test.tsx passes in Node because asset-library.ts falls
 // back to `require("node:fs")` there. A browser has no `fs`, so the shipped

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A14b — AriaAnnouncer tests.
+// AriaAnnouncer tests.
 //
 // Asserts:
 //  - Renders an aria-live="polite" region.

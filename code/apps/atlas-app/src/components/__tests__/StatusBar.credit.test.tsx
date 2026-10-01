@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // The status bar's credit line: the basemap's credit, then each visible tile
-// layer's (W9d). It follows the open document.
+// layer's. It follows the open document.
 
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

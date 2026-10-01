@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// T13 — GeoJSON drag-and-drop integration test for MapEditor.
+// GeoJSON drag-and-drop integration test for MapEditor.
 //
 // Verifies: dropping a .geojson File on the root container parses it,
-// registers a data layer in the registry, and adds source+layer to the map.
+// adds a data layer to the open document, and adds source+layer to the map.
 //
 // Mocking strategy: stub the heavy children (<MapCanvas>, <Excalidraw>) so
 // we don't need a real WebGL context or Excalidraw mount. Stub useMapRef
-// so a synthetic map instance is available immediately. Spy on the
-// registry's `registerDataLayer` action via the real Zustand store.
+// so a synthetic map instance is available immediately. Spy on the open
+// document's `dispatch`.
 //
-// jsdom note (mx-8ec7b9): vitest env is "jsdom" (apps/atlas-app/vitest.config.ts).
+// jsdom note: vitest env is "jsdom" (apps/atlas-app/vitest.config.ts).
 // crypto.randomUUID is available on jsdom's globalThis.crypto in modern
 // Node/jsdom; if it weren't, we'd polyfill in a setup file.
 
@@ -193,8 +193,8 @@ const mockMap = {
   unproject: vi.fn(() => ({ lng: 0, lat: 0 })),
   getZoom: vi.fn(() => 12),
   getCenter: vi.fn(() => ({ lng: 0, lat: 0 })),
-  // RT-3 — useCameraRotation reads the live camera on mount, via
-  // useCameraRotation reads it. A map without it is not a map.
+  // useCameraRotation reads the live camera's bearing on mount. A map
+  // without getBearing is not a map.
   getBearing: vi.fn(() => 0),
   getBounds: vi.fn(() => ({
     getNorth: () => 1,
@@ -313,7 +313,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
     expect(callArg.fc.features).toHaveLength(1);
   });
 
-  it("ignores non-.geojson files (no parse, no registry mutation)", async () => {
+  it("ignores non-.geojson files (no parse, no document change)", async () => {
     const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container } = render(

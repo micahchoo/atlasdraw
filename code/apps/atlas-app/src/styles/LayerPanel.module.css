@@ -1,11 +1,11 @@
 /* LayerPanel.module.css
  *
- * Sidebar tab body for the LayerRegistry. Mounts inside Excalidraw's
+ * Sidebar tab body for the Layers panel. Mounts inside Excalidraw's
  * DefaultSidebar via excalidrawAPI.registerSidebarTab, so this tree lives
  * under the `.excalidraw` CSS scope and may consume Excalidraw design
  * tokens with a hex-literal fallback for safety.
  *
- * Conventions: docs/superpowers/skills/atlasdraw-ui-conventions/SKILL.md
+ * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
  * Atlas-active blue (#1971c2) is used in preference to Excalidraw brand
  * purple per the conventions color table.
  */
@@ -49,7 +49,7 @@
   border-bottom-width: 2px;
 }
 
-/* Threads section (Step 5) — the demoted comments list. The heading IS the
+/* Threads section — the comments list. The heading IS the
  * disclosure, so it resets the button chrome and inherits the h3's type
  * instead of introducing a second heading style. */
 .threadsDisclosure {
@@ -280,9 +280,8 @@
 }
 
 /* Anchored to the trigger and right-aligned so it opens INSIDE the panel's
- * horizontal bounds. The sidebar body clips overflow — the same clipping that
- * used to eat StylePanel — so a menu that grows leftward is the only kind that
- * stays readable at 260px. */
+ * horizontal bounds. The sidebar body clips overflow, so a menu that grows
+ * leftward is the only kind that stays readable at 260px. */
 .menu {
   position: absolute;
   top: 100%;
@@ -683,7 +682,7 @@
   font-weight: 600;
 }
 
-/* --- Tile layers (W9d) ------------------------------------------------------
+/* --- Tile layers ------------------------------------------------------------
  * A tile row's one style, its opacity, sits on the line under the row. */
 .tileOpacity {
   display: flex;

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Step 5 — the composer for a thread being placed in comment mode.
+// The composer for a thread being placed in comment mode.
 //
 // Comment mode is only a mode if the whole gesture happens on the plate:
 // click a point, type, post. Sending the user back to a sidebar column to
-// finish the sentence is the tab we just deleted, wearing a hat. So the
+// finish the sentence breaks the mode. So the
 // composer projects to the anchor the user just picked, exactly where
 // CommentAnchor will render the finished thread.
 //
