@@ -14,6 +14,7 @@ import { createDocument, currentDocument, openDocument } from "../document";
 import { toFile } from "../documentIO";
 import {
   copyOfSharedMap,
+  distinctTitles,
   deleteSavedMap,
   openSavedMap,
   restoreServerBackup,
@@ -175,6 +176,31 @@ describe("openSavedMap", () => {
   });
 });
 
+describe("distinctTitles", () => {
+  const C = "01J0000000000000000000000C";
+
+  it("numbers repeated titles in the order the maps were made", () => {
+    const titles = distinctTitles([
+      { id: C, title: "Untitled map" },
+      { id: A, title: "Untitled map" },
+      { id: B, title: "Field sites" },
+    ]);
+    expect(titles.get(A)).toBe("Untitled map");
+    expect(titles.get(C)).toBe("Untitled map 2");
+    expect(titles.get(B)).toBe("Field sites");
+  });
+
+  it("skips a number another map already has as its title", () => {
+    const titles = distinctTitles([
+      { id: A, title: "Untitled map" },
+      { id: B, title: "Untitled map 2" },
+      { id: C, title: "Untitled map" },
+    ]);
+    expect(titles.get(C)).toBe("Untitled map 3");
+    expect(titles.get(B)).toBe("Untitled map 2");
+  });
+});
+
 describe("copyOfSharedMap", () => {
   it("is the same map under a new id and new dates", () => {
     const shared = savedFile(A, "Wells", "2026-05-02T00:00:00.000Z");
@@ -213,6 +239,52 @@ describe("deleteSavedMap", () => {
     expect(currentDocument().id).toBe(current);
     expect((await store.list()).map((m) => m.id)).not.toContain(A);
     expect(notify.success).toHaveBeenCalledWith('Deleted "Harbour walk"');
+  });
+
+  it("deletes the server copy too when asked", async () => {
+    await store.save(savedFile(A, "Harbour walk", "2026-05-02T00:00:00.000Z"));
+    openEditedMap();
+    const server = {
+      createMap: vi.fn(async () => ({
+        map: { id: "map000000000000000001" },
+        writeKey: "key-1",
+      })),
+      deleteMap: vi.fn(async () => {}),
+    } as unknown as StorageClient;
+    await buildRemoteSaveCallback(server)(new Blob(["x"]), A);
+
+    await deleteSavedMap({ api: fx.api, notify }, A, { server });
+
+    expect(server.deleteMap).toHaveBeenCalledWith(
+      "map000000000000000001",
+      "key-1",
+    );
+    expect((await store.list()).map((m) => m.id)).not.toContain(A);
+    expect(notify.success).toHaveBeenCalledWith(
+      'Deleted "Harbour walk" and its server copy',
+    );
+  });
+
+  it("keeps the map when its server copy could not be deleted", async () => {
+    await store.save(savedFile(A, "Harbour walk", "2026-05-02T00:00:00.000Z"));
+    openEditedMap();
+    const server = {
+      createMap: vi.fn(async () => ({
+        map: { id: "map000000000000000001" },
+        writeKey: "key-1",
+      })),
+      deleteMap: vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    } as unknown as StorageClient;
+    await buildRemoteSaveCallback(server)(new Blob(["x"]), A);
+
+    await deleteSavedMap({ api: fx.api, notify }, A, { server });
+
+    expect((await store.list()).map((m) => m.id)).toContain(A);
+    expect(notify.error).toHaveBeenCalledWith(
+      'The server copy of "Harbour walk" could not be deleted, so nothing was deleted. Try again later.',
+    );
   });
 
   it("starts a new map when it deletes the open map", async () => {

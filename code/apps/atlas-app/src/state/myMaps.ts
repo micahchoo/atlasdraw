@@ -26,7 +26,7 @@ import {
 } from "./document";
 import { decode, hasUnsavedWork, loadDocument } from "./documentIO";
 import { useMapInstanceStore } from "./mapInstance";
-import { restoreFromServer } from "./remoteMapIdCache";
+import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 import { usePersistenceStore } from "./usePersistenceStore";
 
 import type { StorageClient } from "../services/createHttpStorageClient";
@@ -138,6 +138,37 @@ function blankFile(): AtlasdrawDocument {
 }
 
 /**
+ * A title for each map that no other map in the list shows. Maps with the
+ * same title are numbered in the order they were made (a ulid sorts by
+ * time): "Untitled map", "Untitled map 2". A number that another map already
+ * has as its own title is skipped.
+ */
+export function distinctTitles(
+  maps: readonly { id: string; title: string }[],
+): Map<string, string> {
+  const taken = new Set(maps.map((m) => m.title));
+  const byTitle = new Map<string, string[]>();
+  for (const m of maps) {
+    byTitle.set(m.title, [...(byTitle.get(m.title) ?? []), m.id]);
+  }
+  const out = new Map<string, string>();
+  for (const [title, ids] of byTitle) {
+    const [first, ...rest] = [...ids].sort();
+    out.set(first!, title);
+    let n = 2;
+    for (const id of rest) {
+      while (taken.has(`${title} ${n}`)) {
+        n++;
+      }
+      const name = `${title} ${n}`;
+      taken.add(name);
+      out.set(id, name);
+    }
+  }
+  return out;
+}
+
+/**
  * A shared map as a map of the user's own: a new id, so its saves never
  * reach the owner's copy, and new dates.
  */
@@ -169,18 +200,35 @@ export async function startNewMap(ctx: MapActionContext): Promise<boolean> {
 }
 
 /**
- * Delete a saved map from this browser. Deleting the open map first opens a
- * new one, so the deleted map cannot be saved again.
+ * Delete a saved map from this browser, and with `server`, its server copy:
+ * every link and embed made from it stops working. The server copy goes
+ * first; if it cannot, nothing is deleted, so the user can try again.
+ * Deleting the open map first opens a new one, so the deleted map cannot be
+ * saved again.
  */
 export async function deleteSavedMap(
   ctx: MapActionContext,
   id: string,
+  opts: { server?: StorageClient } = {},
 ): Promise<void> {
   const store = usePersistenceStore.getState().persistenceStore;
   if (!store) {
     return;
   }
   const title = (await store.list()).find((m) => m.id === id)?.title;
+  const name = title ? `"${title}"` : "the map";
+  if (opts.server) {
+    try {
+      await deleteServerMap(opts.server, id);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[atlasdraw] could not delete a server map", err);
+      ctx.notify?.error(
+        `The server copy of ${name} could not be deleted, so nothing was deleted. Try again later.`,
+      );
+      return;
+    }
+  }
   if (id === currentDocument().id) {
     // Its changes go with it: nothing to keep, nothing to ask.
     const opened = await loadDocument(blankFile(), ctx.api);
@@ -191,11 +239,16 @@ export async function deleteSavedMap(
   }
   try {
     await store.remove(id);
-    ctx.notify?.success(title ? `Deleted "${title}"` : "Map deleted");
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not delete a saved map", err);
     ctx.notify?.error("The map could not be deleted.");
+    return;
+  }
+  if (opts.server) {
+    ctx.notify?.success(`Deleted ${name} and its server copy`);
+  } else {
+    ctx.notify?.success(title ? `Deleted ${name}` : "Map deleted");
   }
 }
 

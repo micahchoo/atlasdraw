@@ -76,6 +76,7 @@ function stubClient(): HttpStorageClient {
       }),
     ),
     revokeShareToken: vi.fn(async () => {}),
+    deleteMap: vi.fn(async () => {}),
     getShareBlob: vi.fn(),
   };
 }
@@ -223,8 +224,14 @@ describe("ShareDialog", () => {
     expect(hint.textContent).toMatch(/every embed/i);
     expect(hint.textContent).toMatch(/until you stop/i);
 
+    fireEvent.click(screen.getByTestId("share-dialog-revoke"));
+    // Stopping breaks every copy of the link, so it asks first, in red.
+    expect(client.revokeShareToken).not.toHaveBeenCalled();
+    expect(
+      screen.getByTestId("confirm-dialog-confirm").getAttribute("data-tone"),
+    ).toBe("destructive");
     await act(async () => {
-      fireEvent.click(screen.getByTestId("share-dialog-revoke"));
+      fireEvent.click(screen.getByTestId("confirm-dialog-confirm"));
     });
 
     await screen.findByTestId("share-dialog-revoked");
@@ -234,6 +241,31 @@ describe("ShareDialog", () => {
       "tokentokentokentokenA",
     );
     expect(screen.queryByTestId("share-dialog-url")).toBeNull();
+  });
+
+  it("Escape on the stop-sharing question keeps the link and the dialog", async () => {
+    const client = stubClient();
+    const onCloseRequest = vi.fn();
+    render(
+      <ShareDialog
+        onCloseRequest={onCloseRequest}
+        getDoc={() => bigDoc()}
+        client={client}
+        startRoom={stubStartRoom()}
+      />,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("share-dialog-pick-readonly"));
+    });
+    await screen.findByTestId("share-dialog-url");
+
+    fireEvent.click(screen.getByTestId("share-dialog-revoke"));
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+    expect(onCloseRequest).not.toHaveBeenCalled();
+    expect(client.revokeShareToken).not.toHaveBeenCalled();
+    expect(screen.getByTestId("share-dialog-url")).toBeTruthy();
   });
 
   it("an expiry chosen before sharing goes to the server and shows", async () => {

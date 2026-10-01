@@ -1,15 +1,12 @@
 import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
 
 import {
-  isFlowchartNodeElement,
   isImageElement,
   isLinearElement,
   isLineElement,
   isTextBindableContainer,
   isTextElement,
 } from "@atlasdraw/element";
-
-import { isNodeInFlowchart } from "@atlasdraw/element";
 
 import type { EditorInterface } from "@atlasdraw/common";
 
@@ -209,26 +206,11 @@ const getHints = ({
         !appState.selectedElementsAreBeingDragged &&
         isTextBindableContainer(selectedElements[0])
       ) {
-        const bindTextToElement = t("hints.bindTextToElement", {
+        // No flowchart hint: flowchart creation steps by a fixed 100 scene
+        // units, under a pixel at map zoom (ADR-0015).
+        return t("hints.bindTextToElement", {
           shortcut: getTaggedShortcutKey("Enter"),
         });
-        const createFlowchart = t("hints.createFlowchart", {
-          shortcut: getTaggedShortcutKey(["CtrlOrCmd", "↑↓"]),
-        });
-        if (isFlowchartNodeElement(selectedElements[0])) {
-          if (
-            isNodeInFlowchart(
-              selectedElements[0],
-              app.scene.getNonDeletedElementsMap(),
-            )
-          ) {
-            return [bindTextToElement, createFlowchart];
-          }
-
-          return [bindTextToElement, createFlowchart];
-        }
-
-        return bindTextToElement;
       }
     }
   }

@@ -1,21 +1,18 @@
 /**
- * MapEditor — visual keystone for Phase 1.
+ * MapEditor — the editor: MapLibre GL (bottom) and a transparent Excalidraw
+ * (top) stacked in one container, inside the collar.
  *
- * Stacks MapLibre GL (bottom) + Excalidraw (top, transparent) in an
- * absolute-positioned container. Both layers fill the container via CSS
- * modules; the Excalidraw layer has pointer-events: none by default so map
- * interactions pass through. Task 13 wires isDrawingMode → .excalidrawLayerActive.
+ * Who takes the pointer: every Excalidraw tool except the hand tool captures
+ * pointer events (classifyTool, decision atlasdraw-dd91), so a drag with the
+ * selection tool selects. The hand tool lets the pointer through to the map,
+ * and Space+drag pans with any tool. Wheel and pinch always go to the map
+ * (useMapWheelRouter).
  *
  * The map owns the camera; Excalidraw's scroll and zoom follow it
  * (useCameraBridge, ADR-0015). A drawn element is stored in world
  * coordinates, so no camera move rewrites it.
  *
- * API surface for downstream tasks:
- *   map            — from useMapRef().
- *   excalidrawAPI  — from onExcalidrawAPI callback.
- *   onMount        — fires once when BOTH map AND api are non-null; callers
- *                    (e.g. integration tests) can use this as a "ready"
- *                    signal.
+ * `onMount` fires once when both the map and the Excalidraw API exist.
  */
 
 import React, {
@@ -31,7 +28,6 @@ import { MapCanvas } from "@atlasdraw/basemap";
 
 import { getBasemap } from "@atlasdraw/basemap";
 
-// @atlasdraw/data imports removed (unused after refactor)
 import { Excalidraw, MainMenu } from "@atlasdraw/excalidraw";
 
 import { CANVAS_SEARCH_TAB, DEFAULT_SIDEBAR } from "@atlasdraw/common";
@@ -465,8 +461,7 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
 
   useBrowserTabTitle();
 
-  // Phase 4 T8 — share-link HTTP client. Lazy: only built when the share
-  // dialog opens (avoids hitting fetch in the local-only / pages tiers).
+  // The storage HTTP client for Share and My maps, built on first use.
   const shareClientRef = useRef<HttpStorageClient | null>(null);
   function getShareClient(): HttpStorageClient {
     if (!shareClientRef.current) {
@@ -1413,6 +1408,11 @@ export function MapEditor({ initialView, onMount, open }: MapEditorProps) {
               excalidrawAPI={excalidrawAPI}
               notify={documentNotify}
               onClose={() => setShowMyMaps(false)}
+              server={
+                getAppConfig().enableBackendPersistence
+                  ? getShareClient()
+                  : null
+              }
             />
           )}
           {serverBackup.dialog}

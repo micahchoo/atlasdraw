@@ -195,6 +195,44 @@ export function revokeShare(
   });
 }
 
+async function forget(documentId: string): Promise<void> {
+  try {
+    const db = await remoteDb();
+    try {
+      await db.delete(REMOTE_STORE, remoteKey(documentId));
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] remote map forget failed", err);
+  }
+}
+
+/**
+ * Delete the document's server map (its links and bytes go with it) and
+ * forget its write key. A map the server no longer has is forgotten too.
+ */
+export function deleteServerMap(
+  client: StorageClient,
+  documentId: string,
+): Promise<void> {
+  return serial(documentId, async () => {
+    const entry = await load(documentId);
+    if (!entry) {
+      return;
+    }
+    try {
+      await client.deleteMap(entry.mapId, entry.writeKey);
+    } catch (err) {
+      if (!refused(err)) {
+        throw err;
+      }
+    }
+    await forget(documentId);
+  });
+}
+
 /** True when this browser holds a server map for the document. */
 export async function hasServerMap(documentId: string): Promise<boolean> {
   return (await load(documentId)) !== null;

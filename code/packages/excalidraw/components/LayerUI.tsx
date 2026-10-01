@@ -382,8 +382,8 @@ const LayerUI = ({
                   isCompactStylesPanel,
               })}
             >
-              {/* collar mode: the properties panel renders as the LEGEND at
-                the right frame edge instead (renderCollarLegend below). */}
+              {/* collar mode: the properties panel renders at the right
+                frame edge instead (renderCollarLegend below). */}
               {!collarMode &&
                 shouldRenderSelectedShapeActions &&
                 renderSelectedShapeActions()}
@@ -551,8 +551,8 @@ const LayerUI = ({
     );
   };
 
-  // Collar shell: element properties as the LEGEND panel, unfolding from the
-  // right frame edge (appears on selection — not at-rest chrome). Reuses
+  // Collar shell: the selected shape's properties, unfolding from the right
+  // frame edge (appears on selection — not at-rest chrome). Reuses
   // renderSelectedShapeActions; the collar CSS neutralizes the Island float.
   const renderCollarLegend = () => {
     if (!collarMode || !shouldRenderSelectedShapeActions) {
@@ -580,7 +580,9 @@ const LayerUI = ({
         })}
         data-testid="collar-legend"
       >
-        <div className="App-collar-legend__header">LEGEND</div>
+        <div className="App-collar-legend__header">
+          {t("stats.elementProperties")}
+        </div>
         {renderSelectedShapeActions()}
       </div>
     );

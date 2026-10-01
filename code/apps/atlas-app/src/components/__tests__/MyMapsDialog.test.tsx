@@ -28,11 +28,14 @@ import {
   type PersistenceStore,
 } from "../../state/persistence";
 import { sceneOf } from "../../state/scene";
+import { buildRemoteSaveCallback } from "../../state/remoteMapIdCache";
 import { usePersistenceStore } from "../../state/usePersistenceStore";
 import {
   makeFakeExcalidraw,
   type FakeExcalidraw,
 } from "../../state/__tests__/fixtures/documentWorld";
+
+import type { StorageClient } from "../../services/createHttpStorageClient";
 
 const A = "01J0000000000000000000000A";
 const B = "01J0000000000000000000000B";
@@ -83,7 +86,7 @@ afterEach(async () => {
   await store.close();
 });
 
-function renderDialog() {
+function renderDialog(server: StorageClient | null = null) {
   const onClose = vi.fn();
   const notify = { success: vi.fn(), error: vi.fn() };
   render(
@@ -92,9 +95,23 @@ function renderDialog() {
       notify={notify}
       onClose={onClose}
       now={() => NOW}
+      server={server}
     />,
   );
   return { onClose, notify };
+}
+
+/** A storage server that holds a copy of map `id`. */
+async function serverWithCopyOf(id: string) {
+  const server = {
+    createMap: vi.fn(async () => ({
+      map: { id: "map000000000000000001" },
+      writeKey: "key-1",
+    })),
+    deleteMap: vi.fn(async () => {}),
+  } as unknown as StorageClient & { deleteMap: ReturnType<typeof vi.fn> };
+  await buildRemoteSaveCallback(server)(new Blob(["x"]), id);
+  return server;
 }
 
 async function seedTwoMaps() {
@@ -116,6 +133,21 @@ describe("MyMapsDialog", () => {
     ]);
     expect(rows[0].textContent).toContain("5 minutes ago");
     expect(rows[1].textContent).toContain("3 days ago");
+  });
+
+  it("numbers maps that share a title, so each row can be told apart", async () => {
+    await store.save(savedFile(A, "Untitled map", "2026-10-01T11:55:00.000Z"));
+    await store.save(savedFile(B, "Untitled map", "2026-10-01T11:50:00.000Z"));
+    renderDialog();
+
+    const rows = await screen.findAllByTestId("my-maps-row");
+    expect(rows.map((r) => r.querySelector("span")?.textContent)).toEqual([
+      "Untitled map",
+      "Untitled map 2",
+    ]);
+    expect(
+      within(rows[1]).getByRole("button", { name: "Open Untitled map 2" }),
+    ).toBeTruthy();
   });
 
   it("says how to make a map when there are none", async () => {
@@ -168,6 +200,65 @@ describe("MyMapsDialog", () => {
 
     await waitFor(() => expect(screen.queryByText("Field sites")).toBeNull());
     expect((await store.list()).map((m) => m.id)).toEqual([A]);
+  });
+
+  it("asks in red before it deletes", async () => {
+    await seedTwoMaps();
+    renderDialog();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete Field sites" }),
+    );
+
+    expect(
+      screen.getByTestId("confirm-dialog-confirm").getAttribute("data-tone"),
+    ).toBe("destructive");
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("offers to delete the server copy too when there is one", async () => {
+    await seedTwoMaps();
+    const server = await serverWithCopyOf(B);
+    renderDialog(server);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete Field sites" }),
+    );
+    const also = await screen.findByRole("checkbox", {
+      name: /also delete the server copy/i,
+    });
+    expect((also as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(also);
+    fireEvent.click(screen.getByRole("button", { name: "Delete map" }));
+
+    await waitFor(() =>
+      expect(server.deleteMap).toHaveBeenCalledWith(
+        "map000000000000000001",
+        "key-1",
+      ),
+    );
+    await waitFor(async () =>
+      expect((await store.list()).map((m) => m.id)).toEqual([A]),
+    );
+  });
+
+  it("keeps the server copy unless asked", async () => {
+    await seedTwoMaps();
+    const server = await serverWithCopyOf(B);
+    renderDialog(server);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete Field sites" }),
+    );
+    await screen.findByRole("checkbox", {
+      name: /also delete the server copy/i,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete map" }));
+
+    await waitFor(async () =>
+      expect((await store.list()).map((m) => m.id)).toEqual([A]),
+    );
+    expect(server.deleteMap).not.toHaveBeenCalled();
   });
 
   it("keeps the map when the confirm is cancelled", async () => {

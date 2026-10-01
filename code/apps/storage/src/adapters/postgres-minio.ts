@@ -279,6 +279,35 @@ export function createPostgresMinioAdapter(opts: {
       return (res.rowCount ?? 0) > 0;
     },
 
+    async deleteMap(id) {
+      if (!ID_RE.test(id)) {
+        return false;
+      }
+      await ensureSchema();
+      const client = await pool.connect();
+      let blobRef: string | null = null;
+      try {
+        await client.query("BEGIN");
+        await client.query(`DELETE FROM share_tokens WHERE map_id = $1`, [id]);
+        const res = await client.query<{ blob_ref: string }>(
+          `DELETE FROM maps WHERE id = $1 RETURNING blob_ref`,
+          [id],
+        );
+        await client.query("COMMIT");
+        blobRef = res.rows[0]?.blob_ref ?? null;
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+      if (blobRef === null) {
+        return false;
+      }
+      await deleteBlob(blobRef);
+      return true;
+    },
+
     async totalBytes() {
       await ensureSchema();
       const res = await pool.query<{ total: string | number }>(

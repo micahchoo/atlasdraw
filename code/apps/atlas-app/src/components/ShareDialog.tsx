@@ -29,6 +29,7 @@ import { getAppConfig } from "../config/app-config";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 import { toEmbedUrl } from "../routes";
 
+import { ConfirmDialog } from "./ConfirmDialog";
 import { FocusTrap } from "./FocusTrap";
 
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
@@ -94,6 +95,10 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [view, setView] = useState<DialogView>({ kind: "picker" });
+  /** The link the user is asked about stopping; null when not asked. */
+  const [confirmStop, setConfirmStop] = useState<string | null>(null);
+  const confirmStopRef = useRef(confirmStop);
+  confirmStopRef.current = confirmStop;
   const [copied, setCopied] = useState(false);
   const [expiry, setExpiry] = useState("");
   const {
@@ -113,7 +118,8 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     }
     panel.querySelector<HTMLButtonElement>("button")?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      // An open question answers its own Escape.
+      if (e.key === "Escape" && confirmStopRef.current === null) {
         onCloseRequest();
       }
     };
@@ -132,6 +138,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   };
 
   const stopSharing = async (token: string) => {
+    setConfirmStop(null);
     if (await revoke(token)) {
       setView({ kind: "revoked" });
     } else {
@@ -417,7 +424,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               {view.kind === "readonly-success" && view.token !== null && (
                 <button
                   type="button"
-                  onClick={() => void stopSharing(view.token!)}
+                  onClick={() => setConfirmStop(view.token)}
                   data-testid="share-dialog-revoke"
                   style={{
                     margin: "0 0 0.75rem 0",
@@ -472,6 +479,16 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               Close
             </button>
           </div>
+          {confirmStop !== null && (
+            <ConfirmDialog
+              title="Stop sharing this link?"
+              body="Everyone who has the link, and every embed made from it, loses the map. You cannot undo this."
+              confirmLabel="Stop sharing"
+              tone="destructive"
+              onConfirm={() => void stopSharing(confirmStop)}
+              onCancel={() => setConfirmStop(null)}
+            />
+          )}
         </div>
       </FocusTrap>
     </div>

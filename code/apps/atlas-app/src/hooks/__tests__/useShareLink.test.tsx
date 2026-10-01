@@ -104,6 +104,7 @@ function makeMockClient(opts: { fail?: boolean } = {}): HttpStorageClient & {
     readMap: vi.fn(),
     createShareToken: createShareTokenSpy,
     revokeShareToken: revokeShareTokenSpy,
+    deleteMap: vi.fn(async () => {}),
     getShareBlob: vi.fn(async () => null),
     createMapSpy,
     createShareTokenSpy,

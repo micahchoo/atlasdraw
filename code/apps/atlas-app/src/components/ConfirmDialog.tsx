@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // ConfirmDialog — a question with two answers, in the page. Used where an
-// action would replace the user's work (Open over unsaved changes).
-// window.confirm blocks the page and cannot be styled or tested; this can.
+// action would replace or destroy the user's work. window.confirm blocks the
+// page and cannot be styled or tested; this can. `tone="destructive"` paints
+// the confirm button red, for an action that cannot be undone.
 //
 // Escape and the Cancel button cancel. Focus starts on Cancel, the answer
 // that loses nothing, and stays inside the dialog (FocusTrap).
@@ -17,6 +18,14 @@ export interface ConfirmDialogProps {
   title: string;
   body: string;
   confirmLabel: string;
+  /** "destructive": the confirm button is red. */
+  tone?: "default" | "destructive";
+  /** A checkbox that goes with the answer, below the body. */
+  option?: {
+    label: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+  };
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -25,6 +34,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title,
   body,
   confirmLabel,
+  tone = "default",
+  option,
   onConfirm,
   onCancel,
 }) => {
@@ -55,6 +66,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <p id="confirm-dialog-body" className={styles.body}>
             {body}
           </p>
+          {option && (
+            <label className={styles.option}>
+              <input
+                type="checkbox"
+                checked={option.checked}
+                onChange={(e) => option.onChange(e.target.checked)}
+                data-testid="confirm-dialog-option"
+              />
+              <span>{option.label}</span>
+            </label>
+          )}
           <div className={styles.actions}>
             <button
               type="button"
@@ -67,9 +89,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             </button>
             <button
               type="button"
-              className={[styles.button, styles.buttonPrimary].join(" ")}
+              className={[
+                styles.button,
+                tone === "destructive"
+                  ? styles.buttonDestructive
+                  : styles.buttonPrimary,
+              ].join(" ")}
               onClick={onConfirm}
               data-testid="confirm-dialog-confirm"
+              data-tone={tone}
             >
               {confirmLabel}
             </button>

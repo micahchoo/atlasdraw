@@ -78,7 +78,7 @@ test("a share link shows the map, the drawing and the map's title", async ({
   const viewer = await page.context().newPage();
   await viewer.goto(url.slice(url.indexOf("/m#")));
 
-  await expect(viewer.getByTestId("viewer-head")).toContainText("Untitled");
+  await expect(viewer.getByTestId("viewer-head")).toContainText("Untitled map");
   await expect(viewer.locator("canvas.maplibregl-canvas")).toHaveCount(1, {
     timeout: 15_000,
   });

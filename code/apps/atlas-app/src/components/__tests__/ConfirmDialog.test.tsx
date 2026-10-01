@@ -25,6 +25,29 @@ function renderDialog() {
 }
 
 describe("ConfirmDialog", () => {
+  it("marks the confirm button destructive when the action destroys", () => {
+    render(
+      <ConfirmDialog
+        title="Delete map?"
+        body="You cannot undo this."
+        confirmLabel="Delete map"
+        tone="destructive"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByTestId("confirm-dialog-confirm").getAttribute("data-tone"),
+    ).toBe("destructive");
+  });
+
+  it("is not destructive unless asked", () => {
+    renderDialog();
+    expect(
+      screen.getByTestId("confirm-dialog-confirm").getAttribute("data-tone"),
+    ).toBe("default");
+  });
+
   it("asks the question as an alert dialog", () => {
     renderDialog();
     const dialog = screen.getByRole("alertdialog", {

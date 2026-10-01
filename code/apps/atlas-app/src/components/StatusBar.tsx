@@ -203,7 +203,7 @@ export function StatusBar({
       {readout && (
         <>
           <span className={styles.zoom} data-testid="status-bar-zoom">
-            {fmtZoom(readout.zoom)}×
+            z {fmtZoom(readout.zoom)}
           </span>
           <span className={styles.value} data-testid="status-bar-ratio">
             {readout.ratio}

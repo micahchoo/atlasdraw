@@ -222,6 +222,7 @@ describe("layer commands", () => {
 
     doc.dispatch({ type: "rename-document", title: "   " });
     expect(doc.snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
+    expect(DEFAULT_DOCUMENT_TITLE).toBe("Untitled map");
   });
 });
 

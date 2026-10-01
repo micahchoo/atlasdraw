@@ -157,6 +157,18 @@ describe("createHttpStorageClient", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("deleteMap DELETEs the map with the key", async () => {
+    const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
+      expect(url).toBe(`/maps/${SAMPLE_MAP.id}`);
+      expect((init as RequestInit).method).toBe("DELETE");
+      expect(headersOf(init).Authorization).toBe(`Bearer ${KEY}`);
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    await expect(client.deleteMap(SAMPLE_MAP.id, KEY)).resolves.toBeUndefined();
+  });
+
   it("propagates network errors from fetch (rejection bubbles up)", async () => {
     const boom = new Error("network down");
     const fetchSpy = vi.fn(async () => {
