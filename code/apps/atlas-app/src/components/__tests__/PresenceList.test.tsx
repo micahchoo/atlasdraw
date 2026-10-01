@@ -54,4 +54,20 @@ describe("PresenceList", () => {
     fireEvent.blur(field);
     expect(onRename).not.toHaveBeenCalled();
   });
+
+  it("says how the room's connection stands, as a status line", () => {
+    const { rerender } = render(
+      <PresenceList
+        peers={[]}
+        self={self}
+        connection="Offline. Reconnecting…"
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toBe(
+      "Offline. Reconnecting…",
+    );
+
+    rerender(<PresenceList peers={[]} self={self} connection={null} />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });

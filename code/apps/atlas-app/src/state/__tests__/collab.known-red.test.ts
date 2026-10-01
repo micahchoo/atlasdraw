@@ -49,9 +49,12 @@ import { sqliteRoomStore } from "../../../../realtime/src/room-store";
 import {
   registerRoomServer,
   type RoomServer,
+  type RoomServerOptions,
 } from "../../../../realtime/src/rooms";
+import { createDocument, type Document } from "../document";
+import { planSeed } from "../roomDocument";
 import { toFile } from "../documentIO";
-import { joinRoom, relayTransport, type Room } from "../room";
+import { joinRoom, relayTransport, type Room, type RoomStatus } from "../room";
 
 import type { BinaryFiles, RoomEditor } from "../roomScene";
 import type { FeatureCollection } from "geojson";
@@ -100,6 +103,9 @@ interface Client {
 }
 
 const open = new Set<Client>();
+
+/** A drawing with nothing in it, for rooms that test only layers. */
+const NO_SCENE = { elements: () => [], files: () => ({}) };
 
 function openClient(link: RoomLink): Client {
   const changeListeners = new Set<() => void>();
@@ -718,6 +724,54 @@ describe("the relay's abuse limits reach the user", () => {
   });
 });
 
+describe("what a client skipped stays in the room", () => {
+  it("a layer whose features this client cannot read survives this client's next edit", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const link = newRoomLink();
+    const a = openClient(link);
+    await joined(a);
+    const rogue = await openRogue(link);
+
+    // What a newer client might write: a geometry this one does not know.
+    writeRaw(rogue, (doc) => {
+      doc.getMap<unknown>("overlays").set("dl:new", {
+        kind: "data",
+        id: "dl:new",
+        label: "From a newer client",
+        visible: true,
+        order: 0,
+        featureCount: 1,
+        geometryKind: "circle",
+        style: {},
+      });
+      doc.getMap<unknown>("features").set("dl:new", {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: {},
+            geometry: { type: "Curve", coordinates: [13.4, 52.5] },
+          },
+        ],
+      });
+    });
+    await until("A has the rogue's write", () =>
+      a.room.doc.getMap("overlays").has("dl:new"),
+    );
+    expect(documentOf(a).snapshot().overlays).toEqual([]);
+
+    // An unrelated edit by A: toRoom diffs the whole Document.
+    documentOf(a).dispatch({ type: "rename-document", title: "Renamed" });
+    await until(
+      "the rogue has A's rename",
+      () => rogue.doc.getMap("meta").get("title") === "Renamed",
+    );
+    expect(rogue.doc.getMap("overlays").has("dl:new")).toBe(true);
+    expect(rogue.doc.getMap("features").has("dl:new")).toBe(true);
+    a.leave();
+  });
+});
+
 describe("comments outlive the room", () => {
   it("comments survive the room emptying and refilling", async () => {
     const link = newRoomLink();
@@ -790,6 +844,146 @@ describe("comments in the saved document", () => {
       ).toBe(true);
     } finally {
       a.leave();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Size limits (protocol ROOM_SIZE): the relay refuses, the client says so
+// ---------------------------------------------------------------------------
+
+/** A relay of its own, with these limits, for one test. */
+async function ownRelay(options: Partial<RoomServerOptions> = {}) {
+  const ownServer = http.createServer();
+  const ownStore = sqliteRoomStore(":memory:");
+  const relay = registerRoomServer(ownServer, {
+    store: ownStore,
+    saveDelayMs: 50,
+    ...options,
+  });
+  await new Promise<void>((resolve) => ownServer.listen(0, resolve));
+  return {
+    url: `ws://127.0.0.1:${(ownServer.address() as { port: number }).port}`,
+    relay,
+    async stop() {
+      relay.close();
+      await new Promise<void>((resolve) => {
+        ownServer.close(() => resolve());
+        ownServer.closeAllConnections();
+      });
+      ownStore.close();
+    },
+  };
+}
+
+const CORNERS: [
+  [number, number],
+  [number, number],
+  [number, number],
+  [number, number],
+] = [
+  [13.3, 52.6],
+  [13.5, 52.6],
+  [13.5, 52.4],
+  [13.3, 52.4],
+];
+
+/** A PNG-typed image of `bytes` bytes, each one `fill`. */
+function image(bytes: number, fill = 7): Blob {
+  return new Blob([new Uint8Array(bytes).fill(fill)], { type: "image/png" });
+}
+
+function addRaster(d: Document, id: string, bytes: number): void {
+  d.dispatch({
+    type: "add-raster-layer",
+    id,
+    label: id,
+    corners: CORNERS,
+    imageKey: `${id}.png`,
+    image: image(bytes),
+  });
+}
+
+function statusesOf(room: Room): RoomStatus[] {
+  const seen: RoomStatus[] = [];
+  room.status((s) => seen.push(s));
+  return seen;
+}
+
+describe("a room's size limits reach the user", () => {
+  it("a map larger than one message is seeded in parts, and a joiner gets all of it", async () => {
+    const seed = createDocument({ title: "Big survey" }, NO_SCENE);
+    for (const id of ["rl:a", "rl:b", "rl:c"]) {
+      addRaster(seed, id, 7 << 20);
+    }
+    const link = newRoomLink();
+    const plan = await planSeed(seed, null);
+    if (!plan.ok) {
+      throw new Error(plan.reason);
+    }
+    const host = joinRoom(link, relayTransport(relayUrl), {
+      seed: plan,
+      scene: NO_SCENE,
+    });
+    try {
+      await until("the host joined", () => host.document !== null, 20_000);
+      const b = openClient(link);
+      await until(
+        "the joiner holds all three rasters",
+        () =>
+          (b.room.document?.snapshot().overlays.length ?? 0) === 3 &&
+          Object.keys(b.room.document?.snapshot().images ?? {}).length === 3,
+        20_000,
+      );
+      expect(b.room.document!.snapshot().title).toBe("Big survey");
+      b.leave();
+    } finally {
+      host.leave();
+    }
+  }, 60_000);
+
+  it("a change over the relay's message cap: the client says too large and stops trying", async () => {
+    const own = await ownRelay({ maxMessageBytes: 64 * 1024 });
+    try {
+      const room = joinRoom(newRoomLink(), relayTransport(own.url), {
+        scene: NO_SCENE,
+      });
+      const seen = statusesOf(room);
+      await until("joined", () => room.document !== null);
+      addRaster(room.document!, "rl:big", 100 * 1024);
+      await until("the client is told the map is too large", () =>
+        seen.includes("too-large"),
+      );
+      await new Promise((r) => setTimeout(r, 400));
+      expect(seen.at(-1), "no retry turned it into another status").toBe(
+        "too-large",
+      );
+      expect(own.relay.connections()).toBe(0);
+      expect(room.reason).toMatch(/16\.0 MB/);
+      room.leave();
+    } finally {
+      await own.stop();
+    }
+  });
+
+  it("a change that takes the room past its cap: too large, with the relay's reason", async () => {
+    const own = await ownRelay({ maxRoomBytes: 64 * 1024 });
+    try {
+      const room = joinRoom(newRoomLink(), relayTransport(own.url), {
+        scene: NO_SCENE,
+      });
+      const seen = statusesOf(room);
+      await until("joined", () => room.document !== null);
+      addRaster(room.document!, "rl:one", 40 * 1024);
+      await new Promise((r) => setTimeout(r, 200));
+      addRaster(room.document!, "rl:two", 40 * 1024);
+      await until("the client is told the map is too large", () =>
+        seen.includes("too-large"),
+      );
+      expect(room.reason).toMatch(/64\.0 KB/);
+      room.leave();
+    } finally {
+      await own.stop();
     }
   });
 });

@@ -85,6 +85,16 @@ function copy<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/** An element as the room doc holds it: a copy, since Excalidraw mutates. */
+export function elementRecord(el: ExcalidrawElement): ExcalidrawElement {
+  return copy(el);
+}
+
+/** A file as the room doc holds it. */
+export function fileRecord(f: BinaryFileData): RoomFile {
+  return { mimeType: f.mimeType, dataURL: f.dataURL, created: f.created };
+}
+
 /**
  * Write every element and file of `editor` that the room does not hold, or
  * holds an older copy of, into `doc` as one transaction with `origin`.
@@ -118,15 +128,10 @@ export function writeScene(
   }
   doc.transact(() => {
     for (const el of changed) {
-      elements.set(el.id, copy(el));
+      elements.set(el.id, elementRecord(el));
     }
     for (const id of newFiles) {
-      const f = editorFiles[id]!;
-      files.set(id, {
-        mimeType: f.mimeType,
-        dataURL: f.dataURL,
-        created: f.created,
-      });
+      files.set(id, fileRecord(editorFiles[id]!));
     }
   }, origin);
 }

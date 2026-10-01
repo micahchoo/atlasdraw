@@ -26,7 +26,15 @@ import { Awareness } from "y-protocols/awareness";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
-import { roomToken, withRoomToken, type RoomLink } from "@atlasdraw/protocol";
+import {
+  CLOSE,
+  ROOM_SIZE,
+  readCloseReason,
+  roomToken,
+  sizeText,
+  withRoomToken,
+  type RoomLink,
+} from "@atlasdraw/protocol";
 
 import type { Camera } from "@atlasdraw/data";
 
@@ -37,7 +45,8 @@ import {
   bindRoomDocument,
   makeEmptyRoom,
   roomIsMade,
-  seedRoom,
+  writeSeed,
+  type Seed,
 } from "./roomDocument";
 import { bindScene, type RoomEditor } from "./roomScene";
 
@@ -46,14 +55,19 @@ import { editorScene, type SceneAccess } from "./scene";
 import type { Document } from "./document";
 
 /**
- * Where the room stands. The last four are refusals: the relay closed the
- * connection with a reason, and the room does not try again.
+ * Where the room stands. The last six are refusals: the relay closed the
+ * connection with a reason, or the client found one before it connected,
+ * and the room does not try again. A refusal after "joined" means the
+ * edits made from then on reach nobody.
  *
- *   denied    the link's key is not the room's
- *   full      too many people in the room or rooms on the relay, or the
- *             room is over the relay's size limit
- *   limited   too many connections or new rooms from this network
- *   no-space  the relay's storage for rooms is full
+ *   denied       the link's key is not the room's
+ *   full         too many people in the room, or rooms on the relay
+ *   too-large    one change was over the relay's message cap, or the room
+ *                would grow past its cap (protocol ROOM_SIZE)
+ *   limited      too many connections or new rooms from this network
+ *   no-space     the relay's storage for rooms is full
+ *   unavailable  this page cannot make a room token (no WebCrypto: an
+ *                http page that is not localhost)
  */
 export type RoomStatus =
   | "connecting"
@@ -61,31 +75,46 @@ export type RoomStatus =
   | "offline"
   | "denied"
   | "full"
+  | "too-large"
   | "limited"
-  | "no-space";
-
-/** Close codes the relay uses (apps/realtime/src/rooms.ts). */
-const CLOSE_DENIED = 4403;
-const CLOSE_FULL = 4409;
-const CLOSE_TOO_LARGE = 4413;
-const CLOSE_LIMITED = 4429;
-const CLOSE_NO_SPACE = 4507;
+  | "no-space"
+  | "unavailable";
 
 /** The status a refusal close code means; null for any other close. */
 function refusal(code: number): RoomStatus | null {
   switch (code) {
-    case CLOSE_DENIED:
+    case CLOSE.denied:
       return "denied";
-    case CLOSE_FULL:
-    case CLOSE_TOO_LARGE:
+    case CLOSE.full:
       return "full";
-    case CLOSE_LIMITED:
+    case CLOSE.roomTooLarge:
+    case CLOSE.messageTooLarge:
+      return "too-large";
+    case CLOSE.limited:
       return "limited";
-    case CLOSE_NO_SPACE:
+    case CLOSE.noSpace:
       return "no-space";
     default:
       return null;
   }
+}
+
+/** A size refusal in the user's words, with the size and the cap. */
+function sizeRefusal(code: number, reason: string): string | null {
+  if (code === CLOSE.messageTooLarge) {
+    return `One change was larger than the server takes at once (${sizeText(
+      ROOM_SIZE.messageBytes,
+    )}).`;
+  }
+  if (code === CLOSE.roomTooLarge) {
+    const sizes = readCloseReason(reason);
+    return sizes
+      ? `This shared map would grow to ${sizeText(
+          sizes.size,
+        )}; the server holds at most ${sizeText(sizes.cap)} per map.`
+      : `This shared map is over the server's size limit.`;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,8 +124,8 @@ function refusal(code: number): RoomStatus | null {
 export interface TransportEvents {
   /** The doc has had its first full sync from the relay since (re)connect. */
   synced(): void;
-  /** The connection closed with this WebSocket close code. */
-  closed(code: number): void;
+  /** The connection closed with this WebSocket close code and reason. */
+  closed(code: number, reason: string): void;
 }
 
 /** How a room reaches its relay. */
@@ -142,9 +171,11 @@ export function relayTransport(baseUrl: string): RoomTransport {
     provider.on("connection-close", (event: CloseEvent | null) => {
       const code = event?.code ?? 1006;
       if (refusal(code)) {
+        // Before y-websocket schedules its next attempt: a refusal is the
+        // same answer every time, so no retry.
         provider.shouldConnect = false;
       }
-      events.closed(code);
+      events.closed(code, event?.reason ?? "");
     });
     return { close: () => provider.destroy() };
   };
@@ -313,6 +344,12 @@ export interface Room {
   /** Call `listener` with the status now and after each change. */
   status(listener: (status: RoomStatus) => void): () => void;
   /**
+   * Why the room was refused, in the user's words, when the status alone
+   * does not say it: the size and the cap of a size refusal. Null
+   * otherwise.
+   */
+  readonly reason: string | null;
+  /**
    * Show the room's drawing in `editor` and keep the two in step. Only
    * after the room joined. Returns the detach function.
    */
@@ -323,12 +360,11 @@ export interface Room {
 
 export interface JoinOptions {
   /**
-   * The user's map, to make a new room from. Used only when the room is
-   * empty: a room that exists already keeps its content.
+   * The user's map, planned as a room (roomDocument.ts#planSeed), to make a
+   * new room from. Used only when the room is empty: a room that exists
+   * already keeps its content.
    */
-  seed?: Document;
-  /** Where the seed's user is looking: the camera a joiner starts at. */
-  seedCamera?: Camera | null;
+  seed?: Seed;
   identity?: Identity;
   /** The drawing the room's Document saves with. Default: the editor's. */
   scene?: SceneAccess;
@@ -356,6 +392,7 @@ export function joinRoom(
   const local = { room: link.roomId };
 
   let status: RoomStatus = "connecting";
+  let reason: string | null = null;
   const listeners = new Set<(s: RoomStatus) => void>();
   const setStatus = (next: RoomStatus): void => {
     if (status === next) {
@@ -369,22 +406,29 @@ export function joinRoom(
 
   let document: Document | null = null;
   let unbindDocument: (() => void) | null = null;
-  let making: Promise<void> | null = null;
+  /** The room was made or seeded, or found made, at the first sync. */
+  let made = false;
   let left = false;
   /** The relay refused this client; the status stays the refusal. */
   let refused = false;
   let connection: { close(): void } | null = null;
 
-  const open = async (): Promise<void> => {
+  const refuse = (next: RoomStatus, why: string | null): void => {
+    refused = true;
+    reason = why;
+    setStatus(next);
+  };
+
+  const open = (): void => {
+    if (left) {
+      return;
+    }
     if (!roomIsMade(doc)) {
       if (options.seed) {
-        await seedRoom(doc, options.seed, local, options.seedCamera ?? null);
+        writeSeed(doc, options.seed, local);
       } else {
         makeEmptyRoom(doc, local);
       }
-    }
-    if (left) {
-      return;
     }
     const bound = bindRoomDocument(doc, options.scene ?? editorScene, local);
     document = bound.document;
@@ -392,42 +436,55 @@ export function joinRoom(
     roomDocuments.add(document);
   };
 
-  void roomToken(link).then((token) => {
-    if (left) {
-      return;
-    }
-    connection = transport({
-      roomId: link.roomId,
-      token,
-      doc,
-      awareness,
-      events: {
-        synced: () => {
-          making ??= open();
-          void making.then(() => {
+  roomToken(link).then(
+    (token) => {
+      if (left) {
+        return;
+      }
+      connection = transport({
+        roomId: link.roomId,
+        token,
+        doc,
+        awareness,
+        events: {
+          synced: () => {
+            if (!made) {
+              made = true;
+              open();
+            }
             if (!left && !refused) {
               setStatus("joined");
             }
-          });
+          },
+          closed: (code, why) => {
+            const next = refusal(code);
+            if (next) {
+              refuse(next, sizeRefusal(code, why));
+            } else if (!refused) {
+              setStatus("offline");
+            }
+          },
         },
-        closed: (code) => {
-          const reason = refusal(code);
-          if (reason) {
-            refused = true;
-            setStatus(reason);
-          } else if (!refused) {
-            setStatus("offline");
-          }
-        },
-      },
-    });
-  });
+      });
+    },
+    () => {
+      if (!left) {
+        refuse(
+          "unavailable",
+          "Shared maps need a secure page: open this map over https.",
+        );
+      }
+    },
+  );
 
   return {
     link,
     doc,
     get document() {
       return document;
+    },
+    get reason() {
+      return reason;
     },
     presence,
     status(listener) {

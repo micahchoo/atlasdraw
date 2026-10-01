@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // PresenceList — who else is in the room. One coloured dot and name per
-// peer; it collapses to dots alone at four or more. A peer whose camera is
+// peer; it collapses to dots alone at four or more. Under the header, a
+// status line says when the room is connecting, offline or refused. A peer whose camera is
 // known can be clicked to look where they look. The first row is this
 // person's own name, which they can change (identity.ts#setDisplayName).
 //
@@ -34,6 +35,8 @@ export interface PresenceListProps {
   /** This person; with `onRename`, a field to change the name others see. */
   self?: Identity | null;
   onRename?: (name: string) => void;
+  /** How the room's connection stands ("Connecting…"); null when joined. */
+  connection?: string | null;
 }
 
 /**
@@ -103,11 +106,12 @@ export function PresenceList({
   onGoTo,
   self,
   onRename,
+  connection = null,
 }: PresenceListProps) {
   const count = peers.length;
   const editable = self && onRename ? { self, onRename } : null;
 
-  if (count === 0 && !editable) {
+  if (count === 0 && !editable && !connection) {
     return null;
   }
 
@@ -124,6 +128,15 @@ export function PresenceList({
       <h3 className={styles.header} data-testid="presence-list-header">
         {headerText}
       </h3>
+      {connection && (
+        <p
+          className={styles.connection}
+          role="status"
+          data-testid="presence-connection"
+        >
+          {connection}
+        </p>
+      )}
       {editable && <NameField {...editable} />}
       {compact ? (
         <div className={styles.dotRow} data-testid="presence-list-compact">
