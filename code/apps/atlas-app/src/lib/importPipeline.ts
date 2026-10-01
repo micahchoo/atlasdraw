@@ -33,6 +33,8 @@ import {
   UnsupportedRasterCrsError,
 } from "@atlasdraw/data";
 
+import { LIMITS } from "@atlasdraw/protocol";
+
 import type { AtlasGeometryKind } from "@atlasdraw/data";
 
 import type { RasterCorners } from "../state/document";
@@ -48,11 +50,13 @@ export type ImportFormat =
   | "gpx";
 
 /**
- * The largest file an import reads. The whole file is held in memory while
- * it is parsed, and the result again in the document and in MapLibre's
- * workers, so a larger file is refused before it is read.
+ * The largest file an import reads (protocol LIMITS). A data file becomes
+ * the layer, so its cap is what a server save takes. A GeoTIFF is resampled,
+ * so it may be larger. A file over its cap is refused before it is read.
  */
-export const IMPORT_LIMIT_BYTES = 256 * 1024 * 1024;
+function importLimit(file: { name: string; type?: string }): number {
+  return detectFormat(file) === "geotiff" ? LIMITS.importRaster : LIMITS.import;
+}
 
 /** The formats the pipeline reads, for messages. */
 export const SUPPORTED_FORMATS =
@@ -137,19 +141,21 @@ export function detectFormat(file: {
   return MIME_TYPES[(file.type ?? "").toLowerCase()] ?? null;
 }
 
-/** The refusal for a file over IMPORT_LIMIT_BYTES, or null. */
+/** The refusal for a file over its import cap, or null. */
 export function sizeRefusal(file: {
   name: string;
+  type?: string;
   size?: number;
 }): string | null {
-  if (!(typeof file.size === "number" && file.size > IMPORT_LIMIT_BYTES)) {
+  const limit = importLimit(file);
+  if (!(typeof file.size === "number" && file.size > limit)) {
     return null;
   }
   const mb = (n: number) => Math.round(n / (1024 * 1024));
   return `${file.name} is ${mb(
     file.size,
-  )} MB. Atlasdraw imports files up to ${mb(
-    IMPORT_LIMIT_BYTES,
+  )} MB. Atlasdraw imports files like this up to ${mb(
+    limit,
   )} MB; split or simplify the file and try again.`;
 }
 

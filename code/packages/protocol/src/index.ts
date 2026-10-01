@@ -12,6 +12,9 @@ export {
   withRoomToken,
 } from "./room-link.js";
 
+export type { ArchiveLimits } from "./limits.js";
+export { LIMITS } from "./limits.js";
+
 export type { CloseCode, RoomSize } from "./wire.js";
 export {
   CLOSE,

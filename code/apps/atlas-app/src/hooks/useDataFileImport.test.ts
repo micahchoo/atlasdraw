@@ -837,7 +837,7 @@ describe("useDataFileImport — limits, many files, cancel", () => {
 
     const toast = await findByTestId("toast-error");
     expect(toast.textContent).toMatch(/huge\.geojson is 300 MB/);
-    expect(toast.textContent).toMatch(/up to 256 MB/);
+    expect(toast.textContent).toMatch(/up to 50 MB/);
     expect(parseMock).not.toHaveBeenCalled();
     expect(registerDataLayer).not.toHaveBeenCalled();
   });
