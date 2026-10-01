@@ -15,7 +15,6 @@
 //   /m/<token>           → ShareView (upload mode)
 //   /m#room:...          → ShareView (defensive — Q-P5-2; treat as read-only)
 //   /#room:<id>,<key>    → MapEditor (collab session; URL key = write cap)
-//   /billing             → BillingPage (managed-mode upgrade page; A13a)
 //   anything else        → MapEditor (the editor)
 
 import { Suspense, lazy, useEffect } from "react";
@@ -24,21 +23,15 @@ import { dismissBootShell } from "./bootShell";
 import { AriaAnnouncer } from "./components/AriaAnnouncer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ToastProvider";
-import { getAppConfig } from "./config/app-config";
-import { createHttpStorageClient } from "./services/createHttpStorageClient";
-import { resolveWorkspaceFromEnv } from "./state/workspace";
 
-// The four route roots load on demand. Before this split every visitor
-// downloaded all four in one 4.3 MB entry chunk: an /embed iframe pulled the
-// whole editor, and an editor visitor pulled BillingPage and both read-only
-// views. Exactly one of these ever mounts per page load.
+// The three route roots load on demand, so a visitor downloads only the one
+// that mounts: an /embed iframe does not pull the editor, and an editor
+// visitor does not pull the read-only views. Exactly one of these mounts per
+// page load.
 //
 // `.then(m => ({ default: ... }))` because each module exports a NAMED
 // component and React.lazy resolves `default` only. Keep the named exports —
 // the test suite mocks these modules by name.
-const BillingPage = lazy(() =>
-  import("./components/BillingPage").then((m) => ({ default: m.BillingPage })),
-);
 const MapEditor = lazy(() =>
   import("./components/MapEditor").then((m) => ({ default: m.MapEditor })),
 );
@@ -85,32 +78,6 @@ function pickView() {
   }
   if (path.startsWith("/m/")) {
     return <ShareView />;
-  }
-  // Phase 6 A13a: `/billing` route — Stripe checkout entry point. Renders
-  // in self-host too (with a FOSS hint) so users following an "Upgrade" link
-  // accidentally on a self-host deploy get a sensible explanation.
-  //
-  // workspaceId resolution: prefer `?workspaceId=` query (set by the in-app
-  // Upgrade button so the active workspace survives the full-page reload),
-  // then fall back to the A9 env resolver (`VITE_WORKSPACE_ID`). In a
-  // multi-tenant managed deploy the env var is not set per-user, so the
-  // query-string hop is the load-bearing path — without it every BillingPage
-  // visit renders disabled Upgrade buttons.
-  if (path === "/billing") {
-    const cfg = getAppConfig();
-    const params = new URLSearchParams(window.location.search);
-    const queryWs = params.get("workspaceId");
-    const envCtx = resolveWorkspaceFromEnv(
-      typeof import.meta.env === "undefined"
-        ? {}
-        : (import.meta.env as Record<string, string | undefined>),
-    );
-    const workspaceId = queryWs && queryWs !== "" ? queryWs : envCtx.id;
-    const client = createHttpStorageClient({
-      baseUrl: cfg.storageBaseUrl,
-      getWorkspaceId: () => workspaceId,
-    });
-    return <BillingPage client={client} workspaceId={workspaceId} />;
   }
   // Q-P5-2: `#room:` on the editor path (`/`) is the write-capable collab
   // entry point. MapEditor mounts useCollabRoom which decodes the key and
