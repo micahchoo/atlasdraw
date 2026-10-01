@@ -10,6 +10,35 @@ wedge is bigger than the evidence claims — and that itself is the finding.
 
 ---
 
+## Status (2026-10)
+
+The text below is the spec as written on 2026-07-05. This section says what
+the code does on 2026-10-01.
+
+**Shipped:**
+
+- The `/embed` route, for a map in the link (`/embed#v2:…`) and a map on the
+  server (`/embed/<token>`). It shows the basemap, the data, raster and tile
+  layers, and the drawing, at the saved camera. `/m` is the same viewer with a
+  title and a link that opens a copy in the editor. `ShareView` is deleted.
+- An **Embed** section in the Share dialog that copies an `<iframe>` snippet.
+- `?lock=1` fixes the camera and turns off feature popups. Without it, a click
+  on a feature shows its attributes.
+- `EMBED_FRAME_ANCESTORS` in the Caddyfile, default `*` (ADR-0012).
+- Embeds last. A server link lives until its owner stops it (a 7- or 30-day
+  expiry is optional), and it shows the map's latest save, so an edit reaches
+  every embed (`docs/architecture/adr/0017-maps-carry-a-write-key.md`). A link
+  that carries the map in the URL never expires.
+
+**Not shipped:** the `legend` and `attribution` parameters, the script-tag
+option, the SRI hash and the PNG fallback. The embed shows no legend.
+
+**Known gap:** `infra/docker-compose.yml` does not pass
+`EMBED_FRAME_ANCESTORS` from `.env` to the `caddy` container, so the default
+`*` applies until an operator adds it to that service's `environment`.
+
+---
+
 ## Press release
 
 **Atlasdraw maps now embed anywhere — one `<iframe>`, no per-pageview bill.**

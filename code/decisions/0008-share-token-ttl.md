@@ -3,6 +3,8 @@
 **Status:** Accepted  
 **Date:** 2026-05-03
 
+> **Note (2026-10-01):** As built, a token is a 21-character nanoid stored as is, with a 7-day TTL and no role column; revoking deletes the row. `docs/architecture/adr/0017-maps-carry-a-write-key.md` (repository root) then replaced the TTL: a token lasts until its owner revokes it, unless the owner asks for an expiry of 1 to 3650 days. A token reads the map's latest bytes and never grants a write.
+
 ## Context
 
 Phase 4 introduces share-via-link (read-only, optionally password-protected). Embedded instances need a token model for temporary access control. Considered options:

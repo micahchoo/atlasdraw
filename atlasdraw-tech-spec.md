@@ -7,6 +7,22 @@
 
 This document is the engineering counterpart to the PRD. It assumes you've read the PRD and now need to know — concretely — what to build, in what order, where the seams are, and what the data shapes look like. It is mid-level: deep enough to choose libraries and design module boundaries, shallow enough to leave room for engineering judgment in the small.
 
+> **Note (2026-10-01).** This is the first plan, kept as written. Three of its
+> core designs were replaced. Read these before you trust a section here:
+>
+> - §0 and §3 (coordinate sync, `customData.geo`, re-projection on every
+>   camera move): elements are stored in world coordinates and a camera move
+>   writes no element. `docs/architecture/adr/0015-world-coordinates-gate.md`.
+> - §4 realtime and §5 (Socket.IO, `excalidraw-room`, two protocols, Redis):
+>   one Y.Doc per room over y-websocket, saved to SQLite by the relay.
+>   `docs/architecture/adr/0014-collab-trust-model.md`,
+>   `docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md`.
+> - §10 (`config.toml`): nothing reads it. The apps read environment
+>   variables; `docs/self-host/` lists them.
+>
+> The drawing tools in §4 were deleted except the pin; the native Excalidraw
+> toolbar draws on the map.
+
 ---
 
 ## 0. Mental Model

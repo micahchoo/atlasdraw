@@ -1,19 +1,17 @@
 # @atlasdraw/element
 
-## Install
+Part of Atlasdraw's fork of [Excalidraw](https://github.com/excalidraw/excalidraw). Element types, factories (`newElement.ts`), mutation, bounds, binding and the scene. Atlasdraw adds `atlasStyleUnit.ts`: the scene unit that strokes, dashes and arrowheads are drawn in when the scene is a world map.
 
-```bash
-npm install @atlasdraw/element
+This package is `private: true` and is not published; `npm install` cannot get it. Use it from inside the `code/` workspace:
+
+```ts
+import /* … */ "@atlasdraw/element";
 ```
 
-If you prefer Yarn over npm, use this command to install the Excalidraw utils package:
+Atlasdraw owns the fork outright (`code/decisions/0010-own-the-fork.md`). Nothing syncs from upstream; the fork point and how to port a security fix are in `VENDOR.md` at the repository root.
 
-```bash
-yarn add @atlasdraw/element
-```
+The other packages read this one's built types, so run `yarn build:types` (or `yarn test:typecheck`, which runs it) from `code/` after a change.
 
-With PNPM, similarly install the package with this command:
+## License
 
-```bash
-pnpm add @atlasdraw/element
-```
+MIT, as upstream (`code/LICENSE-EXCALIDRAW-UPSTREAM`).

@@ -2,7 +2,7 @@
 
 ## `code/` — Excalidraw fork (inlined)
 
-Atlasdraw is built on a fork of [Excalidraw](https://github.com/excalidraw/excalidraw). The fork lives inlined under `code/` as plain files, with no embedded git repo and no submodule. The forked packages are `code/packages/{excalidraw,element,math,common,utils}`. The Atlasdraw packages (`apps/*`, `packages/{basemap,data,geo,tools,protocol,sdk,cli}`) sit beside them.
+Atlasdraw is built on a fork of [Excalidraw](https://github.com/excalidraw/excalidraw). The fork lives inlined under `code/` as plain files, with no embedded git repo and no submodule. The forked packages are `code/packages/{excalidraw,element,math,common,utils}`. The Atlasdraw packages (`apps/*`, `packages/{basemap,data,geo,tools,protocol,cli}`) sit beside them.
 
 **Upstream pin (the one fork point):**
 - Repo: `https://github.com/excalidraw/excalidraw.git`

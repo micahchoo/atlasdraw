@@ -8,6 +8,8 @@ Each entry records: the finding that forced escalation, the options with scope i
 
 ## E-01 — Yjs Encryption Boundary (Phase 5 / Phase 6)
 
+> **Resolved (2026-10-01):** closed by `docs/architecture/adr/0014-collab-trust-model.md` (repository root). The relay is trusted; rooms are not end-to-end encrypted.
+
 **Date escalated:** 2026-05-03  
 **Escalated by:** open-questions-resolver (Phase 5 research); shape-incorporator (structural triage)  
 **Blocking:** Task 8 execution (Phase 5 plan — `packages/data/src/yjs-crypto.ts` wiring)  

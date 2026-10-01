@@ -1,5 +1,5 @@
 ---
-scope:
+paths:
   - code/apps/atlas-app/src/state/room.ts
   - code/apps/atlas-app/src/state/roomScene.ts
   - code/apps/atlas-app/src/state/roomDocument.ts

@@ -1,5 +1,5 @@
 ---
-scope:
+paths:
   - code/packages/data/src/base64url.ts
 tags: [canonicalization, dedup]
 priority: medium

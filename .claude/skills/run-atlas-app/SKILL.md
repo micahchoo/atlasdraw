@@ -18,7 +18,7 @@ triggers:
 
 atlas-app is the editor SPA — MapLibre basemap + forked Excalidraw canvas —
 and the only piece needed to "see atlasdraw running." The sibling services
-`apps/realtime` (Socket.IO/y-websocket collab relay) and `apps/storage`
+`apps/realtime` (y-websocket room relay, SQLite) and `apps/storage`
 (Fastify API) exist in the same workspace but aren't required for a basic
 launch-and-draw check; only reach for them if the task is collaboration or
 persistence specifically.
@@ -28,12 +28,13 @@ persistence specifically.
 - **The workspace root is `code/`, not the repo root.** `cd code` first —
   `yarn install` / `yarn --cwd ...` from the repo root will fail or hit the
   wrong `package.json`.
-- **Ignore README.md's "yarn@1.22."** That's stale. The real pin is
-  `code/package.json`'s `"packageManager": "yarn@4.15.0"` (Corepack-managed).
-  Node >=18 works; this has been verified on Node 24.
-- **Don't assume port 5173.** Vite falls back to the next free port with no
-  warning beyond a one-line log ("Port 5173 is in use, trying another
-  one..."). Other projects on a shared dev machine commonly squat 5173/5174.
+- **Yarn 4 via Corepack.** `code/package.json` pins
+  `"packageManager": "yarn@4.15.0"`; run `corepack enable` once. CI uses
+  Node 20 (`.nvmrc`); Node 24 also works.
+- **Don't assume the port.** `vite.config.ts` asks for 5174, but Vite falls
+  back to the next free port with only a one-line log ("Port 5174 is in use,
+  trying another one..."). Other projects on a shared dev machine often hold
+  it.
   Always read the actual `➜ Local:` URL from the dev-server's own stdout —
   don't hardcode a port in a curl/playwright command before checking.
 

@@ -38,8 +38,8 @@ Different deployment topologies need different tradeoffs (see
   backup. ~3 GB disk, ~500 MB RAM.
 - **Full** (`docker-compose.yml`) — Postgres + MinIO + Caddy. Multi-writer,
   S3-compatible blob layer, automatic TLS, suitable for any operator
-  comfortable with Docker. ~5 GB disk, ~1.5 GB RAM (MinIO is capped at
-  1g per [plan §5 line 914](../superpowers/plans/2026-05-03-atlasdraw-phase-4-mvp-self-host.md)).
+  comfortable with Docker. ~5 GB disk, ~1.5 GB RAM (the compose file caps
+  MinIO at 1 GB).
 
 Both stacks expose the same HTTP API; atlas-app code is agnostic to which
 adapter is loaded.
@@ -82,6 +82,14 @@ Optional:
   their privacy notice — see ADR-0009.
 - `POSTGRES_USER`, `POSTGRES_DB`, `MINIO_ROOT_USER` — defaults are
   `atlasdraw`. Override if you need to match existing infra.
+- `VITE_REALTIME_ENABLED`, `VITE_REALTIME_WS_URL` — live rooms; see
+  "Realtime relay" below.
+- The relay limits (`MAX_ROOMS` and the others in "Realtime relay").
+
+The storage server reads four more variables that the compose file does
+**not** pass from `.env`. To use one, add it to the `storage` service's
+`environment` in `infra/docker-compose.yml`:
+
 - `MAX_TOTAL_BYTES` — the cap on the sum of all stored map sizes, in
   bytes. A save or a new map that would pass it gets `507`. `0` (the
   default) is no cap. Set it on a server that faces the internet; see
@@ -89,6 +97,14 @@ Optional:
 - `SWEEP_INTERVAL_MS` — how often the storage server deletes expired
   share links and the maps nobody can reach any more (default `3600000`,
   one hour; `0` turns it off). It also sweeps once at start.
+- `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS` — requests per client address
+  per window (defaults `120` per `60000` ms; `RATE_LIMIT_MAX=0` turns the
+  limit off). `/health` is never limited. `infra/.env.example` lists them,
+  but the values there do not reach the container.
+- `EMBED_FRAME_ANCESTORS` is the same case for the `caddy` service: the
+  Caddyfile reads it (default `*`, any site may embed your maps), but the
+  compose file does not pass it. Add it to `caddy`'s `environment` to limit
+  which sites can frame `/embed`.
 
 ## Bring it up
 
@@ -257,17 +273,25 @@ TLS. For production exposure, also consider:
 - **Rotate `MINIO_ROOT_PASSWORD` and `POSTGRES_PASSWORD` periodically.**
   Currently a manual operation (compose env edit + `docker compose
   restart`).
-- **Egress firewall.** The default build makes no outbound calls beyond
-  ACME (Caddy) and the optional Sentry DSN. If you need to verify this,
-  `tcpdump` outbound traffic — the only legitimate destinations are the
-  ACME endpoints and the (optional) Sentry ingestion URL.
+- **Egress firewall.** The servers make no outbound calls beyond ACME
+  (Caddy) and the optional Sentry DSN. To verify, `tcpdump` outbound
+  traffic: the only expected destinations are the ACME endpoints and the
+  Sentry ingestion URL. The users' browsers are a different matter; see
+  "What the browser fetches from other servers" in [`README.md`](README.md).
 
 ## Realtime relay
 
 The relay (`apps/realtime`, compose profile `realtime`) holds the shared
-maps that people edit together ("rooms"). Start it with
-`docker compose --profile realtime --env-file .env -f infra/docker-compose.yml up -d`
-and build the web image with `VITE_REALTIME_ENABLED=true`.
+maps that people edit together ("rooms"). To turn rooms on:
+
+1. Put `VITE_REALTIME_ENABLED=true` in `.env`. Leave `VITE_REALTIME_WS_URL`
+   empty: the editor then connects to `/yjs/` on its own origin, which
+   Caddy passes to the relay.
+2. Rebuild and start with the profile:
+   `docker compose --profile realtime --env-file .env -f infra/docker-compose.yml up -d --build`.
+
+The Share dialog then offers **Collaborate**, which makes a room from the
+open map and gives a room link. Anyone with the link can edit the room.
 
 ### What the relay can see
 

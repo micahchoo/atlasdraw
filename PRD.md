@@ -17,6 +17,62 @@
 
 ---
 
+## Status (2026-10)
+
+This PRD is the vision, and its text stays as written. This section says what the code does on 2026-10-01, after the 2026-10 roadmap. "Shipped" means a user can do it in the editor today. Section numbers point to §7.
+
+### Shipped
+
+| Item (§) | What exists |
+| --- | --- |
+| Map canvas (7.1) | Drawings are stored in world coordinates (Web Mercator at zoom 22) and never move when the camera moves. This replaces the `customData` anchor design (`docs/architecture/adr/0015-world-coordinates-gate.md`). |
+| Basemaps (7.1) | Light and Dark from a bundled PMTiles file; Bright (OpenFreeMap) and OSM from remote servers. An operator can turn the remote ones off. |
+| Drawing tools (7.1) | The Excalidraw toolbar on the map, plus a pin. The selection readout shows a shape's ground length, area and radius. |
+| Measure (7.3 extension) | A Measure tool for distance and area, geodesic on the ellipsoid, metric or imperial. |
+| Data import (7.1) | GeoJSON (`.geojson`, `.json`), CSV with coordinates, Shapefile zip, KML, KMZ, GPX and GeoTIFF. |
+| Layer panel (7.1) | Show, hide, reorder and style; drawings and data layers are separate. |
+| Tile layers | Raster tiles from an XYZ URL, with the credit shown in the status bar and in exports. |
+| Feature popups | A click on a feature shows its attributes, in the editor and in an unlocked embed. |
+| Data styling (7.2) | Categorical and graduated colour, labels from a property, and a filter by property. |
+| Real-time collaboration (7.1) | Rooms on one Y.Doc each, with cursors, names and comments. The relay keeps rooms in SQLite between sessions. |
+| Comments (7.2) | Anchored to a place or a shape, resolvable, kept in the room and in the `.atlasdraw` file. |
+| Sharing (7.1) | A read-only link (`/m`). A small map goes in the link; a large map goes to the server, and that link lasts until the owner stops it and shows the latest save. A room link lets anyone with it edit. |
+| Embed (7.2) | An `<iframe>` snippet in the Share dialog (`/embed`); `?lock=1` fixes the camera. |
+| File format (7.1) | `.atlasdraw`: `manifest.json` (version 2), `scene.excalidraw.json`, `data/layer-*.geojson`, `style.json`, `comments.json`, `files/`. Version 1 files migrate when they open. |
+| Export (7.1) | PNG at 1x, 2x or 3x; PDF; GeoJSON of the drawing, optionally with data layers; a data layer as GeoJSON or CSV; `.atlasdraw`. |
+| Print layout (7.2) | Letter, A4 or Tabloid: one map page with a title, credit, legend, scale bar and north arrow. A long legend continues on more pages. |
+| Style editor (7.2) | Maputnik in a modal. |
+| Asset library (7.2) | `.excalidrawlib` libraries and a built-in set. |
+| My maps | A list of the maps in this browser, and a restore from the server backup. |
+| Self-host (7.1) | Two Compose stacks (`infra/`); the relay is an optional profile. |
+
+### Partly shipped
+
+| Item (§) | What is missing |
+| --- | --- |
+| Pin (7.1) | No title, description, photo or link on a pin. |
+| GeoTIFF (7.1) | EPSG:4326 and EPSG:3857 only; the whole file is decoded, not read as a COG. |
+| Geocoding (7.1) | Address columns geocode only when the operator sets `VITE_GEOCODER_ENDPOINT`. There is no default public Photon, on purpose: no call-home. |
+| Collaboration privacy (7.1) | Rooms are not end-to-end encrypted. The relay can read every room (`docs/architecture/adr/0014-collab-trust-model.md`). |
+| Permissions (7.1) | No accounts. A write key in the owner's browser protects a saved map; a room link gives edit access to anyone who has it. |
+| Embed (7.2) | No legend or attribution parameters, no script tag, no SRI, no PNG fallback. |
+| Comments (7.2) | No replies, no mentions, no reopen. |
+| Data styling (7.2) | No point size by attribute. |
+| Print (7.2) | The map is a raster image, not vectors. |
+| Accessibility (7.2) | Focus traps, an announcer and a high-contrast mode exist; map features cannot be reached by keyboard. |
+| Drawing on a turned map | Drawing is blocked while the map's bearing is not 0. |
+
+### Not shipped
+
+- Route tool that snaps to roads (7.1).
+- Spatial transforms (7.2).
+- Hosted multi-tenant mode (7.2): removed (`docs/architecture/adr/0013-self-host-only.md`).
+- Everything in 7.3: field collection, plugin API, natural-language styling, version history, PostGIS, QGIS bridge.
+- Everything in 7.4, including the offline PWA and globe view.
+- GeoPackage import (refused with a message that names the format).
+
+---
+
 ## 1. Vision
 
 A map should be as easy to draft, share, and embed as a Google Doc — and as portable as a Markdown file. Atlasdraw is the open, self-hostable canvas for collaborative cartography. It treats the map as a *document*: a single shareable artifact combining a basemap, structured geographic data, freeform annotations, and a presentation layer, that can be exported, version-controlled, and run on a laptop in airplane mode.

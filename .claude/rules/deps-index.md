@@ -10,9 +10,13 @@ When you need API or usage info for one of these libraries, query
 data. If `freshness` is `very-stale` and the answer is load-bearing, call
 `mcp__context__upgrade(<pkg@ref>)` first.
 
+Excalidraw is not here: it is forked into `code/packages/` and is the source
+of truth for its own API (`excalidraw-api.md`). The relay's `ws`,
+`y-protocols` and `lib0`, and `@tmcw/togeojson` in `packages/data`, are not
+indexed yet.
+
 | Package | Ref | Indexed | Freshness | Source |
 |---------|-----|---------|-----------|--------|
-| `@excalidraw/excalidraw` | `master` | 2026-05-16 | stale | https://github.com/excalidraw/excalidraw |
 | `@playwright/test` | `main` | 2026-05-16 | stale | https://github.com/microsoft/playwright |
 | `@types/geojson` | `master` | 2026-05-16 | stale | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | `@types/lodash.throttle` | `master` | 2026-05-16 | stale | https://github.com/DefinitelyTyped/DefinitelyTyped |
@@ -28,7 +32,6 @@ data. If `freshness` is `very-stale` and the answer is load-bearing, call
 | `react` | `main` | 2026-05-16 | stale | https://github.com/facebook/react |
 | `react-dom` | `main` | 2026-05-16 | stale | https://github.com/facebook/react |
 | `sass` | `main` | 2026-05-16 | stale | https://github.com/sass/dart-sass |
-| `socket.io-client` | `main` | 2026-05-16 | stale | https://github.com/socketio/socket.io |
 | `typescript` | `main` | 2026-05-16 | stale | https://github.com/microsoft/TypeScript |
 | `vite` | `main` | 2026-05-16 | stale | https://github.com/vitejs/vite |
 | `vitest` | `main` | 2026-05-16 | stale | https://github.com/vitest-dev/vitest |

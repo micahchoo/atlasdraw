@@ -3,6 +3,8 @@
 **Status:** Accepted  
 **Date:** 2026-05-03
 
+> **Note (2026-10-01):** As built, `GET /health` on the storage server returns `{"status":"ok","uptime":<s>,"storageMode":"sqlite-fs"|"postgres-minio"}`, or `"status":"error"` with HTTP 503. Sentry is configured by the `SENTRY_DSN` environment variable, not `config.toml`; nothing reads `config.toml`. The relay has its own `GET /health`.
+
 ## Context
 
 Cross-phase audit GAP-6: the hosted instance has no observability planned before Show HN. Operators would run blind: no logs, no error tracking, no health signals. A minimal baseline is required for production readiness.
