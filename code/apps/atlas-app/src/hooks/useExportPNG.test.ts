@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Tests for useExportPNG (ISSUES.md Issue 6 — coverage climb).
+// Tests for useExportPNG: the download wiring around lib/export. What the
+// PNG contains is tested in lib/__tests__/export.test.ts.
 //
 // Per .claude/rules/test-fixtures.md: this file owns its own mocks.
 
@@ -62,16 +63,13 @@ describe("useExportPNG", () => {
     const map = {} as maplibregl.Map;
     const api = {} as ExcalidrawImperativeAPI;
     const clickSpy = vi.fn();
+    const anchor = { click: clickSpy, href: "", download: "" };
     const realCreateElement = document.createElement.bind(document);
     const createElementSpy = vi
       .spyOn(document, "createElement")
       .mockImplementation((tag: string, opts?: ElementCreationOptions) => {
         if (tag === "a") {
-          return {
-            click: clickSpy,
-            href: "",
-            download: "",
-          } as unknown as HTMLElement;
+          return anchor as unknown as HTMLElement;
         }
         return realCreateElement(tag, opts);
       });
@@ -79,12 +77,15 @@ describe("useExportPNG", () => {
     const { result } = renderHook(() =>
       useExportPNG(map, api, "#123456", notify),
     );
-    result.current();
+    result.current(3);
     await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
 
     expect(exportPNGMock).toHaveBeenCalledWith(map, api, {
+      pixelRatio: 3,
       backgroundColor: "#123456",
     });
+    // The file name says the size, so 1x and 3x files are told apart.
+    expect(anchor.download).toMatch(/^atlasdraw-\d+@3x\.png$/);
     expect(URL.createObjectURL).toHaveBeenCalledWith(FAKE_BLOB);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake-url");
     createElementSpy.mockRestore();

@@ -7,15 +7,19 @@
 // one neighbourhood and the key described the whole project — the one thing a
 // printed legend exists to prevent.
 //
-// Three small units so each is testable on its own:
+// Small units so each is testable on its own:
 //   renderedDataLayerIds  — which MapLibre layers actually painted something
 //   visibleAnnotationIds  — which Excalidraw elements fall inside the frame
-//   buildLegendEntries    — the projection to LayerLegendEntry, given both
+//   visibleRasterIds      — which rasters' corners overlap the frame
+//   buildLegendEntries    — the projection to LayerLegendEntry, given all three
+//   exportLegendEntries   — the three questions asked of the live view
 //
 // Data layers are asked of MapLibre rather than bbox-tested ourselves:
 // `queryRenderedFeatures` reports what was drawn, which is the exact question,
 // and it already honours layer visibility and zoom-range filters that a bbox
 // test would miss.
+
+import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { LayerLegendEntry } from "./print-pdf";
 
@@ -112,9 +116,43 @@ export function visibleAnnotationIds(
   return visible;
 }
 
+/**
+ * Raster ids whose four corners, projected to the screen, overlap the
+ * exported frame. Rasters paint no features, so `queryRenderedFeatures`
+ * cannot answer for them; their corners are the whole of their footprint.
+ * Before this, rasters were tested against the annotation set and never
+ * reached the legend.
+ */
+export function visibleRasterIds(
+  entries: readonly LegendSource[],
+  project: (lngLat: [number, number]) => { x: number; y: number },
+  width: number,
+  height: number,
+): Set<string> {
+  const visible = new Set<string>();
+  for (const e of entries) {
+    if (e.kind !== "raster") {
+      continue;
+    }
+    const pts = e.corners.map((c) => project(c));
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    if (
+      Math.max(...xs) >= 0 &&
+      Math.min(...xs) <= width &&
+      Math.max(...ys) >= 0 &&
+      Math.min(...ys) <= height
+    ) {
+      visible.add(e.id);
+    }
+  }
+  return visible;
+}
+
 export interface LegendContext {
   renderedDataLayerIds: ReadonlySet<string>;
   visibleAnnotationIds: ReadonlySet<string>;
+  visibleRasterIds: ReadonlySet<string>;
 }
 
 /**
@@ -132,7 +170,9 @@ export function buildLegendEntries(
     .filter((e) =>
       e.kind === "data"
         ? ctx.renderedDataLayerIds.has(e.id)
-        : e.kind === "annotation" && ctx.visibleAnnotationIds.has(e.id),
+        : e.kind === "raster"
+        ? ctx.visibleRasterIds.has(e.id)
+        : ctx.visibleAnnotationIds.has(e.id),
     )
     .map<LayerLegendEntry>((e) => ({
       id: e.id,
@@ -142,4 +182,37 @@ export function buildLegendEntries(
           ? e.style.fillColor ?? NEUTRAL_SWATCH
           : NEUTRAL_SWATCH,
     }));
+}
+
+/**
+ * The legend for an export of the live view: the registry, less what is
+ * hidden or not on the page. Read at export time, like the image, so both
+ * answer the same viewport (FU-13).
+ */
+export function exportLegendEntries(
+  entries: readonly LegendSource[],
+  map: maplibregl.Map,
+  excalidrawAPI: ExcalidrawImperativeAPI,
+): LayerLegendEntry[] {
+  const canvas = map.getCanvas();
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  return buildLegendEntries(entries, {
+    renderedDataLayerIds: renderedDataLayerIds(
+      map,
+      entries.filter((e) => e.kind === "data").map((e) => e.id),
+    ),
+    visibleAnnotationIds: visibleAnnotationIds(
+      excalidrawAPI.getSceneElements(),
+      excalidrawAPI.getAppState(),
+      width,
+      height,
+    ),
+    visibleRasterIds: visibleRasterIds(
+      entries,
+      (lngLat) => map.project(lngLat),
+      width,
+      height,
+    ),
+  });
 }

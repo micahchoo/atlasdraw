@@ -36,8 +36,13 @@ function fmtZoom(zoom: number): string {
 }
 
 /** Web-Mercator meters per CSS pixel at the given latitude/zoom. */
-function metersPerPixel(lat: number, zoom: number): number {
-  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+/** Equator length in metres, WGS84. */
+const EQUATOR_M = 40075016.686;
+/** MapLibre's zoom counts 512-px tiles (not the 256-px tiles of raster web maps). */
+const TILE_PX = 512;
+
+export function metersPerPixel(lat: number, zoom: number): number {
+  return ((EQUATOR_M / TILE_PX) * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
 }
 
 /** Pick a round scale-bar length that renders between 64 and 150 px.

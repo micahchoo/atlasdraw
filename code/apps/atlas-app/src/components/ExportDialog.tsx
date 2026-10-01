@@ -12,16 +12,30 @@
  *
  * Design: drafting-room output panel — all formats visible at once, settings
  * appear for the selected format, single export action.
+ *
+ * Wording rule: say what the file contains. The PDF hint once said "vector
+ * document" over a JPEG; the PNG pane once showed a "Resolution" row that
+ * could not be changed. Every row here is a setting that changes the file,
+ * or a plain statement of what the file is.
  */
 
 import React, { useEffect, useState } from "react";
 
 import {
+  PNG_PIXEL_RATIOS,
+  exportSize,
+  type PngPixelRatio,
+} from "../lib/export";
+import {
+  PRINT_DPI,
   exportPDF,
+  printPixelRatio,
+  scaleUnitsForLocale,
   type LayerLegendEntry,
   type Orientation,
   type PageSize,
   type PrintOptions,
+  type PrintView,
 } from "../lib/print-pdf";
 import { safeFileName } from "../lib/safeFileName";
 
@@ -49,13 +63,13 @@ const FORMATS: FormatDef[] = [
     id: "png",
     label: "PNG",
     icon: "@",
-    hint: "Composite raster image with basemap",
+    hint: "Image of the map and drawings",
   },
   {
     id: "pdf",
     label: "PDF",
     icon: "#",
-    hint: "Print-optimized vector document",
+    hint: "Page with a map image, legend and scale",
   },
   {
     id: "geojson",
@@ -83,17 +97,22 @@ const PAGE_SIZE_OPTIONS: { value: PageSize; label: string }[] = [
 
 interface ExportDialogProps {
   onCloseRequest: () => void;
-  onExportPNG: () => void;
+  /** Export a PNG of the view at `pixelRatio` output px per CSS px. */
+  onExportPNG: (pixelRatio: PngPixelRatio) => void;
   onExportGeoJSON: () => void;
   onExportAtlasdraw: () => void;
   /**
-   * Returns the composited view (map + Excalidraw annotations) encoded as a
-   * `data:image/jpeg;base64,...` URL, or null if the map isn't ready yet.
-   * Called at export time so the PDF snapshot reflects the current viewport,
-   * not the moment the dialog opened. Async because the composite encodes
-   * through `OffscreenCanvas.convertToBlob`.
+   * The live view's CSS size and ground resolution (`measureView`), or null
+   * when the map is not ready. Sizes the PNG choices and the PDF layout.
    */
-  getMapImageDataUrl: () => Promise<string | null>;
+  getView: () => PrintView | null;
+  /**
+   * Returns the composited view (map + Excalidraw annotations) rendered at
+   * `pixelRatio` and encoded as a `data:image/jpeg;base64,...` URL, or null
+   * if the map isn't ready yet. Called at export time so the PDF shows the
+   * current viewport, not the moment the dialog opened.
+   */
+  getMapImageDataUrl: (pixelRatio: number) => Promise<string | null>;
   /**
    * Registry entries projected to legend shape, evaluated at export time so
    * the legend and the image answer the same viewport (FU-13). A snapshot
@@ -108,6 +127,10 @@ interface ExportDialogProps {
    * leave the north arrow describing a viewport the image does not show.
    */
   getCameraRotationDeg?: () => number;
+  /** The active basemap's credit line, printed on the PDF page. */
+  attribution?: string;
+  /** Decides the PDF's scale-bar units. Default `navigator.language`. */
+  locale?: string;
   /** Preselected format card (e.g. quick-actions "Export PDF"). */
   initialFormat?: ExportFormat;
   /**
@@ -124,9 +147,12 @@ export function ExportDialog({
   onExportPNG,
   onExportGeoJSON,
   onExportAtlasdraw,
+  getView,
   getMapImageDataUrl,
   getLegendEntries,
   getCameraRotationDeg,
+  attribution,
+  locale = navigator.language,
   initialFormat = "png",
   exportPDFImpl = exportPDF,
 }: ExportDialogProps) {
@@ -144,6 +170,10 @@ export function ExportDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onCloseRequest]);
+
+  // Read once on open: the dialog is modal, so the view cannot change under it.
+  const [view] = useState(getView);
+  const [pixelRatio, setPixelRatio] = useState<PngPixelRatio>(2);
 
   // PDF pane state (absorbed from PrintDialog).
   const [pageSize, setPageSize] = useState<PageSize>("letter");
@@ -164,19 +194,34 @@ export function ExportDialog({
     setExporting(true);
     setError(null);
     try {
-      // Compositing is async and can fail (no 2D context, renderer error), so
-      // it runs inside the try with the export itself rather than ahead of it.
-      const mapImageDataUrl = await getMapImageDataUrl();
+      // The view, legend and image are all read now, so they describe the
+      // same viewport. The legend is read before the image because its length
+      // sets the size of the map frame, and the image is rendered for that
+      // frame at PRINT_DPI.
+      const printView = getView();
+      if (!printView) {
+        setError("The map is not ready. Try again in a moment.");
+        return;
+      }
+      const layers = getLegendEntries();
+      const page = { pageSize, orientation };
+      // Compositing is async and can fail (no 2D context, image too large),
+      // so it runs inside the try with the export itself.
+      const mapImageDataUrl = await getMapImageDataUrl(
+        printPixelRatio(page, printView, layers.length),
+      );
       if (!mapImageDataUrl) {
-        setError("Map is not ready yet — try again in a moment.");
+        setError("The map is not ready. Try again in a moment.");
         return;
       }
       const blob = await exportPDFImpl({
-        pageSize,
-        orientation,
+        ...page,
         title: title.trim() || documentTitle,
         mapImageDataUrl,
-        layers: getLegendEntries(),
+        view: printView,
+        layers,
+        attribution,
+        units: scaleUnitsForLocale(locale),
         cameraRotationDeg: getCameraRotationDeg?.() ?? 0,
       });
       const safeName = `${safeFileName(title.trim() || documentTitle)}.pdf`;
@@ -200,7 +245,7 @@ export function ExportDialog({
   const handleExport = () => {
     switch (format) {
       case "png":
-        onExportPNG();
+        onExportPNG(pixelRatio);
         onCloseRequest();
         break;
       case "pdf":
@@ -275,15 +320,37 @@ export function ExportDialog({
             {format === "png" && (
               <>
                 <div className={styles.settingRow}>
-                  <span className={styles.settingLabel}>Include basemap</span>
-                  <span className={styles.settingHint}>
-                    Always — composite render
-                  </span>
+                  <label
+                    className={styles.settingLabel}
+                    htmlFor="export-png-pixel-ratio"
+                  >
+                    Size
+                  </label>
+                  <select
+                    id="export-png-pixel-ratio"
+                    className={styles.settingControl}
+                    value={pixelRatio}
+                    onChange={(e) =>
+                      setPixelRatio(Number(e.target.value) as PngPixelRatio)
+                    }
+                    data-testid="export-png-pixel-ratio"
+                  >
+                    {PNG_PIXEL_RATIOS.map((ratio) => {
+                      const px = view && exportSize(view, ratio);
+                      return (
+                        <option key={ratio} value={ratio}>
+                          {px
+                            ? `${ratio}× — ${px.width} × ${px.height} px`
+                            : `${ratio}×`}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div className={styles.settingRow}>
-                  <span className={styles.settingLabel}>Resolution</span>
                   <span className={styles.settingHint}>
-                    Current viewport (match screen)
+                    The map and the drawings are drawn again at this size. They
+                    are not enlarged from the screen.
                   </span>
                 </div>
               </>
@@ -346,6 +413,16 @@ export function ExportDialog({
                     onChange={(e) => setTitle(e.target.value)}
                     data-testid="export-pdf-title-input"
                   />
+                </div>
+                <div className={styles.settingRow}>
+                  <span
+                    className={styles.settingHint}
+                    data-testid="export-pdf-note"
+                  >
+                    The map is an image at {PRINT_DPI} dpi, not vector shapes.
+                    The page also has a legend, a scale bar, a north arrow and
+                    the basemap credit.
+                  </span>
                 </div>
                 {error && (
                   <div

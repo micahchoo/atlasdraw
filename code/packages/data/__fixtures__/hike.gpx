@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Hand-written fixture" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>Mount Tam loop</name>
+  </metadata>
+  <wpt lat="37.9235" lon="-122.5965">
+    <ele>784</ele>
+    <time>2026-09-12T08:00:00Z</time>
+    <name>East Peak</name>
+    <desc>Fire lookout at the summit</desc>
+  </wpt>
+  <wpt lat="37.9100" lon="-122.6000">
+    <name>Rock Spring</name>
+  </wpt>
+  <rte>
+    <name>Planned descent</name>
+    <rtept lat="37.9235" lon="-122.5965"/>
+    <rtept lat="37.9150" lon="-122.5980"/>
+    <rtept lat="37.9100" lon="-122.6000"/>
+  </rte>
+  <trk>
+    <name>Morning climb</name>
+    <desc>Recorded on the way up</desc>
+    <trkseg>
+      <trkpt lat="37.9000" lon="-122.6100"><time>2026-09-12T07:00:00Z</time></trkpt>
+      <trkpt lat="37.9100" lon="-122.6050"><time>2026-09-12T07:20:00Z</time></trkpt>
+      <trkpt lat="37.9235" lon="-122.5965"><time>2026-09-12T07:58:00Z</time></trkpt>
+    </trkseg>
+  </trk>
+  <trk>
+    <name>Paused walk</name>
+    <trkseg>
+      <trkpt lat="37.9000" lon="-122.6100"/>
+      <trkpt lat="37.9010" lon="-122.6090"/>
+    </trkseg>
+    <trkseg>
+      <trkpt lat="37.9050" lon="-122.6060"/>
+      <trkpt lat="37.9060" lon="-122.6050"/>
+    </trkseg>
+  </trk>
+</gpx>

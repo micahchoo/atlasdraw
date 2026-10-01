@@ -1,54 +1,66 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Phase 6 A10 — print-pdf unit tests.
-//
-// Coverage:
-// - Page dimensions for A4 portrait (and a tabloid landscape spot-check).
-// - Legend block embeds each entry name.
-// - ODbL attribution survives — reachable in raw PDF bytes (via ASCII
-//   substring "OpenStreetMap contributors", since "©" is encoded under
-//   Helvetica's WinAnsi tables and isn't a literal ASCII match).
-// - exportPDF returns a Blob with the right MIME type.
+// print-pdf tests. Every claim is read back out of the PDF that exportPDF
+// writes: page sizes, the text drawn on each page, and the embedded map image
+// with the size it is drawn at. Nothing here inspects a mock.
 
 import { describe, it, expect } from "vitest";
-import { PDFDocument } from "pdf-lib";
 
 import {
+  PRINT_DPI,
   exportPDF,
   northArrowGeometry,
   pageDimensions,
-  ODBL_ATTRIBUTION,
+  printPixelRatio,
+  scaleBar,
+  scaleRatioLabel,
+  scaleUnitsForLocale,
   type LayerLegendEntry,
+  type Orientation,
+  type PageSize,
+  type PrintOptions,
+  type PrintView,
 } from "../print-pdf";
 
-// 1×1 white JPEG (smallest legal baseline JPEG, hex-encoded). pdf-lib's
-// embedJpg parses this happily. This stands in for what
-// `exportCompositeDataURL` hands the PDF at runtime — jsdom has no real
-// canvas encoder, so the bytes are supplied directly.
-const TINY_JPEG_DATA_URL =
-  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAr/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AAB//2Q==";
+import { jpegOfSize, readPdf, type ReadPdf } from "./fixtures/print";
 
-/**
- * jsdom 22 Blob lacks `arrayBuffer()`. FileReader-based shim works in both
- * jsdom and real browsers, and the read is synchronous from the test's POV
- * (single tick). Buffer fallback covers pure-node runs.
- */
-function blobToArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === "function") {
-    return blob.arrayBuffer();
-  }
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsArrayBuffer(blob);
-  });
-}
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+/** A 1440 × 720 CSS-px view, 10 m per CSS px: 14.4 km across. */
+const VIEW: PrintView = { width: 1440, height: 720, metersPerPixel: 10 };
 
 const LAYERS: LayerLegendEntry[] = [
   { id: "dl:a", name: "Trails", color: "#0aa" },
   { id: "dl:b", name: "Parks", color: "#3a3" },
   { id: "dl:c", name: "Rivers", color: "#48f" },
 ];
+
+/** Options for a page, with the map image rendered at the ratio the layout asks for. */
+function printOptions(overrides: Partial<PrintOptions> = {}): PrintOptions {
+  const pageSize = overrides.pageSize ?? "letter";
+  const orientation = overrides.orientation ?? "landscape";
+  const view = overrides.view ?? VIEW;
+  const layers = overrides.layers ?? LAYERS;
+  const ratio = printPixelRatio({ pageSize, orientation }, view, layers.length);
+  return {
+    pageSize,
+    orientation,
+    title: "Test map",
+    view,
+    layers,
+    attribution: "© Protomaps © OpenStreetMap",
+    mapImageDataUrl: jpegOfSize(
+      Math.floor(view.width * ratio),
+      Math.floor(view.height * ratio),
+    ),
+    ...overrides,
+  };
+}
+
+const allTexts = (pdf: ReadPdf) => pdf.pages.flatMap((p) => p.texts);
+
+// ---------------------------------------------------------------------------
 
 describe("pageDimensions", () => {
   it("A4 portrait is 595.28 × 841.89 pt", () => {
@@ -62,133 +74,194 @@ describe("pageDimensions", () => {
     expect(width).toBe(1224);
     expect(height).toBe(792);
   });
+});
 
-  it("Letter portrait is 612 × 792 pt", () => {
-    const { width, height } = pageDimensions("letter", "portrait");
-    expect(width).toBe(612);
-    expect(height).toBe(792);
+describe("exportPDF — the map image", () => {
+  const pages: [PageSize, Orientation][] = [
+    ["letter", "landscape"],
+    ["letter", "portrait"],
+    ["a4", "landscape"],
+    ["a4", "portrait"],
+    ["tabloid", "landscape"],
+    ["tabloid", "portrait"],
+  ];
+
+  for (const [pageSize, orientation] of pages) {
+    it(`is embedded at print resolution on ${pageSize} ${orientation}`, async () => {
+      const pdf = await readPdf(
+        await exportPDF(printOptions({ pageSize, orientation })),
+      );
+      expect(pdf.pages[0].images).toHaveLength(1);
+      const [image] = pdf.pages[0].images;
+      const dpiAcross = image.pixelWidth / (image.width / 72);
+      const dpiDown = image.pixelHeight / (image.height / 72);
+      expect(dpiAcross).toBeGreaterThanOrEqual(200);
+      expect(dpiDown).toBeGreaterThanOrEqual(200);
+      // The ratio asks for PRINT_DPI; flooring the pixel count loses < 1 px.
+      expect(dpiAcross).toBeGreaterThan(PRINT_DPI - 1);
+    });
+  }
+
+  it("keeps the view's proportions on the page", async () => {
+    const pdf = await readPdf(await exportPDF(printOptions()));
+    const [image] = pdf.pages[0].images;
+    expect(image.width / image.height).toBeCloseTo(VIEW.width / VIEW.height, 3);
+  });
+
+  it("refuses to write a page without the map", async () => {
+    await expect(
+      exportPDF(printOptions({ mapImageDataUrl: "data:," })),
+    ).rejects.toThrow(/map image/i);
   });
 });
 
-describe("exportPDF", () => {
-  it("returns a Blob with application/pdf MIME type", async () => {
-    const blob = await exportPDF({
-      pageSize: "a4",
-      orientation: "portrait",
-      title: "Test map",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: LAYERS,
-    });
-    expect(blob).toBeInstanceOf(Blob);
-    expect(blob.type).toBe("application/pdf");
-    expect(blob.size).toBeGreaterThan(0);
-  });
-
-  it("PDF starts with the %PDF- magic", async () => {
-    const blob = await exportPDF({
-      pageSize: "a4",
-      orientation: "portrait",
-      title: "Test map",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: [],
-    });
-    const ab = await blobToArrayBuffer(blob);
-    const head = new TextDecoder("latin1").decode(
-      new Uint8Array(ab).slice(0, 8),
+describe("exportPDF — attribution", () => {
+  it("credits the basemap it is given, on the page and in the document info", async () => {
+    const pdf = await readPdf(
+      await exportPDF(
+        printOptions({ attribution: "© OpenFreeMap © OpenMapTiles" }),
+      ),
     );
-    expect(head.startsWith("%PDF-")).toBe(true);
+    expect(pdf.pages[0].texts).toContain("© OpenFreeMap © OpenMapTiles");
+    expect(pdf.subject).toBe("© OpenFreeMap © OpenMapTiles");
   });
 
-  it("embeds the ODbL attribution string in the PDF Info dictionary (Subject + Keywords)", async () => {
-    // pdf-lib's content streams are FlateDecode-compressed by default, so the
-    // attribution drawn in the title block isn't recoverable as a plaintext
-    // byte search. The Info dict (Subject / Keywords) lives in the PDF trailer
-    // in PDFString form — *that* survives as a literal byte substring AND is
-    // recoverable via PDFDocument.load. We assert both surfaces.
-    const blob = await exportPDF({
-      pageSize: "letter",
-      orientation: "portrait",
-      title: "Attribution check",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: LAYERS,
-    });
-    const ab = await blobToArrayBuffer(blob);
+  it("does not credit a basemap it was not given", async () => {
+    const pdf = await readPdf(
+      await exportPDF(printOptions({ attribution: "© Protomaps" })),
+    );
+    expect(allTexts(pdf)).toContain("© Protomaps");
+    expect(allTexts(pdf).join("\n")).not.toMatch(/OpenMapTiles/);
+  });
+});
 
-    // Surface 1: PDFDocument.load → Subject/Keywords are the canonical
-    // attribution carriers; ODBL_ATTRIBUTION must round-trip exactly.
-    const parsed = await PDFDocument.load(ab);
-    expect(parsed.getSubject()).toBe(ODBL_ATTRIBUTION);
-    const keywords = parsed.getKeywords();
-    expect(keywords ?? "").toContain("OpenStreetMap contributors");
-
-    // Surface 2: the raw byte stream contains the ASCII substring
-    // (Info-dict strings aren't compressed — they're plaintext in the
-    // PDF trailer).
-    const raw = new TextDecoder("latin1").decode(new Uint8Array(ab));
-    expect(raw).toContain("OpenStreetMap contributors");
+describe("exportPDF — legend", () => {
+  it("lists every layer on one page when they fit", async () => {
+    const pdf = await readPdf(await exportPDF(printOptions()));
+    expect(pdf.pages).toHaveLength(1);
+    for (const layer of LAYERS) {
+      expect(pdf.pages[0].texts).toContain(layer.name);
+    }
   });
 
-  it("attribution is non-removable — present even when layers is empty", async () => {
-    const blob = await exportPDF({
-      pageSize: "a4",
-      orientation: "portrait",
-      title: "",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: [],
-    });
-    const ab = await blobToArrayBuffer(blob);
-    const parsed = await PDFDocument.load(ab);
-    expect(parsed.getSubject()).toBe(ODBL_ATTRIBUTION);
+  it("continues on more pages instead of dropping layers", async () => {
+    const many = Array.from({ length: 300 }, (_, i) => ({
+      id: `el-${i}`,
+      name: `Layer ${i + 1}`,
+      color: "#868e96",
+    }));
+    const pdf = await readPdf(await exportPDF(printOptions({ layers: many })));
+    const texts = allTexts(pdf);
+    for (const layer of many) {
+      expect(texts).toContain(layer.name);
+    }
+    expect(pdf.pages.length).toBeGreaterThan(1);
+    expect(pdf.pages[0].texts.join(" ")).toMatch(/continues on page 2/i);
+    // Every page is the chosen page size.
+    for (const page of pdf.pages) {
+      expect(page.width).toBe(792);
+      expect(page.height).toBe(612);
+    }
   });
 
-  it("renders every legend entry into the embedded PDF objects (visible in the parsed structure)", async () => {
-    // Content streams are compressed, but legend strings still survive as
-    // distinct PDFContentStream objects we can re-parse via PDFDocument.load.
-    // Since the entries are drawn-text we can't grep the bytes directly, but
-    // we can assert the document has a non-trivial page count and the layers
-    // were forwarded into the renderer (smoke check). The deeper assertion
-    // — entries actually rendered — is exercised in the visual e2e path.
-    const blob = await exportPDF({
-      pageSize: "a4",
-      orientation: "landscape",
-      title: "Legend check",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: LAYERS,
-    });
-    const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
-    expect(parsed.getPageCount()).toBe(1);
-    // The page should be A4 landscape: 841.89 × 595.28 pt.
-    const [page] = parsed.getPages();
-    expect(page.getWidth()).toBeCloseTo(841.89, 1);
-    expect(page.getHeight()).toBeCloseTo(595.28, 1);
+  it("prints a name the standard font cannot encode instead of failing the export", async () => {
+    const pdf = await readPdf(
+      await exportPDF(
+        printOptions({
+          title: "東京 survey",
+          layers: [{ id: "x", name: "東京 roads", color: "#000" }],
+        }),
+      ),
+    );
+    expect(pdf.pages[0].texts).toContain("?? roads");
+    expect(pdf.pages[0].texts).toContain("?? survey");
   });
 
-  it("uses the title in the PDF Info dictionary", async () => {
-    const blob = await exportPDF({
-      pageSize: "a4",
-      orientation: "portrait",
-      title: "Foo Bar Map",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: [],
-    });
-    const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
-    expect(parsed.getTitle()).toBe("Foo Bar Map");
+  it("shortens a name too long for its column and marks the cut", async () => {
+    const long = "Very long layer name ".repeat(12).trim();
+    const pdf = await readPdf(
+      await exportPDF(
+        printOptions({ layers: [{ id: "x", name: long, color: "#000" }] }),
+      ),
+    );
+    const drawn = pdf.pages[0].texts.find((t) => t.startsWith("Very long"));
+    expect(drawn).toBeDefined();
+    expect(drawn!.endsWith("…")).toBe(true);
+    expect(drawn!.length).toBeLessThan(long.length);
+  });
+});
+
+describe("scaleBar", () => {
+  const isNice = (n: number) => {
+    const mantissa = n / 10 ** Math.floor(Math.log10(n));
+    return [1, 2, 5].some((m) => Math.abs(mantissa - m) < 1e-9);
+  };
+
+  it("gives a 1/2/5 × 10^n distance whose length on the page is that distance", () => {
+    for (const metersPerPoint of [0.07, 1, 3.3, 13.9, 250, 4800, 61000]) {
+      const bar = scaleBar(metersPerPoint, 100, "metric");
+      expect(isNice(bar.meters), `${metersPerPoint} m/pt`).toBe(true);
+      expect(bar.lengthPt * metersPerPoint).toBeCloseTo(bar.meters, 6);
+      // Largest nice step that fits: within the limit, and the next step up
+      // (at most 2.5× larger) would not fit.
+      expect(bar.lengthPt).toBeLessThanOrEqual(100);
+      expect(bar.lengthPt).toBeGreaterThan(100 / 2.5);
+    }
   });
 
-  it("gracefully handles a canvas stub that returns 'data:,' (jsdom default)", async () => {
-    // Simulate a canvas where toDataURL yielded the jsdom no-op.
-    const blob = await exportPDF({
-      pageSize: "letter",
-      orientation: "portrait",
-      title: "Stub canvas",
-      mapImageDataUrl: "data:,",
-      layers: LAYERS,
-    });
-    // Still returns a valid PDF — just without the embedded JPEG.
-    expect(blob.type).toBe("application/pdf");
-    expect(blob.size).toBeGreaterThan(0);
-    const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
-    expect(parsed.getSubject()).toBe(ODBL_ATTRIBUTION);
+  it("labels metres below a kilometre and kilometres from there up", () => {
+    expect(scaleBar(5, 100, "metric").label).toBe("500 m");
+    expect(scaleBar(13.9, 100, "metric").label).toBe("1 km");
+    expect(scaleBar(250, 100, "metric").label).toBe("20 km");
+  });
+
+  it("labels feet below a mile and miles from there up", () => {
+    // 100 pt × 13.9 m/pt = 1390 m = 4560 ft: under a mile, so feet.
+    const feet = scaleBar(13.9, 100, "imperial");
+    expect(feet.label).toBe("2,000 ft");
+    expect(feet.lengthPt * 13.9).toBeCloseTo(2000 * 0.3048, 6);
+    // 100 pt × 250 m/pt = 25 km = 15.5 mi.
+    const miles = scaleBar(250, 100, "imperial");
+    expect(miles.label).toBe("10 mi");
+    expect(miles.lengthPt * 250).toBeCloseTo(10 * 1609.344, 6);
+  });
+});
+
+describe("scaleRatioLabel", () => {
+  it("states the representative fraction at 100% print size, to 3 figures", () => {
+    // 1 pt is 0.0254 / 72 m of paper; 13.888… m of ground per pt is 1:39,370.
+    expect(scaleRatioLabel(10_000 / 720)).toBe("1:39,400");
+  });
+});
+
+describe("scaleUnitsForLocale", () => {
+  it("adds feet and miles for the United States only", () => {
+    expect(scaleUnitsForLocale("en-US")).toBe("metric+imperial");
+    expect(scaleUnitsForLocale("es-US")).toBe("metric+imperial");
+    expect(scaleUnitsForLocale("en-GB")).toBe("metric");
+    expect(scaleUnitsForLocale("fr")).toBe("metric");
+  });
+});
+
+describe("exportPDF — scale", () => {
+  // VIEW is 14,400 m across. On letter landscape the map is 720 pt wide (the
+  // page less two 36 pt margins; the view's 2:1 shape is limited by width), so
+  // one point is 20 m and a bar of at most 100 pt shows 2 km.
+  it("prints a scale bar measured from the view", async () => {
+    const pdf = await readPdf(await exportPDF(printOptions()));
+    expect(pdf.pages[0].images[0].width).toBeCloseTo(720, 6);
+    const texts = pdf.pages[0].texts;
+    expect(texts).toContain("2 km");
+    expect(texts).toContain(`${scaleRatioLabel(20)} at 100% print size`);
+    expect(texts.join(" ")).not.toMatch(/ ft|mi\b/);
+  });
+
+  it("adds a feet-and-miles bar when asked", async () => {
+    const pdf = await readPdf(
+      await exportPDF(printOptions({ units: "metric+imperial" })),
+    );
+    // 100 pt × 20 m = 2000 m = 6562 ft: over a mile, so miles; 1 mi fits.
+    expect(pdf.pages[0].texts).toContain("1 mi");
   });
 });
 
@@ -257,20 +330,11 @@ describe("northArrowGeometry", () => {
     expect(b.tip.x).toBeCloseTo(a.tip.x, 10);
     expect(b.tip.y).toBeCloseTo(a.tip.y, 10);
   });
-});
 
-describe("exportPDF — camera rotation", () => {
-  it("accepts a rotation and still produces a valid PDF", async () => {
-    const blob = await exportPDF({
-      pageSize: "letter",
-      orientation: "landscape",
-      title: "Turned",
-      mapImageDataUrl: TINY_JPEG_DATA_URL,
-      layers: LAYERS,
-      cameraRotationDeg: 47,
-    });
-    expect(blob.type).toBe("application/pdf");
-    const parsed = await PDFDocument.load(await blobToArrayBuffer(blob));
-    expect(parsed.getPageCount()).toBe(1);
+  it("draws the N on the page whatever the rotation", async () => {
+    const pdf = await readPdf(
+      await exportPDF(printOptions({ cameraRotationDeg: 47 })),
+    );
+    expect(pdf.pages[0].texts).toContain("N");
   });
 });

@@ -36,7 +36,11 @@ const {
   FakeGeoJSONParseError,
   FakeCSVParseError,
   FakeShapefileParseError,
+  FakeGeoXmlParseError,
   parseMock,
+  parseKMLMock,
+  parseKMZMock,
+  parseGPXMock,
   parseCSVMock,
   parseShapefileMock,
   requireHomogeneousGeometryMock,
@@ -71,11 +75,25 @@ const {
       this.code = code;
     }
   }
+  class FakeGeoXmlParseError extends Error {
+    format: string;
+    code: string;
+    constructor(format: string, code: string, message: string) {
+      super(message);
+      this.name = "GeoXmlParseError";
+      this.format = format;
+      this.code = code;
+    }
+  }
   return {
     FakeGeoJSONParseError,
     FakeCSVParseError,
     FakeShapefileParseError,
+    FakeGeoXmlParseError,
     parseMock: vi.fn(),
+    parseKMLMock: vi.fn(),
+    parseKMZMock: vi.fn(),
+    parseGPXMock: vi.fn(),
     parseCSVMock: vi.fn(),
     parseShapefileMock: vi.fn(),
     requireHomogeneousGeometryMock: vi.fn(),
@@ -103,7 +121,15 @@ const {
   };
 });
 
-vi.mock("@atlasdraw/data", () => ({
+// splitByGeometryKind is the real function: the layers that a mixed file
+// makes are the behaviour under test, and a mock would only repeat it.
+vi.mock("@atlasdraw/data", async (importActual) => ({
+  splitByGeometryKind: (await importActual<typeof import("@atlasdraw/data")>())
+    .splitByGeometryKind,
+  parseKML: parseKMLMock,
+  parseKMZ: parseKMZMock,
+  parseGPX: parseGPXMock,
+  GeoXmlParseError: FakeGeoXmlParseError,
   parse: parseMock,
   parseCSV: parseCSVMock,
   parseShapefile: parseShapefileMock,
@@ -157,9 +183,49 @@ const POLY_FC: FeatureCollection = {
   ],
 };
 
-function makeFile(name: string, text = ""): File {
+const LINE_FC: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { name: "Morning climb" },
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
+    },
+  ],
+};
+
+const POINT_FC: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      properties: { name: "East Peak" },
+      geometry: { type: "Point", coordinates: [1, 1] },
+    },
+    {
+      type: "Feature",
+      properties: { name: "Rock Spring" },
+      geometry: { type: "Point", coordinates: [2, 2] },
+    },
+  ],
+};
+
+/** A GPX-like collection with points first, then a line. */
+const MIXED_FC: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [...POINT_FC.features, ...LINE_FC.features],
+};
+
+function makeFile(name: string, text = "", type = ""): File {
   return {
     name,
+    type,
     text: () => Promise.resolve(text),
     // The raster path reads bytes, not text. Present on every fixture so a
     // `.tif` case does not need its own factory.
@@ -641,11 +707,7 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
   // GeoTIFF is gone from this list — RA-4 built the importer, and `detectExt`
   // now claims those extensions before the message is ever reached. The list is
   // for formats that genuinely have no path yet.
-  it.each([
-    ["wards.gpkg", "GeoPackage"],
-    ["route.kml", "KML"],
-    ["track.gpx", "GPX"],
-  ])(
+  it.each([["wards.gpkg", "GeoPackage"]])(
     "names the format and says 'not yet' for %s, rather than blaming the file",
     async (fileName, label) => {
       const map = makeMockMap();
@@ -660,6 +722,123 @@ describe("useDataFileImport — importFile (deliberate file-picker action)", () 
       expect(registerDataLayer).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("useDataFileImport — KML, KMZ and GPX", () => {
+  it("imports a file with one geometry kind as one layer named after the file", async () => {
+    parseKMLMock.mockResolvedValue({ fc: LINE_FC, droppedCount: 0 });
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("trail.kml")] } });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+    expect(parseKMLMock).toHaveBeenCalledTimes(1);
+    const arg = registerDataLayer.mock.calls[0][0];
+    expect(arg.label).toBe("trail.kml");
+    expect(arg.fc).toEqual(LINE_FC);
+    expect(arg.provenance).toEqual({
+      sourceFile: "trail.kml",
+      droppedCount: 0,
+    });
+  });
+
+  it("imports a file with points and lines as one layer per kind, lines first", async () => {
+    parseGPXMock.mockResolvedValue({ fc: MIXED_FC, droppedCount: 0 });
+    const map = makeMockMap();
+    const { root, registerDataLayer, onImported, findByTestId } =
+      renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("hike.gpx")] } });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(2));
+    const [lines, points] = registerDataLayer.mock.calls.map((c) => c[0]);
+    expect(lines.label).toBe("hike.gpx — lines");
+    expect(lines.fc).toEqual(LINE_FC);
+    expect(points.label).toBe("hike.gpx — points");
+    expect(points.fc).toEqual(POINT_FC);
+    expect(lines.id).not.toBe(points.id);
+    expect(map.addSource).toHaveBeenCalledTimes(2);
+    expect(onImported).toHaveBeenCalledTimes(1);
+    const toast = await findByTestId("toast-success");
+    expect(toast.textContent).toMatch(/3 features imported as 2 layers/);
+  });
+
+  it("records the dropped count once, on the first layer, so the total stays true", async () => {
+    parseGPXMock.mockResolvedValue({ fc: MIXED_FC, droppedCount: 4 });
+    const map = makeMockMap();
+    const { root, registerDataLayer } = renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("hike.gpx")] } });
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(2));
+    expect(registerDataLayer.mock.calls.map((c) => c[0].provenance)).toEqual([
+      { sourceFile: "hike.gpx", droppedCount: 4 },
+      { sourceFile: "hike.gpx", droppedCount: 0 },
+    ]);
+  });
+
+  it("names a polygon layer 'areas'", async () => {
+    parseKMZMock.mockResolvedValue({
+      fc: {
+        type: "FeatureCollection",
+        features: [...POLY_FC.features, ...POINT_FC.features],
+      },
+      droppedCount: 0,
+    });
+    const map = makeMockMap();
+    const { registerDataLayer } = renderHarness(map);
+
+    lastImportFile!(makeFile("Parks.KMZ"));
+
+    await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(2));
+    expect(parseKMZMock).toHaveBeenCalledTimes(1);
+    expect(registerDataLayer.mock.calls.map((c) => c[0].label)).toEqual([
+      "Parks.KMZ — areas",
+      "Parks.KMZ — points",
+    ]);
+  });
+
+  it.each([
+    ["application/gpx+xml", parseGPXMock],
+    ["application/vnd.google-earth.kml+xml", parseKMLMock],
+    ["application/vnd.google-earth.kmz", parseKMZMock],
+  ])(
+    "detects a file with no known extension by its MIME type %s",
+    async (type, parser) => {
+      parser.mockResolvedValue({ fc: LINE_FC, droppedCount: 0 });
+      const map = makeMockMap();
+      const { registerDataLayer } = renderHarness(map);
+
+      lastImportFile!(makeFile("download", "", type));
+
+      await waitFor(() => expect(registerDataLayer).toHaveBeenCalledTimes(1));
+      expect(parser).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("shows the parser's message and registers nothing on a GeoXmlParseError", async () => {
+    parseKMLMock.mockRejectedValue(
+      new FakeGeoXmlParseError(
+        "KML",
+        "MALFORMED_XML",
+        "The file is not well-formed XML.",
+      ),
+    );
+    const map = makeMockMap();
+    const { root, registerDataLayer, onImported, findByTestId } =
+      renderHarness(map);
+
+    fireEvent.drop(root, { dataTransfer: { files: [makeFile("bad.kml")] } });
+
+    const toast = await findByTestId("toast-error");
+    expect(toast.textContent).toMatch(
+      /KML import failed — The file is not well-formed XML\./,
+    );
+    expect(registerDataLayer).not.toHaveBeenCalled();
+    expect(map.addSource).not.toHaveBeenCalled();
+    expect(onImported).not.toHaveBeenCalled();
+  });
 });
 
 // The sheet panel defaults closed (design doc §5) and a successful import is the

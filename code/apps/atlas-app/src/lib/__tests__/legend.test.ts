@@ -8,6 +8,7 @@ import {
   renderedDataLayerIds,
   visibleAnnotationIds,
   type LegendSource,
+  visibleRasterIds,
 } from "../legend";
 
 import type { OverlayEntry } from "../../state/document";
@@ -37,6 +38,29 @@ function annotation(id: string): LegendSource {
     renamedByUser: false,
     order: 0,
   };
+}
+
+function raster(
+  id: string,
+  overrides: Partial<Extract<OverlayEntry, { kind: "raster" }>> = {},
+): OverlayEntry {
+  return {
+    kind: "raster",
+    id,
+    label: id,
+    visible: true,
+    order: 0,
+    // A 1° square with its top-left at (0°, 1°N).
+    corners: [
+      [0, 1],
+      [1, 1],
+      [1, 0],
+      [0, 0],
+    ],
+    opacity: 1,
+    imageKey: "k",
+    ...overrides,
+  } as OverlayEntry;
 }
 
 const APPSTATE = { scrollX: 0, scrollY: 0, zoom: { value: 1 } };
@@ -137,11 +161,56 @@ describe("visibleAnnotationIds", () => {
   });
 });
 
+describe("visibleRasterIds", () => {
+  // 100 screen px per degree, lng right and lat up, origin at (0°, 0°) + offset.
+  const project =
+    (offsetX: number, offsetY: number) =>
+    ([lng, lat]: [number, number]) => ({
+      x: offsetX + lng * 100,
+      y: offsetY - lat * 100,
+    });
+
+  it("keeps a raster whose corners overlap the frame, drops one beside it", () => {
+    const entries = [raster("rl:in"), raster("rl:hidden", { visible: false })];
+    // The square spans x 50..150, y 100..200 in an 800 × 600 frame.
+    expect(visibleRasterIds(entries, project(50, 200), 800, 600)).toEqual(
+      new Set(["rl:in", "rl:hidden"]),
+    );
+    // Moved to x 900..1000: wholly right of the frame.
+    expect(visibleRasterIds(entries, project(900, 200), 800, 600)).toEqual(
+      new Set(),
+    );
+  });
+
+  it("keeps a raster that covers the whole frame", () => {
+    const big = raster("rl:big", {
+      corners: [
+        [-10, 10],
+        [10, 10],
+        [10, -10],
+        [-10, -10],
+      ],
+    });
+    expect(visibleRasterIds([big], project(400, 300), 800, 600)).toEqual(
+      new Set(["rl:big"]),
+    );
+  });
+});
+
 describe("buildLegendEntries", () => {
   const ctx = {
     renderedDataLayerIds: new Set(["dl:painted"]),
     visibleAnnotationIds: new Set(["ann-in"]),
+    visibleRasterIds: new Set(["rl:in"]),
   };
+
+  it("lists a visible raster in view and drops one out of view", () => {
+    const entries = buildLegendEntries(
+      [raster("rl:in"), raster("rl:out")],
+      ctx,
+    );
+    expect(entries.map((e) => e.id)).toEqual(["rl:in"]);
+  });
 
   it("drops hidden layers even when they are in view", () => {
     const entries = buildLegendEntries(

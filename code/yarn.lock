@@ -163,9 +163,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@atlasdraw/data@workspace:packages/data"
   dependencies:
+    "@tmcw/togeojson": "npm:^7.1.2"
     "@types/geojson": "npm:*"
+    "@types/jsdom": "npm:^21"
     "@types/papaparse": "npm:^5.3.0"
     geotiff: "npm:3.0.5"
+    jsdom: "npm:22.1.0"
     jszip: "npm:^3.10.0"
     papaparse: "npm:^5.4.0"
     shpjs: "npm:^6.2.0"
@@ -6712,6 +6715,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tmcw/togeojson@npm:^7.1.2":
+  version: 7.1.2
+  resolution: "@tmcw/togeojson@npm:7.1.2"
+  checksum: 10/b16395a54966ea0745541cdde98ce3be026c19441a42d05e74414119efd08041434f7bc6aa35f416fdae1348a358166aa509c785ae07e21cb763c896f528391b
+  languageName: node
+  linkType: hard
+
 "@tootallnate/once@npm:2":
   version: 2.0.1
   resolution: "@tootallnate/once@npm:2.0.1"
@@ -6896,6 +6906,17 @@ __metadata:
     jest-diff: "npm:^27.0.0"
     pretty-format: "npm:^27.0.0"
   checksum: 10/4ecef33e4626e2640493738087e8f49b263e1c2861508924ea9342c5bbc1c2c8b3fa39d2264fa67cbd0782058cf3f187379fa75efd743df2ce110e1608897849
+  languageName: node
+  linkType: hard
+
+"@types/jsdom@npm:^21":
+  version: 21.1.7
+  resolution: "@types/jsdom@npm:21.1.7"
+  dependencies:
+    "@types/node": "npm:*"
+    "@types/tough-cookie": "npm:*"
+    parse5: "npm:^7.0.0"
+  checksum: 10/a5ee54aec813ac928ef783f69828213af4d81325f584e1fe7573a9ae139924c40768d1d5249237e62d51b9a34ed06bde059c86c6b0248d627457ec5e5d532dfa
   languageName: node
   linkType: hard
 
@@ -7126,6 +7147,13 @@ __metadata:
   version: 0.2.6
   resolution: "@types/tmp@npm:0.2.6"
   checksum: 10/e14a094c10569d3b56805552b21417860ef21060d969000d5d5b53604a78c2bdac216f064b03797d4b07a081e0141dd3ab22bc36923e75300eb1c023f7252cc7
+  languageName: node
+  linkType: hard
+
+"@types/tough-cookie@npm:*":
+  version: 4.0.5
+  resolution: "@types/tough-cookie@npm:4.0.5"
+  checksum: 10/01fd82efc8202670865928629697b62fe9bf0c0dcbc5b1c115831caeb073a2c0abb871ff393d7df1ae94ea41e256cb87d2a5a91fd03cdb1b0b4384e08d4ee482
   languageName: node
   linkType: hard
 
@@ -9490,6 +9518,13 @@ __metadata:
   version: 4.5.0
   resolution: "entities@npm:4.5.0"
   checksum: 10/ede2a35c9bce1aeccd055a1b445d41c75a14a2bb1cd22e242f20cf04d236cdcd7f9c859eb83f76885327bfae0c25bf03303665ee1ce3d47c5927b98b0e3e3d48
+  languageName: node
+  linkType: hard
+
+"entities@npm:^6.0.0":
+  version: 6.0.1
+  resolution: "entities@npm:6.0.1"
+  checksum: 10/62af1307202884349d2867f0aac5c60d8b57102ea0b0e768b16246099512c28e239254ad772d6834e7e14cb1b6f153fc3d0c031934e3183b086c86d3838d874a
   languageName: node
   linkType: hard
 
@@ -13454,6 +13489,15 @@ __metadata:
     json-parse-even-better-errors: "npm:^2.3.0"
     lines-and-columns: "npm:^1.1.6"
   checksum: 10/62085b17d64da57f40f6afc2ac1f4d95def18c4323577e1eced571db75d9ab59b297d1d10582920f84b15985cbfc6b6d450ccbf317644cfa176f3ed982ad87e2
+  languageName: node
+  linkType: hard
+
+"parse5@npm:^7.0.0":
+  version: 7.3.0
+  resolution: "parse5@npm:7.3.0"
+  dependencies:
+    entities: "npm:^6.0.0"
+  checksum: 10/b0e48be20b820c655b138b86fa6fb3a790de6c891aa2aba536524f8027b4dca4fe538f11a0e5cf2f6f847d120dbb9e4822dcaeb933ff1e10850a2ef0154d1d88
   languageName: node
   linkType: hard
 

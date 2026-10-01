@@ -3,16 +3,30 @@
 // Phase 2 Wave 1b T10 implemented the GeoJSON parser in ./geojson; Wave 2b
 // T13 (MapEditor drop import) is the first consumer that imports from the
 // package root, so the barrel re-export is added here. CSV and Shapefile
-// followed in Phase 3. Future format adapters (KML/GPX — still unimplemented)
-// should follow the same pattern — re-export their parser entry point
+// followed in Phase 3. Format adapters re-export their parser entry point
 // through this file rather than from a deep path.
 
 export {
   parse,
   GeoJSONParseError,
   requireHomogeneousGeometry,
+  splitByGeometryKind,
 } from "./geojson";
-export type { AtlasGeometryKind } from "./geojson";
+export type { AtlasGeometryKind, GeometryKindPart } from "./geojson";
+
+// KML, KMZ and GPX → GeoJSON. Output can mix geometry kinds.
+export {
+  parseKML,
+  parseKMZ,
+  parseGPX,
+  GeoXmlParseError,
+  KML_FOLDER_PROPERTY,
+} from "./geoxml";
+export type {
+  GeoXmlFormat,
+  GeoXmlImport,
+  GeoXmlParseErrorCode,
+} from "./geoxml";
 
 // Phase 3 Wave 0 Task 1 — manifest schema + AtlasdrawDocument runtime type.
 export {

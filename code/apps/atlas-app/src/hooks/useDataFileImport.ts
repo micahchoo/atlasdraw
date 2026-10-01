@@ -5,9 +5,9 @@
 //
 // Two trigger paths funnel into the same processDataDrop pipeline:
 //   1. Drag-and-drop — capture-phase DOM listeners on a root element so
-//      .geojson/.csv/.zip files are intercepted before Excalidraw's
-//      bubble-phase handler consumes them. Other files pass through for
-//      Excalidraw's native image/library drops.
+//      data files (.geojson, .csv, .zip, .kml, .kmz, .gpx, GeoTIFF) are
+//      intercepted before Excalidraw's bubble-phase handler consumes them.
+//      Other files pass through for Excalidraw's native image/library drops.
 //   2. A deliberate "Import…" menu action — MapEditor calls the returned
 //      `importFile(file)` after a native file picker resolves a File (see
 //      the fallbackOpen pattern in state/persistence.ts for the picker
@@ -26,6 +26,13 @@
 // message. That's a known, accepted limitation for this pass: teasing layers
 // apart would mean changing parseShapefile's merge behavior in
 // @atlasdraw/data, not just this hook.
+//
+// KML, KMZ and GPX files usually mix geometry kinds: a GPX file has waypoints
+// and tracks, a KML file has placemarks, paths and polygons. A data layer
+// holds one kind, so these files import as one layer per kind, named
+// "<file> — areas", "<file> — lines" and "<file> — points". A file with one
+// kind imports as one layer named "<file>". GeoJSON, CSV and shapefiles keep
+// the single-layer rule and its error.
 
 import { useCallback, useEffect } from "react";
 
@@ -33,9 +40,14 @@ import {
   parse,
   parseCSV,
   parseShapefile,
+  parseKML,
+  parseKMZ,
+  parseGPX,
+  splitByGeometryKind,
   GeoJSONParseError,
   CSVParseError,
   ShapefileParseError,
+  GeoXmlParseError,
   PhotonGeocoder,
   decodeGeoTiff,
   encodeRasterPng,
@@ -45,6 +57,8 @@ import {
 import { defaultLayerStyle } from "@atlasdraw/basemap";
 
 import { requireHomogeneousGeometry } from "@atlasdraw/data";
+
+import type { AtlasGeometryKind } from "@atlasdraw/data";
 
 import { getAppConfig } from "../config/app-config";
 
@@ -61,7 +75,14 @@ import type {
   RasterCorners,
 } from "../state/document";
 
-type DataFileExt = "geojson" | "csv" | "zip" | "geotiff";
+type DataFileExt =
+  | "geojson"
+  | "csv"
+  | "zip"
+  | "geotiff"
+  | "kml"
+  | "kmz"
+  | "gpx";
 
 /**
  * Formats the app cannot read *yet*, as opposed to formats that are simply not
@@ -78,9 +99,22 @@ const KNOWN_UNBUILT: ReadonlyArray<{ exts: string[]; label: string }> = [
   // mechanism this list exists for: `detectExt` claims the extension first, so
   // a stale entry here would be unreachable rather than wrong.
   { exts: [".gpkg"], label: "GeoPackage" },
-  { exts: [".kml", ".kmz"], label: "KML" },
-  { exts: [".gpx"], label: "GPX" },
 ];
+
+/** The formats that `importFile` reads, for its error message. */
+const SUPPORTED_FORMATS =
+  ".geojson, .csv, zipped shapefiles, .kml, .kmz, .gpx and GeoTIFF";
+
+/**
+ * MIME types that identify a format when the file name has no known
+ * extension, for example a download saved without one.
+ */
+const MIME_TYPES: Readonly<Record<string, DataFileExt>> = {
+  "application/geo+json": "geojson",
+  "application/vnd.google-earth.kml+xml": "kml",
+  "application/vnd.google-earth.kmz": "kmz",
+  "application/gpx+xml": "gpx",
+};
 
 function unbuiltFormatLabel(fileName: string): string | null {
   const name = fileName.toLowerCase();
@@ -92,9 +126,13 @@ function unbuiltFormatLabel(fileName: string): string | null {
   return null;
 }
 
-/** Extension routing shared by both the drop handler and the file picker. */
-function detectExt(fileName: string): DataFileExt | null {
-  const name = fileName.toLowerCase();
+/**
+ * Format routing shared by both the drop handler and the file picker. The
+ * extension decides first; the MIME type decides only when the extension is
+ * not known.
+ */
+function detectExt(file: { name: string; type?: string }): DataFileExt | null {
+  const name = file.name.toLowerCase();
   if (name.endsWith(".geojson")) {
     return "geojson";
   }
@@ -114,22 +152,67 @@ function detectExt(fileName: string): DataFileExt | null {
   ) {
     return "geotiff";
   }
-  return null;
+  for (const ext of ["kml", "kmz", "gpx"] as const) {
+    if (name.endsWith(`.${ext}`)) {
+      return ext;
+    }
+  }
+  return MIME_TYPES[(file.type ?? "").toLowerCase()] ?? null;
+}
+
+/** The word for each geometry kind in a layer name. */
+const KIND_LABEL: Readonly<Record<AtlasGeometryKind, string>> = {
+  fill: "areas",
+  line: "lines",
+  circle: "points",
+};
+
+/** One data layer that an import makes. */
+interface ParsedLayer {
+  fc: FeatureCollection;
+  /** "areas", "lines" or "points" when the file made more than one layer. */
+  kindLabel: string | null;
 }
 
 /**
- * Parse a dropped/picked file by extension. Throws the parser's own error types.
+ * Parse a dropped/picked file and divide it into data layers. Throws the
+ * parser's own error types.
  *
- * Returns the FC alongside the number of input records the parse discarded.
- * Only CSV discards anything (a row with no usable coordinates is skipped so
- * one bad line can't fail a 10k-row file); GeoJSON and shapefile reject the
- * whole file instead, so 0 from those branches is a fact rather than a
- * placeholder. The count is recorded as layer provenance — see
- * `LayerProvenance` in state/document.
+ * GeoJSON, CSV and shapefiles give one layer, and must hold one geometry
+ * kind. KML, KMZ and GPX give one layer per geometry kind.
+ *
+ * `dropped` is the number of input records the parse discarded. CSV skips a
+ * row with no usable coordinates so one bad line can't fail a 10k-row file;
+ * KML, KMZ and GPX skip features with no geometry and KML ground overlays;
+ * GeoJSON and shapefile reject the whole file instead, so 0 from those
+ * branches is a fact rather than a placeholder. The count is recorded as
+ * layer provenance — see `LayerProvenance` in state/document.
  */
 async function parseDroppedFile(
   file: File,
   ext: Exclude<DataFileExt, "geotiff">,
+): Promise<{ layers: ParsedLayer[]; dropped: number }> {
+  if (ext === "kml" || ext === "kmz" || ext === "gpx") {
+    const parser =
+      ext === "kml" ? parseKML : ext === "kmz" ? parseKMZ : parseGPX;
+    const { fc, droppedCount } = await parser(file);
+    const parts = splitByGeometryKind(fc);
+    return {
+      layers: parts.map(({ kind, fc: part }) => ({
+        fc: part,
+        kindLabel: parts.length > 1 ? KIND_LABEL[kind] : null,
+      })),
+      dropped: droppedCount,
+    };
+  }
+  const { fc, dropped } = await parseSingleLayerFile(file, ext);
+  requireHomogeneousGeometry(fc);
+  return { layers: [{ fc, kindLabel: null }], dropped };
+}
+
+async function parseSingleLayerFile(
+  file: File,
+  ext: "geojson" | "csv" | "zip",
 ): Promise<{ fc: FeatureCollection; dropped: number }> {
   if (ext === "csv") {
     const geocoderConfig = getAppConfig().geocoder;
@@ -291,29 +374,34 @@ export function useDataFileImport(
         return;
       }
       try {
-        const { fc, dropped } = await parseDroppedFile(file, ext);
-        requireHomogeneousGeometry(fc);
-        const id = `dl:${crypto.randomUUID()}`;
-        const style = defaultLayerStyle(fc);
-        // Map mutations first, registry second: the registry subscriber
-        // (useLayerRegistrySync) reconciles registry→map on new entries, and
-        // adding here first means it finds this layer already present.
-        // addDataLayerToMap owns the addSource/addLayer + orphan-source
-        // rollback so an imported layer and a re-added one are byte-identical.
-        addDataLayerToMap(map, id, fc, style);
-        registerDataLayer({
-          id,
-          fc,
-          label: file.name,
-          style,
-          provenance: {
-            sourceFile: file.name,
-            droppedCount: dropped + countNullGeometries(fc),
-          },
+        const { layers, dropped } = await parseDroppedFile(file, ext);
+        let n = 0;
+        layers.forEach(({ fc, kindLabel }, i) => {
+          const id = `dl:${crypto.randomUUID()}`;
+          const style = defaultLayerStyle(fc);
+          // Map first, document second: the map bridge (useLayerRegistrySync)
+          // reconciles new document layers onto the map, and adding here
+          // first means it finds this layer already present.
+          // addDataLayerToMap owns the addSource/addLayer + orphan-source
+          // rollback so an imported layer and a re-added one are byte-identical.
+          addDataLayerToMap(map, id, fc, style);
+          registerDataLayer({
+            id,
+            fc,
+            label: kindLabel ? `${file.name} — ${kindLabel}` : file.name,
+            style,
+            provenance: {
+              sourceFile: file.name,
+              // The parser's count belongs to the file, not to a kind. The
+              // first layer records it, so the sum over the layers is true.
+              droppedCount: (i === 0 ? dropped : 0) + countNullGeometries(fc),
+            },
+          });
+          n += fc.features.length;
         });
-        const n = fc.features.length;
+        const asLayers = layers.length > 1 ? ` as ${layers.length} layers` : "";
         toast.success(
-          `${file.name}: ${n} feature${n === 1 ? "" : "s"} imported`,
+          `${file.name}: ${n} feature${n === 1 ? "" : "s"} imported${asLayers}`,
         );
         onImported?.();
       } catch (err) {
@@ -331,6 +419,11 @@ export function useDataFileImport(
               ? " (address-only CSVs need a geocoder — see the VITE_GEOCODER_ENDPOINT setting)"
               : "";
           toast.error(`CSV import failed — ${err.message}${hint}`);
+          return;
+        }
+        if (err instanceof GeoXmlParseError) {
+          console.error(`[MapEditor] ${err.format} parse failed:`, err.message);
+          toast.error(`${err.format} import failed — ${err.message}`);
           return;
         }
         if (err instanceof ShapefileParseError) {
@@ -353,13 +446,13 @@ export function useDataFileImport(
 
   const importFile = useCallback(
     (file: File) => {
-      const ext = detectExt(file.name);
+      const ext = detectExt(file);
       if (!ext) {
         const unbuilt = unbuiltFormatLabel(file.name);
         toast.error(
           unbuilt
-            ? `${file.name}: ${unbuilt} import isn't supported yet — atlasdraw reads .geojson, .csv and zipped shapefiles`
-            : `${file.name}: unsupported file type — expected .geojson, .csv, or .zip`,
+            ? `${file.name}: ${unbuilt} import isn't supported yet — atlasdraw reads ${SUPPORTED_FORMATS}`
+            : `${file.name}: unsupported file type — expected ${SUPPORTED_FORMATS}`,
         );
         return;
       }
@@ -383,7 +476,7 @@ export function useDataFileImport(
       if (!file) {
         return;
       }
-      const ext = detectExt(file.name);
+      const ext = detectExt(file);
       if (!ext) {
         return;
       }

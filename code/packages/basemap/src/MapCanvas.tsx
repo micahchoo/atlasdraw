@@ -147,10 +147,9 @@ export const MapCanvas: React.FC<MapCanvasProps> = ({
       // just below — they have no construction option that spares pinch-zoom
       // and arrow-key panning.
       dragRotate: false,
-      // T15: required so map canvas can be sampled via drawImage in PNG
-      // export. Without this WebGL clears the drawing buffer between frames
-      // and the export reads a blank layer.
-      preserveDrawingBuffer: true,
+      // No preserveDrawingBuffer: export renders its own offscreen map
+      // (apps/atlas-app/src/lib/export.ts), so the live map need not keep
+      // every frame's buffer.
       // Prevent horizontal world tiling at low zoom — a single world copy
       // avoids the disorienting 1.5x repetition at zoom 0.
       renderWorldCopies: false,

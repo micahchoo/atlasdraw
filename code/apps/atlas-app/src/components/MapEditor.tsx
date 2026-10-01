@@ -110,13 +110,9 @@ import {
 
 import styles from "../styles/MapEditor.module.css";
 
-import { exportCompositeDataURL } from "../lib/export";
+import { exportCompositeDataURL, measureView } from "../lib/export";
 
-import {
-  buildLegendEntries,
-  renderedDataLayerIds,
-  visibleAnnotationIds,
-} from "../lib/legend";
+import { exportLegendEntries } from "../lib/legend";
 
 import { useToast } from "./ToastProvider";
 
@@ -951,10 +947,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
   // <input type="file"> pattern in state/persistence.ts's fallbackOpen:
   // create it off-DOM, click it programmatically, clean up once settled.
-  // .accept covers every format useDataFileImport understands so one
-  // picker serves GeoJSON/CSV/Shapefile alike — drag-drop already handles
-  // GeoJSON/CSV; this is the discoverable, menu-driven equivalent, and the
-  // only reachable path for Shapefile today.
+  // .accept covers every format useDataFileImport understands, so one
+  // picker serves GeoJSON, CSV, Shapefile, KML, KMZ, GPX and GeoTIFF. It is
+  // the menu-driven equivalent of a drop.
   const handleImportFile = useCallback(() => {
     if (typeof document === "undefined") {
       return;
@@ -963,7 +958,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     input.type = "file";
     // FU-1: .tif/.tiff/.geotiff added with the raster importer. A format
     // missing here is invisible in the picker even though a drop would work.
-    input.accept = ".geojson,.csv,.zip,.tif,.tiff,.geotiff";
+    input.accept = ".geojson,.csv,.zip,.kml,.kmz,.gpx,.tif,.tiff,.geotiff";
     input.style.display = "none";
     let settled = false;
     const settle = () => {
@@ -1065,15 +1060,26 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // The PDF export's image source: the SAME composite the PNG export uses, so
   // the two formats cannot disagree about what an export contains. Passing
   // `map.getCanvas()` here is what dropped every drawn shape from the PDF
-  // (FU-12) — MapLibre's canvas has no Excalidraw content on it.
-  const getMapImageDataUrl = useCallback(async (): Promise<string | null> => {
-    if (!map || !excalidrawAPI) {
-      return null;
-    }
-    return exportCompositeDataURL(map, excalidrawAPI, {
-      backgroundColor: mapBg,
-    });
-  }, [map, excalidrawAPI, mapBg]);
+  // (FU-12) — MapLibre's canvas has no Excalidraw content on it. The dialog
+  // picks `pixelRatio` so the image is print resolution for the page.
+  const getMapImageDataUrl = useCallback(
+    async (pixelRatio: number): Promise<string | null> => {
+      if (!map || !excalidrawAPI) {
+        return null;
+      }
+      return exportCompositeDataURL(map, excalidrawAPI, {
+        pixelRatio,
+        backgroundColor: mapBg,
+      });
+    },
+    [map, excalidrawAPI, mapBg],
+  );
+
+  // The view's size and ground resolution: the PNG sizes and the PDF scale bar.
+  const getExportView = useCallback(
+    () => (map ? measureView(map) : null),
+    [map],
+  );
 
   // RT-4. How far the camera is turned, for the PDF's north arrow. Measured
   // off the live projection by the same `cameraRotation` RT-2 uses, not read
@@ -1092,28 +1098,18 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // layers and layers with nothing painted in this view are left out. Read at
   // export time, like the image, so both answer the same viewport.
   const getLegendEntries = useCallback((): LayerLegendEntry[] => {
-    const entries = currentDocument().snapshot().overlays;
     if (!map || !excalidrawAPI) {
       return [];
     }
-    const canvas = map.getCanvas();
     // Annotations first: the panel lists them above the data layers.
-    const layers = [
-      ...annotationRows(excalidrawAPI.getSceneElements()),
-      ...entries,
-    ];
-    return buildLegendEntries(layers, {
-      renderedDataLayerIds: renderedDataLayerIds(
-        map,
-        entries.filter((e) => e.kind === "data").map((e) => e.id),
-      ),
-      visibleAnnotationIds: visibleAnnotationIds(
-        excalidrawAPI.getSceneElements(),
-        excalidrawAPI.getAppState(),
-        canvas.clientWidth,
-        canvas.clientHeight,
-      ),
-    });
+    return exportLegendEntries(
+      [
+        ...annotationRows(excalidrawAPI.getSceneElements()),
+        ...currentDocument().snapshot().overlays,
+      ],
+      map,
+      excalidrawAPI,
+    );
   }, [map, excalidrawAPI]);
 
   // "Scroll back to content" reframes the MAP on the geographic bounds of the
@@ -1513,9 +1509,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 onExportPNG={handleExportPNG}
                 onExportGeoJSON={handleExportGeoJSON}
                 onExportAtlasdraw={handleExportAtlasdraw}
+                getView={getExportView}
                 getMapImageDataUrl={getMapImageDataUrl}
                 getCameraRotationDeg={getCameraRotationDeg}
                 getLegendEntries={getLegendEntries}
+                attribution={getBasemap(activeBasemapId)?.attribution}
               />
             </Suspense>
           )}
