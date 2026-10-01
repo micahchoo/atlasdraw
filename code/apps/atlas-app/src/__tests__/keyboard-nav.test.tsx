@@ -26,6 +26,7 @@ function renderExportDialog(onClose: () => void = () => {}) {
       onExportPNG={() => {}}
       onExportGeoJSON={() => {}}
       onExportAtlasdraw={() => {}}
+      getView={() => null}
       getMapImageDataUrl={async () => null}
       getLegendEntries={() => []}
     />,
