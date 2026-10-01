@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildRemoteSaveCallback,
+  hasServerMap,
   restoreFromServer,
   revokeShare,
   shareDocument,
@@ -236,5 +237,17 @@ describe("restoreFromServer", () => {
 
     expect(await restoreFromServer(client, B)).toBeNull();
     expect(readMap).not.toHaveBeenCalled();
+  });
+});
+
+describe("hasServerMap", () => {
+  it("is true after the first push of the document, and only for it", async () => {
+    const { client } = fakeClient();
+    expect(await hasServerMap(A)).toBe(false);
+
+    await buildRemoteSaveCallback(client)(bytes(), A);
+
+    expect(await hasServerMap(A)).toBe(true);
+    expect(await hasServerMap(B)).toBe(false);
   });
 });

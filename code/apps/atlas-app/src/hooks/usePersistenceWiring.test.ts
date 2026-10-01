@@ -64,6 +64,9 @@ function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
   const store: PersistenceStore = {
     save: vi.fn(async () => {}),
     load: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    open: vi.fn(async () => null),
+    remove: vi.fn(async () => {}),
     saveToDisk: vi.fn(async () => {}),
     openFromDisk: vi.fn(async () => null),
     onDirty: vi.fn((cb: () => void) => {
