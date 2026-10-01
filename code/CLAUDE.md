@@ -40,4 +40,4 @@ yarn workspace @atlasdraw/atlas-app build   # production build (apps/atlas-app/d
 
 ### Known seams (tracked, not yet resolved)
 
-- `packages/excalidraw/locales` ships 59 upstream locale files with no active translation coverage tooling (`locales-coverage.yml` is disabled) — treat as dead weight until a real i18n decision is made, don't add new keys expecting them to be translated.
+- The editor ships English only: `packages/excalidraw/locales/en.json` is the one locale, and `i18n.ts#languages` lists only English. A `langCode` prop for another language falls back to English. Adding a language is a product decision, not a file drop.
