@@ -1,10 +1,8 @@
-// @atlasdraw/storage — Phase 4 T18: /health endpoint.
+// @atlasdraw/storage — /health endpoint.
 //
-// Readiness probe for compose stacks, load balancers, and the Show HN demo
-// "is the server up" check. Pings the storage adapter's actual dependencies
-// (DB, and blob store for postgres-minio) — a stopped postgres/minio
-// container now surfaces as a 503 here instead of a fake 200 (ISSUES.md
-// Issue 8; NEGSPACE.md).
+// Readiness probe for compose stacks and load balancers. Pings the storage
+// adapter's actual dependencies (DB, and blob store for postgres-minio), so a
+// stopped postgres/minio container answers 503, not 200.
 
 import type { FastifyInstance } from "fastify";
 import type { StorageClient, StorageMode } from "../types";

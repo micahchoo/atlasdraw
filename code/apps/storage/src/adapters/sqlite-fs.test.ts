@@ -114,7 +114,7 @@ describe("sqlite-fs adapter", () => {
     expect(resolved).toEqual(created);
   });
 
-  // Phase 4 T8 amendment — blob retrieval for /share/:token/blob.
+  // Blob retrieval for GET /share/:token/blob.
   it("getBlob returns the original bytes for an existing map", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     const payload = Buffer.from("scene-bytes-roundtrip");
@@ -138,7 +138,7 @@ describe("sqlite-fs adapter", () => {
     expect(await client.getBlob("a".repeat(22))).toBeNull();
   });
 
-  // ISSUES.md Issue 8 — /health now pings the adapter for real.
+  // /health pings the adapter's real dependencies.
   it("ping resolves when the db + blobs dir are reachable", async () => {
     const client = createSqliteFsAdapter({ dataDir: scratch.name });
     await expect(client.ping()).resolves.toBeUndefined();

@@ -1,4 +1,4 @@
-// @atlasdraw/storage — Phase 4 T18: structured logger.
+// @atlasdraw/storage — structured logger.
 //
 // Single pino instance exported for both Fastify's request log and direct
 // import by route handlers / adapters. Level is env-controlled via LOG_LEVEL.

@@ -40,12 +40,10 @@ describe("loadConfig", () => {
     });
   });
 
-  // FU-10. `toMatchObject` rather than `if (cfg.STORAGE_MODE === "sqlite-fs")`
-  // around the DATA_DIR assertion. The `if` was there to narrow a discriminated
-  // union, and it did — but it also skipped: "honors an explicit DATA_DIR" had
-  // its ONLY assertion inside it, so a loadConfig that returned the wrong mode
-  // entirely ran zero assertions and passed. One matcher, no narrowing, and
-  // both fields are checked unconditionally.
+  // `toMatchObject`, not `if (cfg.STORAGE_MODE === "sqlite-fs")` around the
+  // DATA_DIR assertion. An `if` that narrows the union also skips: a
+  // loadConfig that returned the wrong mode would run zero assertions and
+  // pass. One matcher checks both fields unconditionally.
   describe("sqlite-fs mode", () => {
     it("parses a minimal env (DATA_DIR defaulted)", () => {
       expect(loadConfig({ STORAGE_MODE: "sqlite-fs" })).toMatchObject({

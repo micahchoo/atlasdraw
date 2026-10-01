@@ -1,6 +1,5 @@
-// @atlasdraw/storage — Phase 4 T18: /health endpoint tests.
-// ISSUES.md Issue 8: /health now pings the adapter's real dependencies
-// instead of returning an unconditional 200.
+// @atlasdraw/storage — /health endpoint tests. /health pings the adapter's
+// real dependencies; it never returns an unconditional 200.
 
 import Fastify from "fastify";
 import { describe, it, expect, vi } from "vitest";

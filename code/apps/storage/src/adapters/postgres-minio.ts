@@ -84,9 +84,8 @@ export function createPostgresMinioAdapter(opts: {
   // drops (restart, `terminating connection due to administrator command`,
   // network blip) emits an 'error' event on the Pool. Node's default
   // behavior for an unhandled 'error' event is to throw and crash the
-  // process — discovered via ISSUES.md Issue 8's forced dependency-down
-  // check (stopping the postgres container mid-session crashed the whole
-  // storage process, not just failed one request). The pool itself already
+  // process: stopping the postgres container mid-session crashes the whole
+  // storage process, not just one request. The pool itself already
   // removes the broken client and reconnects on next use; this handler only
   // stops that removal from taking the process down with it.
   pool.on("error", (err) => {
