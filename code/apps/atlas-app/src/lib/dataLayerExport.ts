@@ -81,3 +81,25 @@ export function withDataLayers(
     ? drawn
     : { ...drawn, features: [...drawn.features, ...added] };
 }
+
+export interface GeoJsonExportOptions {
+  /** Add the features of every data layer (see `withDataLayers`). */
+  includeDataLayers: boolean;
+}
+
+/**
+ * The Export dialog's GeoJSON file: the drawn shapes in `drawn`, and the
+ * data layers when the user asks for them. It is named after the document.
+ */
+export function geoJsonExportFile(
+  drawn: FeatureCollection,
+  state: DocumentState,
+  opts: GeoJsonExportOptions,
+): ExportFile {
+  const fc = opts.includeDataLayers ? withDataLayers(drawn, state) : drawn;
+  return {
+    fileName: `${safeFileName(state.title)}.geojson`,
+    type: "application/geo+json",
+    text: toGeoJSONText(fc, { name: state.title }),
+  };
+}

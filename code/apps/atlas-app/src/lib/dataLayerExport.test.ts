@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { createDocument } from "../state/document";
 
-import { csvMenuLabel, dataLayerFile, withDataLayers } from "./dataLayerExport";
+import {
+  csvMenuLabel,
+  dataLayerFile,
+  geoJsonExportFile,
+  withDataLayers,
+} from "./dataLayerExport";
 
 import type { FeatureCollection } from "geojson";
 
@@ -132,5 +137,49 @@ describe("withDataLayers", () => {
       features: [],
     };
     expect(withDataLayers(drawn, createDocument().snapshot())).toEqual(drawn);
+  });
+});
+
+describe("geoJsonExportFile", () => {
+  const drawn: FeatureCollection = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [5.123456789, 5] },
+        properties: {},
+      },
+    ],
+  };
+
+  it("writes only the drawn shapes when data layers are not included", () => {
+    const file = geoJsonExportFile(drawn, docWithLayers(), {
+      includeDataLayers: false,
+    });
+    expect(file.type).toBe("application/geo+json");
+    expect(file.fileName).toBe("Untitled atlasdraw.geojson");
+    expect(JSON.parse(file.text)).toEqual({
+      type: "FeatureCollection",
+      name: "Untitled atlasdraw",
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [5.1234568, 5] },
+          properties: {},
+        },
+      ],
+    });
+  });
+
+  it("adds every data feature with its layer when data layers are included", () => {
+    const file = geoJsonExportFile(drawn, docWithLayers(), {
+      includeDataLayers: true,
+    });
+    const features = JSON.parse(file.text).features;
+    expect(features.map((f: { properties: object }) => f.properties)).toEqual([
+      {},
+      { name: "Pike, Place", seats: 12, layer: "Cafés: 2026/10" },
+      { ref: "A1", layer: "Roads" },
+    ]);
   });
 });
