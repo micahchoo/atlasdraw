@@ -73,7 +73,9 @@ scrollX / scrollY / zoom from each map `move`. Keep these true:
   and steps by 0.1, which at zoom value 2^-10 jumps the map many levels.
   Ctrl+0 (Excalidraw's 100%, map zoom 22) frames the drawing instead.
 - **Bearing is a CSS turn of the canvases only** (`--world-rotate`), and
-  drawing stays blocked while turned. Hit tests that must work turned go
+  drawing stays blocked while turned: `MapEditor#drawingBlocked` turns off
+  the pointer (CSS) and the keyboard (the fork's `placementBlocked` prop
+  stops paste and arrow-key nudges). Hit tests that must work turned go
   through `map.unproject` and the frame, not Excalidraw's viewport math.
 
 Scene numbers reach 2^31. Upstream had 1e6 limits (elbow arrows,

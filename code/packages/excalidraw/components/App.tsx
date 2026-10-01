@@ -3020,6 +3020,13 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
+      // Atlasdraw: the cursor's scene point is wrong while the host turns
+      // the canvas (`placementBlocked`).
+      if (this.props.placementBlocked) {
+        event?.preventDefault();
+        return;
+      }
+
       // must be called in the same frame (thus before any awaits) as the paste
       // event else some browsers (FF...) will clear the clipboardData
       // (something something security)
@@ -4328,6 +4335,11 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (isArrowKey(event.key)) {
+        // Atlasdraw: a nudge moves along the scene's axes, which are not the
+        // screen's while the host turns the canvas (`placementBlocked`).
+        if (this.props.placementBlocked) {
+          return;
+        }
         let selectedElements = this.scene.getSelectedElements({
           selectedElementIds: this.state.selectedElementIds,
           includeBoundTextElement: true,

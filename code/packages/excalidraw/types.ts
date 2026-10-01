@@ -817,6 +817,13 @@ export interface ExcalidrawProps {
    */
   stampNewElements?: StampNewElements;
   /**
+   * Atlasdraw addition. True while the host shows the canvases turned (a CSS
+   * rotation that Excalidraw's screen-to-scene math does not know). A paste,
+   * which lands at the cursor, and an arrow-key nudge, which moves along the
+   * scene's axes, then do nothing. The host gates the pointer itself.
+   */
+  placementBlocked?: boolean;
+  /**
    * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
    * False turns off flowchart creation with Ctrl/Cmd+Arrow: its gaps are fixed
    * scene units and its arrow has no style unit, so on a world map the new node

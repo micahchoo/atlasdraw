@@ -346,6 +346,9 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               // Every new element records its unit; foreign content comes
               // in at its screen size (element/src/atlasStamp.ts).
               stampNewElements={atlasStampNewElements}
+              // The keyboard half of the drawing gate: paste and nudge use
+              // Excalidraw's unturned screen math.
+              placementBlocked={drawingBlocked}
               // Its fixed gaps and unitless arrows do not fit world
               // coordinates (packages/excalidraw/tests/flowchartOff.test.tsx).
               flowchart={false}
