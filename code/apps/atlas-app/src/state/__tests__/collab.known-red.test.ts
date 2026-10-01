@@ -350,6 +350,22 @@ describe("collaboration between two clients", () => {
     b.leave();
   });
 
+  it("a display name one client sets reaches the other", async () => {
+    const link = newRoomLink();
+    const a = openClient(link);
+    const b = openClient(link);
+    await joined(a, b);
+
+    a.room.presence.setName("Ana from survey");
+
+    await until("B lists A under the new name", () =>
+      b.room.presence.peers().some((p) => p.user.name === "Ana from survey"),
+    );
+    expect(a.room.presence.self.name).toBe("Ana from survey");
+    a.leave();
+    b.leave();
+  });
+
   it("the document title one client sets reaches the other", async () => {
     const link = newRoomLink();
     const a = openClient(link);

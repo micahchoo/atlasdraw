@@ -43,6 +43,7 @@ import {
   type Room,
   type RoomStatus,
 } from "../state/room";
+import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 
@@ -55,6 +56,10 @@ export interface RoomSession {
   readonly status: RoomStatus | null;
   /** Everyone else in the room. */
   readonly peers: readonly Peer[];
+  /** This person as the room sees them; null outside a room. */
+  readonly self: Identity | null;
+  /** Set this person's display name: saved in this browser, shown to the room. */
+  rename(name: string): void;
   /** Why the link in the URL cannot be joined; null when it can. */
   readonly error: string | null;
   /**
@@ -79,6 +84,7 @@ export function useRoom(
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [peers, setPeers] = useState<readonly Peer[]>(NO_PEERS);
+  const [self, setSelf] = useState<Identity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
 
@@ -171,6 +177,7 @@ export function useRoom(
     const unsubscribePeers = room.presence.subscribe(() =>
       setPeers(room.presence.peers()),
     );
+    setSelf(room.presence.self);
     // Another document opened in the editor (a file, My maps, a new map):
     // the editor leaves the room at once, before that document's drawing
     // reaches Excalidraw, so none of it is written to the room.
@@ -206,6 +213,7 @@ export function useRoom(
         api.history?.clear();
       }
       setPeers(NO_PEERS);
+      setSelf(null);
       setStatus(null);
     };
   }, [room, api]);
@@ -261,11 +269,22 @@ export function useRoom(
     return roomUrl(link);
   }, [join]);
 
+  const rename = useCallback(
+    (name: string): void => {
+      const next = setDisplayName(name);
+      room?.presence.setName(next.name);
+      setSelf(room ? room.presence.self : null);
+    },
+    [room],
+  );
+
   return {
     available: realtime.enabled,
     room,
     status,
     peers,
+    self,
+    rename,
     error,
     start,
   };

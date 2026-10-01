@@ -3,7 +3,8 @@
 // Who this browser is to collaborators: a fixed id, a name and a colour,
 // kept in localStorage. Comments carry the id and name; room presence
 // carries all three. There is no account behind it: anyone can claim any
-// name, and the id only lets this browser keep its own comments.
+// name, and the id only lets this browser keep its own comments. The person
+// can change the name (setDisplayName); the id and colour stay.
 
 export interface Identity {
   readonly id: string;
@@ -64,6 +65,29 @@ export function localIdentity(): Identity {
     localStorage.setItem(KEY, JSON.stringify(cached));
   } catch {
     // Private mode: the identity lasts for this session only.
+  }
+  return cached;
+}
+
+/** The longest display name; room presence cuts a peer's name to it too. */
+export const MAX_NAME_LENGTH = 64;
+
+/**
+ * Change this browser's display name and save it. Runs of white space become
+ * one space and the name is cut to MAX_NAME_LENGTH. An empty name changes
+ * nothing. Returns the identity after the change.
+ */
+export function setDisplayName(name: string): Identity {
+  const current = localIdentity();
+  const clean = name.trim().replace(/\s+/g, " ").slice(0, MAX_NAME_LENGTH);
+  if (!clean || clean === current.name) {
+    return current;
+  }
+  cached = { ...current, name: clean };
+  try {
+    localStorage.setItem(KEY, JSON.stringify(cached));
+  } catch {
+    // Private mode or full storage: the name lasts for this session only.
   }
   return cached;
 }

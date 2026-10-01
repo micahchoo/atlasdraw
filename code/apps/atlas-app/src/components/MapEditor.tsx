@@ -1248,6 +1248,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               <CursorOverlay map={map} peers={roomSession.peers} />
               <PresenceList
                 peers={roomSession.peers}
+                self={roomSession.self}
+                onRename={roomSession.rename}
                 onGoTo={(camera) =>
                   map?.jumpTo({
                     center: camera.center,

@@ -30,7 +30,7 @@ import { roomToken, withRoomToken, type RoomLink } from "@atlasdraw/protocol";
 
 import type { Camera } from "@atlasdraw/data";
 
-import { localIdentity, type Identity } from "./identity";
+import { MAX_NAME_LENGTH, localIdentity, type Identity } from "./identity";
 import {
   bindRoomDocument,
   makeEmptyRoom,
@@ -155,7 +155,10 @@ export interface Peer {
 }
 
 export interface Presence {
+  /** This person, as the others see them. */
   readonly self: Identity;
+  /** Show the others this name from now on. */
+  setName(name: string): void;
   /** Everyone else in the room. The same array until something changes. */
   peers(): readonly Peer[];
   subscribe(listener: () => void): () => void;
@@ -203,13 +206,18 @@ function peerOf(clientId: number, state: Record<string, unknown>): Peer | null {
   }
   return {
     clientId,
-    user: { id: user.id, name: user.name.slice(0, 64), color: user.color },
+    user: {
+      id: user.id,
+      name: user.name.slice(0, MAX_NAME_LENGTH),
+      color: user.color,
+    },
     cursor: isLngLat(state.cursor) ? state.cursor : null,
     camera: isCamera(state.camera) ? state.camera : null,
   };
 }
 
-function createPresence(awareness: Awareness, self: Identity): Presence {
+function createPresence(awareness: Awareness, initial: Identity): Presence {
+  let self = initial;
   awareness.setLocalState({ user: self, cursor: null, camera: null });
   let peers: readonly Peer[] = [];
   const listeners = new Set<() => void>();
@@ -242,7 +250,17 @@ function createPresence(awareness: Awareness, self: Identity): Presence {
   };
 
   return {
-    self,
+    get self() {
+      return self;
+    },
+    setName(name) {
+      const clean = name.trim().slice(0, MAX_NAME_LENGTH);
+      if (!clean || clean === self.name) {
+        return;
+      }
+      self = { ...self, name: clean };
+      awareness.setLocalStateField("user", self);
+    },
     peers: () => peers,
     subscribe(listener) {
       listeners.add(listener);
