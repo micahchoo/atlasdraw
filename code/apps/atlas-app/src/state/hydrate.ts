@@ -22,13 +22,36 @@ import { syncInvalidIndices } from "@atlasdraw/element";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import type { BinaryFileData, FileId, DataURL } from "@atlasdraw/excalidraw";
 
-import type { AtlasdrawDocument } from "@atlasdraw/data";
+import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
 
 import { useLayerRegistryStore } from "./layerRegistry";
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { useRasterImageStore } from "./useRasterImageStore";
 import { useDocumentTitleStore } from "./documentTitle";
 import { usePersistenceStore } from "./usePersistenceStore";
+import { createDocument, openDocument } from "./document";
+import { contentKey } from "./selectDocument";
+import { useBasemapStore } from "./basemap";
+import { useMapInstanceStore } from "./mapInstance";
+
+/**
+ * Move the map to a saved camera. Returns false when no map is mounted yet;
+ * the caller that owns the editor's lifetime then applies it when the map
+ * arrives (see usePersistenceWiring).
+ */
+export function restoreCamera(camera: Camera): boolean {
+  const map = useMapInstanceStore.getState().map;
+  if (!map) {
+    return false;
+  }
+  map.jumpTo({
+    center: camera.center,
+    zoom: camera.zoom,
+    bearing: camera.bearing,
+    pitch: camera.pitch,
+  });
+  return true;
+}
 
 /**
  * Apply a loaded `AtlasdrawDocument` to the live editor state.
@@ -70,6 +93,19 @@ export async function hydrate(
   // object URL, which is the part that matters — opening five documents in a
   // session would otherwise hold every image any of them contained.
   useRasterImageStore.getState().clear();
+
+  // Step 1a — the loaded file is now the open document: its id, creation
+  // time and saved camera. A new Document, so nothing carries over from the
+  // previous one.
+  const doc = createDocument({
+    id: loaded.manifest.id,
+    createdAt: loaded.manifest.createdAt,
+    updatedAt: loaded.manifest.updatedAt,
+    camera: loaded.manifest.camera,
+  });
+  openDocument(doc);
+  useBasemapStore.getState().setActiveBasemapId(loaded.manifest.basemap.id);
+  restoreCamera(loaded.manifest.camera);
 
   // Step 1b — adopt the loaded document's name. Without this the collar head
   // bar would keep showing the previous document's title and the next
@@ -194,7 +230,11 @@ export async function hydrate(
     excalidrawAPI.addFiles(binaryFiles);
   }
 
-  // Step 5 — clear the dirty flag AFTER the synchronous onChange that
+  // Step 5 — what is on screen now is the loaded content. Settle on it, so a
+  // save with no edit keeps the file's updatedAt.
+  doc.settle(contentKey(excalidrawAPI, useLayerRegistryStore.getState()));
+
+  // Step 6 — clear the dirty flag AFTER the synchronous onChange that
   // updateScene fires (which would otherwise re-mark dirty). queueMicrotask
   // runs after the Excalidraw onChange callback resolves but before the next
   // frame, so the MainMenu indicator never blinks on.

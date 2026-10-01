@@ -222,30 +222,26 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("document identity", () => {
-  // KNOWN-RED (W3 document owner): every save mints a new manifest id and createdAt because no production caller passes baseManifest to selectDocument. Flip to it() when fixed.
-  it.fails(
-    "keeps the loaded manifest id and createdAt across two saves with no edits",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
+  it("keeps the loaded manifest id and createdAt across two saves with no edits", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
 
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const first = await autosaveDocument();
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const second = await autosaveDocument();
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const first = await autosaveDocument();
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const second = await autosaveDocument();
 
-      expect(first.manifest.id).toBe(SAVED_ULID);
-      expect(second.manifest.id).toBe(SAVED_ULID);
-      expect(first.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
-      expect(second.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
-    },
-  );
+    expect(first.manifest.id).toBe(SAVED_ULID);
+    expect(second.manifest.id).toBe(SAVED_ULID);
+    expect(first.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
+    expect(second.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -253,34 +249,30 @@ describe("document identity", () => {
 // ---------------------------------------------------------------------------
 
 describe("save determinism", () => {
-  // KNOWN-RED (W3 document owner): two saves with no edits write different bytes (a new ULID, a new updatedAt, and zip entries stamped with the wall clock). Flip to it() when fixed.
-  it.fails(
-    "writes byte-identical archives for two saves with no edits",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
+  it("writes byte-identical archives for two saves with no edits", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
 
-      // Only the clock moves between the two saves. Faking Date alone keeps
-      // fake-indexeddb's own timers real.
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const first = await autosaveBytes();
+    // Only the clock moves between the two saves. Faking Date alone keeps
+    // fake-indexeddb's own timers real.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const first = await autosaveBytes();
 
-      vi.setSystemTime(new Date("2026-10-01T09:00:10.000Z"));
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const second = await autosaveBytes();
+    vi.setSystemTime(new Date("2026-10-01T09:00:10.000Z"));
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const second = await autosaveBytes();
 
-      expect(second.length).toBe(first.length);
-      expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
-    },
-  );
+    expect(second.length).toBe(first.length);
+    expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -288,8 +280,7 @@ describe("save determinism", () => {
 // ---------------------------------------------------------------------------
 
 describe("camera and basemap persistence", () => {
-  // KNOWN-RED (W3 document owner): selectDocument always writes camera [0,0] z4 and basemap "default", whatever the live map shows. Flip to it() when fixed.
-  it.fails("saves the live camera and the chosen basemap", async () => {
+  it("saves the live camera and the chosen basemap", async () => {
     const map = new FakeCameraMap({
       center: [-74.0, 40.7],
       zoom: 12.5,
@@ -315,8 +306,7 @@ describe("camera and basemap persistence", () => {
     expect(saved.manifest.camera.bearing).toBeCloseTo(15, 6);
   });
 
-  // KNOWN-RED (W3 document owner): hydrate restores neither the saved camera nor the saved basemap, so a reload opens on the defaults. Flip to it() when fixed.
-  it.fails("restores the saved camera and basemap on reload", async () => {
+  it("restores the saved camera and basemap on reload", async () => {
     await seedAutosave(savedDocument()); // camera [13.4, 52.5] z11 b30, protomaps-dark
     const map = new FakeCameraMap({ center: [0, 0], zoom: 2 });
     useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });

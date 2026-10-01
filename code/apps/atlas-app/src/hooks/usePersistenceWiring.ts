@@ -25,8 +25,10 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useLayerRegistryStore } from "../state/layerRegistry";
+import { useBasemapStore } from "../state/basemap";
 import { selectDocument } from "../state/selectDocument";
-import { hydrate } from "../state/hydrate";
+import { hydrate, restoreCamera } from "../state/hydrate";
+import { useMapInstanceStore } from "../state/mapInstance";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
@@ -103,6 +105,7 @@ export function usePersistenceWiring(
     });
 
     let cancelled = false;
+    let unsubCamera: () => void = () => {};
     void (async () => {
       try {
         const loaded = await store.load();
@@ -111,6 +114,16 @@ export function usePersistenceWiring(
         }
         if (loaded) {
           await hydrate(loaded, excalidrawAPI);
+          // hydrate moved the map if there was one. The autosave can load
+          // before the map exists; then the saved camera waits for the map,
+          // for as long as this editor is mounted.
+          if (!useMapInstanceStore.getState().map) {
+            unsubCamera = useMapInstanceStore.subscribe(() => {
+              if (restoreCamera(loaded.manifest.camera)) {
+                unsubCamera();
+              }
+            });
+          }
           // eslint-disable-next-line no-console
           console.info("[atlasdraw] persisted document hydrated", {
             id: loaded.manifest.id,
@@ -142,6 +155,13 @@ export function usePersistenceWiring(
         usePersistenceStore.getState().markDirty();
       }
     });
+    // The basemap is saved in the manifest, so choosing another one is an
+    // edit too.
+    const unsubBasemap = useBasemapStore.subscribe((state, prev) => {
+      if (state.activeBasemapId !== prev.activeBasemapId) {
+        usePersistenceStore.getState().markDirty();
+      }
+    });
 
     const dispose = startAutoSave(
       store,
@@ -170,6 +190,8 @@ export function usePersistenceWiring(
       cancelled = true;
       unsubDirty();
       unsubLayers();
+      unsubBasemap();
+      unsubCamera();
       dispose();
       usePersistenceStore.getState().setAutosaveDispose(null);
       usePersistenceStore.getState().setPersistenceStore(null);

@@ -6,13 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import type { Manifest } from "@atlasdraw/data";
-
 import { selectDocument, documentFromExcalidrawJson } from "./selectDocument";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 
 import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
+import { createDocument, openDocument } from "./document";
+import { useBasemapStore } from "./basemap";
 
 import type { FeatureCollection } from "geojson";
 
@@ -66,71 +66,26 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("selectDocument", () => {
-  it("mints a new ULID manifest when no baseManifest is provided", () => {
-    const api = makeAPI();
-    const reg = makeRegistry();
-    const doc = selectDocument(api, reg, { now: () => NOW });
-
-    expect(doc.manifest.version).toBe(1);
-    expect(doc.manifest.createdAt).toBe(NOW);
-    expect(doc.manifest.updatedAt).toBe(NOW);
-    expect(doc.manifest.title).toBe("Untitled atlasdraw");
-    expect(doc.manifest.basemap).toEqual({ type: "registry", id: "default" });
-    expect(doc.manifest.layers).toEqual([]);
-    // ULID = 26 chars in Crockford base32.
-    expect(doc.manifest.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
-  });
-
-  it("preserves base manifest id + createdAt, refreshes updatedAt", () => {
-    const base: Manifest = {
+  it("writes the open document's id and createdAt, and the live title and basemap", () => {
+    const opened = createDocument({
       id: "01J0000000000000000000000A",
-      version: 1,
-      title: "My atlas",
       createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      basemap: { type: "registry", id: "satellite" },
-      camera: { center: [-122.4, 37.78], zoom: 10, bearing: 0, pitch: 0 },
-      layers: [],
-      permissions: { publicView: false },
-    };
-
-    const api = makeAPI();
-    const reg = makeRegistry();
-    const doc = selectDocument(api, reg, {
-      baseManifest: base,
-      now: () => NOW,
     });
-
-    expect(doc.manifest.id).toBe(base.id);
-    expect(doc.manifest.createdAt).toBe(base.createdAt);
-    expect(doc.manifest.updatedAt).toBe(NOW);
-    expect(doc.manifest.basemap.id).toBe("satellite");
-    // Title is NOT carried over from the base manifest — it comes from the
-    // live title store, which `hydrate` seeds on load. Preserving the base
-    // value here would make a rename in the collar head bar unsaveable.
-    expect(doc.manifest.title).toBe(DEFAULT_DOCUMENT_TITLE);
-  });
-
-  it("stamps the live document title over a stale base manifest title", () => {
-    const base: Manifest = {
-      id: "01J0000000000000000000000A",
-      version: 1,
-      title: "Name at load time",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      basemap: { type: "registry", id: "satellite" },
-      camera: { center: [-122.4, 37.78], zoom: 10, bearing: 0, pitch: 0 },
-      layers: [],
-      permissions: { publicView: false },
-    };
+    openDocument(opened);
     useDocumentTitleStore.getState().setTitle("Renamed in the collar");
+    useBasemapStore.getState().setActiveBasemapId("protomaps-dark");
 
-    const doc = selectDocument(makeAPI(), makeRegistry(), {
-      baseManifest: base,
-      now: () => NOW,
-    });
+    const doc = selectDocument(makeAPI(), makeRegistry(), { now: () => NOW });
 
+    expect(doc.manifest.id).toBe("01J0000000000000000000000A");
+    expect(doc.manifest.createdAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(doc.manifest.updatedAt).toBe(NOW);
     expect(doc.manifest.title).toBe("Renamed in the collar");
+    expect(doc.manifest.basemap).toEqual({
+      type: "registry",
+      id: "protomaps-dark",
+    });
+    expect(doc.manifest.layers).toEqual([]);
   });
 
   it("honours an explicit title override without touching the store", () => {

@@ -20,23 +20,21 @@ import { ulid } from "ulid";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
+import type { AtlasdrawDocument, Camera, Manifest } from "@atlasdraw/data";
 
 import { useDataLayerFCStore } from "./useDataLayerFCStore";
 import { useRasterImageStore } from "./useRasterImageStore";
 import { DEFAULT_DOCUMENT_TITLE, useDocumentTitleStore } from "./documentTitle";
+import { DEFAULT_CAMERA, currentDocument } from "./document";
+import { sceneSignature } from "./sceneSignature";
+import { useMapInstanceStore } from "./mapInstance";
+import { useBasemapStore } from "./basemap";
 
 import type { FeatureCollection } from "geojson";
 
 import type { LayerRegistryState } from "./layerRegistry";
 
 export type SelectDocumentOptions = {
-  /**
-   * Manifest carried over from a previously-loaded document. When present we
-   * preserve `id` + `createdAt` and only refresh `updatedAt` + the layer list.
-   * When absent we mint a new ULID and stamp createdAt = updatedAt = now.
-   */
-  baseManifest?: Manifest | null;
   /** Override `new Date().toISOString()` for deterministic tests. */
   now?: () => string;
   /**
@@ -58,22 +56,53 @@ export type SelectDocumentOptions = {
   title?: string;
 };
 
-const DEFAULT_BASEMAP_ID = "default";
-const DEFAULT_CAMERA = {
-  center: [0, 0] as [number, number],
-  zoom: 4,
-  bearing: 0,
-  pitch: 0,
-};
+/** The camera half of a MapLibre map: what a save reads. */
+interface CameraSource {
+  getCenter(): { lng: number; lat: number };
+  getZoom(): number;
+  getBearing(): number;
+  getPitch(): number;
+}
+
+/** The live camera, or null when no map is mounted. */
+function liveCamera(): Camera | null {
+  const map = useMapInstanceStore.getState().map as CameraSource | null;
+  if (!map) {
+    return null;
+  }
+  const center = map.getCenter();
+  return {
+    center: [center.lng, center.lat],
+    zoom: map.getZoom(),
+    bearing: map.getBearing(),
+    pitch: map.getPitch(),
+  };
+}
+
+/**
+ * A key that changes when the saved content changes: the layers, the drawing,
+ * the title and the basemap. The camera is not in it. A pan is not an edit,
+ * so it must not move updatedAt.
+ */
+export function contentKey(
+  excalidrawAPI: ExcalidrawImperativeAPI,
+  layerRegistryState: LayerRegistryState,
+): string {
+  return [
+    layerRegistryState.revision,
+    sceneSignature(excalidrawAPI.getSceneElements()),
+    useDocumentTitleStore.getState().title,
+    useBasemapStore.getState().activeBasemapId,
+  ].join("|");
+}
 
 /**
  * Synthesize a runtime AtlasdrawDocument snapshot.
  *
  * Contract:
- *   - `manifest` — re-uses baseManifest.id/createdAt if provided; otherwise mints.
- *                 `title` always comes from the live document-title store, so
- *                 a rename in the collar head bar lands on the next auto-save
- *                 tick even when a baseManifest carries the older name.
+ *   - `manifest` — identity from the open document; title from the live
+ *                 document-title store; camera and basemap from the live map
+ *                 and basemap picker.
  *   - `scene`   — Excalidraw scene elements (camera state lives in appState
  *                 separately and is round-tripped through Excalidraw's own
  *                 .excalidraw save path; we don't duplicate it into the manifest).
@@ -141,25 +170,25 @@ export function selectDocument(
     };
   });
 
-  const manifest: Manifest =
-    options.baseManifest != null
-      ? {
-          ...options.baseManifest,
-          title,
-          updatedAt: now,
-          layers: manifestLayers,
-        }
-      : {
-          id: ulid(),
-          version: 1,
-          title,
-          createdAt: now,
-          updatedAt: now,
-          basemap: { type: "registry", id: DEFAULT_BASEMAP_ID },
-          camera: { ...DEFAULT_CAMERA },
-          layers: manifestLayers,
-          permissions: { publicView: false },
-        };
+  // Identity and creation time come from the open document, which fixed
+  // them when it was created or loaded. The camera and the basemap come from
+  // where they live while the editor runs: the map and the basemap picker.
+  const doc = currentDocument();
+  const snapshot = doc.snapshot();
+  const manifest: Manifest = {
+    id: doc.id,
+    version: 1,
+    title,
+    createdAt: snapshot.createdAt,
+    updatedAt: doc.stamp(contentKey(excalidrawAPI, layerRegistryState), now),
+    basemap: {
+      type: "registry",
+      id: useBasemapStore.getState().activeBasemapId,
+    },
+    camera: liveCamera() ?? snapshot.camera,
+    layers: manifestLayers,
+    permissions: { publicView: false },
+  };
 
   // Phase 4 W0 (atlasdraw-ad27): pull FCs from the FC registry, intersected
   // with `data`-kind entries from the LayerRegistry. Annotation entries don't
@@ -236,8 +265,8 @@ export function selectDocument(
 /**
  * Import-only compatibility: convert the text of a bare `.excalidraw` file
  * into a fresh AtlasdrawDocument (one format, one door — ADR 0010 cohesion
- * work). The drawing comes in; zero geo layers, default basemap/camera, new
- * ULID. Never round-tripped back out as `.excalidraw` — the caller
+ * work). The drawing comes in; zero geo layers, the current basemap, the
+ * default camera, new ULID. Never round-tripped back out as `.excalidraw` — the caller
  * (persistence.openFromDisk) must NOT retain a writable handle to the
  * source file, or a later save would clobber it with zip bytes.
  *
@@ -282,8 +311,12 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
       title: DEFAULT_DOCUMENT_TITLE,
       createdAt: now,
       updatedAt: now,
-      basemap: { type: "registry", id: DEFAULT_BASEMAP_ID },
-      camera: { ...DEFAULT_CAMERA },
+      // A .excalidraw file names no basemap; keep the one the user has.
+      basemap: {
+        type: "registry",
+        id: useBasemapStore.getState().activeBasemapId,
+      },
+      camera: DEFAULT_CAMERA,
       layers: [],
       permissions: { publicView: false },
     },

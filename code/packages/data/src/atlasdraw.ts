@@ -55,10 +55,10 @@ export class AtlasdrawFormatError extends Error {
 export interface WriteOptions {
   thumbnail?: Blob;
   /**
-   * Pin the zip mod-time of every entry written by this call. When omitted,
-   * JSZip stamps each entry with `new Date()` (DOS time, 2 s granularity), so
-   * two writes of the same document straddling a tick differ in bytes.
-   * Passing a fixed date makes the archive fully deterministic.
+   * The zip mod-time of every entry written by this call. When omitted, it is
+   * the manifest's `updatedAt`, so the same document always gives the same
+   * bytes. (JSZip's own default is `new Date()`, which made two writes of one
+   * document differ.)
    */
   date?: Date;
   /**
@@ -100,8 +100,12 @@ export class AtlasdrawWriteCache {
  */
 export async function write(
   doc: AtlasdrawDocument,
-  options: WriteOptions = {},
+  writeOptions: WriteOptions = {},
 ): Promise<Blob> {
+  const options: WriteOptions = {
+    ...writeOptions,
+    date: writeOptions.date ?? new Date(doc.manifest.updatedAt),
+  };
   // Serialize every text entry up front — both the fresh and the incremental
   // path need the strings, and the incremental path's unchanged-detection is
   // string equality against the previous write.
