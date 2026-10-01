@@ -14,8 +14,8 @@
 // Node/jsdom; if it weren't, we'd polyfill in a setup file.
 
 import React from "react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, waitFor } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
+import { cleanup, render, fireEvent, waitFor } from "@testing-library/react";
 import { getByTestId } from "@testing-library/dom";
 
 // ---------------------------------------------------------------------------
@@ -268,6 +268,10 @@ beforeEach(() => {
   mapHandlers.clear();
   openDocument(createDocument());
 });
+
+// Unmount between cases: a toast timer that outlives its tree fires after
+// the environment is torn down ("window is not defined").
+afterEach(cleanup);
 
 describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
   it("parses dropped .geojson and registers a data layer", async () => {
