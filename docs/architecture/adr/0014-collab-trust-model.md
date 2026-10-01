@@ -1,0 +1,73 @@
+<!-- ADR-0014-MARKER: collab-trust-model -->
+
+# ADR-0014: Collaboration Trusts the Relay — Option C Made Permanent
+
+- **Status:** Accepted
+- **Date:** 2026-10-01
+- **Amends:** ADR-0010 (Yjs E2EE threat model). This is the "Option C made
+  permanent" decision block that ADR-0010's Phase 6 obligations asked for. It
+  closes escalation E-01.
+- **Relates to:** ADR-0008 (share-link encoding: the room key in the URL fragment)
+
+## Context
+
+ADR-0010 chose a server-trusted Yjs relay (Option C) for data layers in Phase 5,
+kept scene and comments end-to-end encrypted over Socket.IO, and deferred the
+choice between making C permanent and building an opaque log-replay relay
+(Option B).
+
+The collaboration audit of 2026-10-01 found that ADR-0010 no longer describes
+the code:
+
+- Comments travel over y-websocket in plaintext, not encrypted over Socket.IO.
+- The only encrypted path carries the one-time join snapshot. Live scene
+  updates, cursors and camera updates have no sender.
+- The data-layer connection opens a bare WebSocket and never runs the Yjs sync
+  protocol, so nothing syncs.
+- The relay checks nothing: a socket can send into a room it never joined,
+  under any sender id, and anyone who knows a room id can read and write its
+  comments.
+
+Live collaboration will be rebuilt on one Y.Doc per room (roadmap wave W6).
+Before that, the trust model must be decided, because it decides whether the
+server may read room content.
+
+## Decision
+
+The relay is trusted. Option C is permanent.
+
+1. **One transport.** Each room has one Y.Doc over y-websocket, holding
+   elements (keyed by id, geo anchor as truth), file references, layers,
+   metadata and comments. Presence uses Yjs awareness.
+2. **The relay can read everything in a room doc.** Operators can see room
+   content, as they can see a stored map today. Self-host docs state this in a
+   "What the relay can see" section.
+3. **The link key is the capability, not the room id.** The client derives a
+   room access token from the fragment key (one-way derivation with a fixed
+   label) and presents it on connect. The relay accepts a connection only with
+   the token that matches the room. A room id alone, seen in a log or a URL
+   path, grants nothing.
+4. **The server may persist rooms.** Room docs, including comments, persist to
+   storage, so a review that runs over days keeps its comments.
+5. **Delete what Option B kept alive.** When W6 lands, delete the Socket.IO
+   relay, `apps/atlas-app/src/collab/scene-crypto.ts` and the unused stub
+   `packages/data/src/yjs-crypto.ts`.
+
+## Consequences
+
+- Comments, late-joiner catch-up, undo and persistence all come from Yjs; there
+  is no custom sync protocol to maintain.
+- Privacy against the operator depends on who runs the relay. A user who needs
+  it runs their own deployment, which is the self-host posture (ADR-0013).
+- ADR-0010's tables "What the Phase 5 relay can see" and its claim that comments
+  are end-to-end encrypted are superseded by this ADR. Until W6 ships, the
+  accurate statement is: comments are plaintext to the relay and readable by
+  anyone who knows the room id.
+
+## Alternatives considered
+
+**Option B, an opaque log-replay relay with end-to-end encryption.** Rejected:
+the server could not persist or compact rooms, so comments could not outlive
+the session without client-side storage, and it needs a custom replacement for
+the Yjs sync protocol. Reopen only on real demand from deployments that cannot
+trust their own operator.
