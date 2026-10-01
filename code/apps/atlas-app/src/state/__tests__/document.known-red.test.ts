@@ -501,21 +501,24 @@ function makeMemoryStorage(): HttpStorageClient {
   const maps = new Map<string, Uint8Array>();
   const tokens = new Map<string, string>();
   let n = 0;
+  const bytesOf = async (blob: Blob | Uint8Array) =>
+    blob instanceof Uint8Array
+      ? blob
+      : new Uint8Array(await new Response(blob).arrayBuffer());
   const client = {
     async createMap(blob: Blob | Uint8Array) {
-      const id = `map-${++n}`;
-      maps.set(
-        id,
-        blob instanceof Uint8Array
-          ? blob
-          : new Uint8Array(await new Response(blob).arrayBuffer()),
-      );
+      const id = `map${String(++n).padStart(18, "0")}`; // 21 chars
+      maps.set(id, await bytesOf(blob));
+      return { map: { id }, writeKey: `key-${id}` };
+    },
+    async updateMap(id: string, _key: string, blob: Blob | Uint8Array) {
+      maps.set(id, await bytesOf(blob));
       return { id };
     },
     async createShareToken(mapId: string) {
       const token = `tok${String(++n).padStart(18, "0")}`; // 21 chars
       tokens.set(token, mapId);
-      return { token };
+      return { token, expiresAt: null };
     },
     async getShareBlob(token: string) {
       const mapId = tokens.get(token);
@@ -565,7 +568,7 @@ describe("share links", () => {
     );
     let url: string | null = null;
     await act(async () => {
-      url = await result.current.generate();
+      url = (await result.current.generate())?.url ?? null;
     });
     expect(url).not.toBeNull();
 

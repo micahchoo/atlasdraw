@@ -7,8 +7,11 @@
 //
 //   - Hash mode   — the bytes fit in a URL fragment: `/m#v2:<base64url>`.
 //                   Fully self-contained, no server.
-//   - Upload mode — they do not: the bytes go to the storage server, which
-//                   mints a token for `/m/<token>`.
+//   - Upload mode — they do not: the bytes go to the document's own server
+//                   map (the one the autosave updates), and the server mints
+//                   a token for `/m/<token>`. The token reads the map's
+//                   latest bytes, so a later save updates the link. It lasts
+//                   until revoked unless the owner chose an expiry.
 //
 // The size test is on the encoded bytes. Nothing is left out to make a
 // document fit: a document that does not fit and cannot be uploaded gets an
@@ -20,9 +23,20 @@ import { uint8ArrayToBase64Url, write } from "@atlasdraw/data";
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
+import { revokeShare, shareDocument } from "../state/remoteMapIdCache";
+
 import type { HttpStorageClient } from "../services/createHttpStorageClient";
 
 export type ShareMode = "hash" | "upload";
+
+export interface ShareLink {
+  url: string;
+  mode: ShareMode;
+  /** The server token of an upload link; null for a hash link. */
+  token: string | null;
+  /** When an upload link stops working; null if it does not. */
+  expiresAt: string | null;
+}
 
 export interface UseShareLinkOptions {
   getDoc: () => AtlasdrawDocument;
@@ -33,7 +47,10 @@ export interface UseShareLinkState {
   isSharing: boolean;
   error: string | null;
   mode: ShareMode | null;
-  generate: () => Promise<string | null>;
+  /** `expiresInDays` applies to an upload link only; null: no expiry. */
+  generate: (expiresInDays?: number | null) => Promise<ShareLink | null>;
+  /** End an upload link. False if the server could not. */
+  revoke: (token: string) => Promise<boolean>;
   reset: () => void;
 }
 
@@ -75,41 +92,74 @@ export function useShareLink(opts: UseShareLinkOptions): UseShareLinkState {
     setMode(null);
   }, []);
 
-  const generate = useCallback(async (): Promise<string | null> => {
-    setIsSharing(true);
-    setError(null);
-    setMode(null);
-    try {
-      const bytes = await blobToUint8Array(await write(getDoc()));
-
-      if (bytes.byteLength <= HASH_BYTE_LIMIT) {
-        setMode("hash");
-        return `${
-          window.location.origin
-        }/m#${HASH_PREFIX}${uint8ArrayToBase64Url(bytes)}`;
-      }
-
+  const generate = useCallback(
+    async (expiresInDays: number | null = null): Promise<ShareLink | null> => {
+      setIsSharing(true);
+      setError(null);
+      setMode(null);
       try {
-        const record = await client.createMap(bytes);
-        const token = await client.createShareToken(record.id);
-        setMode("upload");
-        return `${window.location.origin}/m/${token.token}`;
+        const doc = getDoc();
+        const bytes = await blobToUint8Array(await write(doc));
+
+        if (bytes.byteLength <= HASH_BYTE_LIMIT) {
+          setMode("hash");
+          return {
+            url: `${
+              window.location.origin
+            }/m#${HASH_PREFIX}${uint8ArrayToBase64Url(bytes)}`,
+            mode: "hash",
+            token: null,
+            expiresAt: null,
+          };
+        }
+
+        try {
+          const share = await shareDocument(
+            client,
+            bytes,
+            doc.manifest.id,
+            expiresInDays,
+          );
+          setMode("upload");
+          return {
+            url: `${window.location.origin}/m/${share.token}`,
+            mode: "upload",
+            token: share.token,
+            expiresAt: share.expiresAt,
+          };
+        } catch (err) {
+          const reason = err instanceof Error ? ` (${err.message})` : "";
+          setError(
+            `This map is too large for a link on its own, and the server could not store it${reason}. Try again, or save the file and send it.`,
+          );
+          return null;
+        }
       } catch (err) {
-        const reason = err instanceof Error ? ` (${err.message})` : "";
         setError(
-          `This map is too large for a link on its own, and the server could not store it${reason}. Try again, or save the file and send it.`,
+          err instanceof Error ? err.message : "Failed to generate share link.",
         );
         return null;
+      } finally {
+        setIsSharing(false);
       }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate share link.",
-      );
-      return null;
-    } finally {
-      setIsSharing(false);
-    }
-  }, [client, getDoc]);
+    },
+    [client, getDoc],
+  );
 
-  return { isSharing, error, mode, generate, reset };
+  const revoke = useCallback(
+    async (token: string): Promise<boolean> => {
+      try {
+        await revokeShare(client, getDoc().manifest.id, token);
+        return true;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Could not stop the link.",
+        );
+        return false;
+      }
+    },
+    [client, getDoc],
+  );
+
+  return { isSharing, error, mode, generate, revoke, reset };
 }

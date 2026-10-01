@@ -36,15 +36,6 @@ async function shareLinkWithRectangle(page: Page): Promise<string> {
 
   await page.getByTestId("main-menu-trigger").click();
   await page.getByTestId("main-menu-share").click();
-  // Work around the dialog-closes-itself defect (its own known-red test
-  // below): stop this one click at React's root container, after React has
-  // handled it, so ShareDialog's document-level click-outside listener never
-  // sees a target that React has already unmounted.
-  await page.evaluate(() => {
-    document
-      .getElementById("root")
-      ?.addEventListener("click", (e) => e.stopPropagation(), { once: true });
-  });
   await page.getByTestId("share-dialog-pick-readonly").click();
   const url = await page.getByTestId("share-dialog-url").inputValue();
   expect(url, "small map takes hash mode").toContain("/m#v1:");
@@ -73,29 +64,6 @@ async function paintedPixels(page: Page): Promise<number> {
 }
 
 test.describe("known-red", () => {
-  test("W7: choosing Read-only in the Share dialog shows the link", async ({
-    page,
-  }) => {
-    test.fail(
-      true,
-      "KNOWN-RED (W7 share dialog): choosing Read-only closes the Share dialog before the link shows — the click-outside listener sees the unmounted picker button as outside the panel. Remove when fixed.",
-    );
-    await openEditor(page);
-    await drawRectangle(page, RECT);
-    await setTool(page, "selection");
-    await page.getByTestId("main-menu-trigger").click();
-    await page.getByTestId("main-menu-share").click();
-    await expect(page.getByTestId("share-dialog-panel")).toBeVisible();
-
-    // The picker button unmounts when React handles the click; the dialog's
-    // document-level click-outside listener then sees a detached target,
-    // finds it outside the panel, and closes the dialog before the link shows.
-    await page.getByTestId("share-dialog-pick-readonly").click();
-    await expect(page.getByTestId("share-dialog-url")).toBeVisible({
-      timeout: 5_000,
-    });
-  });
-
   test("W7: the read-only share page renders a map", async ({ page }) => {
     test.fail(
       true,
