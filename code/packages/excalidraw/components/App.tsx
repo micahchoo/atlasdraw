@@ -4002,27 +4002,31 @@ class App extends React.Component<AppProps, AppState> {
               CLASSES.CONVERT_ELEMENT_TYPE_POPUP,
             ))
         ) {
-          event.preventDefault();
-
           const conversionType =
             getConversionTypeFromElements(selectedElements);
+          const panelOpen =
+            editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
-          if (
-            editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel"
-          ) {
-            if (
-              convertElementTypes(this, {
-                conversionType,
-                direction: event.shiftKey ? "left" : "right",
-              })
-            ) {
-              this.store.scheduleCapture();
+          // Atlasdraw (WCAG 2.1.2, no keyboard trap): Tab is taken only when
+          // a shape conversion applies. Otherwise focus moves on.
+          if (conversionType || panelOpen) {
+            event.preventDefault();
+
+            if (panelOpen) {
+              if (
+                convertElementTypes(this, {
+                  conversionType,
+                  direction: event.shiftKey ? "left" : "right",
+                })
+              ) {
+                this.store.scheduleCapture();
+              }
             }
-          }
-          if (conversionType) {
-            this.updateEditorAtom(convertElementTypePopupAtom, {
-              type: "panel",
-            });
+            if (conversionType) {
+              this.updateEditorAtom(convertElementTypePopupAtom, {
+                type: "panel",
+              });
+            }
           }
         }
 
