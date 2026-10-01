@@ -9,7 +9,7 @@ const VALID_ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 
 const baseManifest = {
   id: VALID_ULID,
-  version: 1 as const,
+  version: 2 as const,
   title: "Test Map",
   createdAt: "2026-05-06T12:00:00.000Z",
   updatedAt: "2026-05-06T12:30:00.000Z",
@@ -23,7 +23,7 @@ describe("ManifestSchema", () => {
   it("parses a valid manifest", () => {
     const parsed = ManifestSchema.parse(baseManifest);
     expect(parsed.id).toBe(VALID_ULID);
-    expect(parsed.version).toBe(1);
+    expect(parsed.version).toBe(2);
   });
 
   it("rejects missing id", () => {
@@ -65,9 +65,12 @@ describe("ManifestSchema", () => {
     ).toBe(true);
   });
 
-  it("rejects version != 1", () => {
+  it("rejects any version but the current one (readers migrate first)", () => {
     expect(
-      ManifestSchema.safeParse({ ...baseManifest, version: 2 }).success,
+      ManifestSchema.safeParse({ ...baseManifest, version: 1 }).success,
+    ).toBe(false);
+    expect(
+      ManifestSchema.safeParse({ ...baseManifest, version: 3 }).success,
     ).toBe(false);
   });
 
@@ -101,36 +104,14 @@ describe("ManifestSchema", () => {
     expect(parsed.permissions.publicView).toBe(false);
   });
 
-  it("accepts annotation layer entry", () => {
+  it("rejects an annotation entry: a drawn element is not a manifest layer", () => {
     const m = {
       ...baseManifest,
       layers: [
         { kind: "annotation", id: "elem-1", label: "Pin 1", visible: true },
       ],
     };
-    expect(ManifestSchema.safeParse(m).success).toBe(true);
-  });
-
-  it("round-trips renamedByUser on an annotation layer entry", () => {
-    const m = {
-      ...baseManifest,
-      layers: [
-        {
-          kind: "annotation",
-          id: "elem-1",
-          label: "Ward 3",
-          visible: true,
-          renamedByUser: true,
-        },
-      ],
-    };
-    const parsed = ManifestSchema.safeParse(m);
-    expect(parsed.success).toBe(true);
-    // A zod object strips what it doesn't declare, so "parses fine" is not the
-    // assertion that matters — the flag has to come out the other side.
-    expect(parsed.success && parsed.data.layers[0]).toMatchObject({
-      renamedByUser: true,
-    });
+    expect(ManifestSchema.safeParse(m).success).toBe(false);
   });
 
   it("accepts data layer entry with dl: prefix", () => {

@@ -21,6 +21,7 @@ import {
   type AtlasdrawDocument,
   type SceneElement,
 } from "./manifest-schema.js";
+import { migrate, MigrationError, type StoredDocument } from "./migrations.js";
 
 import type { FeatureCollection } from "geojson";
 
@@ -37,7 +38,8 @@ export type AtlasdrawFormatErrorCode =
   | "BAD_ZIP"
   | "MISSING_MANIFEST"
   | "INVALID_MANIFEST"
-  | "MISSING_SCENE";
+  | "MISSING_SCENE"
+  | "UNSUPPORTED_VERSION";
 
 /**
  * Error type for `.atlasdraw` format violations. `code` is the machine-readable
@@ -288,15 +290,6 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       }`,
     );
   }
-  const parsed = ManifestSchema.safeParse(manifestJson);
-  if (!parsed.success) {
-    throw new AtlasdrawFormatError(
-      "INVALID_MANIFEST",
-      `manifest.json failed schema validation: ${parsed.error.message}`,
-    );
-  }
-  const manifest = parsed.data;
-
   // --- scene.excalidraw.json ------------------------------------------------
   const sceneEntry = zip.file(SCENE_PATH);
   if (!sceneEntry) {
@@ -327,6 +320,41 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       ? ((sceneJson as { elements: unknown[] })
           .elements as ReadonlyArray<SceneElement>)
       : [];
+
+  // --- migrate, then validate -----------------------------------------------
+  // An older file is brought to the current version first (migrations.ts), so
+  // the schema below only ever sees the current shape.
+  if (
+    !manifestJson ||
+    typeof manifestJson !== "object" ||
+    Array.isArray(manifestJson)
+  ) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      "manifest.json is not a JSON object",
+    );
+  }
+  let migrated: StoredDocument;
+  try {
+    migrated = migrate({
+      manifest: manifestJson as Record<string, unknown>,
+      scene: sceneElements,
+    });
+  } catch (err) {
+    if (err instanceof MigrationError) {
+      throw new AtlasdrawFormatError("UNSUPPORTED_VERSION", err.message);
+    }
+    throw err;
+  }
+  const parsed = ManifestSchema.safeParse(migrated.manifest);
+  if (!parsed.success) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      `manifest.json failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  const manifest = parsed.data;
+  const scene = migrated.scene as ReadonlyArray<SceneElement>;
 
   // --- data/layer-<id>.geojson ---------------------------------------------
   const layers = new Map<string, FeatureCollection>();
@@ -380,7 +408,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
 
   return {
     manifest,
-    scene: sceneElements,
+    scene,
     layers,
     styleRef,
     files,

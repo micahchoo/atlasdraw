@@ -324,7 +324,7 @@ function registerRaster(id: string): void {
 function manifest(layers: Manifest["layers"]): Manifest {
   return {
     id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
-    version: 1,
+    version: 2,
     title: "document B",
     createdAt: "2026-10-01T00:00:00.000Z",
     updatedAt: "2026-10-01T00:00:00.000Z",

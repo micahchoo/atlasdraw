@@ -27,7 +27,7 @@ const makeDoc = (
 ): AtlasdrawDocument => ({
   manifest: {
     id: ULID,
-    version: 1,
+    version: 2,
     title: "Test",
     createdAt: "2026-05-06T00:00:00.000Z",
     updatedAt,

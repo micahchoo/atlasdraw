@@ -66,7 +66,7 @@ function docWithLayer(fc: FeatureCollection): AtlasdrawDocument {
   const now = new Date().toISOString();
   const manifest = ManifestSchema.parse({
     id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-    version: 1,
+    version: 2,
     title: "Fixture",
     createdAt: now,
     updatedAt: now,

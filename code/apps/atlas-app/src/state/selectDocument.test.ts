@@ -4,6 +4,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CURRENT_MANIFEST_VERSION } from "@atlasdraw/data";
+
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { selectDocument, documentFromExcalidrawJson } from "./selectDocument";
@@ -292,7 +294,7 @@ describe("documentFromExcalidrawJson (import-only .excalidraw compatibility)", (
     const doc = documentFromExcalidrawJson(validPayload);
     expect(doc.scene).toEqual([{ id: "el-1", type: "rectangle" }]);
     expect(doc.layers.size).toBe(0);
-    expect(doc.manifest.version).toBe(1);
+    expect(doc.manifest.version).toBe(CURRENT_MANIFEST_VERSION);
     expect(doc.manifest.layers).toEqual([]);
     expect(doc.manifest.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
   });

@@ -18,6 +18,8 @@
 
 import { ulid } from "ulid";
 
+import { CURRENT_MANIFEST_VERSION } from "@atlasdraw/data";
+
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { AtlasdrawDocument, Camera, Manifest } from "@atlasdraw/data";
@@ -164,7 +166,7 @@ export function selectDocument(
   const snapshot = doc.snapshot();
   const manifest: Manifest = {
     id: doc.id,
-    version: 1,
+    version: CURRENT_MANIFEST_VERSION,
     title,
     createdAt: snapshot.createdAt,
     updatedAt: doc.stamp(contentKey(excalidrawAPI, layerRegistryState), now),
@@ -292,7 +294,7 @@ export function documentFromExcalidrawJson(text: string): AtlasdrawDocument {
   return {
     manifest: {
       id: ulid(),
-      version: 1,
+      version: CURRENT_MANIFEST_VERSION,
       // A .excalidraw file carries no title, so this import genuinely has no
       // name yet — the default, not the current document's name.
       title: DEFAULT_DOCUMENT_TITLE,

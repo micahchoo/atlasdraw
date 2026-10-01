@@ -22,19 +22,13 @@ function synthAtlasdrawDocument(
 ): AtlasdrawDocument {
   const baseManifest: Manifest = {
     id: VALID_ULID,
-    version: 1,
+    version: 2,
     title: "Round-trip fixture",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-02T00:00:00.000Z",
     basemap: { type: "registry", id: "osm-standard" },
     camera: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
     layers: [
-      {
-        kind: "annotation",
-        id: "anno-1",
-        label: "Annotations",
-        visible: true,
-      },
       {
         kind: "data",
         id: DATA_LAYER_ID,

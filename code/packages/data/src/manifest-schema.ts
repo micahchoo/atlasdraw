@@ -8,6 +8,8 @@
 
 import { z } from "zod";
 
+import { CURRENT_MANIFEST_VERSION } from "./migrations.js";
+
 import type { FeatureCollection } from "geojson";
 
 // ULID = 26 characters in Crockford base32 (digits + uppercase letters minus
@@ -35,25 +37,11 @@ export type Camera = z.infer<typeof CameraSchema>;
 // runtime shape opaquely here so manifest evolution doesn't gate Phase 3.
 const LayerStyleSchema = z.record(z.string(), z.unknown());
 
-const AnnotationLayerEntrySchema = z.object({
-  kind: z.literal("annotation"),
-  id: z.string().min(1),
-  label: z.string(),
-  visible: z.boolean(),
-  // A `label` the user typed, rather than one the app generated from the
-  // element's type and geo-anchor ("Rectangle near Bidar"). It has to persist:
-  // the generator re-runs on every scene change, so a reopened document whose
-  // flag was dropped would silently revert the name the first time the shape
-  // moved. Optional because documents written before this field existed have
-  // only generated labels by definition.
-  renamedByUser: z.boolean().optional(),
-});
-
 const DataLayerEntrySchema = z.object({
   kind: z.literal("data"),
   // `dl:` prefix matches the runtime convention from
-  // apps/atlas-app/src/state/layerRegistry.ts so annotation ids
-  // (= Excalidraw element ids) can never collide with data layer ids.
+  // apps/atlas-app/src/state/layerRegistry.ts so a layer id can never
+  // collide with an Excalidraw element id.
   id: z.string().regex(/^dl:/, "data layer id must start with 'dl:'"),
   label: z.string(),
   visible: z.boolean(),
@@ -92,11 +80,6 @@ const RasterCornersSchema = z.tuple([
  * The original GeoTIFF is deliberately NOT persisted — see `RasterLayerEntry`
  * in the app's layerRegistry for why. `provenance.sourceFile` is the only
  * record of the file that produced this.
- *
- * NOTE on compatibility: `Manifest.version` stays 1. A document containing a
- * raster fails validation on a build predating this schema; documents without
- * one are unaffected in both directions. Bumping to 2 would break the reverse
- * case for every document that already exists, which is the worse trade.
  */
 const RasterLayerEntrySchema = z.object({
   kind: z.literal("raster"),
@@ -117,8 +100,13 @@ const RasterLayerEntrySchema = z.object({
     .optional(),
 });
 
+/**
+ * The manifest lists the map layers: data and raster. A drawn element is not
+ * listed; what the layer panel adds to it (a user label, a hidden flag) is in
+ * the element's `customData.atlas`. Version 1 listed elements too; the v1 → v2
+ * migration (migrations.ts) moves those entries onto their elements.
+ */
 export const LayerEntrySchema = z.discriminatedUnion("kind", [
-  AnnotationLayerEntrySchema,
   DataLayerEntrySchema,
   RasterLayerEntrySchema,
 ]);
@@ -132,7 +120,9 @@ export type Permissions = z.infer<typeof PermissionsSchema>;
 export const ManifestSchema = z
   .object({
     id: ULIDSchema,
-    version: z.literal(1),
+    // Readers run migrations.ts first, so an older file arrives here at the
+    // current version.
+    version: z.literal(CURRENT_MANIFEST_VERSION),
     title: z.string().min(1),
     createdAt: ISOTimestampSchema,
     updatedAt: ISOTimestampSchema,
@@ -167,7 +157,7 @@ export type Manifest = z.infer<typeof ManifestSchema>;
  * Excalidraw's `OrderedExcalidrawElement` is a structural subtype of this:
  * the assignment `scene: excalidrawAPI.getSceneElements()` typechecks without
  * a cast. Going the other direction (passing `doc.scene` to `updateScene`)
- * needs a narrowing cast at the boundary — see MapEditor.tsx hydration path.
+ * needs a narrowing cast at the boundary — see the app's state/hydrate.ts.
  */
 export interface SceneElement {
   readonly id: string;

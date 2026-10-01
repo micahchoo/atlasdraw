@@ -28,7 +28,7 @@ const VALID_ULID = "01HZ8KQR5Z3MV7BJ4N6XPYD9TF";
 
 const baseManifest = (overrides: Partial<Manifest> = {}): Manifest => ({
   id: VALID_ULID,
-  version: 1,
+  version: 2,
   title: "hydrate fixture",
   createdAt: "2026-05-06T00:00:00.000Z",
   updatedAt: "2026-05-06T00:00:00.000Z",
@@ -135,76 +135,6 @@ describe("hydrate", () => {
     expect(useDocumentTitleStore.getState().title).toBe("Bidar ward survey");
   });
 
-  it("registers no layer for an annotation entry: an annotation is its element", async () => {
-    const { api } = makeAPI();
-    const loaded: AtlasdrawDocument = {
-      manifest: baseManifest({
-        layers: [
-          { kind: "annotation", id: "anno-1", label: "Notes", visible: true },
-        ],
-      }),
-      scene: [sceneEl("anno-1")],
-      layers: new Map(),
-      styleRef: {},
-      files: new Map(),
-    };
-
-    await hydrate(loaded, api);
-
-    expect(useLayerRegistryStore.getState().entries).toEqual([]);
-    expect(api.getSceneElements().map((e) => e.id)).toEqual(["anno-1"]);
-  });
-
-  it("moves a v1 annotation entry's user label onto its element", async () => {
-    const { api } = makeAPI();
-    const loaded: AtlasdrawDocument = {
-      manifest: baseManifest({
-        layers: [
-          {
-            kind: "annotation",
-            id: "anno-1",
-            label: "Ward 3",
-            visible: true,
-            renamedByUser: true,
-          },
-        ],
-      }),
-      scene: [sceneEl("anno-1")],
-      layers: new Map(),
-      styleRef: {},
-      files: new Map(),
-    };
-
-    await hydrate(loaded, api);
-
-    const [el] = api.getSceneElements();
-    expect(el.customData).toEqual({ atlas: { label: "Ward 3" } });
-  });
-
-  it("does not store a generated label on the element", async () => {
-    const { api } = makeAPI();
-    const loaded: AtlasdrawDocument = {
-      manifest: baseManifest({
-        layers: [
-          {
-            kind: "annotation",
-            id: "anno-1",
-            label: "Rectangle",
-            visible: true,
-          },
-        ],
-      }),
-      scene: [sceneEl("anno-1")],
-      layers: new Map(),
-      styleRef: {},
-      files: new Map(),
-    };
-
-    await hydrate(loaded, api);
-
-    expect(api.getSceneElements()[0].customData).toEqual({ atlas: {} });
-  });
-
   it("registers data layers and seeds the FC store", async () => {
     const { api } = makeAPI();
     const loaded: AtlasdrawDocument = {
@@ -304,33 +234,6 @@ describe("hydrate", () => {
 
       expect(useLayerRegistryStore.getState().entries).toHaveLength(0);
     });
-  });
-
-  it("hides an element through customData.atlas.hidden and gives back the opacity an old hide took", async () => {
-    const { api } = makeAPI();
-    const loaded: AtlasdrawDocument = {
-      manifest: baseManifest({
-        layers: [
-          { kind: "annotation", id: "hidden", label: "h", visible: false },
-        ],
-      }),
-      scene: [
-        {
-          ...sceneEl("hidden"),
-          opacity: 0,
-          customData: { atlasOriginalOpacity: 60 },
-        },
-      ],
-      layers: new Map(),
-      styleRef: {},
-      files: new Map(),
-    };
-
-    await hydrate(loaded, api);
-
-    const [el] = api.getSceneElements();
-    expect(el.opacity).toBe(60);
-    expect(el.customData).toEqual({ atlas: { hidden: true } });
   });
 
   it("clears prior registry + FC entries before applying the loaded doc", async () => {

@@ -168,9 +168,6 @@ const EmbedCanvas: React.FC<{
     const layers = doc.layers;
     if (layers instanceof Map) {
       for (const entry of doc.manifest?.layers ?? []) {
-        if (entry.kind === "annotation") {
-          continue;
-        }
         if (entry.kind === "raster") {
           // Registered here so a shared/embedded document shows the same
           // backdrop the author saw. `doc.files` carries the decoded image
