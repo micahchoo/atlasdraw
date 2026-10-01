@@ -195,6 +195,11 @@ export function revokeShare(
   });
 }
 
+/** True when this browser holds a server map for the document. */
+export async function hasServerMap(documentId: string): Promise<boolean> {
+  return (await load(documentId)) !== null;
+}
+
 /**
  * The document's bytes as the server last saved them, or null when this
  * browser holds no server map for it.

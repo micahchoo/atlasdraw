@@ -32,6 +32,12 @@ const DB_VERSION = 1;
 const STORE = "state";
 /** Each document's bytes live under `doc:<manifest id>`. */
 const docKey = (id: string): string => `doc:${id}`;
+/**
+ * What My maps shows of each document, written beside its bytes on every
+ * save so the list never decodes a bundle: `summary:<manifest id>`.
+ */
+const summaryKey = (id: string): string => `summary:${id}`;
+const DOC_PREFIX = "doc:";
 /** The id of the document saved last: the one a reload opens. */
 const KEY_LAST_OPENED = "lastOpened";
 /** The one slot an older build wrote every document into. Read, then moved. */
@@ -145,6 +151,25 @@ interface FSAWindow extends Window {
 // Public surface
 // ---------------------------------------------------------------------------
 
+/** One saved map, as My maps lists it. */
+export interface DocumentSummary {
+  readonly id: string;
+  readonly title: string;
+  /** ISO time of the last change to the map's content. */
+  readonly updatedAt: string;
+}
+
+function isSummary(v: unknown): v is DocumentSummary {
+  const s = v as DocumentSummary | undefined;
+  return (
+    typeof s === "object" &&
+    s !== null &&
+    typeof s.id === "string" &&
+    typeof s.title === "string" &&
+    typeof s.updatedAt === "string"
+  );
+}
+
 export interface PersistenceStore {
   /**
    * Serialize doc into its own IndexedDB slot (by manifest id) and make it
@@ -153,6 +178,15 @@ export interface PersistenceStore {
   save(doc: AtlasdrawDocument): Promise<void>;
   /** Read the document saved last; null on an empty DB. */
   load(): Promise<AtlasdrawDocument | null>;
+  /** Every saved document, the last changed first. Unreadable ones are left out. */
+  list(): Promise<DocumentSummary[]>;
+  /**
+   * Read one saved document and make it the one a reload opens; null when
+   * there is none with that id. An unreadable copy is moved aside, as load().
+   */
+  open(id: string): Promise<AtlasdrawDocument | null>;
+  /** Delete a saved document, after any save of it that is in progress. */
+  remove(id: string): Promise<void>;
   /** Open a save dialog (FSA) or trigger a download anchor. */
   saveToDisk(doc: AtlasdrawDocument): Promise<void>;
   /** Open an open dialog (FSA) or a file input. Null on user cancel. */
@@ -279,6 +313,12 @@ export function createPersistenceStore(
       const database = await db();
       const id = doc.manifest.id;
       await database.put(STORE, stored, docKey(id));
+      const summary: DocumentSummary = {
+        id,
+        title: doc.manifest.title,
+        updatedAt: doc.manifest.updatedAt,
+      };
+      await database.put(STORE, summary, summaryKey(id));
       await database.put(STORE, id, KEY_LAST_OPENED);
       // The older single slot held this document or an earlier one; either
       // way its content now has a slot of its own.
@@ -308,12 +348,11 @@ export function createPersistenceStore(
     });
   };
 
-  const load = async (): Promise<AtlasdrawDocument | null> => {
-    const database = await db();
-    const lastId = (await database.get(STORE, KEY_LAST_OPENED)) as
-      | string
-      | undefined;
-    const key = lastId ? docKey(lastId) : KEY_LEGACY_CURRENT;
+  /** Read one slot; an unreadable copy is moved aside, then the error thrown. */
+  const readSlot = async (
+    database: IDBPDatabase,
+    key: string,
+  ): Promise<AtlasdrawDocument | null> => {
     const stored = (await database.get(STORE, key)) as StoredBlob | undefined;
     if (!stored) {
       return null;
@@ -333,6 +372,71 @@ export function createPersistenceStore(
       throw err;
     }
   };
+
+  const load = async (): Promise<AtlasdrawDocument | null> => {
+    const database = await db();
+    const lastId = (await database.get(STORE, KEY_LAST_OPENED)) as
+      | string
+      | undefined;
+    return readSlot(database, lastId ? docKey(lastId) : KEY_LEGACY_CURRENT);
+  };
+
+  const list = async (): Promise<DocumentSummary[]> => {
+    const database = await db();
+    const keys = (await database.getAllKeys(STORE))
+      .map(String)
+      .filter((k) => k.startsWith(DOC_PREFIX));
+    const summaries: DocumentSummary[] = [];
+    for (const key of keys) {
+      const id = key.slice(DOC_PREFIX.length);
+      const summary: unknown = await database.get(STORE, summaryKey(id));
+      if (isSummary(summary)) {
+        summaries.push({
+          id: summary.id,
+          title: summary.title,
+          updatedAt: summary.updatedAt,
+        });
+        continue;
+      }
+      // Saved by a build that wrote no summary: read the bundle once. The
+      // next save of the map writes the summary.
+      const stored = (await database.get(STORE, key)) as StoredBlob;
+      try {
+        const { manifest } = await read(storedToBlob(stored));
+        summaries.push({
+          id: manifest.id,
+          title: manifest.title,
+          updatedAt: manifest.updatedAt,
+        });
+      } catch {
+        // Not listed. open() and load() are where a bad copy is moved aside.
+      }
+    }
+    return summaries.sort((a, b) =>
+      a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0,
+    );
+  };
+
+  const open = async (id: string): Promise<AtlasdrawDocument | null> => {
+    const database = await db();
+    const doc = await readSlot(database, docKey(id));
+    if (doc) {
+      await database.put(STORE, id, KEY_LAST_OPENED);
+    }
+    return doc;
+  };
+
+  const remove = (id: string): Promise<void> =>
+    enqueueWrite(async () => {
+      const database = await db();
+      await database.delete(STORE, docKey(id));
+      await database.delete(STORE, summaryKey(id));
+      await database.delete(STORE, handleKey(id));
+      handles.delete(id);
+      if ((await database.get(STORE, KEY_LAST_OPENED)) === id) {
+        await database.delete(STORE, KEY_LAST_OPENED);
+      }
+    });
 
   // ----- File System Access API path -------------------------------------
 
@@ -543,6 +647,9 @@ export function createPersistenceStore(
   return {
     save,
     load,
+    list,
+    open,
+    remove,
     saveToDisk,
     openFromDisk,
     onDirty,
