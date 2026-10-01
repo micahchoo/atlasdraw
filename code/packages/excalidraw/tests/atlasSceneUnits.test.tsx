@@ -15,12 +15,13 @@ import { act, render, unmountComponent } from "./test-utils";
 
 import type { NormalizedZoomValue } from "../types";
 
-// Atlasdraw addition (ADR-0015). Upstream gives some distances in scene
-// units: the gap between an arrow and the shape it binds to, how near an
-// arrow end must come to bind, the padding of text in a container, the
-// spacing of an elbow arrow's route, the arrow-key nudge and the eraser's
-// reach. The atlas scene is a world map at zoom 22, so where people draw a
-// scene unit is about a thousandth of a pixel and those distances vanish.
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+// Upstream gives some distances in scene units: the gap between an arrow and
+// the shape it binds to, how near an arrow end must come to bind, the padding
+// of text in a container, the spacing of an elbow arrow's route, the arrow-key
+// nudge and the eraser's reach. The atlas scene is a world map at zoom 22, so
+// where people draw a scene unit is about a thousandth of a pixel and those
+// distances vanish.
 //
 // Each case does the same screen gestures twice: in upstream's editor at
 // zoom 1, and in the atlas editor (`screenSizedStyles`) at zoom 1/U. The

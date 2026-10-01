@@ -13,14 +13,13 @@ import { GlobalTestState, act, fireEvent, render, waitFor } from "./test-utils";
 
 import type { UIOptions } from "../types";
 
-// Atlasdraw addition (ADR-0010). A host that sets these canvasActions to
-// false closes every upstream door that writes an image or an .excalidraw
-// file: the keyboard shortcuts, the command-palette entries and the
-// copy-as-image items of the context menu. The atlas
-// app uses exactly these options (MapEditor.tsx EXCALIDRAW_UI_OPTIONS), so
-// its own Export dialog and the .atlasdraw bundle are the only doors.
-// Each case also runs with the upstream defaults, to show that the probe
-// can see an open door.
+// Atlasdraw addition (code/decisions/0010-own-the-fork.md). A host that sets
+// these canvasActions to false closes every upstream door that writes an image
+// or an .excalidraw file: the keyboard shortcuts, the command-palette entries
+// and the copy-as-image items of the context menu. The atlas app uses exactly
+// these options (MapEditor.tsx EXCALIDRAW_UI_OPTIONS), so its own Export dialog
+// and the .atlasdraw bundle are the only doors. Each case also runs with the
+// upstream defaults, to show that the probe can see an open door.
 
 // The copy actions check clipboard support once, when their module loads,
 // and jsdom has no clipboard. Without this stub the copy items never show,

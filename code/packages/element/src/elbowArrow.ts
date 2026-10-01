@@ -2258,7 +2258,7 @@ const getBindPointHeading = (
   hoveredElement: ExcalidrawBindableElement | null | undefined,
   origPoint: GlobalPoint,
   elementsMap: ElementsMap,
-  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
+  unit = 1, // Atlasdraw: upstream has `zoom`, never passed; the arrow's pixel unit.
 ): Heading =>
   getHeadingForElbowArrowSnap(
     p,
@@ -2284,7 +2284,7 @@ const getHoveredElement = (
   origPoint: GlobalPoint,
   elementsMap: NonDeletedSceneElementsMap,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
-  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
+  unit = 1, // Atlasdraw: upstream has `zoom`, never passed; the arrow's pixel unit.
 ) => {
   return getHoveredElementForBinding(
     origPoint,

@@ -138,7 +138,8 @@ export const actionZoomIn = register({
   icon: ZoomInIcon,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (app.props.onZoomAction?.({ type: "zoomIn" })) {
       return false;
     }
@@ -183,7 +184,8 @@ export const actionZoomOut = register({
   viewMode: true,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (app.props.onZoomAction?.({ type: "zoomOut" })) {
       return false;
     }
@@ -228,7 +230,8 @@ export const actionResetZoom = register({
   viewMode: true,
   trackEvent: { category: "canvas" },
   perform: (_elements, appState, _, app) => {
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (app.props.onZoomAction?.({ type: "resetZoom" })) {
       return false;
     }
@@ -413,7 +416,8 @@ export const actionZoomToFitSelectionInViewport = register({
     const targetElements = selectedElements.length
       ? selectedElements
       : elements;
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (
       app.props.onZoomAction?.({
         type: "zoomToFit",
@@ -452,7 +456,8 @@ export const actionZoomToFitSelection = register({
     const targetElements = selectedElements.length
       ? selectedElements
       : elements;
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (
       app.props.onZoomAction?.({
         type: "zoomToFit",
@@ -487,7 +492,8 @@ export const actionZoomToFit = register({
   viewMode: true,
   trackEvent: { category: "canvas" },
   perform: (elements, appState, _, app) => {
-    // Atlasdraw (ADR-0015): the host's map may own the camera.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // host's map may own the camera.
     if (
       app.props.onZoomAction?.({
         type: "zoomToFit",

@@ -189,7 +189,8 @@ export const exportToCanvas = async (
     viewBackgroundColor: string;
     exportingFrame?: ExcalidrawFrameLikeElement | null;
     // When provided, render the live viewport instead of the element bounding
-    // box. Fixes composite-export scale mismatch (atlas-app exportPNG).
+    // box. Atlasdraw: the composite export (atlas-app lib/export.ts) needs the
+    // map and the drawing at one scale.
     viewport?: {
       width: number;
       height: number;

@@ -207,7 +207,8 @@ const getHints = ({
         isTextBindableContainer(selectedElements[0])
       ) {
         // No flowchart hint: flowchart creation steps by a fixed 100 scene
-        // units, under a pixel at map zoom (ADR-0015).
+        // units, under a pixel at map zoom
+        // (docs/architecture/adr/0015-world-coordinates-gate.md).
         return t("hints.bindTextToElement", {
           shortcut: getTaggedShortcutKey("Enter"),
         });

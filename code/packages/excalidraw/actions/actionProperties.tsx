@@ -294,8 +294,8 @@ const changeFontSize = (
     }
   });
 
-  // Atlasdraw (ADR-0015): elements hold scene units, the current item style
-  // holds what the picker shows.
+  // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): elements
+  // hold scene units, the current item style holds what the picker shows.
   const scale = styleScale(app.props.screenSizedStyles, appState.zoom.value);
   return {
     elements: updatedElements,
@@ -552,7 +552,8 @@ export const actionChangeStrokeWidth = register<
   label: "labels.strokeWidth",
   trackEvent: false,
   perform: (elements, appState, value, app) => {
-    // Atlasdraw (ADR-0015): the picker value is screen pixels.
+    // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+    // picker value is screen pixels.
     const scale = styleScale(app.props.screenSizedStyles, appState.zoom.value);
     return {
       elements: changeProperty(elements, appState, (el) =>
@@ -774,7 +775,8 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
         app,
         () => {
           invariant(value, "actionChangeFontSize: Expected a font size value");
-          // Atlasdraw (ADR-0015): the picker value is screen pixels.
+          // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
+          // the picker value is screen pixels.
           return (
             value * styleScale(app.props.screenSizedStyles, appState.zoom.value)
           );

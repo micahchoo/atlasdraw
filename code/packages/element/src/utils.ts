@@ -591,7 +591,7 @@ export const getSnapOutlineMidPoint = (
   point: GlobalPoint,
   element: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
-  view: EditorView, // Atlasdraw: was `zoom`; carries the editor's unit.
+  view: EditorView, // Atlasdraw: upstream has `zoom`; carries the editor's unit.
 ) => {
   const center = elementCenterPoint(element, elementsMap);
   const sideMidpoints =
@@ -656,7 +656,7 @@ export const projectFixedPointOntoDiagonal = (
   element: ExcalidrawBindableElement,
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
-  view: EditorView, // Atlasdraw: was `zoom`; carries the editor's unit.
+  view: EditorView, // Atlasdraw: upstream has `zoom`; carries the editor's unit.
   isMidpointSnappingEnabled: boolean = true,
 ): GlobalPoint | null => {
   invariant(arrow.points.length >= 2, "Arrow must have at least two points");

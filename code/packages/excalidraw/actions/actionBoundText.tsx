@@ -252,7 +252,8 @@ export const actionWrapTextInContainer = register({
           fillStyle: appState.currentItemFillStyle,
           strokeColor: appState.currentItemStrokeColor,
           roughness: appState.currentItemRoughness,
-          // Atlasdraw (ADR-0015): screen pixels to scene units.
+          // Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md):
+          // screen pixels to scene units.
           strokeWidth:
             appState.currentItemStrokeWidth *
             styleScale(app.props.screenSizedStyles, appState.zoom.value),

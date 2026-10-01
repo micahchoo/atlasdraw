@@ -1,6 +1,7 @@
-// Atlasdraw addition (ADR-0015). An element's pixel-sized details — its
-// arrowheads, dashes, rough jitter and adaptive corner radius — are drawn in
-// its pixel unit, `customData.atlas.unit`. Without it they are upstream's.
+// Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md). An
+// element's pixel-sized details — its arrowheads, dashes, rough jitter and
+// adaptive corner radius — are drawn in its pixel unit,
+// `customData.atlas.unit`. Without it they are upstream's.
 
 import { pointFrom } from "@atlasdraw/math";
 import { ROUNDNESS } from "@atlasdraw/common";

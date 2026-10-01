@@ -318,8 +318,9 @@ export interface AppState {
   /** user preference whether arrow snap to midpoints while binding */
   isMidpointSnappingEnabled: boolean;
   /**
-   * Atlasdraw (ADR-0015): the `screenSizedStyles` prop. The editor's own
-   * distances (binding reach, nudge, snaps) are then screen pixels at every zoom.
+   * Atlasdraw (docs/architecture/adr/0015-world-coordinates-gate.md): the
+   * `screenSizedStyles` prop. The editor's own distances (binding reach, nudge,
+   * snaps) are then screen pixels at every zoom.
    */
   screenSizedStyles: boolean;
   /**
@@ -669,12 +670,12 @@ export interface ExcalidrawProps {
     appState: UIAppState,
   ) => JSX.Element | null;
   /**
-   * Atlasdraw addition (ADR-0010, fully-owned fork): render custom content
-   * INSIDE the shapes toolbar Island, appended after the tool buttons (see
-   * LayerUI). The atlas app mounts its geo-search control here so it sits on
-   * the same toolbar as the drawing tools. Mirrors the renderTopLeftUI /
-   * renderTopRightUI render-prop pattern; args are provided for parity and may
-   * be ignored.
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, fully-owned fork):
+   * render custom content INSIDE the shapes toolbar Island, appended after the
+   * tool buttons (see LayerUI). The atlas app mounts its geo-search control
+   * here so it sits on the same toolbar as the drawing tools. Mirrors the
+   * renderTopLeftUI / renderTopRightUI render-prop pattern; args are provided
+   * for parity and may be ignored.
    */
   renderToolbarExtras?: (
     isMobile: boolean,
@@ -696,26 +697,28 @@ export interface ExcalidrawProps {
    */
   searchSources?: readonly SearchSource[];
   /**
-   * Atlasdraw addition (ADR-0010, Collar shell): when set, the desktop editor
-   * chrome enters "collar mode" — the shapes toolbar renders flush into this
-   * host element (a row of the app's Collar frame) via a React portal instead
-   * of a floating Island. When null/undefined the stock floating-island
-   * layout renders unchanged (vendored tests + reference app unaffected).
-   * The mobile layout (MobileMenu) ignores collar mode entirely.
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, Collar shell):
+   * when set, the desktop editor chrome enters "collar mode" — the shapes
+   * toolbar renders flush into this host element (a row of the app's Collar
+   * frame) via a React portal instead of a floating Island. When null/undefined
+   * the stock floating-island layout renders unchanged (vendored tests +
+   * reference app unaffected). The mobile layout (MobileMenu) ignores collar
+   * mode entirely.
    */
   collarToolbarTarget?: HTMLElement | null;
   /**
-   * Atlasdraw addition (ADR-0010, Collar shell): host element for the main
-   * menu trigger + dropdown (typically the Collar head bar). Only honored
-   * together with collar mode; when unset the menu renders in its stock
-   * top-left position.
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, Collar shell):
+   * host element for the main menu trigger + dropdown (typically the Collar
+   * head bar). Only honored together with collar mode; when unset the menu
+   * renders in its stock top-left position.
    */
   collarMenuTarget?: HTMLElement | null;
   /**
-   * Atlasdraw addition (ADR-0010, Collar shell): when `true`, `DefaultSidebar`
-   * renders **without** its own tab-trigger row. Opt-in, exactly like
-   * `collarToolbarTarget`/`collarMenuTarget` — default (`false`/unset) leaves
-   * the stock trigger row and every vendored test untouched.
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, Collar shell):
+   * when `true`, `DefaultSidebar` renders **without** its own tab-trigger row.
+   * Opt-in, exactly like `collarToolbarTarget`/`collarMenuTarget` — default
+   * (`false`/unset) leaves the stock trigger row and every vendored test
+   * untouched.
    *
    * For hosts that drive the sidebar from their own persistent rail (see
    * {@link ExcalidrawImperativeAPI.getSidebarTabs}). Two rails onto one
@@ -741,11 +744,10 @@ export interface ExcalidrawProps {
    */
   hideDefaultSidebarTabTriggers?: boolean;
   /**
-   * Atlasdraw addition (ADR-0010, Collar shell): width of the right sidebar in
-   * px, clamped to
-   * `[RIGHT_SIDEBAR_MIN_WIDTH, RIGHT_SIDEBAR_MAX_WIDTH]` by
-   * {@link clampRightSidebarWidth}. Unset ⇒ upstream's 302px, so vendored
-   * tests and the reference app are unaffected.
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, Collar shell):
+   * width of the right sidebar in px, clamped to `[RIGHT_SIDEBAR_MIN_WIDTH,
+   * RIGHT_SIDEBAR_MAX_WIDTH]` by {@link clampRightSidebarWidth}. Unset ⇒
+   * upstream's 302px, so vendored tests and the reference app are unaffected.
    *
    * The editor only *publishes* the value, as the `--right-sidebar-width`
    * custom property on the editor container. `Sidebar.scss`, the
@@ -756,10 +758,11 @@ export interface ExcalidrawProps {
    */
   rightSidebarWidth?: number;
   /**
-   * Atlasdraw addition (ADR-0010, Collar shell): notifies the host when the
-   * right sidebar's *layout* changes, so the host can reflow its own surfaces
-   * (in atlasdraw: narrow the MapLibre plate instead of letting the panel
-   * cover it, and place the resize handle at the panel's left edge).
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md, Collar shell):
+   * notifies the host when the right sidebar's *layout* changes, so the host
+   * can reflow its own surfaces (in atlasdraw: narrow the MapLibre plate
+   * instead of letting the panel cover it, and place the resize handle at the
+   * panel's left edge).
    *
    * - `open` — a sidebar is open (docked or floating). Same `appState`
    *   expression the editor uses for its own narrowing, so it is "whatever
@@ -794,26 +797,28 @@ export interface ExcalidrawProps {
     collar: boolean;
   }) => void;
   /**
-   * Atlasdraw addition (ADR-0015). The scene is a world map at a fixed
-   * reference zoom, so one scene unit can be far less than one pixel. When
-   * true, the stroke width and font size the user picks are screen pixels:
-   * a new element, and a picker change, store them divided by the zoom value,
-   * and the pickers show an element's sizes times the zoom value.
+   * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+   * The scene is a world map at a fixed reference zoom, so one scene unit can
+   * be far less than one pixel. When true, the stroke width and font size the
+   * user picks are screen pixels: a new element, and a picker change, store
+   * them divided by the zoom value, and the pickers show an element's sizes
+   * times the zoom value.
    */
   screenSizedStyles?: boolean;
   /**
-   * Atlasdraw addition (ADR-0015). False turns off flowchart creation with
-   * Ctrl/Cmd+Arrow: its gaps are fixed scene units and its arrow has no
-   * style unit, so on a world map the new node lands on the shape and the
-   * arrow has no head. The key then moves the selection like an arrow key.
-   * Default true.
+   * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+   * False turns off flowchart creation with Ctrl/Cmd+Arrow: its gaps are fixed
+   * scene units and its arrow has no style unit, so on a world map the new node
+   * lands on the shape and the arrow has no head. The key then moves the
+   * selection like an arrow key. Default true.
    */
   flowchart?: boolean;
   /**
-   * Atlasdraw addition (ADR-0015). Called before a zoom action (zoom in, out,
-   * reset, fit) changes the viewport. Return true when the host moved its own
-   * camera instead; the action then does nothing. The atlas app's map owns
-   * the camera, and Excalidraw's zoom steps and clamp do not fit a map zoom.
+   * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
+   * Called before a zoom action (zoom in, out, reset, fit) changes the
+   * viewport. Return true when the host moved its own camera instead; the
+   * action then does nothing. The atlas app's map owns the camera, and
+   * Excalidraw's zoom steps and clamp do not fit a map zoom.
    */
   onZoomAction?: (action: ZoomAction) => boolean;
   langCode?: Language["code"];

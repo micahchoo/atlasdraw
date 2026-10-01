@@ -8,11 +8,11 @@ import { API } from "./helpers/api";
 import { Keyboard } from "./helpers/ui";
 import { act, fireEvent, render, waitFor } from "./test-utils";
 
-// Atlasdraw addition (ADR-0010). Frames, embeddables, the laser pointer,
-// Mermaid / text-to-diagram and the AI magic frame mean nothing on a map, so
-// the editor offers no way to start them. Their element types stay: a
-// document that already holds a frame, a magic frame, an embeddable or an
-// iframe must still load and render.
+// Atlasdraw addition (code/decisions/0010-own-the-fork.md). Frames,
+// embeddables, the laser pointer, Mermaid / text-to-diagram and the AI magic
+// frame mean nothing on a map, so the editor offers no way to start them. Their
+// element types stay: a document that already holds a frame, a magic frame, an
+// embeddable or an iframe must still load and render.
 
 const REMOVED_TOOL_TEST_IDS = [
   "toolbar-frame",
