@@ -20,10 +20,22 @@ Y.Doc. The relay checks the token, not the content (ADR-0014). So:
   `checkImage`, `checkComment` and the meta checks. A new key in the room
   doc gets a check there before anything reads it. A record that fails is
   skipped, and `rejectFrom` says so once per peer.
-- **Never delete what was skipped.** `toRoom` deletes a room entry only when
-  the entry passes its check: a newer client may write a kind this one does
-  not know. `writeScene` writes a local element over an invalid one, which
-  is a repair, not a delete.
+- **Never delete what was skipped.** A newer client may write a kind or a
+  geometry this one does not know. `readContent` returns `skipped`: every
+  layer entry it left out of the Document, both an entry that fails
+  `checkOverlay` and a valid entry whose features or image fail. `toRoom`
+  deletes an entry only when the Document showed it and its user removed
+  it. Until 2026-10-01 `toRoom` asked only `checkOverlay`, so the first
+  unrelated edit (a rename) deleted a peer's layer whose features this
+  client could not read (audit 2-02 finding 7; `collab.known-red.test.ts`
+  "what a client skipped stays in the room"). `writeScene` writes a local
+  element over an invalid one, which is a repair, not a delete.
+- **A record the client writes must fit one relay message.** The caps in
+  `ROOM_LIMITS` that bound a record (raster, file) come from
+  `@atlasdraw/protocol` `ROOM_SIZE`, as do the relay's. A seed goes through
+  `roomDocument.ts#planSeed`, which packs writes under the message cap and
+  refuses a map over a cap before anything connects. Do not write a seed
+  or a bulk import as one transaction: one transaction is one message.
 - **A repair never bumps `version`.** The per-element conflict rule
   (`roomScene.ts#wins`) depends on it. This is why Excalidraw's
   `restoreElements` is not the validator (it bumps versions, keeps wrong
