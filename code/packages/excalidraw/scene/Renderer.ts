@@ -1,4 +1,4 @@
-import { isElementInViewport } from "@atlasdraw/element";
+import { isAtlasHidden, isElementInViewport } from "@atlasdraw/element";
 
 import { memoize, toBrandedType } from "@atlasdraw/common";
 
@@ -76,9 +76,15 @@ export class Renderer {
       newElementId: ExcalidrawElement["id"] | undefined;
     }) => {
       const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
+      const sceneMap = this.scene.getNonDeletedElementsMap();
 
       for (const element of elements) {
         if (newElementId === element.id) {
+          continue;
+        }
+
+        // Atlasdraw: hidden from the layer panel (see atlasHidden.ts).
+        if (isAtlasHidden(element, sceneMap)) {
           continue;
         }
 

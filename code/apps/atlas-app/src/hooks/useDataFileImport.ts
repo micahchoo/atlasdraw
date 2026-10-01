@@ -65,7 +65,7 @@ import { getAppConfig } from "../config/app-config";
 import { useToast } from "../components/ToastProvider";
 
 import { addDataLayerToMap, addRasterLayerToMap } from "../lib/dataLayerRender";
-import { useRasterImageStore } from "../state/useRasterImageStore";
+import { rasterUrl } from "../state/rasterUrls";
 
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
@@ -73,7 +73,7 @@ import type {
   LayerProvenance,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 
 type DataFileExt =
   | "geojson"
@@ -186,7 +186,7 @@ interface ParsedLayer {
  * KML, KMZ and GPX skip features with no geometry and KML ground overlays;
  * GeoJSON and shapefile reject the whole file instead, so 0 from those
  * branches is a fact rather than a placeholder. The count is recorded as
- * layer provenance — see `LayerProvenance` in state/layerRegistry.
+ * layer provenance — see `LayerProvenance` in state/document.
  */
 async function parseDroppedFile(
   file: File,
@@ -297,6 +297,8 @@ export function useDataFileImport(
     label: string;
     corners: RasterCorners;
     imageKey: string;
+    /** The decoded PNG; the document keeps it and saves it. */
+    image: Blob;
     provenance?: LayerProvenance;
   }) => void,
 ): UseDataFileImportResult {
@@ -327,19 +329,17 @@ export function useDataFileImport(
 
         const id = `rl:${crypto.randomUUID()}`;
         const imageKey = `raster-${id.slice(3)}.png`;
-        // Image store before the map, and the map before the registry: the
-        // registry subscriber reconciles new entries onto the map and reads
-        // the URL from the store, so writing it last would have it find a
-        // raster with no image and skip it. Same ordering rule as the data
-        // path, one store deeper.
-        useRasterImageStore.getState().set(id, png);
-        const url = useRasterImageStore.getState().get(id)!.url;
+        // The map first, then the document: a bridge that reconciles new
+        // layers onto the map then finds this one already there. The URL
+        // cache keeps this URL once the document holds the same image.
+        const url = rasterUrl(id, png);
         addRasterLayerToMap(map, id, url, decoded.corners, 1);
         registerRasterLayer?.({
           id,
           label: file.name,
           corners: decoded.corners,
           imageKey,
+          image: png,
           provenance: { sourceFile: file.name, droppedCount: 0 },
         });
 
@@ -379,9 +379,9 @@ export function useDataFileImport(
         layers.forEach(({ fc, kindLabel }, i) => {
           const id = `dl:${crypto.randomUUID()}`;
           const style = defaultLayerStyle(fc);
-          // Map mutations first, registry second: the registry subscriber
-          // (useLayerRegistrySync) reconciles registry→map on new entries, and
-          // adding here first means it finds this layer already present.
+          // Map first, document second: the map bridge (useLayerRegistrySync)
+          // reconciles new document layers onto the map, and adding here
+          // first means it finds this layer already present.
           // addDataLayerToMap owns the addSource/addLayer + orphan-source
           // rollback so an imported layer and a re-added one are byte-identical.
           addDataLayerToMap(map, id, fc, style);

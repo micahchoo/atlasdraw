@@ -180,7 +180,28 @@ export class FakeCameraMap {
 
 export const SAVED_ULID = "01HZ8KQR5Z3MV7BJ4N6XPYD9TF";
 
-export function savedManifest(overrides: Partial<Manifest> = {}): Manifest {
+/**
+ * The manifest a v1 build wrote: version 1, and one entry per drawn element
+ * beside the data and raster layers. This is the format of every file saved
+ * before the v1 → v2 migration, so loading it exercises that migration.
+ */
+export interface SavedManifestV1 extends Omit<Manifest, "version" | "layers"> {
+  version: 1;
+  layers: Array<
+    | Manifest["layers"][number]
+    | {
+        kind: "annotation";
+        id: string;
+        label: string;
+        visible: boolean;
+        renamedByUser?: boolean;
+      }
+  >;
+}
+
+export function savedManifest(
+  overrides: Partial<SavedManifestV1> = {},
+): SavedManifestV1 {
   return {
     id: SAVED_ULID,
     version: 1,
@@ -220,15 +241,23 @@ export function geoRect(id: string, x = 512, y = 300): FakeSceneElement {
   };
 }
 
+/**
+ * A document as a v1 build saved it. The writer does not validate, so these
+ * are the bytes such a build wrote; the reader migrates them on load. The
+ * cast is the one place a v1 manifest stands in for the current type.
+ */
 export function savedDocument(
-  overrides: Partial<AtlasdrawDocument> = {},
+  overrides: Partial<Omit<AtlasdrawDocument, "manifest">> & {
+    manifest?: SavedManifestV1;
+  } = {},
 ): AtlasdrawDocument {
+  const { manifest = savedManifest(), ...rest } = overrides;
   return {
-    manifest: savedManifest(),
+    manifest: manifest as unknown as Manifest,
     scene: [geoRect("rect-1")] as unknown as AtlasdrawDocument["scene"],
     layers: new Map(),
     styleRef: {},
     files: new Map(),
-    ...overrides,
+    ...rest,
   };
 }

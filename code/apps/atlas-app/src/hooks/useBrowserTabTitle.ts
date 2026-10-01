@@ -8,12 +8,12 @@
 
 import { useEffect } from "react";
 
-import { useDocumentTitleStore } from "../state/documentTitle";
+import { useDocument } from "../state/document";
 
 const SUFFIX = "Atlasdraw";
 
 export function useBrowserTabTitle(): void {
-  const title = useDocumentTitleStore((s) => s.title);
+  const title = useDocument((s) => s.title);
 
   useEffect(() => {
     document.title = `${title} — ${SUFFIX}`;

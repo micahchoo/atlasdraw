@@ -32,21 +32,26 @@ import type { AtlasdrawDocument, Manifest } from "@atlasdraw/data";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useLayerRegistrySync } from "../useLayerRegistrySync";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
-import { useRasterImageStore } from "../../state/useRasterImageStore";
-import { hydrate } from "../../state/hydrate";
+import { loadDocument } from "../../state/documentIO";
+import { useSceneBinding, useSceneStore } from "../../state/scene";
+import { annotationRows } from "../../state/annotations";
 import { reconcileDataLayers } from "../../lib/dataLayerRender";
 import { LayerPanel } from "../../components/LayerPanel";
 import { StylePanel } from "../../components/StylePanel";
 import { ToastProvider } from "../../components/ToastProvider";
 import { AriaAnnouncer } from "../../components/AriaAnnouncer";
 
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
+
 import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import type { FeatureCollection } from "geojson";
 import type maplibregl from "maplibre-gl";
-import type { RasterCorners } from "../../state/layerRegistry";
+import type { RasterCorners } from "../../state/document";
 
 // ---------------------------------------------------------------------------
 // FakeMapLibre — style state + the 4.7.1 error contract
@@ -310,8 +315,9 @@ function points(values: Array<Record<string, unknown>>): FeatureCollection {
 }
 
 function registerRaster(id: string): void {
-  useRasterImageStore.getState().set(id, new Blob(["png"]));
-  useLayerRegistryStore.getState().registerRasterLayer({
+  currentDocument().dispatch({
+    type: "add-raster-layer",
+    image: new Blob(["png"]),
     id,
     label: id,
     corners: CORNERS,
@@ -322,7 +328,7 @@ function registerRaster(id: string): void {
 function manifest(layers: Manifest["layers"]): Manifest {
   return {
     id: "01HZ8KQR5Z3MV7BJ4N6XPYD9TF",
-    version: 1,
+    version: 2,
     title: "document B",
     createdAt: "2026-10-01T00:00:00.000Z",
     updatedAt: "2026-10-01T00:00:00.000Z",
@@ -334,9 +340,7 @@ function manifest(layers: Manifest["layers"]): Manifest {
 }
 
 function resetStores(): void {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
-  useRasterImageStore.getState().clear();
+  openDocument(createDocument());
 }
 
 beforeEach(resetStores);
@@ -354,11 +358,15 @@ describe("raster layers follow the registry onto the map", () => {
   it.fails("hiding a raster sets visibility none on its map layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
     act(() =>
-      useLayerRegistryStore.getState().setVisibility("rl:sheet", false),
+      currentDocument().dispatch({
+        type: "set-visibility",
+        id: "rl:sheet",
+        visible: false,
+      }),
     );
 
     expect(map.getLayoutProperty("rl:sheet", "visibility")).toBe("none");
@@ -368,10 +376,12 @@ describe("raster layers follow the registry onto the map", () => {
   it.fails("deleting a raster removes its image source and layer", () => {
     registerRaster("rl:sheet");
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     expect(map.draws("rl:sheet")).toBe(true);
 
-    act(() => useLayerRegistryStore.getState().remove("rl:sheet"));
+    act(() =>
+      currentDocument().dispatch({ type: "remove-layer", id: "rl:sheet" }),
+    );
 
     expect(map.getLayer("rl:sheet")).toBeUndefined();
     expect(map.getSource("rl:sheet")).toBeUndefined();
@@ -384,7 +394,7 @@ describe("raster layers follow the registry onto the map", () => {
       registerRaster("rl:doc-a");
       const map = new FakeMapLibre();
       const { api } = fakeExcalidraw();
-      renderHook(() => useLayerRegistrySync(asMap(map), api));
+      renderHook(() => useLayerRegistrySync(asMap(map)));
       expect(map.draws("rl:doc-a")).toBe(true);
 
       const docB: AtlasdrawDocument = {
@@ -405,7 +415,7 @@ describe("raster layers follow the registry onto the map", () => {
         files: new Map([["img-b", new Blob(["png-b"])]]),
       };
       await act(async () => {
-        await hydrate(docB, api);
+        await loadDocument(docB, api);
       });
 
       expect({
@@ -421,10 +431,10 @@ describe("raster layers follow the registry onto the map", () => {
 // ---------------------------------------------------------------------------
 
 describe("annotation rows act on the scene", () => {
-  // KNOWN-RED (W5 map overlays): confirming Delete on an annotation row removes the registry entry and leaves the Excalidraw element live in the scene. Flip to it() when fixed.
-  it.fails("Delete on an annotation row deletes the shape", () => {
+  it("Delete on an annotation row deletes the shape", () => {
     const scene = fakeExcalidraw();
-    renderHook(() => useLayerRegistrySync(null, scene.api));
+    // Annotation rows are computed from the scene the panel is bound to.
+    renderHook(() => useSceneBinding(scene.api));
     act(() =>
       scene.api.updateScene({
         elements: [
@@ -434,9 +444,9 @@ describe("annotation rows act on the scene", () => {
         >[0]["elements"],
       }),
     );
-    expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual([
-      "el-1",
-    ]);
+    expect(
+      annotationRows(useSceneStore.getState().elements).map((r) => r.id),
+    ).toEqual(["el-1"]);
 
     render(<LayerPanel />);
     fireEvent.click(screen.getByTestId("layer-menu-el-1"));
@@ -456,11 +466,12 @@ describe("data-layer panel order matches map z-order", () => {
   // KNOWN-RED (W5 map overlays): the Data Layers section lists order 0 at the top, but MapLibre draws order 0 at the bottom, so the top row is drawn underneath. Flip to it() when fixed.
   it.fails("the panel's top data row is the top data layer on the map", () => {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     const ids = ["dl:roads", "dl:rivers", "dl:wells"];
     act(() => {
       for (const id of ids) {
-        useLayerRegistryStore.getState().registerDataLayer({
+        currentDocument().dispatch({
+          type: "add-data-layer",
           id,
           fc: points([{ n: 1 }]),
           label: id,
@@ -489,9 +500,10 @@ describe("data-layer panel order matches map z-order", () => {
 describe("a style MapLibre rejects is not committed", () => {
   function setup(fc: FeatureCollection) {
     const map = new FakeMapLibre();
-    renderHook(() => useLayerRegistrySync(asMap(map), null));
+    renderHook(() => useLayerRegistrySync(asMap(map)));
     act(() =>
-      useLayerRegistryStore.getState().registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:wells",
         fc,
         label: "Wells",
@@ -516,8 +528,8 @@ describe("a style MapLibre rejects is not committed", () => {
     const fresh = new FakeMapLibre();
     reconcileDataLayers(
       asMap(fresh),
-      useLayerRegistryStore.getState().entries,
-      useDataLayerFCStore.getState().getAll(),
+      currentDocument().snapshot().overlays,
+      currentDocument().snapshot().featureCollections,
     );
     return { draws: fresh.draws(id), errors: fresh.errors };
   }

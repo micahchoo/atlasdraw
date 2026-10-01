@@ -6,9 +6,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, cleanup } from "@testing-library/react";
 
-import { useLayerRegistryStore } from "../state/layerRegistry";
-
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../state/document";
 
 import { useBasemapStyle } from "./useBasemapStyle";
 
@@ -121,8 +123,7 @@ const POLY_FC: FeatureCollection = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
   resolveStyleMock.mockResolvedValue(FAKE_STYLE);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -214,7 +215,8 @@ describe("useBasemapStyle", () => {
 describe("useBasemapStyle — data-layer re-add after a style swap (P2)", () => {
   it("reconciles the registry's data layers once the new style has loaded", async () => {
     const map = makeMockMap();
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:a",
       fc: POLY_FC,
       label: "a.geojson",

@@ -43,7 +43,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { inferGeometryType } from "../lib/geometryType";
 
-import type { LayerRegistryState } from "../state/layerRegistry";
+import type { DocumentCommand } from "../state/document";
 import type maplibregl from "maplibre-gl";
 
 /**
@@ -59,7 +59,9 @@ export interface ConvertToDataLayerNotify {
 export function useConvertToDataLayer(
   map: maplibregl.Map | null,
   excalidrawAPI: ExcalidrawImperativeAPI | null,
-  registry: Pick<LayerRegistryState, "registerDataLayer" | "remove">,
+  addDataLayer: (
+    layer: Omit<Extract<DocumentCommand, { type: "add-data-layer" }>, "type">,
+  ) => void,
   notify: ConvertToDataLayerNotify,
 ): {
   currentConvertibleSelection: () => ConvertibleElement | null;
@@ -117,9 +119,8 @@ export function useConvertToDataLayer(
           }
           throw layerErr;
         }
-        // Step 3 — registry mutations (won't throw).
-        registry.registerDataLayer({ id, fc, label: el.id, style });
-        registry.remove(el.id); // drop the old annotation entry (if any)
+        // Step 3 — the document gains the layer (won't throw).
+        addDataLayer({ id, fc, label: el.id, style });
         // Step 4 — destructive scene mutation last.
         const remaining = excalidrawAPI
           .getSceneElements()
@@ -143,7 +144,7 @@ export function useConvertToDataLayer(
         );
       }
     },
-    [map, registry, excalidrawAPI, notify],
+    [map, addDataLayer, excalidrawAPI, notify],
   );
 
   // W-C — Surface Convert as a right-click context-menu item via the

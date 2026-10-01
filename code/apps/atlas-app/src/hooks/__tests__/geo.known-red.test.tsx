@@ -317,8 +317,7 @@ describe("geo anchors survive undo, pins, pans (KNOWN-RED, audit 01)", () => {
     expect(screenDistance(w.map, placeOf(pin), clicked)).toBeLessThan(0.5);
   });
 
-  // KNOWN-RED (W4 world coordinates): every camera frame rewrites every geo element through updateScene, so a pure pan hands onChange a new elements array and useExcalidrawChangeHandler marks the document dirty. Flip to it() when fixed.
-  it.fails("a pure pan does not mark the document dirty", async () => {
+  it("a pure pan does not mark the document dirty", async () => {
     const w = await mount(10);
     draw(w, rectangle());
     w.pan(0, 0);

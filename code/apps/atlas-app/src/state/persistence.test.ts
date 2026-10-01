@@ -24,10 +24,11 @@ const ULID = "01J0000000000000000000000A"; // 26 chars, valid ULID shape.
 
 const makeDoc = (
   updatedAt: string = "2026-05-06T00:00:00.000Z",
+  id: string = ULID,
 ): AtlasdrawDocument => ({
   manifest: {
-    id: ULID,
-    version: 1,
+    id,
+    version: 2,
     title: "Test",
     createdAt: "2026-05-06T00:00:00.000Z",
     updatedAt,
@@ -124,7 +125,7 @@ describe("createPersistenceStore — protecting the stored copy", () => {
     await store.save(makeDoc());
     const raw = await openDB(dbName);
     const garbage = { type: "application/zip", buffer: new ArrayBuffer(8) };
-    await raw.put("state", garbage, "current");
+    await raw.put("state", garbage, `doc:${ULID}`);
 
     await expect(store.load()).rejects.toThrow();
     await store.save(makeDoc("2026-05-07T00:00:00.000Z"));
@@ -152,11 +153,64 @@ describe("createPersistenceStore — protecting the stored copy", () => {
   });
 });
 
+describe("createPersistenceStore — one slot per document", () => {
+  const OTHER = "01J0000000000000000000000B";
+
+  it("keeps each document in its own slot: saving B does not replace A", async () => {
+    const dbName = freshDb();
+    const store = createPersistenceStore({ dbName });
+    await store.save(makeDoc(undefined, ULID));
+    await store.save(makeDoc(undefined, OTHER));
+
+    const raw = await openDB(dbName);
+    const keys = (await raw.getAllKeys("state")).map(String);
+    raw.close();
+    expect(keys).toEqual(
+      expect.arrayContaining([`doc:${ULID}`, `doc:${OTHER}`]),
+    );
+    // load() opens the document saved last.
+    expect((await store.load())?.manifest.id).toBe(OTHER);
+    await store.close();
+  });
+
+  it("still reads the single slot an older build wrote, and moves it on the next save", async () => {
+    const dbName = freshDb();
+    const writer = createPersistenceStore({ dbName });
+    await writer.save(makeDoc());
+    const raw = await openDB(dbName);
+    const bytes = await raw.get("state", `doc:${ULID}`);
+    await raw.clear("state");
+    await raw.put("state", bytes, "current");
+    await writer.close();
+
+    const store = createPersistenceStore({ dbName });
+    const loaded = await store.load();
+    expect(loaded?.manifest.id).toBe(ULID);
+    await store.save(loaded!);
+
+    const keys = (await raw.getAllKeys("state")).map(String);
+    expect(keys).toContain(`doc:${ULID}`);
+    expect(keys).not.toContain("current");
+    raw.close();
+    await store.close();
+  });
+
+  it("tells remoteSave which document the bytes are", async () => {
+    const remoteSave = vi.fn(async () => {});
+    const store = createPersistenceStore({ dbName: freshDb(), remoteSave });
+
+    await store.save(makeDoc(undefined, OTHER));
+
+    expect(remoteSave).toHaveBeenCalledWith(expect.any(Blob), OTHER);
+    await store.close();
+  });
+});
+
 describe("createPersistenceStore — remoteSave callback (T13)", () => {
   it("fires remoteSave after the IDB write resolves", async () => {
     const calls: string[] = [];
-    const remoteSave: (blob: Blob) => Promise<void> = vi.fn(
-      async (_blob: Blob) => {
+    const remoteSave: (blob: Blob, documentId: string) => Promise<void> = vi.fn(
+      async (_blob: Blob, _documentId: string) => {
         calls.push("remote");
       },
     );
@@ -298,6 +352,75 @@ describe("saveToDisk / openFromDisk — fallback path", () => {
 
   afterEach(async () => {
     await store.close();
+  });
+
+  describe("with the File System Access API", () => {
+    type Picker = ReturnType<typeof vi.fn>;
+    let picked: string[];
+    let savePicker: Picker;
+    let openPicker: Picker;
+
+    /** A file handle in memory: writes land in `written`. */
+    function handle(name: string, text?: string) {
+      return {
+        name,
+        createWritable: async () => ({
+          write: async () => {
+            picked.push(`write:${name}`);
+          },
+          close: async () => {},
+        }),
+        // jsdom's File has no text(); give the reader what a browser gives.
+        getFile: async () =>
+          ({ name, text: async () => text ?? "" } as unknown as File),
+      };
+    }
+
+    beforeEach(() => {
+      picked = [];
+      savePicker = vi.fn(async (opts: { suggestedName: string }) => {
+        picked.push(`pick:${opts.suggestedName}`);
+        return handle(opts.suggestedName);
+      });
+      openPicker = vi.fn();
+      Object.assign(window, {
+        showSaveFilePicker: savePicker,
+        showOpenFilePicker: openPicker,
+      });
+    });
+
+    afterEach(() => {
+      delete (window as { showSaveFilePicker?: unknown }).showSaveFilePicker;
+      delete (window as { showOpenFilePicker?: unknown }).showOpenFilePicker;
+    });
+
+    it("saves a document to the file it chose before, without asking again", async () => {
+      await store.saveToDisk(makeDoc());
+      await store.saveToDisk(makeDoc());
+
+      expect(savePicker).toHaveBeenCalledTimes(1);
+      expect(picked).toEqual([
+        "pick:Test.atlasdraw",
+        "write:Test.atlasdraw",
+        "write:Test.atlasdraw",
+      ]);
+    });
+
+    it("asks for a file for a document imported from .excalidraw, not the previous document's file", async () => {
+      await store.saveToDisk(makeDoc());
+      openPicker.mockResolvedValue([
+        handle(
+          "sketch.excalidraw",
+          JSON.stringify({ type: "excalidraw", elements: [] }),
+        ),
+      ]);
+      const imported = await store.openFromDisk();
+
+      await store.saveToDisk(imported!);
+
+      expect(savePicker).toHaveBeenCalledTimes(2);
+      expect(picked.filter((p) => p.startsWith("write:"))).toHaveLength(2);
+    });
   });
 
   it("saveToDisk uses download anchor when FSA is unavailable", async () => {

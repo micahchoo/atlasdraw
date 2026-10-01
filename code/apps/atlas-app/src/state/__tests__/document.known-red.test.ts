@@ -6,8 +6,8 @@
 // W3 document owner flips each one to `it` when the fix lands.
 //
 // Everything here runs through the production composition: the real
-// usePersistenceWiring (load -> hydrate -> autosave/forceSave through
-// selectDocument), the real PersistenceStore on fake-indexeddb, the real
+// usePersistenceWiring (load -> loadDocument -> autosave/forceSave through
+// toFile), the real PersistenceStore on fake-indexeddb, the real
 // layer registry, useLayerRegistrySync and useExcalidrawChangeHandler. Only
 // Excalidraw and MapLibre are stand-ins (fixtures/documentWorld.ts).
 //
@@ -35,14 +35,19 @@ import { useExcalidrawChangeHandler } from "../../hooks/useExcalidrawChangeHandl
 import { FakeMercatorMap } from "../../hooks/geoOpFuzz.harness";
 import { useShareLink } from "../../hooks/useShareLink";
 import { createPersistenceStore } from "../persistence";
-import { selectDocument } from "../selectDocument";
+import { createDocument, currentDocument, openDocument } from "../document";
+import { toFile } from "../documentIO";
+import { sceneOf } from "../scene";
 import { loadShareDocument, tokenFromPath } from "../loadShareDocument";
 import { usePersistenceStore } from "../usePersistenceStore";
-import { useLayerRegistryStore } from "../layerRegistry";
-import { useDataLayerFCStore } from "../useDataLayerFCStore";
-import { useRasterImageStore } from "../useRasterImageStore";
 import { useMapInstanceStore } from "../mapInstance";
 import { useBasemapStore } from "../basemap";
+import { useSceneBinding, useSceneStore } from "../scene";
+import {
+  annotationRows,
+  renameAnnotation,
+  setAnnotationVisible,
+} from "../annotations";
 
 import {
   FakeCameraMap,
@@ -59,7 +64,7 @@ import type { FeatureCollection } from "geojson";
 
 import type maplibregl from "maplibre-gl";
 
-// usePersistenceWiring's own IDB name and slot (state/persistence.ts).
+// usePersistenceWiring's own IDB name (state/persistence.ts).
 const DB_NAME = "atlasdraw-autosave";
 
 const NOTIFY = { error: () => {} };
@@ -114,10 +119,14 @@ async function seedAutosave(doc: AtlasdrawDocument): Promise<void> {
   await seed.close();
 }
 
-/** The raw bytes currently in the autosave slot. */
+/**
+ * The raw bytes of the autosaved document a reload opens. Each document has
+ * its own slot, `doc:<id>`; `lastOpened` names the one saved last.
+ */
 async function autosaveBytes(): Promise<Uint8Array> {
   const db = await openDB(DB_NAME, 1);
-  const stored = (await db.get("state", "current")) as { bytes: Uint8Array };
+  const id = (await db.get("state", "lastOpened")) as string;
+  const stored = (await db.get("state", `doc:${id}`)) as { bytes: Uint8Array };
   db.close();
   return new Uint8Array(stored.bytes);
 }
@@ -143,7 +152,8 @@ function mountEditor(
 ) {
   return renderHook(() => {
     usePersistenceWiring(api, NOTIFY);
-    useLayerRegistrySync(map, api);
+    useSceneBinding(api);
+    useLayerRegistrySync(map);
     const onChange = useExcalidrawChangeHandler({
       excalidrawAPI: api,
       map,
@@ -201,12 +211,8 @@ beforeEach(async () => {
   });
   await db.clear("state");
   db.close();
-  const reg = useLayerRegistryStore.getState();
-  for (const id of reg.entries.map((e) => e.id)) {
-    reg.remove(id);
-  }
-  useDataLayerFCStore.getState().clear();
-  useRasterImageStore.getState().clear();
+  // A new, empty open document for every case.
+  openDocument(createDocument());
   usePersistenceStore.setState({ isDirty: false, isDraining: false });
   useMapInstanceStore.setState({ map: null });
   useBasemapStore.setState({ activeBasemapId: "protomaps-light" });
@@ -222,30 +228,26 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("document identity", () => {
-  // KNOWN-RED (W3 document owner): every save mints a new manifest id and createdAt because no production caller passes baseManifest to selectDocument. Flip to it() when fixed.
-  it.fails(
-    "keeps the loaded manifest id and createdAt across two saves with no edits",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
+  it("keeps the loaded manifest id and createdAt across two saves with no edits", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
 
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const first = await autosaveDocument();
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const second = await autosaveDocument();
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const first = await autosaveDocument();
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const second = await autosaveDocument();
 
-      expect(first.manifest.id).toBe(SAVED_ULID);
-      expect(second.manifest.id).toBe(SAVED_ULID);
-      expect(first.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
-      expect(second.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
-    },
-  );
+    expect(first.manifest.id).toBe(SAVED_ULID);
+    expect(second.manifest.id).toBe(SAVED_ULID);
+    expect(first.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
+    expect(second.manifest.createdAt).toBe("2026-05-06T00:00:00.000Z");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -253,34 +255,30 @@ describe("document identity", () => {
 // ---------------------------------------------------------------------------
 
 describe("save determinism", () => {
-  // KNOWN-RED (W3 document owner): two saves with no edits write different bytes (a new ULID, a new updatedAt, and zip entries stamped with the wall clock). Flip to it() when fixed.
-  it.fails(
-    "writes byte-identical archives for two saves with no edits",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
+  it("writes byte-identical archives for two saves with no edits", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
 
-      // Only the clock moves between the two saves. Faking Date alone keeps
-      // fake-indexeddb's own timers real.
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const first = await autosaveBytes();
+    // Only the clock moves between the two saves. Faking Date alone keeps
+    // fake-indexeddb's own timers real.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T09:00:00.000Z"));
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const first = await autosaveBytes();
 
-      vi.setSystemTime(new Date("2026-10-01T09:00:10.000Z"));
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const second = await autosaveBytes();
+    vi.setSystemTime(new Date("2026-10-01T09:00:10.000Z"));
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const second = await autosaveBytes();
 
-      expect(second.length).toBe(first.length);
-      expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
-    },
-  );
+    expect(second.length).toBe(first.length);
+    expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -288,8 +286,7 @@ describe("save determinism", () => {
 // ---------------------------------------------------------------------------
 
 describe("camera and basemap persistence", () => {
-  // KNOWN-RED (W3 document owner): selectDocument always writes camera [0,0] z4 and basemap "default", whatever the live map shows. Flip to it() when fixed.
-  it.fails("saves the live camera and the chosen basemap", async () => {
+  it("saves the live camera and the chosen basemap", async () => {
     const map = new FakeCameraMap({
       center: [-74.0, 40.7],
       zoom: 12.5,
@@ -315,8 +312,7 @@ describe("camera and basemap persistence", () => {
     expect(saved.manifest.camera.bearing).toBeCloseTo(15, 6);
   });
 
-  // KNOWN-RED (W3 document owner): hydrate restores neither the saved camera nor the saved basemap, so a reload opens on the defaults. Flip to it() when fixed.
-  it.fails("restores the saved camera and basemap on reload", async () => {
+  it("restores the saved camera and basemap on reload", async () => {
     await seedAutosave(savedDocument()); // camera [13.4, 52.5] z11 b30, protomaps-dark
     const map = new FakeCameraMap({ center: [0, 0], zoom: 2 });
     useMapInstanceStore.setState({ map: map as unknown as maplibregl.Map });
@@ -347,47 +343,52 @@ describe("dirty tracking", () => {
     return fx;
   }
 
-  // KNOWN-RED (W3 document owner): renaming a data layer never calls markDirty, so the rename is saved only if some later scene change happens. Flip to it() when fixed.
-  it.fails("renaming a layer marks the document dirty", async () => {
+  it("renaming a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore.getState().renameLayer("dl:wells", "Boreholes"),
+      currentDocument().dispatch({
+        type: "rename-layer",
+        id: "dl:wells",
+        label: "Boreholes",
+      }),
     );
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): restyling a data layer never calls markDirty, so closing the tab without moving the map loses the new style. Flip to it() when fixed.
-  it.fails("restyling a layer marks the document dirty", async () => {
+  it("restyling a layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore
-        .getState()
-        .updateStyle("dl:wells", { fillColor: "#ff0000" }),
+      currentDocument().dispatch({
+        type: "restyle",
+        id: "dl:wells",
+        patch: { fillColor: "#ff0000" },
+      }),
     );
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): reordering layers in the panel never calls markDirty. Flip to it() when fixed.
-  it.fails("reordering layers marks the document dirty", async () => {
+  it("reordering layers marks the document dirty", async () => {
     await loadedAndClean();
-    const before = useLayerRegistryStore
-      .getState()
-      .entries.filter((e) => e.kind === "data")
+    const before = currentDocument()
+      .snapshot()
+      .overlays.filter((e) => e.kind === "data")
       .map((e) => e.id);
-    act(() => useLayerRegistryStore.getState().reorder(before[0], 1));
-    const after = useLayerRegistryStore
-      .getState()
-      .entries.filter((e) => e.kind === "data")
+    act(() =>
+      currentDocument().dispatch({ type: "reorder", id: before[0], order: 1 }),
+    );
+    const after = currentDocument()
+      .snapshot()
+      .overlays.filter((e) => e.kind === "data")
       .map((e) => e.id);
     expect(after).not.toEqual(before); // the reorder did happen
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): importing a data layer never calls markDirty; today it survives only because the import also moves the camera. Flip to it() when fixed.
-  it.fails("importing a data layer marks the document dirty", async () => {
+  it("importing a data layer marks the document dirty", async () => {
     await loadedAndClean();
     act(() =>
-      useLayerRegistryStore.getState().registerDataLayer({
+      currentDocument().dispatch({
+        type: "add-data-layer",
         id: "dl:schools",
         fc: pointFC(4),
         label: "Schools",
@@ -397,8 +398,7 @@ describe("dirty tracking", () => {
     expect(isDirty()).toBe(true);
   });
 
-  // KNOWN-RED (W3 document owner): a pan re-projects every element into new screen x/y, the onChange handler sees a new elements array, and marks the document dirty. Flip to it() when fixed.
-  it.fails("a pure map pan does not mark the document dirty", async () => {
+  it("a pure map pan does not mark the document dirty", async () => {
     const map = new FakeMercatorMap(11, { lng: 13.4, lat: 52.5 });
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
     const sync = new CoordinateSync({
@@ -428,72 +428,68 @@ describe("dirty tracking", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Whether the canvas shows an element. Today a hidden annotation is drawn at
- * opacity 0. If the fix hides through a renderer filter instead, read that
- * mechanism here; the assertions that use this stay as they are.
+ * Whether the canvas shows an element. A hidden annotation carries
+ * customData.atlas.hidden, which the fork's renderer does not draw
+ * (packages/element/src/atlasHidden.ts).
  */
-function shownOnCanvas(el: { isDeleted?: boolean; opacity?: number }): boolean {
-  return !el.isDeleted && (el.opacity ?? 100) > 0;
+function shownOnCanvas(el: {
+  isDeleted?: boolean;
+  opacity?: number;
+  customData?: Record<string, unknown>;
+}): boolean {
+  const atlas = el.customData?.atlas as { hidden?: boolean } | undefined;
+  return !el.isDeleted && (el.opacity ?? 100) > 0 && atlas?.hidden !== true;
+}
+
+/** The annotation rows the layer panel shows. */
+function panelRows() {
+  return annotationRows(useSceneStore.getState().elements);
 }
 
 describe("annotation rows after reload and undo", () => {
-  // KNOWN-RED (W3 document owner): useLayerRegistrySync seeds knownIds at mount, before load() resolves, and skips ids hydrate already registered, so a reloaded shape is never tracked and its deletion leaves a ghost row. Flip to it() when fixed.
-  it.fails(
-    "deleting a reloaded shape removes its row and keeps it out of the next save",
-    async () => {
-      await seedAutosave(savedDocument());
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      await waitForHydrate(fx.api);
-      expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
-        ["rect-1"],
-      );
+  it("deleting a reloaded shape removes its row and keeps it out of the next save", async () => {
+    await seedAutosave(savedDocument());
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    await waitForHydrate(fx.api);
+    expect(panelRows().map((r) => r.id)).toEqual(["rect-1"]);
 
-      act(() =>
-        fx.setElements(fx.all().map((el) => ({ ...el, isDeleted: true }))),
-      );
+    act(() =>
+      fx.setElements(fx.all().map((el) => ({ ...el, isDeleted: true }))),
+    );
 
-      expect(useLayerRegistryStore.getState().entries.map((e) => e.id)).toEqual(
-        [],
-      );
-      await act(async () => {
-        await usePersistenceStore.getState().forceSave();
-      });
-      const saved = await autosaveDocument();
-      expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);
-    },
-  );
+    expect(panelRows().map((r) => r.id)).toEqual([]);
+    await act(async () => {
+      await usePersistenceStore.getState().forceSave();
+    });
+    const saved = await autosaveDocument();
+    expect(saved.manifest.layers.map((l) => l.id)).toEqual([]);
+  });
 
-  // KNOWN-RED (W3 document owner): the registry is not under Excalidraw's undo, so delete-then-undo re-registers the shape with a generated label and visible:true while the element itself comes back at opacity 0. Flip to it() when fixed.
-  it.fails(
-    "undo of a delete restores the user's label and hidden state, and the canvas agrees with the panel",
-    async () => {
-      const fx = makeFakeExcalidraw();
-      mountEditor(fx.api);
-      act(() => fx.setElements([geoRect("rect-9")]));
-      act(() => {
-        useLayerRegistryStore.getState().renameLayer("rect-9", "Ward 3");
-        useLayerRegistryStore.getState().setVisibility("rect-9", false);
-      });
-      const hidden = fx.all()[0];
-      expect(shownOnCanvas(hidden)).toBe(false); // the hide reached the canvas
+  it("undo of a delete restores the user's label and hidden state, and the canvas agrees with the panel", async () => {
+    const fx = makeFakeExcalidraw();
+    mountEditor(fx.api);
+    act(() => fx.setElements([geoRect("rect-9")]));
+    act(() => {
+      renameAnnotation(fx.api, "rect-9", "Ward 3");
+      setAnnotationVisible(fx.api, "rect-9", false);
+    });
+    const hidden = fx.all()[0];
+    expect(shownOnCanvas(hidden)).toBe(false); // the hide reached the canvas
 
-      // Delete, then undo: Excalidraw's history puts back the element exactly
-      // as it was before the delete.
-      act(() => fx.setElements([{ ...hidden, isDeleted: true }]));
-      act(() => fx.setElements([{ ...hidden, isDeleted: false }]));
+    // Delete, then undo: Excalidraw's history puts back the element exactly
+    // as it was before the delete.
+    act(() => fx.setElements([{ ...hidden, isDeleted: true }]));
+    act(() => fx.setElements([{ ...hidden, isDeleted: false }]));
 
-      const entry = useLayerRegistryStore
-        .getState()
-        .entries.find((e) => e.id === "rect-9");
-      expect(entry).toMatchObject({
-        label: "Ward 3",
-        renamedByUser: true,
-        visible: false,
-      });
-      expect(shownOnCanvas(fx.api.getSceneElements()[0])).toBe(entry?.visible);
-    },
-  );
+    const entry = panelRows().find((r) => r.id === "rect-9");
+    expect(entry).toMatchObject({
+      label: "Ward 3",
+      renamedByUser: true,
+      visible: false,
+    });
+    expect(shownOnCanvas(fx.api.getSceneElements()[0])).toBe(entry?.visible);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -531,63 +527,61 @@ function makeMemoryStorage(): HttpStorageClient {
 }
 
 describe("share links", () => {
-  // KNOWN-RED (W3 document owner): useShareLink sizes the document with JSON.stringify, which writes its layers and files Maps as {}, so a large GeoJSON layer looks small, takes hash mode, and is silently dropped. Flip to it() when fixed.
-  it.fails(
-    "a share link carries the data layers and files, or does not use hash mode",
-    async () => {
-      const fx = makeFakeExcalidraw([
-        geoRect("rect-1"),
-        {
-          ...geoRect("photo-1"),
-          type: "image",
-          fileId: "img-1",
-          status: "saved",
-        },
-      ]);
-      fx.api.addFiles([
-        {
-          id: "img-1",
-          mimeType: "image/png",
-          dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
-          created: 0,
-        },
-      ] as unknown as Parameters<ExcalidrawImperativeAPI["addFiles"]>[0]);
-      // ~150 KB of GeoJSON: far over the 32 KiB hash threshold.
-      useLayerRegistryStore.getState().registerDataLayer({
-        id: "dl:wells",
-        fc: pointFC(2000),
-        label: "Wells",
-        style: STYLE,
-      });
+  it("a share link carries the data layers and files, or does not use hash mode", async () => {
+    const fx = makeFakeExcalidraw([
+      geoRect("rect-1"),
+      {
+        ...geoRect("photo-1"),
+        type: "image",
+        fileId: "img-1",
+        status: "saved",
+      },
+    ]);
+    // The open document saves this drawing.
+    openDocument(createDocument({}, sceneOf(fx.api)));
+    fx.api.addFiles([
+      {
+        id: "img-1",
+        mimeType: "image/png",
+        dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+        created: 0,
+      },
+    ] as unknown as Parameters<ExcalidrawImperativeAPI["addFiles"]>[0]);
+    // ~150 KB of GeoJSON: far over the 32 KiB hash threshold.
+    currentDocument().dispatch({
+      type: "add-data-layer",
+      id: "dl:wells",
+      fc: pointFC(2000),
+      label: "Wells",
+      style: STYLE,
+    });
 
-      const client = makeMemoryStorage();
-      const { result } = renderHook(() =>
-        useShareLink({
-          getDoc: () =>
-            selectDocument(fx.api, useLayerRegistryStore.getState()),
-          client,
-        }),
-      );
-      let url: string | null = null;
-      await act(async () => {
-        url = await result.current.generate();
-      });
-      expect(url).not.toBeNull();
-
-      // Open the link the way ShareView does.
-      const link = new URL(url as unknown as string);
-      const loaded = await loadShareDocument(
-        link.hash,
-        tokenFromPath(link.pathname, "/m/"),
+    const client = makeMemoryStorage();
+    const { result } = renderHook(() =>
+      useShareLink({
+        getDoc: () => toFile(currentDocument()),
         client,
-      );
-      expect(loaded.kind).toBe("ready");
-      const doc = loaded.kind === "ready" ? loaded.doc : null;
-      const wells =
-        doc?.layers instanceof Map ? doc.layers.get("dl:wells") : undefined;
-      expect(wells?.features.length).toBe(2000);
-      const files = doc?.files instanceof Map ? doc.files : undefined;
-      expect(files?.has("img-1")).toBe(true);
-    },
-  );
+      }),
+    );
+    let url: string | null = null;
+    await act(async () => {
+      url = await result.current.generate();
+    });
+    expect(url).not.toBeNull();
+
+    // Open the link the way ShareView does.
+    const link = new URL(url as unknown as string);
+    const loaded = await loadShareDocument(
+      link.hash,
+      tokenFromPath(link.pathname, "/m/"),
+      client,
+    );
+    expect(loaded.kind).toBe("ready");
+    const doc = loaded.kind === "ready" ? loaded.doc : null;
+    const wells =
+      doc?.layers instanceof Map ? doc.layers.get("dl:wells") : undefined;
+    expect(wells?.features.length).toBe(2000);
+    const files = doc?.files instanceof Map ? doc.files : undefined;
+    expect(files?.has("img-1")).toBe(true);
+  });
 });

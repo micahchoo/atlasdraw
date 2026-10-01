@@ -31,9 +31,19 @@ import { render, waitFor, cleanup } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
+
+import type { DocumentCommand } from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
+
+/** The command an import or a convert sends to the open document. */
+type AddDataLayer = Extract<DocumentCommand, { type: "add-data-layer" }>;
 
 // ---------------------------------------------------------------------------
 // Mocks (hoisted)
@@ -152,6 +162,7 @@ const EMPTY_SIDEBAR_TABS: never[] = [];
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => currentScene,
+  getSceneElementsIncludingDeleted: () => currentScene,
   getAppState: () => ({ selectedElementIds: currentSelectedIds }),
   updateScene: updateSceneSpy,
   toggleSidebar: vi.fn(),
@@ -304,7 +315,7 @@ vi.mock("../../hooks/useAtlasdrawTool", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   currentScene = [fakeRectangleEl];
   currentSelectedIds = { "anno-1": true };
   capturedContextMenuItems.length = 0;
@@ -403,10 +414,7 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
   });
 
   it("perform with polygon selection runs the full convert pipeline", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     render(
       <ToastProvider>
@@ -435,7 +443,7 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
       expect(registerSpy).toHaveBeenCalledTimes(1);
     });
 
-    const arg = registerSpy.mock.calls[0][0];
+    const arg = registerSpy.mock.calls[0][0] as AddDataLayer;
     expect(arg.id).toMatch(/^dl:/);
     expect(arg.fc.type).toBe("FeatureCollection");
     expect(arg.fc.features[0].geometry.type).toBe("Polygon");

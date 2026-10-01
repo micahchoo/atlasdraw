@@ -29,14 +29,13 @@ function synthDoc(
 ): AtlasdrawDocument {
   const manifest: Manifest = {
     id: VALID_ULID,
-    version: 1,
+    version: 2,
     title: "Test Map",
     createdAt: "2026-05-03T00:00:00.000Z",
     updatedAt: "2026-05-03T00:00:00.000Z",
     basemap: { type: "registry", id: "default" },
     camera: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
     layers: [
-      { kind: "annotation", id: "anno-1", label: "Notes", visible: true },
       {
         kind: "data",
         id: "dl:cities",

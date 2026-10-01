@@ -9,8 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { StylePanel } from "../StylePanel";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import type { FeatureCollection } from "geojson";
 
@@ -73,9 +77,9 @@ function panelRuleBody(): string {
 }
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
-  useLayerRegistryStore.getState().registerDataLayer({
+  openDocument(createDocument());
+  currentDocument().dispatch({
+    type: "add-data-layer",
     id: "dl:t1",
     fc: sampleFc,
     label: "Test layer",
@@ -113,9 +117,9 @@ describe("StylePanel", () => {
     fireEvent.change(colorInput, { target: { value: "#ff8800" } });
     fireEvent.click(screen.getByTestId("style-single-apply"));
 
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "dl:t1");
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:t1");
     expect(entry?.kind).toBe("data");
     if (entry?.kind === "data") {
       expect(entry.style.fillColor).toBe("#ff8800");
@@ -150,9 +154,9 @@ describe("StylePanel", () => {
     // the test passes green. Narrow by asserting the narrowing condition and
     // then projecting: a wrong shape lands as `undefined` in an expect that
     // always executes.
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "dl:t1");
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:t1");
     expect(entry?.kind).toBe("data");
 
     const expression =
@@ -186,9 +190,9 @@ describe("StylePanel", () => {
 
     // Apply and verify the stops are evenly spaced from min..max.
     fireEvent.click(screen.getByTestId("grad-apply"));
-    const entry = useLayerRegistryStore
-      .getState()
-      .entries.find((e) => e.id === "dl:t1");
+    const entry = currentDocument()
+      .snapshot()
+      .overlays.find((e) => e.id === "dl:t1");
     if (
       entry?.kind === "data" &&
       entry.style.expression?.kind === "graduated"

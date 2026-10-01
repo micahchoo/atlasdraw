@@ -11,6 +11,7 @@ import {
   type AtlasdrawDocument,
   type SceneElement,
 } from "./manifest-schema.js";
+import { migrate, MigrationError, type StoredDocument } from "./migrations.js";
 
 import type { FeatureCollection } from "geojson";
 
@@ -110,7 +111,17 @@ export async function readJSON(blob: Blob): Promise<AtlasdrawDocument> {
     );
   }
 
-  const manifestParse = ManifestSchema.safeParse(manifest);
+  // An older payload is brought to the current version first.
+  let migrated: StoredDocument;
+  try {
+    migrated = migrate({ manifest, scene });
+  } catch (err) {
+    if (err instanceof MigrationError) {
+      throw new AtlasdrawJSONError("INVALID_MANIFEST", err.message);
+    }
+    throw err;
+  }
+  const manifestParse = ManifestSchema.safeParse(migrated.manifest);
   if (!manifestParse.success) {
     throw new AtlasdrawJSONError(
       "INVALID_MANIFEST",
@@ -124,7 +135,7 @@ export async function readJSON(blob: Blob): Promise<AtlasdrawDocument> {
 
   return {
     manifest: manifestParse.data,
-    scene: scene as ReadonlyArray<SceneElement>,
+    scene: migrated.scene as ReadonlyArray<SceneElement>,
     layers: layersMap,
     styleRef: styleRef ?? null,
     files: new Map<string, Blob>(),

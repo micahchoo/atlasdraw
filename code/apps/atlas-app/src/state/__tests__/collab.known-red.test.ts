@@ -64,11 +64,11 @@ import { registerYjsHandler } from "../../../../realtime/src/yjs-server";
 import { __resetAppConfigForTests } from "../../config/app-config";
 import { META_MAP_KEY, TITLE_KEY } from "../../hooks/useCollabDocumentTitle";
 import { CollabState } from "../collab";
-import { selectDocument } from "../selectDocument";
+import { createDocument } from "../document";
+import { toFile } from "../documentIO";
+import { sceneOf } from "../scene";
 
 import type * as Y from "yjs";
-
-import type { LayerRegistryState } from "../layerRegistry";
 
 // Short, so a test can outlive it. The relay evicts a room's Yjs doc this
 // long after its last client leaves.
@@ -408,8 +408,6 @@ describe("comments in the saved document", () => {
       getFiles: () => ({}),
     } as unknown as ExcalidrawImperativeAPI);
 
-  const registry = { entries: [] } as unknown as LayerRegistryState;
-
   /** Whether `text` appears anywhere in a read-back document. */
   async function mentions(value: unknown, text: string): Promise<boolean> {
     if (typeof value === "string") {
@@ -436,7 +434,7 @@ describe("comments in the saved document", () => {
     return false;
   }
 
-  // KNOWN-RED (W6 collaboration): comments are not part of the saved .atlasdraw document — selectDocument reads the scene, layers, rasters and title, never the comments layer, so a save and reopen loses every comment. Flip to it() when fixed.
+  // KNOWN-RED (W6 collaboration): comments are not part of the saved .atlasdraw document — toFile reads the scene, layers, rasters and title, never the comments layer, so a save and reopen loses every comment. Flip to it() when fixed.
   it.fails(
     "a comment in the session is in the .atlasdraw file and comes back on read",
     async () => {
@@ -446,11 +444,9 @@ describe("comments in the saved document", () => {
         addComment(a, "survey marker is 2 m east");
         expect(commentTexts(a)).toContain("survey marker is 2 m east");
 
-        const saved = selectDocument(api(a.scene), registry, {
-          fcMap: {},
-          rasterImages: {},
-          title: "Saved map",
-        });
+        const saved = toFile(
+          createDocument({ title: "Saved map" }, sceneOf(api(a.scene))),
+        );
         const reopened = await readAtlasdraw(await writeAtlasdraw(saved));
 
         expect(

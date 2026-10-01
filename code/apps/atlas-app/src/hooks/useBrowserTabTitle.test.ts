@@ -4,15 +4,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
-import {
-  DEFAULT_DOCUMENT_TITLE,
-  useDocumentTitleStore,
-} from "../state/documentTitle";
+import { DEFAULT_DOCUMENT_TITLE, currentDocument } from "../state/document";
 
 import { useBrowserTabTitle } from "./useBrowserTabTitle";
 
 beforeEach(() => {
-  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
   document.title = "Atlasdraw";
 });
 
@@ -29,7 +25,10 @@ describe("useBrowserTabTitle", () => {
   it("follows a rename", () => {
     renderHook(() => useBrowserTabTitle());
     act(() => {
-      useDocumentTitleStore.getState().setTitle("Bidar wards");
+      currentDocument().dispatch({
+        type: "rename-document",
+        title: "Bidar wards",
+      });
     });
     expect(document.title).toBe("Bidar wards — Atlasdraw");
   });

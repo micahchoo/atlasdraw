@@ -11,8 +11,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { LayerPanel } from "../LayerPanel";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
-import { useDataLayerFCStore } from "../../state/useDataLayerFCStore";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import type { FeatureCollection } from "geojson";
 
@@ -28,8 +32,7 @@ const emptyFc = (): FeatureCollection => ({
 });
 
 beforeEach(() => {
-  useLayerRegistryStore.setState({ entries: [] });
-  useDataLayerFCStore.getState().clear();
+  openDocument(createDocument());
 });
 
 afterEach(() => {
@@ -38,13 +41,15 @@ afterEach(() => {
 
 describe("LayerPanel — symbology inside the card", () => {
   it("expanding a card mounts StylePanel for that layer and no other", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:row-a",
       fc: emptyFc(),
       label: "Layer A",
       style: { fillColor: "#000" },
     });
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:row-b",
       fc: emptyFc(),
       label: "Layer B",
@@ -64,7 +69,8 @@ describe("LayerPanel — symbology inside the card", () => {
   });
 
   it("collapsing the card unmounts the symbology section", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:row-c",
       fc: emptyFc(),
       label: "Layer C",
@@ -80,7 +86,8 @@ describe("LayerPanel — symbology inside the card", () => {
   });
 
   it("StylePanel's own tabs still work from inside the card", () => {
-    useLayerRegistryStore.getState().registerDataLayer({
+    currentDocument().dispatch({
+      type: "add-data-layer",
       id: "dl:row-d",
       fc: emptyFc(),
       label: "Layer D",

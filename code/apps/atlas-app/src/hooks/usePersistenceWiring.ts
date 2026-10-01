@@ -1,22 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// T9 — Persistence wiring.
+// Persistence wiring. When Excalidraw is ready: create the PersistenceStore,
+// load the last autosaved document and open it (documentIO.loadDocument),
+// start autosave, and mirror the dirty and drain state into
+// usePersistenceStore for the "Unsaved" indicator and the share flush.
 //
-// On excalidrawAPI ready: create a PersistenceStore, attempt to load() the
-// last-persisted document from IDB, start auto-save, and register the dirty
-// channel to React state for the MainMenu indicator.
-//
-// Phase 4 W0 (atlasdraw-3601): scene + layers + FCs are hydrated via
-// `hydrate(loaded, excalidrawAPI)` in state/hydrate.ts. The previously
-// observe-only stub left a refreshed page with a blank canvas even when an
-// IDB doc existed; this closes the round-trip gate.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 3). No
-// test covered the autosave debounce/forceSave path directly before this
-// extraction — indirect coverage came from MapEditor.atlasdraw-export.test.tsx
-// exercising saveAtlasDocument/openAtlasDocument, which read the same
-// usePersistenceStore contract. New usePersistenceWiring.test.ts adds direct
-// characterization coverage.
+// What marks the document dirty: a change of the open Document's revision
+// (its layers, payloads, title), a change of the basemap, and, from
+// useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
 
 import { useEffect } from "react";
 
@@ -24,9 +15,10 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { createPersistenceStore, startAutoSave } from "../state/persistence";
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useLayerRegistryStore } from "../state/layerRegistry";
-import { selectDocument } from "../state/selectDocument";
-import { hydrate } from "../state/hydrate";
+import { useBasemapStore } from "../state/basemap";
+import { currentDocument, followDocument } from "../state/document";
+import { loadDocument, restoreCamera, toFile } from "../state/documentIO";
+import { useMapInstanceStore } from "../state/mapInstance";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
@@ -39,8 +31,8 @@ export interface PersistenceWiringNotify {
 
 /**
  * Wires the persistence lifecycle to `excalidrawAPI`: constructs the
- * PersistenceStore (with optional backend remote-save), loads + hydrates any
- * previously-persisted document, starts auto-save, and mirrors dirty/drain
+ * PersistenceStore (with optional backend remote-save), loads and opens the
+ * last autosaved document, starts auto-save, and mirrors dirty/drain
  * state into the Zustand usePersistenceStore for the MainMenu indicator and
  * useShareLink's pre-share flush.
  */
@@ -87,8 +79,7 @@ export function usePersistenceWiring(
     // call store.save(getDoc())). useShareLink consumes this via
     // usePersistenceStore to guarantee a fresh snapshot before
     // share-link minting.
-    const getDoc = () =>
-      selectDocument(excalidrawAPI, useLayerRegistryStore.getState());
+    const getDoc = () => toFile(currentDocument());
     usePersistenceStore.getState().setForceSave(async () => {
       try {
         await store.save(getDoc());
@@ -103,6 +94,8 @@ export function usePersistenceWiring(
     });
 
     let cancelled = false;
+    const abort = new AbortController();
+    let unsubCamera: () => void = () => {};
     void (async () => {
       try {
         const loaded = await store.load();
@@ -110,9 +103,24 @@ export function usePersistenceWiring(
           return;
         }
         if (loaded) {
-          await hydrate(loaded, excalidrawAPI);
+          const opened = await loadDocument(loaded, excalidrawAPI, {
+            signal: abort.signal,
+          });
+          if (!opened) {
+            return;
+          }
+          // loadDocument moved the map if there was one. The autosave can load
+          // before the map exists; then the saved camera waits for the map,
+          // for as long as this editor is mounted.
+          if (!useMapInstanceStore.getState().map) {
+            unsubCamera = useMapInstanceStore.subscribe(() => {
+              if (restoreCamera(loaded.manifest.camera)) {
+                unsubCamera();
+              }
+            });
+          }
           // eslint-disable-next-line no-console
-          console.info("[atlasdraw] persisted document hydrated", {
+          console.info("[atlasdraw] autosaved document opened", {
             id: loaded.manifest.id,
             layerCount: loaded.manifest.layers.length,
             sceneLength: loaded.scene.length,
@@ -133,6 +141,25 @@ export function usePersistenceWiring(
       // than markDirty() to avoid re-forwarding back into the store.
       // T13: also flip isDraining so consumers know a save will fire.
       usePersistenceStore.setState({ isDirty: true, isDraining: true });
+    });
+
+    // A command on the open document is an edit. Opening another document
+    // is not; whoever opens one decides whether it needs a save.
+    let followed = currentDocument();
+    let followedRevision = followed.revision;
+    const unsubDocument = followDocument((doc) => {
+      if (doc === followed && doc.revision !== followedRevision) {
+        usePersistenceStore.getState().markDirty();
+      }
+      followed = doc;
+      followedRevision = doc.revision;
+    });
+    // The basemap is saved in the manifest, so choosing another one is an
+    // edit too.
+    const unsubBasemap = useBasemapStore.subscribe((state, prev) => {
+      if (state.activeBasemapId !== prev.activeBasemapId) {
+        usePersistenceStore.getState().markDirty();
+      }
     });
 
     const dispose = startAutoSave(
@@ -158,9 +185,34 @@ export function usePersistenceWiring(
     );
     usePersistenceStore.getState().setAutosaveDispose(dispose);
 
+    // Closing or leaving the tab: write unsaved changes now, not after the
+    // autosave delay. 'visibilitychange' to hidden comes first and leaves the
+    // most time; 'pagehide' covers a close that skips it.
+    const flushOnLeave = () => {
+      if (store.isDirty()) {
+        void store.save(getDoc()).catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("[persistence] save on leave failed", err);
+        });
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        flushOnLeave();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flushOnLeave);
+
     return () => {
       cancelled = true;
+      abort.abort();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flushOnLeave);
       unsubDirty();
+      unsubDocument();
+      unsubBasemap();
+      unsubCamera();
       dispose();
       usePersistenceStore.getState().setAutosaveDispose(null);
       usePersistenceStore.getState().setPersistenceStore(null);

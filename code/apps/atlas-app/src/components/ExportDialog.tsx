@@ -39,7 +39,7 @@ import {
 } from "../lib/print-pdf";
 import { safeFileName } from "../lib/safeFileName";
 
-import { useDocumentTitleStore } from "../state/documentTitle";
+import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
 
@@ -182,7 +182,7 @@ export function ExportDialog({
   // shouldn't rename the map, so this stays local state and never writes
   // back to the store. The dialog mounts fresh on each open (ExportDialog is
   // conditionally rendered), so the seed re-reads the current name.
-  const documentTitle = useDocumentTitleStore((s) => s.title);
+  const documentTitle = useDocument((s) => s.title);
   const [title, setTitle] = useState(documentTitle);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);

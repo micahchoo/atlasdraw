@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// T13 — remoteSave callback factory.
+// The remote save: send a document's bytes to the storage server, one
+// server map per document.
 //
-// Translates a `(blob: Blob) => Promise<void>` into HTTP calls against the
-// storage server. Holds an in-memory `mapId` ref (lazy-minted by the first
-// save) and persists it to the same IndexedDB the PersistenceStore uses
-// (db `atlasdraw-autosave`, store `state`, key `remoteMapId`) so reloads
-// target the same map.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 3) as part
-// of usePersistenceWiring's module-scope dependencies.
+// The first save of a document creates its server map (POST /maps); later
+// saves update it (PUT /maps/:id). The server map id is kept per document,
+// in the IndexedDB the PersistenceStore uses (db `atlasdraw-autosave`, store
+// `state`, key `remoteMapId:<document id>`), so a reload updates the same
+// map. An older build kept one id for every document under `remoteMapId`;
+// the first document saved without an id of its own takes that one, once.
 
 import { openDB } from "idb";
 
@@ -18,9 +17,11 @@ import type { StorageClient } from "../services/createHttpStorageClient";
 const REMOTE_DB_NAME = "atlasdraw-autosave";
 const REMOTE_DB_VERSION = 1;
 const REMOTE_STORE = "state";
-const KEY_REMOTE_MAP_ID = "remoteMapId";
+const KEY_LEGACY_MAP_ID = "remoteMapId";
+const mapIdKey = (documentId: string): string => `remoteMapId:${documentId}`;
+const MAP_ID = /^[A-Za-z0-9_-]{21}$/;
 
-const remoteIdDbPromise = (): Promise<import("idb").IDBPDatabase> =>
+const remoteIdDb = (): Promise<import("idb").IDBPDatabase> =>
   openDB(REMOTE_DB_NAME, REMOTE_DB_VERSION, {
     upgrade(database) {
       if (!database.objectStoreNames.contains(REMOTE_STORE)) {
@@ -29,46 +30,66 @@ const remoteIdDbPromise = (): Promise<import("idb").IDBPDatabase> =>
     },
   });
 
-export function buildRemoteSaveCallback(
-  client: StorageClient,
-): (blob: Blob) => Promise<void> {
-  // mapId loads asynchronously from IDB on first call; until then we treat
-  // it as "unknown" and wait. The `idLoad` promise resolves exactly once.
-  let mapId: string | null = null;
-  let idLoaded = false;
-  const idLoad: Promise<void> = (async () => {
+/** The stored server map id for a document, or the legacy one (taken once). */
+async function storedMapId(documentId: string): Promise<string | null> {
+  try {
+    const db = await remoteIdDb();
     try {
-      const db = await remoteIdDbPromise();
-      const stored = (await db.get(REMOTE_STORE, KEY_REMOTE_MAP_ID)) as
+      const own = (await db.get(REMOTE_STORE, mapIdKey(documentId))) as
         | string
         | undefined;
-      if (stored && /^[A-Za-z0-9_-]{21}$/.test(stored)) {
-        mapId = stored;
+      if (own && MAP_ID.test(own)) {
+        return own;
       }
-    } catch (err) {
-      // IDB unavailable (private mode / quota) — we'll mint a fresh id per
-      // session. Observably lossy but never throws.
-      // eslint-disable-next-line no-console
-      console.warn("[atlasdraw] remoteSave id-load failed", err);
+      const legacy = (await db.get(REMOTE_STORE, KEY_LEGACY_MAP_ID)) as
+        | string
+        | undefined;
+      if (legacy && MAP_ID.test(legacy)) {
+        await db.put(REMOTE_STORE, legacy, mapIdKey(documentId));
+        await db.delete(REMOTE_STORE, KEY_LEGACY_MAP_ID);
+        return legacy;
+      }
     } finally {
-      idLoaded = true;
+      db.close();
     }
-  })();
+  } catch (err) {
+    // IDB unavailable (private mode, quota): a new server map per session.
+    // Lossy, but never throws.
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] remoteSave id-load failed", err);
+  }
+  return null;
+}
 
-  return async (blob: Blob): Promise<void> => {
-    if (!idLoaded) {
-      await idLoad;
+async function storeMapId(documentId: string, mapId: string): Promise<void> {
+  try {
+    const db = await remoteIdDb();
+    try {
+      await db.put(REMOTE_STORE, mapId, mapIdKey(documentId));
+    } finally {
+      db.close();
     }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[atlasdraw] remoteSave id-persist failed", err);
+  }
+}
+
+export function buildRemoteSaveCallback(
+  client: StorageClient,
+): (blob: Blob, documentId: string) => Promise<void> {
+  // Server map id by document id, as far as this session knows.
+  const known = new Map<string, string | null>();
+
+  return async (blob, documentId) => {
+    if (!known.has(documentId)) {
+      known.set(documentId, await storedMapId(documentId));
+    }
+    const mapId = known.get(documentId) ?? null;
     if (mapId === null) {
       const record = await client.createMap(blob);
-      mapId = record.id;
-      try {
-        const db = await remoteIdDbPromise();
-        await db.put(REMOTE_STORE, mapId, KEY_REMOTE_MAP_ID);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn("[atlasdraw] remoteSave id-persist failed", err);
-      }
+      known.set(documentId, record.id);
+      await storeMapId(documentId, record.id);
     } else {
       await client.updateMap(mapId, blob);
     }

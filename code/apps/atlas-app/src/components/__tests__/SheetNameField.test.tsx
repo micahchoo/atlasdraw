@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // SheetNameField — click-to-edit document name in the collar head bar.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { SheetNameField } from "../SheetNameField";
-import {
-  DEFAULT_DOCUMENT_TITLE,
-  useDocumentTitleStore,
-} from "../../state/documentTitle";
-import { usePersistenceStore } from "../../state/usePersistenceStore";
+import { DEFAULT_DOCUMENT_TITLE, currentDocument } from "../../state/document";
 
 const label = () => screen.getByTestId("collar-sheet-name");
 const input = () =>
   screen.getByTestId("collar-sheet-name-input") as HTMLInputElement;
 
-let markDirty: ReturnType<typeof vi.fn>;
+/**
+ * Commands the open document took since the test began. A rename is one
+ * command; each command raises the revision, and the persistence wiring
+ * marks the document dirty when the revision rises.
+ */
+let baseline = 0;
+const commands = () => currentDocument().revision - baseline;
 
 beforeEach(() => {
-  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
-  markDirty = vi.fn();
-  usePersistenceStore.setState({ markDirty });
+  baseline = currentDocument().revision;
 });
 
 afterEach(() => {
@@ -44,15 +44,15 @@ describe("SheetNameField", () => {
     expect(input().selectionEnd).toBe(DEFAULT_DOCUMENT_TITLE.length);
   });
 
-  it("commits on Enter and marks the document dirty", () => {
+  it("commits on Enter as one document command", () => {
     render(<SheetNameField />);
     fireEvent.click(label());
     fireEvent.change(input(), { target: { value: "Bidar wards" } });
     fireEvent.keyDown(input(), { key: "Enter" });
 
-    expect(useDocumentTitleStore.getState().title).toBe("Bidar wards");
+    expect(currentDocument().snapshot().title).toBe("Bidar wards");
     expect(label().textContent).toBe("Bidar wards");
-    expect(markDirty).toHaveBeenCalledTimes(1);
+    expect(commands()).toBe(1);
   });
 
   it("commits on blur", () => {
@@ -61,8 +61,8 @@ describe("SheetNameField", () => {
     fireEvent.change(input(), { target: { value: "Deccan plateau" } });
     fireEvent.blur(input());
 
-    expect(useDocumentTitleStore.getState().title).toBe("Deccan plateau");
-    expect(markDirty).toHaveBeenCalledTimes(1);
+    expect(currentDocument().snapshot().title).toBe("Deccan plateau");
+    expect(commands()).toBe(1);
   });
 
   it("restores the previous name on Escape", () => {
@@ -71,28 +71,29 @@ describe("SheetNameField", () => {
     fireEvent.change(input(), { target: { value: "discard me" } });
     fireEvent.keyDown(input(), { key: "Escape" });
 
-    expect(useDocumentTitleStore.getState().title).toBe(DEFAULT_DOCUMENT_TITLE);
+    expect(currentDocument().snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
     expect(label().textContent).toBe(DEFAULT_DOCUMENT_TITLE);
-    expect(markDirty).not.toHaveBeenCalled();
+    expect(commands()).toBe(0);
   });
 
   it("treats a cleared box as a cancel, not a rename to blank", () => {
-    useDocumentTitleStore.setState({ title: "Keep me" });
+    currentDocument().dispatch({ type: "rename-document", title: "Keep me" });
+    baseline = currentDocument().revision;
     render(<SheetNameField />);
     fireEvent.click(label());
     fireEvent.change(input(), { target: { value: "   " } });
     fireEvent.keyDown(input(), { key: "Enter" });
 
-    expect(useDocumentTitleStore.getState().title).toBe("Keep me");
-    expect(markDirty).not.toHaveBeenCalled();
+    expect(currentDocument().snapshot().title).toBe("Keep me");
+    expect(commands()).toBe(0);
   });
 
-  it("does not mark dirty when the name is unchanged", () => {
+  it("sends no command when the name is unchanged", () => {
     render(<SheetNameField />);
     fireEvent.click(label());
     fireEvent.blur(input());
 
-    expect(markDirty).not.toHaveBeenCalled();
+    expect(commands()).toBe(0);
   });
 
   it("trims surrounding whitespace off a committed name", () => {
@@ -101,6 +102,6 @@ describe("SheetNameField", () => {
     fireEvent.change(input(), { target: { value: "  Ward 3  " } });
     fireEvent.keyDown(input(), { key: "Enter" });
 
-    expect(useDocumentTitleStore.getState().title).toBe("Ward 3");
+    expect(currentDocument().snapshot().title).toBe("Ward 3");
   });
 });

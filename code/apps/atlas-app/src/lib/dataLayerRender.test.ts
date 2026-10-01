@@ -23,10 +23,10 @@ import {
 } from "./dataLayerRender";
 
 import type {
-  LayerRegistryEntry,
+  OverlayEntry,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 import type { FeatureCollection } from "geojson";
 
 const POLY_FC: FeatureCollection = {
@@ -178,7 +178,7 @@ function dataEntry(
   style: LayerStyle = TEAL,
   visible = true,
   order = 0,
-): LayerRegistryEntry {
+): OverlayEntry {
   return {
     kind: "data",
     id,
@@ -188,10 +188,6 @@ function dataEntry(
     featureCount: 1,
     style,
   };
-}
-
-function annotationEntry(id: string, order = 0): LayerRegistryEntry {
-  return { kind: "annotation", id, label: id, visible: true, order };
 }
 
 // ---------------------------------------------------------------------------
@@ -361,16 +357,6 @@ describe("reconcileDataLayers — re-add after setStyle/reload (P2)", () => {
     reconcileDataLayers(map, entries, fcs);
     expect(raw.addSource).not.toHaveBeenCalled();
     expect(raw.addLayer).not.toHaveBeenCalled();
-  });
-
-  it("ignores annotation entries", () => {
-    const { map, raw } = makeStyleStubMap();
-    reconcileDataLayers(
-      map,
-      [{ kind: "annotation", id: "x", label: "x", visible: true, order: 0 }],
-      {},
-    );
-    expect(raw.addSource).not.toHaveBeenCalled();
   });
 
   it("warns and continues when the FC mirror has no geometry for an entry", () => {
@@ -565,23 +551,6 @@ describe("applyOrderToMap — registry order → MapLibre z-order (P3)", () => {
     expect(order()).toEqual(["basemap-fill", "dl:b", "dl:a", "collab-data"]);
   });
 
-  it("never passes an annotation id to moveLayer", () => {
-    // Annotation entries are Excalidraw elements, not MapLibre layers — the
-    // stub throws for an unknown id, which is what MapLibre does.
-    const { map, raw, order } = makeOrderStubMap(["dl:a", "dl:b"]);
-    applyOrderToMap(map, [
-      annotationEntry("elem-1", 0),
-      dataEntry("dl:b", TEAL, true, 0),
-      annotationEntry("elem-2", 1),
-      dataEntry("dl:a", TEAL, true, 1),
-    ]);
-    expect(order()).toEqual(["dl:b", "dl:a"]);
-    for (const [id, beforeId] of raw.moveLayer.mock.calls) {
-      expect(id.startsWith("dl:")).toBe(true);
-      expect(beforeId === undefined || beforeId.startsWith("dl:")).toBe(true);
-    }
-  });
-
   it("orders the layers that are present when a registry id is missing from the style", () => {
     const { map, order } = makeOrderStubMap(["dl:a", "dl:b"]);
     applyOrderToMap(map, [
@@ -592,9 +561,9 @@ describe("applyOrderToMap — registry order → MapLibre z-order (P3)", () => {
     expect(order()).toEqual(["dl:b", "dl:a"]);
   });
 
-  it("does nothing with fewer than two data layers", () => {
+  it("does nothing with fewer than two layers", () => {
     const { map, raw } = makeOrderStubMap(["dl:a"]);
-    applyOrderToMap(map, [dataEntry("dl:a"), annotationEntry("elem-1")]);
+    applyOrderToMap(map, [dataEntry("dl:a")]);
     expect(raw.moveLayer).not.toHaveBeenCalled();
     expect(raw.getLayersOrder).not.toHaveBeenCalled();
   });
@@ -652,7 +621,7 @@ function rasterEntry(
   visible = true,
   opacity = 1,
   order = 0,
-): LayerRegistryEntry {
+): OverlayEntry {
   return {
     kind: "raster",
     id,

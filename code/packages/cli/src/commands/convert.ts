@@ -29,6 +29,7 @@ import {
   readJSON,
   write,
   writeJSON,
+  CURRENT_MANIFEST_VERSION,
   ManifestSchema,
   GeoJSONParseError,
   CSVParseError,
@@ -139,7 +140,8 @@ function flattenLayers(doc: AtlasdrawDocument): FeatureCollection {
 /**
  * Build a minimal valid `Manifest` for a CLI-authored `.atlasdraw` document
  * containing one data layer. The shape mirrors `apps/atlas-app`'s persistence
- * conventions: ULID id, `version: 1`, registry basemap `default`, zero camera.
+ * conventions: ULID id, the current manifest version, registry basemap
+ * `default`, zero camera.
  *
  * Exposed as a named helper so T12 (round-trip tests, Wave 3) can call it
  * directly when constructing fresh test fixtures.
@@ -152,7 +154,7 @@ export function buildCLIManifest(opts: {
   const now = new Date().toISOString();
   return ManifestSchema.parse({
     id: ulid(),
-    version: 1,
+    version: CURRENT_MANIFEST_VERSION,
     title: opts.title,
     createdAt: now,
     updatedAt: now,

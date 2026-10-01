@@ -15,10 +15,7 @@ import {
 } from "@testing-library/react";
 
 import { ExportDialog } from "../ExportDialog";
-import {
-  DEFAULT_DOCUMENT_TITLE,
-  useDocumentTitleStore,
-} from "../../state/documentTitle";
+import { DEFAULT_DOCUMENT_TITLE, currentDocument } from "../../state/document";
 import { exportSize } from "../../lib/export";
 import { jpegOfSize, readPdf } from "../../lib/__tests__/fixtures/print";
 
@@ -26,9 +23,7 @@ import type { LayerLegendEntry, PrintView } from "../../lib/print-pdf";
 
 // The PDF title seeds from the document-name store, which is a module
 // singleton — reset it so a rename in one test can't leak into the next.
-beforeEach(() => {
-  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
-});
+beforeEach(() => {});
 
 afterEach(() => {
   cleanup();
@@ -216,7 +211,10 @@ describe("ExportDialog — PDF", () => {
   });
 
   it("falls back to the document name when the title is whitespace", async () => {
-    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
+    currentDocument().dispatch({
+      type: "rename-document",
+      title: "Bidar ward survey",
+    });
     const downloads = captureDownloads();
     const props = renderDialog({ initialFormat: "pdf" });
     fireEvent.change(screen.getByTestId("export-pdf-title-input"), {
@@ -229,7 +227,10 @@ describe("ExportDialog — PDF", () => {
   });
 
   it("PDF title seeds from the current document name", () => {
-    useDocumentTitleStore.setState({ title: "Bidar ward survey" });
+    currentDocument().dispatch({
+      type: "rename-document",
+      title: "Bidar ward survey",
+    });
     renderDialog({ initialFormat: "pdf" });
     expect(
       (screen.getByTestId("export-pdf-title-input") as HTMLInputElement).value,

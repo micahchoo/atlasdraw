@@ -24,9 +24,19 @@ import { getByTestId } from "@testing-library/dom";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
+
+import type { DocumentCommand } from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
+
+/** The command an import or a convert sends to the open document. */
+type AddDataLayer = Extract<DocumentCommand, { type: "add-data-layer" }>;
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before the import of the SUT so vi.mock factories are
@@ -259,15 +269,12 @@ beforeEach(() => {
   // Reset spies + store between tests so assertions are isolated.
   vi.clearAllMocks();
   mapHandlers.clear();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
 });
 
 describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
   it("parses dropped .geojson and registers a data layer + map source/layer", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container } = render(
       <ToastProvider>
@@ -301,7 +308,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
       expect(registerSpy).toHaveBeenCalledTimes(1);
     });
 
-    const callArg = registerSpy.mock.calls[0][0];
+    const callArg = registerSpy.mock.calls[0][0] as AddDataLayer;
     expect(callArg.id).toMatch(/^dl:/);
     expect(callArg.label).toBe("test.geojson");
     expect(callArg.fc.type).toBe("FeatureCollection");
@@ -323,10 +330,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
   });
 
   it("ignores non-.geojson files (no parse, no registry mutation)", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container } = render(
       <ToastProvider>
@@ -352,10 +356,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
   });
 
   it("parses a dropped .csv with lat/lng columns and registers a point layer", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container } = render(
       <ToastProvider>
@@ -377,7 +378,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
       expect(registerSpy).toHaveBeenCalledTimes(1);
     });
 
-    const callArg = registerSpy.mock.calls[0][0];
+    const callArg = registerSpy.mock.calls[0][0] as AddDataLayer;
     expect(callArg.label).toBe("places.csv");
     expect(callArg.fc.features).toHaveLength(2);
     expect(callArg.fc.features[0].geometry.type).toBe("Point");
@@ -390,10 +391,7 @@ describe("MapEditor — GeoJSON drag-and-drop import (T13)", () => {
   });
 
   it("surfaces a toast (no layer) for an address-only .csv when no geocoder is configured", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
 
     const { container, findByTestId } = render(
       <ToastProvider>

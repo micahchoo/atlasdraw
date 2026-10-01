@@ -47,6 +47,15 @@ export type {
   SceneElement,
 } from "./manifest-schema";
 
+// Format migrations: every reader brings an older file to the current version.
+export {
+  CURRENT_MANIFEST_VERSION,
+  MIGRATIONS,
+  MigrationError,
+  migrate,
+} from "./migrations";
+export type { MigrationStep, StoredDocument } from "./migrations";
+
 // Phase 3 Wave 1 Task 2/3 — .atlasdraw zip read/write.
 export {
   write,

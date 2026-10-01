@@ -5,10 +5,10 @@
 //
 // Succeeds the renderCustomUI-cards contract test (atlasdraw-9078): same
 // assertions, now against the extracted handlers instead of dialog cards.
-//   1. saveAtlasDocument calls `persistenceStore.saveToDisk(selectDocument(...))`
+//   1. saveAtlasDocument calls `persistenceStore.saveToDisk(toFile(...))`
 //      then `clearDirty`.
 //   2. openAtlasDocument calls `persistenceStore.openFromDisk()` and on
-//      success hands the loaded doc to `hydrate(...)`.
+//      success hands the loaded doc to `loadDocument(...)`.
 //   3. Both no-op on a null Excalidraw API (pre-mount) or missing store.
 //
 // We test the exported handlers directly rather than mounting MapEditor —
@@ -105,20 +105,22 @@ vi.mock("@atlasdraw/geo", () => ({
   isGeoCustomData: () => false,
 }));
 
-// hydrate is called from openAtlasDocument. Spy on it.
-const hydrateSpy = vi.fn();
-vi.mock("../../state/hydrate", () => ({
-  hydrate: (...args: unknown[]) => hydrateSpy(...args),
-}));
-
-// selectDocument is called from saveAtlasDocument. Returns a sentinel doc.
+// loadDocument is called from openAtlasDocument, toFile from
+// saveAtlasDocument. Spy on the first; the second returns a sentinel doc.
+// Resolves to an opened document, as loadDocument does.
+const hydrateSpy = vi.fn(async (..._args: unknown[]) => ({}));
 const sentinelDoc = {
   manifest: { id: "doc-x", layers: [] },
   scene: [],
   layers: new Map(),
 } as unknown as AtlasdrawDocument;
-vi.mock("../../state/selectDocument", () => ({
-  selectDocument: vi.fn(() => sentinelDoc),
+let unsavedWork = false;
+const markSavedToFileMock = vi.fn();
+vi.mock("../../state/documentIO", () => ({
+  loadDocument: (...args: unknown[]) => hydrateSpy(...args),
+  toFile: vi.fn(() => sentinelDoc),
+  hasUnsavedWork: () => unsavedWork,
+  markSavedToFile: (...args: unknown[]) => markSavedToFileMock(...args),
 }));
 
 // usePersistenceStore — only `getState()` is used inside the handlers.
@@ -138,17 +140,12 @@ vi.mock("../../state/usePersistenceStore", () => ({
           }
         : null,
       clearDirty: clearDirtyMock,
+      markDirty: vi.fn(),
     }),
   },
 }));
 
-// useLayerRegistryStore — `getState()` is read by saveAtlasDocument via
-// selectDocument; the mocked selectDocument ignores its arg, so a stub is fine.
-vi.mock("../../state/layerRegistry", () => ({
-  useLayerRegistryStore: { getState: () => ({}) },
-}));
-
-// Fake imperative API — the handlers pass this to selectDocument / hydrate.
+// Fake imperative API — the handlers pass this to loadDocument.
 // Identity is what matters; the methods are only called by selectDocument
 // (mocked) so a bare object suffices.
 const fakeAPI = {
@@ -161,7 +158,9 @@ describe("saveAtlasDocument / openAtlasDocument (single document door)", () => {
     openFromDiskMock.mockClear();
     clearDirtyMock.mockClear();
     hydrateSpy.mockClear();
+    markSavedToFileMock.mockClear();
     storePresent = true;
+    unsavedWork = false;
   });
 
   it("saveAtlasDocument invokes persistenceStore.saveToDisk + clearDirty", async () => {
@@ -183,6 +182,7 @@ describe("saveAtlasDocument / openAtlasDocument (single document door)", () => {
     expect(openFromDiskMock).toHaveBeenCalledTimes(1);
     expect(hydrateSpy).toHaveBeenCalledTimes(1);
     expect(hydrateSpy).toHaveBeenCalledWith(loaded, fakeAPI);
+    expect(markSavedToFileMock).toHaveBeenCalledTimes(1);
   });
 
   it("openAtlasDocument skips hydrate when user cancels the file picker (returns null)", async () => {
@@ -190,6 +190,39 @@ describe("saveAtlasDocument / openAtlasDocument (single document door)", () => {
     await openAtlasDocument(fakeAPI);
     expect(openFromDiskMock).toHaveBeenCalledTimes(1);
     expect(hydrateSpy).not.toHaveBeenCalled();
+  });
+
+  it("a save to a file marks the document saved to a file", async () => {
+    await saveAtlasDocument(fakeAPI);
+    expect(markSavedToFileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before Open replaces unsaved work, and opens nothing on No", async () => {
+    unsavedWork = true;
+    const confirmReplace = vi.fn(async () => false);
+
+    await openAtlasDocument(fakeAPI, undefined, confirmReplace);
+
+    expect(confirmReplace).toHaveBeenCalledTimes(1);
+    expect(openFromDiskMock).not.toHaveBeenCalled();
+  });
+
+  it("opens after a Yes", async () => {
+    unsavedWork = true;
+    const confirmReplace = vi.fn(async () => true);
+
+    await openAtlasDocument(fakeAPI, undefined, confirmReplace);
+
+    expect(openFromDiskMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask when there is no unsaved work", async () => {
+    const confirmReplace = vi.fn(async () => false);
+
+    await openAtlasDocument(fakeAPI, undefined, confirmReplace);
+
+    expect(confirmReplace).not.toHaveBeenCalled();
+    expect(openFromDiskMock).toHaveBeenCalledTimes(1);
   });
 
   it("both handlers no-op when the Excalidraw API is not yet available", async () => {

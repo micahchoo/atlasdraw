@@ -1,18 +1,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Shared read-only document loader for ShareView and EmbedView.
 //
-// Two entry shapes per ADR-0008, extracted so both the share viewer (`/m…`)
-// and the embed (`/embed…`) resolve a document identically:
-//   - Hash mode  : `#v1:<lz-string base64>` — self-contained, no network.
-//   - Token mode : a 21-char id → `.atlasdraw` blob over HTTP.
+// A link carries the document in its hash or names it by a token:
+//   - `#v2:<base64url>` — the document's `.atlasdraw` bytes (useShareLink).
+//   - `#v1:<lz-string>` — older links: `JSON.stringify(doc)`. JSON has no
+//                          Map, so these carry the manifest and the drawing
+//                          only. They are still read, through the format
+//                          migrations.
+//   - a 21-char token   — the `.atlasdraw` bytes over HTTP.
 //
-// NOTE: hash-mode payloads are `JSON.stringify(doc)`, so the document's
-// `layers`/`files` Maps do not survive (Maps JSON-serialize to `{}`). Hash
-// docs therefore carry `scene` + `manifest` only; callers must not assume
-// `doc.layers.get` exists on a hash-loaded document.
+// Every shape goes through the format migrations and the manifest schema
+// before a viewer sees it.
 
 import LZString from "lz-string";
-import { read, type AtlasdrawDocument } from "@atlasdraw/data";
+import {
+  ManifestSchema,
+  base64UrlToUint8Array,
+  migrate,
+  type AtlasdrawDocument,
+} from "@atlasdraw/data";
 
 import {
   createHttpStorageClient,
@@ -21,15 +27,25 @@ import {
 } from "../services/createHttpStorageClient";
 import { getAppConfig } from "../config/app-config";
 
+import { decode } from "./documentIO";
+
 export type ShareLoadResult =
   | { kind: "ready"; doc: AtlasdrawDocument }
   | { kind: "not-found" }
   | { kind: "expired" }
   | { kind: "error"; message: string };
 
-/** Decode a `#v1:<lz>` fragment into a document. Throws on bad input. */
-export function decodeHashDoc(hash: string): AtlasdrawDocument {
+/** Decode a hash fragment into a document. Rejects bad input. */
+export async function decodeHashDoc(hash: string): Promise<AtlasdrawDocument> {
   const stripped = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (stripped.startsWith("v2:")) {
+    const bytes = base64UrlToUint8Array(stripped.slice("v2:".length));
+    const result = await decode(new Blob([bytes as unknown as BlobPart]));
+    if (!result.ok) {
+      throw new Error("Corrupted share-link payload.");
+    }
+    return result.file;
+  }
   if (!stripped.startsWith("v1:")) {
     throw new Error("Unsupported share-link version.");
   }
@@ -37,7 +53,33 @@ export function decodeHashDoc(hash: string): AtlasdrawDocument {
   if (!json) {
     throw new Error("Corrupted share-link payload.");
   }
-  return JSON.parse(json) as AtlasdrawDocument;
+  const parsed = JSON.parse(json) as { manifest?: unknown; scene?: unknown };
+  const manifest = parsed.manifest;
+  const scene = Array.isArray(parsed.scene) ? parsed.scene : [];
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    throw new Error("Corrupted share-link payload.");
+  }
+  let migrated: ReturnType<typeof migrate>;
+  try {
+    migrated = migrate({
+      manifest: manifest as Record<string, unknown>,
+      scene,
+    });
+  } catch {
+    // No version, or one this build cannot read: not a document it can show.
+    throw new Error("Corrupted share-link payload.");
+  }
+  const valid = ManifestSchema.safeParse(migrated.manifest);
+  if (!valid.success) {
+    throw new Error("Corrupted share-link payload.");
+  }
+  return {
+    manifest: valid.data,
+    scene: migrated.scene as AtlasdrawDocument["scene"],
+    layers: new Map(),
+    styleRef: {},
+    files: new Map(),
+  };
 }
 
 /** Extract a 21-char share token from a `<prefix><token>` path; null if none. */
@@ -56,9 +98,9 @@ export async function loadShareDocument(
   token: string | null,
   client?: HttpStorageClient,
 ): Promise<ShareLoadResult> {
-  if (hash.startsWith("#v1:")) {
+  if (hash.startsWith("#v1:") || hash.startsWith("#v2:")) {
     try {
-      return { kind: "ready", doc: decodeHashDoc(hash) };
+      return { kind: "ready", doc: await decodeHashDoc(hash) };
     } catch (err) {
       return {
         kind: "error",
@@ -79,7 +121,11 @@ export async function loadShareDocument(
     if (!buf) {
       return { kind: "not-found" };
     }
-    return { kind: "ready", doc: await read(new Blob([buf])) };
+    const result = await decode(new Blob([buf]));
+    if (!result.ok) {
+      return { kind: "error", message: result.error.message };
+    }
+    return { kind: "ready", doc: result.file };
   } catch (err) {
     if (err instanceof ShareExpiredError) {
       return { kind: "expired" };

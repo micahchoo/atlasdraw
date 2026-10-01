@@ -35,8 +35,9 @@ import { act, cleanup, render, waitFor } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 import * as appConfig from "../../config/app-config";
+
+import { createDocument, openDocument } from "../../state/document";
 
 import type { AppConfig } from "../../config/app-config";
 import type { PeerMeta, CollabSnapshot } from "../../state/collab";
@@ -143,6 +144,7 @@ const EMPTY_SIDEBAR_TABS: never[] = [];
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
+  getSceneElementsIncludingDeleted: () => [],
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
   toggleSidebar: vi.fn(),
@@ -321,7 +323,7 @@ const BASE_CONFIG: AppConfig = {
 beforeEach(() => {
   vi.clearAllMocks();
   latestInstance = null;
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   vi.spyOn(appConfig, "getAppConfig").mockReturnValue(BASE_CONFIG);
 });
 

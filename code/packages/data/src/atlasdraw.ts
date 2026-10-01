@@ -21,6 +21,7 @@ import {
   type AtlasdrawDocument,
   type SceneElement,
 } from "./manifest-schema.js";
+import { migrate, MigrationError, type StoredDocument } from "./migrations.js";
 
 import type { FeatureCollection } from "geojson";
 
@@ -37,7 +38,8 @@ export type AtlasdrawFormatErrorCode =
   | "BAD_ZIP"
   | "MISSING_MANIFEST"
   | "INVALID_MANIFEST"
-  | "MISSING_SCENE";
+  | "MISSING_SCENE"
+  | "UNSUPPORTED_VERSION";
 
 /**
  * Error type for `.atlasdraw` format violations. `code` is the machine-readable
@@ -55,10 +57,10 @@ export class AtlasdrawFormatError extends Error {
 export interface WriteOptions {
   thumbnail?: Blob;
   /**
-   * Pin the zip mod-time of every entry written by this call. When omitted,
-   * JSZip stamps each entry with `new Date()` (DOS time, 2 s granularity), so
-   * two writes of the same document straddling a tick differ in bytes.
-   * Passing a fixed date makes the archive fully deterministic.
+   * The zip mod-time of every entry written by this call. When omitted, it is
+   * the manifest's `updatedAt`, so the same document always gives the same
+   * bytes. (JSZip's own default is `new Date()`, which made two writes of one
+   * document differ.)
    */
   date?: Date;
   /**
@@ -91,6 +93,23 @@ export class AtlasdrawWriteCache {
 }
 
 /**
+ * A Blob's bytes. `Blob.prototype.arrayBuffer` is in every browser and in
+ * Node; jsdom's Blob lacks it, and there FileReader gives the same bytes.
+ */
+function blobBytes(blob: Blob): Promise<ArrayBuffer> {
+  if (typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("FileReader failed"));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+/**
  * Serialize an `AtlasdrawDocument` to a `.atlasdraw` zip Blob.
  *
  * - text-ish entries (manifest, scene, geojson, style) are DEFLATE compressed;
@@ -100,8 +119,12 @@ export class AtlasdrawWriteCache {
  */
 export async function write(
   doc: AtlasdrawDocument,
-  options: WriteOptions = {},
+  writeOptions: WriteOptions = {},
 ): Promise<Blob> {
+  const options: WriteOptions = {
+    ...writeOptions,
+    date: writeOptions.date ?? new Date(doc.manifest.updatedAt),
+  };
   // Serialize every text entry up front — both the fresh and the incremental
   // path need the strings, and the incremental path's unchanged-detection is
   // string equality against the previous write.
@@ -166,7 +189,7 @@ export async function write(
   // costs a copy + CRC, no DEFLATE, so they are not worth cache-tracking.
   const binaryPaths = new Set<string>();
   for (const [name, blob] of doc.files) {
-    const buf = await blob.arrayBuffer();
+    const buf = await blobBytes(blob);
     const path = `${FILES_PREFIX}${name}`;
     binaryPaths.add(path);
     zip.file(path, buf, {
@@ -176,7 +199,7 @@ export async function write(
   }
 
   if (options.thumbnail) {
-    const thumbBuf = await options.thumbnail.arrayBuffer();
+    const thumbBuf = await blobBytes(options.thumbnail);
     binaryPaths.add(THUMBNAIL_PATH);
     zip.file(THUMBNAIL_PATH, thumbBuf, {
       compression: "STORE",
@@ -253,7 +276,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
   try {
     // JSZip's Blob support is browser-only; in node test runtimes we hand it
     // an ArrayBuffer, which is universally supported.
-    const buf = await blob.arrayBuffer();
+    const buf = await blobBytes(blob);
     zip = await JSZip.loadAsync(buf);
   } catch (err) {
     throw new AtlasdrawFormatError(
@@ -284,15 +307,6 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       }`,
     );
   }
-  const parsed = ManifestSchema.safeParse(manifestJson);
-  if (!parsed.success) {
-    throw new AtlasdrawFormatError(
-      "INVALID_MANIFEST",
-      `manifest.json failed schema validation: ${parsed.error.message}`,
-    );
-  }
-  const manifest = parsed.data;
-
   // --- scene.excalidraw.json ------------------------------------------------
   const sceneEntry = zip.file(SCENE_PATH);
   if (!sceneEntry) {
@@ -323,6 +337,41 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
       ? ((sceneJson as { elements: unknown[] })
           .elements as ReadonlyArray<SceneElement>)
       : [];
+
+  // --- migrate, then validate -----------------------------------------------
+  // An older file is brought to the current version first (migrations.ts), so
+  // the schema below only ever sees the current shape.
+  if (
+    !manifestJson ||
+    typeof manifestJson !== "object" ||
+    Array.isArray(manifestJson)
+  ) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      "manifest.json is not a JSON object",
+    );
+  }
+  let migrated: StoredDocument;
+  try {
+    migrated = migrate({
+      manifest: manifestJson as Record<string, unknown>,
+      scene: sceneElements,
+    });
+  } catch (err) {
+    if (err instanceof MigrationError) {
+      throw new AtlasdrawFormatError("UNSUPPORTED_VERSION", err.message);
+    }
+    throw err;
+  }
+  const parsed = ManifestSchema.safeParse(migrated.manifest);
+  if (!parsed.success) {
+    throw new AtlasdrawFormatError(
+      "INVALID_MANIFEST",
+      `manifest.json failed schema validation: ${parsed.error.message}`,
+    );
+  }
+  const manifest = parsed.data;
+  const scene = migrated.scene as ReadonlyArray<SceneElement>;
 
   // --- data/layer-<id>.geojson ---------------------------------------------
   const layers = new Map<string, FeatureCollection>();
@@ -376,7 +425,7 @@ export async function read(blob: Blob): Promise<AtlasdrawDocument> {
 
   return {
     manifest,
-    scene: sceneElements,
+    scene,
     layers,
     styleRef,
     files,

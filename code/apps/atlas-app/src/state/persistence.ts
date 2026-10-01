@@ -21,7 +21,7 @@ import {
 
 import { safeFileName } from "../lib/safeFileName";
 
-import { documentFromExcalidrawJson } from "./selectDocument";
+import { documentFromExcalidrawJson } from "./documentIO";
 
 // ---------------------------------------------------------------------------
 // IndexedDB schema
@@ -30,8 +30,14 @@ import { documentFromExcalidrawJson } from "./selectDocument";
 const DB_NAME = "atlasdraw-autosave";
 const DB_VERSION = 1;
 const STORE = "state";
-const KEY_CURRENT = "current";
-const KEY_FILE_HANDLE = "fileHandle";
+/** Each document's bytes live under `doc:<manifest id>`. */
+const docKey = (id: string): string => `doc:${id}`;
+/** The id of the document saved last: the one a reload opens. */
+const KEY_LAST_OPENED = "lastOpened";
+/** The one slot an older build wrote every document into. Read, then moved. */
+const KEY_LEGACY_CURRENT = "current";
+/** A document's File System Access handle: `fileHandle:<manifest id>`. */
+const handleKey = (id: string): string => `fileHandle:${id}`;
 /** Prefix for stored copies that could not be read. Never overwritten. */
 const KEY_QUARANTINE_PREFIX = "quarantine:";
 
@@ -140,9 +146,12 @@ interface FSAWindow extends Window {
 // ---------------------------------------------------------------------------
 
 export interface PersistenceStore {
-  /** Serialize doc and write to IndexedDB; clears dirty if no edits raced. */
+  /**
+   * Serialize doc into its own IndexedDB slot (by manifest id) and make it
+   * the one a reload opens; clears dirty if no edits raced.
+   */
   save(doc: AtlasdrawDocument): Promise<void>;
-  /** Read last persisted doc from IndexedDB; null on empty DB. */
+  /** Read the document saved last; null on an empty DB. */
   load(): Promise<AtlasdrawDocument | null>;
   /** Open a save dialog (FSA) or trigger a download anchor. */
   saveToDisk(doc: AtlasdrawDocument): Promise<void>;
@@ -170,11 +179,11 @@ export interface CreatePersistenceStoreOptions {
   /** Override the IDB name (tests may pass a per-test name). */
   dbName?: string;
   /**
-   * T13 (Phase 4): optional best-effort push to the storage HTTP API. Fires
-   * AFTER the IDB write resolves. Failures set `remoteSaveFailed()` to true
-   * and fire `onRemoteSaveFailed` if configured.
+   * Optional best-effort push to the storage HTTP API, told which document
+   * the bytes are. Fires AFTER the IDB write resolves. Failures set
+   * `remoteSaveFailed()` to true and fire `onRemoteSaveFailed` if configured.
    */
-  remoteSave?: (blob: Blob) => Promise<void>;
+  remoteSave?: (blob: Blob, documentId: string) => Promise<void>;
   /** Callback when remoteSave fails (IDB ok, server not). */
   onRemoteSaveFailed?: () => void;
 }
@@ -268,7 +277,12 @@ export function createPersistenceStore(
       const blob = await write(doc, { cache: writeCache });
       const stored = await blobToStored(blob);
       const database = await db();
-      await database.put(STORE, stored, KEY_CURRENT);
+      const id = doc.manifest.id;
+      await database.put(STORE, stored, docKey(id));
+      await database.put(STORE, id, KEY_LAST_OPENED);
+      // The older single slot held this document or an earlier one; either
+      // way its content now has a slot of its own.
+      await database.delete(STORE, KEY_LEGACY_CURRENT);
       // Clear dirty only if no `markDirty()` arrived during the write.
       if (dirtySeq === seqAtStart) {
         dirty = false;
@@ -279,7 +293,7 @@ export function createPersistenceStore(
       // above. The Blob is the same one we wrote locally — no re-serialize.
       if (options.remoteSave) {
         try {
-          await options.remoteSave(blob);
+          await options.remoteSave(blob, doc.manifest.id);
           _remoteSaveFailed = false;
         } catch (err) {
           _remoteSaveFailed = true;
@@ -296,9 +310,11 @@ export function createPersistenceStore(
 
   const load = async (): Promise<AtlasdrawDocument | null> => {
     const database = await db();
-    const stored = (await database.get(STORE, KEY_CURRENT)) as
-      | StoredBlob
+    const lastId = (await database.get(STORE, KEY_LAST_OPENED)) as
+      | string
       | undefined;
+    const key = lastId ? docKey(lastId) : KEY_LEGACY_CURRENT;
+    const stored = (await database.get(STORE, key)) as StoredBlob | undefined;
     if (!stored) {
       return null;
     }
@@ -312,7 +328,8 @@ export function createPersistenceStore(
         stored,
         `${KEY_QUARANTINE_PREFIX}${Date.now()}`,
       );
-      await database.delete(STORE, KEY_CURRENT);
+      await database.delete(STORE, key);
+      await database.delete(STORE, KEY_LAST_OPENED);
       throw err;
     }
   };
@@ -327,21 +344,38 @@ export function createPersistenceStore(
     return !!w && typeof w.showSaveFilePicker === "function";
   };
 
-  const getStoredFileHandle = async (): Promise<FSAFileHandle | undefined> => {
+  // A document's file handle, by manifest id. A handle belongs to one
+  // document: a document opened from .excalidraw, or any other document,
+  // never reuses another's file, so Save cannot write over it unasked.
+  // Held in memory and, where the browser can store it, in IDB.
+  const handles = new Map<string, FSAFileHandle>();
+
+  const getStoredFileHandle = async (
+    documentId: string,
+  ): Promise<FSAFileHandle | undefined> => {
+    const held = handles.get(documentId);
+    if (held) {
+      return held;
+    }
     const database = await db();
-    return (await database.get(STORE, KEY_FILE_HANDLE)) as
+    return (await database.get(STORE, handleKey(documentId))) as
       | FSAFileHandle
       | undefined;
   };
 
   const setStoredFileHandle = async (
-    handle: FSAFileHandle | undefined,
+    documentId: string,
+    handle: FSAFileHandle,
   ): Promise<void> => {
-    const database = await db();
-    if (handle === undefined) {
-      await database.delete(STORE, KEY_FILE_HANDLE);
-    } else {
-      await database.put(STORE, handle, KEY_FILE_HANDLE);
+    handles.set(documentId, handle);
+    // Best-effort: keeping the handle only skips the next picker. If IDB
+    // rejects it (private mode, quota), the save must still run.
+    try {
+      const database = await db();
+      await database.put(STORE, handle, handleKey(documentId));
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("[persistence] could not retain file handle", err);
     }
   };
 
@@ -401,7 +435,7 @@ export function createPersistenceStore(
       const suggestedName = `${safeFileName(doc.manifest.title)}.atlasdraw`;
       const w = fsaWindow();
       if (hasFSA() && w && w.showSaveFilePicker) {
-        let handle = await getStoredFileHandle();
+        let handle = await getStoredFileHandle(doc.manifest.id);
         if (!handle) {
           handle = await w.showSaveFilePicker({
             suggestedName,
@@ -412,14 +446,7 @@ export function createPersistenceStore(
               },
             ],
           });
-          // Best-effort: retaining the handle only skips the next picker.
-          // If IDB rejects it (private mode, quota), the save must still run.
-          try {
-            await setStoredFileHandle(handle);
-          } catch (err) {
-            // eslint-disable-next-line no-console
-            console.warn("[persistence] could not retain file handle", err);
-          }
+          await setStoredFileHandle(doc.manifest.id, handle);
         }
         const writable = await handle.createWritable();
         await writable.write(blob);
@@ -438,6 +465,7 @@ export function createPersistenceStore(
     const w = fsaWindow();
     let blob: Blob | null = null;
     let fileName = "";
+    let openedHandle: FSAFileHandle | null = null;
     if (hasFSA() && w && w.showOpenFilePicker) {
       try {
         const [handle] = await w.showOpenFilePicker({
@@ -456,12 +484,7 @@ export function createPersistenceStore(
         const file = await handle.getFile();
         blob = file;
         fileName = file.name;
-        // Import-only for .excalidraw: do NOT retain the handle — a later
-        // save must never clobber the source drawing with .atlasdraw zip
-        // bytes. Save prompts for a fresh .atlasdraw destination instead.
-        if (!fileName.toLowerCase().endsWith(".excalidraw")) {
-          await setStoredFileHandle(handle);
-        }
+        openedHandle = handle;
       } catch (err) {
         // AbortError (user cancel) → null. Anything else is a real failure.
         if (
@@ -483,10 +506,17 @@ export function createPersistenceStore(
     if (!blob) {
       return null;
     }
+    // An import from .excalidraw is a new document with a new id, so it has
+    // no handle: Save asks for a .atlasdraw file and never writes zip bytes
+    // over the source drawing.
     if (fileName.toLowerCase().endsWith(".excalidraw")) {
       return documentFromExcalidrawJson(await blob.text());
     }
-    return read(blob);
+    const doc = await read(blob);
+    if (openedHandle) {
+      await setStoredFileHandle(doc.manifest.id, openedHandle);
+    }
+    return doc;
   };
 
   const onDirty = (cb: () => void): (() => void) => {

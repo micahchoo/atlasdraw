@@ -7,6 +7,16 @@
 
 import "fake-indexeddb/auto";
 
+import { beforeEach } from "vitest";
+
+import { createDocument, openDocument } from "./state/document";
+
+// The open document is a module singleton. Each test starts with a new,
+// empty one, so no test sees the layers or title another test left.
+beforeEach(() => {
+  openDocument(createDocument());
+});
+
 // Phase 6 A14a — `@atlasdraw/basemap` re-exports MapCanvas at module load,
 // which pulls in maplibre-gl. maplibre's top-level body calls
 // `window.URL.createObjectURL(new Blob([...]))` to register a worker URL

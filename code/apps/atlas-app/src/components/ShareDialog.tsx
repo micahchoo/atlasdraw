@@ -11,7 +11,7 @@
 // size-based decision). Collaborate goes through generateRoomKey() + CollabState.
 //
 // Q-P5-2: a `#room:` URL grants write capability — anyone with the link can
-// edit. Existing share URLs (`/m#v1:`, `/m/<token>`) remain read-only via the
+// edit. Existing share URLs (`/m#v2:`, `/m#v1:`, `/m/<token>`) remain read-only via the
 // ShareView path. The hint text in the collab success state surfaces this
 // explicitly to the user.
 
@@ -116,7 +116,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
     // useShareLink's internal `mode` state is set synchronously inside
     // generate() before it returns the URL, but the React state is stale
     // for our purposes — re-derive from the URL shape.
-    const mode: ShareMode = result.includes("/m#v1:") ? "hash" : "upload";
+    const mode: ShareMode = result.includes("/m#") ? "hash" : "upload";
     setView({ kind: "readonly-success", url: result, mode });
   };
 
@@ -407,9 +407,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 // <iframe> use; the snippet just repoints the `/m` share URL at `/embed`.
 // ---------------------------------------------------------------------------
 
-/** `/m#v1:<enc>` → `/embed#v1:<enc>` · `/m/<token>` → `/embed/<token>`. */
+/** `/m#v2:<enc>` → `/embed#v2:<enc>` · `/m/<token>` → `/embed/<token>`. */
 export function toEmbedUrl(shareUrl: string): string {
-  return shareUrl.replace(/\/m(#v1:|\/)/, "/embed$1");
+  return shareUrl.replace(/\/m(#v[12]:|\/)/, "/embed$1");
 }
 
 const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {

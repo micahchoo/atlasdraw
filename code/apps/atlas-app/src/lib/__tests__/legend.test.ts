@@ -7,15 +7,16 @@ import {
   buildLegendEntries,
   renderedDataLayerIds,
   visibleAnnotationIds,
+  type LegendSource,
   visibleRasterIds,
 } from "../legend";
 
-import type { LayerRegistryEntry } from "../../state/layerRegistry";
+import type { OverlayEntry } from "../../state/document";
 
 function dataLayer(
   id: string,
-  overrides: Partial<Extract<LayerRegistryEntry, { kind: "data" }>> = {},
-): LayerRegistryEntry {
+  overrides: Partial<Extract<OverlayEntry, { kind: "data" }>> = {},
+): OverlayEntry {
   return {
     kind: "data",
     id,
@@ -25,27 +26,24 @@ function dataLayer(
     featureCount: 1,
     style: { fillColor: "#0aa" },
     ...overrides,
-  } as LayerRegistryEntry;
+  } as OverlayEntry;
 }
 
-function annotation(
-  id: string,
-  overrides: Partial<Extract<LayerRegistryEntry, { kind: "annotation" }>> = {},
-): LayerRegistryEntry {
+function annotation(id: string): LegendSource {
   return {
     kind: "annotation",
     id,
     label: id,
     visible: true,
+    renamedByUser: false,
     order: 0,
-    ...overrides,
-  } as LayerRegistryEntry;
+  };
 }
 
 function raster(
   id: string,
-  overrides: Partial<Extract<LayerRegistryEntry, { kind: "raster" }>> = {},
-): LayerRegistryEntry {
+  overrides: Partial<Extract<OverlayEntry, { kind: "raster" }>> = {},
+): OverlayEntry {
   return {
     kind: "raster",
     id,
@@ -62,7 +60,7 @@ function raster(
     opacity: 1,
     imageKey: "k",
     ...overrides,
-  } as LayerRegistryEntry;
+  } as OverlayEntry;
 }
 
 const APPSTATE = { scrollX: 0, scrollY: 0, zoom: { value: 1 } };

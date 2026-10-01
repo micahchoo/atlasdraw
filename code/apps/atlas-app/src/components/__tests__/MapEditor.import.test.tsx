@@ -22,9 +22,19 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
+
+import type { DocumentCommand } from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
+
+/** The command an import or a convert sends to the open document. */
+type AddDataLayer = Extract<DocumentCommand, { type: "add-data-layer" }>;
 
 // ---------------------------------------------------------------------------
 // Mocks (hoisted)
@@ -88,6 +98,7 @@ const EMPTY_SIDEBAR_TABS: never[] = [];
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
+  getSceneElementsIncludingDeleted: () => [],
   getAppState: () => ({ selectedElementIds: {} }),
   updateScene: vi.fn(),
   toggleSidebar: vi.fn(),
@@ -258,7 +269,7 @@ function makeFile(name: string, text: string): File {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
 });
 
 afterEach(() => {
@@ -271,10 +282,7 @@ afterEach(() => {
 
 describe("MapEditor — 'Import…' menu action (ISSUES.md Direction 1)", () => {
   it("clicking Import… opens a native file picker, and picking a .geojson imports it", async () => {
-    const registerSpy = vi.spyOn(
-      useLayerRegistryStore.getState(),
-      "registerDataLayer",
-    );
+    const registerSpy = vi.spyOn(currentDocument(), "dispatch");
     const { getByTestId } = render(
       <ToastProvider>
         <MapEditor />
@@ -297,7 +305,9 @@ describe("MapEditor — 'Import…' menu action (ISSUES.md Direction 1)", () => 
     pickFileInNativeDialog(makeFile("picked.geojson", JSON.stringify(fc)));
 
     await waitFor(() => expect(registerSpy).toHaveBeenCalledTimes(1));
-    expect(registerSpy.mock.calls[0][0].label).toBe("picked.geojson");
+    expect((registerSpy.mock.calls[0][0] as AddDataLayer).label).toBe(
+      "picked.geojson",
+    );
     expect(mockMap.addSource).toHaveBeenCalledTimes(1);
     expect(mockMap.addLayer).toHaveBeenCalledTimes(1);
   });

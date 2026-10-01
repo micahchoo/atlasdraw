@@ -23,9 +23,13 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import type { LayerLegendEntry } from "./print-pdf";
 
-import type { LayerRegistryEntry } from "../state/layerRegistry";
+import type { OverlayEntry } from "../state/document";
+import type { AnnotationRow } from "../state/annotations";
 
 import type maplibregl from "maplibre-gl";
+
+/** A layer the legend can describe: a map layer or an annotation row. */
+export type LegendSource = OverlayEntry | AnnotationRow;
 
 /** Fallback swatch: annotation layers carry no colour of their own. */
 const NEUTRAL_SWATCH = "#868e96";
@@ -120,7 +124,7 @@ export function visibleAnnotationIds(
  * reached the legend.
  */
 export function visibleRasterIds(
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly LegendSource[],
   project: (lngLat: [number, number]) => { x: number; y: number },
   width: number,
   height: number,
@@ -152,13 +156,13 @@ export interface LegendContext {
 }
 
 /**
- * Project the registry to legend entries, keeping only what the exported page
+ * Project the layers to legend entries, keeping only what the exported page
  * actually shows. `visible` is checked first because a hidden layer is not
  * painted regardless of where the camera is — and because that check needs no
- * map at all.
+ * map at all. A raster has no legend swatch and is left out.
  */
 export function buildLegendEntries(
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly LegendSource[],
   ctx: LegendContext,
 ): LayerLegendEntry[] {
   return entries
@@ -186,7 +190,7 @@ export function buildLegendEntries(
  * answer the same viewport (FU-13).
  */
 export function exportLegendEntries(
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly LegendSource[],
   map: maplibregl.Map,
   excalidrawAPI: ExcalidrawImperativeAPI,
 ): LayerLegendEntry[] {

@@ -2,7 +2,7 @@
 //
 // dataLayerRender — every write the app makes to the `dl:` data layers inside a
 // MapLibre style: add, remove, visibility, stacking order, and the whole-style
-// reconcile that rebuilds them from the LayerRegistry.
+// reconcile that rebuilds them from the open document's layers.
 //
 // Call sites:
 //   - useDataFileImport    — a freshly imported/dropped file;
@@ -30,10 +30,10 @@ import { inferGeometryType } from "./geometryType";
 import type maplibregl from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
 import type {
-  LayerRegistryEntry,
+  OverlayEntry,
   LayerStyle,
   RasterCorners,
-} from "../state/layerRegistry";
+} from "../state/document";
 
 /**
  * Every source spec this module hands to MapLibre.
@@ -181,10 +181,10 @@ export interface DataLayerRemovalSurface {
 /**
  * Drop the given data-layer ids out of the MapLibre style, source and all.
  *
- * The reconcile direction is add-only, so without this a `hydrate()` that
- * swaps in a different document left the previous document's layers rendered
- * underneath the new one — the registry no longer listed them, so nothing
- * would ever toggle, restyle or remove them again.
+ * The reconcile direction is add-only, so without this opening a different
+ * document left the previous document's layers rendered underneath the new
+ * one — the document no longer listed them, so nothing would ever toggle,
+ * restyle or remove them again.
  *
  * Per-id try/catch, same reasoning as applyVisibilityToMap: a registry id can
  * legitimately be absent from the style, and one failure must not strand the
@@ -252,7 +252,7 @@ function sameSequence(a: readonly string[], b: readonly string[]): boolean {
  */
 export function applyOrderToMap(
   map: MapOrderSurface,
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly OverlayEntry[],
 ): void {
   // Rasters first, then data layers. Both are MapLibre layers in one style, so
   // one sequence covers the whole stack — and putting every raster below every
@@ -315,9 +315,8 @@ export function applyOrderToMap(
  * Three callers, one behaviour:
  *   - a basemap switch (useBasemapStyle), because setStyle() drops every
  *     custom source and layer;
- *   - a document load / registry replay (state/hydrate.ts writes entries but
- *     never touches the map);
- *   - a registry gaining a data-layer id from anywhere else (convert).
+ *   - opening a document, whose layers arrive without touching the map;
+ *   - the document gaining a data-layer id from anywhere else (convert).
  *
  * FU-1: rasters go back too, and they go back FIRST so a rebuilt style has them
  * under the vector band. Without this a basemap switch would drop every scanned
@@ -336,7 +335,7 @@ export function applyOrderToMap(
  */
 export function reconcileDataLayers(
   map: DataLayerMapSurface,
-  entries: readonly LayerRegistryEntry[],
+  entries: readonly OverlayEntry[],
   fcs: Record<string, FeatureCollection>,
   /**
    * FU-1: raster id → object URL. Optional so the three existing callers that
@@ -361,7 +360,7 @@ export function reconcileDataLayers(
     if (!url) {
       // Same shape as the missing-FC case below: an entry with no image cannot
       // render, and a raster in the panel that draws nothing is worse than one
-      // that is honestly absent. hydrate() already skips these at load.
+      // that is honestly absent. Opening a file already skips these.
       // eslint-disable-next-line no-console
       console.warn(
         "[dataLayerRender] no decoded image for raster layer, skipping",
@@ -393,9 +392,9 @@ export function reconcileDataLayers(
     }
     const fc = fcs[entry.id];
     if (!fc) {
-      // A registry entry with no FC mirror can't be rendered. hydrate() already
-      // skips manifest layers whose blob is missing, so this is the drift case
-      // (e.g. an entry written without going through registerDataLayer).
+      // An entry with no FeatureCollection cannot be drawn. Opening a file
+      // already leaves out a layer whose GeoJSON is missing
+      // (documentIO.fromFile), so this is a drift case.
       // eslint-disable-next-line no-console
       console.warn(
         "[dataLayerRender] no FeatureCollection for data layer, skipping",

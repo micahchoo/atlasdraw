@@ -9,6 +9,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import LZString from "lz-string";
 
+import { savedManifest } from "../state/__tests__/fixtures/documentWorld";
+
 import { EmbedView, parseEmbedOptions } from "./EmbedView";
 import { toEmbedUrl } from "./ShareDialog";
 
@@ -39,13 +41,13 @@ afterEach(cleanup);
 const hashFor = (doc: unknown) =>
   `#v1:${LZString.compressToBase64(JSON.stringify(doc))}`;
 
+// A link made before v2: the manifest and the drawing, as JSON.
 const mapDoc = {
-  manifest: {
-    id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  manifest: savedManifest({
     basemap: { type: "registry", id: "openfreemap-bright" },
-    camera: { center: [-122.42, 37.77], zoom: 12 },
+    camera: { center: [-122.42, 37.77], zoom: 12, bearing: 0, pitch: 0 },
     layers: [],
-  },
+  }),
   scene: [],
 };
 

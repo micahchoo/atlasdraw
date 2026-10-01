@@ -41,15 +41,13 @@ function fc(name: string, n: number): FeatureCollection {
 function synthDoc(): AtlasdrawDocument {
   const manifest: Manifest = {
     id: VALID_ULID,
-    version: 1,
+    version: 2,
     title: "Incremental fixture ✓",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-02T00:00:00.000Z",
     basemap: { type: "registry", id: "osm-standard" },
     camera: { center: [0, 0], zoom: 2, bearing: 0, pitch: 0 },
-    layers: [
-      { kind: "annotation", id: "anno-1", label: "Annotations", visible: true },
-    ],
+    layers: [],
     permissions: { publicView: false },
   } as Manifest;
 

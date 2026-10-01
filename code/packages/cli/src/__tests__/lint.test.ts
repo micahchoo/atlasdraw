@@ -41,7 +41,7 @@ function makeStreams() {
 function makeManifest(overrides: Record<string, unknown> = {}) {
   const base = {
     id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-    version: 1 as const,
+    version: 2 as const,
     title: "Test Atlas",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-02T00:00:00.000Z",
@@ -116,7 +116,7 @@ describe("atlasdraw lint", () => {
     expect(code).toBe(0);
     expect(err.join("")).toBe("");
     expect(out.join("")).toMatch(
-      /^OK: manifest version 1, id [0-9A-HJKMNP-TV-Z]{26}, title '.+'\n$/,
+      /^OK: manifest version 2, id [0-9A-HJKMNP-TV-Z]{26}, title '.+'\n$/,
     );
     expect(out.join("")).toContain("title 'Test Atlas'");
   });
@@ -137,12 +137,28 @@ describe("atlasdraw lint", () => {
     expect(err.join("")).toContain("manifest.json: id: Required");
   });
 
-  it("returns 1 and prints version error when manifest version is 2", async () => {
+  it("passes a file saved by a v1 build: the reader migrates it", async () => {
     const buf = await buildFixtureWithRawManifest({
       ...makeManifest(),
-      version: 2,
+      version: 1,
+      layers: [{ kind: "annotation", id: "a", label: "a", visible: true }],
     });
-    const file = path.join(tmpDir, "v2.atlasdraw");
+    const file = path.join(tmpDir, "v1.atlasdraw");
+    await fs.writeFile(file, buf);
+
+    const { streams, out } = makeStreams();
+    const code = await runLint({ file }, streams);
+
+    expect(code).toBe(0);
+    expect(out.join("")).toContain("OK: manifest version 2");
+  });
+
+  it("returns 1 and names the version when the file is from a newer build", async () => {
+    const buf = await buildFixtureWithRawManifest({
+      ...makeManifest(),
+      version: 99,
+    });
+    const file = path.join(tmpDir, "v99.atlasdraw");
     await fs.writeFile(file, buf);
 
     const { streams, out, err } = makeStreams();
@@ -150,9 +166,8 @@ describe("atlasdraw lint", () => {
 
     expect(code).toBe(1);
     expect(out.join("")).toBe("");
-    expect(err.join("")).toContain(
-      "manifest.json: version: Invalid literal value, expected 1",
-    );
+    expect(err.join("")).toContain("UNSUPPORTED_VERSION");
+    expect(err.join("")).toContain("version 99");
   });
 
   it("returns 1 with 'File not found:' when the path does not exist", async () => {

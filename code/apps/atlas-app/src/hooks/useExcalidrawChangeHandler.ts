@@ -20,15 +20,6 @@
 //      projector itself and not from a second projection here — that pair
 //      diverged under a rotated camera and the "corrective" sync recursed
 //      until React tore the scene down. driftSyncQueuedRef bounds it anyway.
-//
-// Extracted from MapEditor.tsx (DEADWOOD.md god-module split, Cut 5 — the
-// hardest, done last: this callback fuses five previously-inline concerns
-// (background intercept, scroll-lock/space-pan bridge, coordinate-sync
-// consumer, autosave markDirty, aria-live selection announce) and owned six
-// refs. `spaceHeldRef` stays owned by MapEditor and threaded in — it's also
-// written by useMapEditorKeyboard (Cut 4). This callback was entirely
-// uncovered before extraction; new useExcalidrawChangeHandler.test.ts adds
-// characterization coverage per numbered sub-concern.
 
 import { useCallback, useRef } from "react";
 
@@ -43,8 +34,8 @@ import type {
 import type { NormalizedZoomValue } from "@atlasdraw/excalidraw/types";
 
 import { usePersistenceStore } from "../state/usePersistenceStore";
-import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useSelectedLayerStore } from "../state/selectedLayer";
+import { sceneSignature } from "../state/sceneSignature";
+import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
 
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type maplibregl from "maplibre-gl";
@@ -74,12 +65,9 @@ export function useExcalidrawChangeHandler({
 }: ExcalidrawChangeHandlerParams): NonNullable<
   React.ComponentProps<typeof Excalidraw>["onChange"]
 > {
-  // Tracks the prior elements array reference so this handler can skip
-  // markDirty when Excalidraw fires onChange without an actual element
-  // mutation (initial mount, viewport-only updates, scroll-lock self-fires).
-  // Closes atlasdraw-12f0 — the "● Unsaved" indicator no longer trips on
-  // first load before the user has done anything.
-  const prevElementsRef = useRef<readonly unknown[] | null>(null);
+  // The scene signature at the previous onChange. Null until the first call,
+  // which only sets the baseline.
+  const prevSignatureRef = useRef<number | null>(null);
   // Guards against re-entrant updateScene calls. CoordinateSync fires many
   // onChange events before React can process our viewBackgroundColor reset;
   // without this flag each one queues another updateScene, exhausting
@@ -195,20 +183,19 @@ export function useExcalidrawChangeHandler({
         }
       }
 
-      // --- 4. T9 — mark persistence dirty (gated on real element mutation).
-      // Excalidraw fires onChange on initial mount, viewport changes, scroll-
-      // lock self-fires, and selection updates — none of which are user
-      // edits. Mark dirty only when the elements reference actually changes
-      // from the prior call, AND skip the first call (which establishes the
-      // baseline). The underlying PersistenceStore debounces (5s) + ceilings
-      // (30s) so the actual IDB write rate stays bounded.
-      const prev = prevElementsRef.current;
-      prevElementsRef.current = elements;
-      if (prev !== null && elements !== prev) {
+      // --- 4. Mark the document dirty when the drawing changed ---
+      // Excalidraw fires onChange for a mount, a camera move, a scroll-lock
+      // reset and a selection. None of these change an element's version, so
+      // compare version signatures, not array identity: a pan gives a new
+      // array with the same versions. The first call sets the baseline.
+      const signature = sceneSignature(elements);
+      const prevSignature = prevSignatureRef.current;
+      prevSignatureRef.current = signature;
+      if (prevSignature !== null && signature !== prevSignature) {
         usePersistenceStore.getState().markDirty();
       }
 
-      // --- 5. Phase 6 A14b — selection-change aria-live announcement.
+      // --- 5. Selection-change aria-live announcement.
       // Compare the sorted selected-id set against the prior call. Throttled
       // to ≤1 announcement per 500ms so a rubber-band drag-select doesn't
       // spam the screen-reader queue.
@@ -241,25 +228,17 @@ export function useExcalidrawChangeHandler({
       // data/raster selections made from the panel are preserved. The
       // key-set comparison before writing breaks the feedback loop with
       // MapEditor's store→scene subscriber (a no-op write still notifies).
+      // Every selected canvas id is an annotation: annotations are the
+      // scene's elements. Data and raster ids carry a dl:/rl: prefix and are
+      // selected only from the panel, so they are kept.
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(appState.selectedElementIds ?? {})) {
-        // Check if this id belongs to a registered annotation
-        const entry = useLayerRegistryStore
-          .getState()
-          .entries.find((e) => e.id === id && e.kind === "annotation");
-        if (entry) {
-          annotationIds[id] = true;
-        }
+        annotationIds[id] = true;
       }
-      // Merge with existing non-annotation selections from the store
       const storeState = useSelectedLayerStore.getState();
       const existing = { ...storeState.selectedLayerIds };
-      // Remove stale annotation keys, add current ones
       for (const key of Object.keys(existing)) {
-        const isAnnotation = useLayerRegistryStore
-          .getState()
-          .entries.some((e) => e.id === key && e.kind === "annotation");
-        if (isAnnotation && !annotationIds[key]) {
+        if (!isOverlayId(key) && !annotationIds[key]) {
           delete existing[key];
         }
       }

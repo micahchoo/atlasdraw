@@ -39,8 +39,13 @@ import {
   setPendingAnchor,
   usePendingAnchor,
 } from "../../state/comments-anchor-picker";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { CommentAnchorsOverlay } from "../CommentAnchorsOverlay";
+
+import {
+  createDocument,
+  currentDocument,
+  openDocument,
+} from "../../state/document";
 
 import type { CollabContextValue } from "../../hooks/useCollab";
 import type maplibregl from "maplibre-gl";
@@ -386,8 +391,10 @@ describe("CommentAnchorsOverlay — placing a thread in comment mode", () => {
     // Seeded here, and this test runs after the bare-map tests: the raster's
     // projected corners (10,20)-(30,60) enclose the (10,20) click those tests
     // use, so registering it earlier would steal their map fallback.
-    useLayerRegistryStore.setState({ entries: [] });
-    useLayerRegistryStore.getState().registerRasterLayer({
+    openDocument(createDocument());
+    currentDocument().dispatch({
+      type: "add-raster-layer",
+      image: new Blob(["png"]),
       id: "rl:test-1",
       label: "plate",
       corners: [

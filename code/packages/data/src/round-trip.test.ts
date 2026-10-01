@@ -118,7 +118,7 @@ function buildManifest(): Manifest {
   // and use the parsed result to guarantee schema validity at the seam.
   const raw = {
     id: VALID_ULID,
-    version: 1,
+    version: 2,
     title: "Round-trip acceptance fixture",
     createdAt: FIXED_CREATED_AT,
     updatedAt: FIXED_UPDATED_AT,
@@ -143,12 +143,6 @@ function buildManifest(): Manifest {
         featureCount: 1,
         style: { color: "#00ff00" },
         source: `data/layer-${POLY_LAYER_ID}.geojson`,
-      },
-      {
-        kind: "annotation",
-        id: "anno-1",
-        label: "Notes",
-        visible: true,
       },
     ],
     permissions: { publicView: true },
@@ -198,7 +192,7 @@ function buildEmptyDoc(): AtlasdrawDocument {
   // Empty doc still needs a schema-valid manifest; just no data layers.
   const manifest = ManifestSchema.parse({
     id: VALID_ULID,
-    version: 1,
+    version: 2,
     title: "Empty doc",
     createdAt: FIXED_CREATED_AT,
     updatedAt: FIXED_UPDATED_AT,
@@ -365,7 +359,7 @@ describe("T12 — writeJSON rejects when files non-empty", () => {
 });
 
 describe("T12 — read rejects on tampered manifest.json", () => {
-  it("throws AtlasdrawFormatError with code INVALID_MANIFEST when manifest.version is wrong", async () => {
+  it("throws AtlasdrawFormatError with code UNSUPPORTED_VERSION for a newer manifest version", async () => {
     // Start from a real, valid blob then mutate manifest.json in-place via JSZip
     // (same surgery pattern T10's lint test uses).
     const doc = buildSyntheticDoc();
@@ -374,7 +368,7 @@ describe("T12 — read rejects on tampered manifest.json", () => {
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
     const manifestText = await zip.file("manifest.json")!.async("string");
     const manifestObj = JSON.parse(manifestText);
-    manifestObj.version = 2; // schema literal(1) → schema rejects.
+    manifestObj.version = 99; // newer than this build reads → refused.
     zip.file("manifest.json", JSON.stringify(manifestObj));
 
     const buf = await zip.generateAsync({ type: "uint8array" });
@@ -385,7 +379,7 @@ describe("T12 — read rejects on tampered manifest.json", () => {
       throw new Error("expected read to reject");
     } catch (err) {
       expect(err).toBeInstanceOf(AtlasdrawFormatError);
-      expect((err as AtlasdrawFormatError).code).toBe("INVALID_MANIFEST");
+      expect((err as AtlasdrawFormatError).code).toBe("UNSUPPORTED_VERSION");
     }
   });
 });

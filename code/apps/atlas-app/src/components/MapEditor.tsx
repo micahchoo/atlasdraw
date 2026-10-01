@@ -71,7 +71,6 @@ import { useOpenThreadCountFor } from "../hooks/useOpenThreadCount";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useCommentMode, toggleCommentMode } from "../state/commentMode";
 import { useMapWheelRouter } from "../hooks/useMapWheelRouter";
-import { useLayerRegistry } from "../hooks/useLayerRegistry";
 import { CollabContext, type CollabContextValue } from "../hooks/useCollab";
 import { useCollabRoom } from "../hooks/useCollabRoom";
 import { useYjsLayer } from "../hooks/useYjsLayer";
@@ -88,11 +87,16 @@ import { usePersistenceStore } from "../state/usePersistenceStore";
 import { useBasemapStore } from "../state/basemap";
 import { useSheetPanelStore } from "../state/sheetPanel";
 import { useMapInstanceStore } from "../state/mapInstance";
-import { useLayerRegistryStore } from "../state/layerRegistry";
-import { useSelectedLayerStore } from "../state/selectedLayer";
-import { useDataLayerFCStore } from "../state/useDataLayerFCStore";
-import { selectDocument } from "../state/selectDocument";
-import { hydrate } from "../state/hydrate";
+import { isOverlayId, useSelectedLayerStore } from "../state/selectedLayer";
+import { useSceneBinding } from "../state/scene";
+import { annotationRows } from "../state/annotations";
+import { currentDocument, dispatch } from "../state/document";
+import {
+  hasUnsavedWork,
+  loadDocument,
+  markSavedToFile,
+  toFile,
+} from "../state/documentIO";
 import { getAppConfig } from "../config/app-config";
 import {
   fitMapToContent,
@@ -117,6 +121,7 @@ import { SheetRail } from "./SheetRail";
 import { SheetPanelResizer } from "./SheetPanelResizer";
 import { SheetNameField } from "./SheetNameField";
 import { ShareDialog } from "./ShareDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CursorOverlay } from "./CursorOverlay";
@@ -136,7 +141,7 @@ import { OnboardingTips, useOnboarding } from "./OnboardingTips";
 import type { ExportFormat } from "./ExportDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
-import type { RasterCorners } from "../state/layerRegistry";
+import type { DocumentCommand, RasterCorners } from "../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -276,9 +281,9 @@ export async function saveAtlasDocument(
     return;
   }
   try {
-    await store.saveToDisk(
-      selectDocument(excalidrawAPI, useLayerRegistryStore.getState()),
-    );
+    const doc = currentDocument();
+    await store.saveToDisk(toFile(doc));
+    markSavedToFile(doc);
     usePersistenceStore.getState().clearDirty();
     notify?.success("Map saved as .atlasdraw");
   } catch (err) {
@@ -293,9 +298,15 @@ export async function saveAtlasDocument(
   }
 }
 
+/**
+ * Open a file in place of the open document. When the open document holds
+ * work that is not in a file, `confirmReplace` is asked first (an in-page
+ * question); without an answer of yes, nothing is opened.
+ */
 export async function openAtlasDocument(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   notify?: DocumentNotify,
+  confirmReplace: () => Promise<boolean> = async () => false,
 ): Promise<void> {
   if (!excalidrawAPI) {
     return;
@@ -305,13 +316,19 @@ export async function openAtlasDocument(
     return;
   }
   try {
+    if (hasUnsavedWork(currentDocument()) && !(await confirmReplace())) {
+      return;
+    }
     const loaded = await store.openFromDisk();
     if (loaded) {
-      // Phase 4 W0 (atlasdraw-3601): apply to live runtime —
-      // see state/hydrate.ts for ordering + idempotency.
-      await hydrate(loaded, excalidrawAPI);
+      const opened = await loadDocument(loaded, excalidrawAPI);
+      if (opened) {
+        markSavedToFile(opened);
+      }
+      // The opened file becomes the autosaved document.
+      usePersistenceStore.getState().markDirty();
       // eslint-disable-next-line no-console
-      console.info("[atlasdraw] document opened + hydrated", {
+      console.info("[atlasdraw] document opened", {
         id: loaded.manifest.id,
         layerCount: loaded.manifest.layers.length,
         sceneLength: loaded.scene.length,
@@ -612,12 +629,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       if (!excalidrawAPI) {
         return;
       }
-      // Filter to only annotation IDs (these are Excalidraw element ids)
-      const registryEntries = useLayerRegistryStore.getState().entries;
+      // Annotation ids are Excalidraw element ids; data and raster ids are
+      // not, and Excalidraw must not be asked to select them.
+      const registryEntries = currentDocument().snapshot().overlays;
       const annotationIds: Record<string, true> = {};
       for (const id of Object.keys(state.selectedLayerIds)) {
-        const entry = registryEntries.find((e) => e.id === id);
-        if (entry?.kind === "annotation") {
+        if (!isOverlayId(id)) {
           annotationIds[id] = true;
         }
       }
@@ -635,7 +652,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       for (const id of Object.keys(state.selectedLayerIds)) {
         const entry = registryEntries.find((e) => e.id === id);
         if (entry?.kind === "data") {
-          const fc = useDataLayerFCStore.getState().fcs[id];
+          const fc = currentDocument().snapshot().featureCollections[id];
           const m = useMapInstanceStore.getState().map;
           if (m) {
             // fitMapToLayer returns false (camera untouched) when the FC is
@@ -657,7 +674,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           }
         }
         // For annotation → zoom to its geo-anchor bounds
-        if (entry?.kind === "annotation") {
+        if (!isOverlayId(id)) {
           const m = useMapInstanceStore.getState().map;
           if (m) {
             const elements = excalidrawAPI.getSceneElements();
@@ -689,7 +706,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
         return;
       }
 
-      const registryEntries = useLayerRegistryStore.getState().entries;
+      const registryEntries = currentDocument().snapshot().overlays;
       const dataLayerIds = registryEntries
         .filter((e) => e.kind === "data")
         .map((e) => e.id);
@@ -750,10 +767,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     };
   }, [map, excalidrawAPI]);
 
-  // T9 — Persistence wiring (extracted to usePersistenceWiring hook): creates
-  // the PersistenceStore, loads + hydrates any previously-persisted document,
+  // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
+  // opens the last autosaved document,
   // starts auto-save, and mirrors dirty/drain state into Zustand.
   usePersistenceWiring(excalidrawAPI, documentNotify);
+  // Publish the scene for the layer panel's annotation rows and commands.
+  useSceneBinding(excalidrawAPI);
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
@@ -767,10 +786,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
   useGeoAnchor(map, excalidrawAPI);
 
-  // W-A — wire LayerRegistry to actual rendering:
-  //   Excalidraw scene-element IDs → registry annotation entries (Bug A)
-  //   registry visibility flips → opacity rewrite (annotation) / setLayoutProperty (data) (Bug B)
-  useLayerRegistrySync(map, excalidrawAPI);
+  // Draw the open document's data and raster layers on the map.
+  useLayerRegistrySync(map);
 
   // Derive pointer-events gate from active Excalidraw tool (Flow B decision node).
   // isDrawingMode=true → Excalidraw captures events; false → events pass to MapLibre.
@@ -840,6 +857,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Keyboard shortcuts (Cmd+K quick actions, Cmd+S/Cmd+O save/open, `?`
   // shortcuts panel, Escape to dismiss) — extracted to useMapEditorKeyboard.
+  //
+  // Open asks before it replaces unsaved work. The question is a promise the
+  // ConfirmDialog below settles; null means no question is open.
+  const [replacePrompt, setReplacePrompt] = useState<
+    ((yes: boolean) => void) | null
+  >(null);
+  const confirmReplace = useCallback(
+    () =>
+      new Promise<boolean>((resolve) => {
+        setReplacePrompt(() => (yes: boolean) => {
+          setReplacePrompt(null);
+          resolve(yes);
+        });
+      }),
+    [],
+  );
   useMapEditorKeyboard({
     spaceHeldRef,
     excalidrawAPI,
@@ -847,7 +880,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     setShowShortcuts,
     setShowQuickActions,
     onSave: (api) => void saveAtlasDocument(api, documentNotify),
-    onOpen: (api) => void openAtlasDocument(api, documentNotify),
+    onOpen: (api) =>
+      void openAtlasDocument(api, documentNotify, confirmReplace),
   });
 
   // T9 — subscribe to the persistence dirty flag for the MainMenu indicator.
@@ -859,7 +893,22 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // hook). ISSUES.md Direction 1: also exposes importFile() for the
   // deliberate "Import…" menu action below (native file picker), so both
   // trigger paths funnel through the same parse+dispatch pipeline.
-  const registry = useLayerRegistry();
+  // Imports and conversions add layers to the open document.
+  const addDataLayer = useCallback(
+    (
+      layer: Omit<Extract<DocumentCommand, { type: "add-data-layer" }>, "type">,
+    ) => dispatch({ type: "add-data-layer", ...layer }),
+    [],
+  );
+  const addRasterLayer = useCallback(
+    (
+      layer: Omit<
+        Extract<DocumentCommand, { type: "add-raster-layer" }>,
+        "type"
+      >,
+    ) => dispatch({ type: "add-raster-layer", ...layer }),
+    [],
+  );
   // Design doc §5 — the panel defaults closed (Priya's four-minute map never
   // opens it) but a successful import is the one moment both personas want it:
   // it is the "what did I just get?" beat, and where provenance lives. Once per
@@ -890,9 +939,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   const { importFile } = useDataFileImport(
     rootRef,
     map,
-    registry.registerDataLayer,
+    addDataLayer,
     openSheetPanelForImport,
-    registry.registerRasterLayer,
+    addRasterLayer,
   );
 
   // ISSUES.md Direction 1 — "Import…" menu action. Mirrors the hidden-
@@ -941,7 +990,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // context menu (registered internally). Extracted to useConvertToDataLayer
   // hook; its returned currentConvertibleSelection/handleConvert pair has no
   // consumer here today (no MainMenu item wires it — see the hook's header).
-  useConvertToDataLayer(map, excalidrawAPI, registry, toast);
+  useConvertToDataLayer(map, excalidrawAPI, addDataLayer, toast);
 
   // Register the LayerPanel as a tab inside Excalidraw's DefaultSidebar
   // (the sidebar that hosts Library + canvas Search). Replaces the
@@ -1052,8 +1101,12 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     if (!map || !excalidrawAPI) {
       return [];
     }
+    // Annotations first: the panel lists them above the data layers.
     return exportLegendEntries(
-      useLayerRegistryStore.getState().entries,
+      [
+        ...annotationRows(excalidrawAPI.getSceneElements()),
+        ...currentDocument().snapshot().overlays,
+      ],
       map,
       excalidrawAPI,
     );
@@ -1194,7 +1247,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                 Cmd+O / Cmd+S route to these same handlers (onKeyDown). */}
                 <MainMenu.Item
                   onSelect={() =>
-                    void openAtlasDocument(excalidrawAPI, documentNotify)
+                    void openAtlasDocument(
+                      excalidrawAPI,
+                      documentNotify,
+                      confirmReplace,
+                    )
                   }
                   data-testid="main-menu-open"
                 >
@@ -1441,9 +1498,9 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
           {/* Export — unified export surface (PNG / PDF / GeoJSON / .atlasdraw).
           The PDF pane needs the live MapLibre canvas (at export time, so the
-          PDF reflects the current viewport) and the layer registry projected
-          to legend shape: annotation entries have no color of their own → use
-          a neutral grey; data layers carry style.fillColor. */}
+          PDF reflects the current viewport) and the layers projected to legend
+          shape: annotations have no color of their own → use a neutral grey;
+          data layers carry style.fillColor. */}
           {exportDialogFormat && (
             <Suspense fallback={null}>
               <ExportDialog
@@ -1461,17 +1518,25 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
             </Suspense>
           )}
 
+          {replacePrompt && (
+            <ConfirmDialog
+              title="Open another map?"
+              body="This map has changes you have not saved to a file. Opening another map closes it."
+              confirmLabel="Open anyway"
+              onConfirm={() => replacePrompt(true)}
+              onCancel={() => replacePrompt(false)}
+            />
+          )}
+
           {/* Phase 4 T8 — ShareDialog. Mounted only when excalidrawAPI is ready
-          (selectDocument needs the imperative API). Phase 5 collab integration:
+          (the share reads the drawing). Phase 5 collab integration:
           opens to a mode picker (read-only / Collaborate) instead of auto-
           firing the read-only generate. Receives the editor's CollabState so
           the Collaborate path reuses the same socket as the editor. */}
           {showShareDialog && excalidrawAPI && (
             <ShareDialog
               onCloseRequest={() => setShowShareDialog(false)}
-              getDoc={() =>
-                selectDocument(excalidrawAPI, useLayerRegistryStore.getState())
-              }
+              getDoc={() => toFile(currentDocument())}
               client={getShareClient()}
               collabState={collabState}
             />
@@ -1576,7 +1641,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
                     "import",
                   ],
                   onSelect: () =>
-                    void openAtlasDocument(excalidrawAPI, documentNotify),
+                    void openAtlasDocument(
+                      excalidrawAPI,
+                      documentNotify,
+                      confirmReplace,
+                    ),
                 },
                 {
                   id: "save",

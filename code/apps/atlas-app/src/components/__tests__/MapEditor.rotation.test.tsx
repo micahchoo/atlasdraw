@@ -19,8 +19,9 @@ import { render, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 import { MapEditor } from "../MapEditor";
 import { ToastProvider } from "../ToastProvider";
-import { useLayerRegistryStore } from "../../state/layerRegistry";
 import { useBasemapStore } from "../../state/basemap";
+
+import { createDocument, openDocument } from "../../state/document";
 
 import type maplibregl from "maplibre-gl";
 
@@ -73,6 +74,7 @@ const EMPTY_SIDEBAR_TABS: never[] = [];
 const mockFakeExcalidrawAPI = {
   isDestroyed: false,
   getSceneElements: () => [],
+  getSceneElementsIncludingDeleted: () => [],
   getAppState: () => ({ selectedElementIds: {}, activeTool: { type: "hand" } }),
   updateScene: vi.fn(),
   toggleSidebar: vi.fn(),
@@ -185,7 +187,7 @@ beforeEach(() => {
   toolState.isDrawingMode = false;
   rotationState.degrees = 0;
   rotationState.isRotated = false;
-  useLayerRegistryStore.setState({ entries: [] });
+  openDocument(createDocument());
   useBasemapStore.setState({
     activeBasemapId: "protomaps-light",
     styleEditorOpen: false,

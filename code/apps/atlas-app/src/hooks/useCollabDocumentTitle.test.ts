@@ -9,10 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import * as Y from "yjs";
 
-import {
-  DEFAULT_DOCUMENT_TITLE,
-  useDocumentTitleStore,
-} from "../state/documentTitle";
+import { DEFAULT_DOCUMENT_TITLE, currentDocument } from "../state/document";
 
 import {
   META_MAP_KEY,
@@ -40,9 +37,7 @@ function relay(a: Y.Doc, b: Y.Doc): () => void {
   };
 }
 
-beforeEach(() => {
-  useDocumentTitleStore.setState({ title: DEFAULT_DOCUMENT_TITLE });
-});
+beforeEach(() => {});
 
 afterEach(() => {
   cleanup();
@@ -51,12 +46,15 @@ afterEach(() => {
 describe("useCollabDocumentTitle", () => {
   it("does nothing without a Y.Doc (collab inactive)", () => {
     renderHook(() => useCollabDocumentTitle(null));
-    expect(useDocumentTitleStore.getState().title).toBe(DEFAULT_DOCUMENT_TITLE);
+    expect(currentDocument().snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
   });
 
   it("publishes the local name into an empty room", () => {
     const doc = new Y.Doc();
-    useDocumentTitleStore.setState({ title: "First in the room" });
+    currentDocument().dispatch({
+      type: "rename-document",
+      title: "First in the room",
+    });
 
     renderHook(() => useCollabDocumentTitle(doc));
 
@@ -68,11 +66,14 @@ describe("useCollabDocumentTitle", () => {
   it("adopts the room's name instead of overwriting it on join", () => {
     const doc = new Y.Doc();
     doc.getMap<string>(META_MAP_KEY).set(TITLE_KEY, "Named by the host");
-    useDocumentTitleStore.setState({ title: "My local name" });
+    currentDocument().dispatch({
+      type: "rename-document",
+      title: "My local name",
+    });
 
     renderHook(() => useCollabDocumentTitle(doc));
 
-    expect(useDocumentTitleStore.getState().title).toBe("Named by the host");
+    expect(currentDocument().snapshot().title).toBe("Named by the host");
     expect(doc.getMap<string>(META_MAP_KEY).get(TITLE_KEY)).toBe(
       "Named by the host",
     );
@@ -85,7 +86,10 @@ describe("useCollabDocumentTitle", () => {
     renderHook(() => useCollabDocumentTitle(local));
 
     act(() => {
-      useDocumentTitleStore.getState().setTitle("Bidar wards");
+      currentDocument().dispatch({
+        type: "rename-document",
+        title: "Bidar wards",
+      });
     });
 
     expect(peer.getMap<string>(META_MAP_KEY).get(TITLE_KEY)).toBe(
@@ -104,7 +108,7 @@ describe("useCollabDocumentTitle", () => {
       peer.getMap<string>(META_MAP_KEY).set(TITLE_KEY, "Renamed by peer");
     });
 
-    expect(useDocumentTitleStore.getState().title).toBe("Renamed by peer");
+    expect(currentDocument().snapshot().title).toBe("Renamed by peer");
     unwire();
   });
 
@@ -119,7 +123,7 @@ describe("useCollabDocumentTitle", () => {
       peer.getMap<string>(META_MAP_KEY).set(TITLE_KEY, "Too late");
     });
 
-    expect(useDocumentTitleStore.getState().title).toBe(DEFAULT_DOCUMENT_TITLE);
+    expect(currentDocument().snapshot().title).toBe(DEFAULT_DOCUMENT_TITLE);
     unwire();
   });
 
@@ -127,14 +131,14 @@ describe("useCollabDocumentTitle", () => {
     const local = new Y.Doc();
     const peer = new Y.Doc();
     const unwire = relay(local, peer);
-    useDocumentTitleStore.setState({ title: "Keep me" });
+    currentDocument().dispatch({ type: "rename-document", title: "Keep me" });
     renderHook(() => useCollabDocumentTitle(local));
 
     act(() => {
       peer.getMap<string>(META_MAP_KEY).set(TITLE_KEY, "   ");
     });
 
-    expect(useDocumentTitleStore.getState().title).toBe("Keep me");
+    expect(currentDocument().snapshot().title).toBe("Keep me");
     unwire();
   });
 });
