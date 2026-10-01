@@ -43,6 +43,8 @@ import {
   cameraRotation,
   computeSceneBounds,
   isGeoCustomData,
+  toLngLat,
+  toScene,
 } from "@atlasdraw/geo";
 
 import type {
@@ -61,6 +63,11 @@ import { usePersistenceWiring } from "../hooks/usePersistenceWiring";
 import { useMapEditorKeyboard } from "../hooks/useMapEditorKeyboard";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
 import { useCoordinateSync } from "../hooks/useCoordinateSync";
+import {
+  isWorldCoordsEnabled,
+  useCameraBridge,
+} from "../hooks/useCameraBridge";
+import { seedShapes } from "../lib/devSeedShapes";
 import { useGeoAnchor } from "../hooks/useGeoAnchor";
 import { useLayerRegistrySync } from "../hooks/useLayerRegistrySync";
 import { useToolState } from "../hooks/useToolState";
@@ -606,6 +613,17 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   // because it sets pointer-events:none — events fall through to MapLibre
   // directly. Space+drag takes the scroll-mutation path instead.
   const spaceHeldRef = useRef(false);
+  // ADR-0015 spike: world coordinates, behind a flag. Read once per mount.
+  const [worldCoords] = useState(isWorldCoordsEnabled);
+  const [excalidrawLayer, setExcalidrawLayer] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const cameraBridge = useCameraBridge(
+    worldCoords,
+    map,
+    excalidrawAPI,
+    excalidrawLayer,
+  );
 
   // Fire onMount exactly once per (map, api) tuple. `onMount` is intentionally
   // excluded from deps so a re-rendered parent passing a fresh closure doesn't
@@ -761,11 +779,23 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
       return;
     }
     const w = window as unknown as { __atlasdraw__?: unknown };
-    w.__atlasdraw__ = { map, excalidrawAPI };
+    w.__atlasdraw__ = {
+      map,
+      excalidrawAPI,
+      // ADR-0015 spike measurement hooks.
+      worldCoords,
+      cameraBridge,
+      seed: (n: number) =>
+        seedShapes(map, excalidrawAPI, n, cameraBridge?.frame ?? null),
+      isDirty: () => usePersistenceStore.getState().isDirty,
+      clearDirty: () => usePersistenceStore.getState().clearDirty(),
+      toLngLat,
+      toScene,
+    };
     return () => {
       delete (window as unknown as { __atlasdraw__?: unknown }).__atlasdraw__;
     };
-  }, [map, excalidrawAPI]);
+  }, [map, excalidrawAPI, worldCoords, cameraBridge]);
 
   // Persistence wiring (usePersistenceWiring): creates the PersistenceStore,
   // opens the last autosaved document,
@@ -776,7 +806,11 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
 
   // Wire camera events → CoordinateSync.syncMapToScene (throttled at 16ms).
   // syncNow lets us trigger an immediate sync outside camera events (e.g. after file load).
-  const { syncNow, expectedOrigin } = useCoordinateSync(map, excalidrawAPI);
+  // Under world coordinates (ADR-0015 spike) the camera bridge replaces it.
+  const { syncNow, expectedOrigin } = useCoordinateSync(
+    worldCoords ? null : map,
+    worldCoords ? null : excalidrawAPI,
+  );
 
   // Route wheel events to the map regardless of whether Excalidraw's drawing
   // layer is on top. Without this, scroll-to-zoom is silently captured by
@@ -784,7 +818,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
   useMapWheelRouter(rootRef.current, map);
 
   // Auto-anchor stock bbox tools (rectangle/ellipse/diamond) on creation.
-  useGeoAnchor(map, excalidrawAPI);
+  // Not under world coordinates: nothing is re-derived from pixels there.
+  useGeoAnchor(worldCoords ? null : map, excalidrawAPI);
 
   // Draw the open document's data and raster layers on the map.
   useLayerRegistrySync(map);
@@ -1055,6 +1090,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
     announceMapEditor,
     setMapBg,
     spaceHeldRef,
+    worldCoords,
   });
 
   // The PDF export's image source: the SAME composite the PNG export uses, so
@@ -1180,6 +1216,8 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
           pointer-events: none (from .excalidrawLayer) — toggled to auto via
           .excalidrawLayerActive when isDrawingMode is true (Flow B gate). */}
           <div
+            ref={setExcalidrawLayer}
+            data-world-coords={worldCoords ? "on" : undefined}
             className={[
               styles.excalidrawLayer,
               isDrawingMode ? styles.excalidrawLayerActive : "",
@@ -1192,6 +1230,7 @@ export function MapEditor({ initialView, onMount }: MapEditorProps) {
               gridModeEnabled={false}
               onExcalidrawAPI={(api) => setExcalidrawAPI(api)}
               onChange={handleExcalidrawChange}
+              onScrollChange={cameraBridge?.onScrollChange}
               UIOptions={EXCALIDRAW_UI_OPTIONS}
               // Collar mode: toolbar + main menu render flush in the collar
               // frame (portal hosts provided by CollarShell above). Geo-search

@@ -44,3 +44,6 @@ export type { ResolveStyleOptions } from "./resolver";
 
 export { CoordinateSync } from "./CoordinateSync";
 export type { CoordinateSyncOptions } from "./CoordinateSync";
+// ADR-0015 spike — map camera drives Excalidraw's viewport.
+export { CameraBridge } from "./CameraBridge";
+export type { BridgeMap, BridgeScene, CameraBridgeStats } from "./CameraBridge";
