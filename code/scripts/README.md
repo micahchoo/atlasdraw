@@ -14,12 +14,6 @@ Expected values:
 
 Exits 1 and prints `FAIL: <path> license=<actual> expected=<expected>` on any mismatch.
 
-## check-patches.sh
-
-Guards vendored Excalidraw files (`packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/`) per ADR 0004 (upstream patch policy). If any of those files appear in a PR diff, `decisions/upstream-patches.md` must also be modified.
-
-CI passes `BASE_SHA` and `HEAD_SHA` env vars. Local fallback: diffs against `upstream/master...HEAD`.
-
 ## check-telemetry.sh
 
 Scans `apps/atlas-app/src/`, `apps/realtime/src/`, and `packages/sdk/src/` for forbidden telemetry imports (`@sentry/`, `firebase`, `mixpanel`, `amplitude`, `google-analytics`, `posthog`) per ADR 0006. The embed SDK and user-facing apps must never call home.
@@ -28,4 +22,4 @@ Lines annotated with `// telemetry-allowed: opt-in (ADR 0006)` are exempt (inten
 
 ## When CI runs these
 
-All three scripts run as the `atlasdraw-checks` job in `.github/workflows/atlasdraw-checks.yml` on every pull request targeting `main`.
+Nothing runs `check-license.sh` or `check-telemetry.sh` today. The `atlasdraw-checks` workflow that ran them lived in `code/.github/`, which GitHub never executes, and that directory is gone. The root `.github/workflows/ci.yml` runs `find-unfalsifiable-tests.mjs` through `yarn test:falsifiable`.

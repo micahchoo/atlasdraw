@@ -210,7 +210,6 @@ __metadata:
     canvas-roundrect-polyfill: "npm:0.0.1"
     clsx: "npm:1.1.1"
     cross-env: "npm:7.0.3"
-    dotenv: "npm:16.0.1"
     es6-promise-pool: "npm:2.5.0"
     esbuild: "npm:0.19.10"
     esbuild-sass-plugin: "npm:2.16.0"
@@ -8157,7 +8156,6 @@ __metadata:
     "@vitest/coverage-v8": "npm:3.2.7"
     "@vitest/ui": "npm:3.2.7"
     chai: "npm:4.3.6"
-    dotenv: "npm:16.0.1"
     eslint-config-prettier: "npm:8.5.0"
     eslint-config-react-app: "npm:7.0.1"
     eslint-plugin-import: "npm:2.31.0"
@@ -9358,13 +9356,6 @@ __metadata:
     no-case: "npm:^3.0.4"
     tslib: "npm:^2.0.3"
   checksum: 10/a65e3519414856df0228b9f645332f974f2bf5433370f544a681122eab59e66038fc3349b4be1cdc47152779dac71a5864f1ccda2f745e767c46e9c6543b1169
-  languageName: node
-  linkType: hard
-
-"dotenv@npm:16.0.1":
-  version: 16.0.1
-  resolution: "dotenv@npm:16.0.1"
-  checksum: 10/4b530b0cc1ecfbff93ce4641fb7bbcd5731a54c3acfbdbd00283073ec3f0cbff8e93946a68eaa6fa8ece33d442555e6a61a01da8fffb553d20838ba079bf1a20
   languageName: node
   linkType: hard
 

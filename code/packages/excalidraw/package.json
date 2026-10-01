@@ -120,7 +120,6 @@
     "ansicolor": "2.0.3",
     "autoprefixer": "10.4.7",
     "cross-env": "7.0.3",
-    "dotenv": "16.0.1",
     "esbuild": "0.19.10",
     "esbuild-sass-plugin": "2.16.0",
     "eslint-plugin-react": "7.32.2",
