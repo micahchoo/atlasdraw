@@ -218,7 +218,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
   useConvertToDataLayer(api, addDataLayer, toast);
-  useCommandKeys(session, drawingLayer);
+  useCommandKeys(session);
 
   // Drawing is off while the camera is turned. Unprojecting the corners of a
   // rectangle dragged at 30° gives a north-aligned box that is not the box

@@ -4,8 +4,10 @@
 // browser decides what reaches it, so a few cases here model the drawing as
 // an element below the window with its own keydown listener.
 
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { PinTool } from "@atlasdraw/tools";
 
 import { testSession } from "../session/__tests__/sessionFixture";
 
@@ -48,7 +50,7 @@ afterEach(() => {
 describe("a key runs its command", () => {
   it("runs the command, and the browser does not act on the key", () => {
     const save = command("save", [{ key: "s", mod: true }]);
-    renderHook(() => useCommandKeys(session, null, [save]));
+    renderHook(() => useCommandKeys(session, [save]));
 
     const event = fireKey({ key: "s", ctrlKey: true });
 
@@ -58,7 +60,7 @@ describe("a key runs its command", () => {
 
   it("takes the key before the drawing sees it", () => {
     const help = command("help", [{ key: "?" }]);
-    renderHook(() => useCommandKeys(session, null, [help]));
+    renderHook(() => useCommandKeys(session, [help]));
     const drawing = document.createElement("div");
     document.body.appendChild(drawing);
     const editor = vi.fn();
@@ -72,7 +74,7 @@ describe("a key runs its command", () => {
 
   it("leaves every other key to the drawing", () => {
     const comment = command("comment", [{ key: "c" }]);
-    renderHook(() => useCommandKeys(session, null, [comment]));
+    renderHook(() => useCommandKeys(session, [comment]));
     const drawing = document.createElement("div");
     document.body.appendChild(drawing);
     const editor = vi.fn();
@@ -93,7 +95,7 @@ describe("a key runs its command", () => {
 
   it("an unavailable command lets its key through", () => {
     const save = command("save", [{ key: "s", mod: true }], () => false);
-    renderHook(() => useCommandKeys(session, null, [save]));
+    renderHook(() => useCommandKeys(session, [save]));
 
     const event = fireKey({ key: "s", ctrlKey: true });
 
@@ -116,7 +118,7 @@ describe("typing, repeats and open dialogs", () => {
 
   it("a bare key typed into a field types; it runs nothing", () => {
     const comment = command("comment", [{ key: "c" }]);
-    renderHook(() => useCommandKeys(session, null, [comment]));
+    renderHook(() => useCommandKeys(session, [comment]));
 
     for (const tag of ["input", "textarea", "div"]) {
       fireKey({ key: "c" }, typedInto(tag));
@@ -129,7 +131,7 @@ describe("typing, repeats and open dialogs", () => {
     const palette = command("palette", [
       { key: "k", mod: true, whileTyping: true },
     ]);
-    renderHook(() => useCommandKeys(session, null, [palette]));
+    renderHook(() => useCommandKeys(session, [palette]));
 
     fireKey({ key: "k", metaKey: true }, typedInto("input"));
 
@@ -141,7 +143,7 @@ describe("typing, repeats and open dialogs", () => {
     const zoomIn = command("zoom", [
       { key: "+", mod: true, codes: ["Equal"], repeat: true },
     ]);
-    renderHook(() => useCommandKeys(session, null, [comment, zoomIn]));
+    renderHook(() => useCommandKeys(session, [comment, zoomIn]));
 
     fireKey({ key: "c" });
     fireKey({ key: "c", repeat: true });
@@ -153,17 +155,47 @@ describe("typing, repeats and open dialogs", () => {
     expect(zoomIn.run).toHaveBeenCalledTimes(2);
   });
 
-  it("while a dialog is open a bare key runs nothing; a mod key still runs", () => {
+  it("while a dialog is open no command runs, not even a mod key", () => {
     const comment = command("comment", [{ key: "c" }]);
-    const save = command("save", [{ key: "s", mod: true }]);
-    renderHook(() => useCommandKeys(session, null, [comment, save]));
-    session.view.getState().openDialog({ kind: "about" });
+    const open = command("open", [{ key: "o", mod: true }]);
+    renderHook(() => useCommandKeys(session, [comment, open]));
+    void session.view.getState().ask({
+      title: "Clear the drawing?",
+      body: "…",
+      confirmLabel: "Clear",
+    });
 
     fireKey({ key: "c" });
-    fireKey({ key: "s", ctrlKey: true });
+    const event = fireKey({ key: "o", ctrlKey: true });
 
     expect(comment.run).not.toHaveBeenCalled();
-    expect(save.run).toHaveBeenCalledTimes(1);
+    expect(open.run).not.toHaveBeenCalled();
+    // The browser's own Ctrl+O is not left to open a file picker either.
+    expect(event.defaultPrevented).toBe(true);
+    expect(session.view.getState().dialog?.kind).toBe("confirm");
+  });
+
+  it("a dialog's own command still runs on its key (Ctrl+K closes the palette)", () => {
+    const palette = command("palette", [
+      { key: "k", mod: true, whileTyping: true },
+    ]);
+    const save = command("save", [{ key: "s", mod: true }]);
+    renderHook(() => useCommandKeys(session, [palette, save]));
+    session.view.getState().openDialog({ kind: "palette" });
+    act(() => {
+      session.keys.push({
+        name: "palette",
+        layer: "dialog",
+        onKey: () => false,
+        commands: ["palette"],
+      });
+    });
+
+    fireKey({ key: "k", ctrlKey: true });
+    fireKey({ key: "s", ctrlKey: true });
+
+    expect(palette.run).toHaveBeenCalledTimes(1);
+    expect(save.run).not.toHaveBeenCalled();
   });
 });
 
@@ -179,7 +211,7 @@ describe("the editor's commands on their keys", () => {
   }
 
   it("? opens the shortcuts, c toggles comment mode, m the Measure tool, Ctrl+K the palette", () => {
-    renderHook(() => useCommandKeys(session, null));
+    renderHook(() => useCommandKeys(session));
     const view = () => session.view.getState();
 
     fireKey({ key: "c" });
@@ -196,7 +228,7 @@ describe("the editor's commands on their keys", () => {
   it("the zoom keys move the map, from the numpad too", () => {
     const map = fakeMap();
     session.view.getState().setMap(map as unknown as maplibregl.Map);
-    renderHook(() => useCommandKeys(session, null));
+    renderHook(() => useCommandKeys(session));
 
     fireKey({ key: "=", code: "Equal", ctrlKey: true });
     fireKey({ key: "+", code: "NumpadAdd", metaKey: true });
@@ -208,7 +240,7 @@ describe("the editor's commands on their keys", () => {
 
 describe("Escape", () => {
   it("leaves comment mode", () => {
-    renderHook(() => useCommandKeys(session, null));
+    renderHook(() => useCommandKeys(session));
     session.view.getState().setCommentMode(true);
 
     fireKey({ key: "Escape" });
@@ -216,8 +248,32 @@ describe("Escape", () => {
     expect(session.view.getState().commentMode).toBe(false);
   });
 
+  it("cancels the Pin tool (its hint promises it)", () => {
+    renderHook(() => useCommandKeys(session));
+    act(() => session.view.getState().setAtlasTool(PinTool));
+
+    const event = fireKey({ key: "Escape" });
+
+    expect(session.view.getState().atlasTool).toBeNull();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("in an open menu, closes the menu and leaves the tool on", () => {
+    renderHook(() => useCommandKeys(session));
+    act(() => session.view.getState().setAtlasTool(PinTool));
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    const item = document.createElement("button");
+    menu.appendChild(item);
+    document.body.appendChild(menu);
+
+    fireKey({ key: "Escape" }, item);
+
+    expect(session.view.getState().atlasTool).toBe(PinTool);
+  });
+
   it("with a dialog open, leaves the mode alone: the dialog takes its own Escape", () => {
-    renderHook(() => useCommandKeys(session, null));
+    renderHook(() => useCommandKeys(session));
     session.view.getState().setCommentMode(true);
     session.view.getState().openDialog({ kind: "shortcuts" });
 
@@ -228,7 +284,8 @@ describe("Escape", () => {
 
   describe("with focus in the drawing", () => {
     // Excalidraw takes Escape at its root while a tool other than selection
-    // is active and stops it there, so a window listener never hears it.
+    // is active and stops it there. The key scopes listen on the window in
+    // the capture phase, before it.
     function drawing() {
       const layer = document.createElement("div");
       const canvas = document.createElement("div");
@@ -240,8 +297,8 @@ describe("Escape", () => {
     }
 
     it("leaves comment mode before the drawing sees it", () => {
-      const { layer, canvas, excalidraw } = drawing();
-      renderHook(() => useCommandKeys(session, layer));
+      const { canvas, excalidraw } = drawing();
+      renderHook(() => useCommandKeys(session));
       session.view.getState().setCommentMode(true);
 
       fireKey({ key: "Escape" }, canvas);
@@ -251,8 +308,8 @@ describe("Escape", () => {
     });
 
     it("goes to the drawing when comment mode is off", () => {
-      const { layer, canvas, excalidraw } = drawing();
-      renderHook(() => useCommandKeys(session, layer));
+      const { canvas, excalidraw } = drawing();
+      renderHook(() => useCommandKeys(session));
 
       fireKey({ key: "Escape" }, canvas);
 
@@ -265,7 +322,7 @@ describe("Escape", () => {
       layer.appendChild(textarea);
       const typed = vi.fn();
       textarea.addEventListener("keydown", typed);
-      renderHook(() => useCommandKeys(session, layer));
+      renderHook(() => useCommandKeys(session));
       session.view.getState().setCommentMode(true);
 
       fireKey({ key: "Escape" }, textarea);

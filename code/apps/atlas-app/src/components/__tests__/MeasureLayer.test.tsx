@@ -324,6 +324,32 @@ describe("Measure tool", () => {
     }
   });
 
+  it("hears no key while a dialog is open above it", () => {
+    const map = new MeasureMap(7, { lng: 1, lat: 50.2 });
+    renderLayer(map, fakeEditor([]).api);
+    act(() => session.view.getState().setMeasuring(true));
+    clickAt(map, LONDON);
+    clickAt(map, PARIS);
+    const pop = session.keys.push({
+      name: "confirm",
+      layer: "dialog",
+      onKey: () => false,
+    });
+    try {
+      const enter = fireEvent.keyDown(document.body, { key: "Enter" });
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      fireEvent.keyDown(document.body, { key: "Backspace" });
+
+      // Enter is left to the dialog's focused button.
+      expect(enter).toBe(true);
+      expect(screen.queryByTestId("measure-keep-line")).toBeNull();
+      expect(session.view.getState().measuring).toBe(true);
+      expect(text("measure-distance")).not.toBe("Click the map to start");
+    } finally {
+      pop();
+    }
+  });
+
   it("turns off when another tool starts", () => {
     const map = new MeasureMap(7, LONDON);
     const ed = fakeEditor([]);
