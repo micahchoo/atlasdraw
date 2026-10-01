@@ -32,6 +32,7 @@ import {
   getCommonBoundingBox,
   getElementBounds,
 } from "./bounds";
+import { styleUnit } from "./atlasStyleUnit";
 import { LinearElementEditor } from "./linearElementEditor";
 import {
   getBoundTextElement,
@@ -357,6 +358,7 @@ export const resizeSingleTextElement = (
         fontFamily: element.fontFamily,
       }),
       element.lineHeight,
+      styleUnit(element), // Atlasdraw
     );
 
     const newWidth = Math.max(minWidth, nextWidth);
@@ -784,10 +786,12 @@ export const resizeSingleElement = (
       const minWidth = getApproxMinLineWidth(
         getFontString(boundTextElement),
         boundTextElement.lineHeight,
+        styleUnit(latestElement), // Atlasdraw
       );
       const minHeight = getApproxMinLineHeight(
         boundTextElement.fontSize,
         boundTextElement.lineHeight,
+        styleUnit(latestElement), // Atlasdraw
       );
       nextWidth = Math.max(nextWidth, minWidth);
       nextHeight = Math.max(nextHeight, minHeight);

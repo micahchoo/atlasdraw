@@ -33,22 +33,26 @@ const DUMMY_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toLocaleUpperCase();
 export const getApproxMinLineWidth = (
   font: FontString,
   lineHeight: ExcalidrawTextElement["lineHeight"],
+  unit = 1, // Atlasdraw: the container's pixel unit (atlasStyleUnit.ts).
 ) => {
   const maxCharWidth = getMaxCharWidth(font);
   if (maxCharWidth === 0) {
     return (
       measureText(DUMMY_TEXT.split("").join("\n"), font, lineHeight).width +
-      BOUND_TEXT_PADDING * 2
+      BOUND_TEXT_PADDING * 2 * unit
     );
   }
-  return maxCharWidth + BOUND_TEXT_PADDING * 2;
+  return maxCharWidth + BOUND_TEXT_PADDING * 2 * unit;
 };
 
 export const getMinTextElementWidth = (
   font: FontString,
   lineHeight: ExcalidrawTextElement["lineHeight"],
+  unit = 1, // Atlasdraw: the text's pixel unit (atlasStyleUnit.ts).
 ) => {
-  return measureText("", font, lineHeight).width + BOUND_TEXT_PADDING * 2;
+  return (
+    measureText("", font, lineHeight).width + BOUND_TEXT_PADDING * 2 * unit
+  );
 };
 
 export const isMeasureTextSupported = () => {
@@ -100,8 +104,11 @@ export const getLineHeightInPx = (
 export const getApproxMinLineHeight = (
   fontSize: ExcalidrawTextElement["fontSize"],
   lineHeight: ExcalidrawTextElement["lineHeight"],
+  unit = 1, // Atlasdraw: the container's pixel unit (atlasStyleUnit.ts).
 ) => {
-  return getLineHeightInPx(fontSize, lineHeight) + BOUND_TEXT_PADDING * 2;
+  return (
+    getLineHeightInPx(fontSize, lineHeight) + BOUND_TEXT_PADDING * 2 * unit
+  );
 };
 
 let textMetricsProvider: TextMetricsProvider | undefined;

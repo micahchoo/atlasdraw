@@ -7,7 +7,9 @@ import { ROUNDNESS } from "@atlasdraw/common";
 
 import type { LocalPoint } from "@atlasdraw/math";
 
-import { styleUnit } from "../src/atlasStyleUnit";
+import { editorUnit, styleUnit } from "../src/atlasStyleUnit";
+import { getBindingGap, maxBindingDistance_simple } from "../src/binding";
+import { computeContainerDimensionForBoundText } from "../src/textElement";
 import { getArrowheadPoints } from "../src/bounds";
 import { newArrowElement, newElement } from "../src/newElement";
 import { ShapeCache, generateRoughOptions } from "../src/shape";
@@ -119,5 +121,50 @@ describe("details drawn in the element's pixel unit", () => {
       });
     expect(getCornerRadius(1e9, rounded())).toBe(32);
     expect(getCornerRadius(1e9, rounded(UNIT))).toBe(32 * UNIT);
+  });
+});
+
+describe("distances in the element's and the editor's unit", () => {
+  const view = (zoom: number, screenSizedStyles: boolean) => ({
+    zoom: { value: zoom },
+    screenSizedStyles,
+  });
+
+  it("the editor's unit is one pixel at its zoom, or 1 upstream", () => {
+    expect(editorUnit(view(1 / UNIT, true))).toBe(UNIT);
+    expect(editorUnit(view(1 / UNIT, false))).toBe(1);
+  });
+
+  it("the binding reach is upstream's at zoom 1, in the editor's unit", () => {
+    const atZoom1 = maxBindingDistance_simple(view(1, false));
+    expect(maxBindingDistance_simple(view(1 / UNIT, true))).toBe(
+      atZoom1 * UNIT,
+    );
+    // Upstream's zoom rule is kept without the prop.
+    expect(maxBindingDistance_simple(view(0.25, false))).toBe(30);
+  });
+
+  it("the binding gap is in the arrow's unit; the target's stroke adds", () => {
+    const target = newElement({
+      type: "rectangle",
+      x: 0,
+      y: 0,
+      strokeWidth: 2 * UNIT,
+    }) as Parameters<typeof getBindingGap>[0];
+    const plain = getBindingGap(
+      { ...target, strokeWidth: 2 },
+      {
+        elbowed: false,
+      },
+    );
+    expect(getBindingGap(target, { elbowed: false, ...withUnit(UNIT) })).toBe(
+      plain * UNIT,
+    );
+  });
+
+  it("bound-text padding is in the container's unit", () => {
+    expect(
+      computeContainerDimensionForBoundText(100 * UNIT, "rectangle", UNIT),
+    ).toBe(computeContainerDimensionForBoundText(100, "rectangle") * UNIT);
   });
 });

@@ -56,6 +56,7 @@ import {
 } from "./typeChecks";
 
 import { aabbForElement, elementCenterPoint } from "./bounds";
+import { editorUnit, styleUnit } from "./atlasStyleUnit";
 import { updateElbowArrowPoints } from "./elbowArrow";
 import {
   deconstructDiamondElement,
@@ -63,6 +64,7 @@ import {
   projectFixedPointOntoDiagonal,
 } from "./utils";
 
+import type { EditorView } from "./atlasStyleUnit";
 import type { Scene } from "./Scene";
 
 import type { ElementUpdate } from "./mutateElement";
@@ -116,23 +118,37 @@ export const FOCUS_POINT_SIZE = 10 / 1.5;
 
 export const getBindingGap = (
   bindTarget: ExcalidrawBindableElement,
-  opts: Pick<ExcalidrawArrowElement, "elbowed">,
+  opts: Pick<ExcalidrawArrowElement, "elbowed"> &
+    Partial<Pick<ExcalidrawArrowElement, "customData">>,
 ): number => {
   return (
-    (opts.elbowed ? BASE_BINDING_GAP_ELBOW : BASE_BINDING_GAP) +
+    // Atlasdraw: the gap is in the arrow's pixel unit (atlasStyleUnit.ts).
+    (opts.elbowed ? BASE_BINDING_GAP_ELBOW : BASE_BINDING_GAP) *
+      styleUnit(opts) +
     bindTarget.strokeWidth / 2
   );
 };
 
-export const maxBindingDistance_simple = (zoom?: AppState["zoom"]): number => {
+/**
+ * Atlasdraw: `view` gives the editor's unit (atlasStyleUnit.ts#editorUnit);
+ * without a view, `unit` is the unit of the arrow being routed.
+ */
+export const maxBindingDistance_simple = (
+  view?: EditorView,
+  unit: number = view ? editorUnit(view) : 1,
+): number => {
   const BASE_BINDING_DISTANCE = Math.max(BASE_BINDING_GAP, 15);
-  const zoomValue = zoom?.value && zoom.value < 1 ? zoom.value : 1;
-  return clamp(
-    // reducing zoom impact so that the diff between binding distance and
-    // binding gap is kept to minimum when possible
-    BASE_BINDING_DISTANCE / (zoomValue * 1.5),
-    BASE_BINDING_DISTANCE,
-    BASE_BINDING_DISTANCE * 2,
+  // Atlasdraw: the zoom relative to the unit; upstream's when the unit is 1.
+  const relativeZoom = view ? view.zoom.value * unit : 1;
+  const zoomValue = relativeZoom && relativeZoom < 1 ? relativeZoom : 1;
+  return (
+    clamp(
+      // reducing zoom impact so that the diff between binding distance and
+      // binding gap is kept to minimum when possible
+      BASE_BINDING_DISTANCE / (zoomValue * 1.5),
+      BASE_BINDING_DISTANCE,
+      BASE_BINDING_DISTANCE * 2,
+    ) * unit
   );
 };
 
@@ -249,7 +265,8 @@ const bindingStrategyForElbowArrowEndpointDragging = (
   draggingPoints: PointsPositionUpdates,
   elementsMap: NonDeletedSceneElementsMap,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
-  zoom?: AppState["zoom"],
+  // Atlasdraw: the editor's unit (atlasStyleUnit.ts). Upstream passed no zoom.
+  unit = 1,
 ): {
   start: BindingStrategy;
   end: BindingStrategy;
@@ -273,7 +290,7 @@ const bindingStrategyForElbowArrowEndpointDragging = (
     globalPoint,
     elements,
     elementsMap,
-    maxBindingDistance_simple(zoom),
+    maxBindingDistance_simple(undefined, unit),
   );
 
   const current = hit
@@ -675,7 +692,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
       draggingPoints,
       elementsMap,
       elements,
-      opts?.zoom,
+      editorUnit(appState), // Atlasdraw: was `opts?.zoom`, never passed.
     );
   }
 
@@ -698,7 +715,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
     globalPoint,
     elements,
     elementsMap,
-    maxBindingDistance_simple(appState.zoom),
+    maxBindingDistance_simple(appState),
   );
   const pointInElement =
     hit &&
@@ -811,7 +828,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
               hit,
               startDragged ? "start" : "end",
               elementsMap,
-              appState.zoom,
+              appState,
               appState.isMidpointSnappingEnabled,
             ) || globalPoint,
         }
@@ -829,7 +846,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
       point: globalPoint,
       element: otherBindableElement,
       elementsMap,
-      threshold: maxBindingDistance_simple(appState.zoom),
+      threshold: maxBindingDistance_simple(appState),
       overrideShouldTestInside: true,
     });
   const otherNeverOverride = opts?.newArrow
@@ -856,7 +873,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
               otherBindableElement,
               startDragged ? "end" : "start",
               elementsMap,
-              appState.zoom,
+              appState,
               appState.isMidpointSnappingEnabled,
             ) || otherEndpoint,
         }
@@ -923,6 +940,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_complex = (
       draggingPoints,
       elementsMap,
       elements,
+      editorUnit(appState), // Atlasdraw
     );
   }
 
@@ -1231,7 +1249,7 @@ const updateArrowBindings = (
       element: bindableElement,
       point,
       elementsMap,
-      threshold: maxBindingDistance_simple(appState.zoom),
+      threshold: maxBindingDistance_simple(appState),
     });
   const strategyName = startOrEnd === "startBinding" ? "start" : "end";
   unbindBindingElement(latestElement, strategyName, scene);
@@ -1328,7 +1346,7 @@ export const getHeadingForElbowArrowSnap = (
   aabb: Bounds | undefined | null,
   origPoint: GlobalPoint,
   elementsMap: ElementsMap,
-  zoom?: AppState["zoom"],
+  unit = 1, // Atlasdraw: was `zoom`, never passed; the arrow's pixel unit.
 ): Heading => {
   const otherPointHeading = vectorToHeading(vectorFromPoint(otherPoint, p));
 
@@ -1340,7 +1358,7 @@ export const getHeadingForElbowArrowSnap = (
     origPoint,
     bindableElement,
     elementsMap,
-    zoom,
+    unit,
   );
 
   if (!distance) {
@@ -1356,10 +1374,10 @@ const getDistanceForBinding = (
   point: Readonly<GlobalPoint>,
   bindableElement: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
-  zoom?: AppState["zoom"],
+  unit = 1, // Atlasdraw: was `zoom`, never passed.
 ) => {
   const distance = distanceToElement(bindableElement, elementsMap, point);
-  const bindDistance = maxBindingDistance_simple(zoom);
+  const bindDistance = maxBindingDistance_simple(undefined, unit);
 
   return distance > bindDistance ? null : distance;
 };
@@ -1456,7 +1474,7 @@ export const bindPointToSnapToElementOutline = (
         bindableElement,
         elementsMap,
         anotherIntersector,
-        BASE_BINDING_GAP_ELBOW,
+        BASE_BINDING_GAP_ELBOW * styleUnit(arrowElement), // Atlasdraw: arrow's unit.
       ).sort(pointDistanceSq)[0];
     }
   } else {
@@ -1608,8 +1626,10 @@ export const snapToMid = (
 
   // snap-to-center point is adaptive to element size, but we don't want to go
   // above and below certain px distance
-  const verticalThreshold = clamp(tolerance * height, 5, 80);
-  const horizontalThreshold = clamp(tolerance * width, 5, 80);
+  // Atlasdraw: the px limits in the arrow's (or target's) pixel unit.
+  const unit = styleUnit(arrowElement ?? bindTarget);
+  const verticalThreshold = clamp(tolerance * height, 5 * unit, 80 * unit);
+  const horizontalThreshold = clamp(tolerance * width, 5 * unit, 80 * unit);
 
   // Too close to the center makes it hard to resolve direction precisely
   if (pointDistance(center, nonRotated) < bindingGap) {
@@ -1864,7 +1884,7 @@ export const updateBoundPoint = (
     : otherArrowPoint;
   const arrowTooShort =
     pointDistance(otherTargetPoint, outlinePoint || focusPoint) <=
-    BASE_ARROW_MIN_LENGTH;
+    BASE_ARROW_MIN_LENGTH * styleUnit(arrow); // Atlasdraw: arrow's unit.
 
   // 2. If the arrow is unconnected at the other end, just check arrow size
   // and short-circuit to the focus point if the arrow is too short to

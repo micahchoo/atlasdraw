@@ -247,6 +247,8 @@ import {
   doBoundsIntersect,
   isPointInElement,
   maxBindingDistance_simple,
+  editorUnit,
+  styleUnit,
   convertToExcalidrawElements,
   type ExcalidrawElementSkeleton,
   getSnapOutlineMidPoint,
@@ -954,6 +956,8 @@ class App extends React.Component<AppProps, AppState> {
       viewModeEnabled,
       zenModeEnabled,
       objectsSnapModeEnabled,
+      // Atlasdraw (ADR-0015): the prop, mirrored for the element package.
+      screenSizedStyles: !!props.screenSizedStyles,
       gridModeEnabled: gridModeEnabled ?? defaultAppState.gridModeEnabled,
       name,
       width: window.innerWidth,
@@ -3460,6 +3464,11 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ zenModeEnabled: !!this.props.zenModeEnabled });
     }
 
+    // Atlasdraw (ADR-0015): the prop wins over a scene update or restore.
+    if (this.state.screenSizedStyles !== !!this.props.screenSizedStyles) {
+      this.setState({ screenSizedStyles: !!this.props.screenSizedStyles });
+    }
+
     if (prevProps.theme !== this.props.theme && this.props.theme) {
       this.setState({ theme: this.props.theme });
     }
@@ -5116,14 +5125,16 @@ class App extends React.Component<AppProps, AppState> {
           (el) => !arrowIdsToRemove.has(el.id),
         );
 
+        // Atlasdraw: the nudge is screen pixels in the editor's unit.
+        const nudge = editorUnit(this.state);
         const step =
           (this.getEffectiveGridSize() &&
             (event.shiftKey
-              ? ELEMENT_TRANSLATE_AMOUNT
+              ? ELEMENT_TRANSLATE_AMOUNT * nudge
               : this.getEffectiveGridSize())) ||
           (event.shiftKey
-            ? ELEMENT_SHIFT_TRANSLATE_AMOUNT
-            : ELEMENT_TRANSLATE_AMOUNT);
+            ? ELEMENT_SHIFT_TRANSLATE_AMOUNT * nudge
+            : ELEMENT_TRANSLATE_AMOUNT * nudge);
 
         let offsetX = 0;
         let offsetY = 0;
@@ -6192,8 +6203,13 @@ class App extends React.Component<AppProps, AppState> {
       const minWidth = getApproxMinLineWidth(
         getFontString(fontString),
         lineHeight,
+        styleUnit(container), // Atlasdraw
       );
-      const minHeight = getApproxMinLineHeight(fontSize, lineHeight);
+      const minHeight = getApproxMinLineHeight(
+        fontSize,
+        lineHeight,
+        styleUnit(container), // Atlasdraw
+      );
       const newHeight = Math.max(container.height, minHeight);
       const newWidth = Math.max(container.width, minWidth);
       this.scene.mutateElement(container, {
@@ -6870,7 +6886,7 @@ class App extends React.Component<AppProps, AppState> {
           globalPoint,
           this.scene.getNonDeletedElements(),
           elementsMap,
-          maxBindingDistance_simple(this.state.zoom),
+          maxBindingDistance_simple(this.state),
         );
         if (hoveredElement) {
           this.setState({
@@ -6880,7 +6896,7 @@ class App extends React.Component<AppProps, AppState> {
                 globalPoint,
                 hoveredElement,
                 elementsMap,
-                this.state.zoom,
+                this.state,
               ),
             },
           });
@@ -6909,7 +6925,7 @@ class App extends React.Component<AppProps, AppState> {
             pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
             this.scene.getNonDeletedElements(),
             this.scene.getNonDeletedElementsMap(),
-            maxBindingDistance_simple(this.state.zoom),
+            maxBindingDistance_simple(this.state),
           );
         if (hoveredElement) {
           this.actionManager.executeAction(actionFinalize, "ui", {
@@ -7059,7 +7075,7 @@ class App extends React.Component<AppProps, AppState> {
         pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
         this.scene.getNonDeletedElements(),
         this.scene.getNonDeletedElementsMap(),
-        maxBindingDistance_simple(this.state.zoom),
+        maxBindingDistance_simple(this.state),
       );
       const scenePointer = pointFrom<GlobalPoint>(scenePointerX, scenePointerY);
       const elementsMap = this.scene.getNonDeletedElementsMap();
@@ -7071,7 +7087,7 @@ class App extends React.Component<AppProps, AppState> {
               scenePointer,
               hit,
               elementsMap,
-              this.state.zoom,
+              this.state,
             ),
           },
         });
@@ -9230,7 +9246,7 @@ class App extends React.Component<AppProps, AppState> {
                       point,
                       boundElement,
                       elementsMap,
-                      this.state.zoom,
+                      this.state,
                     ),
                   }
                 : null,
@@ -10709,6 +10725,7 @@ class App extends React.Component<AppProps, AppState> {
             fontFamily: newElement.fontFamily,
           }),
           newElement.lineHeight,
+          styleUnit(newElement), // Atlasdraw
         );
 
         if (newElement.width < minWidth) {
@@ -12749,7 +12766,8 @@ class App extends React.Component<AppProps, AppState> {
         y - elementCenterY,
       );
       const isSnappedToCenter =
-        distanceToCenter < TEXT_TO_CENTER_SNAP_THRESHOLD;
+        // Atlasdraw: in the editor's unit (atlasStyleUnit.ts).
+        distanceToCenter < TEXT_TO_CENTER_SNAP_THRESHOLD * editorUnit(appState);
       if (isSnappedToCenter) {
         const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
           { sceneX: elementCenterX, sceneY: elementCenterY },

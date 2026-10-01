@@ -224,6 +224,8 @@ export type InteractiveCanvasAppState = Readonly<
     newElement: AppState["newElement"];
     isBindingEnabled: AppState["isBindingEnabled"];
     isMidpointSnappingEnabled: AppState["isMidpointSnappingEnabled"];
+    // Atlasdraw: the binding reach is drawn in the editor's unit.
+    screenSizedStyles: AppState["screenSizedStyles"];
     suggestedBinding: AppState["suggestedBinding"];
     isRotating: AppState["isRotating"];
     elementsToHighlight: AppState["elementsToHighlight"];
@@ -315,6 +317,11 @@ export interface AppState {
   bindingPreference: "enabled" | "disabled";
   /** user preference whether arrow snap to midpoints while binding */
   isMidpointSnappingEnabled: boolean;
+  /**
+   * Atlasdraw (ADR-0015): the `screenSizedStyles` prop. The editor's own
+   * distances (binding reach, nudge, snaps) are then screen pixels at every zoom.
+   */
+  screenSizedStyles: boolean;
   /**
    * The bindable element the UI highlights for the user when an arrow is
    * dragged or otherwise its endpoint being close to said element.

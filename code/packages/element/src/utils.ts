@@ -28,11 +28,7 @@ import {
 
 import type { Curve, LineSegment, LocalPoint } from "@atlasdraw/math";
 
-import type {
-  AppState,
-  NormalizedZoomValue,
-  Zoom,
-} from "@atlasdraw/excalidraw/types";
+import type { NormalizedZoomValue, Zoom } from "@atlasdraw/excalidraw/types";
 
 import { styleUnit } from "./atlasStyleUnit";
 import { elementCenterPoint, getDiamondPoints } from "./bounds";
@@ -49,6 +45,7 @@ import {
   normalizeFixedPoint,
 } from "./binding";
 
+import type { EditorView } from "./atlasStyleUnit";
 import type {
   ElementsMap,
   ExcalidrawArrowElement,
@@ -594,7 +591,7 @@ export const getSnapOutlineMidPoint = (
   point: GlobalPoint,
   element: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
-  zoom: AppState["zoom"],
+  view: EditorView, // Atlasdraw: was `zoom`; carries the editor's unit.
 ) => {
   const center = elementCenterPoint(element, elementsMap);
   const sideMidpoints =
@@ -640,7 +637,7 @@ export const getSnapOutlineMidPoint = (
   const candidate = sideMidpoints.find(
     (midpoint) =>
       pointDistance(point, midpoint) <=
-        maxBindingDistance_simple(zoom) + element.strokeWidth / 2 &&
+        maxBindingDistance_simple(view) + element.strokeWidth / 2 &&
       !hitElementItself({
         point,
         element,
@@ -659,7 +656,7 @@ export const projectFixedPointOntoDiagonal = (
   element: ExcalidrawBindableElement,
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
-  zoom: AppState["zoom"],
+  view: EditorView, // Atlasdraw: was `zoom`; carries the editor's unit.
   isMidpointSnappingEnabled: boolean = true,
 ): GlobalPoint | null => {
   invariant(arrow.points.length >= 2, "Arrow must have at least two points");
@@ -672,7 +669,7 @@ export const projectFixedPointOntoDiagonal = (
       point,
       element,
       elementsMap,
-      zoom,
+      view,
     );
     if (sideMidPoint) {
       return sideMidPoint;
