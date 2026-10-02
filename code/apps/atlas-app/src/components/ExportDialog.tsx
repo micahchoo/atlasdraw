@@ -40,6 +40,7 @@ import { useDocument } from "../state/document";
 
 import styles from "../styles/ExportDialog.module.css";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 import type { MapView } from "../lib/mapView";
@@ -256,15 +257,15 @@ export function ExportDialog({
       {/* Header */}
       <div className={styles.header}>
         <span className={styles.title}>Export</span>
-        <button
-          type="button"
-          className={styles.closeBtn}
+        <Button
+          variant="ghost-icon"
+          size="sm"
           onClick={onCloseRequest}
           aria-label="Close"
           data-testid="export-dialog-close"
         >
           ×
-        </button>
+        </Button>
       </div>
 
       {/* Format cards */}
@@ -455,17 +456,11 @@ export function ExportDialog({
 
       {/* Footer */}
       <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.cancelBtn}
-          onClick={onCloseRequest}
-          data-testid="export-dialog-cancel"
-        >
+        <Button onClick={onCloseRequest} data-testid="export-dialog-cancel">
           Cancel
-        </button>
-        <button
-          type="button"
-          className={styles.exportBtn}
+        </Button>
+        <Button
+          variant="primary"
           onClick={handleExport}
           disabled={exporting}
           aria-disabled={exporting}
@@ -474,7 +469,7 @@ export function ExportDialog({
           {exporting
             ? "Exporting…"
             : `Export ${FORMATS.find((f) => f.id === format)?.label}`}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

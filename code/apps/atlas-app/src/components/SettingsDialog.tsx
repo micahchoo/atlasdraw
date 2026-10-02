@@ -13,6 +13,7 @@ import styles from "../styles/SettingsDialog.module.css";
 
 import { getAppConfig } from "../config/app-config";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 // ---------------------------------------------------------------------------
@@ -51,15 +52,15 @@ export function SettingsDialog({ onCloseRequest }: SettingsDialogProps) {
       {/* Header */}
       <div className={styles.header}>
         <span className={styles.title}>Settings</span>
-        <button
-          type="button"
-          className={styles.closeBtn}
+        <Button
+          variant="ghost-icon"
+          size="sm"
           onClick={onCloseRequest}
           aria-label="Close"
           data-testid="settings-dialog-close"
         >
           ×
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -88,14 +89,13 @@ export function SettingsDialog({ onCloseRequest }: SettingsDialogProps) {
 
       {/* Footer */}
       <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.footerBtn}
+        <Button
+          variant="primary"
           onClick={onCloseRequest}
           data-testid="settings-dialog-done"
         >
           Done
-        </button>
+        </Button>
       </div>
     </Modal>
   );
