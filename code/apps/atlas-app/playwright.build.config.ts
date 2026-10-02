@@ -57,6 +57,9 @@ const BUILDS = {
       VITE_BUILD_TARGET: "hosted",
       VITE_STORAGE_BASE_URL: "/api",
       VITE_REALTIME_ENABLED: "true",
+      // Keeps window.__atlasdraw__ (hooks/useDevHandles.ts) for the specs
+      // that read the session. Pages builds without it, as pages.yml does.
+      VITE_E2E_HOOKS: "1",
       // vite.config.ts: preview serves the storage server at /api.
       PREVIEW_API_PROXY: `http://localhost:${STORAGE_PORT}`,
     },
@@ -77,7 +80,13 @@ const BUILDS = {
 process.env.E2E_TARGET = TARGET;
 
 export default defineConfig({
-  testDir: "./e2e-build",
+  testDir: ".",
+  // The hosted build has the e2e hook, so it also runs the dev-suite specs
+  // that need it and are about built behaviour.
+  testMatch: [
+    "e2e-build/**/*.spec.ts",
+    ...(TARGET === "hosted" ? ["e2e/one-history.spec.ts"] : []),
+  ],
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

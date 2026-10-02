@@ -148,10 +148,14 @@ function paintedBox(page: Page) {
   });
 }
 
-async function expectRectangle(page: Page): Promise<void> {
+/** The drawing is painted; at the size it was drawn unless `anySize`. */
+async function expectRectangle(page: Page, anySize = false): Promise<void> {
   await expect
     .poll(() => paintedBox(page), { message: "the rectangle is drawn" })
     .not.toBeNull();
+  if (anySize) {
+    return;
+  }
   const box = (await paintedBox(page))!;
   expect(box.width).toBeGreaterThan(RECT.x1 - RECT.x0 - 8);
   expect(box.width).toBeLessThan(RECT.x1 - RECT.x0 + 8);
@@ -167,15 +171,17 @@ async function shareLink(page: Page): Promise<string> {
   return page.getByTestId("share-dialog-url").inputValue();
 }
 
-test("the editor boots under its base path, with no development hook", async ({
+test("the editor boots under its base path; only an e2e build has the hook", async ({
   page,
 }) => {
   const seen = await watch(page);
   await openEditor(page);
+  // Pages builds as pages.yml does, so this is the published build's
+  // answer. The hosted build sets VITE_E2E_HOOKS=1 (the config).
   expect(
     await page.evaluate(() => "__atlasdraw__" in window),
-    "a production build exposes no development hook",
-  ).toBe(false);
+    "the development hook is in an e2e build only",
+  ).toBe(TARGET === "hosted");
   // MapLibre's worker loads from the build (lib/maplibreWorker.ts); a wrong
   // worker URL logs "Worker failed to load" and the map paints no tiles.
   await page.waitForTimeout(1500);
@@ -229,7 +235,9 @@ test("an embed link shows the drawing without the editor, under the base path", 
   const embedSeen = await watch(embed);
   await embed.goto(embedUrl);
   await expect(embed.locator("canvas.maplibregl-canvas")).toBeVisible();
-  await expectRectangle(embed);
+  // The embed frames the drawing itself (hooks/useEmbedCamera.ts), so its
+  // size on screen is the embed's choice.
+  await expectRectangle(embed, true);
   await expect(embed.getByRole("radio", { name: "Rectangle" })).toHaveCount(0);
   await expect(embed.getByTestId("viewer-head")).toHaveCount(0);
   await expectClean(page, seen);
