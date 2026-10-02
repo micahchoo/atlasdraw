@@ -32,7 +32,7 @@
 .buttonActive,
 .buttonActive:hover {
   background: var(--color-primary, #6965db);
-  color: var(--color-primary-contrast, #ffffff);
+  color: var(--ad-ink-inverse);
 }
 
 .icon {

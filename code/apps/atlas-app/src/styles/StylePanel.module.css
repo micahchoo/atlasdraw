@@ -190,7 +190,7 @@
 
 .previewLabel {
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--ad-veil);
   color: var(--ad-ink);
   padding: 0 2px;
   border-radius: 2px;

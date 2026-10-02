@@ -1578,7 +1578,7 @@ function TileLayersSection({
 // CommentsPanel, one level down. Comments are a mode (the toolbar toggle +
 // `C`, threads anchored on the map); this section is the review pass — read
 // every thread in order, resolve the stale ones — in the same Sheet scope as
-// Basemap / Data Layers / Annotations.
+// Basemap / Data layers / Annotations.
 //
 // Collapsed by default, deliberately: it is the review surface, not the
 // default one, and an always-open chronological list is a mostly empty
@@ -1910,8 +1910,8 @@ export function LayerPanel() {
           ))
         )}
       </section>
-      <section aria-label="Data Layers" className={styles.section}>
-        <h3 className={styles.heading}>Data Layers</h3>
+      <section aria-label="Data layers" className={styles.section}>
+        <h3 className={styles.heading}>Data layers</h3>
         {showFilter && (
           <div className={styles.filterRow}>
             <label htmlFor="layer-filter" className={styles.srOnly}>

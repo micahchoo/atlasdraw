@@ -9,7 +9,7 @@
   align-items: flex-start;
   justify-content: center;
   padding-top: 18vh;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--ad-scrim);
 }
 
 .panel {

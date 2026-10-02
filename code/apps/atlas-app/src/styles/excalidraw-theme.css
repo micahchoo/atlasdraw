@@ -7,6 +7,11 @@
  *
  * Target: .excalidraw scoped — only affects Excalidraw's chrome surfaces.
  * Atlas-side overlays use --ad-* tokens directly from :root.
+ *
+ * Every value here is a token or derived from one, so the dark tokens
+ * (tokens.css) reach Excalidraw too. A shade Excalidraw names "-darker" means
+ * "stronger": it mixes toward --ad-ink, which is dark on light paper and light
+ * on dark. styles/__tests__/tokens.test.ts refuses a literal colour here.
  * ------------------------------------------------------------------------- */
 
 .excalidraw {
@@ -43,9 +48,18 @@
   --color-primary: var(--ad-accent) !important;
   --color-primary-hover: var(--ad-accent-hover) !important;
   --color-primary-darker: var(--ad-accent-hover) !important;
-  --color-primary-darkest: #0d3b6e !important;
+  --color-primary-darkest: color-mix(
+    in srgb,
+    var(--ad-accent) 55%,
+    var(--ad-ink)
+  ) !important;
   --color-primary-light: var(--ad-accent-subtle) !important;
-  --color-primary-light-darker: #c8ddf5 !important;
+  --color-primary-contrast: var(--ad-ink-inverse) !important;
+  --color-primary-light-darker: color-mix(
+    in srgb,
+    var(--ad-accent) 28%,
+    var(--ad-surface-raised)
+  ) !important;
   --color-surface-primary-container: var(--ad-accent-subtle) !important;
   --color-on-primary-container: var(--ad-accent) !important;
   --color-brand-hover: var(--ad-accent-hover) !important;
@@ -54,34 +68,94 @@
   --link-color-hover: var(--ad-accent-hover) !important;
   --link-color-active: var(--ad-accent-hover) !important;
   --focus-highlight-color: var(--ad-focus-ring) !important;
-  --color-selection: rgba(25, 113, 194, 0.25) !important;
+  --color-selection: color-mix(
+    in srgb,
+    var(--ad-accent) 25%,
+    transparent
+  ) !important;
 
   /* --- Semantic — aligned with --ad-danger/caution/confirm -------------- */
   --color-danger: var(--ad-danger) !important;
-  --color-danger-dark: #c0392b !important;
-  --color-danger-darker: #a82020 !important;
-  --color-danger-darkest: #8b0000 !important;
+  --color-danger-dark: color-mix(
+    in srgb,
+    var(--ad-danger) 85%,
+    var(--ad-ink)
+  ) !important;
+  --color-danger-darker: color-mix(
+    in srgb,
+    var(--ad-danger) 70%,
+    var(--ad-ink)
+  ) !important;
+  --color-danger-darkest: color-mix(
+    in srgb,
+    var(--ad-danger) 55%,
+    var(--ad-ink)
+  ) !important;
   --color-danger-text: var(--ad-danger) !important;
-  --color-danger-background: #fce4e4 !important;
-  --color-danger-icon-background: #fce4e4 !important;
+  --color-danger-background: color-mix(
+    in srgb,
+    var(--ad-danger) 14%,
+    var(--ad-surface-raised)
+  ) !important;
+  --color-danger-icon-background: color-mix(
+    in srgb,
+    var(--ad-danger) 14%,
+    var(--ad-surface-raised)
+  ) !important;
   --color-danger-icon-color: var(--ad-danger) !important;
 
   --color-warning: var(--ad-caution) !important;
-  --color-warning-dark: #cc6600 !important;
-  --color-warning-darker: #b35900 !important;
-  --color-warning-darkest: #994d00 !important;
+  --color-warning-dark: color-mix(
+    in srgb,
+    var(--ad-caution) 85%,
+    var(--ad-ink)
+  ) !important;
+  --color-warning-darker: color-mix(
+    in srgb,
+    var(--ad-caution) 70%,
+    var(--ad-ink)
+  ) !important;
+  --color-warning-darkest: color-mix(
+    in srgb,
+    var(--ad-caution) 55%,
+    var(--ad-ink)
+  ) !important;
   --color-text-warning: var(--ad-caution) !important;
-  --color-warning-background: #fff3e0 !important;
-  --color-warning-icon-background: #fff3e0 !important;
+  --color-warning-background: color-mix(
+    in srgb,
+    var(--ad-caution) 14%,
+    var(--ad-surface-raised)
+  ) !important;
+  --color-warning-icon-background: color-mix(
+    in srgb,
+    var(--ad-caution) 14%,
+    var(--ad-surface-raised)
+  ) !important;
   --color-warning-icon-color: var(--ad-caution) !important;
 
   --color-success: var(--ad-confirm) !important;
-  --color-success-darker: #277a38 !important;
-  --color-success-darkest: #1e5e2b !important;
+  --color-success-darker: color-mix(
+    in srgb,
+    var(--ad-confirm) 70%,
+    var(--ad-ink)
+  ) !important;
+  --color-success-darkest: color-mix(
+    in srgb,
+    var(--ad-confirm) 55%,
+    var(--ad-ink)
+  ) !important;
   --color-success-text: var(--ad-confirm) !important;
   --color-success-contrast: var(--ad-confirm) !important;
-  --color-success-contrast-hover: #277a38 !important;
-  --color-success-contrast-active: #1e5e2b !important;
+  --color-success-contrast-hover: color-mix(
+    in srgb,
+    var(--ad-confirm) 70%,
+    var(--ad-ink)
+  ) !important;
+  --color-success-contrast-active: color-mix(
+    in srgb,
+    var(--ad-confirm) 55%,
+    var(--ad-ink)
+  ) !important;
 
   /* --- Interaction states ------------------------------------------------ */
   --button-hover-bg: var(--ad-surface-inset) !important;
@@ -92,7 +166,11 @@
   --button-gray-3: var(--ad-ink-tertiary) !important;
   --color-surface-low: var(--ad-surface) !important;
   --color-surface-mid: var(--ad-surface-inset) !important;
-  --color-surface-high: #e9e5df !important;
+  --color-surface-high: color-mix(
+    in srgb,
+    var(--ad-ink) 8%,
+    var(--ad-surface)
+  ) !important;
   --color-surface-lowest: var(--ad-surface) !important;
   --color-disabled: var(--ad-ink-tertiary) !important;
 

@@ -36,7 +36,7 @@
 .buttonActive,
 .buttonActive:hover {
   background: var(--color-primary, #6965db);
-  color: var(--color-primary-contrast, #ffffff);
+  color: var(--ad-ink-inverse);
 }
 
 .icon {
@@ -92,10 +92,10 @@
   /* z-index 100 = the existing atlas "context menu / popover" band. */
   z-index: 100;
   max-width: calc(100vw - 16px);
-  background: #ffffff;
-  border: 1px solid #adb5bd;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-emphasis);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--ad-shadow-raised);
   font-family: system-ui, sans-serif;
   overflow: hidden;
 }
@@ -105,16 +105,16 @@
   box-sizing: border-box;
   padding: 8px 10px;
   border: none;
-  border-bottom: 1px solid #dee2e6;
-  background: #ffffff;
-  color: #212529;
+  border-bottom: 1px solid var(--ad-rule);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-family: inherit;
   font-size: 14px;
   outline: none;
 }
 
 .input::placeholder {
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
 }
 
 .list {
@@ -134,7 +134,7 @@
   padding: 8px 10px;
   border: none;
   background: transparent;
-  color: #212529;
+  color: var(--ad-ink);
   font-family: inherit;
   font-size: 13px;
   text-align: left;
@@ -143,7 +143,7 @@
 
 .result:hover,
 .resultActive {
-  background: #f1f3f5;
+  background: var(--ad-surface-inset);
 }
 
 .resultName {
@@ -156,12 +156,12 @@
 /* Muted category chip (country / region / locality) for disambiguation. */
 .resultKind {
   flex: 0 0 auto;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
   font-size: 11px;
 }
 
 .hint {
   padding: 8px 10px;
-  color: #868e96;
+  color: var(--ad-ink-tertiary);
   font-size: 12px;
 }

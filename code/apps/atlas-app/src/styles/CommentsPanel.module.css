@@ -2,7 +2,7 @@
  * CommentsPanel styles.
  *
  * Not a whole sidebar tab body. Comments are a mode; the list is the Threads
- * SECTION of the Layers tab, a sibling of Basemap / Data Layers / Annotations.
+ * SECTION of the Layers tab, a sibling of Basemap / Data layers / Annotations.
  * It owns a slice of a flowing stack, not the full column height. See .root
  * and .list.
  *
@@ -105,14 +105,14 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #dbeafe;
-  color: #1e3a8a;
+  background: var(--ad-info-subtle);
+  color: var(--ad-info-ink);
   width: max-content;
 }
 
 .anchorBadgeMap {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--ad-caution-subtle);
+  color: var(--ad-caution-ink);
 }
 
 .rowActions {
@@ -124,7 +124,7 @@
 .actionButton {
   font-size: 11px;
   padding: 2px 8px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
@@ -132,11 +132,11 @@
 }
 
 .actionButton:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }
 
 .actionButton:disabled {
-  color: #adb5bd;
+  color: var(--ad-ink-tertiary);
   cursor: not-allowed;
 }
 
@@ -153,7 +153,7 @@
   resize: vertical;
   min-height: 56px;
   padding: 6px 8px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
   font: inherit;
   font-size: 12px;
@@ -169,7 +169,7 @@
 .composerToggle {
   display: inline-flex;
   gap: 0;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -205,8 +205,8 @@
 }
 
 .composerSubmit:disabled {
-  background: #adb5bd;
-  border-color: #adb5bd;
+  background: var(--ad-emphasis);
+  border-color: var(--ad-emphasis);
   cursor: not-allowed;
 }
 

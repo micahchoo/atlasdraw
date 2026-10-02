@@ -1,8 +1,13 @@
 /* Atlasdraw Design Tokens.
  *
- * New components use these custom properties. Some CSS Modules still carry
- * hex literals; replace them when the module is touched for other reasons.
- * Prefix --ad- (atlasdraw) avoids collisions with Excalidraw's --color-* namespace.
+ * Every colour on an app surface comes from here; styles/__tests__/
+ * tokens.test.ts refuses a colour literal in a CSS module. Prefix --ad-
+ * (atlasdraw) avoids collisions with Excalidraw's --color-* namespace.
+ *
+ * Two themes. `:root` is light. `:root[data-ad-theme="dark"]` redefines every
+ * colour token; hooks/useThemeAttribute.ts sets the attribute from
+ * Excalidraw's `appState.theme`, so "Dark or light theme" reaches the panels,
+ * the dialogs and Excalidraw's chrome (excalidraw-theme.css reads these).
  * ------------------------------------------------------------------------- */
 
 :root {
@@ -19,7 +24,7 @@
   --ad-ink: #2d2218; /* primary — sepia-black */
   --ad-ink-secondary: #544a3d; /* supporting — warm dark brown-gray */
   --ad-ink-tertiary: #8a7e6e; /* muted — warm mid-brown */
-  --ad-ink-inverse: #faf6ee; /* on accent — warm white */
+  --ad-ink-inverse: #faf6ee; /* on a coloured fill (accent, danger) */
 
   /* Accent — blueprint / cyanotype blue.
    * Unchanged from existing #1971c2 — already the right domain color.
@@ -46,6 +51,16 @@
   --ad-danger: #d64045; /* destructive — red pencil correction */
   --ad-caution: #e67700; /* warning — amber */
   --ad-confirm: #2f9e44; /* success — green */
+
+  /* Badges — a tinted fill with its own ink, for kinds and states. */
+  --ad-info-subtle: #dbeafe;
+  --ad-info-ink: #1e3a8a;
+  --ad-caution-subtle: #fef3c7;
+  --ad-caution-ink: #92400e;
+
+  /* Behind a dialog, and a label laid over the map. */
+  --ad-scrim: rgba(0, 0, 0, 0.35);
+  --ad-veil: rgba(255, 255, 255, 0.85);
 
   /* Spacing scale — base unit 4px.
    * Compact (6px) is accepted for inline padding and tight-fit contexts
@@ -78,4 +93,47 @@
     0 0 0 1px rgba(0, 0, 0, 0.03);
   --ad-shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.08),
     0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+/* Dark — the same drawing office at night: warm dark paper, light ink, and a
+ * lighter blueprint blue so it reads on the dark surface. Text on the accent
+ * turns dark, because white on that blue falls below 4.5:1. */
+:root[data-ad-theme="dark"] {
+  --ad-surface: #1e1a15;
+  --ad-surface-raised: #28231c;
+  --ad-surface-inset: #16130f;
+
+  --ad-ink: #ece3d2;
+  --ad-ink-secondary: #c4b9a6;
+  --ad-ink-tertiary: #9a8e7c;
+  --ad-ink-inverse: #14110d;
+
+  --ad-accent: #4c9be8;
+  --ad-accent-hover: #6fb0ee;
+  --ad-accent-subtle: rgba(76, 155, 232, 0.16);
+
+  --ad-hairline: rgba(255, 255, 255, 0.06);
+  --ad-rule: rgba(255, 255, 255, 0.12);
+  --ad-emphasis: rgba(255, 255, 255, 0.24);
+  --ad-focus-ring: #6fb0ee;
+  --ad-neatline: rgba(236, 227, 210, 0.55);
+
+  --ad-danger: #ff6b6b;
+  --ad-caution: #ffa94d;
+  --ad-confirm: #51cf66;
+
+  --ad-info-subtle: rgba(76, 155, 232, 0.18);
+  --ad-info-ink: #a9cdf5;
+  --ad-caution-subtle: rgba(255, 169, 77, 0.16);
+  --ad-caution-ink: #ffd29c;
+
+  --ad-scrim: rgba(0, 0, 0, 0.55);
+  --ad-veil: rgba(30, 26, 21, 0.85);
+
+  --ad-shadow-tracing: 0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  --ad-shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  color-scheme: dark;
 }

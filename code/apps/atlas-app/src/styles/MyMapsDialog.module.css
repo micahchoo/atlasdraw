@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--ad-scrim);
 }
 
 .dialog {
@@ -129,17 +129,17 @@
 
 .button {
   padding: 4px 10px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .button:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }
 
 .button:focus-visible,
@@ -149,8 +149,8 @@
 }
 
 .button:disabled {
-  color: #adb5bd;
-  background: #ffffff;
+  color: var(--ad-ink-tertiary);
+  background: var(--ad-surface-raised);
   cursor: not-allowed;
 }
 
@@ -159,11 +159,11 @@
 }
 
 .buttonPrimary {
-  background: #1971c2;
-  border-color: #1971c2;
-  color: #ffffff;
+  background: var(--ad-accent);
+  border-color: var(--ad-accent);
+  color: var(--ad-ink-inverse);
 }
 
 .buttonPrimary:hover {
-  background: #1864ab;
+  background: var(--ad-accent-hover);
 }

@@ -81,7 +81,7 @@ test.describe("LayerPanel", () => {
     await page.waitForTimeout(500);
 
     const panel = page.locator('[data-testid="layer-panel-body"]');
-    // "none" appears in both Data Layers and Annotations empty-state text.
+    // "none" appears in both Data layers and Annotations empty-state text.
     await expect(panel).toContainText("none");
   });
 });

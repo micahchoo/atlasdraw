@@ -60,9 +60,9 @@ function seedTwo() {
 }
 
 describe("LayerPanel", () => {
-  it("renders both Data Layers and Annotations sections", () => {
+  it("renders both Data layers and Annotations sections", () => {
     render(withSession(<LayerPanel />));
-    expect(screen.getByLabelText("Data Layers")).toBeTruthy();
+    expect(screen.getByLabelText("Data layers")).toBeTruthy();
     expect(screen.getByLabelText("Annotations")).toBeTruthy();
   });
 
@@ -445,7 +445,7 @@ describe("LayerPanel", () => {
 // The comments list
 //
 // Comments are a mode, and the "read every thread" pass is one level down, as
-// a section of the Sheet scope alongside Basemap / Data Layers / Annotations.
+// a section of the Sheet scope alongside Basemap / Data layers / Annotations.
 // These cases pin that it is REACHABLE and that it is not the default — an
 // always-open chronological list is a mostly empty column.
 // ---------------------------------------------------------------------------
@@ -454,7 +454,7 @@ describe("LayerPanel — Threads section", () => {
   it("offers Threads in the Sheet scope, alongside the other sections", () => {
     render(withSession(<LayerPanel />));
     expect(screen.getByLabelText("Threads")).toBeTruthy();
-    expect(screen.getByLabelText("Data Layers")).toBeTruthy();
+    expect(screen.getByLabelText("Data layers")).toBeTruthy();
     expect(screen.getByLabelText("Annotations")).toBeTruthy();
     expect(screen.getByLabelText("Basemap")).toBeTruthy();
   });
@@ -651,9 +651,9 @@ describe("LayerPanel — raster layers", () => {
     expect(currentDocument().snapshot().overlays).toHaveLength(0);
   });
 
-  it("renders layers in map stacking order: Annotations above Data Layers above Images", () => {
+  it("renders layers in map stacking order: Annotations above Data layers above Images", () => {
     // The panel mirrors the map's Z-order top-to-bottom:
-    // Annotations (topmost) → Data Layers (vectors) → Images (rasters)
+    // Annotations (topmost) → Data layers (vectors) → Images (rasters)
     // → Basemap (foundation). Threads is a review surface, not a layer.
     seedRaster();
     seedScene(["el-1", "Note"]);
@@ -670,10 +670,10 @@ describe("LayerPanel — raster layers", () => {
       .getAllByRole("heading", { level: 3 })
       .map((h) => h.textContent);
     expect(headings.indexOf("Annotations")).toBeLessThan(
-      headings.indexOf("Data Layers"),
+      headings.indexOf("Data layers"),
     );
     expect(headings.indexOf("Images")).toBeGreaterThan(
-      headings.indexOf("Data Layers"),
+      headings.indexOf("Data layers"),
     );
   });
 

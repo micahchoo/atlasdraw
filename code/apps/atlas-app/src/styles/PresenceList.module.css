@@ -15,10 +15,10 @@
   z-index: 10;
   min-width: 140px;
   background: var(--ad-surface-raised);
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: var(--ad-radius-md);
   padding: var(--ad-space-2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--ad-shadow-raised);
   font-family: system-ui, sans-serif;
 }
 
@@ -28,7 +28,7 @@
   color: var(--ad-ink);
   margin: 0 0 6px 0;
   padding-bottom: 6px;
-  border-bottom: 1px solid #adb5bd;
+  border-bottom: 1px solid var(--ad-emphasis);
 }
 
 /* How the room's connection stands: connecting, offline, refused. */
@@ -111,10 +111,10 @@
   min-width: 0;
   width: 112px;
   padding: 2px 4px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
-  background: #ffffff;
-  color: #212529;
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
   font: inherit;
   font-size: 12px;
 }

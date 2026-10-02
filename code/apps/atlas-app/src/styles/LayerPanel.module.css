@@ -396,19 +396,19 @@
 }
 
 .kindBadgeData {
-  background: #dbeafe;
-  color: #1e3a8a;
+  background: var(--ad-info-subtle);
+  color: var(--ad-info-ink);
 }
 
 .kindBadgeAnnotation {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--ad-caution-subtle);
+  color: var(--ad-caution-ink);
 }
 
 /* The map did not draw this overlay. The reason is in the title. */
 .kindBadgeRejected {
   background: var(--ad-danger);
-  color: #ffffff;
+  color: var(--ad-ink-inverse);
 }
 
 /* Icon button — atlasdraw-ui-conventions §Buttons type 2 (32px square).
@@ -652,14 +652,14 @@
  * layers, self-contained), Remote = amber (like annotations, external). */
 .sourceBadgeLocal {
   composes: kindBadge;
-  background: #dbeafe;
-  color: #1e3a8a;
+  background: var(--ad-info-subtle);
+  color: var(--ad-info-ink);
 }
 
 .sourceBadgeRemote {
   composes: kindBadge;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--ad-caution-subtle);
+  color: var(--ad-caution-ink);
 }
 
 .basemapOptions {

@@ -277,7 +277,7 @@ describe("data-layer panel order matches map z-order", () => {
     expect(ids.every((id) => map.draws(id))).toBe(true);
 
     render(withSession(<LayerPanel />));
-    const section = screen.getByLabelText("Data Layers");
+    const section = screen.getByLabelText("Data layers");
     const panelTopFirst = Array.from(
       section.querySelectorAll<HTMLElement>('[data-testid^="layer-row-"]'),
     )

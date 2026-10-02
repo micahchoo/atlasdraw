@@ -46,12 +46,12 @@
   left: 24px;
   z-index: 100;
   background: var(--ad-surface-raised);
-  border: 1px solid #ccc;
+  border: 1px solid var(--ad-rule);
   border-radius: var(--ad-radius-md);
   padding: var(--ad-space-2);
   min-width: 200px;
   max-width: 280px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--ad-shadow-raised);
   font-family: system-ui, sans-serif;
   font-size: 12px;
   color: var(--ad-ink);
@@ -89,7 +89,7 @@
 .popoverButton {
   font-size: 11px;
   padding: 2px 8px;
-  border: 1px solid #adb5bd;
+  border: 1px solid var(--ad-emphasis);
   border-radius: 4px;
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
@@ -97,7 +97,7 @@
 }
 
 .popoverButton:hover {
-  background: #f8f9fa;
+  background: var(--ad-surface-inset);
 }
 
 .popoverEditArea {

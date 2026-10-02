@@ -48,6 +48,7 @@ import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { useDevHandles } from "../hooks/useDevHandles";
 import { useEditorHistory } from "../hooks/useEditorHistory";
+import { useThemeAttribute } from "../hooks/useThemeAttribute";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
 import { useMapOverlays } from "../hooks/useMapOverlays";
 import { useMapRef } from "../hooks/useMapRef";
@@ -221,6 +222,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useBasemapStyle(map, basemap, getAppConfig().allowRemoteBasemaps);
   useDevHandles(session, map, api, bridge);
   useEditorHistory(session, api);
+  useThemeAttribute(api);
   // Stable: <Excalidraw> is memoized on a shallow prop compare.
   const drawingHistoryHost = useMemo(
     () => historyHost(session.history),

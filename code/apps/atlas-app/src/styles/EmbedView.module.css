@@ -64,7 +64,7 @@
   font-family: var(--ad-font-sans);
   font-size: 12px;
   line-height: 1.4;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--ad-shadow-raised);
 }
 
 .legendTitle {
@@ -90,7 +90,7 @@
   width: 10px;
   height: 10px;
   border-radius: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--ad-emphasis);
 }
 
 /* --- share page: a head bar like the editor's collar, then the map ------- */
