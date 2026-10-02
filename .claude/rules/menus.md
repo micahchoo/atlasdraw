@@ -3,7 +3,6 @@ paths:
   - code/apps/atlas-app/src/commands/**
   - code/apps/atlas-app/src/components/MapEditor.tsx
   - code/apps/atlas-app/src/components/LayerPanel.tsx
-  - code/apps/atlas-app/src/components/Menu.tsx
   - code/packages/excalidraw/components/ContextMenu.tsx
 tags: [commands, menus, context-menu]
 priority: high
@@ -56,6 +55,18 @@ none of them. Each was tested in Chromium over the map.
 The kept three set `AppState` as the upstream actions do. If an upstream
 action changes, change its command too. Their keys (Alt+S) stay the
 drawing's. Ctrl+' still sets `gridModeEnabled` although the prop is false.
+
+## A layer row: one menu, three ways in
+
+A layer row's actions take the layer, so they are not commands. The row's
+⋯ menu (`LayerPanel.tsx#OverflowMenu`) is its one menu. `SortableRow` holds
+its open state (`RowMenu`), so a right-click on the row, Shift+F10 and the
+ContextMenu key open the same menu. A text field keeps the browser's menu.
+
+The menu handles Escape on its items and stops it. The drawing's undocked
+sidebar closes on any Escape that reaches the document (`Sidebar.tsx`), and
+before 2026-10-01 the menu's Escape closed the whole Layers panel. jsdom
+cannot show this; `e2e/context-menus.spec.ts` does.
 
 ## Where a fork item is shown
 

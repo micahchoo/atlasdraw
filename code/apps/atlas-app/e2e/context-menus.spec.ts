@@ -256,3 +256,35 @@ test("Snap to objects, from the canvas menu, turns the drawing's snapping on and
     menu(page).locator('[data-testid="canvas:edit.snap-objects"] .checkmark'),
   ).toHaveCount(1);
 });
+
+test("a layer row: a right-click and Shift+F10 open its ⋯ menu", async ({
+  page,
+}) => {
+  await openEditor(page);
+  // An import opens the Layers panel.
+  await addParcel(page);
+
+  const row = page.locator('[data-testid^="layer-row-header-dl:"]').first();
+  await expect(row).toBeVisible();
+  const id = (await row.getAttribute("data-testid"))!.replace(
+    "layer-row-header-",
+    "",
+  );
+
+  await row.click({ button: "right" });
+  const list = page.getByTestId(`layer-menu-list-${id}`);
+  await expect(list).toBeVisible();
+  await expect(list.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
+  await expect(page.getByTestId(`layer-menu-${id}`)).toBeFocused();
+
+  await page.getByTestId(`layer-visibility-${id}`).focus();
+  await page.keyboard.press("Shift+F10");
+  await expect(list).toBeVisible();
+  await expect(page.getByTestId(`layer-zoom-${id}`)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByTestId(`layer-table-${id}`)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("attribute-table-count")).toBeVisible();
+});

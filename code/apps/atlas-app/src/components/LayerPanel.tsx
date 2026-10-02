@@ -32,7 +32,9 @@
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
 import React, {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -308,6 +310,24 @@ type LayerActions = {
 /** A row in any section: a document layer, or an annotation from the scene. */
 type PanelEntry = OverlayEntry | AnnotationRow;
 
+/**
+ * Whether a row's ⋯ menu is open. The row holds it, so the row's two other
+ * triggers (a right-click, and the context-menu keys) open the one menu.
+ */
+const RowMenu = createContext<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}>({ open: false, setOpen: () => {} });
+
+/** A text field keeps the browser's own menu, for cut, copy and paste. */
+function isTextField(target: EventTarget): boolean {
+  return (
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLInputElement &&
+      !["button", "checkbox", "color", "radio", "range"].includes(target.type))
+  );
+}
+
 interface LayerRowProps {
   entry: PanelEntry;
   mutators: Mutators;
@@ -368,6 +388,11 @@ function SortableRow({
   // is hiding rows: reorder addresses real stack positions, and filtered
   // indices would move the wrong layer.
   const index = allIds.indexOf(id);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rowMenu = useMemo(
+    () => ({ open: menuOpen, setOpen: setMenuOpen }),
+    [menuOpen],
+  );
   const rowRef = useRef<HTMLDivElement>(null);
   const rowTopRef = useRef<HTMLDivElement>(null);
   const [dragOverPos, setDragOverPos] = useState<"above" | "below" | null>(
@@ -470,59 +495,78 @@ function SortableRow({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      // The row's context menu is its ⋯ menu: a right-click, Shift+F10 or
+      // the ContextMenu key on anything in the row opens it.
+      onContextMenu={(e) => {
+        if (!isTextField(e.target)) {
+          e.preventDefault();
+          setMenuOpen(true);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (
+          (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) &&
+          !isTextField(e.target)
+        ) {
+          e.preventDefault();
+          setMenuOpen(true);
+        }
+      }}
     >
-      <div
-        ref={rowTopRef}
-        className={joinClass(styles.rowTop, expanded && styles.rowTopSticky)}
-        data-sticky={expanded ? "" : undefined}
-      >
-        <span
-          className={styles.dragHandle}
-          aria-label={`Drag to reorder ${entry.label}`}
-          data-testid={`layer-drag-${id}`}
-          role="button"
-          tabIndex={0}
-          draggable
-          onDragStart={handleDragStart}
+      <RowMenu.Provider value={rowMenu}>
+        <div
+          ref={rowTopRef}
+          className={joinClass(styles.rowTop, expanded && styles.rowTopSticky)}
+          data-sticky={expanded ? "" : undefined}
         >
-          <IconGripVertical />
-        </span>
-        {children}
-        {/* Stacked as one 32px-tall control cluster rather than two 32px
+          <span
+            className={styles.dragHandle}
+            aria-label={`Drag to reorder ${entry.label}`}
+            data-testid={`layer-drag-${id}`}
+            role="button"
+            tabIndex={0}
+            draggable
+            onDragStart={handleDragStart}
+          >
+            <IconGripVertical />
+          </span>
+          {children}
+          {/* Stacked as one 32px-tall control cluster rather than two 32px
             squares. Adding the disclosure caret and the ⋯ trigger put nine
             controls in a 302px row; side-by-side arrows left the label about
             40px, which turns "parcels_2026.geojson" into "parc…". Same
             buttons, same keyboard path, same bounds — half the width. */}
-        <div className={styles.reorderStack}>
-          <button
-            type="button"
-            className={styles.reorderBtn}
-            aria-label={`Move ${entry.label} up`}
-            data-testid={`layer-up-${id}`}
-            disabled={isFirst}
-            onClick={(e) => {
-              e.stopPropagation();
-              mutators.reorder(id, index - 1);
-            }}
-          >
-            <IconChevronUp />
-          </button>
-          <button
-            type="button"
-            className={styles.reorderBtn}
-            aria-label={`Move ${entry.label} down`}
-            data-testid={`layer-down-${id}`}
-            disabled={isLast}
-            onClick={(e) => {
-              e.stopPropagation();
-              mutators.reorder(id, index + 1);
-            }}
-          >
-            <IconChevronDown />
-          </button>
+          <div className={styles.reorderStack}>
+            <button
+              type="button"
+              className={styles.reorderBtn}
+              aria-label={`Move ${entry.label} up`}
+              data-testid={`layer-up-${id}`}
+              disabled={isFirst}
+              onClick={(e) => {
+                e.stopPropagation();
+                mutators.reorder(id, index - 1);
+              }}
+            >
+              <IconChevronUp />
+            </button>
+            <button
+              type="button"
+              className={styles.reorderBtn}
+              aria-label={`Move ${entry.label} down`}
+              data-testid={`layer-down-${id}`}
+              disabled={isLast}
+              onClick={(e) => {
+                e.stopPropagation();
+                mutators.reorder(id, index + 1);
+              }}
+            >
+              <IconChevronDown />
+            </button>
+          </div>
         </div>
-      </div>
-      {body}
+        {body}
+      </RowMenu.Provider>
     </div>
   );
 }
@@ -643,7 +687,8 @@ function LayerNameField({
 /**
  * Per-layer overflow menu. Reachable whether or not the card is expanded, so
  * "zoom to this layer" — the universal gesture after an import — never costs a
- * disclosure click first.
+ * disclosure click first. It is also the row's context menu: the row holds the
+ * open state (`RowMenu`), and a right-click or the context-menu keys open it.
  *
  * Delete is two-step inside the menu: a single mis-click sits 4px from
  * Rename. Undo brings a deleted layer back (session/history.ts), so the
@@ -658,7 +703,7 @@ function OverflowMenu({
   actions: LayerActions;
   onStartRename: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen } = useContext(RowMenu);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -668,7 +713,7 @@ function OverflowMenu({
   const close = useCallback(() => {
     setOpen(false);
     setConfirmingDelete(false);
-  }, []);
+  }, [setOpen]);
 
   /**
    * "Zoom to layer" is a universal gesture across kinds today: data layers and
@@ -819,9 +864,16 @@ function OverflowMenu({
       case "End":
         moveFocus(last);
         break;
+      case "Escape":
+        // Here, not only on the document: the drawing's undocked sidebar
+        // closes on any Escape that reaches the document, and the menu's
+        // Escape must not take the Layers panel with it.
+        close();
+        triggerRef.current?.focus();
+        break;
       default:
-        // Escape, Tab, Enter and Space stay with the browser and with the
-        // dismiss handler below.
+        // Tab, Enter and Space stay with the browser and with the dismiss
+        // handler below.
         return;
     }
     event.preventDefault();

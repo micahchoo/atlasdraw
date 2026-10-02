@@ -470,6 +470,99 @@ describe("data layer card — the three missing actions", () => {
     ).toHaveLength(7);
   });
 
+  // One item list, two triggers: a right-click on the row, and the keyboard's
+  // context-menu keys on anything in it, open the ⋯ menu itself.
+  describe("the row's context menu is the ⋯ menu", () => {
+    const listed = () =>
+      within(screen.getByRole("menu"))
+        .getAllByRole("menuitem")
+        .map((el) => el.getAttribute("data-testid"));
+
+    it("a right-click on the row opens the ⋯ menu's items, and no browser menu", () => {
+      const id = seedParcels();
+      render(withSession(<LayerPanel />));
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+      const fromDots = listed();
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        screen.getByTestId(`layer-row-header-${id}`).dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(listed()).toEqual(fromDots);
+      expect(
+        screen.getByTestId(`layer-menu-${id}`).getAttribute("aria-expanded"),
+      ).toBe("true");
+    });
+
+    it.each([
+      ["Shift+F10", { key: "F10", shiftKey: true }],
+      ["the ContextMenu key", { key: "ContextMenu" }],
+    ])(
+      "%s on a control in the row opens it, focused on the first item",
+      (_name, key) => {
+        const id = seedParcels();
+        render(withSession(<LayerPanel />));
+        const eye = screen.getByTestId(`layer-visibility-${id}`);
+        eye.focus();
+
+        fireEvent.keyDown(eye, key);
+
+        expect(screen.getByRole("menu")).toBeTruthy();
+        expect(document.activeElement).toBe(
+          screen.getByTestId(`layer-zoom-${id}`),
+        );
+        fireEvent.keyDown(document, { key: "Escape" });
+        expect(document.activeElement).toBe(
+          screen.getByTestId(`layer-menu-${id}`),
+        );
+      },
+    );
+
+    it("leaves the browser's menu to a text field, so paste still works", () => {
+      const id = seedParcels();
+      render(withSession(<LayerPanel />));
+      fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+      fireEvent.click(screen.getByTestId(`layer-rename-${id}`));
+      const input = screen.getByRole("textbox");
+
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        input.dispatchEvent(event);
+      });
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+  });
+
+  // The drawing's undocked sidebar closes on any Escape that reaches the
+  // document (Sidebar.tsx). The menu's Escape is the menu's: it must not take
+  // the whole Layers panel with it.
+  it("Escape on a menu item closes the menu only; the document does not hear it", () => {
+    const id = seedParcels();
+    render(withSession(<LayerPanel />));
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => heard.push(e.key);
+    document.addEventListener("keydown", listen);
+
+    fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+    fireEvent.keyDown(document.activeElement as Element, { key: "Escape" });
+    document.removeEventListener("keydown", listen);
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId(`layer-menu-${id}`));
+    expect(heard).toEqual([]);
+  });
+
   it("Escape closes the ⋯ menu and returns focus to its trigger", () => {
     const id = seedParcels();
     render(withSession(<LayerPanel />));
