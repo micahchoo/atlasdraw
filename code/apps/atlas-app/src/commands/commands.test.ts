@@ -31,6 +31,8 @@ import {
 } from "./commands";
 import { bindingId, keyLabels } from "./keys";
 
+import type { MenuTarget } from "./commands";
+
 import type * as maplibregl from "maplibre-gl";
 
 /** A map that counts its zoom steps. */
@@ -310,5 +312,235 @@ describe("what a command does", () => {
     input.dispatchEvent(new Event("change"));
     await vi.waitFor(() => expect(importFile).toHaveBeenCalledWith(file));
     expect(input.isConnected).toBe(false);
+  });
+});
+
+/** A map that answers a point query and turns pixels into degrees, 1:1. */
+function pointingMap(hits: Record<string, Record<string, unknown>> = {}) {
+  const rect = { left: 10, top: 20, width: 800, height: 600 };
+  return {
+    zoom: 6,
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    fitBounds: vi.fn(),
+    getZoom: () => 6,
+    project: ([lng, lat]: [number, number]) => ({ x: lng, y: -lat }),
+    unproject: ([x, y]: [number, number]) => ({ lng: x, lat: -y }),
+    getContainer: () => ({ getBoundingClientRect: () => rect }),
+    getCanvas: () => ({ getBoundingClientRect: () => rect }),
+    getBounds: () => ({
+      getNorth: () => 1,
+      getSouth: () => -1,
+      getEast: () => 1,
+      getWest: () => -1,
+    }),
+    getLayer: (id: string) => (id in hits ? {} : undefined),
+    queryRenderedFeatures: vi.fn(
+      (_p: unknown, { layers }: { layers: string[] }) =>
+        layers.filter((l) => l in hits).map((l) => ({ properties: hits[l] })),
+    ),
+  };
+}
+
+/** A data layer of two parcels, each one feature. */
+function addParcels(id = "dl:parcels") {
+  useDocumentStore.getState().doc.dispatch({
+    type: "add-data-layer",
+    id,
+    label: "Parcels",
+    style: {
+      fillColor: "#336699",
+      strokeColor: "#224466",
+      strokeWidth: 1,
+      opacity: 0.5,
+    } as never,
+    fc: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { name: "north" },
+          geometry: { type: "Point", coordinates: [10, 50] },
+        },
+        {
+          type: "Feature",
+          properties: { name: "south" },
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [1, 1],
+                [3, 1],
+                [3, 2],
+                [1, 2],
+                [1, 1],
+              ],
+            ],
+          },
+        },
+      ],
+    },
+  });
+}
+
+const at = (context: MenuTarget["context"], x = 110, y = 70): MenuTarget => ({
+  context,
+  clientX: x,
+  clientY: y,
+});
+
+describe("what a command does from a right-click menu", () => {
+  it("Pin to map, from the canvas menu, places a pin at the menu's point and arms nothing", () => {
+    const { s, all } = session();
+    s.view.getState().setMap(pointingMap() as unknown as maplibregl.Map);
+
+    commandById("tools.pin")!.run(s, at("canvas", 110, 70));
+
+    expect(s.view.getState().atlasTool).toBeNull();
+    const pins = all().filter((e) => e.id !== "a" && e.id !== "b");
+    expect(pins).toHaveLength(1);
+    expect(commandById("tools.pin")!.menuLabel?.canvas).toBe("Pin here");
+  });
+
+  it("Zoom to selection is offered with shapes selected, and fits the map to them", () => {
+    const { s, api, map } = session();
+    const zoomTo = commandById("view.zoom-selection")!;
+    expect(zoomTo.available(s)).toBe(false);
+
+    api.updateScene({
+      elements: [
+        { id: "a", type: "rectangle", x: 0, y: 0, width: 100, height: 50 },
+      ] as never,
+      appState: { selectedElementIds: { a: true } },
+    });
+    expect(zoomTo.available(s)).toBe(true);
+    zoomTo.run(s);
+    expect(map.fitBounds).toHaveBeenCalledTimes(1);
+  });
+
+  it("Convert selection to data layer is offered for one shape with a place on the map", () => {
+    const { s, api } = session();
+    const convert = commandById("edit.convert-to-layer")!;
+    expect(convert.contexts).toContain("element");
+    expect(convert.available(s)).toBe(false);
+    api.updateScene({
+      elements: [
+        { id: "r", type: "rectangle", x: 0, y: 0, width: 100, height: 50 },
+      ] as never,
+      appState: { selectedElementIds: { r: true } },
+    });
+    expect(convert.available(s)).toBe(true);
+  });
+
+  it("Edit pin details is in the pin's menu", () => {
+    expect(commandById("tools.pin-details")!.contexts).toEqual(["pin"]);
+  });
+
+  it("the snap and binding toggles flip the drawing's setting and read as checked", () => {
+    const { s, api } = session();
+    const state = () => api.getAppState() as unknown as Record<string, unknown>;
+    api.updateScene({
+      appState: {
+        objectsSnapModeEnabled: false,
+        gridModeEnabled: true,
+        bindingPreference: "enabled",
+        isBindingEnabled: true,
+        isMidpointSnappingEnabled: true,
+      },
+    });
+
+    const snap = commandById("edit.snap-objects")!;
+    snap.run(s);
+    expect(state()).toMatchObject({
+      objectsSnapModeEnabled: true,
+      gridModeEnabled: false,
+    });
+    expect(snap.checked?.(s)).toBe(true);
+
+    const binding = commandById("edit.arrow-binding")!;
+    expect(binding.checked?.(s)).toBe(true);
+    binding.run(s);
+    expect(state()).toMatchObject({
+      bindingPreference: "disabled",
+      isBindingEnabled: false,
+    });
+    expect(binding.checked?.(s)).toBe(false);
+
+    const midpoints = commandById("edit.snap-midpoints")!;
+    midpoints.run(s);
+    expect(state()).toMatchObject({ isMidpointSnappingEnabled: false });
+    expect(midpoints.checked?.(s)).toBe(false);
+  });
+
+  it("Show attribute table opens the selected data layer's table, or from the feature menu the layer under the pointer", () => {
+    const { s } = session();
+    addParcels("dl:a");
+    addParcels("dl:b");
+    s.view
+      .getState()
+      .setMap(
+        pointingMap({ "dl:b": { name: "south" } }) as unknown as maplibregl.Map,
+      );
+    const table = commandById("layer.table")!;
+    expect(table.available(s)).toBe(false);
+
+    s.view.getState().select("dl:a");
+    expect(table.available(s)).toBe(true);
+    table.run(s);
+    expect(s.view.getState().dialog).toEqual({
+      kind: "attribute-table",
+      layerId: "dl:a",
+    });
+
+    expect(table.appliesAt?.(s, at("feature"))).toBe(true);
+    table.run(s, at("feature"));
+    expect(s.view.getState().dialog).toEqual({
+      kind: "attribute-table",
+      layerId: "dl:b",
+    });
+  });
+
+  it("from the feature menu, Zoom to selection is Zoom to feature: it fits the map to the one feature under the pointer", () => {
+    const { s } = session();
+    addParcels();
+    const map = pointingMap({ "dl:parcels": { name: "south" } });
+    s.view.getState().setMap(map as unknown as maplibregl.Map);
+    const zoomTo = commandById("view.zoom-selection")!;
+    expect(zoomTo.menuLabel?.feature).toBe("Zoom to feature");
+
+    expect(zoomTo.appliesAt?.(s, at("feature"))).toBe(true);
+    zoomTo.run(s, at("feature"));
+    expect(map.fitBounds.mock.calls[0][0]).toEqual([
+      [1, 1],
+      [3, 2],
+    ]);
+  });
+
+  it("Zoom to feature is not offered when two features carry the same properties", () => {
+    const { s } = session();
+    addParcels();
+    s.view
+      .getState()
+      .setMap(pointingMap({ "dl:parcels": {} }) as unknown as maplibregl.Map);
+    useDocumentStore.getState().doc.dispatch({
+      type: "add-data-layer",
+      id: "dl:blank",
+      label: "Blank",
+      style: { fillColor: "#336699" } as never,
+      fc: {
+        type: "FeatureCollection",
+        features: [0, 1].map((i) => ({
+          type: "Feature" as const,
+          properties: {},
+          geometry: { type: "Point" as const, coordinates: [i, i] },
+        })),
+      },
+    });
+    s.view
+      .getState()
+      .setMap(pointingMap({ "dl:blank": {} }) as unknown as maplibregl.Map);
+    expect(
+      commandById("view.zoom-selection")!.appliesAt?.(s, at("feature")),
+    ).toBe(false);
   });
 });
