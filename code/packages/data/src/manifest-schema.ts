@@ -2,9 +2,9 @@
 // Canonical Zod schema for `manifest.json`.
 //
 // This is the single source of truth for the persisted manifest shape. The
-// `.atlasdraw` zip writer (`atlasdraw.ts`), reader (`atlasdraw.ts`),
-// persistence layer (`apps/atlas-app/state/persistence.ts`), and CLI lint
-// (`packages/cli/commands/lint.ts`) all parse against `ManifestSchema`.
+// `.atlasdraw` zip reader and writer (`atlasdraw.ts`), the bare-JSON variant
+// (`atlasdraw-json.ts`) and the CLI's lint and convert
+// (`packages/cli/src/commands/`) all parse against `ManifestSchema`.
 
 import { z } from "zod";
 
