@@ -6,7 +6,7 @@
 // the root config via `extends`.
 //
 // bench/ is NOT here: it is timing work, not a test, and runs on its own
-// (`yarn workspace @atlasdraw/bench bench`, then `ci-gate`).
+// (`yarn workspace @atlasdraw/bench bench`, and the A/B gate `ab`; bench/README.md).
 export default [
   {
     extends: "./vitest.config.mts",

@@ -18,7 +18,8 @@
 //
 // The two `disableRotation()` calls exist precisely because the blunt
 // `disable()` would take pinch-zoom and arrow-key panning down with them.
-// Verified against the shipped maplibre-gl 4.7.1 bundle:
+// Verified against the maplibre-gl 6.11.2 source (src/ui/handler/keyboard.ts,
+// src/ui/handler/shim/two_fingers_touch.ts):
 //   TwoFingersTouchZoomRotate — `disableRotation()` disables `_touchRotate`
 //     only; `_touchZoom` is untouched.
 //   Keyboard — `_rotationDisabled` zeroes the bearing and pitch deltas and

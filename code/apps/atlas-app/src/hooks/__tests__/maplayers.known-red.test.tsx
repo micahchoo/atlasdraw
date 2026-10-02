@@ -4,7 +4,7 @@
 // pass because the map overlays have one writer (lib/mapOverlays.ts).
 //
 // The map is FakeMapLibre (lib/__tests__/fixtures/fakeMapLibre.ts): it keeps
-// MapLibre 4.7.1's style state and fires "error" events where MapLibre does.
+// MapLibre 6.11's style state and fires "error" events where MapLibre does.
 // Every assertion reads the resulting style state.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

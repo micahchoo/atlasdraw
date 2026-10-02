@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // FakeMapLibre: a stand-in map for tests of code that writes the MapLibre
-// style. It is not a call recorder. It keeps the style state MapLibre 4.7.1
+// style. It is not a call recorder. It keeps the style state MapLibre 6.11
 // keeps (sources, layers, paint, layout, order) and follows its error
-// contract, read from maplibre-gl-dev.js 4.7.1:
+// contract, read from maplibre-gl 6.11.2 src/style/style.ts:
 //   - addLayer / setPaintProperty / setLayoutProperty / moveLayer /
 //     removeLayer on an invalid spec or a missing layer FIRE an "error" event
-//     and return. They do not throw (Style#addLayer :44860, :45045, :45071).
+//     and return. They do not throw.
 //   - addSource on a duplicate id and removeSource on a missing id THROW.
 //   - removeSource while a layer uses the source fires "error" and returns.
 // Validation uses the real @maplibre/maplibre-gl-style-spec validator, so a
@@ -253,7 +253,7 @@ export class FakeMapLibre {
   // the style state like MapLibre's: a layer that is not in the style, or
   // whose visibility is "none", draws nothing. A query that names a layer
   // missing from the style fires "error" and returns [] (Style#
-  // queryRenderedFeatures, 4.7.1).
+  // queryRenderedFeatures, 6.11.2).
   // -------------------------------------------------------------------------
 
   private readonly underPointer = new Map<
