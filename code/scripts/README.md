@@ -8,11 +8,11 @@ Validates that every workspace `package.json` declares the correct `"license"` f
 
 Expected values:
 
-- The root, `apps/atlas-app`, `apps/realtime`: `AGPL-3.0-only`
-- `packages/cli`, `packages/geo`, `packages/data`, the five fork packages: `MIT`
+- The root and every app (`atlas-app`, `realtime`, `storage`): `AGPL-3.0-only`
+- `packages/cli`, `packages/geo`, `packages/data`, `packages/protocol`, the five fork packages: `MIT`
 - `packages/basemap`, `packages/tools`: `MPL-2.0`
 
-It does not check `apps/storage` or `packages/protocol`.
+A package under `apps/` or `packages/` that the script's map does not name fails the check, so a new package cannot pass unchecked.
 
 Exits 1 and prints `FAIL: <path> license=<actual> expected=<expected>` on any mismatch.
 

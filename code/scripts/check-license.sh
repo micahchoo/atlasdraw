@@ -14,6 +14,8 @@ declare -A EXPECTED_LICENSE
 EXPECTED_LICENSE["package.json"]="AGPL-3.0-only"
 EXPECTED_LICENSE["apps/atlas-app/package.json"]="AGPL-3.0-only"
 EXPECTED_LICENSE["apps/realtime/package.json"]="AGPL-3.0-only"
+EXPECTED_LICENSE["apps/storage/package.json"]="AGPL-3.0-only"
+EXPECTED_LICENSE["packages/protocol/package.json"]="MIT"
 EXPECTED_LICENSE["packages/cli/package.json"]="MIT"
 EXPECTED_LICENSE["packages/geo/package.json"]="MIT"
 EXPECTED_LICENSE["packages/data/package.json"]="MIT"
@@ -28,6 +30,16 @@ EXPECTED_LICENSE["packages/utils/package.json"]="MIT"
 
 FAIL=0
 CHECKED=0
+
+# A workspace package the map does not name has no expected license, so it
+# would pass unchecked. That is how apps/storage and packages/protocol went
+# unchecked until 2026-10-01.
+for pkg_path in apps/*/package.json packages/*/package.json; do
+  if [ -z "${EXPECTED_LICENSE[${pkg_path}]+set}" ]; then
+    echo "FAIL: ${pkg_path}  is not in this script's license map"
+    FAIL=1
+  fi
+done
 
 for pkg_path in "${!EXPECTED_LICENSE[@]}"; do
   if [ ! -f "${pkg_path}" ]; then
