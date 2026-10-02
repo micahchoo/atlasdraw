@@ -164,6 +164,11 @@ export interface PersistenceStore {
    * there is none with that id. An unreadable copy is moved aside, as load().
    */
   open(id: string): Promise<AtlasdrawDocument | null>;
+  /**
+   * Read one saved document without making it the one a reload opens; null
+   * when there is none. A backup reads every map this way.
+   */
+  read(id: string): Promise<AtlasdrawDocument | null>;
   /** Delete a saved document, after any save of it that is in progress. */
   remove(id: string): Promise<void>;
   /** Open a save dialog (FSA) or trigger a download anchor. */
@@ -451,6 +456,9 @@ export function createPersistenceStore(
     return doc;
   };
 
+  const readById = async (id: string): Promise<AtlasdrawDocument | null> =>
+    readMap(await db(), id);
+
   const remove = (id: string): Promise<void> =>
     enqueueWrite(async () => {
       const database = await db();
@@ -667,6 +675,7 @@ export function createPersistenceStore(
   return {
     save,
     claim: (id, claimOptions) => documents.claim(id, claimOptions),
+    read: readById,
     load,
     list,
     open,

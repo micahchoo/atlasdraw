@@ -77,6 +77,7 @@ function makeFakeStore(overrides: Partial<PersistenceStore> = {}) {
     load: vi.fn(async () => null),
     list: vi.fn(async () => []),
     open: vi.fn(async () => null),
+    read: vi.fn(async () => null),
     remove: vi.fn(async () => {}),
     saveToDisk: vi.fn(async () => {}),
     openFromDisk: vi.fn(async () => null),
@@ -562,6 +563,33 @@ describe("usePersistenceWiring", () => {
       await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
       expect(replace.mock.calls[0]!.slice(1)).toEqual([blob, "doc-1"]);
     });
+  });
+
+  it("asks the browser to keep this site's storage once, after the first save", async () => {
+    const persist = vi.fn(async () => true);
+    vi.stubGlobal("navigator", {
+      ...navigator,
+      storage: { persist, persisted: vi.fn(async () => false) },
+    });
+    vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
+      makeFakeStore(),
+    );
+    let onSaved: (() => void) | undefined;
+    vi.spyOn(persistenceModule, "startAutoSave").mockImplementation(
+      (_store, _history, _getDoc, opts) => {
+        onSaved = opts?.onSaved as () => void;
+        return fakeAutoSave();
+      },
+    );
+    renderHook(() =>
+      usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
+    );
+
+    onSaved!();
+    onSaved!();
+
+    await waitFor(() => expect(persist).toHaveBeenCalledTimes(1));
+    vi.unstubAllGlobals();
   });
 
   it("disposes the store and clears it from the session on unmount", async () => {

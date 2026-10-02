@@ -249,8 +249,37 @@ export function usePersistenceWiring(
       return answering;
     };
     const unholdMaps = holdOpenMaps(ownership, store);
+    // The maps and the write keys of their server maps live only in this
+    // site's storage, which a browser may evict when space is low (and
+    // WebKit after seven days without a visit). Ask once, after the first
+    // save, that it be kept: there is something to keep, and a browser
+    // grants this more readily to a site the user works in. A refusal
+    // changes nothing; "Back up my maps" is the other way to keep them.
+    let askedToKeep = false;
+    const askToKeepStorage = () => {
+      if (askedToKeep) {
+        return;
+      }
+      askedToKeep = true;
+      const storage =
+        typeof navigator === "undefined" ? undefined : navigator.storage;
+      if (!storage?.persist) {
+        return;
+      }
+      void (async () => {
+        try {
+          if (!(await storage.persisted?.())) {
+            await storage.persist();
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("[atlasdraw] persistent storage request failed", err);
+        }
+      })();
+    };
     const autosave = startAutoSave(store, history, getDoc, {
       onSaved: () => {
+        askToKeepStorage();
         persistence.getState().setLastSavedAt(Date.now());
         if (!store.remoteSaveFailed()) {
           persistence.getState().setRemoteSaveFailed(false);

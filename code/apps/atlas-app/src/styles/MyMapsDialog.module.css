@@ -120,7 +120,9 @@
 
 .footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: var(--ad-space-2);
   padding: var(--ad-space-3) var(--ad-space-4);
   border-top: 1px solid var(--ad-hairline);
 }

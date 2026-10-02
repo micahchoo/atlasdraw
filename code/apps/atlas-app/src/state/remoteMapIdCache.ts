@@ -419,6 +419,64 @@ export async function hasServerMap(documentId: string): Promise<boolean> {
   }
 }
 
+/** One document's server map and the key that opens it, as a backup holds it. */
+export interface ServerKey {
+  documentId: string;
+  mapId: string;
+  writeKey: string;
+  revision?: number;
+}
+
+/** Every server map this browser holds a key for. */
+export async function serverKeys(): Promise<ServerKey[]> {
+  const db = await remoteDb();
+  try {
+    const keys = await db.getAllKeys(REMOTE_STORE);
+    const found: ServerKey[] = [];
+    for (const key of keys) {
+      if (typeof key !== "string" || !key.startsWith(REMOTE_PREFIX)) {
+        continue;
+      }
+      const entry: unknown = await db.get(REMOTE_STORE, key);
+      if (isRemoteMap(entry)) {
+        found.push({
+          documentId: key.slice(REMOTE_PREFIX.length),
+          mapId: entry.mapId,
+          writeKey: entry.writeKey,
+          ...(entry.revision === undefined ? {} : { revision: entry.revision }),
+        });
+      }
+    }
+    return found;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Keep a key from a backup, unless this browser already holds one for the
+ * document: the key it holds is the one its saves use. True when kept.
+ */
+export function importServerKey(key: ServerKey): Promise<boolean> {
+  return serial(key.documentId, async () => {
+    const entry = {
+      mapId: key.mapId,
+      writeKey: key.writeKey,
+      ...(key.revision === undefined ? {} : { revision: key.revision }),
+    };
+    if (!isRemoteMap(entry) || (await load(key.documentId))) {
+      return false;
+    }
+    const db = await remoteDb();
+    try {
+      await db.put(REMOTE_STORE, entry, remoteKey(key.documentId));
+    } finally {
+      db.close();
+    }
+    return true;
+  });
+}
+
 /**
  * The revisions the server keeps of the document's map, the current one
  * first; null when this browser holds no server map for it.
