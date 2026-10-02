@@ -16,6 +16,8 @@ import type {
   FilterStyle,
   LabelStyle,
   LayerStyle,
+  PointDisplay,
+  SizeStyle,
   StyleExpression,
 } from "./style";
 
@@ -115,8 +117,33 @@ export function compilePaint(
     "circle-stroke-color": style.strokeColor ?? "#077",
     "circle-stroke-width": style.strokeWidth ?? 1,
     "circle-opacity": style.opacity ?? 1,
-    "circle-radius": 5,
+    "circle-radius": style.size ? compileRadius(style.size) : POINT_RADIUS,
   };
+}
+
+/** A point's radius in pixels when no property sizes it. */
+const POINT_RADIUS = 5;
+
+/**
+ * The radius expression for a size by property. A feature whose value is
+ * not a number gets the plain radius; `interpolate` clamps outside the range.
+ */
+function compileRadius(size: SizeStyle): PaintValue {
+  const value = ["get", size.property];
+  return [
+    "case",
+    ["==", ["typeof", value], "number"],
+    [
+      "interpolate",
+      ["linear"],
+      value,
+      size.min,
+      size.minRadius,
+      size.max,
+      size.maxRadius,
+    ],
+    POINT_RADIUS,
+  ];
 }
 
 /**
@@ -140,6 +167,163 @@ export function outlineLayerId(id: string): string {
 /** The id of a data layer's label (symbol) layer. */
 export function labelLayerId(id: string): string {
   return `${id}::label`;
+}
+
+/** The id of a clustered point layer's cluster circles. */
+export function clusterLayerId(id: string): string {
+  return `${id}::clusters`;
+}
+
+/** The id of a clustered point layer's cluster counts. */
+export function clusterCountLayerId(id: string): string {
+  return `${id}::cluster-count`;
+}
+
+/** MapLibre marks a cluster feature with `point_count`. */
+const IS_CLUSTER: maplibregl.FilterSpecification = ["has", "point_count"];
+const NOT_CLUSTER: maplibregl.FilterSpecification = ["!", IS_CLUSTER];
+
+/** Pixels around a cluster's centre that join points into it. */
+const CLUSTER_RADIUS = 50;
+
+const POINT_DISPLAYS: readonly PointDisplay[] = [
+  "points",
+  "clusters",
+  "heatmap",
+];
+
+export const POINT_RADIUS_MIN = 1;
+export const POINT_RADIUS_MAX = 50;
+
+function sizeProblem(size: SizeStyle): string | null {
+  if (typeof size !== "object" || size === null || !size.property) {
+    return "Choose a number property to size the points by.";
+  }
+  const { min, max, minRadius, maxRadius } = size;
+  if (
+    typeof min !== "number" ||
+    typeof max !== "number" ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    min >= max
+  ) {
+    return "The size range needs a smallest value below its largest.";
+  }
+  const radius = (r: unknown) =>
+    typeof r === "number" && r >= POINT_RADIUS_MIN && r <= POINT_RADIUS_MAX;
+  if (!radius(minRadius) || !radius(maxRadius)) {
+    return `Use a point size from ${POINT_RADIUS_MIN} to ${POINT_RADIUS_MAX}.`;
+  }
+  return null;
+}
+
+/**
+ * Why the map cannot draw this style's point display or point size, or
+ * null. Clusters, heatmaps and sizes are for point layers only.
+ */
+export function pointProblem(
+  style: Pick<LayerStyle, "points" | "size">,
+  geometryType: LayerGeometryType,
+): string | null {
+  const { points, size } = style;
+  if (points !== undefined && !POINT_DISPLAYS.includes(points)) {
+    return "Show the points as points, clusters or a heatmap.";
+  }
+  if (
+    points !== undefined &&
+    points !== "points" &&
+    geometryType !== "circle"
+  ) {
+    return "Only a point layer can show clusters or a heatmap.";
+  }
+  if (size === undefined) {
+    return null;
+  }
+  if (geometryType !== "circle") {
+    return "Only a point layer can size its points by a property.";
+  }
+  return sizeProblem(size);
+}
+
+/**
+ * The options a data layer's GeoJSON source takes from its style. Only
+ * clusters change the source: MapLibre makes the clusters there. The filter
+ * goes on the source too, so a cluster counts only the points that pass it.
+ * Empty for every other style.
+ */
+export function compileSourceOptions(
+  style: LayerStyle,
+  geometryType: LayerGeometryType,
+): { cluster?: true; clusterRadius?: number; filter?: unknown[] } {
+  if (geometryType !== "circle" || style.points !== "clusters") {
+    return {};
+  }
+  return {
+    cluster: true,
+    clusterRadius: CLUSTER_RADIUS,
+    ...(style.filter ? { filter: compileFilter(style.filter) } : {}),
+  };
+}
+
+/** The cluster circles and, with a font, their counts. */
+function compileClusterLayers(
+  id: string,
+  style: LayerStyle,
+  font: string[] | undefined,
+): maplibregl.LayerSpecification[] {
+  const count: maplibregl.ExpressionSpecification = ["get", "point_count"];
+  const layers: maplibregl.LayerSpecification[] = [
+    {
+      id: clusterLayerId(id),
+      type: "circle",
+      source: id,
+      filter: IS_CLUSTER,
+      paint: {
+        "circle-color": style.fillColor ?? "#0aa",
+        "circle-stroke-color": style.strokeColor ?? "#077",
+        "circle-stroke-width": style.strokeWidth ?? 1,
+        "circle-opacity": style.opacity ?? 1,
+        // 12 px for a pair, growing with the count to 24 px at 1000.
+        "circle-radius": ["interpolate", ["linear"], count, 2, 12, 1000, 24],
+      },
+    } as maplibregl.LayerSpecification,
+  ];
+  if (font) {
+    layers.push({
+      id: clusterCountLayerId(id),
+      type: "symbol",
+      source: id,
+      filter: IS_CLUSTER,
+      layout: {
+        "text-field": ["get", "point_count_abbreviated"],
+        "text-font": font,
+        "text-size": 12,
+        "text-allow-overlap": true,
+      },
+      paint: {
+        "text-color": LABEL_COLOR,
+        "text-halo-color": LABEL_HALO_COLOR,
+        "text-halo-width": LABEL_HALO_WIDTH,
+      },
+    } as maplibregl.LayerSpecification);
+  }
+  return layers;
+}
+
+/** A heatmap of point density, in the layer's own id. */
+function compileHeatmapLayer(
+  id: string,
+  style: LayerStyle,
+): maplibregl.LayerSpecification {
+  return {
+    id,
+    type: "heatmap",
+    source: id,
+    paint: {
+      "heatmap-radius": 20,
+      "heatmap-opacity": style.opacity ?? 1,
+    },
+  };
 }
 
 /**
@@ -261,6 +445,11 @@ export interface CompileLayersOptions {
  * one layer. With `style.label` and a font, a symbol layer for the labels
  * (`labelLayerId`) is last. With `style.filter`, every layer carries the
  * filter. Each layer reads the source named `id`.
+ *
+ * A point layer with `points: "heatmap"` is one heatmap layer. With
+ * `points: "clusters"`, the cluster circles (`clusterLayerId`) and counts
+ * (`clusterCountLayerId`, with a font) come first, and every layer picks
+ * clusters or single points; the filter is on the source.
  */
 export function compileLayers(
   id: string,
@@ -268,6 +457,17 @@ export function compileLayers(
   geometryType: LayerGeometryType,
   options: CompileLayersOptions = {},
 ): maplibregl.LayerSpecification[] {
+  const display: PointDisplay =
+    geometryType === "circle" ? style.points ?? "points" : "points";
+  const filter = style.filter ? compileFilter(style.filter) : undefined;
+  if (display === "heatmap") {
+    const heatmap = compileHeatmapLayer(id, style);
+    return [
+      filter
+        ? ({ ...heatmap, filter } as maplibregl.LayerSpecification)
+        : heatmap,
+    ];
+  }
   const layers: maplibregl.LayerSpecification[] = [
     compileLayer(id, style, geometryType),
   ];
@@ -287,10 +487,20 @@ export function compileLayers(
       compileLabelLayer(id, style.label, geometryType, options.labelFont),
     );
   }
-  if (!style.filter) {
+  if (display === "clusters") {
+    // The source holds the filter (compileSourceOptions). Each layer only
+    // picks clusters or single points.
+    return [
+      ...compileClusterLayers(id, style, options.labelFont),
+      ...layers.map(
+        (layer) =>
+          ({ ...layer, filter: NOT_CLUSTER } as maplibregl.LayerSpecification),
+      ),
+    ];
+  }
+  if (!filter) {
     return layers;
   }
-  const filter = compileFilter(style.filter);
   return layers.map(
     (layer) => ({ ...layer, filter } as maplibregl.LayerSpecification),
   );
