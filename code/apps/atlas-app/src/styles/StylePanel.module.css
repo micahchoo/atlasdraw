@@ -196,38 +196,6 @@
   border-radius: var(--ad-radius-xs);
 }
 
-/* --- buttons -------------------------------------------------------------- */
-
-.applyBtn {
-  padding: 6px 12px;
-  border: 1px solid var(--ad-accent);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-  font-size: var(--ad-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.applyBtn:hover {
-  background: var(--ad-accent-hover);
-  border-color: var(--ad-accent-hover);
-}
-
-.secondaryBtn {
-  padding: 4px 8px;
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: var(--ad-text-sm);
-  cursor: pointer;
-}
-
-.secondaryBtn:hover {
-  background: var(--ad-surface-inset);
-}
-
 /* --- rejected style --------------------------------------------------------- */
 
 .error {

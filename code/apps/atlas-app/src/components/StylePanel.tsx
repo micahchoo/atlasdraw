@@ -43,6 +43,7 @@ import { useOverlayReport } from "../hooks/useMapOverlays";
 
 import styles from "../styles/StylePanel.module.css";
 
+import { Button } from "./Button";
 import { ColorRampPicker } from "./ColorRampPicker";
 
 import type { DataLayerEntry, LayerStyle } from "../state/document";
@@ -383,23 +384,22 @@ function PointsSection({
       </label>
       <div className={styles.sectionActions}>
         {existing && (
-          <button
-            type="button"
-            className={styles.secondaryBtn}
+          <Button
+            size="sm"
             data-testid="size-remove"
             onClick={() => onSize(undefined)}
           >
             Remove size
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className={styles.applyBtn}
+        <Button
+          variant="primary"
+          size="sm"
           data-testid="size-apply"
           onClick={apply}
         >
           Apply
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -481,23 +481,22 @@ function LabelSection({
       </label>
       <div className={styles.sectionActions}>
         {existing && (
-          <button
-            type="button"
-            className={styles.secondaryBtn}
+          <Button
+            size="sm"
             data-testid="label-remove"
             onClick={() => onApply(undefined)}
           >
             Remove labels
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className={styles.applyBtn}
+        <Button
+          variant="primary"
+          size="sm"
           data-testid="label-apply"
           onClick={() => onApply({ property, size, halo })}
         >
           Apply
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -579,23 +578,22 @@ function FilterSection({
       </label>
       <div className={styles.sectionActions}>
         {existing && (
-          <button
-            type="button"
-            className={styles.secondaryBtn}
+          <Button
+            size="sm"
             data-testid="filter-remove"
             onClick={() => onApply(undefined)}
           >
             Remove filter
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className={styles.applyBtn}
+        <Button
+          variant="primary"
+          size="sm"
           data-testid="filter-apply"
           onClick={() => onApply({ property, op, value })}
         >
           Apply
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -656,14 +654,14 @@ function SingleColorTab({
           onChange={(e) => setHex(e.target.value)}
         />
       </label>
-      <button
-        type="button"
-        className={styles.applyBtn}
+      <Button
+        variant="primary"
+        size="sm"
         data-testid="style-single-apply"
         onClick={() => onApply(hex)}
       >
         Apply
-      </button>
+      </Button>
     </div>
   );
 }
@@ -750,25 +748,21 @@ function CategoricalTab({
               data-testid={`cat-stop-color-${idx}`}
               onChange={(e) => updateStop(idx, { color: e.target.value })}
             />
-            <button
-              type="button"
+            <Button
+              variant="ghost-icon"
+              size="sm"
               aria-label="Remove stop"
               data-testid={`cat-stop-remove-${idx}`}
               onClick={() => removeStop(idx)}
             >
               ×
-            </button>
+            </Button>
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        className={styles.secondaryBtn}
-        data-testid="cat-add-stop"
-        onClick={addStop}
-      >
+      <Button size="sm" data-testid="cat-add-stop" onClick={addStop}>
         + Add stop
-      </button>
+      </Button>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Fallback</span>
         <input
@@ -778,14 +772,14 @@ function CategoricalTab({
           onChange={(e) => setFallback(e.target.value)}
         />
       </label>
-      <button
-        type="button"
-        className={styles.applyBtn}
+      <Button
+        variant="primary"
+        size="sm"
         data-testid="cat-apply"
         onClick={apply}
       >
         Apply
-      </button>
+      </Button>
     </div>
   );
 }
@@ -913,14 +907,9 @@ function GraduatedTab({
         />
       </label>
       <ColorRampPicker value={colors} stops={stopCount} onChange={setColors} />
-      <button
-        type="button"
-        className={styles.secondaryBtn}
-        data-testid="grad-compute"
-        onClick={compute}
-      >
+      <Button size="sm" data-testid="grad-compute" onClick={compute}>
         Compute stops
-      </button>
+      </Button>
       {computedStops.length > 0 && (
         <div className={styles.stopPreview} data-testid="grad-preview">
           {computedStops.map((s, i) => (
@@ -944,14 +933,14 @@ function GraduatedTab({
           onChange={(e) => setFallback(e.target.value)}
         />
       </label>
-      <button
-        type="button"
-        className={styles.applyBtn}
+      <Button
+        variant="primary"
+        size="sm"
         data-testid="grad-apply"
         onClick={apply}
       >
         Apply
-      </button>
+      </Button>
     </div>
   );
 }
