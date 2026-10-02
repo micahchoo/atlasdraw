@@ -482,6 +482,8 @@ import type {
   NullableGridSize,
   Offsets,
   ProjectContextMenuItem,
+  ProjectContextMenuContext,
+  ContextMenuPoint,
   ProjectSidebarTab,
   SidebarTabDescriptor,
 } from "../types";
@@ -11263,7 +11265,14 @@ class App extends React.Component<AppProps, AppState> {
       },
       () => {
         this.setState({
-          contextMenu: { top, left, items: this.getContextMenuItems(type) },
+          contextMenu: {
+            top,
+            left,
+            items: this.getContextMenuItems(type, {
+              clientX: event.clientX,
+              clientY: event.clientY,
+            }),
+          },
         });
       },
     );
@@ -11695,36 +11704,42 @@ class App extends React.Component<AppProps, AppState> {
    * action registry. `name` is closed-string-typed as `ActionName` on
    * `Action`; cast through unknown is the minimal patch.
    */
-  private getProjectContextMenuActions = (): ContextMenuItems => {
-    if (this.projectContextMenuItems.length === 0) {
-      return [];
-    }
-    return this.projectContextMenuItems.map((item) => {
-      const action: Action = {
-        name: item.name as Action["name"],
-        label: item.label,
-        icon: item.icon,
-        // Action.predicate signature: (elements, appState, appProps, app)
-        predicate: (elements, appState) => item.predicate(elements, appState),
-        // Action.perform signature: (elements, appState, formData, app) =>
-        // ActionResult | Promise<ActionResult>. Project items return
-        // `void | false | {elements?, appState?, captureUpdate}` — coerce
-        // void to a no-mutation result so the updater pipeline doesn't crash.
-        perform: (elements, appState) => {
-          const result = item.perform(elements, appState);
-          if (!result) {
-            return false;
-          }
-          return result;
-        },
-        trackEvent: false,
-      };
-      return action;
-    });
+  private getProjectContextMenuActions = (
+    type: ProjectContextMenuContext,
+    at: ContextMenuPoint,
+  ): ContextMenuItems => {
+    return this.projectContextMenuItems
+      .filter((item) => (item.contexts ?? ["element"]).includes(type))
+      .map((item) => {
+        const action: Action = {
+          name: item.name as Action["name"],
+          label: item.label,
+          icon: item.icon,
+          checked: item.checked,
+          // Action.predicate signature: (elements, appState, appProps, app).
+          // The item also gets the point where the menu opened.
+          predicate: (elements, appState) =>
+            item.predicate(elements, appState, at),
+          // Action.perform signature: (elements, appState, formData, app) =>
+          // ActionResult | Promise<ActionResult>. Project items return
+          // `void | false | {elements?, appState?, captureUpdate}` — coerce
+          // void to a no-mutation result so the updater pipeline doesn't crash.
+          perform: (elements, appState) => {
+            const result = item.perform(elements, appState, at);
+            if (!result) {
+              return false;
+            }
+            return result;
+          },
+          trackEvent: false,
+        };
+        return action;
+      });
   };
 
   private getContextMenuItems = (
-    type: "canvas" | "element",
+    type: ProjectContextMenuContext,
+    at: ContextMenuPoint,
   ): ContextMenuItems => {
     const options: ContextMenuItems = [];
 
@@ -11734,15 +11749,38 @@ class App extends React.Component<AppProps, AppState> {
     // -------------------------------------------------------------------------
 
     if (type === "canvas") {
+      // Atlasdraw fork — `canvasMenuToggles={false}` takes the upstream
+      // toggles out. The atlas keeps the ones that work over a map as its
+      // own registered items (apps/atlas-app, `.claude/rules/menus.md`).
+      const toggles = this.props.canvasMenuToggles !== false;
       if (this.state.viewModeEnabled) {
-        return [
-          ...options,
-          actionToggleGridMode,
-          actionToggleZenMode,
-          actionToggleViewMode,
-          actionToggleStats,
-        ];
+        return toggles
+          ? [
+              ...options,
+              actionToggleGridMode,
+              actionToggleZenMode,
+              actionToggleViewMode,
+              actionToggleStats,
+            ]
+          : options;
       }
+
+      const upstreamToggles: ContextMenuItems = toggles
+        ? [
+            actionToggleGridMode,
+            actionToggleObjectsSnapMode,
+            actionToggleArrowBinding,
+            actionToggleMidpointSnapping,
+            actionToggleZenMode,
+            actionToggleViewMode,
+            actionToggleStats,
+          ]
+        : [];
+      const hostItems = this.getProjectContextMenuActions("canvas", at);
+      // No separator without host items: it would end the list.
+      const hostBlock: ContextMenuItems = hostItems.length
+        ? [CONTEXT_MENU_SEPARATOR, ...hostItems]
+        : [];
 
       return [
         actionPaste,
@@ -11754,13 +11792,8 @@ class App extends React.Component<AppProps, AppState> {
         actionSelectAll,
         actionUnlockAllElements,
         CONTEXT_MENU_SEPARATOR,
-        actionToggleGridMode,
-        actionToggleObjectsSnapMode,
-        actionToggleArrowBinding,
-        actionToggleMidpointSnapping,
-        actionToggleZenMode,
-        actionToggleViewMode,
-        actionToggleStats,
+        ...upstreamToggles,
+        ...hostBlock,
       ];
     }
 
@@ -11829,7 +11862,7 @@ class App extends React.Component<AppProps, AppState> {
       // current selection are filtered out (and the leading separator is
       // dropped automatically when no items follow).
       CONTEXT_MENU_SEPARATOR,
-      ...this.getProjectContextMenuActions(),
+      ...this.getProjectContextMenuActions("element", at),
     ];
   };
 

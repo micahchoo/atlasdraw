@@ -72,9 +72,14 @@ export const ContextMenu = React.memo(
         >
           {filteredItems.map((item, idx) => {
             if (item === CONTEXT_MENU_SEPARATOR) {
+              // Atlasdraw: no separator at either end. The host's items
+              // follow one, and the predicates may hide every one of them.
               if (
                 !filteredItems[idx - 1] ||
-                filteredItems[idx - 1] === CONTEXT_MENU_SEPARATOR
+                filteredItems[idx - 1] === CONTEXT_MENU_SEPARATOR ||
+                filteredItems
+                  .slice(idx + 1)
+                  .every((next) => next === CONTEXT_MENU_SEPARATOR)
               ) {
                 return null;
               }
