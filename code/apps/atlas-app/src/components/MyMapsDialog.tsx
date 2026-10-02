@@ -34,6 +34,7 @@ import {
 } from "../state/myMaps";
 import { hasServerMap } from "../state/remoteMapIdCache";
 
+import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Modal } from "./Modal";
 
@@ -214,15 +215,15 @@ export function MyMapsDialog({
         <h2 id="my-maps-title" className={styles.title}>
           My maps
         </h2>
-        <button
-          type="button"
-          className={styles.closeBtn}
+        <Button
+          variant="ghost-icon"
+          size="sm"
           onClick={onClose}
           aria-label="Close"
           data-testid="my-maps-close"
         >
           ×
-        </button>
+        </Button>
       </div>
 
       <div className={styles.body}>
@@ -266,9 +267,8 @@ export function MyMapsDialog({
                       )}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.button}
+                  <Button
+                    size="sm"
                     onClick={() => void open(map.id)}
                     disabled={isOpen || newer}
                     aria-disabled={isOpen || newer ? "true" : undefined}
@@ -283,16 +283,16 @@ export function MyMapsDialog({
                     data-testid="my-maps-open"
                   >
                     Open
-                  </button>
-                  <button
-                    type="button"
-                    className={[styles.button, styles.buttonDanger].join(" ")}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     onClick={() => void askDelete(map)}
                     aria-label={`Delete ${title}`}
                     data-testid="my-maps-delete"
                   >
                     Delete
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -301,22 +301,15 @@ export function MyMapsDialog({
       </div>
 
       <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.button}
-          onClick={() => void backUp()}
-          data-testid="my-maps-backup"
-        >
+        <Button onClick={() => void backUp()} data-testid="my-maps-backup">
           Back up my maps
-        </button>
-        <button
-          type="button"
-          className={styles.button}
+        </Button>
+        <Button
           onClick={() => restoreInput.current?.click()}
           data-testid="my-maps-restore"
         >
           Restore a backup
-        </button>
+        </Button>
         <input
           ref={restoreInput}
           type="file"
@@ -331,14 +324,13 @@ export function MyMapsDialog({
           }}
           data-testid="my-maps-restore-input"
         />
-        <button
-          type="button"
-          className={[styles.button, styles.buttonPrimary].join(" ")}
+        <Button
+          variant="primary"
           onClick={() => void startNew()}
           data-testid="my-maps-new"
         >
           New map
-        </button>
+        </Button>
       </div>
 
       {prompt?.kind === "delete" && (

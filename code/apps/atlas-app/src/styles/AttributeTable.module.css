@@ -1,10 +1,10 @@
 /* AttributeTable — a data layer's features, read-only, in the dialog slot.
- * z:100 (context menu band), as KeyboardShortcuts. Uses --ad-* tokens. */
+ * --ad-z-dialog, as KeyboardShortcuts. Uses --ad-* tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -37,27 +37,11 @@
 
 .title {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.close,
-.zoom {
-  padding: 2px 8px;
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.close:hover,
-.zoom:hover {
-  background: var(--ad-surface-inset);
 }
 
 .searchRow {
@@ -77,11 +61,11 @@
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
 }
 
 .count {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
 }
 
@@ -93,7 +77,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .th {
@@ -112,7 +96,7 @@
   background: transparent;
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -124,7 +108,7 @@
 
 .arrow {
   margin-left: 4px;
-  font-size: 9px;
+  font-size: var(--ad-text-2xs);
 }
 
 .tr:nth-child(even) {

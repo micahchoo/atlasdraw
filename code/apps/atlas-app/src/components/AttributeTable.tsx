@@ -21,6 +21,7 @@ import { useDocument } from "../state/document";
 
 import styles from "../styles/AttributeTable.module.css";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 import type { Feature } from "geojson";
@@ -88,14 +89,9 @@ export function AttributeTable({
         <h2 id="attribute-table-title" className={styles.title}>
           {`Attributes: ${label}`}
         </h2>
-        <button
-          type="button"
-          className={styles.close}
-          onClick={onClose}
-          data-testid="attribute-table-close"
-        >
+        <Button size="sm" onClick={onClose} data-testid="attribute-table-close">
           Close
-        </button>
+        </Button>
       </div>
       <div className={styles.searchRow}>
         <input
@@ -158,9 +154,8 @@ export function AttributeTable({
                   </td>
                 ))}
                 <td className={styles.td}>
-                  <button
-                    type="button"
-                    className={styles.zoom}
+                  <Button
+                    size="sm"
                     aria-label={`Zoom to ${
                       row.cells[0] || `feature ${row.feature + 1}`
                     }`}
@@ -168,7 +163,7 @@ export function AttributeTable({
                     data-testid={`attribute-table-zoom-${row.feature}`}
                   >
                     Zoom
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

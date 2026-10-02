@@ -55,6 +55,7 @@ import {
 import { useSession, useView } from "../session/SessionContext";
 import styles from "../styles/MeasureLayer.module.css";
 
+import { Button } from "./Button";
 import { ToolOptionsBar } from "./ToolOptionsBar";
 
 import type * as maplibregl from "maplibre-gl";
@@ -112,16 +113,15 @@ function UnitsButton({
 }) {
   const other = units === "metric" ? "imperial" : "metric";
   return (
-    <button
-      type="button"
-      className={styles.unitsButton}
+    <Button
+      size="sm"
       onClick={onToggle}
       aria-label={`Units: ${units}. Change to ${other}`}
       title={`Change to ${other} units`}
       data-testid="measure-units-button"
     >
       {units === "metric" ? "m, km" : "ft, mi"}
-    </button>
+    </Button>
   );
 }
 
@@ -419,15 +419,15 @@ function MeasureTool({
           {distance}
         </span>
         {state.phase === "done" && (
-          <button
-            type="button"
-            className={styles.textButton}
+          <Button
+            variant="primary"
+            size="sm"
             onClick={keepAsLine}
             disabled={!excalidrawAPI}
             data-testid="measure-keep-line"
           >
             Keep as line
-          </button>
+          </Button>
         )}
         <UnitsButton units={units} onToggle={onToggleUnits} />
         <span className={styles.separator} />

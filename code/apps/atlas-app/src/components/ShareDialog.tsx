@@ -31,6 +31,7 @@ import { getAppConfig } from "../config/app-config";
 import { useShareLink, type ShareMode } from "../hooks/useShareLink";
 import { embedSnippet, type EmbedChoices } from "../lib/embed";
 
+import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Modal } from "./Modal";
 
@@ -390,23 +391,13 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 color: "var(--ad-ink, #212529)",
               }}
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={handleCopy}
               data-testid="share-dialog-copy"
-              style={{
-                padding: "6px 14px",
-                border: "1px solid var(--ad-accent, #1971c2)",
-                borderRadius: "4px",
-                background: copied ? "#37b24d" : "var(--ad-accent, #1971c2)",
-                color: "var(--ad-ink-inverse, #fff)",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
             >
               {copied ? "Copied" : "Copy link"}
-            </button>
+            </Button>
           </div>
           {view.kind === "readonly-success" && (
             <p
@@ -424,24 +415,15 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
             </p>
           )}
           {view.kind === "readonly-success" && view.token !== null && (
-            <button
-              type="button"
+            <Button
+              variant="destructive"
+              size="sm"
               onClick={() => setConfirmStop(view.token)}
               data-testid="share-dialog-revoke"
-              style={{
-                margin: "0 0 0.75rem 0",
-                padding: "5px 12px",
-                border: "1px solid #c92a2a",
-                borderRadius: "4px",
-                background: "transparent",
-                color: "#c92a2a",
-                fontSize: "0.8125rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
+              style={{ margin: "0 0 0.75rem 0" }}
             >
               Stop sharing this link
-            </button>
+            </Button>
           )}
           {view.kind === "readonly-success" && (
             <EmbedSnippet shareUrl={currentUrl} />
@@ -463,23 +445,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
-          onClick={onCloseRequest}
-          data-testid="share-dialog-close"
-          style={{
-            padding: "6px 14px",
-            border: "1px solid #adb5bd",
-            borderRadius: "4px",
-            background: "var(--ad-surface-raised, #fff)",
-            color: "var(--ad-ink, #212529)",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
+        <Button onClick={onCloseRequest} data-testid="share-dialog-close">
           Close
-        </button>
+        </Button>
       </div>
       {confirmStop !== null && (
         <ConfirmDialog
@@ -629,26 +597,14 @@ const EmbedSnippet: React.FC<{ shareUrl: string }> = ({ shareUrl }) => {
         The map fills the width of the page. Readers zoom with Ctrl or ⌘ and the
         scroll wheel, and move it with two fingers on a touch screen.
       </p>
-      <button
-        type="button"
+      <Button
+        size="sm"
         onClick={copy}
         data-testid="embed-snippet-copy"
-        style={{
-          marginTop: "0.375rem",
-          padding: "5px 12px",
-          border: "1px solid var(--ad-accent, #1971c2)",
-          borderRadius: "4px",
-          background: copied ? "#37b24d" : "transparent",
-          color: copied
-            ? "var(--ad-ink-inverse, #fff)"
-            : "var(--ad-accent, #1971c2)",
-          fontSize: "0.8125rem",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
+        style={{ marginTop: "0.375rem" }}
       >
         {copied ? "Copied" : "Copy embed code"}
-      </button>
+      </Button>
     </div>
   );
 };

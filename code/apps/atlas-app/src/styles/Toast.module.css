@@ -1,12 +1,12 @@
 /* Toast notifications — transient feedback stacked bottom-right.
- * z:50 (above toolbar/z:10, below context menus/z:100).
+ * --ad-z-toast: over the hints and popups, under a popover or a dialog.
  * Uses --ad-* design tokens. */
 
 .container {
   position: absolute;
   bottom: 36px; /* above status bar (28px + 8px gap) */
   right: var(--ad-space-3);
-  z-index: 50;
+  z-index: var(--ad-z-toast);
   display: flex;
   flex-direction: column-reverse; /* newest at bottom */
   gap: 6px;
@@ -30,7 +30,7 @@
   border-radius: var(--ad-radius-md);
   box-shadow: var(--ad-shadow-raised);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   color: var(--ad-ink);
   pointer-events: auto;
@@ -87,43 +87,4 @@
 .message {
   flex: 1;
   line-height: 1.4;
-}
-
-.dismiss {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--ad-ink-tertiary);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  flex-shrink: 0;
-  border-radius: 2px;
-}
-
-.dismiss:hover {
-  color: var(--ad-ink);
-  background: var(--ad-surface-inset);
-}
-
-/* A text action beside the message, such as Cancel on a running import. */
-.action {
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border: 1px solid var(--ad-rule);
-  border-radius: 4px;
-  background: none;
-  color: var(--ad-ink);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.action:hover {
-  background: var(--ad-surface-inset);
 }

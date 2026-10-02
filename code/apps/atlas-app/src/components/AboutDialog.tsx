@@ -8,6 +8,7 @@ import React from "react";
 
 import { getAppConfig } from "../config/app-config";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 import type { BuildTarget } from "../config/app-config";
@@ -168,24 +169,13 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({ onCloseRequest }) => {
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          type="button"
+        <Button
           onClick={onCloseRequest}
           data-testid="about-dialog-close"
           autoFocus
-          style={{
-            padding: "6px 14px",
-            border: "1px solid #adb5bd",
-            borderRadius: "4px",
-            background: "var(--ad-surface-raised, #fff)",
-            color: "var(--ad-ink, #212529)",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
         >
           Close
-        </button>
+        </Button>
       </div>
     </Modal>
   );

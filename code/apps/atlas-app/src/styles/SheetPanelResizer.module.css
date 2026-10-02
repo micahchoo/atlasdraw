@@ -5,8 +5,8 @@
  * 7px hit area on that edge so the grab target overhangs the panel by half its
  * width instead of sitting entirely inside the map.
  *
- * Z-index 10 — the ladder's toolbar/banner band. See the component header for
- * why that clears the sidebar's own 120.
+ * Z-index --ad-z-overlay. See the component header for why that clears the
+ * sidebar's own 120.
  */
 
 .handle {
@@ -15,7 +15,7 @@
   bottom: 0;
   width: 7px;
   transform: translateX(50%);
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;

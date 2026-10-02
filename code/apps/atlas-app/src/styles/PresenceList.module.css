@@ -1,8 +1,7 @@
 /* PresenceList.module.css
  *
  * Compact sidebar widget showing connected collaborators.
- * Absolutely positioned at top-right (z-index 10, same band as toolbar
- * buttons per atlasdraw-ui-conventions z-index ladder).
+ * Absolutely positioned at top-right, at --ad-z-overlay (tokens.css).
  *
  * Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
  * Color tokens are the atlas-side palette (literal hex values).
@@ -12,7 +11,7 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   min-width: 140px;
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-emphasis);
@@ -23,7 +22,7 @@
 }
 
 .header {
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   color: var(--ad-ink);
   margin: 0 0 6px 0;
@@ -33,7 +32,7 @@
 
 /* How the room's connection stands: connecting, offline, refused. */
 .connection {
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink-tertiary);
   margin: 0 0 6px 0;
 }
@@ -65,7 +64,7 @@
 
 /* Username label — truncated at ~12 characters */
 .username {
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   color: var(--ad-ink);
   white-space: nowrap;
@@ -112,11 +111,11 @@
   width: 112px;
   padding: 2px 4px;
   border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .selfName:focus-visible {

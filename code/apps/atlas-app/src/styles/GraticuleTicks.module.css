@@ -9,7 +9,7 @@
   height: 100%;
   padding: 0 2px;
   font-family: var(--ad-font-mono);
-  font-size: 9.5px;
+  font-size: var(--ad-text-2xs);
   color: var(--ad-ink-tertiary);
   user-select: none;
 }
@@ -27,7 +27,7 @@
   height: 100%;
   padding: 2px 0;
   font-family: var(--ad-font-mono);
-  font-size: 9.5px;
+  font-size: var(--ad-text-2xs);
   color: var(--ad-ink-tertiary);
   user-select: none;
 }

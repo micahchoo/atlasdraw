@@ -24,6 +24,7 @@ import {
 } from "../state/myMaps";
 import { serverVersions } from "../state/remoteMapIdCache";
 
+import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Modal } from "./Modal";
 
@@ -147,15 +148,15 @@ export function ServerVersionsDialog({
         <h2 id="server-versions-title" className={styles.title}>
           Server versions
         </h2>
-        <button
-          type="button"
-          className={styles.closeBtn}
+        <Button
+          variant="ghost-icon"
+          size="sm"
           onClick={onClose}
           aria-label="Close"
           data-testid="server-versions-close"
         >
           ×
-        </button>
+        </Button>
       </div>
 
       <div className={styles.body}>
@@ -197,24 +198,22 @@ export function ServerVersionsDialog({
                       )}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className={styles.button}
+                  <Button
+                    size="sm"
                     onClick={() => void openCopy(version)}
                     aria-label={`Open a copy of the version saved ${when}`}
                     data-testid="server-versions-copy"
                   >
                     Open a copy
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.button}
+                  </Button>
+                  <Button
+                    size="sm"
                     onClick={() => void restore(version)}
                     aria-label={`Restore the version saved ${when}`}
                     data-testid="server-versions-restore"
                   >
                     Restore
-                  </button>
+                  </Button>
                 </li>
               );
             })}

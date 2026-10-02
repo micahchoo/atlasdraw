@@ -10,16 +10,17 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
 }
 
 /* Comment-mode pick surface: captures every click while the user is choosing
- * an anchor, then runs the hit-test cascade. z-index 1 keeps it below the
- * placed anchors (.anchor is 10) so existing threads stay clickable, and
- * below the draft bubble (.draft is 11), which only renders after a pick. */
+ * an anchor, then runs the hit-test cascade. --ad-z-raised keeps it below the
+ * placed anchors (.anchor is --ad-z-overlay) so existing threads stay
+ * clickable, and below the draft bubble (.draft, one over the anchors), which
+ * only renders after a pick. All three resolve inside .overlay. */
 .clickInterceptor {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: var(--ad-z-raised);
   pointer-events: auto;
 }

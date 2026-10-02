@@ -34,6 +34,8 @@ import React, {
 
 import styles from "../styles/Toast.module.css";
 
+import { Button } from "./Button";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -243,23 +245,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           />
           <span className={styles.message}>{t.message}</span>
           {t.action && (
-            <button
-              type="button"
-              className={styles.action}
+            <Button
+              size="sm"
               data-testid="toast-action"
               onClick={t.action.onClick}
             >
               {t.action.label}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            className={styles.dismiss}
+          <Button
+            variant="ghost-icon"
+            size="sm"
             onClick={() => dismiss(t.id)}
             aria-label="Dismiss"
           >
             ×
-          </button>
+          </Button>
         </div>
       ));
 

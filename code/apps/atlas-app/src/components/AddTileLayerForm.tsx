@@ -28,6 +28,8 @@ import { dispatch } from "../state/document";
 
 import styles from "../styles/AddTileLayerForm.module.css";
 
+import { Button } from "./Button";
+
 /** The policy the production build writes into index.html, if any. */
 function pagePolicy(): string | null {
   return (
@@ -183,21 +185,17 @@ export function AddTileLayerForm({ onDone }: { onDone: () => void }) {
       )}
 
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.button}
-          data-testid="tile-add-cancel"
-          onClick={onDone}
-        >
+        <Button size="sm" data-testid="tile-add-cancel" onClick={onDone}>
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           type="submit"
-          className={[styles.button, styles.buttonPrimary].join(" ")}
           data-testid="tile-add-submit"
         >
           Add layer
-        </button>
+        </Button>
       </div>
     </form>
   );

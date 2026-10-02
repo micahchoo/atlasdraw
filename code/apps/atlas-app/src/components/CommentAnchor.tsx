@@ -21,9 +21,13 @@ import React, { useEffect, useState } from "react";
 
 import { normalizeAnchor } from "@atlasdraw/protocol";
 
+import { CommentIcon } from "../lib/icons";
+
 import styles from "../styles/CommentAnchor.module.css";
 
 import type { Comment } from "../state/comments";
+
+import { Button } from "./Button";
 
 export interface CommentAnchorProps {
   comment: Comment;
@@ -94,18 +98,7 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
         onClick={() => setOpen((v) => !v)}
         data-testid={`comment-anchor-button-${comment.id}`}
       >
-        <svg
-          className={styles.icon}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M2 3h12v8H6l-3 3v-3H2z" />
-        </svg>
+        <CommentIcon className={styles.icon} strokeWidth={2} />
       </button>
 
       {open && (
@@ -133,22 +126,21 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
                 data-testid={`comment-popover-edit-text-${comment.id}`}
               />
               <div className={styles.popoverEditActions}>
-                <button
-                  type="button"
-                  className={styles.popoverButton}
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={saveEditing}
                   data-testid={`comment-popover-save-${comment.id}`}
                 >
                   Save
-                </button>
-                <button
-                  type="button"
-                  className={styles.popoverButton}
+                </Button>
+                <Button
+                  size="sm"
                   onClick={cancelEditing}
                   data-testid={`comment-popover-cancel-${comment.id}`}
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -157,19 +149,17 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
           {!comment.resolved && (
             <div className={styles.popoverActions}>
               {isOwn && !editing && (
-                <button
-                  type="button"
-                  className={styles.popoverButton}
+                <Button
+                  size="sm"
                   onClick={startEditing}
                   data-testid={`comment-popover-edit-${comment.id}`}
                 >
                   Edit
-                </button>
+                </Button>
               )}
               {onResolve && (
-                <button
-                  type="button"
-                  className={styles.popoverButton}
+                <Button
+                  size="sm"
                   onClick={() => {
                     onResolve(comment.id);
                     setOpen(false);
@@ -177,7 +167,7 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
                   data-testid={`comment-popover-resolve-${comment.id}`}
                 >
                   Resolve
-                </button>
+                </Button>
               )}
             </div>
           )}

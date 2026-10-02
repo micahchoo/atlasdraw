@@ -53,19 +53,18 @@ in an existing surface instead.
 
 ## Z-Index Ladder
 
-Do not invent new z-index values. Extend by inserting between existing bands
-only, with an explicit comment in `MapEditor.module.css` explaining why.
+The ladder is the `--ad-z-*` tokens in `src/styles/tokens.css`, named by
+role: map, drawing, cursor, legend, tool overlay, neatline, overlay (hints,
+banners, popups, presence, compass, handles), toast, popover and dialog.
+`styles/__tests__/tokens.test.ts` refuses a literal z-index in a module.
 
-| Surface | z-index | CSS class / element |
-|---|---|---|
-| Map (MapLibre GL) | 0 | `.mapLayer` |
-| Excalidraw canvas | 1 | `.excalidrawLayer` — Excalidraw's own toolbar/sidebar float internally above this |
-| Collar legend (selection) | 4 | `.App-collar-legend` (`packages/excalidraw/components/LayerUI.scss`) — collar-mode selection legend panel over the plate |
-| Atlas tool overlay | 5 | `.atlasToolOverlay` — transparent, interaction capture only, no visual chrome |
-| Collar neatline (inner) | 6 | `.plate::after` (`CollarShell.module.css`) — printed inner double-neatline rule, above the map but below chrome |
-| Hints / banners / presence | 10 | `.commentModeHint`, `.drawBlockedHint`, the presence list, the sheet-panel handle |
-| Toasts | 50 | `Toast.module.css` `.container` — always mounted, it holds the live regions |
-| Dialog scrims / menus | 100 | Each dialog's scrim (`ConfirmDialog`, `QuickActions` …); menus dismiss on an outside press and on Escape |
+- New atlas-side chrome over the plate is `var(--ad-z-overlay)`.
+- Inside a component's own stacking context, use `--ad-z-raised` and
+  `--ad-z-pinned`, and `calc()` for "one over that".
+- A new band is a new token between two others, with a comment in
+  tokens.css that says what paints above and below it.
+- `.excalidrawLayer` is a stacking context: Excalidraw's own z-indices (the
+  sidebar's 120, the collar legend's 4) stay inside it.
 
 ---
 
@@ -162,151 +161,47 @@ hex literals above, not Excalidraw CSS vars — those are only defined inside th
 
 ## Buttons
 
-### Three button types in the codebase
+**Use `components/Button.tsx`.** Do not write a button class.
 
-#### 1. Atlas tool toggle (in the drawing's tool strip)
-
-The current pattern — `PinToolButton.tsx`, `MeasureToolButton.tsx`.
-Use for: atlas tool toggles rendered through `renderToolbarExtras`. The
-values below are the older free-floating version; match the neighbours in
-the strip first.
-
-```css
-/* default */
-position: absolute;
-top: 12px;
-left: 12px;       /* or offset for next button: left: calc(12px + prev-width + gap) */
-z-index: 10;
-padding: 6px 12px;
-border: 1px solid #adb5bd;
-border-radius: 4px;
-background: #ffffff;
-color: #212529;
-font-size: 14px;
-cursor: pointer;
-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-
-/* hover */
-background: #f8f9fa;
-
-/* active/engaged (aria-pressed=true) */
-background: #1971c2;
-color: #ffffff;
-border-color: #1971c2;
-
-/* active hover */
-background: #1864ab;
+```tsx
+<Button variant="primary" onClick={save} data-testid="my-save">Save</Button>
+<Button size="sm" pressed={on} onClick={toggle}>Show resolved</Button>
+<Button variant="ghost-icon" size="sm" aria-label="Close" onClick={close}>×</Button>
 ```
 
-#### 2. Icon-only button (square, 32px)
+| Prop | Values |
+|---|---|
+| `variant` | `secondary` (default), `primary` (the one action of a surface), `destructive` (destroys), `ghost-icon` (icon or glyph only; needs `aria-label`) |
+| `size` | `md` (default, 32px) in a dialog; `sm` (24px) in a panel, popover or row |
+| `pressed` | makes a toggle; sets `aria-pressed`, and the look follows it |
+| `className` | placement only (width, margin, flex) |
 
-Use for: toolbar icon buttons, layer panel actions.
-Follows Excalidraw's `outlineButtonIconStyles` mixin when inside Excalidraw scope.
+`type` is `"button"` unless you set it. The focus ring is
+`--ad-focus-ring`; disabled is `disabled`.
 
-```css
-display: flex;
-justify-content: center;
-align-items: center;
-width: 2rem;      /* 32px — --default-button-size */
-height: 2rem;
-padding: 0;
-border: 1px solid #adb5bd;
-border-radius: 4px;
-background: #ffffff;
-color: #212529;
-cursor: pointer;
-
-/* hover */
-background: #f8f9fa;
-
-/* active/engaged */
-background: #1971c2;
-color: #ffffff;
-border-color: #1971c2;
-```
-
-#### 3. Context menu action button
-
-Borderless, text-only, full-width inside the menu container.
-
-```css
-display: block;
-width: 100%;
-padding: 4px 8px;
-border: none;
-background: transparent;
-color: #212529;
-font-size: 13px;
-text-align: left;
-cursor: pointer;
-
-/* hover */
-background: #f8f9fa;
-
-/* disabled */
-color: #adb5bd;
-cursor: not-allowed;
-```
+Not Buttons, on purpose: the atlas tool toggles in Excalidraw's tool strip
+(`PinToolButton`, `MeasureToolButton`, `CommentModeButton`, the place-search
+trigger) match the fork's `ToolIcon` through Excalidraw's variables. Tabs,
+menu items, listbox options, disclosure carets and map markers are other
+widgets.
 
 ---
 
 ## Icons
 
-**Atlas-app has no icon library.** Excalidraw uses inline SVG with `currentColor`.
-Follow the same pattern for any new atlas-side icons.
+**Import icons from `src/lib/icons.tsx`.** Do not write an inline `<svg>`
+icon in a component; `lib/__tests__/icons.test.tsx` refuses one.
 
-### Rules
-
-- **Inline SVG only** — no `<img>`, no CSS `background-image`, no icon font, no emoji in buttons
-- **Use `currentColor`** — stroke and fill should inherit from the parent's `color`, so hover/active state color changes propagate automatically
-- **Size via CSS** — set `width` and `height` on the `svg` element from the parent's class, not as SVG attributes
-- **No hardcoded fill colors** — `fill="currentColor"` or `fill="none" stroke="currentColor"`
-- **16px default, 20px large** — matches Excalidraw's `--default-icon-size: 1rem` / `--lg-icon-size: 1rem`
-
-### SVG template
-
-```tsx
-/* in ComponentName.module.css */
-.icon {
-  width: 1rem;   /* 16px */
-  height: 1rem;
-  flex-shrink: 0;
-}
-```
-
-```tsx
-<button type="button" className={styles.iconButton}>
-  <svg
-    className={styles.icon}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    aria-hidden="true"
-  >
-    <path d="..." />
-  </svg>
-  <span className={styles.srOnly}>Accessible label</span>
-</button>
-```
-
-```css
-/* visually hidden but screen-reader visible */
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-```
-
-For icon buttons that also have a visible text label, omit `srOnly` — the text
-is the accessible label. Don't double-label with both visible text and `aria-label`.
+- Every icon is a component: `<SearchIcon className={styles.icon} />`.
+- 24×24 viewBox, `currentColor`, `aria-hidden`. Size it in CSS (16px is
+  `var(--default-icon-size, 1rem)`).
+- Where the app sits beside Excalidraw's chrome, `lib/icons` re-exports
+  Excalidraw's own icon (`PinIcon`, `SearchIcon`, `CloseIcon`, `EyeIcon`,
+  `DotsIcon`, the chevrons). A new icon that Excalidraw has: re-export it
+  there. One it lacks: draw it there, tabler style, with `drawn(...)`.
+- An icon-only button is `<Button variant="ghost-icon" aria-label="…">`.
+- Map drawings (remote cursors, the measured path, the compass dial) are
+  not icons and stay where they are drawn.
 
 ---
 
@@ -322,20 +217,16 @@ Inside Excalidraw scope: `font-family: var(--ui-font)` — let the theme provide
 
 ### Size ladder
 
-| Role | Size | Weight | Notes |
-|---|---|---|---|
-| Button label | `14px` (`0.875rem`) | 600 | Atlas toolbar buttons |
-| Secondary label / banner | `13px` | 400 | Demo banners, context menu items |
-| Panel body text | `12px` (`0.75rem`) | 400 | Layer panel rows, status text |
-| Metadata / keybinding hint | `11px` | 400 | Below primary labels |
-
-Excalidraw's own large button size: `font-size: 0.875rem; font-weight: 600`
-Excalidraw's medium button: `font-size: 0.75rem; font-weight: 600`
+Font sizes are the `--ad-text-*` tokens in `tokens.css`: `2xs` 10px
+(marginalia, counts, key caps), `xs` 11px (metadata, hints, status bar),
+`sm` 12px (panel body), `md` 13px (menu items, banners, dialog body), `lg`
+14px, `xl` 16px (dialog titles), `2xl` 20px. A literal font size in a module
+fails `tokens.test.ts`.
 
 ### Text in context menus
 
-`font-size: 13px` — matches the scrim banner. Do not use `14px` in menus;
-it reads as a button, not a menu item.
+`var(--ad-text-md)` (13px) — matches the scrim banner. Do not use
+`--ad-text-lg` in menus; it reads as a button, not a menu item.
 
 ### Don't use bold for body text
 
@@ -365,8 +256,8 @@ Layer names, attribute values, and status messages are `font-weight: 400`.
 | Gap between adjacent toolbar buttons | `8px` |
 | Context menu container padding | `4px` |
 | Context menu item padding | `4px 8px` |
-| Border radius — buttons | `4px` |
-| Border radius — banners / popups | `6px` |
+| Border radius — buttons | `--ad-radius-sm` |
+| Border radius — banners / popups | `--ad-radius-md` |
 
 ---
 
@@ -478,25 +369,26 @@ Everything else goes in a CSS module.
 ## Layer Surfaces — Quick Reference
 
 ```
-<div className={styles.root}>                       ← z:relative, overflow:hidden
-  <div className={styles.mapLayer}>                 ← z:0 — MapLibre GL
+<div className={styles.root}>                       ← relative, overflow:hidden
+  <div className={styles.mapLayer}>                 ← --ad-z-map — MapLibre GL
     <MapCanvas />
   </div>
-  <div className={styles.excalidrawLayer [+ Active]}> ← z:1 — Excalidraw + its UI
+  <div className={styles.excalidrawLayer [+ Active]}> ← --ad-z-drawing — Excalidraw + its UI
     <Excalidraw ... />
   </div>
   {activeAtlasTool && (
-    <div className={styles.atlasToolOverlay} />     ← z:5 — transparent, events only
+    <div className={styles.atlasToolOverlay} />     ← --ad-z-tool-overlay — events only
   )}
-  {commentMode && <div className={styles.commentModeHint}/>} ← z:10 — hints
-  <EditorDialogs />                                  ← z:100 — the one dialog (Modal)
+  {commentMode && <div className={styles.commentModeHint}/>} ← --ad-z-overlay — hints
+  <EditorDialogs />                                  ← --ad-z-dialog — the one dialog (Modal)
 </div>
 ```
 
 Atlas tool toggles are not in this stack: they render into the drawing's
 tool strip in the collar (`renderToolbarExtras`). New atlas-side controls
-land at **z:10** as a CSS-module class, or in an existing surface. They do **not** create new z-index
-bands without updating this table and adding a comment in `MapEditor.module.css`.
+land at `--ad-z-overlay` as a CSS-module class, or in an existing surface.
+A new band is a new `--ad-z-*` token in `tokens.css`, with a comment that
+says what paints above and below it.
 
 ---
 
@@ -508,7 +400,7 @@ bands without updating this table and adding a comment in `MapEditor.module.css`
 | New CSS module | `code/apps/atlas-app/src/styles/MyComponent.module.css` |
 | New hook | `code/apps/atlas-app/src/hooks/useMyHook.ts` |
 | Sidebar tab body | A function component returning **body markup only** — no `<Sidebar>` wrapper. Mount via `excalidrawAPI.registerSidebarTab({ name, label, content: <Body/> })` from inside a `useEffect` keyed on `excalidrawAPI`; return the unsubscribe. Open via `excalidrawAPI.toggleSidebar({ name: DEFAULT_SIDEBAR.name, tab: <name> })`. **Never** render `<Sidebar name="...">` directly — that creates a parallel sidebar with no public trigger button. |
-| SVG icon | Inline in component; no separate icon file |
+| Icon | `src/lib/icons.tsx` (re-export Excalidraw's, or draw it there) |
 
 ---
 
@@ -566,8 +458,9 @@ Neither check can see a weak assertion that does run. That one is on you.
 - [ ] **Surface decision:** checked the decision tree; documented why a new surface was needed if one was created
 - [ ] **CSS Module:** all persistent styles in `src/styles/*.module.css`, not inline
 - [ ] **Colors:** `--ad-*` tokens; no new hex values
-- [ ] **Z-index:** correct band; comment added in `MapEditor.module.css` if a new band
-- [ ] **Icons:** inline SVG, `currentColor`, `aria-hidden="true"`, `width`/`height` from CSS
+- [ ] **Scales:** colours, font sizes, radii and z-index are `--ad-*` tokens (`tokens.test.ts` enforces it)
+- [ ] **Buttons:** `components/Button.tsx`, no new button class
+- [ ] **Icons:** from `lib/icons.tsx`, sized in CSS
 - [ ] **Text:** correct size/weight for the role
 - [ ] **`type="button"`** on every `<button>`
 - [ ] **`aria-pressed`** on toggles

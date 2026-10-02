@@ -72,8 +72,18 @@ import {
 } from "../lib/dataLayerExport";
 
 import { downloadBlob } from "../lib/download";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  DotsIcon,
+  EyeClosedIcon,
+  EyeIcon,
+  GripIcon,
+} from "../lib/icons";
 
 import { useAnnounce } from "./AriaAnnouncer";
+import { Button } from "./Button";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
 import { AddTileLayerForm } from "./AddTileLayerForm";
@@ -100,139 +110,6 @@ const FILTER_THRESHOLD = 10;
 /** Attribute-preview size: rows sampled, and columns that fit the panel width. */
 const ATTR_PREVIEW_ROWS = 3;
 const ATTR_PREVIEW_COLS = 4;
-
-// ---------------------------------------------------------------------------
-// Inline SVG icons — atlasdraw-ui-conventions §Icons:
-//   - currentColor stroke so hover/active state propagates from button color
-//   - sized via CSS (.icon class), not SVG attributes
-//   - aria-hidden on the SVG; text label or sr-only span on the button.
-// ---------------------------------------------------------------------------
-
-function IconEye() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-    </svg>
-  );
-}
-
-function IconEyeSlash() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-      <line x1="2" y1="2" x2="14" y2="14" />
-    </svg>
-  );
-}
-
-function IconChevronUp() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3,10 8,5 13,10" />
-    </svg>
-  );
-}
-
-function IconChevronDown() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3,6 8,11 13,6" />
-    </svg>
-  );
-}
-
-/** Disclosure caret: points right when collapsed, down when expanded. */
-function IconCaret({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {open ? (
-        <polyline points="3,6 8,11 13,6" />
-      ) : (
-        <polyline points="6,3 11,8 6,13" />
-      )}
-    </svg>
-  );
-}
-
-function IconDots() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="3.5" cy="8" r="1.3" />
-      <circle cx="8" cy="8" r="1.3" />
-      <circle cx="12.5" cy="8" r="1.3" />
-    </svg>
-  );
-}
-
-function IconGripVertical() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="5" cy="3" r="1.2" />
-      <circle cx="11" cy="3" r="1.2" />
-      <circle cx="5" cy="8" r="1.2" />
-      <circle cx="11" cy="8" r="1.2" />
-      <circle cx="5" cy="13" r="1.2" />
-      <circle cx="11" cy="13" r="1.2" />
-    </svg>
-  );
-}
 
 function joinClass(...names: Array<string | false | null | undefined>): string {
   return names.filter(Boolean).join(" ");
@@ -528,7 +405,7 @@ function SortableRow({
             draggable
             onDragStart={handleDragStart}
           >
-            <IconGripVertical />
+            <GripIcon className={styles.icon} />
           </span>
           {children}
           {/* Stacked as one 32px-tall control cluster rather than two 32px
@@ -548,7 +425,7 @@ function SortableRow({
                 mutators.reorder(id, index - 1);
               }}
             >
-              <IconChevronUp />
+              <ChevronUpIcon className={styles.icon} />
             </button>
             <button
               type="button"
@@ -561,7 +438,7 @@ function SortableRow({
                 mutators.reorder(id, index + 1);
               }}
             >
-              <IconChevronDown />
+              <ChevronDownIcon className={styles.icon} />
             </button>
           </div>
         </div>
@@ -908,10 +785,9 @@ function OverflowMenu({
 
   return (
     <div className={styles.menuWrap} ref={wrapRef}>
-      <button
-        type="button"
+      <Button
         ref={triggerRef}
-        className={styles.iconButton}
+        variant="ghost-icon"
         aria-label={`Actions for ${entry.label}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -921,8 +797,8 @@ function OverflowMenu({
           open ? close() : setOpen(true);
         }}
       >
-        <IconDots />
-      </button>
+        <DotsIcon className={styles.icon} />
+      </Button>
       {open && (
         <div
           role="menu"
@@ -1210,22 +1086,20 @@ function DataLayerCard({
             <AttributePreview entry={entry} fc={fc} />
 
             <div className={styles.detailActions}>
-              <button
-                type="button"
-                className={styles.detailBtn}
+              <Button
+                size="sm"
                 data-testid={`layer-zoom-inline-${id}`}
                 onClick={() => actions.zoomTo(id)}
               >
                 Zoom to layer
-              </button>
-              <button
-                type="button"
-                className={styles.detailBtn}
+              </Button>
+              <Button
+                size="sm"
                 data-testid={`layer-rename-inline-${id}`}
                 onClick={() => setRenaming(true)}
               >
                 Rename
-              </button>
+              </Button>
             </div>
           </div>
         ) : null
@@ -1252,7 +1126,11 @@ function DataLayerCard({
             onToggleExpanded();
           }}
         >
-          <IconCaret open={expanded} />
+          {expanded ? (
+            <ChevronDownIcon className={styles.icon} />
+          ) : (
+            <ChevronRightIcon className={styles.icon} />
+          )}
         </button>
         <span
           aria-label="Data layer"
@@ -1274,22 +1152,22 @@ function DataLayerCard({
         >
           {featureCount}
         </span>
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
+        </Button>
         <OverflowMenu
           entry={entry}
           actions={actions}
@@ -1354,22 +1232,22 @@ function AnnotationLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? "Hide annotation" : "Show annotation"}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
+        </Button>
         <span
           aria-label="Annotation"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1433,22 +1311,22 @@ function RasterLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? "Hide image" : "Show image"}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
+        </Button>
         <span
           aria-label="Image"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1531,22 +1409,22 @@ function TileLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
+        </Button>
         <span
           aria-label="Tile layer"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1609,14 +1487,13 @@ function TileLayersSection({
         <AddTileLayerForm onDone={() => setAdding(false)} />
       ) : (
         <div className={styles.tileAddRow}>
-          <button
-            type="button"
-            className={styles.detailBtn}
+          <Button
+            size="sm"
             data-testid="tile-add-open"
             onClick={() => setAdding(true)}
           >
             Add tile layer…
-          </button>
+          </Button>
         </div>
       )}
     </section>

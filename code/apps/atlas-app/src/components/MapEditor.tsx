@@ -72,6 +72,7 @@ import { editorScene, useSceneBinding } from "../state/scene";
 import styles from "../styles/MapEditor.module.css";
 
 import { useAnnounce } from "./AriaAnnouncer";
+import { Button } from "./Button";
 import { CollarShell } from "./CollarShell";
 import { CommentAnchorsOverlay } from "./CommentAnchorsOverlay";
 import { CommentModeButton } from "./CommentModeButton";
@@ -406,13 +407,13 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               data-testid="draw-blocked-hint"
             >
               Drawing is off while the map is turned
-              <button
-                type="button"
-                className={styles.drawBlockedReset}
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => map?.resetNorth()}
               >
                 Reset north
-              </button>
+              </Button>
             </div>
           )}
 

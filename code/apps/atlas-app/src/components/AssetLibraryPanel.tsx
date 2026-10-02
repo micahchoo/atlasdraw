@@ -38,6 +38,7 @@ import type {
   LibraryItem,
 } from "@atlasdraw/excalidraw/types";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { useToast } from "./ToastProvider";
 
@@ -187,24 +188,16 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
         >
           Asset library
         </h2>
-        <button
+        <Button
+          variant="ghost-icon"
+          size="sm"
           autoFocus
-          type="button"
           onClick={onCloseRequest}
           aria-label="Close asset library dialog"
           data-testid="asset-library-close"
-          style={{
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            padding: "0.25rem 0.5rem",
-            fontSize: "1.25rem",
-            lineHeight: 1,
-            color: "var(--ad-ink-secondary, #4b5563)",
-          }}
         >
           ×
-        </button>
+        </Button>
       </div>
 
       <p
@@ -245,27 +238,16 @@ export const AssetLibraryPanel: React.FC<AssetLibraryPanelProps> = ({
         ))}
       </ul>
 
-      <button
-        type="button"
+      <Button
+        variant="primary"
         onClick={handleViewInLibrary}
         disabled={!excalidrawAPI}
         aria-label="View in Excalidraw library"
         data-testid="asset-library-view"
-        style={{
-          width: "100%",
-          padding: "0.5rem 0.75rem",
-          background: "var(--ad-accent, #6965db)",
-          color: "var(--ad-ink-inverse, #fff)",
-          border: "none",
-          borderRadius: "0.25rem",
-          cursor: excalidrawAPI ? "pointer" : "not-allowed",
-          opacity: excalidrawAPI ? 1 : 0.6,
-          fontSize: "0.875rem",
-          marginBottom: "0.75rem",
-        }}
+        style={{ width: "100%", marginBottom: "0.75rem" }}
       >
         View in Excalidraw library
-      </button>
+      </Button>
 
       <footer
         style={{

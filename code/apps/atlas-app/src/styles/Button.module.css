@@ -1,0 +1,111 @@
+/* Button — components/Button.tsx. Tokens only.
+ *
+ * Two sizes: md (32px high) in a dialog, sm (24px high) in a panel, a
+ * popover or a row. A ghost-icon button is square at the same heights.
+ * A toggle shows its state from aria-pressed, so the look cannot disagree
+ * with what a screen reader hears. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ad-space-1);
+  box-sizing: border-box;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ad-radius-sm);
+  font-family: var(--ad-font-sans);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ad-focus-ring);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sm {
+  min-height: var(--ad-space-6);
+  padding: 0 var(--ad-space-2);
+  font-size: var(--ad-text-sm);
+}
+
+.md {
+  min-height: var(--ad-space-8);
+  padding: 0 var(--ad-space-3);
+  font-size: var(--ad-text-md);
+}
+
+.primary {
+  background: var(--ad-accent);
+  border-color: var(--ad-accent);
+  color: var(--ad-ink-inverse);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--ad-accent-hover);
+  border-color: var(--ad-accent-hover);
+}
+
+.secondary {
+  background: var(--ad-surface-raised);
+  border-color: var(--ad-rule);
+  color: var(--ad-ink);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--ad-surface-inset);
+}
+
+.destructive {
+  background: var(--ad-danger);
+  border-color: var(--ad-danger);
+  color: var(--ad-ink-inverse);
+}
+
+.destructive:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ad-danger) 85%, var(--ad-ink));
+}
+
+.ghostIcon {
+  padding: 0;
+  background: transparent;
+  color: var(--ad-ink-tertiary);
+  /* The size of a glyph such as × when the button shows one. */
+  font-size: var(--ad-text-xl);
+  font-weight: 400;
+}
+
+.ghostIcon.sm {
+  width: var(--ad-space-6);
+}
+
+.ghostIcon.md {
+  width: var(--ad-space-8);
+}
+
+.ghostIcon:hover:not(:disabled) {
+  background: var(--ad-surface-inset);
+  color: var(--ad-ink);
+}
+
+.ghostIcon > svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* A toggle that is on. Primary and destructive are never toggles. */
+.secondary[aria-pressed="true"],
+.ghostIcon[aria-pressed="true"] {
+  background: var(--ad-accent-subtle);
+  border-color: var(--ad-accent);
+  color: var(--ad-accent);
+}

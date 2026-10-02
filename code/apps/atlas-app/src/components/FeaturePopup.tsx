@@ -25,6 +25,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { attributeRows, type FeatureHit } from "../lib/featureHit";
+import { CloseIcon } from "../lib/icons";
 import {
   POPUP_ROWS,
   type OpenPopup,
@@ -33,6 +34,8 @@ import {
 import { safeLink } from "../state/pinDetails";
 
 import styles from "../styles/FeaturePopup.module.css";
+
+import { Button } from "./Button";
 
 export interface FeaturePopupProps {
   popup: OpenPopup | null;
@@ -140,24 +143,14 @@ function OpenFeaturePopup({
         <span id={titleId} className={styles.title}>
           {title}
         </span>
-        <button
-          type="button"
-          className={styles.close}
+        <Button
+          variant="ghost-icon"
           aria-label="Close"
           data-testid="feature-popup-close"
           onClick={onClose}
         >
-          <svg
-            className={styles.icon}
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
-        </button>
+          <CloseIcon className={styles.icon} />
+        </Button>
       </div>
       {"kind" in hit ? (
         <PinBody pin={hit} />
@@ -181,14 +174,14 @@ function OpenFeaturePopup({
         </div>
       )}
       {!showAll && rows.length > POPUP_ROWS && (
-        <button
-          type="button"
+        <Button
+          size="sm"
           className={styles.showAll}
           data-testid="feature-popup-show-all"
           onClick={() => setShowAll(true)}
         >
           {`Show all ${rows.length}`}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 /* ToolOptionsBar — context-sensitive controls for the active atlas tool.
- * Positioned below Excalidraw's toolbar, z:10. Appears only when an atlas
+ * Positioned below Excalidraw's toolbar, at --ad-z-overlay. Appears only when an atlas
  * tool is active. Uses --ad-* design tokens. */
 
 .bar {
@@ -7,7 +7,7 @@
   top: 52px; /* below Excalidraw's native toolbar (~44px + 8px gap) */
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   display: flex;
   align-items: center;
   gap: var(--ad-space-2);
@@ -33,7 +33,7 @@
 
 .toolLabel {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   color: var(--ad-ink);
   white-space: nowrap;
@@ -42,7 +42,7 @@
 /* Hint — keyboard shortcut or status */
 .hint {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }

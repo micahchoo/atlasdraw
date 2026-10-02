@@ -1,14 +1,14 @@
 /* FeaturePopup — a feature's attributes next to the click.
  *
- * z-index 10: the popups-and-banners band of the ladder in
- * MapEditor.module.css. Above the Excalidraw layer (1), the cursor overlay
- * (2) and the atlas tool overlay (5); a context menu (100) still covers it.
+ * --ad-z-overlay, the band of popups and banners (tokens.css). Above the
+ * Excalidraw layer, the cursor overlay and the atlas tool overlay; a popover
+ * or a dialog (--ad-z-popover, --ad-z-dialog) still covers it.
  * `left` / `top` are set inline from the click; the transform keeps the
  * popup clear of the point it describes. */
 
 .popup {
   position: absolute;
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   transform: translate(8px, 8px);
   display: flex;
   flex-direction: column;
@@ -18,7 +18,7 @@
   max-height: min(360px, calc(100% - 32px));
   background: var(--ad-surface-raised, #ffffff);
   border: 1px solid var(--ad-rule, #adb5bd);
-  border-radius: 6px;
+  border-radius: var(--ad-radius-md);
   box-shadow: var(--ad-shadow-raised, 0 1px 3px rgba(0, 0, 0, 0.12));
   font-family: var(--ad-font-sans, system-ui, sans-serif);
   color: var(--ad-ink, #212529);
@@ -53,27 +53,8 @@
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 600;
-}
-
-.close {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.close:hover {
-  background: var(--ad-surface-inset);
 }
 
 .icon {
@@ -89,7 +70,7 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .table th,
@@ -115,24 +96,14 @@
 .empty {
   margin: 0;
   padding: 8px;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink-tertiary);
 }
 
+/* Placement only; the look is Button's. */
 .showAll {
-  margin: 4px 8px 8px;
-  padding: 4px 8px;
+  margin: var(--ad-space-1) var(--ad-space-2) var(--ad-space-2);
   align-self: flex-start;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.showAll:hover {
-  background: var(--ad-surface-inset);
 }
 
 .srOnly {
@@ -153,7 +124,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .photo {
@@ -161,7 +132,7 @@
   max-width: 100%;
   max-height: 180px;
   object-fit: contain;
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
 }
 
 .description {

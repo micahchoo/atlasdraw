@@ -8,8 +8,8 @@
 // Styling note (atlasdraw-ui-conventions): the BUTTON renders inside the
 // `.excalidraw` scope, so it uses Excalidraw CSS vars to match the native tool
 // buttons. The POPOVER is portaled to document.body (to escape the toolbar's
-// clipping/stacking), so it lives OUTSIDE that scope and uses the atlas hex
-// palette. z-index 100 reuses the existing "context menu / popover" band.
+// clipping/stacking), so it lives OUTSIDE that scope and uses the --ad-*
+// tokens. z-index is --ad-z-popover (tokens.css).
 
 import {
   useCallback,
@@ -21,6 +21,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { useGeocoderSearch, type PlaceHit } from "../hooks/useGeocoderSearch";
+import { SearchIcon } from "../lib/icons";
 
 import styles from "../styles/GeoSearchControl.module.css";
 
@@ -45,21 +46,6 @@ interface PopoverPos {
   top: number;
   left: number;
 }
-
-const SearchIcon = () => (
-  <svg
-    className={styles.icon}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    aria-hidden="true"
-  >
-    <circle cx="7" cy="7" r="4.5" />
-    <line x1="10.5" y1="10.5" x2="14" y2="14" />
-  </svg>
-);
 
 export function GeoSearchControl({
   map,
@@ -213,7 +199,7 @@ export function GeoSearchControl({
         title="Search places"
         data-testid="geo-search-button"
       >
-        <SearchIcon />
+        <SearchIcon className={styles.icon} />
         {variant === "collar" && (
           <span className={styles.collarLabel} aria-hidden="true">
             Search places…

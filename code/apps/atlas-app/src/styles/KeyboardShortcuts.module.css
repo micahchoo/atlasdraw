@@ -1,10 +1,10 @@
 /* KeyboardShortcuts — ? key overlay, searchable shortcut reference.
- * z:100 (context menu band). Uses --ad-* design tokens. */
+ * --ad-z-dialog. Uses --ad-* design tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -35,7 +35,7 @@
 
 .searchIcon {
   color: var(--ad-ink-tertiary);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   flex-shrink: 0;
 }
 
@@ -45,7 +45,7 @@
   outline: none;
   background: transparent;
   font-family: var(--ad-font-sans);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 400;
   color: var(--ad-ink);
 }
@@ -68,7 +68,7 @@
 .categoryTitle {
   padding: var(--ad-space-2) 0 4px;
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 600;
   color: var(--ad-ink-tertiary);
   text-transform: uppercase;
@@ -89,7 +89,7 @@
 
 .label {
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 400;
   color: var(--ad-ink);
 }
@@ -111,7 +111,7 @@
   border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-inset);
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 500;
   color: var(--ad-ink);
   box-shadow: 0 1px 0 var(--ad-rule);
@@ -119,7 +119,7 @@
 
 .plus {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
 }
 
@@ -127,7 +127,7 @@
   padding: var(--ad-space-4);
   text-align: center;
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   color: var(--ad-ink-tertiary);
 }
 
@@ -136,7 +136,7 @@
   padding: var(--ad-space-2) var(--ad-space-4);
   border-top: 1px solid var(--ad-hairline);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
   display: flex;

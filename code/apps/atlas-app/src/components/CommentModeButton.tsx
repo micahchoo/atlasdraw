@@ -17,7 +17,7 @@
 // re-establishes it), so it uses Excalidraw CSS vars with fallbacks to match
 // the native tool buttons — same pattern as PinToolButton.
 
-import { CommentModeIcon } from "../lib/icons";
+import { CommentIcon } from "../lib/icons";
 import styles from "../styles/CommentModeButton.module.css";
 
 interface CommentModeButtonProps {
@@ -59,7 +59,7 @@ export function CommentModeButton({
       }
       data-testid="comment-mode-button"
     >
-      <CommentModeIcon className={styles.icon} />
+      <CommentIcon className={styles.icon} />
       {openThreadCount > 0 && (
         // aria-hidden: the same number is already in the accessible name
         // above. Announcing it twice is noise.

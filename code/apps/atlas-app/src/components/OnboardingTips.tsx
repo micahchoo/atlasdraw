@@ -19,6 +19,7 @@ import styles from "../styles/OnboardingTips.module.css";
 
 import { paletteKeyText } from "../commands/commands";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 // ---------------------------------------------------------------------------
@@ -139,23 +140,18 @@ export function OnboardingTips({ onDismiss }: OnboardingTipsProps) {
           {step + 1} / {STEPS.length}
         </span>
         <div className={styles.buttons}>
-          <button
-            type="button"
-            className={styles.btn}
-            onClick={handleSkip}
-            data-testid="onboarding-skip"
-          >
+          <Button size="sm" onClick={handleSkip} data-testid="onboarding-skip">
             Skip
-          </button>
-          <button
-            type="button"
-            className={[styles.btn, styles.btnPrimary].join(" ")}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleNext}
             data-testid="onboarding-next"
             autoFocus
           >
             {step < STEPS.length - 1 ? "Next" : "Got it"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

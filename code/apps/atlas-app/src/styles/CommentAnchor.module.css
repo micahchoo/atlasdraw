@@ -3,12 +3,14 @@
  *
  * Positioned absolutely in the parent overlay container; left/top are inline
  * style values computed at render time (map projection / scene→viewport).
- * Z-index sits in the toolbar band (10) per atlasdraw-ui-conventions.
+ * --ad-z-overlay, the band of hints and popups (tokens.css). An anchor is a
+ * stacking context, so its .popover needs only --ad-z-raised over the
+ * anchor's own button.
  */
 
 .anchor {
   position: absolute;
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   width: 22px;
   height: 22px;
   transform: translate(-50%, -100%);
@@ -19,7 +21,7 @@
   width: 22px;
   height: 22px;
   border: 1px solid var(--ad-accent);
-  border-radius: 50% 50% 50% 4px;
+  border-radius: 50% 50% 50% var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-accent);
   cursor: pointer;
@@ -44,7 +46,7 @@
   position: absolute;
   top: -8px;
   left: 24px;
-  z-index: 100;
+  z-index: var(--ad-z-raised);
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-rule);
   border-radius: var(--ad-radius-md);
@@ -53,7 +55,7 @@
   max-width: 280px;
   box-shadow: var(--ad-shadow-raised);
   font-family: system-ui, sans-serif;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink);
 }
 
@@ -66,16 +68,16 @@
 
 .popoverAuthor {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .popoverTimestamp {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
 }
 
 .popoverText {
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   white-space: pre-wrap;
   word-break: break-word;
   margin-bottom: 6px;
@@ -84,20 +86,6 @@
 .popoverActions {
   display: flex;
   gap: 4px;
-}
-
-.popoverButton {
-  font-size: 11px;
-  padding: 2px 8px;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  cursor: pointer;
-}
-
-.popoverButton:hover {
-  background: var(--ad-surface-inset);
 }
 
 .popoverEditArea {
@@ -113,9 +101,9 @@
   min-height: 48px;
   padding: 4px 6px;
   border: 1px solid var(--ad-accent);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .popoverEditActions {
