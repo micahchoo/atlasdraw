@@ -36,6 +36,7 @@ import type { MapCanvasInitialView } from "@atlasdraw/basemap";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { commandById } from "../commands/commands";
+import { useCommandMenus } from "../commands/contextMenus";
 import { useCommandKeys } from "../commands/useCommandKeys";
 import { getAppConfig } from "../config/app-config";
 import { useAtlasdrawTool } from "../hooks/useAtlasdrawTool";
@@ -45,7 +46,6 @@ import { useCameraBridge } from "../hooks/useCameraBridge";
 import { useCameraRotation } from "../hooks/useCameraRotation";
 import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
-import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { useDevHandles } from "../hooks/useDevHandles";
 import { useEditorHistory } from "../hooks/useEditorHistory";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
@@ -65,11 +65,7 @@ import { createSession } from "../session/EditorSession";
 import { historyHost } from "../session/history";
 import { SessionProvider } from "../session/SessionContext";
 import { openSceneFile } from "../session/fileActions";
-import {
-  useDocument,
-  useDocumentStore,
-  type DocumentCommand,
-} from "../state/document";
+import { useDocument, useDocumentStore } from "../state/document";
 import { configuredTransport, isRoomDocument } from "../state/room";
 import { editorScene, useSceneBinding } from "../state/scene";
 import styles from "../styles/MapEditor.module.css";
@@ -130,10 +126,6 @@ const EXCALIDRAW_UI_OPTIONS = {
 } as const;
 
 type SheetPanelLayout = { open: boolean; shrunk: boolean; collar: boolean };
-type AddDataLayer = Omit<
-  Extract<DocumentCommand, { type: "add-data-layer" }>,
-  "type"
->;
 
 export interface MapEditorProps {
   /** Initial map viewport; changes after mount are ignored. */
@@ -206,14 +198,6 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
     }
   }, [room.status, toast]);
 
-  const addDataLayer = useCallback(
-    (layer: AddDataLayer) =>
-      session.store
-        .getState()
-        .doc.dispatch({ type: "add-data-layer", ...layer }),
-    [session],
-  );
-
   useBrowserTabTitle();
   useSelectionSync(view, api);
   const popup = useMapSelect(session, map, api);
@@ -233,7 +217,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useMapOverlays(map);
   useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
-  useConvertToDataLayer(api, addDataLayer, session.history, toast);
+  useCommandMenus(session, api);
   useCommandKeys(session);
 
   // Drawing is off while the camera is turned. Unprojecting the corners of a
@@ -355,6 +339,12 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               initialData={EXCALIDRAW_INITIAL_DATA}
               gridModeEnabled={false}
               viewModeEnabled={readOnly}
+              // Zen mode hides the drawing's panels into the map and has no
+              // way back over it; the prop also turns its key off. The canvas
+              // menu keeps only the settings that work over a map, as
+              // commands (.claude/rules/menus.md).
+              zenModeEnabled={false}
+              canvasMenuToggles={false}
               onExcalidrawAPI={setApi}
               onChange={onDrawingChange}
               onScrollChange={bridge?.onScrollChange}

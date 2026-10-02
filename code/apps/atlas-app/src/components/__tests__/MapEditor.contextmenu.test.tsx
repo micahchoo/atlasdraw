@@ -1,23 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Convert-to-data-layer right-click context-menu integration test.
+// MapEditor builds the drawing's right-click menus from the command list
+// (commands/contextMenus.ts), through the fork's
+// `excalidrawAPI.registerContextMenuItem`.
 //
-// Convert lives in the right-click element context menu, through the
-// atlasdraw fork's `excalidrawAPI.registerContextMenuItem` API
-// (packages/excalidraw/components/App.tsx).
-//
-// We can't drive the real Excalidraw context-menu DOM in unit tests
-// (the `<Excalidraw>` here is a stub). Instead we capture the item
-// MapEditor passes to `registerContextMenuItem` and exercise it
-// directly:
-//   - assert the item registered with name === "atlasConvertToDataLayer".
-//   - invoke `predicate(elements, appState)` with selection fixtures:
-//       single polygon      → true
-//       text selection      → false
-//       multi-selection     → false
-//   - invoke `perform(elements, appState)` with the polygon fixture and
-//     assert the downstream pipeline (a data layer added to the document →
-//     map.addSource/addLayer → updateScene).
-//   - assert the unregister fn returned by the API is invoked on unmount.
+// The `<Excalidraw>` here is a stub, so the real menu DOM does not render
+// (the e2e `context-menus.spec.ts` drives it). Instead we capture the items
+// MapEditor registers and drive one directly:
+//   - Convert selection to data layer is registered for the element menu;
+//   - its `perform` runs the convert pipeline (a data layer added to the
+//     document, the shape deleted as an undoable step);
+//   - unmount calls every unregister function.
+// Which selection converts is commands' business (session/convertToLayer.test.ts).
 
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -124,22 +117,17 @@ const updateSceneSpy = vi.fn((opts: { elements?: unknown[] }) => {
 
 // Captures the unregister fn the registerContextMenuItem call returns;
 // also captures the registered item itself so tests can drive its
-// predicate/perform directly without rendering the real ContextMenu.
+// perform directly without rendering the real ContextMenu.
 const registerContextMenuItemUnregister = vi.fn();
 const capturedContextMenuItems: Array<{
   name: string;
   label: string;
-  predicate: (elements: unknown, appState: unknown) => boolean;
-  perform: (elements: unknown, appState: unknown) => unknown;
+  contexts?: string[];
+  perform: (elements: unknown, appState: unknown, at: unknown) => unknown;
 }> = [];
 
 const registerContextMenuItemSpy = vi.fn(
-  (item: {
-    name: string;
-    label: string;
-    predicate: (elements: unknown, appState: unknown) => boolean;
-    perform: (elements: unknown, appState: unknown) => unknown;
-  }) => {
+  (item: (typeof capturedContextMenuItems)[number]) => {
     capturedContextMenuItems.push(item);
     return registerContextMenuItemUnregister;
   },
@@ -310,92 +298,33 @@ afterEach(() => {
   cleanup();
 });
 
+const CONVERT = "element:edit.convert-to-layer";
+
 // Helper — wait for MapEditor's registration effect to fire and return
 // the captured item. Throws (via waitFor) if not registered.
 const awaitConvertItem = async () => {
   await waitFor(() => {
     expect(
-      capturedContextMenuItems.find(
-        (i) => i.name === "atlasConvertToDataLayer",
-      ),
+      capturedContextMenuItems.find((i) => i.name === CONVERT),
     ).toBeTruthy();
   });
-  const item = capturedContextMenuItems.find(
-    (i) => i.name === "atlasConvertToDataLayer",
-  );
+  const item = capturedContextMenuItems.find((i) => i.name === CONVERT);
   if (!item) {
     throw new Error("convert item not registered");
   }
   return item;
 };
 
-describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)", () => {
-  it("registers the convert item with the expected name + label", async () => {
+describe("MapEditor — the right-click items come from the commands", () => {
+  it("registers Convert selection to data layer for the element menu", async () => {
     render(
       <ToastProvider>
         <MapEditor />
       </ToastProvider>,
     );
     const item = await awaitConvertItem();
-    expect(item.name).toBe("atlasConvertToDataLayer");
     expect(item.label).toBe("Convert selection to data layer");
-    expect(typeof item.predicate).toBe("function");
-    expect(typeof item.perform).toBe("function");
-  });
-
-  it("predicate returns true for a single polygon selection", async () => {
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await awaitConvertItem();
-    const result = item.predicate([fakeRectangleEl], {
-      selectedElementIds: { "anno-1": true },
-    });
-    expect(result).toBe(true);
-  });
-
-  it("predicate returns false for a text selection (non-convertible type)", async () => {
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await awaitConvertItem();
-    const textEl = { ...fakeRectangleEl, id: "anno-text", type: "text" };
-    const result = item.predicate([textEl], {
-      selectedElementIds: { "anno-text": true },
-    });
-    expect(result).toBe(false);
-  });
-
-  it("predicate returns true for a single arrow selection", async () => {
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await awaitConvertItem();
-    const arrowEl = { ...fakeRectangleEl, id: "anno-arrow", type: "arrow" };
-    const result = item.predicate([arrowEl], {
-      selectedElementIds: { "anno-arrow": true },
-    });
-    expect(result).toBe(true);
-  });
-
-  it("predicate returns false for multi-selection", async () => {
-    render(
-      <ToastProvider>
-        <MapEditor />
-      </ToastProvider>,
-    );
-    const item = await awaitConvertItem();
-    const result = item.predicate(
-      [fakeRectangleEl, { ...fakeRectangleEl, id: "anno-2" }],
-      { selectedElementIds: { "anno-1": true, "anno-2": true } },
-    );
-    expect(result).toBe(false);
+    expect(item.contexts).toEqual(["element"]);
   });
 
   it("perform with polygon selection runs the full convert pipeline", async () => {
@@ -415,13 +344,10 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
       );
     });
 
-    // perform reads selection from currentConvertibleSelection, which
-    // pulls from excalidrawAPI.getAppState/getSceneElements — so module-
-    // level `currentSelectedIds` / `currentScene` drive the gate.
-    const result = item.perform([fakeRectangleEl], {
-      selectedElementIds: { "anno-1": true },
-    });
-    // perform returns false (handleConvert mutates the scene directly).
+    // The command reads the selection through the API, so the module-level
+    // `currentSelectedIds` / `currentScene` drive it.
+    const result = item.perform([], {}, { clientX: 0, clientY: 0 });
+    // perform returns false: the command writes the scene itself.
     expect(result).toBe(false);
 
     await waitFor(() => {
@@ -441,7 +367,7 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
     ]);
   });
 
-  it("unmount invokes the unregister fn returned by registerContextMenuItem", async () => {
+  it("unmount calls the unregister function of every item", async () => {
     const { unmount } = render(
       <ToastProvider>
         <MapEditor />
@@ -450,6 +376,8 @@ describe("MapEditor — Convert context-menu item (W-C: registerContextMenuItem)
     await awaitConvertItem();
     expect(registerContextMenuItemUnregister).not.toHaveBeenCalled();
     unmount();
-    expect(registerContextMenuItemUnregister).toHaveBeenCalled();
+    expect(registerContextMenuItemUnregister).toHaveBeenCalledTimes(
+      capturedContextMenuItems.length,
+    );
   });
 });
