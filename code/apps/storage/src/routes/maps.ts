@@ -8,6 +8,13 @@
 //   DELETE /maps/:id      the map, its links and bytes (write key)
 //
 // There is no route that returns a map's record: nothing needs one.
+//
+// Every save counts one more revision, sent as `revision` and as the ETag
+// `"<n>"`. A PUT with `If-Match: "<n>"` lands only on revision n; else 412
+// with the map's revision, and nothing is stored. With no If-Match, or `*`,
+// the PUT does not check (docs/architecture/adr/0020-server-version-history.md).
+// `?checkpoint=1` keeps the bytes the PUT replaces as a version, whatever
+// their age: a restore asks for it, so the owner can go back again.
 
 import { ID_RE } from "../constants";
 import { clientKey } from "../middleware/client-key";
@@ -23,7 +30,31 @@ interface IdParams {
   id: string;
 }
 
+interface WriteQuery {
+  checkpoint?: string;
+}
+
 const NOT_OCTETS = { error: "Content-Type must be application/octet-stream" };
+
+/** One revision as an entity tag: `"3"`. */
+export const etagOf = (revision: number): string => `"${revision}"`;
+
+const ONE_REVISION = /^"([1-9][0-9]{0,15})"$/;
+
+/**
+ * The revision an If-Match names: a number, undefined for none or `*`, or
+ * "invalid". A list of tags and a weak tag are invalid: a write replaces one
+ * exact revision.
+ */
+export function ifMatchOf(
+  header: string | undefined,
+): number | undefined | "invalid" {
+  if (header === undefined || header.trim() === "*") {
+    return undefined;
+  }
+  const match = ONE_REVISION.exec(header.trim());
+  return match ? Number(match[1]) : "invalid";
+}
 
 export interface NewMapLimit {
   /** New maps per address per window. 0: no limit. */
@@ -63,28 +94,54 @@ export function registerMapRoutes(
     return reply
       .code(201)
       .header("Cache-Control", "no-store")
+      .header("ETag", etagOf(result.map.revision))
       .send({ ...result.map, write_key: result.writeKey });
   });
 
-  fastify.put<{ Params: IdParams }>("/maps/:id", async (request, reply) => {
-    const { id } = request.params;
-    if (!ID_RE.test(id)) {
-      return reply.code(400).send({ error: "invalid id" });
-    }
-    const writeKey = writeKeyOrRefuse(request, reply);
-    if (writeKey === null) {
-      return reply;
-    }
-    if (!isBlobBody(request.body)) {
-      return reply.code(415).send(NOT_OCTETS);
-    }
-    const result = await service.write(id, writeKey, request.body);
-    if (result.kind !== "saved") {
-      const refusal = REFUSAL[result.kind];
-      return reply.code(refusal.status).send(refusal.body);
-    }
-    return reply.code(200).send(result.map);
-  });
+  fastify.put<{ Params: IdParams; Querystring: WriteQuery }>(
+    "/maps/:id",
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!ID_RE.test(id)) {
+        return reply.code(400).send({ error: "invalid id" });
+      }
+      const writeKey = writeKeyOrRefuse(request, reply);
+      if (writeKey === null) {
+        return reply;
+      }
+      if (!isBlobBody(request.body)) {
+        return reply.code(415).send(NOT_OCTETS);
+      }
+      const ifRevision = ifMatchOf(request.headers["if-match"]);
+      if (ifRevision === "invalid") {
+        return reply
+          .code(400)
+          .send({ error: 'If-Match must be one revision, as "<n>", or *' });
+      }
+      const { checkpoint } = request.query;
+      if (checkpoint !== undefined && checkpoint !== "1") {
+        return reply.code(400).send({ error: "checkpoint must be 1" });
+      }
+      const result = await service.write(id, writeKey, request.body, {
+        ifRevision,
+        checkpoint: checkpoint === "1",
+      });
+      if (result.kind === "conflict") {
+        return reply.code(412).header("ETag", etagOf(result.revision)).send({
+          error: "the map has changed since this revision",
+          revision: result.revision,
+        });
+      }
+      if (result.kind !== "saved") {
+        const refusal = REFUSAL[result.kind];
+        return reply.code(refusal.status).send(refusal.body);
+      }
+      return reply
+        .code(200)
+        .header("ETag", etagOf(result.map.revision))
+        .send(result.map);
+    },
+  );
 
   fastify.delete<{ Params: IdParams }>("/maps/:id", async (request, reply) => {
     const { id } = request.params;
@@ -119,7 +176,11 @@ export function registerMapRoutes(
         const refusal = REFUSAL[result.kind];
         return reply.code(refusal.status).send(refusal.body);
       }
-      return sendBlob(reply, result.blob, "no-store");
+      return sendBlob(
+        reply.header("ETag", etagOf(result.blob.revision)),
+        result.blob,
+        "no-store",
+      );
     },
   );
 }

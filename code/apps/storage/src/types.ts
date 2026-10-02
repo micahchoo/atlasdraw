@@ -4,6 +4,9 @@
 // stores rows and bytes.
 
 import type { Readable } from "node:stream";
+import type { MapVersion, VersionPolicy } from "./versions";
+
+export type { MapVersion, VersionPolicy } from "./versions";
 
 /**
  * Selects which adapter the storage server loads at startup.
@@ -25,11 +28,14 @@ export interface MapRecord {
   blob_ref: string;
   byte_size: number;
   write_key_hash: string | null;
+  /** 1 when the map is made; one more with each write. */
+  revision: number;
 }
 
 /**
  * A read-only share token for one map. `expires_at` null means the token
- * lives until its owner revokes it.
+ * lives until its owner revokes it. `revision` null means it reads the
+ * map's latest bytes; a number freezes it on that version.
  */
 export interface ShareToken {
   token: string;
@@ -37,6 +43,7 @@ export interface ShareToken {
   mode: "read";
   expires_at: string | null;
   created_at: string;
+  revision: number | null;
 }
 
 /** What one sweep removed. */
@@ -71,6 +78,23 @@ export interface WriteOptions {
   maxTotalBytes?: number;
 }
 
+export interface UpdateOptions extends WriteOptions {
+  /**
+   * The revision the writer read. When the map is at another revision, the
+   * write rejects with `revisionConflict` (lib/errors.ts) and stores
+   * nothing. Checked again in the transaction that swaps the bytes, so of
+   * two writes from one revision only the first to finish lands. Absent:
+   * no check.
+   */
+  ifRevision?: number;
+  /** Which replaced bytes stay as versions (versions.ts). Default: none. */
+  versions?: VersionPolicy;
+  /** Keep the replaced bytes as a version whatever the policy says. */
+  checkpoint?: boolean;
+  /** The time of the write. Default: now. */
+  at?: Date;
+}
+
 /**
  * Bytes on their way into the store: a stream and its announced length. The
  * adapter stores exactly `size` bytes or nothing: a stream that ends early or
@@ -85,6 +109,8 @@ export interface BlobBody {
 export interface BlobRead {
   stream: Readable;
   size: number;
+  /** The revision these bytes are. */
+  revision: number;
 }
 
 /**
@@ -103,16 +129,27 @@ export interface StorageClient {
   ): Promise<MapRecord>;
   getMap(id: string): Promise<MapRecord | null>;
   /**
-   * Replaces the bytes. Rejects with `not found:` for an unknown id, also
-   * when the map is deleted while the bytes arrive; the new blob is removed.
+   * Replaces the bytes and counts one more revision. Rejects with `not
+   * found:` for an unknown id, also when the map is deleted while the bytes
+   * arrive, and with `revisionConflict` when `ifRevision` does not match;
+   * the new blob is removed.
    */
   updateMap(
     id: string,
     body: BlobBody,
-    opts?: WriteOptions,
+    opts?: UpdateOptions,
   ): Promise<MapRecord>;
-  /** Rejects with `not found:` for an unknown map. */
-  createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;
+  /**
+   * Rejects with `not found:` for an unknown map, and for a `revision` the
+   * store does not keep (the current one or a kept version). The check and
+   * the insert are one transaction, so no write can prune the version
+   * between them.
+   */
+  createShareToken(
+    mapId: string,
+    expiresAt: Date | null,
+    revision?: number | null,
+  ): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
   /** Deletes the token if it belongs to `mapId`. True if a row went. */
   deleteShareToken(mapId: string, token: string): Promise<boolean>;
@@ -121,9 +158,16 @@ export interface StorageClient {
    * or a row whose blob is gone. The caller must consume or destroy it.
    */
   getBlob(id: string): Promise<BlobRead | null>;
+  /** The map's kept versions, newest first; null for an unknown map. */
+  listVersions(id: string): Promise<MapVersion[] | null>;
   /**
-   * Deletes the map, its share tokens and its bytes. False when no map has
-   * the id.
+   * The bytes of one revision: a kept version, or the map's own bytes when
+   * `revision` is its current one. Null when the store has neither.
+   */
+  getVersionBlob(id: string, revision: number): Promise<BlobRead | null>;
+  /**
+   * Deletes the map, its share tokens, its versions and all their bytes.
+   * False when no map has the id.
    */
   deleteMap(id: string): Promise<boolean>;
   /** The sum of `byte_size` over every stored map (a counter, not a scan). */

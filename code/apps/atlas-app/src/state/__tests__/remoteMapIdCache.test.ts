@@ -12,14 +12,21 @@ import {
   buildRemoteSaveCallback,
   deleteServerMap,
   hasServerMap,
-  restoreFromServer,
+  readServerVersion,
+  replaceServerVersion,
   revokeShare,
   saveAsNewServerCopy,
+  saveRestoredVersion,
+  ServerMapChangedError,
   ServerMapRefusedError,
   serverMapRefused,
+  serverVersions,
   shareDocument,
 } from "../remoteMapIdCache";
-import { StorageHttpError } from "../../services/createHttpStorageClient";
+import {
+  MapChangedError,
+  StorageHttpError,
+} from "../../services/createHttpStorageClient";
 
 import type { StorageClient } from "../../services/createHttpStorageClient";
 
@@ -31,27 +38,59 @@ const bytes = () => new Blob(["zip"]);
 function fakeClient() {
   let maps = 0;
   let tokens = 0;
+  // Each map's revision, as the server counts it.
+  const revisions = new Map<string, number>();
   const createMap = vi.fn(async (_blob: Blob | Uint8Array) => {
     maps += 1;
-    return {
-      map: { id: `map${String(maps).padStart(18, "0")}` },
-      writeKey: `key-${maps}`,
-    };
+    const id = `map${String(maps).padStart(18, "0")}`;
+    revisions.set(id, 1);
+    return { map: { id, revision: 1 }, writeKey: `key-${maps}` };
   });
   const updateMap = vi.fn(
-    async (_mapId: string, _key: string, _blob: Blob | Uint8Array) => ({}),
+    async (
+      mapId: string,
+      _key: string,
+      _blob: Blob | Uint8Array,
+      _options?: { ifRevision?: number; checkpoint?: boolean },
+    ) => {
+      const revision = (revisions.get(mapId) ?? 1) + 1;
+      revisions.set(mapId, revision);
+      return { id: mapId, revision };
+    },
   );
   const createShareToken = vi.fn(
-    async (_mapId: string, _key: string, days: number | null) => {
+    async (
+      _mapId: string,
+      _key: string,
+      days: number | null,
+      revision: number | null = null,
+    ) => {
       tokens += 1;
       return {
         token: `tok${String(tokens).padStart(18, "0")}`,
         expiresAt: days === null ? null : "2026-05-17T00:00:00.000Z",
+        revision,
       };
     },
   );
   const revokeShareToken = vi.fn(async () => {});
-  const readMap = vi.fn(async () => new Uint8Array([7, 7]).buffer);
+  const readMap = vi.fn(async () => ({
+    bytes: new Uint8Array([7, 7]).buffer,
+    revision: 7,
+  }));
+  const readVersion = vi.fn(
+    async (_mapId: string, _key: string, revision: number) => ({
+      bytes: new Uint8Array([revision]).buffer,
+      revision,
+    }),
+  );
+  const listVersions = vi.fn(async () => ({
+    current: 2,
+    versions: [
+      { revision: 2, savedAt: "2026-10-01T10:00:00.000Z", byteSize: 3 },
+      { revision: 1, savedAt: "2026-10-01T09:00:00.000Z", byteSize: 3 },
+    ],
+  }));
   const deleteMap = vi.fn(async (_mapId: string, _key: string) => {});
   return {
     client: {
@@ -60,6 +99,8 @@ function fakeClient() {
       createShareToken,
       revokeShareToken,
       readMap,
+      readVersion,
+      listVersions,
       deleteMap,
     } as unknown as StorageClient,
     deleteMap,
@@ -68,6 +109,8 @@ function fakeClient() {
     createShareToken,
     revokeShareToken,
     readMap,
+    readVersion,
+    listVersions,
   };
 }
 
@@ -208,6 +251,93 @@ describe("buildRemoteSaveCallback", () => {
     expect(createMap).toHaveBeenCalledTimes(1);
   });
 
+  it("names the revision it last saw, and keeps the one the server answers", async () => {
+    const { client, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+
+    await save(bytes(), A);
+    await save(bytes(), A);
+    await save(bytes(), A);
+
+    expect(updateMap.mock.calls.map((c) => c[3])).toEqual([
+      { ifRevision: 1, checkpoint: false },
+      { ifRevision: 2, checkpoint: false },
+    ]);
+  });
+
+  it("a map kept before revisions saves once with no check, as a checkpoint", async () => {
+    const db = await openDB(DB, 1);
+    await db.put(
+      "state",
+      { mapId: "map000000000000000009", writeKey: "old-key" },
+      `remoteMap:${A}`,
+    );
+    db.close();
+    const { client, updateMap } = fakeClient();
+
+    await buildRemoteSaveCallback(client)(bytes(), A);
+    await buildRemoteSaveCallback(client)(bytes(), A);
+
+    expect(updateMap.mock.calls.map((c) => c[3])).toEqual([
+      { ifRevision: undefined, checkpoint: true },
+      { ifRevision: 2, checkpoint: false },
+    ]);
+  });
+
+  it("when another browser saved the map, tells the caller and stops uploading", async () => {
+    const { client, createMap, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await save(bytes(), A);
+    updateMap.mockRejectedValueOnce(new MapChangedError(5));
+
+    const changed = save(bytes(), A);
+
+    await expect(changed).rejects.toBeInstanceOf(ServerMapChangedError);
+    await expect(changed).rejects.toMatchObject({ revision: 5 });
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapChangedError);
+    expect(updateMap).toHaveBeenCalledTimes(1);
+    expect(createMap).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaceServerVersion saves over the newer revision as a checkpoint, and saves go on", async () => {
+    const { client, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await save(bytes(), A);
+    updateMap.mockRejectedValueOnce(new MapChangedError(5));
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapChangedError);
+    // The server was at revision 5; this save makes 6.
+    updateMap.mockResolvedValueOnce({
+      id: "map000000000000000001",
+      revision: 6,
+    });
+
+    await replaceServerVersion(client, bytes(), A);
+    await save(bytes(), A);
+
+    expect(updateMap.mock.calls.slice(1).map((c) => c[3])).toEqual([
+      { ifRevision: 5, checkpoint: true },
+      { ifRevision: 6, checkpoint: false },
+    ]);
+  });
+
+  it("makes no new map when this browser's IndexedDB cannot be read", async () => {
+    const { client, createMap } = fakeClient();
+    const real = globalThis.indexedDB;
+    globalThis.indexedDB = {
+      open: () => {
+        throw new Error("storage blocked");
+      },
+    } as unknown as IDBFactory;
+    try {
+      await expect(shareDocument(client, bytes(), A, null)).rejects.toThrow();
+      expect(await hasServerMap(A)).toBe(false);
+    } finally {
+      globalThis.indexedDB = real;
+    }
+
+    expect(createMap).not.toHaveBeenCalled();
+  });
+
   it("creates one map when two saves of a new document overlap", async () => {
     const { client, createMap } = fakeClient();
     const save = buildRemoteSaveCallback(client);
@@ -231,7 +361,36 @@ describe("shareDocument", () => {
       "key-1",
       null,
     );
-    expect(link).toEqual({ token: "tok000000000000000001", expiresAt: null });
+    expect(link).toEqual({
+      token: "tok000000000000000001",
+      expiresAt: null,
+      revision: null,
+    });
+  });
+
+  it("a frozen link is a new token on the revision just saved", async () => {
+    const { client, createShareToken } = fakeClient();
+    await shareDocument(client, bytes(), A, null);
+
+    const frozen = await shareDocument(client, bytes(), A, null, {
+      frozen: true,
+    });
+    const again = await shareDocument(client, bytes(), A, null, {
+      frozen: true,
+    });
+
+    expect(frozen.revision).toBe(2);
+    expect(again.revision).toBe(3);
+    expect(again.token).not.toBe(frozen.token);
+    expect(createShareToken).toHaveBeenLastCalledWith(
+      "map000000000000000001",
+      "key-1",
+      null,
+      3,
+    );
+    // The lasting link is still the one a plain share reuses.
+    expect((await shareDocument(client, bytes(), A, null)).revision).toBeNull();
+    expect(createShareToken).toHaveBeenCalledTimes(3);
   });
 
   it("sharing again sends the new bytes and keeps the same link", async () => {
@@ -276,22 +435,57 @@ describe("shareDocument", () => {
   });
 });
 
-describe("restoreFromServer", () => {
-  it("returns the latest bytes of the document's map", async () => {
-    const { client, readMap } = fakeClient();
+describe("server versions", () => {
+  it("lists and reads the document's server versions with its key", async () => {
+    const { client, listVersions, readVersion } = fakeClient();
     await buildRemoteSaveCallback(client)(bytes(), A);
 
-    const back = await restoreFromServer(client, A);
+    const history = await serverVersions(client, A);
+    const old = await readServerVersion(client, A, 1);
 
-    expect(readMap).toHaveBeenCalledWith("map000000000000000001", "key-1");
-    expect(back).toEqual(new Uint8Array([7, 7]));
+    expect(listVersions).toHaveBeenCalledWith("map000000000000000001", "key-1");
+    expect(history?.current).toBe(2);
+    expect(readVersion).toHaveBeenCalledWith(
+      "map000000000000000001",
+      "key-1",
+      1,
+    );
+    expect(old).toEqual(new Uint8Array([1]));
   });
 
-  it("returns null for a document with no server map", async () => {
-    const { client, readMap } = fakeClient();
+  it("gives null for a document with no server map", async () => {
+    const { client, listVersions } = fakeClient();
 
-    expect(await restoreFromServer(client, B)).toBeNull();
-    expect(readMap).not.toHaveBeenCalled();
+    expect(await serverVersions(client, B)).toBeNull();
+    expect(await readServerVersion(client, B, 1)).toBeNull();
+    expect(listVersions).not.toHaveBeenCalled();
+  });
+
+  it("restoring a version after another browser saved is the owner's answer: it saves over that revision", async () => {
+    const { client, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await save(bytes(), A);
+    updateMap.mockRejectedValueOnce(new MapChangedError(5));
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapChangedError);
+
+    await saveRestoredVersion(client, bytes(), A);
+    await save(bytes(), A);
+
+    expect(updateMap.mock.calls.slice(1).map((c) => c[3]?.ifRevision)).toEqual([
+      5, 2,
+    ]);
+  });
+
+  it("a restored version is a new revision that keeps the one it replaces", async () => {
+    const { client, updateMap } = fakeClient();
+    await buildRemoteSaveCallback(client)(bytes(), A);
+
+    await saveRestoredVersion(client, bytes(), A);
+
+    expect(updateMap.mock.lastCall![3]).toEqual({
+      ifRevision: 1,
+      checkpoint: true,
+    });
   });
 });
 

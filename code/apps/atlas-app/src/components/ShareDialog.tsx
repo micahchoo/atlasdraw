@@ -56,6 +56,7 @@ type DialogView =
       mode: ShareMode;
       token: string | null;
       expiresAt: string | null;
+      frozen: boolean;
     }
   | { kind: "revoked" }
   | { kind: "collab-loading" }
@@ -73,9 +74,17 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
 const HASH_HINT =
   "This link holds a copy of the map. Later edits do not change it, and it never expires.";
 
+/** What the read-only link shows, as the picker offers it. */
+const SHOWS_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "latest", label: "Each new save" },
+  { value: "frozen", label: "This version only" },
+];
+
 /** What an upload link does when the map changes, and how long it works. */
-function uploadHint(expiresAt: string | null): string {
-  const updates = getAppConfig().enableBackendPersistence
+function uploadHint(expiresAt: string | null, frozen: boolean): string {
+  const updates = frozen
+    ? "It shows the map as it is now; later saves do not change it."
+    : getAppConfig().enableBackendPersistence
     ? "Each save updates this link and every embed made from it."
     : "Share again to update this link and every embed made from it.";
   const lasts =
@@ -100,6 +109,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const [confirmStop, setConfirmStop] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [expiry, setExpiry] = useState("");
+  const [shows, setShows] = useState("latest");
   const {
     generate,
     revoke,
@@ -111,7 +121,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
   const startReadonly = async () => {
     setView({ kind: "readonly-loading" });
-    const link = await generate(expiry === "" ? null : Number(expiry));
+    const link = await generate(expiry === "" ? null : Number(expiry), {
+      frozen: shows === "frozen",
+    });
     if (link === null) {
       setView({ kind: "error", message: null });
       return;
@@ -259,6 +271,29 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
               ))}
             </select>
           </label>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.75rem",
+              color: "var(--ad-ink-secondary, #495057)",
+            }}
+          >
+            Read-only link shows
+            <select
+              value={shows}
+              onChange={(e) => setShows(e.target.value)}
+              data-testid="share-dialog-shows"
+              style={{ fontSize: "0.75rem" }}
+            >
+              {SHOWS_CHOICES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {startRoom && (
             <button
               type="button"
@@ -383,7 +418,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                 color: "var(--ad-ink-secondary, #495057)",
               }}
             >
-              {view.mode === "hash" ? HASH_HINT : uploadHint(view.expiresAt)}
+              {view.mode === "hash"
+                ? HASH_HINT
+                : uploadHint(view.expiresAt, view.frozen)}
             </p>
           )}
           {view.kind === "readonly-success" && view.token !== null && (

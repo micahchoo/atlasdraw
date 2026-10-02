@@ -18,6 +18,7 @@ import { registerBlobBodyParser } from "./routes/blob-body";
 import { registerHealthRoute } from "./routes/health";
 import { registerMapRoutes } from "./routes/maps";
 import { registerShareRoutes } from "./routes/share";
+import { registerVersionRoutes } from "./routes/versions";
 import { createMapService } from "./service/maps";
 
 import type { Logger } from "pino";
@@ -73,6 +74,10 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
   const service = createMapService(client, {
     maxTotalBytes: config.MAX_TOTAL_BYTES,
     legacyGraceDays: config.LEGACY_MAP_GRACE_DAYS,
+    versions: {
+      keep: config.MAP_VERSIONS_KEPT,
+      intervalMs: config.MAP_VERSION_INTERVAL_MINUTES * 60_000,
+    },
     now: opts.now,
   });
 
@@ -86,6 +91,7 @@ export function buildApp(opts: BuildAppOptions): FastifyInstance {
     maxNewMaps: config.MAX_NEW_MAPS_PER_IP,
     windowMs: config.NEW_MAPS_WINDOW_MS,
   });
+  registerVersionRoutes(app, service);
   registerShareRoutes(app, service, config.PUBLIC_URL);
 
   // A 4xx carries Fastify's own message (body too large, bad JSON): it names

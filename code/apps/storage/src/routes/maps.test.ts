@@ -20,9 +20,16 @@ const UNKNOWN_ID = "a".repeat(21);
 
 function makeApp(
   dataDir: string,
-  opts: { bodyLimit?: number; maxTotalBytes?: number } = {},
+  opts: {
+    bodyLimit?: number;
+    maxTotalBytes?: number;
+    versionsKept?: number;
+  } = {},
 ): FastifyInstance {
   const env: Record<string, string> = {};
+  if (opts.versionsKept !== undefined) {
+    env.MAP_VERSIONS_KEPT = String(opts.versionsKept);
+  }
   if (opts.bodyLimit !== undefined) {
     env.MAX_MAP_BYTES = String(opts.bodyLimit);
   }
@@ -229,6 +236,92 @@ describe("/maps routes", () => {
       expect(res.statusCode).toBe(403);
     });
 
+    it("answers each save with its revision, also as the ETag", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/maps",
+        headers: OCTETS,
+        payload: Buffer.from("v1"),
+      });
+      const { id, write_key: writeKey } = created.json();
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("v2"),
+      });
+
+      expect(created.json().revision).toBe(1);
+      expect(created.headers.etag).toBe('"1"');
+      expect(res.json().revision).toBe(2);
+      expect(res.headers.etag).toBe('"2"');
+    });
+
+    it("refuses a write whose If-Match names an older revision: 412, and the bytes stay", async () => {
+      const { id, writeKey } = await create("v1");
+      await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey), "if-match": '"1"' },
+        payload: Buffer.from("v2"),
+      });
+
+      const res = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey), "if-match": '"1"' },
+        payload: Buffer.from("from another browser"),
+      });
+
+      expect(res.statusCode).toBe(412);
+      expect(res.json()).toEqual({
+        error: "the map has changed since this revision",
+        revision: 2,
+      });
+      expect(res.headers.etag).toBe('"2"');
+      const read = await app.inject({
+        method: "GET",
+        url: `/maps/${id}/blob`,
+        headers: bearer(writeKey),
+      });
+      expect(read.body).toBe("v2");
+      expect(read.headers.etag).toBe('"2"');
+    });
+
+    it("takes a write with If-Match: * or with no If-Match", async () => {
+      const { id, writeKey } = await create("v1");
+
+      const star = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey), "if-match": "*" },
+        payload: Buffer.from("v2"),
+      });
+      const none = await app.inject({
+        method: "PUT",
+        url: `/maps/${id}`,
+        headers: { ...OCTETS, ...bearer(writeKey) },
+        payload: Buffer.from("v3"),
+      });
+
+      expect(star.statusCode).toBe(200);
+      expect(none.json().revision).toBe(3);
+    });
+
+    it("returns 400 for an If-Match that is not one revision", async () => {
+      const { id, writeKey } = await create("v1");
+      for (const value of ['"1", "2"', "1", 'W/"1"', '"x"', '""']) {
+        const res = await app.inject({
+          method: "PUT",
+          url: `/maps/${id}`,
+          headers: { ...OCTETS, ...bearer(writeKey), "if-match": value },
+          payload: Buffer.from("v2"),
+        });
+        expect(res.statusCode, value).toBe(400);
+      }
+    });
+
     it("returns 400 for a malformed id", async () => {
       const res = await app.inject({
         method: "PUT",
@@ -407,8 +500,11 @@ describe("/maps routes", () => {
       await capped.close();
     });
 
-    it("counts a rewrite by its growth, not its whole size", async () => {
-      const capped = makeApp(scratch.name, { maxTotalBytes: 10 });
+    it("with no history, counts a rewrite by its growth, not its whole size", async () => {
+      const capped = makeApp(scratch.name, {
+        maxTotalBytes: 10,
+        versionsKept: 0,
+      });
       await capped.ready();
       const created = await capped.inject({
         method: "POST",
@@ -446,8 +542,11 @@ describe("/maps routes", () => {
       payload: Buffer.from("again"),
     });
     const files = fs.readdirSync(path.join(scratch.name, "blobs"));
-    expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(new RegExp(`^${id}\\.[0-9a-f]+\\.atlasdraw$`));
+    // The new bytes, and the old ones kept as a version.
+    expect(files).toHaveLength(2);
+    for (const file of files) {
+      expect(file).toMatch(new RegExp(`^${id}\\.[0-9a-f]+\\.atlasdraw$`));
+    }
   });
 
   it("a PUT that loses the race with a DELETE answers 404 and leaves no blob", async () => {

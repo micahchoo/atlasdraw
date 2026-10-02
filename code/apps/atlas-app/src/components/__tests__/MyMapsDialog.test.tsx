@@ -16,7 +16,9 @@ import {
 
 import type { AtlasdrawDocument } from "@atlasdraw/data";
 
+import * as downloadModule from "../../lib/download";
 import { MyMapsDialog } from "../MyMapsDialog";
+import { makeBackup } from "../../state/backup";
 import {
   createDocument,
   currentDocument,
@@ -357,5 +359,60 @@ describe("MyMapsDialog", () => {
     renderDialog();
 
     expect(await screen.findByText("Fresh work")).toBeTruthy();
+  });
+
+  it("Back up my maps downloads one file with the maps and says it holds the keys", async () => {
+    await seedTwoMaps();
+    const download = vi
+      .spyOn(downloadModule, "downloadBlob")
+      .mockImplementation(() => {});
+    const { notify } = renderDialog();
+    await screen.findAllByTestId("my-maps-row");
+
+    fireEvent.click(screen.getByTestId("my-maps-backup"));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(download.mock.calls[0]![1]).toMatch(/^atlasdraw-backup-.*\.json$/);
+    expect(notify.success).toHaveBeenCalledWith(
+      expect.stringMatching(/2 maps.*keep the file private/i),
+    );
+  });
+
+  it("Restore a backup adds the maps it holds to the list", async () => {
+    await seedTwoMaps();
+    const backup = await makeBackup(store);
+    await store.remove(B);
+    const { notify } = renderDialog();
+    await screen.findAllByTestId("my-maps-row");
+
+    fireEvent.change(screen.getByTestId("my-maps-restore-input"), {
+      target: {
+        files: [
+          new File([backup.blob], "backup.json", { type: "application/json" }),
+        ],
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId("my-maps-row")).toHaveLength(2),
+    );
+    expect(notify.success).toHaveBeenCalledWith(
+      expect.stringMatching(/added 1 map/i),
+    );
+  });
+
+  it("says so when the file is not a backup", async () => {
+    const { notify } = renderDialog();
+    await screen.findByTestId("my-maps-empty");
+
+    fireEvent.change(screen.getByTestId("my-maps-restore-input"), {
+      target: { files: [new File(["{}"], "other.json")] },
+    });
+
+    await waitFor(() =>
+      expect(notify.error).toHaveBeenCalledWith(
+        expect.stringMatching(/not an Atlasdraw backup/),
+      ),
+    );
   });
 });

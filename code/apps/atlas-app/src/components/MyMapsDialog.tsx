@@ -4,6 +4,11 @@
 // one, start a new one, or delete one. The actions are state/myMaps.ts; this
 // shows the list and asks the questions.
 //
+// "Back up my maps" downloads one file with every map and the write keys of
+// their server maps; "Restore a backup" adds such a file's maps and keys to
+// this browser (state/backup.ts). A cleared browser that restores it owns
+// its published maps again.
+//
 // A modal, because no existing surface lists documents: the MainMenu holds
 // actions, not lists, and the sidebar belongs to the open map's layers.
 //
@@ -16,7 +21,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import styles from "../styles/MyMapsDialog.module.css";
+import { downloadBlob } from "../lib/download";
 import { relativeTime } from "../lib/relativeTime";
+import { makeBackup, restoreBackupFile } from "../state/backup";
 import { useDocumentStore } from "../state/document";
 import {
   deleteSavedMap,
@@ -118,6 +125,56 @@ export function MyMapsDialog({
           },
         }),
       ),
+  };
+
+  const restoreInput = useRef<HTMLInputElement>(null);
+
+  const backUp = async () => {
+    const store = persistence.getState().persistenceStore;
+    if (!store) {
+      return;
+    }
+    try {
+      const backup = await makeBackup(store);
+      downloadBlob(backup.blob, backup.fileName);
+      notify?.success(
+        `Downloaded a backup of ${backup.maps} ${
+          backup.maps === 1 ? "map" : "maps"
+        }${
+          backup.keys > 0
+            ? ` and the keys of ${backup.keys} server ${
+                backup.keys === 1 ? "copy" : "copies"
+              }. Anyone with the file can change them: keep the file private.`
+            : ". Keep the file private."
+        }`,
+      );
+    } catch (err) {
+      console.warn("[atlasdraw] backup failed", err);
+      notify?.error("Could not make the backup. Your maps did not change.");
+    }
+  };
+
+  const restore = async (file: File) => {
+    const store = persistence.getState().persistenceStore;
+    if (!store) {
+      return;
+    }
+    try {
+      const result = await restoreBackupFile(store, file);
+      const kept = result.kept + result.keptKeys;
+      notify?.success(
+        `Added ${result.added} ${result.added === 1 ? "map" : "maps"} and ${
+          result.keys
+        } server ${result.keys === 1 ? "key" : "keys"}.${
+          kept > 0 ? " What this browser already had is kept as it is." : ""
+        }`,
+      );
+    } catch (err) {
+      notify?.error(
+        err instanceof Error ? err.message : "Could not read the backup.",
+      );
+    }
+    await refresh();
   };
 
   const open = async (id: string) => {
@@ -244,6 +301,36 @@ export function MyMapsDialog({
       </div>
 
       <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => void backUp()}
+          data-testid="my-maps-backup"
+        >
+          Back up my maps
+        </button>
+        <button
+          type="button"
+          className={styles.button}
+          onClick={() => restoreInput.current?.click()}
+          data-testid="my-maps-restore"
+        >
+          Restore a backup
+        </button>
+        <input
+          ref={restoreInput}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) {
+              void restore(file);
+            }
+          }}
+          data-testid="my-maps-restore-input"
+        />
         <button
           type="button"
           className={[styles.button, styles.buttonPrimary].join(" ")}

@@ -76,6 +76,7 @@ const LEGACY_POSTGRES_SCHEMA = `
 `;
 
 const TABLES = [
+  "map_versions",
   "maps",
   "schema_migrations",
   "share_tokens",
@@ -89,8 +90,23 @@ const MAP_COLUMNS = [
   "blob_ref",
   "byte_size",
   "write_key_hash",
+  "revision",
 ];
-const SHARE_COLUMNS = ["token", "map_id", "mode", "expires_at", "created_at"];
+const SHARE_COLUMNS = [
+  "token",
+  "map_id",
+  "mode",
+  "expires_at",
+  "created_at",
+  "revision",
+];
+const VERSION_COLUMNS = [
+  "map_id",
+  "revision",
+  "blob_ref",
+  "byte_size",
+  "saved_at",
+];
 const ALL_NAMES = MIGRATIONS.map((m) => m.name).sort();
 
 function sqliteTables(db: Database.Database): string[] {
@@ -134,7 +150,27 @@ describe("migrateSqlite", () => {
     expect(sqliteTables(db)).toEqual(TABLES);
     expect(sqliteColumns(db, "maps")).toEqual(MAP_COLUMNS);
     expect(sqliteColumns(db, "share_tokens")).toEqual(SHARE_COLUMNS);
+    expect(sqliteColumns(db, "map_versions")).toEqual(VERSION_COLUMNS);
     expect(sqliteApplied(db)).toEqual(ALL_NAMES);
+  });
+
+  it("starts every stored map at revision 1 and pins no link", () => {
+    db.exec(LEGACY_SQLITE_SCHEMA);
+    db.prepare(
+      "INSERT INTO maps VALUES ('m1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/m1.atlasdraw', 3, NULL)",
+    ).run();
+    db.prepare(
+      "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', '2026-01-08T00:00:00.000Z', '2026-01-01T00:00:00.000Z', NULL)",
+    ).run();
+
+    migrateSqlite(db);
+
+    expect(db.prepare("SELECT revision FROM maps").get()).toEqual({
+      revision: 1,
+    });
+    expect(db.prepare("SELECT revision FROM share_tokens").get()).toEqual({
+      revision: null,
+    });
   });
 
   it("changes nothing when it runs again", () => {
@@ -210,13 +246,13 @@ describe("migrateSqlite", () => {
   it("lets a share token have no expiry", () => {
     migrateSqlite(db);
     db.prepare(
-      "INSERT INTO maps VALUES ('m1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/m1.atlasdraw', 3, NULL)",
+      "INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size) VALUES ('m1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'blobs/m1.atlasdraw', 3)",
     ).run();
 
     expect(() =>
       db
         .prepare(
-          "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', NULL, '2026-01-01T00:00:00.000Z')",
+          "INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at) VALUES ('t1', 'm1', 'read', NULL, '2026-01-01T00:00:00.000Z')",
         )
         .run(),
     ).not.toThrow();
@@ -298,6 +334,7 @@ describe.skipIf(!PG_URL)("migratePostgres (real Postgres)", () => {
     expect(await tables()).toEqual(TABLES);
     expect(await columns("maps")).toEqual(MAP_COLUMNS);
     expect(await columns("share_tokens")).toEqual(SHARE_COLUMNS);
+    expect(await columns("map_versions")).toEqual(VERSION_COLUMNS);
     expect(await applied()).toEqual(ALL_NAMES);
   });
 
@@ -334,8 +371,14 @@ describe.skipIf(!PG_URL)("migratePostgres (real Postgres)", () => {
     expect(await tables()).toEqual(TABLES);
     expect(await columns("maps")).toEqual(MAP_COLUMNS);
     expect(await columns("share_tokens")).toEqual(SHARE_COLUMNS);
-    const maps = await pool.query("SELECT id, write_key_hash FROM maps");
-    expect(maps.rows).toEqual([{ id: "m1", write_key_hash: null }]);
+    const maps = await pool.query(
+      "SELECT id, write_key_hash, revision::int AS revision FROM maps",
+    );
+    expect(maps.rows).toEqual([
+      { id: "m1", write_key_hash: null, revision: 1 },
+    ]);
+    const shares = await pool.query("SELECT revision FROM share_tokens");
+    expect(shares.rows).toEqual([{ revision: null }]);
     const usage = await pool.query(
       "SELECT id, total_bytes::int AS total_bytes FROM storage_usage",
     );
@@ -345,12 +388,12 @@ describe.skipIf(!PG_URL)("migratePostgres (real Postgres)", () => {
   it("lets a share token have no expiry", async () => {
     await migratePostgres(pool);
     await pool.query(
-      "INSERT INTO maps VALUES ('m1', now(), now(), 'maps/m1.atlasdraw', 3, NULL)",
+      "INSERT INTO maps (id, created_at, updated_at, blob_ref, byte_size) VALUES ('m1', now(), now(), 'maps/m1.atlasdraw', 3)",
     );
 
     await expect(
       pool.query(
-        "INSERT INTO share_tokens VALUES ('t1', 'm1', 'read', NULL, now())",
+        "INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at) VALUES ('t1', 'm1', 'read', NULL, now())",
       ),
     ).resolves.toBeDefined();
   });

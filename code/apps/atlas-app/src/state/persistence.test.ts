@@ -112,7 +112,7 @@ describe("createPersistenceStore — one slot per document", () => {
   it("keeps each document in its own slot: saving B does not replace A", async () => {
     const dbName = freshDb();
     const store = createPersistenceStore({ dbName });
-    await store.save(makeDoc(undefined, ULID));
+    await store.save(makeDoc());
     await store.save(makeDoc(undefined, OTHER));
 
     const raw = await openDB(dbName);
@@ -213,6 +213,29 @@ describe("createPersistenceStore — remoteSave callback (T13)", () => {
       expect.any(Error),
     );
 
+    errSpy.mockRestore();
+    await store.close();
+  });
+
+  it("tells onRemoteSaveFailed the error, the bytes and the document, so the owner can answer", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const refused = new Error("refused");
+    const onRemoteSaveFailed = vi.fn();
+    const store = createPersistenceStore({
+      dbName: freshDb(),
+      remoteSave: vi.fn(async () => {
+        throw refused;
+      }),
+      onRemoteSaveFailed,
+    });
+
+    await store.save(makeDoc());
+
+    expect(onRemoteSaveFailed).toHaveBeenCalledWith(
+      refused,
+      expect.any(Blob),
+      ULID,
+    );
     errSpy.mockRestore();
     await store.close();
   });

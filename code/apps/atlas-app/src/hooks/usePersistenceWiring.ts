@@ -31,7 +31,13 @@ import { admit, type Admitted } from "../state/documentGate";
 import { isRoomDocument } from "../state/room";
 import { getAppConfig } from "../config/app-config";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
-import { buildRemoteSaveCallback } from "../state/remoteMapIdCache";
+import {
+  buildRemoteSaveCallback,
+  replaceServerVersion,
+  saveAsNewServerCopy,
+  ServerMapChangedError,
+  ServerMapRefusedError,
+} from "../state/remoteMapIdCache";
 import {
   loadShareDocument,
   type ShareLoadResult,
@@ -126,24 +132,78 @@ export function usePersistenceWiring(
     // (PUT /maps/:id). The id and write key are kept in IndexedDB
     // (state/remoteMapIdCache.ts), so a reload goes on updating the same map.
     const cfg = getAppConfig();
-    const remoteSave = cfg.enableBackendPersistence
-      ? buildRemoteSaveCallback(
-          createHttpStorageClient({ baseUrl: cfg.storageBaseUrl }),
-        )
-      : undefined;
+    const client = cfg.enableBackendPersistence
+      ? createHttpStorageClient({ baseUrl: cfg.storageBaseUrl })
+      : null;
+    const remoteSave = client ? buildRemoteSaveCallback(client) : undefined;
+    // A server that refuses the map, or holds another browser's newer save,
+    // gets one question; the cache sends nothing more until it is answered
+    // (state/remoteMapIdCache.ts). Nothing is chosen for the owner.
+    const answerRefusal = async (
+      err: ServerMapRefusedError | ServerMapChangedError,
+      blob: Blob,
+      documentId: string,
+    ) => {
+      const refused = err instanceof ServerMapRefusedError;
+      const yes = await view.getState().ask(
+        refused
+          ? {
+              title: "The server refused this map",
+              body: err.message,
+              confirmLabel: "Save a new server copy",
+              cancelLabel: "Not now",
+            }
+          : {
+              title: "Another browser saved this map",
+              body: `${err.message} Save your version over it, or open Server versions… to see the other one. The server keeps the version you replace.`,
+              confirmLabel: "Save my version",
+              cancelLabel: "Not now",
+            },
+      );
+      if (!yes || !client) {
+        return;
+      }
+      try {
+        await (refused ? saveAsNewServerCopy : replaceServerVersion)(
+          client,
+          blob,
+          documentId,
+        );
+        persistence.getState().setRemoteSaveFailed(false);
+        documentNotify.success?.(
+          refused
+            ? "Saved a new server copy. Links you shared before show the old copy."
+            : "Saved your version on the server.",
+        );
+      } catch (saveErr) {
+        documentNotify.error(
+          `The server did not take the map${
+            saveErr instanceof Error ? `: ${saveErr.message}` : "."
+          }`,
+        );
+      }
+    };
     const store = createPersistenceStore({
       remoteSave,
-      onRemoteSaveFailed: () => {
-        // Edge-triggered: notify once on the ok->failed transition, not on
-        // every subsequent autosave tick while the server stays down (that
-        // would spam a toast every debounce cycle).
+      onRemoteSaveFailed: (err, blob, documentId) => {
+        // Edge-triggered: tell the owner once on the ok->failed transition,
+        // not on every later autosave tick while the server stays down (that
+        // would show a toast every debounce cycle).
         const wasFailed = persistence.getState().remoteSaveFailed;
         persistence.getState().setRemoteSaveFailed(true);
-        if (!wasFailed) {
-          documentNotify.error(
-            "Couldn't sync to the server — your changes are saved locally but not backed up",
-          );
+        if (wasFailed) {
+          return;
         }
+        if (
+          err instanceof ServerMapRefusedError ||
+          err instanceof ServerMapChangedError
+        ) {
+          void answerRefusal(err, blob, documentId);
+          return;
+        }
+        documentNotify.error(
+          "Couldn't sync to the server — your changes are saved locally but not backed up",
+        );
       },
     });
     persistence.getState().setPersistenceStore(store);
@@ -187,8 +247,36 @@ export function usePersistenceWiring(
       return answering;
     };
     const unholdMaps = holdOpenMaps(ownership, store);
+    // The maps and the write keys of their server maps live only in this
+    // site's storage, which a browser may evict when space is low (and
+    // WebKit after seven days without a visit). Ask once, after the first
+    // save, that it be kept: there is something to keep, and a browser
+    // grants this more readily to a site the user works in. A refusal
+    // changes nothing; "Back up my maps" is the other way to keep them.
+    let askedToKeep = false;
+    const askToKeepStorage = () => {
+      if (askedToKeep) {
+        return;
+      }
+      askedToKeep = true;
+      const storage =
+        typeof navigator === "undefined" ? undefined : navigator.storage;
+      if (!storage?.persist) {
+        return;
+      }
+      void (async () => {
+        try {
+          if (!(await storage.persisted?.())) {
+            await storage.persist();
+          }
+        } catch (err) {
+          console.warn("[atlasdraw] persistent storage request failed", err);
+        }
+      })();
+    };
     const autosave = startAutoSave(store, history, getDoc, {
       onSaved: () => {
+        askToKeepStorage();
         persistence.getState().setLastSavedAt(Date.now());
         if (!store.remoteSaveFailed()) {
           persistence.getState().setRemoteSaveFailed(false);

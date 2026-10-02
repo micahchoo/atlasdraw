@@ -3,8 +3,9 @@
 // Minimal stack: SQLite for metadata, the filesystem for blobs. Every write
 // streams to a NEW file (`blobs/<id>.<random>.atlasdraw`) through a flushed
 // temp file and a rename; one transaction then checks the row still exists,
-// points it at the new file and counts the size change; only then is the old
-// file deleted. A crash at any point leaves the old map whole. Reads stream
+// points it at the new file, keeps the old file as a version or not
+// (versions.ts) and counts the size change; only then are the files no row
+// names deleted. A crash at any point leaves the old map whole. Reads stream
 // from an open file; no blob is ever held whole in memory.
 //
 // The size cap (types.ts#StorageClient): bytes are reserved in
@@ -25,13 +26,17 @@ import { ID_RE } from "../constants";
 import { migrateSqlite } from "../db/migrate";
 import { WRITE_KEYS_MIGRATION } from "../db/migrations";
 import { measured } from "../lib/body";
-import { storageFull } from "../lib/errors";
+import { RevisionConflictError, storageFull } from "../lib/errors";
+import { NO_VERSIONS, keepsReplaced, pastKeep } from "../versions";
 
 import type {
   BlobBody,
+  BlobRead,
+  MapVersion,
   ShareToken,
   StorageClient,
   SweepResult,
+  VersionPolicy,
 } from "../types";
 
 interface MapRow {
@@ -41,6 +46,7 @@ interface MapRow {
   blob_ref: string;
   byte_size: number;
   write_key_hash: string | null;
+  revision: number;
 }
 
 interface ShareRow {
@@ -49,6 +55,7 @@ interface ShareRow {
   mode: string;
   expires_at: string | null;
   created_at: string;
+  revision: number | null;
 }
 
 const TEMP_SUFFIX = ".tmp";
@@ -80,6 +87,7 @@ function rowToShare(row: ShareRow): ShareToken {
     mode: "read",
     expires_at: row.expires_at,
     created_at: row.created_at,
+    revision: row.revision,
   };
 }
 
@@ -109,15 +117,16 @@ export function createSqliteFsAdapter(opts: {
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const pointMap = db.prepare(
-    `UPDATE maps SET blob_ref = ?, byte_size = ?, updated_at = ? WHERE id = ?`,
+    `UPDATE maps SET blob_ref = ?, byte_size = ?, updated_at = ?, revision = ?
+     WHERE id = ?`,
   );
   const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
   const deleteMapShares = db.prepare(
     `DELETE FROM share_tokens WHERE map_id = ?`,
   );
   const insertShare = db.prepare(
-    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectShare = db.prepare(`SELECT * FROM share_tokens WHERE token = ?`);
   const deleteShare = db.prepare(
@@ -131,7 +140,30 @@ export function createSqliteFsAdapter(opts: {
      WHERE write_key_hash IS NULL
        AND NOT EXISTS (SELECT 1 FROM share_tokens WHERE map_id = maps.id)`,
   );
-  const selectRefs = db.prepare(`SELECT blob_ref FROM maps`);
+  const selectRefs = db.prepare(
+    `SELECT blob_ref FROM maps UNION ALL SELECT blob_ref FROM map_versions`,
+  );
+  const selectVersions = db.prepare(
+    `SELECT revision, saved_at, byte_size, blob_ref FROM map_versions
+     WHERE map_id = ? ORDER BY revision DESC`,
+  );
+  const selectVersion = db.prepare(
+    `SELECT blob_ref FROM map_versions WHERE map_id = ? AND revision = ?`,
+  );
+  const selectPinned = db.prepare(
+    `SELECT DISTINCT revision FROM share_tokens
+     WHERE map_id = ? AND revision IS NOT NULL`,
+  );
+  const insertVersion = db.prepare(
+    `INSERT INTO map_versions (map_id, revision, blob_ref, byte_size, saved_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  );
+  const deleteVersion = db.prepare(
+    `DELETE FROM map_versions WHERE map_id = ? AND revision = ?`,
+  );
+  const deleteMapVersions = db.prepare(
+    `DELETE FROM map_versions WHERE map_id = ?`,
+  );
   const upgradedAt = db.prepare(
     `SELECT applied_at FROM schema_migrations WHERE name = ?`,
   );
@@ -182,48 +214,136 @@ export function createSqliteFsAdapter(opts: {
   });
 
   type Swap =
-    | { kind: "swapped"; old: MapRow }
+    /** `freed`: blobs no row names any more, to delete after the commit. */
+    | { kind: "swapped"; old: MapRow; freed: string[] }
     | { kind: "missing" }
-    | { kind: "full" };
+    | { kind: "full" }
+    | { kind: "conflict"; revision: number };
+
+  interface SwapRequest {
+    ref: string;
+    size: number;
+    at: Date;
+    reservation: string;
+    /** What the reservation holds. */
+    growth: number;
+    cap: number;
+    ifRevision: number | undefined;
+    policy: VersionPolicy;
+    checkpoint: boolean;
+  }
 
   /**
-   * Points the map at its new blob, if the map still exists and the size
-   * change still fits. `growth` is what the reservation holds.
+   * Points the map at its new blob, if the map still exists, is still at
+   * `ifRevision` when one is named, and the size change still fits. The
+   * replaced bytes become a version or are freed (versions.ts).
    */
-  const commitSwap = db.transaction(
-    (
-      id: string,
-      ref: string,
-      size: number,
-      at: string,
-      reservation: string,
-      growth: number,
-      cap: number,
-    ): Swap => {
-      deleteReservation.run(reservation);
-      const row = selectMap.get(id) as MapRow | undefined;
-      if (!row) {
-        return { kind: "missing" };
-      }
-      const delta = size - row.byte_size;
-      if (cap > 0 && delta > growth && counted() + inFlight() + delta > cap) {
-        return { kind: "full" };
-      }
-      pointMap.run(ref, size, at, id);
-      addUsage.run(delta);
-      return { kind: "swapped", old: row };
-    },
-  );
+  const commitSwap = db.transaction((id: string, w: SwapRequest): Swap => {
+    deleteReservation.run(w.reservation);
+    const row = selectMap.get(id) as MapRow | undefined;
+    if (!row) {
+      return { kind: "missing" };
+    }
+    if (w.ifRevision !== undefined && row.revision !== w.ifRevision) {
+      return { kind: "conflict", revision: row.revision };
+    }
+    const versions = selectVersions.all(id) as MapVersion[];
+    const pinned = new Set(
+      (selectPinned.all(id) as Array<{ revision: number }>).map(
+        (r) => r.revision,
+      ),
+    );
+    const replaced: MapVersion = {
+      revision: row.revision,
+      saved_at: row.updated_at,
+      byte_size: row.byte_size,
+      blob_ref: row.blob_ref,
+    };
+    const keep = keepsReplaced(
+      w.policy,
+      row.updated_at,
+      versions[0],
+      w.at,
+      w.checkpoint || pinned.has(row.revision),
+    );
+    const dropped = pastKeep(
+      keep ? [replaced, ...versions] : versions,
+      pinned,
+      w.policy.keep,
+    );
+    const delta =
+      w.size -
+      (keep ? 0 : row.byte_size) -
+      dropped.reduce((n, v) => n + v.byte_size, 0);
+    if (
+      w.cap > 0 &&
+      delta > w.growth &&
+      counted() + inFlight() + delta > w.cap
+    ) {
+      return { kind: "full" };
+    }
+    pointMap.run(w.ref, w.size, w.at.toISOString(), row.revision + 1, id);
+    if (keep) {
+      insertVersion.run(
+        id,
+        replaced.revision,
+        replaced.blob_ref,
+        replaced.byte_size,
+        replaced.saved_at,
+      );
+    }
+    for (const v of dropped) {
+      deleteVersion.run(id, v.revision);
+    }
+    addUsage.run(delta);
+    return {
+      kind: "swapped",
+      old: row,
+      freed: [
+        ...(keep ? [] : [row.blob_ref]),
+        ...dropped.map((v) => v.blob_ref),
+      ],
+    };
+  });
 
+  /** Deletes the map's rows; the blobs to delete, or null for no map. */
   const deleteMapRows = db.transaction((id: string) => {
     const row = selectMap.get(id) as MapRow | undefined;
     if (!row) {
       return null;
     }
+    const versions = selectVersions.all(id) as MapVersion[];
     deleteMapShares.run(id);
+    deleteMapVersions.run(id);
     deleteMapRow.run(id);
-    addUsage.run(-row.byte_size);
-    return row.blob_ref;
+    addUsage.run(
+      -row.byte_size - versions.reduce((n, v) => n + v.byte_size, 0),
+    );
+    return [row.blob_ref, ...versions.map((v) => v.blob_ref)];
+  });
+
+  /** Inserts the token if its map, and its revision when it names one, exist. */
+  const insertShareChecked = db.transaction((t: ShareToken): boolean => {
+    const row = selectMap.get(t.map_id) as MapRow | undefined;
+    if (!row) {
+      return false;
+    }
+    if (
+      t.revision !== null &&
+      t.revision !== row.revision &&
+      !selectVersion.get(t.map_id, t.revision)
+    ) {
+      return false;
+    }
+    insertShare.run(
+      t.token,
+      t.map_id,
+      t.mode,
+      t.expires_at,
+      t.created_at,
+      t.revision,
+    );
+    return true;
   });
 
   const sweepRows = db.transaction(
@@ -287,9 +407,38 @@ export function createSqliteFsAdapter(opts: {
     }
     return removed;
   }
-  const refCount = db.prepare(`SELECT 1 FROM maps WHERE blob_ref = ?`);
+  const refCount = db.prepare(
+    `SELECT 1 FROM maps WHERE blob_ref = ?
+     UNION ALL SELECT 1 FROM map_versions WHERE blob_ref = ?`,
+  );
   const isReferenced = (name: string) =>
-    refCount.get(`blobs/${name}`) !== undefined;
+    refCount.get(`blobs/${name}`, `blobs/${name}`) !== undefined;
+
+  /** Streams one blob file; null when the file is gone. */
+  async function readBlob(
+    ref: string,
+    revision: number,
+  ): Promise<BlobRead | null> {
+    let handle: fsp.FileHandle;
+    try {
+      handle = await fsp.open(blobPath(ref), "r");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw err;
+    }
+    // The open handle keeps the bytes readable even if a later write
+    // replaces the file. The stream closes the handle when it ends or is
+    // destroyed.
+    try {
+      const { size } = await handle.stat();
+      return { stream: handle.createReadStream(), size, revision };
+    } catch (err) {
+      await handle.close();
+      throw err;
+    }
+  }
 
   return {
     async createMap(body, writeKeyHash, opts = {}) {
@@ -311,6 +460,7 @@ export function createSqliteFsAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         write_key_hash: writeKeyHash,
+        revision: 1,
       };
       try {
         commitCreate.immediate(row, written.reservation);
@@ -338,40 +488,60 @@ export function createSqliteFsAdapter(opts: {
       if (!existing) {
         throw new Error(`not found: ${id}`);
       }
+      // Refused before a byte is read; checked again in the swap.
+      if (
+        opts.ifRevision !== undefined &&
+        existing.revision !== opts.ifRevision
+      ) {
+        throw new RevisionConflictError(existing.revision);
+      }
       const cap = opts.maxTotalBytes ?? 0;
-      const growth = Math.max(0, body.size - existing.byte_size);
+      const policy = opts.versions ?? NO_VERSIONS;
+      const checkpoint = opts.checkpoint ?? false;
+      // A write that may keep the old bytes may grow by all of its own.
+      const growth =
+        policy.keep > 0 || checkpoint
+          ? body.size
+          : Math.max(0, body.size - existing.byte_size);
       const written = await writeReserved(id, body, growth, cap);
       if (!written) {
         throw storageFull();
       }
-      const now = new Date().toISOString();
-      const swap = commitSwap.immediate(
-        id,
-        written.ref,
-        body.size,
-        now,
-        written.reservation,
+      const at = opts.at ?? new Date();
+      const swap = commitSwap.immediate(id, {
+        ref: written.ref,
+        size: body.size,
+        at,
+        reservation: written.reservation,
         growth,
         cap,
-      );
+        ifRevision: opts.ifRevision,
+        policy,
+        checkpoint,
+      });
       if (swap.kind !== "swapped") {
         await fsp.rm(blobPath(written.ref), { force: true });
         throw swap.kind === "full"
           ? storageFull()
+          : swap.kind === "conflict"
+          ? new RevisionConflictError(swap.revision)
           : new Error(`not found: ${id}`);
       }
-      // A reader that opened the old file keeps reading it.
-      await fsp.rm(blobPath(swap.old.blob_ref), { force: true });
+      // A reader that opened an old file keeps reading it.
+      for (const ref of swap.freed) {
+        await fsp.rm(blobPath(ref), { force: true });
+      }
       return {
         ...swap.old,
         blob_ref: written.ref,
         byte_size: body.size,
-        updated_at: now,
+        updated_at: at.toISOString(),
+        revision: swap.old.revision + 1,
       };
     },
 
-    async createShareToken(mapId, expiresAt) {
-      if (!ID_RE.test(mapId) || !selectMap.get(mapId)) {
+    async createShareToken(mapId, expiresAt, revision = null) {
+      if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
       const record: ShareToken = {
@@ -380,14 +550,11 @@ export function createSqliteFsAdapter(opts: {
         mode: "read",
         expires_at: expiresAt ? expiresAt.toISOString() : null,
         created_at: new Date().toISOString(),
+        revision,
       };
-      insertShare.run(
-        record.token,
-        record.map_id,
-        record.mode,
-        record.expires_at,
-        record.created_at,
-      );
+      if (!insertShareChecked.immediate(record)) {
+        throw new Error(`not found: ${mapId}`);
+      }
       return record;
     },
 
@@ -411,39 +578,44 @@ export function createSqliteFsAdapter(opts: {
         return null;
       }
       const row = selectMap.get(id) as MapRow | undefined;
+      return row ? readBlob(row.blob_ref, row.revision) : null;
+    },
+
+    async listVersions(id) {
+      if (!ID_RE.test(id) || !selectMap.get(id)) {
+        return null;
+      }
+      return (selectVersions.all(id) as MapVersion[]).map((v) => ({ ...v }));
+    },
+
+    async getVersionBlob(id, revision) {
+      if (!ID_RE.test(id)) {
+        return null;
+      }
+      const row = selectMap.get(id) as MapRow | undefined;
       if (!row) {
         return null;
       }
-      let handle: fsp.FileHandle;
-      try {
-        handle = await fsp.open(blobPath(row.blob_ref), "r");
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-          return null;
-        }
-        throw err;
+      if (row.revision === revision) {
+        return readBlob(row.blob_ref, revision);
       }
-      // The open handle keeps the bytes readable even if a later write
-      // replaces the file. The stream closes the handle when it ends or is
-      // destroyed.
-      try {
-        const { size } = await handle.stat();
-        return { stream: handle.createReadStream(), size };
-      } catch (err) {
-        await handle.close();
-        throw err;
-      }
+      const version = selectVersion.get(id, revision) as
+        | { blob_ref: string }
+        | undefined;
+      return version ? readBlob(version.blob_ref, revision) : null;
     },
 
     async deleteMap(id) {
       if (!ID_RE.test(id)) {
         return false;
       }
-      const blobRef = deleteMapRows.immediate(id);
-      if (blobRef === null) {
+      const refs = deleteMapRows.immediate(id);
+      if (refs === null) {
         return false;
       }
-      await fsp.rm(blobPath(blobRef), { force: true });
+      for (const ref of refs) {
+        await fsp.rm(blobPath(ref), { force: true });
+      }
       return true;
     },
 

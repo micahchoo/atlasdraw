@@ -51,6 +51,7 @@ export type SimpleDialog =
   | "settings"
   | "share"
   | "my-maps"
+  | "server-versions"
   | "asset-library"
   | "onboarding";
 

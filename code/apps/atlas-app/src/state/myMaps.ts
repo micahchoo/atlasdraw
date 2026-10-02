@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // My maps: what the editor does when the user opens, starts, deletes or
-// restores a map. The maps are the PersistenceStore's `doc:<id>` slots; the
+// restores a map, or opens an earlier server version of it. The maps are the PersistenceStore's `doc:<id>` slots; the
 // MyMapsDialog shows them and calls these.
 //
 // The open map is kept before another one replaces it: its pending changes
@@ -31,7 +31,11 @@ import {
   type CameraSource,
 } from "./documentIO";
 import { isNewerBuildError } from "./persistence";
-import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
+import {
+  deleteServerMap,
+  readServerVersion,
+  saveRestoredVersion,
+} from "./remoteMapIdCache";
 
 import type { PersistenceStateStore } from "./persistenceState";
 import type { History } from "../session/history";
@@ -281,43 +285,74 @@ export async function deleteSavedMap(
   }
 }
 
-export interface RestoreContext extends MapActionContext {
+export interface VersionContext extends MapActionContext {
   client: StorageClient;
-  /** Asked before the server copy replaces the open map. */
+}
+
+export interface RestoreContext extends VersionContext {
+  /** Asked before the version replaces the open map. */
   confirm: () => Promise<boolean>;
 }
 
 /**
- * Replace the open map with the copy the server holds of it. The restored
- * map is then saved locally and pushed again, so both copies agree.
+ * One server version of the open map, admitted by the gate; null after the
+ * user was told why not.
  */
-export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
-  const id = currentDocument().id;
-  if (!(await ctx.confirm())) {
-    return;
-  }
+async function serverVersion(ctx: VersionContext, revision: number) {
   let bytes: Uint8Array | null;
   try {
-    bytes = await restoreFromServer(ctx.client, id);
+    bytes = await readServerVersion(ctx.client, currentDocument().id, revision);
   } catch (err) {
-    console.warn("[atlasdraw] server backup read failed", err);
+    console.warn("[atlasdraw] server version read failed", err);
     ctx.notify?.error(
-      "Could not get the server backup. Your map did not change.",
+      "Could not get this version from the server. Your map did not change.",
     );
-    return;
+    return null;
   }
   if (!bytes) {
-    ctx.notify?.error("This map has no server backup.");
-    return;
+    ctx.notify?.error("This map has no server copy.");
+    return null;
   }
   const decoded = await admit(new Blob([bytes as BlobPart]), "share");
   if (!decoded.ok) {
     ctx.notify?.error(
-      `The server backup cannot open: ${decoded.reason} Your map did not change.`,
+      `This version cannot open: ${decoded.reason} Your map did not change.`,
+    );
+    return null;
+  }
+  return { bytes, decoded };
+}
+
+/**
+ * Replace the open map with one of its server versions, after a yes. The
+ * server saves the version as a new revision and keeps the one it replaces
+ * (docs/architecture/adr/0020-server-version-history.md), so a restore is
+ * never final. The restored map is then saved here too.
+ */
+export async function restoreServerVersion(
+  ctx: RestoreContext,
+  revision: number,
+): Promise<void> {
+  const id = currentDocument().id;
+  if (!(await ctx.confirm())) {
+    return;
+  }
+  const version = await serverVersion(ctx, revision);
+  if (!version) {
+    return;
+  }
+  try {
+    await saveRestoredVersion(ctx.client, version.bytes, id);
+  } catch (err) {
+    console.warn("[atlasdraw] server version restore failed", err);
+    ctx.notify?.error(
+      `The server did not take the restore${
+        err instanceof Error ? `: ${err.message}` : "."
+      } Your map did not change.`,
     );
     return;
   }
-  const opened = await loadDocument(decoded, ctx.api, {
+  const opened = await loadDocument(version.decoded, ctx.api, {
     map: ctx.map,
     onDropped: (message) => ctx.notify?.error(message),
   });
@@ -326,6 +361,35 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
   }
   await saveOpened(ctx);
   ctx.notify?.success(
-    `Restored "${decoded.doc.manifest.title}" from the server backup`,
+    `Restored an earlier version of "${version.decoded.doc.manifest.title}"`,
+  );
+}
+
+/**
+ * Open one server version of the open map as a new map of its own: a look at
+ * an old version that changes neither the open map nor the server.
+ */
+export async function openServerVersionCopy(
+  ctx: VersionContext,
+  revision: number,
+): Promise<void> {
+  const version = await serverVersion(ctx, revision);
+  if (!version || !(await keepOpenMap(ctx))) {
+    return;
+  }
+  const copy = {
+    ...version.decoded,
+    doc: copyOfSharedMap(version.decoded.doc),
+  };
+  const opened = await loadDocument(copy, ctx.api, {
+    map: ctx.map,
+    onDropped: (message) => ctx.notify?.error(message),
+  });
+  if (!opened) {
+    return;
+  }
+  await saveOpened(ctx);
+  ctx.notify?.success(
+    `Opened a copy of an earlier version of "${copy.doc.manifest.title}"`,
   );
 }

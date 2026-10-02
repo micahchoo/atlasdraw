@@ -304,6 +304,13 @@ a key at its next save, so no owner action is necessary (ADR-0017). The
 server keeps the old maps for `LEGACY_MAP_GRACE_DAYS` (default 90) after the
 upgrade; then the sweep deletes each one that no live share link reads.
 
+Migration `005_map_versions` gives every map a revision and starts each
+existing map at revision 1. From then on the server keeps earlier versions
+of each map (ADR-0020), so the stored size grows: up to `MAP_VERSIONS_KEPT`
+copies of each map, inside `MAX_TOTAL_BYTES`. Set `MAP_VERSIONS_KEPT=0`
+before you upgrade if your disk has no room for them. An older browser
+client saves without naming a revision and keeps working.
+
 The images now run as unprivileged users. A volume that an older image made
 is owned by root, so give it to the new user once, before you start:
 
@@ -329,14 +336,18 @@ explicit migration steps.
   capability, so Caddy, nginx and the storage server write `[redacted]` in
   its place (in `/m/…`, `/embed/…`, `/api/share/…` and the `Referer`).
 - **Share links last until the owner stops them.** The Share dialog can
-  give a link a 7- or 30-day expiry instead. A link always shows the
-  map's latest saved version, so a save updates every link and every
-  embed made from it. Links made before this release keep their 7-day
-  expiry.
+  give a link a 7- or 30-day expiry instead. A link shows the map's
+  latest saved version, so a save updates every link and every embed made
+  from it, unless the owner froze it on one version ("This version only").
+  Links made before this release keep their 7-day expiry.
 - **Write keys.** Each map has a write key that only the owner's browser
   holds (ADR-0017). Without it, nobody can change the map, and a share
-  link never gives it. There is no key recovery: if a browser loses its
-  storage, its next save makes a new map.
+  link never gives it. The server cannot recover a key. The owner's own
+  copy is **My maps → Back up my maps**, a file with the maps and their
+  keys; tell your users to keep one.
+- **Server versions.** The server keeps earlier versions of each map
+  (ADR-0020). The owner opens them with **File → Server versions…** and can
+  restore one or open it as a copy. Only the write key reads them.
 - **Storage capacity.** An average atlasdraw document is 30–500 KB
   compressed; basemap pmtiles (43 MB) and its glyphs (11 MB) are baked
   into the web image, not the volume. 10 GB of bucket space holds ~30–100k maps. A map with a write
@@ -350,18 +361,20 @@ bound what one client, or all of them, can take. Each default is the
 server's; the compose file passes the value from `.env`. Never set one to
 an empty value: an empty number reads as `0`, which turns that limit off.
 
-| Var                                      | Default                | What it limits                                                                                                                                        |
-| ---------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MAX_TOTAL_BYTES`                        | `10737418240` (10 GiB) | All stored maps together, writes in flight included. A new map or a growing save past it gets `507`. The check and the write cannot race. `0`: no cap |
-| `MAX_MAP_BYTES`                          | `52428800` (50 MiB)    | One map. Larger gets `413` before a byte is read. nginx (minimal stack) allows 50 MiB too                                                             |
-| `MAX_NEW_MAPS_PER_IP`                    | `60` per hour          | New maps from one client address (`429`). `NEW_MAPS_WINDOW_MS` sets the window                                                                        |
-| `MAX_CONCURRENT_PER_IP`                  | `16`                   | Requests one client address has open at once (`429`)                                                                                                  |
-| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS` | `120` per `60000` ms   | Requests per client address per window (`429`). `/health` is never limited                                                                            |
-| `IDLE_TIMEOUT_MS`                        | `30000`                | A connection with no bytes moving either way is closed: a stalled upload or a reader that stopped reading                                             |
-| `REQUEST_TIMEOUT_MS`                     | `300000`               | The time to send one whole request, body included                                                                                                     |
-| `SWEEP_INTERVAL_MS`                      | `3600000`              | How often expired links, orphan blobs and (after the grace) old keyless maps are deleted. Also once at start. `0`: never                              |
-| `LEGACY_MAP_GRACE_DAYS`                  | `90`                   | How long maps from before write keys are kept after the upgrade                                                                                       |
-| `SHUTDOWN_TIMEOUT_MS`                    | `25000`                | How long a stop waits for requests in flight. Compose gives the container 30 s                                                                        |
+| Var                                      | Default                | What it limits                                                                                                                                                   |
+| ---------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MAX_TOTAL_BYTES`                        | `10737418240` (10 GiB) | All stored maps together, writes in flight included. A new map or a growing save past it gets `507`. The check and the write cannot race. `0`: no cap            |
+| `MAX_MAP_BYTES`                          | `52428800` (50 MiB)    | One map. Larger gets `413` before a byte is read. nginx (minimal stack) allows 50 MiB too                                                                        |
+| `MAX_NEW_MAPS_PER_IP`                    | `60` per hour          | New maps from one client address (`429`). `NEW_MAPS_WINDOW_MS` sets the window                                                                                   |
+| `MAX_CONCURRENT_PER_IP`                  | `16`                   | Requests one client address has open at once (`429`)                                                                                                             |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS` | `120` per `60000` ms   | Requests per client address per window (`429`). `/health` is never limited                                                                                       |
+| `IDLE_TIMEOUT_MS`                        | `30000`                | A connection with no bytes moving either way is closed: a stalled upload or a reader that stopped reading                                                        |
+| `REQUEST_TIMEOUT_MS`                     | `300000`               | The time to send one whole request, body included                                                                                                                |
+| `SWEEP_INTERVAL_MS`                      | `3600000`              | How often expired links, orphan blobs and (after the grace) old keyless maps are deleted. Also once at start. `0`: never                                         |
+| `LEGACY_MAP_GRACE_DAYS`                  | `90`                   | How long maps from before write keys are kept after the upgrade                                                                                                  |
+| `MAP_VERSIONS_KEPT`                      | `20`                   | Earlier versions kept of each map, besides its latest bytes. They count against `MAX_TOTAL_BYTES`. A version a frozen link reads is always kept. `0`: no history |
+| `MAP_VERSION_INTERVAL_MINUTES`           | `10`                   | The least time between two kept versions. A save that stood for less, and came less than this after the last kept version, is not kept. `0`: every save          |
+| `SHUTDOWN_TIMEOUT_MS`                    | `25000`                | How long a stop waits for requests in flight. Compose gives the container 30 s                                                                                   |
 
 An IPv6 client counts by its /64 for every per-address limit. Behind Caddy
 the address is the client's (`TRUST_PROXY=loopback,uniquelocal`: trust a

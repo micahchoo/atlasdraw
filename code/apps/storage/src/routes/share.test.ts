@@ -53,7 +53,12 @@ describe("share routes", () => {
     id: string,
     writeKey: string,
     body?: unknown,
-  ): Promise<{ token: string; url: string; expires_at: string | null }> {
+  ): Promise<{
+    token: string;
+    url: string;
+    expires_at: string | null;
+    revision: number | null;
+  }> {
     const res = await app.inject({
       method: "POST",
       url: `/maps/${id}/share`,
@@ -109,6 +114,43 @@ describe("share routes", () => {
           url: `/maps/${id}/share`,
           headers: bearer(writeKey),
           payload: { expires_in_days: days },
+        });
+        expect(res.statusCode).toBe(400);
+      },
+    );
+
+    it("freezes a link on the revision the owner names", async () => {
+      const { id, writeKey } = await createMap("v1");
+
+      const frozen = await share(id, writeKey, { revision: 1 });
+      const latest = await share(id, writeKey);
+
+      expect(frozen.revision).toBe(1);
+      expect(latest.revision).toBeNull();
+    });
+
+    it("returns 404 for a revision the server does not keep", async () => {
+      const { id, writeKey } = await createMap("v1");
+
+      const res = await app.inject({
+        method: "POST",
+        url: `/maps/${id}/share`,
+        headers: bearer(writeKey),
+        payload: { revision: 2 },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it.each([[0], [-1], [1.5], ["1"], [{}]])(
+      "returns 400 for revision %j",
+      async (revision) => {
+        const { id, writeKey } = await createMap();
+        const res = await app.inject({
+          method: "POST",
+          url: `/maps/${id}/share`,
+          headers: bearer(writeKey),
+          payload: { revision },
         });
         expect(res.statusCode).toBe(400);
       },
@@ -199,6 +241,22 @@ describe("share routes", () => {
 
       expect((await readShared(first.token)).body).toBe("v2");
       expect((await readShared(second.token)).body).toBe("v2");
+    });
+
+    it("a frozen link keeps its bytes after later saves", async () => {
+      const { id, writeKey } = await createMap("published");
+      const frozen = await share(id, writeKey, { revision: 1 });
+
+      for (const bytes of ["draft 1", "draft 2"]) {
+        await app.inject({
+          method: "PUT",
+          url: `/maps/${id}`,
+          headers: { ...OCTETS, ...bearer(writeKey) },
+          payload: Buffer.from(bytes),
+        });
+      }
+
+      expect((await readShared(frozen.token)).body).toBe("published");
     });
 
     it("returns 404 for an unknown but well-formed token", async () => {

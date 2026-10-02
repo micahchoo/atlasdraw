@@ -224,12 +224,14 @@ describe("what a command does", () => {
     expect(s.view.getState().dialog).toEqual({ kind: "export", format: "pdf" });
   });
 
-  it("Restore from server backup is offered only when there is a backup", () => {
+  it("Server versions is offered only when the map has a server copy, and opens its dialog", () => {
     const { s } = session();
-    const restore = commandById("file.restore-backup")!;
-    expect(restore.available(s)).toBe(false);
+    const versions = commandById("file.server-versions")!;
+    expect(versions.available(s)).toBe(false);
     s.view.setState({ backupAvailable: true });
-    expect(restore.available(s)).toBe(true);
+    expect(versions.available(s)).toBe(true);
+    run(s, "file.server-versions");
+    expect(s.view.getState().dialog).toEqual({ kind: "server-versions" });
   });
 
   it("commands that work on the drawing wait for it to mount", () => {

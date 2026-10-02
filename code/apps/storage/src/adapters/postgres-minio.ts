@@ -3,8 +3,9 @@
 // Full stack: Postgres for metadata, an S3-compatible store (MinIO, AWS S3)
 // for the blobs. Same semantics as sqlite-fs: every write streams to a NEW
 // object (`maps/<id>.<random>.atlasdraw`), one transaction checks the row
-// still exists, points it at the new object and counts the size change, and
-// only then is the old object deleted. Bodies stream in and out with a known
+// still exists, points it at the new object, keeps the old one as a version
+// or not (versions.ts) and counts the size change, and only then are the
+// objects no row names deleted. Bodies stream in and out with a known
 // length; no blob is held whole in memory. The size cap: see types.ts.
 //
 // The bucket is BLOB_BUCKET in BLOB_REGION. If it does not exist, the adapter
@@ -30,13 +31,16 @@ import { ID_RE } from "../constants";
 import { migratePostgres } from "../db/migrate";
 import { WRITE_KEYS_MIGRATION } from "../db/migrations";
 import { measured } from "../lib/body";
-import { storageFull } from "../lib/errors";
+import { RevisionConflictError, storageFull } from "../lib/errors";
 import { logger } from "../logger";
+import { NO_VERSIONS, keepsReplaced, pastKeep } from "../versions";
 
 import type { PoolClient } from "pg";
 import type {
   BlobBody,
+  BlobRead,
   MapRecord,
+  MapVersion,
   ShareToken,
   StorageClient,
   SweepResult,
@@ -59,6 +63,7 @@ interface MapRow {
   blob_ref: string;
   byte_size: number | string;
   write_key_hash: string | null;
+  revision: number | string;
 }
 
 interface ShareRow {
@@ -67,6 +72,7 @@ interface ShareRow {
   mode: string;
   expires_at: Date | string | null;
   created_at: Date | string;
+  revision: number | string | null;
 }
 
 function isoize(v: Date | string): string {
@@ -84,6 +90,23 @@ function rowToMap(row: MapRow): MapRecord {
         ? parseInt(row.byte_size, 10)
         : row.byte_size,
     write_key_hash: row.write_key_hash,
+    revision: Number(row.revision),
+  };
+}
+
+interface VersionRow {
+  revision: number | string;
+  saved_at: Date | string;
+  byte_size: number | string;
+  blob_ref: string;
+}
+
+function rowToVersion(row: VersionRow): MapVersion {
+  return {
+    revision: Number(row.revision),
+    saved_at: isoize(row.saved_at),
+    byte_size: Number(row.byte_size),
+    blob_ref: row.blob_ref,
   };
 }
 
@@ -94,6 +117,7 @@ function rowToShare(row: ShareRow): ShareToken {
     mode: "read",
     expires_at: row.expires_at === null ? null : isoize(row.expires_at),
     created_at: isoize(row.created_at),
+    revision: row.revision === null ? null : Number(row.revision),
   };
 }
 
@@ -133,7 +157,11 @@ export function createPostgresMinioAdapter(opts: {
     forcePathStyle: opts.blobForcePathStyle ?? true,
   });
 
-  let bucketReady = false;
+  // One setup at a time: concurrent first writes must not each send
+  // CreateBucket. Some servers (SeaweedFS) answer the second one with
+  // BucketAlreadyExists, which reads as "another account owns it". A setup
+  // that fails is forgotten, so the next call tries again.
+  let bucketReady: Promise<void> | null = null;
 
   // The schema setup runs once per process. A setup that fails (Postgres not
   // up yet at a cold start) is forgotten, so the next call tries again.
@@ -178,13 +206,16 @@ export function createPostgresMinioAdapter(opts: {
         }
       }
     }
-    bucketReady = true;
   }
 
-  async function ensureBucket(): Promise<void> {
+  function ensureBucket(): Promise<void> {
     if (!bucketReady) {
-      await headOrCreateBucket();
+      bucketReady = headOrCreateBucket().catch((err: unknown) => {
+        bucketReady = null;
+        throw err;
+      });
     }
+    return bucketReady;
   }
 
   /** Streams `body` to `key`; exactly `body.size` bytes or a rejection. */
@@ -226,7 +257,7 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   const MAP_COLUMNS =
-    "id, created_at, updated_at, blob_ref, byte_size, write_key_hash";
+    "id, created_at, updated_at, blob_ref, byte_size, write_key_hash, revision";
 
   async function selectMap(id: string): Promise<MapRow | undefined> {
     const res = await pool.query<MapRow>(
@@ -322,6 +353,36 @@ export function createPostgresMinioAdapter(opts: {
     return { ref, reservation };
   }
 
+  /**
+   * Streams one object; null when it is gone. Any other S3 error
+   * propagates.
+   */
+  async function readObject(
+    key: string,
+    byteSize: number,
+    revision: number,
+  ): Promise<BlobRead | null> {
+    await ensureBucket();
+    try {
+      const res = await s3.send(
+        new GetObjectCommand({ Bucket: BUCKET, Key: key }),
+      );
+      // In Node the SDK's Body is an IncomingMessage: a Readable that
+      // streams from the socket.
+      const body = res.Body;
+      if (!(body instanceof Readable)) {
+        return null;
+      }
+      return { stream: body, size: res.ContentLength ?? byteSize, revision };
+    } catch (err: unknown) {
+      const name = (err as { name?: string })?.name ?? "";
+      if (name === "NoSuchKey" || name === "NotFound") {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async function removeOrphans(olderThan: Date): Promise<number> {
     await ensureBucket();
     let removed = 0;
@@ -343,7 +404,8 @@ export function createPostgresMinioAdapter(opts: {
           continue;
         }
         const live = await pool.query(
-          `SELECT 1 FROM maps WHERE blob_ref = $1`,
+          `SELECT 1 FROM maps WHERE blob_ref = $1
+           UNION ALL SELECT 1 FROM map_versions WHERE blob_ref = $1`,
           [object.Key],
         );
         if (live.rowCount === 0) {
@@ -372,7 +434,7 @@ export function createPostgresMinioAdapter(opts: {
       try {
         await inTransaction(async (db) => {
           await db.query(
-            `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, 1)`,
             [id, now, now, written.ref, body.size, writeKeyHash],
           );
           await db.query(
@@ -395,6 +457,7 @@ export function createPostgresMinioAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         write_key_hash: writeKeyHash,
+        revision: 1,
       };
     },
 
@@ -416,16 +479,28 @@ export function createPostgresMinioAdapter(opts: {
       if (!existing) {
         throw new Error(`not found: ${id}`);
       }
+      const known = rowToMap(existing);
+      // Refused before a byte is read; checked again in the swap.
+      if (opts.ifRevision !== undefined && known.revision !== opts.ifRevision) {
+        throw new RevisionConflictError(known.revision);
+      }
       const cap = opts.maxTotalBytes ?? 0;
-      const growth = Math.max(0, body.size - rowToMap(existing).byte_size);
+      const policy = opts.versions ?? NO_VERSIONS;
+      const checkpoint = opts.checkpoint ?? false;
+      // A write that may keep the old bytes may grow by all of its own.
+      const growth =
+        policy.keep > 0 || checkpoint
+          ? body.size
+          : Math.max(0, body.size - known.byte_size);
       const written = await writeReserved(id, body, growth, cap);
       if (!written) {
         throw storageFull();
       }
-      const now = new Date();
+      const now = opts.at ?? new Date();
       let swap:
-        | { kind: "swapped"; old: MapRecord }
-        | { kind: "missing" | "full" };
+        | { kind: "swapped"; old: MapRecord; freed: string[] }
+        | { kind: "missing" | "full" }
+        | { kind: "conflict"; revision: number };
       try {
         swap = await inTransaction(async (db) => {
           await db.query(`DELETE FROM storage_reservations WHERE id = $1`, [
@@ -440,7 +515,50 @@ export function createPostgresMinioAdapter(opts: {
             return { kind: "missing" as const };
           }
           const old = rowToMap(row);
-          const delta = body.size - old.byte_size;
+          if (
+            opts.ifRevision !== undefined &&
+            old.revision !== opts.ifRevision
+          ) {
+            return { kind: "conflict" as const, revision: old.revision };
+          }
+          const versions = (
+            await db.query<VersionRow>(
+              `SELECT revision, saved_at, byte_size, blob_ref FROM map_versions
+               WHERE map_id = $1 ORDER BY revision DESC`,
+              [id],
+            )
+          ).rows.map(rowToVersion);
+          const pinned = new Set(
+            (
+              await db.query<{ revision: string }>(
+                `SELECT DISTINCT revision FROM share_tokens
+                 WHERE map_id = $1 AND revision IS NOT NULL`,
+                [id],
+              )
+            ).rows.map((r) => Number(r.revision)),
+          );
+          const replaced: MapVersion = {
+            revision: old.revision,
+            saved_at: old.updated_at,
+            byte_size: old.byte_size,
+            blob_ref: old.blob_ref,
+          };
+          const keep = keepsReplaced(
+            policy,
+            old.updated_at,
+            versions[0],
+            now,
+            checkpoint || pinned.has(old.revision),
+          );
+          const dropped = pastKeep(
+            keep ? [replaced, ...versions] : versions,
+            pinned,
+            policy.keep,
+          );
+          const delta =
+            body.size -
+            (keep ? 0 : old.byte_size) -
+            dropped.reduce((n, v) => n + v.byte_size, 0);
           if (cap > 0 && delta > growth) {
             const { counted, inFlight } = await usage(db);
             if (counted + inFlight + delta > cap) {
@@ -448,14 +566,36 @@ export function createPostgresMinioAdapter(opts: {
             }
           }
           await db.query(
-            `UPDATE maps SET blob_ref = $1, byte_size = $2, updated_at = $3 WHERE id = $4`,
+            `UPDATE maps SET blob_ref = $1, byte_size = $2, updated_at = $3,
+               revision = revision + 1
+             WHERE id = $4`,
             [written.ref, body.size, now, id],
           );
+          if (keep) {
+            await db.query(
+              `INSERT INTO map_versions (map_id, revision, blob_ref, byte_size, saved_at)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [id, old.revision, old.blob_ref, old.byte_size, old.updated_at],
+            );
+          }
+          if (dropped.length > 0) {
+            await db.query(
+              `DELETE FROM map_versions WHERE map_id = $1 AND revision = ANY($2)`,
+              [id, dropped.map((v) => v.revision)],
+            );
+          }
           await db.query(
             `UPDATE storage_usage SET total_bytes = total_bytes + $1 WHERE id = 1`,
             [delta],
           );
-          return { kind: "swapped" as const, old };
+          return {
+            kind: "swapped" as const,
+            old,
+            freed: [
+              ...(keep ? [] : [old.blob_ref]),
+              ...dropped.map((v) => v.blob_ref),
+            ],
+          };
         });
       } catch (err) {
         await release(written.reservation);
@@ -466,41 +606,69 @@ export function createPostgresMinioAdapter(opts: {
         await deleteBlob(written.ref).catch(() => undefined);
         throw swap.kind === "full"
           ? storageFull()
+          : swap.kind === "conflict"
+          ? new RevisionConflictError(swap.revision)
           : new Error(`not found: ${id}`);
       }
-      // The orphan sweep removes it if this delete fails.
-      await deleteBlob(swap.old.blob_ref).catch((err: unknown) =>
-        logger.warn({ err }, "could not delete a replaced blob"),
-      );
+      // The orphan sweep removes any that this cannot delete.
+      for (const ref of swap.freed) {
+        await deleteBlob(ref).catch((err: unknown) =>
+          logger.warn({ err }, "could not delete a replaced blob"),
+        );
+      }
       return {
         ...swap.old,
         blob_ref: written.ref,
         byte_size: body.size,
         updated_at: now.toISOString(),
+        revision: swap.old.revision + 1,
       };
     },
 
-    async createShareToken(mapId, expiresAt) {
+    async createShareToken(mapId, expiresAt, revision = null) {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
       await ensureSchema();
-      if (!(await selectMap(mapId))) {
-        throw new Error(`not found: ${mapId}`);
-      }
       const token = nanoid(21);
       const now = new Date();
-      await pool.query(
-        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [token, mapId, "read", expiresAt, now],
-      );
+      // The map row is locked, so no write can prune the version between
+      // the check and the insert.
+      const made = await inTransaction(async (db) => {
+        const res = await db.query<{ revision: string }>(
+          `SELECT revision FROM maps WHERE id = $1 FOR UPDATE`,
+          [mapId],
+        );
+        const row = res.rows[0];
+        if (!row) {
+          return false;
+        }
+        if (revision !== null && revision !== Number(row.revision)) {
+          const kept = await db.query(
+            `SELECT 1 FROM map_versions WHERE map_id = $1 AND revision = $2`,
+            [mapId, revision],
+          );
+          if (kept.rowCount === 0) {
+            return false;
+          }
+        }
+        await db.query(
+          `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, revision)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [token, mapId, "read", expiresAt, now, revision],
+        );
+        return true;
+      });
+      if (!made) {
+        throw new Error(`not found: ${mapId}`);
+      }
       return {
         token,
         map_id: mapId,
         mode: "read",
         expires_at: expiresAt ? expiresAt.toISOString() : null,
         created_at: now.toISOString(),
+        revision,
       };
     },
 
@@ -510,7 +678,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<ShareRow>(
-        `SELECT token, map_id, mode, expires_at, created_at
+        `SELECT token, map_id, mode, expires_at, created_at, revision
          FROM share_tokens WHERE token = $1`,
         [token],
       );
@@ -534,8 +702,15 @@ export function createPostgresMinioAdapter(opts: {
         return false;
       }
       await ensureSchema();
-      const blobRef = await inTransaction(async (db) => {
+      const refs = await inTransaction(async (db) => {
         await db.query(`DELETE FROM share_tokens WHERE map_id = $1`, [id]);
+        const versions = await db.query<{
+          blob_ref: string;
+          byte_size: string;
+        }>(
+          `DELETE FROM map_versions WHERE map_id = $1 RETURNING blob_ref, byte_size`,
+          [id],
+        );
         const res = await db.query<{ blob_ref: string; byte_size: string }>(
           `DELETE FROM maps WHERE id = $1 RETURNING blob_ref, byte_size`,
           [id],
@@ -544,16 +719,19 @@ export function createPostgresMinioAdapter(opts: {
         if (!row) {
           return null;
         }
+        const gone = [row, ...versions.rows];
         await db.query(
           `UPDATE storage_usage SET total_bytes = total_bytes - $1 WHERE id = 1`,
-          [row.byte_size],
+          [gone.reduce((n, r) => n + Number(r.byte_size), 0)],
         );
-        return row.blob_ref;
+        return gone.map((r) => r.blob_ref);
       });
-      if (blobRef === null) {
+      if (refs === null) {
         return false;
       }
-      await deleteBlob(blobRef);
+      for (const ref of refs) {
+        await deleteBlob(ref);
+      }
       return true;
     },
 
@@ -624,29 +802,50 @@ export function createPostgresMinioAdapter(opts: {
       if (!row) {
         return null;
       }
-      await ensureBucket();
-      const key = row.blob_ref;
-      try {
-        const res = await s3.send(
-          new GetObjectCommand({ Bucket: BUCKET, Key: key }),
-        );
-        // In Node the SDK's Body is an IncomingMessage: a Readable that
-        // streams from the socket.
-        const body = res.Body;
-        if (!(body instanceof Readable)) {
-          return null;
-        }
-        return {
-          stream: body,
-          size: res.ContentLength ?? rowToMap(row).byte_size,
-        };
-      } catch (err: unknown) {
-        const name = (err as { name?: string })?.name ?? "";
-        if (name === "NoSuchKey" || name === "NotFound") {
-          return null;
-        }
-        throw err;
+      return readObject(
+        row.blob_ref,
+        Number(row.byte_size),
+        Number(row.revision),
+      );
+    },
+
+    async listVersions(id) {
+      if (!ID_RE.test(id)) {
+        return null;
       }
+      await ensureSchema();
+      if (!(await selectMap(id))) {
+        return null;
+      }
+      const res = await pool.query<VersionRow>(
+        `SELECT revision, saved_at, byte_size, blob_ref FROM map_versions
+         WHERE map_id = $1 ORDER BY revision DESC`,
+        [id],
+      );
+      return res.rows.map(rowToVersion);
+    },
+
+    async getVersionBlob(id, revision) {
+      if (!ID_RE.test(id)) {
+        return null;
+      }
+      await ensureSchema();
+      const row = await selectMap(id);
+      if (!row) {
+        return null;
+      }
+      if (Number(row.revision) === revision) {
+        return readObject(row.blob_ref, Number(row.byte_size), revision);
+      }
+      const res = await pool.query<VersionRow>(
+        `SELECT revision, saved_at, byte_size, blob_ref FROM map_versions
+         WHERE map_id = $1 AND revision = $2`,
+        [id, revision],
+      );
+      const version = res.rows[0] ? rowToVersion(res.rows[0]) : null;
+      return version
+        ? readObject(version.blob_ref, version.byte_size, revision)
+        : null;
     },
 
     async ping(): Promise<void> {

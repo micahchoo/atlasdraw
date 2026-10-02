@@ -17,7 +17,8 @@ import {
   distinctTitles,
   deleteSavedMap,
   openSavedMap,
-  restoreServerBackup,
+  openServerVersionCopy,
+  restoreServerVersion,
   startNewMap,
 } from "../myMaps";
 import { createPersistenceStore, type PersistenceStore } from "../persistence";
@@ -331,41 +332,57 @@ describe("deleteSavedMap", () => {
   });
 });
 
-describe("restoreServerBackup", () => {
+describe("server versions", () => {
   async function serverHolding(file: AtlasdrawDocument) {
     const bytes = await blobBytes(await write(file));
     const client = {
       createMap: vi.fn(async () => ({
-        map: { id: "map000000000000000001" },
+        map: { id: "map000000000000000001", revision: 1 },
         writeKey: "key-1",
       })),
-      updateMap: vi.fn(async () => ({})),
-      readMap: vi.fn(async () => bytes.slice().buffer),
+      updateMap: vi.fn(async () => ({ revision: 2 })),
+      readVersion: vi.fn(
+        async (_id: string, _key: string, revision: number) => ({
+          bytes: bytes.slice().buffer,
+          revision,
+        }),
+      ),
     } as unknown as StorageClient;
     await buildRemoteSaveCallback(client)(new Blob(["x"]), file.manifest.id);
     return client;
   }
 
-  it("replaces the open map with the server copy after a yes", async () => {
+  it("restores a version after a yes, as a new server revision that keeps the one it replaces", async () => {
     fx = makeFakeExcalidraw([{ id: "local-edit", type: "ellipse" }]);
     openDocument(createDocument({ id: A, title: "Local" }, sceneOf(fx.api)));
     const client = await serverHolding(
       savedFile(A, "From server", "2026-05-02T00:00:00.000Z", "server-el"),
     );
 
-    await restoreServerBackup({
-      api: fx.api,
-      persistence,
-      history,
-      notify,
-      client,
-      confirm: async () => true,
-    });
+    await restoreServerVersion(
+      {
+        api: fx.api,
+        persistence,
+        history,
+        notify,
+        client,
+        confirm: async () => true,
+      },
+      1,
+    );
 
     expect(currentDocument().snapshot().title).toBe("From server");
     expect(fx.all().map((e) => e.id)).toEqual(["server-el"]);
+    expect(client.readVersion).toHaveBeenCalledWith(
+      "map000000000000000001",
+      "key-1",
+      1,
+    );
+    expect(
+      (client.updateMap as ReturnType<typeof vi.fn>).mock.calls[0]![3],
+    ).toEqual({ ifRevision: 1, checkpoint: true });
     expect(notify.success).toHaveBeenCalledWith(
-      'Restored "From server" from the server backup',
+      'Restored an earlier version of "From server"',
     );
   });
 
@@ -376,41 +393,68 @@ describe("restoreServerBackup", () => {
       savedFile(A, "From server", "2026-05-02T00:00:00.000Z"),
     );
 
-    await restoreServerBackup({
-      api: fx.api,
-      persistence,
-      history,
-      notify,
-      client,
-      confirm: async () => false,
-    });
+    await restoreServerVersion(
+      {
+        api: fx.api,
+        persistence,
+        history,
+        notify,
+        client,
+        confirm: async () => false,
+      },
+      1,
+    );
 
     expect(currentDocument().snapshot().title).toBe("Local");
     expect(fx.all().map((e) => e.id)).toEqual(["local-edit"]);
+    expect(client.readVersion).not.toHaveBeenCalled();
   });
 
-  it("tells the user when the server copy cannot be read", async () => {
+  it("tells the user when the version cannot be read, and writes nothing", async () => {
     fx = makeFakeExcalidraw([{ id: "local-edit", type: "ellipse" }]);
     openDocument(createDocument({ id: A, title: "Local" }, sceneOf(fx.api)));
     const client = await serverHolding(
       savedFile(A, "From server", "2026-05-02T00:00:00.000Z"),
     );
-    (client.readMap as ReturnType<typeof vi.fn>).mockResolvedValue(
-      new Uint8Array([1, 2, 3]).buffer,
-    );
-
-    await restoreServerBackup({
-      api: fx.api,
-      persistence,
-      history,
-      notify,
-      client,
-      confirm: async () => true,
+    (client.readVersion as ReturnType<typeof vi.fn>).mockResolvedValue({
+      bytes: new Uint8Array([1, 2, 3]).buffer,
+      revision: 1,
     });
 
-    expect(currentDocument().snapshot().title).toBe("Local");
-    expect(notify.error).toHaveBeenCalledWith(
-      expect.stringMatching(/^The server backup cannot open: .*did not change/),
+    await restoreServerVersion(
+      {
+        api: fx.api,
+        persistence,
+        history,
+        notify,
+        client,
+        confirm: async () => true,
+      },
+      1,
     );
+
+    expect(currentDocument().snapshot().title).toBe("Local");
+    expect(client.updateMap).not.toHaveBeenCalled();
+    expect(notify.error).toHaveBeenCalledWith(
+      expect.stringMatching(/^This version cannot open: .*did not change/),
+    );
+  });
+
+  it("opens a version as a copy with its own id, and the server map stays as it is", async () => {
+    fx = makeFakeExcalidraw([{ id: "local-edit", type: "ellipse" }]);
+    openDocument(createDocument({ id: A, title: "Local" }, sceneOf(fx.api)));
+    const client = await serverHolding(
+      savedFile(A, "From server", "2026-05-02T00:00:00.000Z", "server-el"),
+    );
+
+    await openServerVersionCopy(
+      { api: fx.api, persistence, history, notify, client },
+      1,
+    );
+
+    expect(currentDocument().id).not.toBe(A);
+    expect(currentDocument().snapshot().title).toBe("From server");
+    expect(fx.all().map((e) => e.id)).toEqual(["server-el"]);
+    expect(client.updateMap).not.toHaveBeenCalled();
   });
 });

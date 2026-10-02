@@ -203,4 +203,23 @@ describe("loadConfig", () => {
       );
     });
   });
+
+  describe("MAP_VERSIONS_KEPT and MAP_VERSION_INTERVAL_MINUTES", () => {
+    const base = { STORAGE_MODE: "sqlite-fs", DATA_DIR: "/tmp/x" };
+
+    it("default to 20 versions, at least 10 minutes apart", () => {
+      const cfg = loadConfig(base);
+      expect(cfg.MAP_VERSIONS_KEPT).toBe(20);
+      expect(cfg.MAP_VERSION_INTERVAL_MINUTES).toBe(10);
+    });
+
+    it("take 0 for no history, and refuse a negative count by name", () => {
+      expect(loadConfig({ ...base, MAP_VERSIONS_KEPT: "0" })).toMatchObject({
+        MAP_VERSIONS_KEPT: 0,
+      });
+      expect(() => loadConfig({ ...base, MAP_VERSIONS_KEPT: "-1" })).toThrow(
+        /MAP_VERSIONS_KEPT/,
+      );
+    });
+  });
 });
