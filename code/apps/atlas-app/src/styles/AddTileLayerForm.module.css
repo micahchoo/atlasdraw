@@ -59,28 +59,3 @@
   gap: 8px;
   margin-top: 4px;
 }
-
-.button {
-  padding: 3px 10px;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: var(--ad-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.button:hover {
-  background: var(--ad-surface-inset);
-}
-
-.buttonPrimary {
-  background: var(--ad-accent);
-  border-color: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-}
-
-.buttonPrimary:hover {
-  background: var(--ad-accent-hover);
-}

@@ -24,6 +24,8 @@ import React, { useEffect, useRef, useState } from "react";
 
 import styles from "../styles/CommentDraftBubble.module.css";
 
+import { Button } from "./Button";
+
 export interface CommentDraftBubbleProps {
   /** Projected screen-x of the pending anchor, in overlay coordinates. */
   screenX: number;
@@ -100,25 +102,25 @@ export function CommentDraftBubble(
         {provenance}
       </div>
       <div role="group" aria-label="Anchor mode" className={styles.anchorMode}>
-        <button
-          type="button"
-          aria-pressed={followMode}
+        <Button
+          pressed={followMode}
           disabled={!hitTarget}
           onClick={() => setFollowMode(true)}
+          size="sm"
           className={styles.anchorModeButton}
           data-testid="comment-draft-follow"
         >
           Follow {hitTarget?.kind === "raster" ? "raster" : "element"}
-        </button>
-        <button
-          type="button"
-          aria-pressed={!followMode}
+        </Button>
+        <Button
+          pressed={!followMode}
           onClick={() => setFollowMode(false)}
+          size="sm"
           className={styles.anchorModeButton}
           data-testid="comment-draft-pin"
         >
           Pin to map
-        </button>
+        </Button>
       </div>
       <textarea
         ref={textareaRef}
@@ -131,17 +133,12 @@ export function CommentDraftBubble(
         disabled={!canSubmit}
       />
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.button}
-          onClick={onCancel}
-          data-testid="comment-draft-cancel"
-        >
+        <Button size="sm" onClick={onCancel} data-testid="comment-draft-cancel">
           Cancel
-        </button>
-        <button
-          type="button"
-          className={[styles.button, styles.buttonPrimary].join(" ")}
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!canSubmit || text.trim().length === 0}
           aria-disabled={!canSubmit || text.trim().length === 0}
           title={
@@ -153,7 +150,7 @@ export function CommentDraftBubble(
           data-testid="comment-draft-submit"
         >
           Post
-        </button>
+        </Button>
       </div>
     </div>
   );
