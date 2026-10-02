@@ -853,6 +853,15 @@ export interface ExcalidrawProps {
    */
   flowchart?: boolean;
   /**
+   * Atlasdraw addition (code/decisions/0010-own-the-fork.md). False takes the
+   * upstream toggles (grid, object and midpoint snapping, arrow binding, zen,
+   * view mode, stats) out of the canvas right-click menu. A host whose canvas
+   * is a map keeps the ones that work there as registered items
+   * (`registerContextMenuItem` with `contexts: ["canvas"]`). Their keys stay.
+   * Default true.
+   */
+  canvasMenuToggles?: boolean;
+  /**
    * Atlasdraw addition (docs/architecture/adr/0015-world-coordinates-gate.md).
    * Called before a zoom action (zoom in, out, reset, fit) changes the
    * viewport. Return true when the host moved its own camera instead; the
@@ -1170,9 +1179,15 @@ export type ExcalidrawImperativeAPIEventMap = {
   "editor:unmount": [];
 };
 
+/** The right-click menus a host item can be in: on no shape, or on shapes. */
+export type ProjectContextMenuContext = "canvas" | "element";
+
+/** Where the right-click menu opened, in viewport pixels. */
+export type ContextMenuPoint = { clientX: number; clientY: number };
+
 /**
  * Atlasdraw fork extension — host-app-defined item spliced into the
- * right-click element context menu (App.tsx `getContextMenuItems`).
+ * right-click context menus (App.tsx `getContextMenuItems`).
  *
  * Not an Excalidraw `Action`: project items skip the action registry
  * (no keyboard / command-palette surface) and run their `perform`
@@ -1188,10 +1203,13 @@ export type ProjectContextMenuItem = {
   name: string;
   /** Visible label. */
   label: string;
+  /** The menus that list the item. Without it: the element menu only. */
+  contexts?: readonly ProjectContextMenuContext[];
   /** When false, the item is hidden for the current selection. */
   predicate: (
     elements: readonly ExcalidrawElement[],
     appState: Readonly<AppState>,
+    at: ContextMenuPoint,
   ) => boolean;
   /**
    * Click handler. Return an `ActionResult`-shaped object to mutate
@@ -1201,6 +1219,7 @@ export type ProjectContextMenuItem = {
   perform: (
     elements: readonly ExcalidrawElement[],
     appState: Readonly<AppState>,
+    at: ContextMenuPoint,
   ) =>
     | {
         elements?: readonly ExcalidrawElement[] | null;
@@ -1209,6 +1228,8 @@ export type ProjectContextMenuItem = {
       }
     | false
     | void;
+  /** A toggle: true draws a check mark beside the label. */
+  checked?: (appState: Readonly<AppState>) => boolean;
   /** Optional leading icon. */
   icon?: React.ReactNode;
 };
@@ -1309,12 +1330,12 @@ export interface ExcalidrawImperativeAPI {
   registerAction: (action: Action) => void;
   /**
    * Atlasdraw fork extension — register a project-defined item that
-   * appears at the end of the right-click element context menu, gated by
-   * the supplied `predicate`. Returns an unregister function.
+   * appears at the end of the right-click menus its `contexts` name
+   * (default: the element menu), gated by the supplied `predicate`.
+   * Returns an unregister function.
    *
    * Item shape: see {@link ProjectContextMenuItem}. Items are appended
-   * after Excalidraw's default `actionDeleteSelected` (preceded by a
-   * separator). Not surfaced in the canvas (no-selection) menu or in
+   * after Excalidraw's own items, behind a separator. Not surfaced in
    * viewMode.
    */
   registerContextMenuItem: (item: ProjectContextMenuItem) => () => void;

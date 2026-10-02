@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // The editor's commands: one list that the main menu, the ⌘K palette, the
-// keys (useCommandKeys) and the shortcuts panel all read. A command that is
-// in one of them is in this list, so the four cannot disagree.
+// keys (useCommandKeys), the shortcuts panel and the right-click menus
+// (contextMenus.ts) all read. A command that is in one of them is in this
+// list, so they cannot disagree.
 //
 // A key here belongs to the editor shell, and useCommandKeys takes it before
 // the drawing sees it. The keys the drawing keeps (its tools, undo, copy)
@@ -17,10 +18,20 @@ import {
 } from "@atlasdraw/common";
 import { PinTool } from "@atlasdraw/tools";
 
-import type { ZoomAction } from "@atlasdraw/excalidraw/types";
+import type { AppState, ZoomAction } from "@atlasdraw/excalidraw/types";
 
 import { zoomActionOnMap } from "../hooks/useCameraBridge";
+import { buildToolContext } from "../hooks/useAtlasdrawTool";
+import { featureAt, matchingFeature, type FeatureHit } from "../lib/featureHit";
+import {
+  computeFeatureCollectionBounds,
+  fitMapToBox,
+} from "../lib/fitMapToContent";
 import { pickFile } from "../lib/pickFile";
+import {
+  convertibleSelection,
+  convertSelection,
+} from "../session/convertToLayer";
 import { openMap, saveMap } from "../session/fileActions";
 import { selectedPin } from "../state/pinDetails";
 
@@ -30,6 +41,19 @@ import type { EditorSession } from "../session/EditorSession";
 
 export type CommandGroup = "File" | "Edit" | "Tools" | "View" | "Help";
 
+/**
+ * A right-click menu, named by what the click landed on: empty canvas, a
+ * shape, a pin, or a feature of a data layer (the canvas menu over one).
+ */
+export type MenuContext = "canvas" | "element" | "pin" | "feature";
+
+/** The menu a command runs from, and where it opened, in viewport pixels. */
+export interface MenuTarget {
+  readonly context: MenuContext;
+  readonly clientX: number;
+  readonly clientY: number;
+}
+
 export interface Command {
   readonly id: string;
   /** What the user reads in the menu, the palette and the shortcuts panel. */
@@ -38,9 +62,28 @@ export interface Command {
   readonly keys?: readonly KeyBinding[];
   /** More words the palette search finds the command by. */
   readonly keywords?: readonly string[];
+  /**
+   * The right-click menus that list the command. The palette lists every
+   * command, so each of these is in the palette too (contextMenus.test.ts).
+   */
+  readonly contexts?: readonly MenuContext[];
+  /** The label in one menu, when the command acts at the click there. */
+  readonly menuLabel?: Partial<Record<MenuContext, string>>;
   /** False hides the command and turns its key off. */
   available(s: EditorSession): boolean;
-  run(s: EditorSession): void;
+  /**
+   * In a right-click menu: true when the command applies to what is under
+   * the click. Without it, the menu asks `available`.
+   */
+  appliesAt?(s: EditorSession, at: MenuTarget): boolean;
+  /** A setting the command turns on and off: true shows a check mark. */
+  checked?(s: EditorSession): boolean;
+  /**
+   * `at` is set when a right-click menu runs the command: it acts at that
+   * point or on what is under it. The palette, a key and the main menu give
+   * none, and the command acts on the selection.
+   */
+  run(s: EditorSession, at?: MenuTarget): void;
 }
 
 const always = () => true;
@@ -57,6 +100,75 @@ function zoom(s: EditorSession, action: ZoomAction): void {
     zoomActionOnMap(map, action, () => api?.getSceneElements() ?? []);
   }
 }
+
+/** The selected shapes, or none. */
+function selectedShapes(s: EditorSession) {
+  const api = s.view.getState().api;
+  if (!api) {
+    return [];
+  }
+  const ids = api.getAppState().selectedElementIds ?? {};
+  return api.getSceneElements().filter((e) => ids[e.id]);
+}
+
+/** The one selected layer, when it is a data layer. */
+function selectedDataLayer(s: EditorSession): string | null {
+  const ids = Object.keys(s.view.getState().selection);
+  const overlays = s.store.getState().doc.snapshot().overlays;
+  const entry =
+    ids.length === 1 ? overlays.find((e) => e.id === ids[0]) : undefined;
+  return entry?.kind === "data" ? entry.id : null;
+}
+
+/** The feature of the topmost data layer under a menu's point, or null. */
+function featureUnder(s: EditorSession, at: MenuTarget): FeatureHit | null {
+  const map = s.view.getState().map;
+  if (!map) {
+    return null;
+  }
+  const rect = map.getCanvas().getBoundingClientRect();
+  const point: [number, number] = [
+    at.clientX - rect.left,
+    at.clientY - rect.top,
+  ];
+  return featureAt(map, s.store.getState().doc.snapshot().overlays, point);
+}
+
+/**
+ * The bounds of the one feature under a menu's point. Null when the click
+ * is on no feature, or its layer holds another feature that MapLibre reports
+ * the same way, so the hit cannot name one feature (lib/featureHit.ts).
+ */
+function featureBoundsUnder(s: EditorSession, at: MenuTarget) {
+  const hit = featureUnder(s, at);
+  const fc = hit
+    ? s.store.getState().doc.snapshot().featureCollections[hit.overlayId]
+    : undefined;
+  const feature = hit && fc ? matchingFeature(fc, hit) : null;
+  return feature
+    ? computeFeatureCollectionBounds({
+        type: "FeatureCollection",
+        features: [feature],
+      })
+    : null;
+}
+
+/** Flip one of the drawing's settings, outside its history. */
+function setDrawing(
+  s: EditorSession,
+  next: (appState: AppState) => Partial<AppState>,
+): void {
+  const api = s.view.getState().api;
+  if (api) {
+    api.updateScene({
+      appState: next(api.getAppState()) as AppState,
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
+  }
+}
+
+const drawingState = (s: EditorSession): AppState | null =>
+  s.view.getState().api?.getAppState() ?? null;
 
 /** Every format the import pipeline reads, for the file picker. */
 const IMPORT_ACCEPT =
@@ -129,6 +241,7 @@ export const COMMANDS: readonly Command[] = [
     label: "Import data…",
     group: "File",
     keywords: ["geojson", "csv", "shapefile", "kml", "gpx", "geotiff"],
+    contexts: ["canvas"],
     available: always,
     run: (s) => void importData(s),
   },
@@ -184,6 +297,62 @@ export const COMMANDS: readonly Command[] = [
     available: hasDrawing,
     run: (s) => void clearDrawing(s),
   },
+  {
+    id: "edit.convert-to-layer",
+    label: "Convert selection to data layer",
+    group: "Edit",
+    keywords: ["data", "layer", "feature", "geojson", "annotation"],
+    contexts: ["element"],
+    available: (s) => convertibleSelection(s) !== null,
+    run: (s) => convertSelection(s),
+  },
+  // The drawing's own settings that work over a map, measured in a browser
+  // (.claude/rules/menus.md). The drawing keeps their keys.
+  {
+    id: "edit.snap-objects",
+    label: "Snap to objects",
+    group: "Edit",
+    keywords: ["align", "magnet", "guides"],
+    contexts: ["canvas"],
+    available: hasDrawing,
+    checked: (s) => drawingState(s)?.objectsSnapModeEnabled === true,
+    // As the drawing's own toggle: object snapping turns the grid off.
+    run: (s) =>
+      setDrawing(s, (a) => ({
+        objectsSnapModeEnabled: !a.objectsSnapModeEnabled,
+        gridModeEnabled: false,
+      })),
+  },
+  {
+    id: "edit.arrow-binding",
+    label: "Arrow binding",
+    group: "Edit",
+    keywords: ["connect", "attach", "arrow", "bind"],
+    contexts: ["canvas"],
+    available: hasDrawing,
+    checked: (s) => drawingState(s)?.bindingPreference === "enabled",
+    run: (s) =>
+      setDrawing(s, (a) => {
+        const on = a.bindingPreference !== "enabled";
+        return {
+          bindingPreference: on ? "enabled" : "disabled",
+          isBindingEnabled: on,
+        };
+      }),
+  },
+  {
+    id: "edit.snap-midpoints",
+    label: "Snap to midpoints",
+    group: "Edit",
+    keywords: ["arrow", "bind", "middle", "edge"],
+    contexts: ["canvas"],
+    available: hasDrawing,
+    checked: (s) => drawingState(s)?.isMidpointSnappingEnabled === true,
+    run: (s) =>
+      setDrawing(s, (a) => ({
+        isMidpointSnappingEnabled: !a.isMidpointSnappingEnabled,
+      })),
+  },
 
   // --- Tools ---
   {
@@ -191,9 +360,34 @@ export const COMMANDS: readonly Command[] = [
     label: "Pin to map",
     group: "Tools",
     keywords: ["marker", "point"],
+    contexts: ["canvas"],
+    // A pin is one click: the menu places it where the menu opened, as the
+    // armed tool places it where the next click lands.
+    menuLabel: { canvas: "Pin here" },
     available: hasMap,
-    run: (s) => {
-      const { atlasTool, setAtlasTool } = s.view.getState();
+    run: (s, at) => {
+      const { atlasTool, setAtlasTool, map, api } = s.view.getState();
+      if (at && map && api) {
+        PinTool.onPointerDown(
+          {
+            clientX: at.clientX,
+            clientY: at.clientY,
+            pointerId: 1,
+            pointerType: "mouse",
+            button: 0,
+            shiftKey: false,
+            altKey: false,
+            ctrlKey: false,
+            metaKey: false,
+          },
+          buildToolContext(
+            map,
+            api,
+            () => s.store.getState().doc.snapshot().world,
+          ),
+        );
+        return;
+      }
       setAtlasTool(atlasTool?.id === PinTool.id ? null : PinTool);
     },
   },
@@ -202,6 +396,7 @@ export const COMMANDS: readonly Command[] = [
     label: "Edit pin details…",
     group: "Tools",
     keywords: ["pin", "title", "description", "link", "photo", "note"],
+    contexts: ["pin"],
     available: (s) => {
       const api = s.view.getState().api;
       return api !== null && selectedPin(api) !== null;
@@ -220,6 +415,9 @@ export const COMMANDS: readonly Command[] = [
     group: "Tools",
     keys: [{ key: "m" }],
     keywords: ["ruler", "length", "area", "distance"],
+    // It arms the tool. The path lives in MeasureLayer, so a menu cannot
+    // start it at the click.
+    contexts: ["canvas"],
     available: always,
     run: (s) => s.view.getState().toggleMeasuring(),
   },
@@ -229,6 +427,8 @@ export const COMMANDS: readonly Command[] = [
     group: "Tools",
     keys: [{ key: "c" }],
     keywords: ["comment", "threads", "annotate", "review"],
+    // It arms the mode; the next click on the shape anchors the thread.
+    contexts: ["element"],
     available: always,
     run: (s) => s.view.getState().toggleCommentMode(),
   },
@@ -239,8 +439,26 @@ export const COMMANDS: readonly Command[] = [
     label: "Layers panel",
     group: "View",
     keywords: ["sidebar", "data", "basemap"],
+    contexts: ["canvas"],
     available: hasDrawing,
     run: (s) => openTab(s, "layers"),
+  },
+  {
+    id: "layer.table",
+    label: "Show attribute table",
+    group: "View",
+    keywords: ["attributes", "properties", "rows", "data", "features"],
+    contexts: ["feature"],
+    available: (s) => selectedDataLayer(s) !== null,
+    appliesAt: (s, at) => featureUnder(s, at) !== null,
+    run: (s, at) => {
+      const layerId = at
+        ? featureUnder(s, at)?.overlayId
+        : selectedDataLayer(s);
+      if (layerId) {
+        s.view.getState().openDialog({ kind: "attribute-table", layerId });
+      }
+    },
   },
   {
     id: "view.find",
@@ -270,6 +488,7 @@ export const COMMANDS: readonly Command[] = [
         repeat: true,
       },
     ],
+    contexts: ["canvas"],
     available: hasMap,
     run: (s) => zoom(s, { type: "zoomIn" }),
   },
@@ -285,6 +504,7 @@ export const COMMANDS: readonly Command[] = [
         repeat: true,
       },
     ],
+    contexts: ["canvas"],
     available: hasMap,
     run: (s) => zoom(s, { type: "zoomOut" }),
   },
@@ -296,6 +516,34 @@ export const COMMANDS: readonly Command[] = [
     keywords: ["fit", "reset", "content"],
     available: hasMap,
     run: (s) => zoom(s, { type: "resetZoom" }),
+  },
+  {
+    id: "view.zoom-selection",
+    label: "Zoom to selection",
+    group: "View",
+    keywords: ["fit", "shapes", "feature", "frame"],
+    contexts: ["element", "feature"],
+    // Over a feature, the feature is what the click selects.
+    menuLabel: { feature: "Zoom to feature" },
+    available: (s) => hasMap(s) && selectedShapes(s).length > 0,
+    appliesAt: (s, at) =>
+      at.context === "feature"
+        ? featureBoundsUnder(s, at) !== null
+        : hasMap(s) && selectedShapes(s).length > 0,
+    run: (s, at) => {
+      if (at?.context === "feature") {
+        const box = featureBoundsUnder(s, at);
+        if (box) {
+          fitMapToBox(s.view.getState().map, box);
+        }
+        return;
+      }
+      zoom(s, {
+        type: "zoomToFit",
+        elements: selectedShapes(s),
+        inViewport: false,
+      });
+    },
   },
   {
     id: "view.theme",

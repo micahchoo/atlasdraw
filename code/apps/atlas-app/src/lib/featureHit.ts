@@ -4,6 +4,8 @@
 //
 //   featureAt(map, overlays, point)  the feature of the topmost visible data
 //                                    layer under the point, or null
+//   matchingFeature(fc, hit)         the one feature of the layer the hit
+//                                    names, or null
 //   attributeRows(properties)        the properties as key/value text, in the
 //                                    feature's order
 //
@@ -16,6 +18,7 @@
 import { outlineLayerId } from "@atlasdraw/basemap";
 
 import type { OverlayEntry } from "../state/document";
+import type { Feature, FeatureCollection } from "geojson";
 
 /**
  * The part of a MapLibre map the hit test reads. `P` is the map's point type
@@ -65,6 +68,35 @@ export function featureAt<P>(
     }
   }
   return null;
+}
+
+/**
+ * Properties as MapLibre reports them: an object or array value as JSON
+ * text, and no key with no value. The sort makes the order of keys count
+ * for nothing.
+ */
+function reported(properties: Record<string, unknown> | null): string {
+  const kept = Object.entries(properties ?? {})
+    .filter(([, v]) => v !== null && v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return JSON.stringify(
+    kept.map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : v]),
+  );
+}
+
+/**
+ * The feature of `fc` that a hit names. A rendered feature carries its
+ * properties but no index, and its geometry is cut at tile edges, so the
+ * properties are the key. Null when no feature, or more than one, has them:
+ * then the hit names no one feature.
+ */
+export function matchingFeature(
+  fc: FeatureCollection,
+  hit: Pick<FeatureHit, "properties">,
+): Feature | null {
+  const key = reported(hit.properties);
+  const found = fc.features.filter((f) => reported(f.properties) === key);
+  return found.length === 1 ? found[0] : null;
 }
 
 /** One property as text: a key and its value. */

@@ -84,6 +84,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     placementBlocked,
     historyHost,
     flowchart,
+    canvasMenuToggles,
     onZoomAction,
     langCode = defaultLang.code,
     viewModeEnabled,
@@ -205,6 +206,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           placementBlocked={placementBlocked}
           historyHost={historyHost}
           flowchart={flowchart}
+          canvasMenuToggles={canvasMenuToggles}
           onZoomAction={onZoomAction}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
