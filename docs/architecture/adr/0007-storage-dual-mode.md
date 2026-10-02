@@ -92,3 +92,12 @@ stack. The `postgres-minio` adapter stays, under the same name, and now means
 "Postgres and any S3-compatible bucket". The operator supplies the bucket.
 `forcePathStyle` is no longer fixed at `true`: `BLOB_FORCE_PATH_STYLE` sets
 it (default `true`; `false` for virtual-hosted URLs such as AWS S3).
+
+## As built after round 2 (2026-10-01)
+
+`StorageClient` grew past the list in the ADR-0013 note. It also deletes a
+map and a link (`deleteMap`, `deleteShareToken`), counts stored bytes
+(`totalBytes`), deletes what has expired (`sweep`), and lists and reads a
+map's versions (`listVersions`, `getVersionBlob`; ADR-0020). In CI, the job
+`storage-postgres` also runs the adapter contract against a real S3 server
+(SeaweedFS, `ATLASDRAW_TEST_S3_URL`).

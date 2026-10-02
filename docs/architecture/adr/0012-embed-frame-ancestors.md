@@ -20,7 +20,7 @@ Browsers refuse cross-origin framing when the response carries a restrictive
 (`ledgers/PROBE-embed.md`) confirmed Atlasdraw serves **no** such header today
 (nor COOP/COEP — SharedArrayBuffer is deliberately avoided precisely to keep
 cross-origin embedding working, per phase-7 research notes), so framing already
-works by default. What was missing is an operator **lever** to *restrict* who
+works by default. What was missing is an operator **lever** to _restrict_ who
 may embed, without breaking the zero-config first run.
 
 ## Decision
@@ -51,8 +51,11 @@ every embed).
 
 ### Scope
 
+> **Note (2026-10-01):** The R2 amendment above replaced this scope. See
+> "As built" at the end.
+
 The header applies to all HTML the `web` container serves, including the editor
-at `/`. The editor is not *designed* to be framed, but framing it is harmless
+at `/`. The editor is not _designed_ to be framed, but framing it is harmless
 and not worth a per-route header split at the edge. A CSP with only
 `frame-ancestors` set imposes no other restriction (script/style/img default to
 unrestricted), so it cannot break the app.
@@ -63,7 +66,7 @@ unrestricted), so it cannot break the app.
 - No app-code coupling: the policy lives entirely at the reverse-proxy edge.
   The dev server (`vite`) and the SPA `index.html` set no framing header, so
   local `/embed` development is unrestricted.
-- A future managed/multi-tenant deploy that wants *per-map* embed allowlists
+- A future managed/multi-tenant deploy that wants _per-map_ embed allowlists
   would need a per-response header (app-side), not this single edge value — out
   of scope here and gated behind the (deliberately parked) multi-tenant work.
 
@@ -73,3 +76,20 @@ A scripts-blocked `<noscript>` PNG fallback for the embed (PRFAQ §Usable) is
 **not** delivered by this ADR: a pure SPA can't render a per-route `<noscript>`
 (the app never boots without JS). It needs SSR or a pre-rendered static embed
 page — tracked in `BUILD-embed.md`.
+
+## As built (2026-10-01)
+
+- The `web` container's nginx sends `frame-ancestors` per path
+  (`code/apps/atlas-app/nginx.conf`): `/embed/*` gets
+  `EMBED_FRAME_ANCESTORS`, and every other page gets `'self'`. The editor
+  holds write keys, so another site cannot frame it.
+- The rest of the policy is a `<meta>` that the build writes into
+  `index.html` (`code/apps/atlas-app/src/lib/contentSecurityPolicy.ts`). So
+  the served HTML does carry a policy beyond `frame-ancestors`, and the
+  claim under "Scope" that it imposes no other restriction no longer holds.
+- `code/vercel.json` sends `frame-ancestors *` on `/embed` and `'self'`
+  elsewhere. Caddy passes the header through.
+- GitHub Pages cannot send a header, and a `<meta>` cannot set
+  `frame-ancestors`. Any site can frame a Pages build.
+- The dev server sends no framing header and no policy: the build plugin
+  writes the `<meta>`.

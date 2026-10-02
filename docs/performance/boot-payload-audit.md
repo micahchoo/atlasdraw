@@ -184,12 +184,12 @@ A route's boot payload is the page entry plus the route root, each with
 every chunk it imports statically (`code/apps/atlas-app/src/lib/bootPayload.ts`,
 read from `vite build --manifest`). Gzip level 9:
 
-| change | editor | viewer and embed |
-| --- | ---: | ---: |
-| before | 1,058 KB | 949 KB |
-| import parsers out of the boot chunk | 960 KB | 870 KB |
-| maplibre-gl 4.7 → 6.11 (critical advisory) | 1,009 KB | 920 KB |
-| after the R4/R5 merge | 1,014 KB | 926 KB |
+| change                                     |   editor | viewer and embed |
+| ------------------------------------------ | -------: | ---------------: |
+| before                                     | 1,058 KB |           949 KB |
+| import parsers out of the boot chunk       |   960 KB |           870 KB |
+| maplibre-gl 4.7 → 6.11 (critical advisory) | 1,009 KB |           920 KB |
+| after the R4/R5 merge                      | 1,014 KB |           926 KB |
 
 - The parsers (proj4, shpjs, xmldom, geotiff, papaparse, wkt-parser,
   togeojson) now load only in the import worker. `packages/data` is
@@ -207,7 +207,8 @@ read from `vite build --manifest`). Gzip level 9:
 ## Still open
 
 - **Brotli.** `.br` siblings would save a further ~270 KB on the shared chunk,
-  but nothing here can serve one: `nginx:alpine` has no `ngx_brotli`, Caddy
+  but nothing here can serve one: `nginx-unprivileged:1.27-alpine` has no
+  `ngx_brotli`, Caddy
   reverse-proxies rather than serving files, and Vercel and Pages compress on
   their own. Needs a brotli-capable image or moving static serving to Caddy's
   `file_server`. Not built, because it would have no consumer.
