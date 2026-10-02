@@ -39,26 +39,6 @@
   color: var(--ad-ink);
 }
 
-.closeBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--ad-ink-tertiary);
-  font-size: var(--ad-text-xl);
-  cursor: pointer;
-  border-radius: var(--ad-radius-sm);
-}
-
-.closeBtn:hover {
-  background: var(--ad-surface-inset);
-  color: var(--ad-ink);
-}
-
 .body {
   flex: 1;
   min-height: 0;
@@ -125,45 +105,4 @@
   gap: var(--ad-space-2);
   padding: var(--ad-space-3) var(--ad-space-4);
   border-top: 1px solid var(--ad-hairline);
-}
-
-.button {
-  padding: 4px 10px;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: var(--ad-text-md);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.button:hover {
-  background: var(--ad-surface-inset);
-}
-
-.button:focus-visible,
-.closeBtn:focus-visible {
-  outline: 2px solid var(--ad-focus-ring);
-  outline-offset: 1px;
-}
-
-.button:disabled {
-  color: var(--ad-ink-tertiary);
-  background: var(--ad-surface-raised);
-  cursor: not-allowed;
-}
-
-.buttonDanger {
-  color: var(--ad-danger);
-}
-
-.buttonPrimary {
-  background: var(--ad-accent);
-  border-color: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-}
-
-.buttonPrimary:hover {
-  background: var(--ad-accent-hover);
 }

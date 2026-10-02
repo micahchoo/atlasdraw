@@ -15,7 +15,7 @@
 // A photo is an image file under Excalidraw's file cap. It becomes a file of
 // the drawing, so it travels with the map and loads from no other host.
 
-import React, { useId, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 
 import { LIMITS } from "@atlasdraw/protocol";
 
@@ -32,6 +32,7 @@ import {
 
 import styles from "../styles/PinDetailsDialog.module.css";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 export interface PinDetailsDialogProps {
@@ -70,6 +71,7 @@ export function PinDetailsDialog({
   const [link, setLink] = useState(initial.link ?? "");
   const [keepPhoto, setKeepPhoto] = useState(Boolean(initial.photo));
   const [photo, setPhoto] = useState<PinPhoto | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const shownPhoto =
     photo?.dataURL ?? (keepPhoto ? photoUrlOf(initial, api.getFiles()) : null);
@@ -166,34 +168,36 @@ export function PinDetailsDialog({
           />
         )}
         <div className={styles.photoActions}>
-          <label className={styles.button}>
+          <Button
+            data-testid="pin-details-photo-pick"
+            onClick={() => photoInput.current?.click()}
+          >
             {shownPhoto ? "Replace photo…" : "Add photo…"}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className={styles.srOnly}
-              data-testid="pin-details-photo-input"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (!file) {
-                  return;
+          </Button>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            data-testid="pin-details-photo-input"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) {
+                return;
+              }
+              void readPhoto(file).then((result) => {
+                if (typeof result === "string") {
+                  setError(result);
+                } else {
+                  setPhoto(result);
+                  setError(null);
                 }
-                void readPhoto(file).then((result) => {
-                  if (typeof result === "string") {
-                    setError(result);
-                  } else {
-                    setPhoto(result);
-                    setError(null);
-                  }
-                });
-              }}
-            />
-          </label>
+              });
+            }}
+          />
           {shownPhoto && (
-            <button
-              type="button"
-              className={styles.button}
+            <Button
               data-testid="pin-details-photo-remove"
               onClick={() => {
                 setPhoto(null);
@@ -201,7 +205,7 @@ export function PinDetailsDialog({
               }}
             >
               Remove photo
-            </button>
+            </Button>
           )}
         </div>
 
@@ -217,21 +221,16 @@ export function PinDetailsDialog({
         )}
 
         <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.button}
-            data-testid="pin-details-cancel"
-            onClick={onClose}
-          >
+          <Button data-testid="pin-details-cancel" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             type="submit"
-            className={[styles.button, styles.buttonPrimary].join(" ")}
             data-testid="pin-details-save"
           >
             Save
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
