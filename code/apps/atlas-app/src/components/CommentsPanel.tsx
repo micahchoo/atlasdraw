@@ -19,6 +19,8 @@ import styles from "../styles/CommentsPanel.module.css";
 
 import type { Comment, CommentsLayer } from "../state/comments";
 
+import { Button } from "./Button";
+
 // ---------------------------------------------------------------------------
 // External controller hook handshake
 //
@@ -142,15 +144,14 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
   return (
     <div className={styles.root} data-testid="comments-panel">
       <div className={styles.filterBar}>
-        <button
-          type="button"
-          className={styles.filterToggle}
-          aria-pressed={showResolved}
+        <Button
+          size="sm"
+          pressed={showResolved}
           onClick={() => setShowResolved((v) => !v)}
           data-testid="comments-filter-show-resolved"
         >
           {showResolved ? "Hiding nothing" : "Show resolved"}
-        </button>
+        </Button>
       </div>
 
       <div className={styles.list} data-testid="comments-list">
@@ -196,15 +197,9 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
             role="group"
             aria-label="Anchor type"
           >
-            <button
-              type="button"
-              className={[
-                styles.composerToggleBtn,
-                anchorMode === "map" ? styles.composerToggleBtnActive : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-pressed={anchorMode === "map"}
+            <Button
+              size="sm"
+              pressed={anchorMode === "map"}
               onClick={() => {
                 setAnchorMode("map");
                 onRequestAnchor?.("map");
@@ -212,16 +207,10 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
               data-testid="comments-anchor-map"
             >
               Map
-            </button>
-            <button
-              type="button"
-              className={[
-                styles.composerToggleBtn,
-                anchorMode === "element" ? styles.composerToggleBtnActive : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-pressed={anchorMode === "element"}
+            </Button>
+            <Button
+              size="sm"
+              pressed={anchorMode === "element"}
               onClick={() => {
                 setAnchorMode("element");
                 onRequestAnchor?.("element");
@@ -229,11 +218,11 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
               data-testid="comments-anchor-element"
             >
               Element
-            </button>
+            </Button>
           </div>
-          <button
-            type="button"
-            className={styles.composerSubmit}
+          <Button
+            variant="primary"
+            size="sm"
             disabled={!canSubmit}
             aria-disabled={!canSubmit}
             title={
@@ -245,7 +234,7 @@ export function CommentsPanel(props: CommentsPanelProps): React.JSX.Element {
             data-testid="comments-submit"
           >
             Post
-          </button>
+          </Button>
         </div>
         {pendingAnchor == null && commentsLayer && (
           <div className={styles.composerHint} data-testid="comments-hint">
@@ -318,22 +307,21 @@ function CommentRow(props: CommentRowProps): React.JSX.Element {
             onKeyDown={(e) => e.stopPropagation()}
           />
           <div className={styles.editActions}>
-            <button
-              type="button"
-              className={styles.actionButton}
+            <Button
+              variant="primary"
+              size="sm"
               onClick={saveEditing}
               data-testid={`comments-row-save-${c.id}`}
             >
               Save
-            </button>
-            <button
-              type="button"
-              className={styles.actionButton}
+            </Button>
+            <Button
+              size="sm"
               onClick={cancelEditing}
               data-testid={`comments-row-cancel-${c.id}`}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -346,34 +334,32 @@ function CommentRow(props: CommentRowProps): React.JSX.Element {
         {!c.resolved && (
           <>
             {isOwn && !editing && (
-              <button
-                type="button"
-                className={styles.actionButton}
+              <Button
+                size="sm"
                 onClick={startEditing}
                 data-testid={`comments-row-edit-${c.id}`}
               >
                 Edit
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
-              className={styles.actionButton}
+            <Button
+              size="sm"
               onClick={onResolve}
               data-testid={`comments-row-resolve-${c.id}`}
             >
               Resolve
-            </button>
+            </Button>
           </>
         )}
         {isOwn && !editing && (
-          <button
-            type="button"
-            className={styles.actionButton}
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={onDelete}
             data-testid={`comments-row-delete-${c.id}`}
           >
             Delete
-          </button>
+          </Button>
         )}
       </div>
     </div>

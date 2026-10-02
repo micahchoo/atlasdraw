@@ -30,23 +30,6 @@
   font-size: var(--ad-text-xs);
 }
 
-.filterToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ad-space-1);
-  background: none;
-  border: none;
-  padding: var(--ad-space-1) var(--ad-space-2);
-  cursor: pointer;
-  color: var(--ad-ink);
-  font-size: var(--ad-text-xs);
-}
-
-.filterToggle[aria-pressed="true"] {
-  color: var(--ad-accent);
-  font-weight: 600;
-}
-
 .list {
   flex: 1 1 auto;
   /* As a section it must not grow without bound — 40 threads would push
@@ -121,25 +104,6 @@
   margin-top: 2px;
 }
 
-.actionButton {
-  font-size: var(--ad-text-xs);
-  padding: 2px 8px;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  cursor: pointer;
-}
-
-.actionButton:hover {
-  background: var(--ad-surface-inset);
-}
-
-.actionButton:disabled {
-  color: var(--ad-ink-tertiary);
-  cursor: not-allowed;
-}
-
 .composer {
   border-top: 1px solid var(--default-border-color, #ced4da);
   padding: var(--ad-space-2);
@@ -168,46 +132,7 @@
 
 .composerToggle {
   display: inline-flex;
-  gap: 0;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: var(--ad-radius-sm);
-  overflow: hidden;
-}
-
-.composerToggleBtn {
-  padding: var(--ad-space-1) var(--ad-space-2);
-  border: none;
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: var(--ad-text-xs);
-  cursor: pointer;
-}
-
-.composerToggleBtnActive {
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-}
-
-.composerSubmit {
-  padding: 6px 12px;
-  border: 1px solid var(--ad-accent);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-  font-size: var(--ad-text-sm);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.composerSubmit:hover {
-  background: var(--ad-accent-hover);
-  border-color: var(--ad-accent-hover);
-}
-
-.composerSubmit:disabled {
-  background: var(--ad-emphasis);
-  border-color: var(--ad-emphasis);
-  cursor: not-allowed;
+  gap: var(--ad-space-1);
 }
 
 .composerHint {
