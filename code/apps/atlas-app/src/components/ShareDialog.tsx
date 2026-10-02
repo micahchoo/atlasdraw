@@ -6,10 +6,11 @@
 //
 // The dialog opens to a mode picker — "Share read-only" vs "Collaborate".
 // Read-only keeps the hash/upload choice inside useShareLink (the user picks
-// the capability; hash vs upload is a size-based decision). An upload link
-// reads the document's server map, so a save updates the link and every
-// embed; it lasts until the owner stops it, unless the owner chose an
-// expiry. Collaborate makes a room from the open map (hooks/useRoom.ts) and
+// the capability; hash vs upload is decided by the size and the expiry). An
+// upload link reads the document's server map, so a save updates the link
+// and every embed; it lasts until the owner stops it, unless the owner chose
+// an expiry. A chosen expiry always makes an upload link: a hash link holds
+// the map itself and never expires, and its hint says so. Collaborate makes a room from the open map (hooks/useRoom.ts) and
 // shows its link; in a room it shows the link of that room.
 //
 // The dialog is a Modal: it closes on Escape and on a press on its backdrop
@@ -70,7 +71,7 @@ const EXPIRY_CHOICES: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 const HASH_HINT =
-  "This link holds a copy of the map. Later edits do not change it.";
+  "This link holds a copy of the map. Later edits do not change it, and it never expires.";
 
 /** What an upload link does when the map changes, and how long it works. */
 function uploadHint(expiresAt: string | null): string {

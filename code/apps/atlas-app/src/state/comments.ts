@@ -207,6 +207,31 @@ export class CommentsLayer {
     this._array().delete(idx, 1);
   }
 
+  /**
+   * Tell `record` about each comment edit made in this tab, as a step that
+   * undoes and redoes it (session/history.ts). A collaborator's edit, which
+   * a room applies with the relay as its origin, is not one. Returns the
+   * function that stops it.
+   */
+  trackUndo(
+    record: (step: { undo(): void; redo(): void }) => void,
+  ): () => void {
+    // captureTimeout 0: each edit is its own step, never merged with the
+    // one before it.
+    const manager = new Y.UndoManager(this._array(), { captureTimeout: 0 });
+    const onAdded = (event: { type: "undo" | "redo" }): void => {
+      if (event.type !== "undo" || manager.undoing || manager.redoing) {
+        return;
+      }
+      record({ undo: () => manager.undo(), redo: () => manager.redo() });
+    };
+    manager.on("stack-item-added", onAdded);
+    return () => {
+      manager.off("stack-item-added", onAdded);
+      manager.destroy();
+    };
+  }
+
   // -------------------------------------------------------------------------
   // Lifecycle
   // -------------------------------------------------------------------------

@@ -157,6 +157,24 @@ export const COMMANDS: readonly Command[] = [
   },
 
   // --- Edit ---
+  // Their keys (Ctrl+Z, Ctrl+Shift+Z) are the drawing's (EDITOR_KEYS); the
+  // drawing sends them to the same history (MapEditor's historyHost).
+  {
+    id: "edit.undo",
+    label: "Undo",
+    group: "Edit",
+    keywords: ["back", "revert"],
+    available: hasDrawing,
+    run: (s) => s.history.undo(),
+  },
+  {
+    id: "edit.redo",
+    label: "Redo",
+    group: "Edit",
+    keywords: ["again", "forward"],
+    available: hasDrawing,
+    run: (s) => s.history.redo(),
+  },
   {
     id: "edit.clear",
     label: "Clear the drawing…",
@@ -332,6 +350,8 @@ export const MAIN_MENU: readonly string[] = [
   "file.export",
   "file.share",
   "---",
+  "edit.undo",
+  "edit.redo",
   "edit.clear",
   "---",
   "app.settings",

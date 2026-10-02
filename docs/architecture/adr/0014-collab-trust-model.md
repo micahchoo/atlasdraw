@@ -94,12 +94,18 @@ Every point of the decision is in the code:
 - **Rooms persist** in the relay's SQLite file (ADR-0018), comments with
   them.
 
-- **Undo stays Excalidraw's.** A collaborator's change reaches the editor
+- **Undo stays per user.** A collaborator's change reaches the editor
   with `CaptureUpdateAction.NEVER`, so Excalidraw's history holds only this
   user's own changes, as per-element deltas. An undo is then a new local
   edit with a higher version, and it reaches the room like any other edit.
-  A `Y.UndoManager` would duplicate that history and would need Excalidraw's
-  undo actions rerouted inside the fork.
+  Since R4 (2026-10-01) the editor has one history over the drawing and the
+  document (`apps/atlas-app/src/session/history.ts`): the drawing's
+  entries stay in Excalidraw, and layer, title and basemap commands are
+  steps of their own. The room applies a collaborator's document change
+  with origin `"remote"`, which is no step. Comments are steps through a
+  `Y.UndoManager` on the comments array that tracks only local origins;
+  the relay's updates carry the provider as their origin, so a
+  collaborator's comment is no step either.
 - **Conflicts** resolve per element as Excalidraw's reconcile does: the
   higher `version` wins, then the lower `versionNonce`
   (`apps/atlas-app/src/state/roomScene.ts`).

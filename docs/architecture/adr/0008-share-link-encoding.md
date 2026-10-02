@@ -70,7 +70,7 @@ Write-capable share tokens are deferred to Phase 6 (multi-user editing), at whic
 
 ### Path-traversal guard
 
-Both `:id` and `:token` route parameters are validated against `/^[A-Za-z0-9_-]{21}$/` *before* any adapter call. Malformed inputs (`'../etc'`, `'..%2F'`, `'short'`, `'a'.repeat(22)`, illegal chars) return 400 with no adapter invocation. The adapter is never asked to look up a malformed id, even if the database/filesystem layer might tolerate it.
+Both `:id` and `:token` route parameters are validated against `/^[A-Za-z0-9_-]{21}$/` _before_ any adapter call. Malformed inputs (`'../etc'`, `'..%2F'`, `'short'`, `'a'.repeat(22)`, illegal chars) return 400 with no adapter invocation. The adapter is never asked to look up a malformed id, even if the database/filesystem layer might tolerate it.
 
 ### Expired vs unknown — 410 vs 404
 
@@ -94,6 +94,19 @@ Both `:id` and `:token` route parameters are validated against `/^[A-Za-z0-9_-]{
 - **Mode A reveals payload size to anyone with link-preview privileges** (chat apps, email scanners). The compressed blob is the URL — its length is visible.
 - **Token existence-probing is theoretically possible** but infeasible in practice. 126-bit search space; even a rate-limited attacker would need cosmic time to find a single valid token.
 - **`PUBLIC_URL=""` (default) means URLs in API responses are relative** (`/m/<token>`). Operators who serve the storage API at a different origin than atlas-app must set `PUBLIC_URL` or assemble the absolute URL client-side. The default is intentionally relative to avoid hard-coding hostnames into a default-build.
+
+### Amendment, 2026-10-01 (R4): an expiry is honoured for every size
+
+The editor made a hash link for every map of 36 KiB or less, whatever
+expiry the owner chose. A hash link holds the map itself, so nothing can
+end it, and the choice was lost without a message.
+
+Now the owner's choice decides first. "Until you stop it" gives a hash link
+when the map fits, and an upload link when it does not. A chosen expiry
+always gives an upload link, because only the server can end a link. The
+hash link's hint says that it never expires. When the server cannot store
+an expiring link for a small map, the error names the other choice
+(`apps/atlas-app/src/hooks/useShareLink.ts`).
 
 ## Follow-ups
 

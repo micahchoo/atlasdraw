@@ -130,6 +130,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -160,6 +161,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -198,6 +200,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -252,16 +255,16 @@ describe("useRoom", () => {
         release: () => {},
         lost: new Promise<void>(() => {}),
       }),
-      onDirty: () => () => {},
-      markDirty: () => {},
-      isDirty: () => false,
       remoteSaveFailed: () => false,
       close: async () => {},
     } as unknown as PersistenceStore;
     vi.spyOn(persistenceModule, "createPersistenceStore").mockReturnValue(
       store,
     );
-    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(() => {});
+    vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue({
+      saveNow: () => null,
+      stop: () => {},
+    });
 
     // What MapEditor does: the autosave wiring and the room, one editor.
     const fake = makeFakeExcalidraw();
@@ -271,6 +274,7 @@ describe("useRoom", () => {
       return useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       });
     });
@@ -319,6 +323,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -345,6 +350,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -369,6 +375,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: relay.transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -390,6 +397,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: memoryRelay().transport,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -406,6 +414,7 @@ describe("useRoom", () => {
       useRoom(fake.api, null, {
         transport: null,
         persistence: session.persistence,
+        history: session.history,
         view: session.view,
       }),
     );
@@ -440,6 +449,7 @@ describe("useRoom", () => {
         useRoom(fake.api, null, {
           transport: relay.transport,
           persistence: session.persistence,
+          history: session.history,
           view: session.view,
         }),
       );
@@ -460,6 +470,7 @@ describe("useRoom", () => {
         useRoom(fake.api, null, {
           transport: relay.transport,
           persistence: session.persistence,
+          history: session.history,
           view: session.view,
         }),
       );
@@ -485,6 +496,7 @@ describe("useRoom", () => {
         useRoom(fake.api, null, {
           transport: relay.transport,
           persistence: session.persistence,
+          history: session.history,
           view: session.view,
         }),
       );
@@ -514,6 +526,7 @@ describe("useRoom", () => {
         useRoom(fake.api, null, {
           transport: relay.transport,
           persistence: session.persistence,
+          history: session.history,
           view: session.view,
         }),
       );
@@ -532,6 +545,7 @@ describe("useRoom", () => {
         useRoom(fake.api, null, {
           transport: memoryRelay().transport,
           persistence: session.persistence,
+          history: session.history,
           view: session.view,
         }),
       );

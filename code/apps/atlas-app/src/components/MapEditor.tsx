@@ -18,7 +18,14 @@
  * coordinates, so no camera move rewrites it.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useStore } from "zustand";
 
 import { MapCanvas } from "@atlasdraw/basemap";
@@ -40,6 +47,7 @@ import { useCommentModeTool } from "../hooks/useCommentModeTool";
 import { useCommentSearchSources } from "../hooks/useCommentSearchSources";
 import { useConvertToDataLayer } from "../hooks/useConvertToDataLayer";
 import { useDevHandles } from "../hooks/useDevHandles";
+import { useEditorHistory } from "../hooks/useEditorHistory";
 import { useExcalidrawChangeHandler } from "../hooks/useExcalidrawChangeHandler";
 import { useMapOverlays } from "../hooks/useMapOverlays";
 import { useMapRef } from "../hooks/useMapRef";
@@ -54,6 +62,7 @@ import { useSessionImport } from "../hooks/useSessionImport";
 import { useToolState } from "../hooks/useToolState";
 import { LayersIcon } from "../lib/icons";
 import { createSession } from "../session/EditorSession";
+import { historyHost } from "../session/history";
 import { SessionProvider } from "../session/SessionContext";
 import { openSceneFile } from "../session/fileActions";
 import {
@@ -61,7 +70,7 @@ import {
   useDocumentStore,
   type DocumentCommand,
 } from "../state/document";
-import { configuredTransport } from "../state/room";
+import { configuredTransport, isRoomDocument } from "../state/room";
 import { editorScene, useSceneBinding } from "../state/scene";
 import styles from "../styles/MapEditor.module.css";
 
@@ -211,6 +220,12 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   const basemap = useDocument((s) => s.basemap);
   useBasemapStyle(map, basemap, getAppConfig().allowRemoteBasemaps);
   useDevHandles(session, map, api, bridge);
+  useEditorHistory(session, api);
+  // Stable: <Excalidraw> is memoized on a shallow prop compare.
+  const drawingHistoryHost = useMemo(
+    () => historyHost(session.history),
+    [session],
+  );
   usePersistenceWiring(session, api, session.notify, open);
   useSceneBinding(api);
   useMapWheelRouter(rootRef.current, map);
@@ -218,7 +233,7 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
   useMapOverlays(map);
   useServerBackup(session);
   useSessionImport(session, rootRef, api, panel.open);
-  useConvertToDataLayer(api, addDataLayer, toast);
+  useConvertToDataLayer(api, addDataLayer, session.history, toast);
   useCommandKeys(session);
 
   // Drawing is off while the camera is turned. Unprojecting the corners of a
@@ -248,7 +263,14 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
     map,
     excalidrawAPI: api,
   });
-  const isDirty = useStore(session.persistence, (s) => s.isDirty);
+  // A room's map is the relay's to keep (ADR-0018): its edits are never
+  // "unsaved" here.
+  const unsaved = useSyncExternalStore(
+    session.history.subscribe,
+    () => session.history.dirty,
+  );
+  const inRoom = useDocumentStore((s) => isRoomDocument(s.doc));
+  const isDirty = unsaved && !inRoom;
   // Another tab holds the open map (session/mapOwnership.ts).
   const readOnly = useStore(session.persistence, (s) => s.readOnly);
   // The first-run tour is a dialog in the slot: the commands wait for it.
@@ -266,7 +288,6 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
       [view],
     ),
     view,
-    persistence: session.persistence,
   });
   const mapBackground = useStore(view, (s) => s.mapBackground);
 
@@ -348,6 +369,9 @@ export function MapEditor({ initialView, open }: MapEditorProps) {
               // The keyboard half of the drawing gate: paste and nudge use
               // Excalidraw's unturned screen math.
               placementBlocked={drawingBlocked}
+              // One history over the document and the drawing: the undo
+              // and redo keys and buttons go to it (session/history.ts).
+              historyHost={drawingHistoryHost}
               // Its fixed gaps and unitless arrows do not fit world
               // coordinates (packages/excalidraw/tests/flowchartOff.test.tsx).
               flowchart={false}

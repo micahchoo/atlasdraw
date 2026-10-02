@@ -256,19 +256,61 @@ export function setAnnotationVisible(
   );
 }
 
-/** Delete the element, and the text bound to it, as an undoable step. */
-export function deleteAnnotation(scene: SceneWriter, id: string): void {
+/** The element and the text bound to it, those not deleted: what a delete takes. */
+export function annotationParts(scene: SceneWriter, id: string): string[] {
+  return scene
+    .getSceneElementsIncludingDeleted()
+    .filter(
+      (el) =>
+        !el.isDeleted &&
+        (el.id === id ||
+          (el as { containerId?: string | null }).containerId === id),
+    )
+    .map((el) => el.id);
+}
+
+/** Write `isDeleted` on the elements `ids`; null when none changed. */
+function withDeleted(
+  scene: SceneWriter,
+  ids: readonly string[],
+  deleted: boolean,
+): readonly Element[] | null {
+  const want = new Set(ids);
   let changed = false;
   const next = scene.getSceneElementsIncludingDeleted().map((el) => {
-    const bound = (el as { containerId?: string | null }).containerId === id;
-    if ((el.id !== id && !bound) || el.isDeleted) {
+    if (!want.has(el.id) || el.isDeleted === deleted) {
       return el;
     }
     changed = true;
-    return newElementWith(el, { isDeleted: true });
+    return newElementWith(el, { isDeleted: deleted });
   });
-  if (changed) {
+  return changed ? next : null;
+}
+
+/** Delete the element, and the text bound to it, as an undoable step. */
+export function deleteAnnotation(scene: SceneWriter, id: string): void {
+  const next = withDeleted(scene, annotationParts(scene, id), true);
+  if (next) {
     commit(scene, next);
+  }
+}
+
+/**
+ * Delete (or bring back) the elements `ids` where the drawing's own history
+ * does not see it: the caller records the step in the editor's history
+ * (session/history.ts), as one with an edit that is not the drawing's.
+ */
+export function setDeletedOutsideDrawingHistory(
+  scene: SceneWriter,
+  ids: readonly string[],
+  deleted: boolean,
+): void {
+  const next = withDeleted(scene, ids, deleted);
+  if (next) {
+    scene.updateScene({
+      elements: next,
+      captureUpdate: CaptureUpdateAction.NEVER,
+    });
   }
 }
 

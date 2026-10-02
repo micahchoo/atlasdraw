@@ -4,10 +4,11 @@
 //
 //   1. Keep Excalidraw transparent so the map shows through, and store a
 //      chosen canvas color in mapBg for CSS and export.
-//   2. Mark the document dirty when the drawing changed. A camera move
-//      changes only the viewport (useCameraBridge), so it does not.
-//   3. Announce selection changes, and mirror the canvas selection into the
+//   2. Announce selection changes, and mirror the canvas selection into the
 //      layer panel's selection.
+//
+// Whether the drawing changed is not decided here: an edit is a step in the
+// editor's history (session/history.ts), which is what makes a map dirty.
 
 import { useCallback, useRef } from "react";
 
@@ -16,10 +17,8 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@atlasdraw/excalidraw";
 
-import { sceneSignature } from "../state/sceneSignature";
 import { isOverlayId } from "../state/selectedLayer";
 
-import type { PersistenceStateStore } from "../state/persistenceState";
 import type { ViewStore } from "../session/view";
 
 export interface ExcalidrawChangeHandlerParams {
@@ -29,8 +28,6 @@ export interface ExcalidrawChangeHandlerParams {
   setMapBg: (color: string) => void;
   /** The session view whose layer selection follows the canvas. */
   view: ViewStore;
-  /** The session's autosave state, marked dirty by a drawing change. */
-  persistence: PersistenceStateStore;
 }
 
 export function useExcalidrawChangeHandler({
@@ -38,13 +35,9 @@ export function useExcalidrawChangeHandler({
   announceMapEditor,
   setMapBg,
   view,
-  persistence,
 }: ExcalidrawChangeHandlerParams): NonNullable<
   React.ComponentProps<typeof Excalidraw>["onChange"]
 > {
-  // The scene signature at the previous onChange. Null until the first call,
-  // which only sets the baseline.
-  const prevSignatureRef = useRef<number | null>(null);
   // Guards against re-entrant updateScene calls. onChange can fire many times
   // (a camera move is one per frame) before React processes our
   // viewBackgroundColor reset; without this flag each one queues another
@@ -84,18 +77,7 @@ export function useExcalidrawChangeHandler({
         bgResetQueuedRef.current = false;
       }
 
-      // --- 2. Mark the document dirty when the drawing changed ---
-      // Excalidraw fires onChange for a mount, a camera move and a selection.
-      // None of these change an element's version, so compare version
-      // signatures. The first call sets the baseline.
-      const signature = sceneSignature(elements);
-      const prevSignature = prevSignatureRef.current;
-      prevSignatureRef.current = signature;
-      if (prevSignature !== null && signature !== prevSignature) {
-        persistence.getState().markDirty();
-      }
-
-      // --- 3. Selection-change aria-live announcement.
+      // --- 2. Selection-change aria-live announcement.
       // Compare the sorted selected-id set against the prior call. Throttled
       // to ≤1 announcement per 500ms so a rubber-band drag-select doesn't
       // spam the screen-reader queue.
@@ -122,7 +104,7 @@ export function useExcalidrawChangeHandler({
         }
       }
 
-      // --- 4. Mirror annotation selection to layer store ---
+      // --- 3. Mirror annotation selection to layer store ---
       // Keep the panel's selection in step with what is selected on the
       // canvas. Only annotation ids (Excalidraw element ids) flow this way;
       // data/raster selections made from the panel are preserved. The
@@ -150,6 +132,6 @@ export function useExcalidrawChangeHandler({
         viewState.setSelection(merged);
       }
     },
-    [excalidrawAPI, announceMapEditor, setMapBg, view, persistence],
+    [excalidrawAPI, announceMapEditor, setMapBg, view],
   );
 }

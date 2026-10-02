@@ -643,9 +643,9 @@ function LayerNameField({
  * "zoom to this layer" — the universal gesture after an import — never costs a
  * disclosure click first.
  *
- * Delete is two-step inside the menu. The document has no undo, an imported
- * layer can represent a real parsing session, and a single mis-click sits 4px
- * from Rename.
+ * Delete is two-step inside the menu: a single mis-click sits 4px from
+ * Rename. Undo brings a deleted layer back (session/history.ts), so the
+ * question names the way back instead of a warning.
  */
 function OverflowMenu({
   entry,
@@ -875,7 +875,7 @@ function OverflowMenu({
         >
           {confirmingDelete && (
             <p className={styles.menuConfirmText}>
-              Delete “{entry.label}”? This cannot be undone.
+              Delete “{entry.label}”? Undo brings it back.
             </p>
           )}
           {items.map((item, index) => (

@@ -3,9 +3,12 @@
 // Convert an annotation to a data layer, from the element's right-click menu
 // (registered through the fork's `excalidrawAPI.registerContextMenuItem`).
 //
-// The conversion is two edits: the document gains a data layer with the
-// element's geometry, and the element is deleted as an undoable scene step.
-// The map overlays draw the new layer; nothing here writes the map.
+// The conversion is one step in the editor's history (session/history.ts):
+// the document gains a data layer with the element's geometry, and the
+// element is deleted. Undo takes back both, so the shape is never on the
+// map twice. The delete is kept out of the drawing's own history, which
+// would hold it as a second step. The map overlays draw the new layer;
+// nothing here writes the map.
 
 import { useCallback, useEffect } from "react";
 
@@ -19,10 +22,15 @@ import { defaultLayerStyle } from "@atlasdraw/basemap";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
-import { deleteAnnotation, generateLayerLabel } from "../state/annotations";
+import {
+  annotationParts,
+  generateLayerLabel,
+  setDeletedOutsideDrawingHistory,
+} from "../state/annotations";
 import { currentDocument } from "../state/document";
 
-import type { DocumentCommand } from "../state/document";
+import type { DispatchResult, DocumentCommand } from "../state/document";
+import type { EditorHistory } from "../session/history";
 
 /**
  * True when the element converts: it has a shape on the map, and it is not
@@ -49,7 +57,8 @@ export function useConvertToDataLayer(
   excalidrawAPI: ExcalidrawImperativeAPI | null,
   addDataLayer: (
     layer: Omit<Extract<DocumentCommand, { type: "add-data-layer" }>, "type">,
-  ) => void,
+  ) => DispatchResult | void,
+  history: Pick<EditorHistory, "group" | "record">,
   notify: ConvertToDataLayerNotify,
 ): {
   currentConvertibleSelection: () => ConvertibleElement | null;
@@ -85,13 +94,30 @@ export function useConvertToDataLayer(
         const source = excalidrawAPI
           .getSceneElements()
           .find((x) => x.id === el.id);
-        addDataLayer({
-          id: `dl:${crypto.randomUUID()}`,
-          fc,
-          label: source ? generateLayerLabel(source, world) : el.type,
-          style: defaultLayerStyle(fc),
+        const parts = annotationParts(excalidrawAPI, el.id);
+        let refused: string | null = null;
+        history.group(() => {
+          const added = addDataLayer({
+            id: `dl:${crypto.randomUUID()}`,
+            fc,
+            label: source ? generateLayerLabel(source, world) : el.type,
+            style: defaultLayerStyle(fc),
+          });
+          if (added && !added.ok) {
+            refused = added.reason;
+            return;
+          }
+          setDeletedOutsideDrawingHistory(excalidrawAPI, parts, true);
+          history.record({
+            undo: () =>
+              setDeletedOutsideDrawingHistory(excalidrawAPI, parts, false),
+            redo: () =>
+              setDeletedOutsideDrawingHistory(excalidrawAPI, parts, true),
+          });
         });
-        deleteAnnotation(excalidrawAPI, el.id);
+        if (refused) {
+          notify.error(`Couldn't convert to a data layer — ${refused}`);
+        }
       } catch (err) {
         if (err instanceof UnsupportedConvertElementError) {
           notify.error(err.message);
@@ -108,7 +134,7 @@ export function useConvertToDataLayer(
         );
       }
     },
-    [addDataLayer, excalidrawAPI, notify],
+    [addDataLayer, excalidrawAPI, history, notify],
   );
 
   // Convert is a right-click context-menu item, through the

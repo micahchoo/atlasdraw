@@ -2,12 +2,12 @@
 //
 // Persistence wiring. When Excalidraw is ready: create the PersistenceStore,
 // load the last autosaved document and open it (documentIO.loadDocument),
-// start autosave, and mirror the dirty and drain state into the session's
-// persistence state for the "Unsaved" indicator and the share flush.
+// and start the autosave.
 //
-// What marks the document dirty: a change of the open Document's revision
-// (its layers, payloads, title, basemap), and, from
-// useExcalidrawChangeHandler, a change of the drawing. A pan is none of these.
+// What needs a save is the session's history (session/history.ts): its
+// position against the last save. Opening a map, loading a share, joining
+// or leaving a room and a collaborator's change are no step in it. A map
+// that is new to this browser (a copy of a shared map) is saved at once.
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 
@@ -20,7 +20,7 @@ import {
   isNewerBuildError,
   startAutoSave,
 } from "../state/persistence";
-import { currentDocument, followDocument } from "../state/document";
+import { currentDocument } from "../state/document";
 import {
   liveCamera,
   loadDocument,
@@ -43,6 +43,7 @@ import { trackSave } from "../state/lastSave";
 
 import type { EditorSession } from "../session/EditorSession";
 import type { Conflict } from "../state/documentStore";
+import type { HistoryPosition } from "../session/history";
 
 export interface PersistenceWiringNotify {
   error: (msg: string) => void;
@@ -64,7 +65,10 @@ function shareFailure(result: Exclude<ShareLoadResult, { kind: "ready" }>) {
 }
 
 /** What the wiring needs of the editor's session. */
-export type PersistenceSession = Pick<EditorSession, "view" | "persistence">;
+export type PersistenceSession = Pick<
+  EditorSession,
+  "view" | "persistence" | "history"
+>;
 
 /**
  * Wires the persistence lifecycle to `excalidrawAPI`: constructs the
@@ -80,7 +84,7 @@ export function usePersistenceWiring(
   /** A shared map to open as a copy in place of the autosave. */
   open: SharedMap | null = null,
 ): void {
-  const { view, persistence } = session;
+  const { view, persistence, history } = session;
   // Read once: the link is consumed by the first open.
   const openRef = useRef(open);
   // Save what is unsaved, now. Set by the effect below; called when the
@@ -167,8 +171,14 @@ export function usePersistenceWiring(
       },
     };
     let answering: Promise<void> | null = null;
-    const onConflict = (conflict: Conflict, doc: AtlasdrawDocument) => {
-      answering ??= answerConflict(ownership, store, conflict, doc)
+    const onConflict = (
+      conflict: Conflict,
+      doc: AtlasdrawDocument,
+      at: HistoryPosition,
+    ) => {
+      answering ??= answerConflict(ownership, store, conflict, doc, () =>
+        history.markSaved(at),
+      )
         .catch((err) => {
           // eslint-disable-next-line no-console
           console.warn("[atlasdraw] could not settle a save conflict", err);
@@ -179,24 +189,44 @@ export function usePersistenceWiring(
       return answering;
     };
     const unholdMaps = holdOpenMaps(ownership, store);
-    persistence.getState().setForceSave(async () => {
-      try {
-        const doc = getDoc();
-        if (doc) {
-          const result = await store.save(doc);
-          if (result.kind === "conflict") {
-            await onConflict(result, doc);
-          }
-        }
+    const autosave = startAutoSave(store, history, getDoc, {
+      onSaved: () => {
         persistence.getState().setLastSavedAt(Date.now());
-        persistence.getState().setDraining(false);
-      } catch (err) {
-        // Surface the failure but always clear isDraining — leaving it
-        // stuck would silently freeze the Share button forever.
-        persistence.getState().setDraining(false);
-        throw err;
-      }
+        if (!store.remoteSaveFailed()) {
+          persistence.getState().setRemoteSaveFailed(false);
+        }
+      },
+      onSaveError: () => {
+        // The store already logged the error; the user just needs to know
+        // the "Saved" indicator is stale.
+        documentNotify.error(
+          "Auto-save failed — recent changes may not be saved",
+        );
+      },
+      onConflict: (conflict, doc, at) => void onConflict(conflict, doc, at),
     });
+    persistence.getState().setForceSave(async () => {
+      const saving = autosave.saveNow();
+      if (!saving) {
+        return;
+      }
+      const { result, doc, at } = await saving;
+      if (result.kind === "conflict") {
+        await onConflict(result, doc, at);
+      }
+      persistence.getState().setLastSavedAt(Date.now());
+    });
+    // A map that is new to this browser: save it now. Opening it was no
+    // edit, so the history does not ask for this save.
+    const saveNewMap = () =>
+      void persistence
+        .getState()
+        .forceSave()
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error("[persistence] saving a new map failed", err);
+          documentNotify.error("Couldn't save the new map in this browser");
+        });
 
     let cancelled = false;
     const abort = new AbortController();
@@ -238,6 +268,16 @@ export function usePersistenceWiring(
           return;
         }
         const loaded = admitted?.doc ?? null;
+        // The user drew on the blank map while the saved one was read: keep
+        // that work. Opening the saved map now would replace it (audit F20);
+        // the saved map stays in My maps, and the new work saves as a map
+        // of its own.
+        if (admitted && loaded && history.dirty) {
+          documentNotify.success?.(
+            `You started drawing before "${loaded.manifest.title}" opened. It is in My maps.`,
+          );
+          return;
+        }
         // A room joined while the autosave was read: the room stays open.
         if (admitted && loaded && !isRoomDocument(currentDocument())) {
           const opened = await loadDocument(admitted, excalidrawAPI, {
@@ -251,7 +291,7 @@ export function usePersistenceWiring(
           if (copy) {
             // The copy is a new map: save it, and drop the link so a reload
             // opens the copy, not another one.
-            persistence.getState().markDirty();
+            saveNewMap();
             window.history.replaceState(
               window.history.state,
               "",
@@ -291,57 +331,14 @@ export function usePersistenceWiring(
       }
     })();
 
-    const unsubDirty = store.onDirty(() => {
-      // The underlying store's onDirty fires on its own markDirty(); mirror
-      // it for the indicator. setState, not markDirty(), which would forward
-      // back into the store. isDraining: a save will fire.
-      persistence.setState({ isDirty: true, isDraining: true });
-    });
-
-    // A command on the open document is an edit. Opening another document
-    // is not; whoever opens one decides whether it needs a save.
-    let followed = currentDocument();
-    let followedRevision = followed.revision;
-    const unsubDocument = followDocument((doc) => {
-      if (doc === followed && doc.revision !== followedRevision) {
-        persistence.getState().markDirty();
-      }
-      followed = doc;
-      followedRevision = doc.revision;
-    });
-
-    const dispose = startAutoSave(
-      store,
-      getDoc,
-      undefined,
-      undefined,
-      () => {
-        persistence.getState().clearDirty();
-        persistence.getState().setDraining(false);
-        persistence.getState().setLastSavedAt(Date.now());
-        if (!store.remoteSaveFailed()) {
-          persistence.getState().setRemoteSaveFailed(false);
-        }
-      },
-      () => {
-        // The store already logged the error; the user just needs to know
-        // the "Saved" indicator is stale.
-        documentNotify.error(
-          "Auto-save failed — recent changes may not be saved",
-        );
-      },
-      (conflict, doc) => void onConflict(conflict, doc),
-    );
-
     // Closing or leaving the tab: write unsaved changes now, not after the
     // autosave delay. 'visibilitychange' to hidden comes first and leaves the
     // most time; 'pagehide' covers a close that skips it.
     const flushOnLeave = (): Promise<unknown> | null => {
-      const doc = store.isDirty() ? getDoc() : null;
-      if (!doc) {
+      const save = history.dirty ? autosave.saveNow() : null;
+      if (!save) {
         return null;
       }
-      const save = store.save(doc);
       save.catch((err) => {
         // eslint-disable-next-line no-console
         console.error("[persistence] save on leave failed", err);
@@ -363,12 +360,10 @@ export function usePersistenceWiring(
       abort.abort();
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
-      unsubDirty();
-      unsubDocument();
       unsubCamera();
       unholdMaps();
       persistence.getState().setOwnMapLoaded(true);
-      dispose();
+      autosave.stop();
       flushRef.current = null;
       persistence.getState().setPersistenceStore(null);
       // The unmount's save (above) still writes through this connection.
@@ -376,5 +371,5 @@ export function usePersistenceWiring(
       unmountSave.current = null;
       void pending.catch(() => undefined).then(() => store.close());
     };
-  }, [excalidrawAPI, documentNotify, view, persistence]);
+  }, [excalidrawAPI, documentNotify, view, persistence, history]);
 }

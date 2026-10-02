@@ -4,13 +4,10 @@
 //
 // The imperative `PersistenceStore` (state/persistence.ts: IndexedDB, file
 // pickers, the autosave timer) is the source of truth for I/O and stays
-// framework-free. This store holds what the views read: the dirty flag (the
-// status bar's "Unsaved"), whether a save is in flight, the last save time,
-// and the handle usePersistenceWiring makes.
-//
-// markDirty() is forwarded to the underlying PersistenceStore so the auto-save
-// debounce timer kicks. Without that forward, edits would set the indicator
-// red but never actually persist.
+// framework-free. This store holds what the views read: the last save time,
+// whether the server copy is behind, and the handle usePersistenceWiring
+// makes. Whether the map has unsaved changes is not here: it is the
+// history's (session/history.ts#dirty), the one source.
 
 import { immer } from "zustand/middleware/immer";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -19,15 +16,6 @@ import type { PersistenceStore } from "./persistence";
 
 export type PersistenceState = {
   persistenceStore: PersistenceStore | null;
-  isDirty: boolean;
-  /**
-   * True while a save is in flight (from first markDirty after a quiet
-   * window until the save callback resolves). Distinct from `isDirty`: the
-   * canvas can be dirty for 5s before the trailing-edge debounce fires, and
-   * `isDraining` reflects "a save is actively flushing right now" so the
-   * Share UI knows to wait.
-   */
-  isDraining: boolean;
   /** ms since the epoch of the last successful local save. */
   lastSavedAt: number | null;
   /** True when the last remoteSave failed (IDB ok, server stale). */
@@ -46,16 +34,15 @@ export type PersistenceState = {
    */
   readOnly: boolean;
   /**
-   * Save now, set by usePersistenceWiring when it makes the persistence
-   * store. Calls `store.save(getDoc())` directly, bypassing the
-   * debounce timer. Returns a promise that resolves when the IDB write (and
-   * remoteSave, if configured) completes.
+   * Save the open map now, dirty or not, past the autosave delay. Set by
+   * usePersistenceWiring when it makes the persistence store. Resolves
+   * when the IDB write (and remoteSave, if configured) completes. A map
+   * that was just made or opened from outside the browser (a new map, a
+   * file, a copy of a shared map) is saved with it: opening is not an
+   * edit, so the history does not ask for that save.
    */
   forceSave: () => Promise<void>;
   setPersistenceStore: (store: PersistenceStore | null) => void;
-  markDirty: () => void;
-  clearDirty: () => void;
-  setDraining: (v: boolean) => void;
   setLastSavedAt: (ts: number | null) => void;
   setForceSave: (fn: () => Promise<void>) => void;
   setRemoteSaveFailed: (v: boolean) => void;
@@ -67,10 +54,8 @@ export type PersistenceStateStore = StoreApi<PersistenceState>;
 
 export function createPersistenceState(): PersistenceStateStore {
   return createStore<PersistenceState>()(
-    immer((set, get) => ({
+    immer((set) => ({
       persistenceStore: null,
-      isDirty: false,
-      isDraining: false,
       lastSavedAt: null,
       remoteSaveFailed: false,
       ownMapLoaded: true,
@@ -81,33 +66,6 @@ export function createPersistenceState(): PersistenceStateStore {
       setPersistenceStore: (store) =>
         set((s) => {
           s.persistenceStore = store;
-        }),
-
-      markDirty: () => {
-        // Forward to underlying PersistenceStore *first* so the debounce timer
-        // starts before any React re-render the isDirty flip might trigger.
-        // Reading via get() avoids capturing a stale closure.
-        const underlying = get().persistenceStore;
-        if (underlying) {
-          underlying.markDirty();
-        }
-        set((s) => {
-          s.isDirty = true;
-          // Observably synchronous: by the time the React tree sees the
-          // markDirty -> isDirty=true flip, isDraining is already true so the
-          // UI never paints a "clean" frame between user edit and save start.
-          s.isDraining = true;
-        });
-      },
-
-      clearDirty: () =>
-        set((s) => {
-          s.isDirty = false;
-        }),
-
-      setDraining: (v) =>
-        set((s) => {
-          s.isDraining = v;
         }),
 
       setLastSavedAt: (ts) =>

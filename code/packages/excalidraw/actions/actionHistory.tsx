@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 import {
   isWindows,
   KEYS,
@@ -14,17 +16,15 @@ import type { SceneElementsMap } from "@atlasdraw/element/types";
 
 import { ToolButton } from "../components/ToolButton";
 import { UndoIcon, RedoIcon } from "../components/icons";
-import { HistoryChangedEvent } from "../history";
-import { useEmitter } from "../hooks/useEmitter";
 import { t } from "../i18n";
 
 import { useStylesPanelMode } from "../components/App";
 
 import type { History } from "../history";
-import type { AppClassProperties, AppState } from "../types";
+import type { AppClassProperties, AppState, HistoryHost } from "../types";
 import type { Action, ActionResult } from "./types";
 
-const executeHistoryAction = (
+export const executeHistoryAction = (
   app: AppClassProperties,
   appState: Readonly<AppState>,
   updater: () => [SceneElementsMap, AppState] | void,
@@ -63,26 +63,50 @@ const executeHistoryAction = (
 
 type ActionCreator = (history: History) => Action;
 
+/**
+ * Whether the undo or redo button is enabled: the host's answer when the
+ * host owns undo (Atlasdraw addition, `historyHost`), else the drawing's
+ * own stack.
+ */
+const useCanStep = (
+  history: History,
+  host: HistoryHost | undefined,
+  kind: "undo" | "redo",
+): boolean =>
+  useSyncExternalStore(
+    (listener) =>
+      host
+        ? host.subscribe(listener)
+        : history.onHistoryChangedEmitter.on(listener),
+    () =>
+      host
+        ? kind === "undo"
+          ? host.canUndo()
+          : host.canRedo()
+        : kind === "undo"
+        ? !history.isUndoStackEmpty
+        : !history.isRedoStackEmpty,
+  );
+
 export const createUndoAction: ActionCreator = (history) => ({
   name: "undo",
   label: "buttons.undo",
   icon: UndoIcon,
   trackEvent: { category: "history" },
   viewMode: false,
-  perform: (elements, appState, value, app) =>
-    executeHistoryAction(app, appState, () =>
+  perform: (elements, appState, value, app) => {
+    if (app.props.historyHost) {
+      app.props.historyHost.undo();
+      return false;
+    }
+    return executeHistoryAction(app, appState, () =>
       history.undo(arrayToMap(elements) as SceneElementsMap, appState),
-    ),
+    );
+  },
   keyTest: (event) =>
     event[KEYS.CTRL_OR_CMD] && matchKey(event, KEYS.Z) && !event.shiftKey,
   PanelComponent: ({ appState, updateData, data, app }) => {
-    const { isUndoStackEmpty } = useEmitter<HistoryChangedEvent>(
-      history.onHistoryChangedEmitter,
-      new HistoryChangedEvent(
-        history.isUndoStackEmpty,
-        history.isRedoStackEmpty,
-      ),
-    );
+    const canUndo = useCanStep(history, app.props.historyHost, "undo");
     const isMobile = useStylesPanelMode() === "mobile";
 
     return (
@@ -92,7 +116,7 @@ export const createUndoAction: ActionCreator = (history) => ({
         aria-label={t("buttons.undo")}
         onClick={updateData}
         size={data?.size || "medium"}
-        disabled={isUndoStackEmpty}
+        disabled={!canUndo}
         data-testid="button-undo"
         style={{
           ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
@@ -108,21 +132,20 @@ export const createRedoAction: ActionCreator = (history) => ({
   icon: RedoIcon,
   trackEvent: { category: "history" },
   viewMode: false,
-  perform: (elements, appState, __, app) =>
-    executeHistoryAction(app, appState, () =>
+  perform: (elements, appState, __, app) => {
+    if (app.props.historyHost) {
+      app.props.historyHost.redo();
+      return false;
+    }
+    return executeHistoryAction(app, appState, () =>
       history.redo(arrayToMap(elements) as SceneElementsMap, appState),
-    ),
+    );
+  },
   keyTest: (event) =>
     (event[KEYS.CTRL_OR_CMD] && event.shiftKey && matchKey(event, KEYS.Z)) ||
     (isWindows && event.ctrlKey && !event.shiftKey && matchKey(event, KEYS.Y)),
   PanelComponent: ({ appState, updateData, data, app }) => {
-    const { isRedoStackEmpty } = useEmitter(
-      history.onHistoryChangedEmitter,
-      new HistoryChangedEvent(
-        history.isUndoStackEmpty,
-        history.isRedoStackEmpty,
-      ),
-    );
+    const canRedo = useCanStep(history, app.props.historyHost, "redo");
     const isMobile = useStylesPanelMode() === "mobile";
 
     return (
@@ -132,7 +155,7 @@ export const createRedoAction: ActionCreator = (history) => ({
         aria-label={t("buttons.redo")}
         onClick={updateData}
         size={data?.size || "medium"}
-        disabled={isRedoStackEmpty}
+        disabled={!canRedo}
         data-testid="button-redo"
         style={{
           ...(isMobile ? MOBILE_ACTION_BUTTON_BG : {}),
