@@ -61,10 +61,10 @@
   align-items: center;
   justify-content: center;
   font-family: var(--ad-font-mono);
-  font-size: 9px;
+  font-size: var(--ad-text-2xs);
   font-weight: 600;
   line-height: 1;
   color: var(--ad-ink-inverse);
   background: var(--ad-accent);
-  border-radius: 7px;
+  border-radius: var(--ad-radius-pill);
 }

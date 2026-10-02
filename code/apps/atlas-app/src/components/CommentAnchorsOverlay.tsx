@@ -21,7 +21,7 @@
 //
 // Mounted by MapEditor as a sibling of the Excalidraw canvas. Pointer events
 // are scoped to the rendered anchors themselves and the transient intercept
-// (z-index 10 per atlasdraw-ui-conventions) — the surrounding container is
+// (--ad-z-overlay, tokens.css) — the surrounding container is
 // pointer-events:none.
 //
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md

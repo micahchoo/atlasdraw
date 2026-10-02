@@ -5,16 +5,15 @@
  * style values from the same projection that places a finished CommentAnchor,
  * so the draft appears where the thread will live.
  *
- * Z-index 11: one above the placed anchors (.anchor is 10, the toolbar band).
- * The draft is transient and must never be occluded by a thread bubble that
- * happens to project to the same pixel. Both resolve inside the overlay
- * container, so this stays inside the ladder's toolbar band rather than
- * opening a new one.
+ * One step over the placed anchors (.anchor is --ad-z-overlay). The draft is
+ * transient and must never be occluded by a thread bubble that happens to
+ * project to the same pixel. Both resolve inside the overlay container, so
+ * this opens no new band on the ladder.
  */
 
 .draft {
   position: absolute;
-  z-index: 11;
+  z-index: calc(var(--ad-z-overlay) + var(--ad-z-raised));
   /* Same tip-of-the-pin origin as .anchor, offset right so the bubble does not
    * cover the point being annotated. */
   transform: translate(12px, -100%);
@@ -23,7 +22,7 @@
   box-sizing: border-box;
   pointer-events: auto;
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink);
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-rule);
@@ -32,7 +31,7 @@
 }
 
 .provenance {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
   margin-bottom: var(--ad-space-1);
 }
@@ -48,7 +47,7 @@
   height: 24px;
   padding: 0 var(--ad-space-1);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink);
   background: var(--ad-surface);
   border: 1px solid var(--ad-rule);
@@ -101,7 +100,7 @@
   height: 24px;
   padding: 0 var(--ad-space-2);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink);
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-rule);
