@@ -93,7 +93,7 @@ export const Hyperlink = ({
       trackEvent("hyperlink", "create");
     }
 
-    // Atlasdraw (ADR-0010): a link is only a link. Upstream resized an
+    // Atlasdraw: a link is only a link. Upstream resized an
     // `embeddable` to the linked video and marked it valid to render.
     scene.mutateElement(element, { link });
   }, [element, scene]);

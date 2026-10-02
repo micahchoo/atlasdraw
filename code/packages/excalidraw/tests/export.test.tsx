@@ -51,7 +51,7 @@ describe("export", () => {
     await render(<Excalidraw />);
   });
 
-  // Atlasdraw (ADR-0010): a dropped scene file goes to the host, not into
+  // Atlasdraw: a dropped scene file goes to the host, not into
   // the canvas (atlasClosedLoadDoors.test.tsx). The decode is still the
   // fork's, so these cases read the files through loadFromBlob.
   it("export embedded png and reimport", async () => {

@@ -50,7 +50,7 @@ export const isEmbeddableElement = (
 };
 
 /**
- * Atlasdraw (ADR-0010): element types no input may bring into a scene. An
+ * Atlasdraw: element types no input may bring into a scene. An
  * `iframe` rendered its `customData` HTML with scripts; an `embeddable`, a
  * third-party page. `restoreElements` drops them, and a host that applies a
  * scene without restoring it (the atlas app's document open) checks here.

@@ -462,7 +462,7 @@ describe("tile layers in the file (W9d)", () => {
 
 describe("loadDocument", () => {
   it("drops iframe and embeddable elements, opens the rest, and says how many", async () => {
-    // ADR-0010: a file, a share link and the autosave are data from a
+    // A file, a share link and the autosave are data from a
     // stranger; these two types rendered live web pages.
     const fx = makeFakeExcalidraw();
     const planted = (id: string, type: string) => ({

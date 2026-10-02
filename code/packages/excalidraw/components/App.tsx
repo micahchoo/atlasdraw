@@ -656,7 +656,7 @@ class App extends React.Component<AppProps, AppState> {
   public files: BinaryFiles = {};
   public imageCache: AppClassProperties["imageCache"] = new Map();
   /**
-   * Atlasdraw (ADR-0010): always empty. The editor renders no `iframe` or
+   * Atlasdraw: always empty. The editor renders no `iframe` or
    * `embeddable` element as live HTML, so no embed is ever "validated";
    * the static renderers draw one that reaches the scene as a plain box.
    */
@@ -3018,7 +3018,7 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
-    // Atlasdraw (ADR-0010): a pasted URL is text. Upstream made an
+    // Atlasdraw: a pasted URL is text. Upstream made an
     // `embeddable` (a live third-party iframe) from it.
 
     // ------------------- Text -------------------
@@ -11062,7 +11062,7 @@ class App extends React.Component<AppProps, AppState> {
         (file.type === MIME_TYPES.png || file.type === MIME_TYPES.svg)
       ) {
         try {
-          // Atlasdraw (ADR-0010): an image that carries a scene is a scene
+          // Atlasdraw: an image that carries a scene is a scene
           // file. The host opens it; the open drawing is not replaced.
           await loadFromBlob(file, null, null);
           this.props.onSceneFileDrop?.(file);
@@ -11138,7 +11138,7 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   /**
-   * Atlasdraw (ADR-0010): a file dropped on, or launched into, the editor.
+   * Atlasdraw: a file dropped on, or launched into, the editor.
    * A scene (.excalidraw) goes to the host's `onSceneFileDrop`, and nothing
    * changes when there is none: upstream replaced the open drawing and its
    * camera here, outside the host's own open path. A library file still goes

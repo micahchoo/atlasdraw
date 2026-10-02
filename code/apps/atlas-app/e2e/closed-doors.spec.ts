@@ -1,5 +1,5 @@
 /**
- * The fork's doors that skipped the product's rules, closed (ADR-0010):
+ * The fork's doors that skipped the product's rules, closed:
  *
  * - A `.excalidraw` file dropped on the canvas opens as Open does: a new map
  *   with a new id, where the user is looking. Upstream replaced the open

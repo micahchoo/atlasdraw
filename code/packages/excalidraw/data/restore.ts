@@ -111,7 +111,7 @@ export const AllowedExcalidrawActiveTools: Record<
   eraser: false,
   custom: true,
   frame: true,
-  // Atlasdraw (ADR-0010): the embeddable tool is closed.
+  // Atlasdraw: the embeddable tool is closed.
   embeddable: false,
   hand: true,
   laser: false,
@@ -557,7 +557,7 @@ export const restoreElement = (
     case "rectangle":
     case "diamond":
       return restoreElementWithProperties(element, {});
-    // Atlasdraw (ADR-0010): refused. Nothing in the editor makes them, and
+    // Atlasdraw: refused. Nothing in the editor makes them, and
     // upstream rendered them as live third-party or scripted HTML.
     case "iframe":
     case "embeddable":

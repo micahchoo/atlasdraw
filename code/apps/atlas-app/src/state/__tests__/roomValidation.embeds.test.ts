@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // A room peer cannot plant a live web page on everyone's map: `iframe` and
-// `embeddable` elements fail the element check (ADR-0010).
+// `embeddable` elements fail the element check.
 
 import { describe, expect, it } from "vitest";
 

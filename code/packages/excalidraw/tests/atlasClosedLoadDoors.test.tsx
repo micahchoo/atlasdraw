@@ -21,7 +21,7 @@ import {
   waitFor,
 } from "./test-utils";
 
-// Atlasdraw addition (ADR-0010). Two upstream doors are closed here.
+// Atlasdraw addition. Two upstream doors are closed here.
 //
 // 1. `iframe` and `embeddable` elements. Upstream rendered an `iframe`
 //    element's `customData.generationData.html` as the srcdoc of a scripted

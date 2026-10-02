@@ -16,7 +16,7 @@ const { h } = window;
 
 describe("appState", () => {
   it("drag&drop of a scene file changes no appState and hands the file to the host", async () => {
-    // Atlasdraw (ADR-0010): upstream loaded the file's appState here.
+    // Atlasdraw: upstream loaded the file's appState here.
     const exportBackground = !getDefaultAppState().exportBackground;
     const onSceneFileDrop = vi.fn();
 

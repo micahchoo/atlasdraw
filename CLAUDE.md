@@ -6,16 +6,17 @@ loads when you work under `code/`.
 
 ADRs live in two series whose numbers collide: `code/decisions/` (0001–0010,
 the fork and licence decisions) and `docs/architecture/adr/` (0006 and later,
-the product decisions). "ADR 0010" means own-the-fork in `code/` docs and the
-Yjs E2EE threat model in code comments, so cite an ADR by file path.
+the product decisions). "ADR 0010" can mean own-the-fork or the Yjs E2EE
+threat model, so cite an ADR by file path.
 
 User docs say what the code does now. History goes in `CHANGELOG.md` and the
 ADRs only. An ADR that a later one reverses keeps its text and gets a dated
 note at the top.
 
 Open follow-up work is in `.agents/docs/SHEET_PANEL_FOLLOWUPS.md`.
-Code comments that cite `ISSUES.md`, `DEADWOOD.md` or `docs/superpowers/plans/`
-name deleted ledgers; `git log` holds them.
+`ISSUES.md`, `DEADWOOD.md` and the root `docs/superpowers/plans/` are deleted;
+`git log` holds them. The research notes in `code/decisions/` still cite those
+plans, as history.
 
 ## Scoped rules
 

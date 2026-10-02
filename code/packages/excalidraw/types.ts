@@ -898,7 +898,7 @@ export interface ExcalidrawProps {
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
   /**
-   * Atlasdraw addition (ADR-0010). A scene file dropped on the editor: an
+   * Atlasdraw addition. A scene file dropped on the editor: an
    * `.excalidraw` file, or a PNG or SVG that carries a scene. The editor
    * never loads one into the open drawing; it hands the file here, and the
    * host opens it on its own terms (the atlas app: as a new map in world

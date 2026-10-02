@@ -74,7 +74,7 @@ describe("map toolset", () => {
   });
 
   it("a document with frame, magic frame, embeddable and iframe elements still loads, without the embeds", async () => {
-    // Atlasdraw (ADR-0010): `embeddable` and `iframe` are refused on load
+    // Atlasdraw: `embeddable` and `iframe` are refused on load
     // (atlasClosedLoadDoors.test.tsx); the rest of the document opens.
     const elements = [
       API.createElement({ type: "frame", id: "frame" }),

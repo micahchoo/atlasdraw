@@ -211,7 +211,7 @@ const renderElementToSvg = (
         renderConfig,
       );
 
-      // Atlasdraw (ADR-0010): an export writes no iframe and no link for
+      // Atlasdraw: an export writes no iframe and no link for
       // an `iframe` or `embeddable` element; the placeholder above is all.
       break;
     }
