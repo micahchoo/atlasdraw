@@ -254,14 +254,22 @@ export function pointProblem(
 export function compileSourceOptions(
   style: LayerStyle,
   geometryType: LayerGeometryType,
-): { cluster?: true; clusterRadius?: number; filter?: unknown[] } {
+): {
+  cluster?: true;
+  clusterRadius?: number;
+  filter?: maplibregl.FilterSpecification;
+} {
   if (geometryType !== "circle" || style.points !== "clusters") {
     return {};
   }
   return {
     cluster: true,
     clusterRadius: CLUSTER_RADIUS,
-    ...(style.filter ? { filter: compileFilter(style.filter) } : {}),
+    ...(style.filter
+      ? {
+          filter: compileFilter(style.filter) as maplibregl.FilterSpecification,
+        }
+      : {}),
   };
 }
 

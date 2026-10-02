@@ -9,7 +9,7 @@
 // At most TABLE_ROW_CAP rows render, so a layer of 50,000 features opens at
 // once; the count line says so.
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   TABLE_ROW_CAP,
