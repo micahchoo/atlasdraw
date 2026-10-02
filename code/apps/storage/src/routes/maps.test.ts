@@ -20,9 +20,16 @@ const UNKNOWN_ID = "a".repeat(21);
 
 function makeApp(
   dataDir: string,
-  opts: { bodyLimit?: number; maxTotalBytes?: number } = {},
+  opts: {
+    bodyLimit?: number;
+    maxTotalBytes?: number;
+    versionsKept?: number;
+  } = {},
 ): FastifyInstance {
   const env: Record<string, string> = {};
+  if (opts.versionsKept !== undefined) {
+    env.MAP_VERSIONS_KEPT = String(opts.versionsKept);
+  }
   if (opts.bodyLimit !== undefined) {
     env.MAX_MAP_BYTES = String(opts.bodyLimit);
   }
@@ -493,8 +500,11 @@ describe("/maps routes", () => {
       await capped.close();
     });
 
-    it("counts a rewrite by its growth, not its whole size", async () => {
-      const capped = makeApp(scratch.name, { maxTotalBytes: 10 });
+    it("with no history, counts a rewrite by its growth, not its whole size", async () => {
+      const capped = makeApp(scratch.name, {
+        maxTotalBytes: 10,
+        versionsKept: 0,
+      });
       await capped.ready();
       const created = await capped.inject({
         method: "POST",
@@ -532,8 +542,11 @@ describe("/maps routes", () => {
       payload: Buffer.from("again"),
     });
     const files = fs.readdirSync(path.join(scratch.name, "blobs"));
-    expect(files).toHaveLength(1);
-    expect(files[0]).toMatch(new RegExp(`^${id}\\.[0-9a-f]+\\.atlasdraw$`));
+    // The new bytes, and the old ones kept as a version.
+    expect(files).toHaveLength(2);
+    for (const file of files) {
+      expect(file).toMatch(new RegExp(`^${id}\\.[0-9a-f]+\\.atlasdraw$`));
+    }
   });
 
   it("a PUT that loses the race with a DELETE answers 404 and leaves no blob", async () => {

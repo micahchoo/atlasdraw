@@ -82,6 +82,20 @@ const BaseSchema = z.object({
   // that no live token reads (see StorageClient.sweep). It also sweeps once at
   // start. 0: never.
   SWEEP_INTERVAL_MS: z.coerce.number().int().nonnegative().default(3_600_000),
+  // Earlier versions of each map the server keeps, besides its latest bytes
+  // (docs/architecture/adr/0020-server-version-history.md). They count
+  // against MAX_TOTAL_BYTES. 0: no history; a frozen link still keeps the
+  // version it shows.
+  MAP_VERSIONS_KEPT: z.coerce.number().int().nonnegative().default(20),
+  // The least time between two kept versions. The editor saves every few
+  // seconds while the owner draws; a save that stood for less than this,
+  // and came less than this after the last kept version, is replaced by the
+  // next one. 0: keep every save.
+  MAP_VERSION_INTERVAL_MINUTES: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(10),
   // How long a shutdown waits for requests in flight before it exits anyway.
   // Keep it below the container's stop grace period (compose: 30 s).
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().positive().default(25_000),

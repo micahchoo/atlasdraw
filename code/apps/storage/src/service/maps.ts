@@ -15,12 +15,15 @@ import {
   isRevisionConflict,
 } from "../lib/errors";
 
+import { NO_VERSIONS } from "../versions";
+
 import type {
   BlobBody,
   BlobRead,
   MapRecord,
   StorageClient,
   SweepResult,
+  VersionPolicy,
 } from "../types";
 
 /** What a client may see of a map. */
@@ -42,6 +45,15 @@ export type Conflict = { kind: "conflict"; revision: number };
 export interface WriteRequest {
   /** The revision the writer read (If-Match). Absent: no check. */
   ifRevision?: number;
+  /** Keep the bytes this write replaces as a version, whatever their age. */
+  checkpoint?: boolean;
+}
+
+/** One revision of a map, as its owner sees it in the history. */
+export interface PublicVersion {
+  revision: number;
+  saved_at: string;
+  byte_size: number;
 }
 
 export interface MapService {
@@ -58,6 +70,21 @@ export interface MapService {
   >;
   /** The owner's backup: the map's latest bytes. */
   read(id: string, writeKey: string): Promise<Bytes | Forbidden | Missing>;
+  /** Every revision the store has, the current one first. */
+  versions(
+    id: string,
+    writeKey: string,
+  ): Promise<
+    | { kind: "versions"; current: number; versions: PublicVersion[] }
+    | Forbidden
+    | Missing
+  >;
+  /** The bytes of one revision the store keeps. */
+  readVersion(
+    id: string,
+    writeKey: string,
+    revision: number,
+  ): Promise<Bytes | Forbidden | Missing>;
   /** `expiresInDays` null: the token lives until it is revoked. */
   share(
     id: string,
@@ -87,6 +114,8 @@ export interface MapServiceOptions {
   maxTotalBytes: number;
   /** How long keyless maps from before write keys are kept. Default 90 days. */
   legacyGraceDays?: number;
+  /** Which earlier bytes each map keeps. Default: none. */
+  versions?: VersionPolicy;
   now?: () => Date;
 }
 
@@ -130,6 +159,7 @@ export function createMapService(
   // The store checks the cap in the same transaction that reserves the
   // bytes, so concurrent writes cannot pass it together.
   const cap = { maxTotalBytes: opts.maxTotalBytes };
+  const versions = opts.versions ?? NO_VERSIONS;
 
   /** The map, if `writeKey` opens it. */
   async function owned(
@@ -175,6 +205,9 @@ export function createMapService(
             await store.updateMap(id, body, {
               ...cap,
               ifRevision: request.ifRevision,
+              checkpoint: request.checkpoint,
+              versions,
+              at: now(),
             }),
           ),
         };
@@ -198,6 +231,42 @@ export function createMapService(
         return map;
       }
       const blob = await store.getBlob(id);
+      return blob ? { kind: "bytes", blob } : { kind: "missing" };
+    },
+
+    async versions(id, writeKey) {
+      const map = await owned(id, writeKey);
+      if (refused(map)) {
+        return map;
+      }
+      const kept = await store.listVersions(id);
+      if (kept === null) {
+        return { kind: "missing" };
+      }
+      return {
+        kind: "versions",
+        current: map.revision,
+        versions: [
+          {
+            revision: map.revision,
+            saved_at: map.updated_at,
+            byte_size: map.byte_size,
+          },
+          ...kept.map((v) => ({
+            revision: v.revision,
+            saved_at: v.saved_at,
+            byte_size: v.byte_size,
+          })),
+        ],
+      };
+    },
+
+    async readVersion(id, writeKey, revision) {
+      const map = await owned(id, writeKey);
+      if (refused(map)) {
+        return map;
+      }
+      const blob = await store.getVersionBlob(id, revision);
       return blob ? { kind: "bytes", blob } : { kind: "missing" };
     },
 
