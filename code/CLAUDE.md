@@ -28,8 +28,8 @@ yarn build                                   # editor production build (apps/atl
 yarn test:typecheck                          # builds the fork's types, then tsc in every workspace
 yarn test --watch=false                      # Vitest, all workspaces
 npx vitest run apps/storage                  # Vitest, one folder
-yarn test:code                               # ESLint
-yarn test:other                              # Prettier check (css, scss, json, md, html, yml)
+yarn test:code                               # ESLint 9 (eslint.config.mjs): boundaries, hooks, a few correctness rules
+yarn test:other                              # Prettier check (TypeScript, JS, css, scss, json, md, html, yml)
 yarn test:all                                # all of the above, plus test:falsifiable
 yarn fix                                     # Prettier and ESLint fixes
 yarn workspace @atlasdraw/atlas-app e2e      # Playwright, chromium
@@ -42,7 +42,7 @@ yarn workspace @atlasdraw/atlas-app e2e      # Playwright, chromium
 - `packageManager: yarn@4.15.0`. In CI, `corepack enable` runs before `setup-node`'s yarn cache step.
 - One scope: everything internal is `@atlasdraw/*` (ADR 0010). The only `@excalidraw/*` names left are real npm dependencies (`eslint-config`, `prettier-config`, `laser-pointer`, `random-username`). Never rename them.
 - The fork packages build with esbuild (`scripts/buildPackage.js`); the editor builds with Vite. The editor reads the fork's built types, so `yarn test:typecheck` runs `build:types` first.
-- TypeScript is strict everywhere.
+- TypeScript is strict everywhere. Atlas-owned code also has `noUnusedLocals` and `noUnusedParameters` (`packages/tsconfig.base.json`); the five fork packages turn them off (183 findings in upstream code). Unused code is a type error, not a lint rule.
 
 ### Known seams
 

@@ -8,7 +8,7 @@
 //
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { Camera } from "@atlasdraw/data";
 

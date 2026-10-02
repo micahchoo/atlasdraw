@@ -4,8 +4,6 @@
 // order. Rendered as a child of <Excalidraw>, where it replaces the drawing
 // editor's own menu.
 
-import React from "react";
-
 import { MainMenu } from "@atlasdraw/excalidraw";
 
 import { MAIN_MENU, commandById } from "../commands/commands";

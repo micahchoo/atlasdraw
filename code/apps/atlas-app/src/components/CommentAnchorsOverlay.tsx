@@ -56,7 +56,7 @@ import { CommentAnchor } from "./CommentAnchor";
 import { CommentDraftBubble } from "./CommentDraftBubble";
 
 import type { Comment } from "../state/comments";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // The structural subset of ExcalidrawImperativeAPI the overlay touches
 // (onChange, getSceneElements, getAppState). Unit-test mocks may omit

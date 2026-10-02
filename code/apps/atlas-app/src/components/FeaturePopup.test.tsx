@@ -5,7 +5,6 @@
 // keyboard. The map is FakeMapLibre with the real reconciler; every
 // assertion reads the rendered DOM.
 
-import React from "react";
 import {
   act,
   cleanup,

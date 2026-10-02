@@ -36,7 +36,7 @@ import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 import type { PersistenceStateStore } from "./persistenceState";
 import type { History } from "../session/history";
 import type { StorageClient } from "../services/createHttpStorageClient";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export interface MapActionContext {
   api: ExcalidrawImperativeAPI;
@@ -67,7 +67,6 @@ async function keepOpenMap(ctx: MapActionContext): Promise<boolean> {
     await persistence.forceSave();
     return true;
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not keep the open map", err);
     if (!hasUnsavedWork(currentDocument())) {
       return true;
@@ -110,7 +109,6 @@ export async function openSavedMap(
     ctx.notify?.success(`Opened "${file.manifest.title}"`);
     return true;
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not open a saved map", err);
     ctx.notify?.error(
       isNewerBuildError(err)
@@ -130,7 +128,6 @@ async function saveOpened(ctx: MapActionContext): Promise<void> {
   try {
     await ctx.persistence.getState().forceSave();
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not save the opened map", err);
     ctx.notify?.error("Couldn't save the map in this browser.");
   }
@@ -255,7 +252,6 @@ export async function deleteSavedMap(
     try {
       await deleteServerMap(opts.server, id);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("[atlasdraw] could not delete a server map", err);
       ctx.notify?.error(
         `The server copy of ${name} could not be deleted, so nothing was deleted. Try again later.`,
@@ -274,7 +270,6 @@ export async function deleteSavedMap(
   try {
     await store.remove(id);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] could not delete a saved map", err);
     ctx.notify?.error("The map could not be deleted.");
     return;
@@ -305,7 +300,6 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
   try {
     bytes = await restoreFromServer(ctx.client, id);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] server backup read failed", err);
     ctx.notify?.error(
       "Could not get the server backup. Your map did not change.",

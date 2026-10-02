@@ -29,7 +29,7 @@ import type {
 import { currentDocument, useDocumentStore } from "../state/document";
 import { fitMapToContent } from "../lib/fitMapToContent";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 const frame = () => currentDocument().snapshot().world;
 

@@ -38,7 +38,7 @@ import {
 
 import type { DocumentCommand } from "../../state/document";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** The command an import or a convert sends to the open document. */
 type AddDataLayer = Extract<DocumentCommand, { type: "add-data-layer" }>;
@@ -171,7 +171,6 @@ const mockFakeExcalidrawAPI = {
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactInner = require("react") as typeof import("react");
   const MainMenuStub = Object.assign(
     ({ children }: { children?: React.ReactNode }) =>

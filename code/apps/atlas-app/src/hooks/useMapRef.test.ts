@@ -12,7 +12,7 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 
 import { useMapRef } from "./useMapRef";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 function makeMockMap(): maplibregl.Map {
   return {} as maplibregl.Map;

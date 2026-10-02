@@ -14,7 +14,7 @@
 
 import "vitest-canvas-mock";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   act,
@@ -50,7 +50,7 @@ import { createViewStore } from "../../session/view";
 
 import { FakeMercatorMap } from "./fakeMercatorMap";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 beforeAll(() => {
   if (!window.matchMedia) {

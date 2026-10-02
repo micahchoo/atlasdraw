@@ -22,7 +22,7 @@
  */
 
 import React, { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 import { applyRotationPolicy } from "./cameraRotation";
 

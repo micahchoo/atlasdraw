@@ -15,7 +15,7 @@
 // caller: the map is drawn at its camera and bearing, the drawing is turned
 // by the same bearing, and the credit is its credits.
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
@@ -23,7 +23,7 @@ import { creditText, renderDrawing, type MapView } from "./mapView";
 
 /** The PNG sizes the dialog offers, as multiples of the view. */
 export const PNG_PIXEL_RATIOS = [1, 2, 3] as const;
-export type PngPixelRatio = typeof PNG_PIXEL_RATIOS[number];
+export type PngPixelRatio = (typeof PNG_PIXEL_RATIOS)[number];
 
 /** A map drawn at some pixel ratio, held until the caller has copied it. */
 export interface RenderedMap {
@@ -127,7 +127,7 @@ export async function renderMapOffscreen(
       Math.ceil(width * pixelRatio),
       Math.ceil(height * pixelRatio),
     ],
-    preserveDrawingBuffer: true,
+    canvasContextAttributes: { preserveDrawingBuffer: true },
     interactive: false,
     attributionControl: false,
     fadeDuration: 0,

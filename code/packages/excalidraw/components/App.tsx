@@ -3808,7 +3808,7 @@ class App extends React.Component<AppProps, AppState> {
        *  - `CaptureUpdateAction.NEVER`: Updates never make it to undo/redo stack. Use for remote updates or scene initialization.
        *  - `CaptureUpdateAction.EVENTUALLY`: Updates will be eventually be captured as part of a future increment.
        *
-       * Check [API docs](https://docs.excalidraw.com/docs/@atlasdraw/excalidraw/api/props/excalidraw-api#captureUpdate) for more details.
+       * Check [API docs](https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#captureUpdate) for more details.
        *
        * @default CaptureUpdateAction.EVENTUALLY
        */

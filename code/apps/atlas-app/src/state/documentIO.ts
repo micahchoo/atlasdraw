@@ -60,7 +60,7 @@ import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Save
@@ -454,7 +454,6 @@ export async function loadDocument(
 
   const dropped = droppedMessage(admitted);
   if (dropped) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] opened with parts left out", admitted.dropped);
     options.onDropped?.(dropped);
   }

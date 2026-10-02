@@ -59,6 +59,9 @@ export default defineConfig({
   },
   fullyParallel: false,
   workers: 1,
+  // One retry on CI: one slow boot must not fail CI and so block the Pages
+  // deploy. The failed try keeps its trace and video.
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   use: {
     baseURL: BASE_URL,

@@ -427,7 +427,6 @@ export const restoreElement = (
       });
     case "line":
     // @ts-ignore LEGACY type
-    // eslint-disable-next-line no-fallthrough
     case "draw":
       const startArrowhead = normalizeArrowhead(element.startArrowhead);
       const endArrowhead = normalizeArrowhead(element.endArrowhead);

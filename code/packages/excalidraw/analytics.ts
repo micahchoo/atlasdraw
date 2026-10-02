@@ -30,6 +30,7 @@ export const trackEvent = (
     }
 
     if (!import.meta.env.PROD) {
+      // eslint-disable-next-line no-console -- development builds only
       console.info("trackEvent", { category, action, label, value });
     }
 

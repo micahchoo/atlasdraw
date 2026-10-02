@@ -16,7 +16,7 @@
 
 import { useEffect, useState } from "react";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /**
  * Rotations closer to north than this read as north. `resetNorth` animates:

@@ -34,7 +34,7 @@ import { createViewStore, type ViewStore } from "./view";
 import type { DocumentStore } from "../state/document";
 import type { RoomTransport } from "../state/room";
 import type { SceneAccess } from "../state/scene";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Where an action tells the user how it went. */
 export interface Notify {

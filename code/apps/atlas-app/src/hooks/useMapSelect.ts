@@ -18,7 +18,7 @@ import { useFeaturePopup, type PopupMap } from "./useFeaturePopup";
 
 import type { EditorSession } from "../session/EditorSession";
 import type { RasterLayerEntry } from "../state/document";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Ray casting, on projected (screen) points. */
 export function pointInPolygon(

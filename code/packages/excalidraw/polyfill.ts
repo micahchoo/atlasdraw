@@ -1,7 +1,6 @@
 const polyfill = () => {
   if (!Array.prototype.at) {
     // Taken from https://github.com/tc39/proposal-relative-indexing-method#polyfill so that it works in tests
-    /* eslint-disable */
     Object.defineProperty(Array.prototype, "at", {
       value: function (n: number) {
         // ToInteger() abstract op

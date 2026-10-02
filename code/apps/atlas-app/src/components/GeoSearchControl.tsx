@@ -24,7 +24,7 @@ import { useGeocoderSearch, type PlaceHit } from "../hooks/useGeocoderSearch";
 
 import styles from "../styles/GeoSearchControl.module.css";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 const POPOVER_WIDTH = 300;
 const LISTBOX_ID = "geo-search-listbox";

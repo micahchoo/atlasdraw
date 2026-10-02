@@ -14,7 +14,7 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { MapCompass } from "../MapCompass";
 
 import type { CameraRotation } from "../../hooks/useCameraRotation";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /**
  * jsdom has no `PointerEvent`, and testing-library's `fireEvent.pointerDown`

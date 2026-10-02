@@ -10,7 +10,7 @@ import { createDocument, openDocument } from "../state/document";
 
 import { useBasemapStyle } from "./useBasemapStyle";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 const { registerPmtilesProtocolMock, resolveStyleMock, GatedErrorCtor } =
   vi.hoisted(() => {

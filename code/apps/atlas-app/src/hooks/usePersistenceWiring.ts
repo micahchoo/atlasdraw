@@ -104,7 +104,6 @@ export function usePersistenceWiring(
         save = flushRef.current?.() ?? null;
       } catch (err) {
         // A cleanup must not throw: the crash screen says the save failed.
-        // eslint-disable-next-line no-console
         console.error("[persistence] save on unmount failed", err);
         save = Promise.reject(err);
         save.catch(() => undefined);
@@ -180,7 +179,6 @@ export function usePersistenceWiring(
         history.markSaved(at),
       )
         .catch((err) => {
-          // eslint-disable-next-line no-console
           console.warn("[atlasdraw] could not settle a save conflict", err);
         })
         .finally(() => {
@@ -223,7 +221,6 @@ export function usePersistenceWiring(
         .getState()
         .forceSave()
         .catch((err) => {
-          // eslint-disable-next-line no-console
           console.error("[persistence] saving a new map failed", err);
           documentNotify.error("Couldn't save the new map in this browser");
         });
@@ -319,7 +316,6 @@ export function usePersistenceWiring(
           });
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("[atlasdraw] persistence.load() failed", err);
         documentNotify.error(
           isNewerBuildError(err)
@@ -340,7 +336,6 @@ export function usePersistenceWiring(
         return null;
       }
       save.catch((err) => {
-        // eslint-disable-next-line no-console
         console.error("[persistence] save on leave failed", err);
       });
       return save;

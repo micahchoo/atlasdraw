@@ -106,7 +106,6 @@ async function load(documentId: string): Promise<RemoteMap | null> {
     }
   } catch (err) {
     // IDB unavailable (private mode, quota): a new server map per session.
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] remote map load failed", err);
     return null;
   }
@@ -124,7 +123,6 @@ async function store(documentId: string, entry: RemoteMap): Promise<void> {
       db.close();
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] remote map store failed", err);
   }
 }
@@ -269,7 +267,6 @@ async function forget(documentId: string): Promise<void> {
       db.close();
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] remote map forget failed", err);
   }
 }

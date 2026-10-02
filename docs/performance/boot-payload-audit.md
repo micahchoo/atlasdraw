@@ -178,6 +178,32 @@ Verified on both routes: the boot shell is dismissed, `#root` renders, zero
 page errors. Gate: `tsc --noEmit` clean, eslint clean, prettier clean,
 1022/1022 vitest tests pass.
 
+## Per route, with a CI budget (2026-10-01)
+
+A route's boot payload is the page entry plus the route root, each with
+every chunk it imports statically (`code/apps/atlas-app/src/lib/bootPayload.ts`,
+read from `vite build --manifest`). Gzip level 9:
+
+| change | editor | viewer and embed |
+| --- | ---: | ---: |
+| before | 1,058 KB | 949 KB |
+| import parsers out of the boot chunk | 960 KB | 870 KB |
+| maplibre-gl 4.7 → 6.11 (critical advisory) | 1,009 KB | 920 KB |
+| after the R4/R5 merge | 1,014 KB | 926 KB |
+
+- The parsers (proj4, shpjs, xmldom, geotiff, papaparse, wkt-parser,
+  togeojson) now load only in the import worker. `packages/data` is
+  `sideEffects: false`, and the editor asks format questions of
+  `lib/importFormat.ts`, never of `lib/importPipeline.ts`.
+- The `boot-size` CI job fails a route over its budget
+  (`scripts/check-boot-size.ts`: editor 1,040 KB, viewer 950 KB).
+- The PRD budget (editor 800 KB, embed about 120 KB) is not met. What is
+  left is what both routes render with: the fork (about 1 MB raw) and
+  MapLibre 6 (296 KB gzip). jszip (with pako) stays: the viewer opens a
+  share link and the editor restores its autosave through it. yjs stays:
+  the comments of every document live in a Y.Doc (`state/document.ts`).
+  An embed near 120 KB needs a renderer without the Excalidraw editor.
+
 ## Still open
 
 - **Brotli.** `.br` siblings would save a further ~270 KB on the shared chunk,

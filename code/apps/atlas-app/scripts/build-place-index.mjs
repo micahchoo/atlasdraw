@@ -111,4 +111,9 @@ const sizeMb = (JSON.stringify(out).length / 1024 / 1024).toFixed(2);
 console.log(`Wrote ${OUT}`);
 console.log(`  ${places.length} places, ${sizeMb} MB`);
 console.log(`  kinds: ${JSON.stringify(kinds)}`);
-console.log(`  top: ${places.slice(0, 6).map((p) => p.n).join(", ")}`);
+console.log(
+  `  top: ${places
+    .slice(0, 6)
+    .map((p) => p.n)
+    .join(", ")}`,
+);

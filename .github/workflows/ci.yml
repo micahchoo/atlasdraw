@@ -32,6 +32,8 @@ jobs:
           cache: yarn
           cache-dependency-path: code/yarn.lock
       - run: yarn install --immutable
+      - run: bash scripts/check-license.sh
+      - run: bash scripts/check-telemetry.sh
       - run: yarn test:typecheck
       - run: yarn test:code
       - run: yarn test:other
@@ -86,17 +88,24 @@ jobs:
       - run: yarn vitest run apps/storage
 
   bench:
-    name: Bench (report only)
+    name: Bench, merge base vs head (report only)
     runs-on: ubuntu-latest
-    # The committed baseline was timed on a developer machine, so comparing a
-    # CI runner against it says nothing about a regression. Report only until
-    # the gate compares two runs on the same runner.
-    continue-on-error: true
+    # Times the merge base and the head in this one job, on this one runner,
+    # and writes the table to the job summary (code/bench/README.md).
+    # REPORT ONLY: no --blocking. Add --blocking to the last step only after
+    # 5 consecutive CI runs on unchanged parse code all pass; until then a
+    # slower result is information, not a failed build.
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PUSH_BEFORE: ${{ github.event.before }}
     defaults:
       run:
         working-directory: code
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: corepack enable
         working-directory: .
       - uses: actions/setup-node@v4
@@ -105,11 +114,26 @@ jobs:
           cache: yarn
           cache-dependency-path: code/yarn.lock
       - run: yarn install --immutable
-      - run: yarn workspace @atlasdraw/bench bench
-      - run: yarn workspace @atlasdraw/bench ci-gate
+      - name: Check out and install the merge base
+        id: base
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            BASE=$(git merge-base "$PR_BASE_SHA" HEAD)
+          else
+            BASE="$PUSH_BEFORE"
+          fi
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No base commit to compare with ($BASE)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE"
+          (cd "$RUNNER_TEMP/base/code" && yarn install --immutable --mode=skip-build)
+          echo "dir=$RUNNER_TEMP/base/code" >> "$GITHUB_OUTPUT"
+      - if: steps.base.outputs.dir != ''
+        run: yarn workspace @atlasdraw/bench ab --base "${{ steps.base.outputs.dir }}" --runs 5
 
   e2e:
-    name: Browser tests (chromium)
+    name: Browser tests on the dev server (chromium)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -133,6 +157,65 @@ jobs:
         with:
           name: playwright-results
           path: code/apps/atlas-app/test-results
+
+  e2e-build:
+    name: Browser tests on the production build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    # What ships: playwright.build.config.ts builds the target, serves it as
+    # it is deployed (Pages: /atlasdraw/ with the 404.html fallback; hosted:
+    # vite preview with the storage server at /api) and drives it through
+    # the UI: boot, draw, save and reload, share and embed links, fonts, and
+    # no CSP violation, console error or unnamed host on any of them.
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [hosted, pages]
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn workspace @atlasdraw/atlas-app exec playwright install --with-deps chromium
+      - run: yarn workspace @atlasdraw/atlas-app exec playwright test --config=playwright.build.config.ts
+        env:
+          CI: "true"
+          E2E_TARGET: ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-build-${{ matrix.target }}
+          path: code/apps/atlas-app/test-results
+
+  boot-size:
+    name: Boot size per route (budget)
+    runs-on: ubuntu-latest
+    # Gzip size of what each route loads before it paints: the page entry
+    # plus the route root and their static imports (src/lib/bootPayload.ts).
+    # Fails over the budgets in scripts/check-boot-size.ts.
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+          cache-dependency-path: code/yarn.lock
+      - run: yarn install --immutable
+      - run: yarn workspace @atlasdraw/atlas-app exec vite build --manifest
+      - run: node --experimental-strip-types scripts/check-boot-size.ts
+        working-directory: code/apps/atlas-app
 
   self-host:
     name: Self-host images build and run

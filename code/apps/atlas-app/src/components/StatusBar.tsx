@@ -9,13 +9,13 @@
  * nothing floats over the plate.
  */
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { creditText, documentCredits, metersPerPixel } from "../lib/mapView";
 import { useDocument } from "../state/document";
 import styles from "../styles/StatusBar.module.css";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Helpers

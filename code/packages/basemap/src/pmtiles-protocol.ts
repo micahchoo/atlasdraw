@@ -3,7 +3,7 @@
 // JSONs can reference vendored PMTiles files. Atlas-app's useBasemapStyle
 // calls it before it resolves a style.
 
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 
 let registered = false;

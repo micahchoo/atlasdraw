@@ -28,7 +28,7 @@ import styles from "../styles/MapCompass.module.css";
 
 import type { CameraRotation } from "../hooks/useCameraRotation";
 import type { KeyboardEvent, PointerEvent } from "react";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** Degrees per arrow-key press while the compass has focus. */
 const KEY_STEP_DEG = 5;

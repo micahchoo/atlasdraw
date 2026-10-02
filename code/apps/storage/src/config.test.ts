@@ -70,11 +70,20 @@ describe("loadConfig", () => {
     it.each([
       ["true", true],
       ["false", false],
-      ["1", 1],
       ["10.0.0.0/8,127.0.0.1", "10.0.0.0/8,127.0.0.1"],
+      ["loopback,uniquelocal", "loopback,uniquelocal"],
     ])("parses %s", (raw, expected) => {
       expect(loadConfig({ ...base, TRUST_PROXY: raw }).TRUST_PROXY).toBe(
         expected,
+      );
+    });
+    // Fastify 5.12 trusts no address for a hop count (it cannot tell the
+    // proxy from a client that forged the header). Accepting "1" would make
+    // every client behind the proxy share the proxy's address, and one
+    // rate-limit bucket. Refuse it at start instead.
+    it("refuses a hop count and names what to set instead", () => {
+      expect(() => loadConfig({ ...base, TRUST_PROXY: "1" })).toThrow(
+        /TRUST_PROXY.*uniquelocal/s,
       );
     });
   });

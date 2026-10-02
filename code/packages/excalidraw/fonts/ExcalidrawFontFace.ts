@@ -161,10 +161,12 @@ export class ExcalidrawFontFace {
         const normalizedBaseUrl = this.normalizeBaseUrl(path);
         urls.push(new URL(assetUrl, normalizedBaseUrl));
       });
+    } else {
+      // Atlasdraw: the CDN copy only when the host serves no fonts of its
+      // own. A host that sets EXCALIDRAW_ASSET_PATH ships the fonts, and a
+      // CDN fallback would make its content security policy admit esm.sh.
+      urls.push(new URL(assetUrl, ExcalidrawFontFace.ASSETS_FALLBACK_URL));
     }
-
-    // fallback url for bundled fonts
-    urls.push(new URL(assetUrl, ExcalidrawFontFace.ASSETS_FALLBACK_URL));
 
     return urls;
   }

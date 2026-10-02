@@ -101,6 +101,13 @@ describe("contentSecurityPolicy", () => {
     expect(connect.filter((s) => s.includes("/api"))).toEqual([]);
   });
 
+  it("loads fonts from the page and data URLs only, with no CDN", () => {
+    expect(directive(contentSecurityPolicy(BASE), "font-src")).toEqual([
+      "'self'",
+      "data:",
+    ]);
+  });
+
   it("lets MapLibre start its worker from a blob", () => {
     expect(directive(contentSecurityPolicy(BASE), "worker-src")).toEqual([
       "'self'",

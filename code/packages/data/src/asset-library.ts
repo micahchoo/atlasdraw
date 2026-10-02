@@ -125,7 +125,6 @@ export function getBuiltInLibraries(): ExcalidrawLibrary[] {
     if ("error" in parsed) {
       // Skip malformed fixtures rather than throwing — the license-check
       // script is the gate for fixture correctness; this is a read path.
-      // eslint-disable-next-line no-console
       console.warn(
         `asset-library: skipping malformed fixture ${path}: ${parsed.error}`,
       );
@@ -160,11 +159,8 @@ function loadFixtureSources(): Array<[string, string]> {
   // We use a synchronous require-shaped fallback so this function stays
   // sync (callers don't await getBuiltInLibraries()).
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require("node:fs") as typeof import("node:fs");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require("node:path") as typeof import("node:path");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const url = require("node:url") as typeof import("node:url");
     const here = url.fileURLToPath(import.meta.url);
     const fixturesDir = path.resolve(

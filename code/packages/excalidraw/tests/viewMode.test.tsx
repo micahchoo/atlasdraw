@@ -50,7 +50,6 @@ describe("view mode", () => {
       const pointer = pointerType;
 
       pointer.moveTo(50, 50);
-      // eslint-disable-next-line dot-notation
       if (pointerType["pointerType"] === "mouse") {
         expect(GlobalTestState.interactiveCanvas.style.cursor).toBe(
           CURSOR_TYPE.MOVE,

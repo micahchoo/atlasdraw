@@ -12,7 +12,7 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 
 import { useGeocoderSearch } from "./useGeocoderSearch";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 import type { PlaceHit, PlaceSearchSource } from "../services/placeSearch";
 

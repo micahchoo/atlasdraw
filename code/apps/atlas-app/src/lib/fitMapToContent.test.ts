@@ -14,7 +14,7 @@ import {
   fitMapToLayer,
 } from "./fitMapToContent";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import type { FeatureCollection, Geometry } from "geojson";
 
 const makeMap = () => ({ fitBounds: vi.fn() } as unknown as maplibregl.Map);

@@ -331,7 +331,7 @@ export const assertElements = <T extends AllPossibleKeys<ExcalidrawElement>>(
 ) => {
   const h = window.h;
 
-  const expectedElementsWithIds: (typeof expectedElements[number] & {
+  const expectedElementsWithIds: ((typeof expectedElements)[number] & {
     id: ExcalidrawElement["id"];
   })[] = expectedElements.map((el) => {
     if ("id" in el) {

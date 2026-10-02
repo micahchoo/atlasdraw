@@ -45,7 +45,7 @@ import {
 } from "../../state/document";
 
 import type { FeatureCollection } from "geojson";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 import type { RasterCorners } from "../../state/document";
 
 const asMap = (m: FakeMapLibre) => m as unknown as maplibregl.Map;

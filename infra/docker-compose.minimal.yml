@@ -28,8 +28,9 @@ services:
       PORT: "4000"
       PUBLIC_URL: ${PUBLIC_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      # One hop: the web container's nginx.
-      TRUST_PROXY: "1"
+      # The web container's nginx, on this private compose network. Storage
+      # refuses a hop count (apps/storage/src/config.ts).
+      TRUST_PROXY: "loopback,uniquelocal"
     volumes:
       - atlas-storage-data:/data
     expose:

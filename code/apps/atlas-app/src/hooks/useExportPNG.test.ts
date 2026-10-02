@@ -11,7 +11,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { useExportPNG } from "./useExportPNG";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 const exportPNGMock = vi.fn();
 vi.mock("../lib/export", () => ({

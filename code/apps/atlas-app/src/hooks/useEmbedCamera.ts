@@ -22,7 +22,7 @@ import type { LngLatBox } from "@atlasdraw/geo";
 import { fitMapToBox } from "../lib/fitMapToContent";
 
 import type { EmbedOptions } from "../lib/embed";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /** The parts of the map this hook uses. */
 export type EmbedMap = Pick<

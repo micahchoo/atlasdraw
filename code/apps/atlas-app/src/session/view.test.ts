@@ -20,7 +20,7 @@ import { MEASURE_UNITS_KEY } from "../state/measure";
 import { createSession } from "./EditorSession";
 import { createViewStore } from "./view";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 const STORAGE_KEY = "atlasdraw:sheet-panel:width";
 

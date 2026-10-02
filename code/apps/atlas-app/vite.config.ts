@@ -263,7 +263,6 @@ export default defineConfig({
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(APP_VERSION),
     "import.meta.env.VITE_GIT_HASH": JSON.stringify(GIT_HASH),
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   plugins: [
     react(),
     pmtilesNotFoundPlugin,
@@ -280,6 +279,19 @@ export default defineConfig({
     // public/ copy that dragged a 4.9 GB local archive through dist/.
     copyPublicDir: false,
   },
+  // PREVIEW_API_PROXY: `vite preview` sends /api/* to this storage server
+  // with the prefix stripped, as nginx.conf does. The production e2e sets it
+  // (playwright.build.config.ts); nothing else does.
+  preview: process.env.PREVIEW_API_PROXY
+    ? {
+        proxy: {
+          "/api": {
+            target: process.env.PREVIEW_API_PROXY,
+            rewrite: (p: string) => p.replace(/^\/api/, ""),
+          },
+        },
+      }
+    : undefined,
   server: {
     port: 5174,
     fs: {

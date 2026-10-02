@@ -18,7 +18,7 @@
  * coordinates, so no camera move rewrites it.
  */
 
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,

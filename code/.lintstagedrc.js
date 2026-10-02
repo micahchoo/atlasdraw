@@ -1,14 +1,10 @@
-const { CLIEngine } = require("eslint");
-
-// see https://github.com/okonet/lint-staged#how-can-i-ignore-files-from-eslintignore-
-// for explanation
-const cli = new CLIEngine({});
-
+// ESLint skips what eslint.config.mjs ignores; --no-warn-ignored keeps a
+// staged ignored file from counting as a warning under --max-warnings=0.
+// Prettier formats everything, TypeScript included (`yarn test:other`).
 module.exports = {
-  "*.{js,ts,tsx}": files => {
-    return (
-      "eslint --max-warnings=0 --fix " + files.filter(file => !cli.isPathIgnored(file)).join(" ")
-    );
-  },
+  "*.{js,mjs,cjs,ts,tsx}": [
+    "eslint --max-warnings=0 --no-warn-ignored --fix",
+    "prettier --write",
+  ],
   "*.{css,scss,json,md,html,yml}": ["prettier --write"],
 };

@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noEmit": true,
     "emitDeclarationOnly": false,
     "declaration": false,

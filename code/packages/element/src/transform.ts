@@ -799,6 +799,7 @@ export const convertToExcalidrawElements = (
       element.children.length &&
       (frame?.x || frame?.y || frame?.width || frame?.height)
     ) {
+      // eslint-disable-next-line no-console -- upstream's hint to a library user
       console.info(
         "User provided frame attributes are being considered, if you find this inaccurate, please remove any of the attributes - x, y, width and height so frame coordinates and dimensions are calculated automatically",
       );

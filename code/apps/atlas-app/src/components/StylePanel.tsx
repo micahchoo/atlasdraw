@@ -20,7 +20,7 @@
 //
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { LABEL_SIZE_MAX, LABEL_SIZE_MIN } from "@atlasdraw/basemap";
 

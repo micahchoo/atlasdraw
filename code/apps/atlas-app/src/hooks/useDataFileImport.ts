@@ -30,10 +30,12 @@ import {
   detectFormat,
   SUPPORTED_FORMATS,
   type ImportFormat,
-  type ImportProgress,
-} from "../lib/importPipeline";
+} from "../lib/importFormat";
+
 import { importFileOffThread, isImportCancelled } from "../lib/importClient";
 import { computeFeatureCollectionBounds } from "../lib/fitMapToContent";
+
+import type { ImportProgress } from "../lib/importPipeline";
 
 import type { FeatureCollection } from "geojson";
 import type {

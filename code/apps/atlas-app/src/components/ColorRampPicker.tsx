@@ -11,8 +11,6 @@
 //
 // Conventions: .claude/skills/atlasdraw-ui-conventions/SKILL.md
 
-import React from "react";
-
 import styles from "../styles/StylePanel.module.css";
 
 // --- palette table -----------------------------------------------------------

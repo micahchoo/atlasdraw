@@ -175,7 +175,6 @@ export function fitMapToBox(
     );
     return true;
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn("[atlasdraw] the map refused a camera fit", box, err);
     return false;
   }

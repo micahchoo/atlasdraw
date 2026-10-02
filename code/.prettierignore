@@ -14,15 +14,22 @@ packages/excalidraw/types
 dev-dist
 coverage
 
+# Generated emscripten output ("GENERATED CODE -- DO NOT EDIT"). ESLint
+# skips them by their own /* eslint-disable */; Prettier must too, now that
+# it formats TypeScript.
+packages/excalidraw/subset/harfbuzz/harfbuzz-wasm.ts
+packages/excalidraw/subset/woff2/woff2-wasm.ts
+packages/excalidraw/subset/woff2/woff2-bindings.ts
+
 # MapLibre style documents. Third-party data, not our source: they change by
 # being replaced wholesale from upstream, and prettier collapses them by ~10,000
 # lines each — which buries any real change in them and gains nothing.
 # FU-8: without this, `yarn test:other` can never pass.
 packages/basemap/src/styles/*.json
 
-# `yarn test:app` rewrites these with a fresh `runAt` on every run, so they are
-# perpetually dirty and never worth formatting.
-bench/results/*.json
+# Bench output. `yarn workspace @atlasdraw/bench bench` and `ab` write it to
+# results/current/, which git ignores; nothing in it is source.
+bench/results/
 
 # Playwright run output. Regenerated on every failed spec; formatting it is
 # meaningless and its presence alone fails `test:other`.

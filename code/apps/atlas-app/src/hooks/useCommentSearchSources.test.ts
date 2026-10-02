@@ -19,7 +19,7 @@ import {
 
 import { useCommentSearchSources } from "./useCommentSearchSources";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 function makeLayer(): CommentsLayer {
   return new CommentsLayer(new Y.Doc());

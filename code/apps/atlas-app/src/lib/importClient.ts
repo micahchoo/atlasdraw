@@ -7,13 +7,9 @@
 // Where there is no Worker (a test environment), the pipeline runs on this
 // thread; cancel then stops waiting for it, and its result is not used.
 
-import {
-  runImport,
-  sizeRefusal,
-  type ImportFormat,
-  type ImportOutcome,
-  type ImportProgress,
-} from "./importPipeline";
+import { sizeRefusal, type ImportFormat } from "./importFormat";
+
+import type { ImportOutcome, ImportProgress } from "./importPipeline";
 
 export interface ImportWorkerRequest {
   file: File;
@@ -62,10 +58,16 @@ export function importFileOffThread(
       run.signal?.addEventListener("abort", () => reject(cancelled()), {
         once: true,
       });
-      void runImport(file, format, {
-        geocoderEndpoint: run.geocoderEndpoint,
-        onProgress: run.onProgress,
-      }).then(resolve);
+      // On demand: a static import would put every parser in the editor's
+      // boot chunk (importFormat.ts says why).
+      void import("./importPipeline")
+        .then(({ runImport }) =>
+          runImport(file, format, {
+            geocoderEndpoint: run.geocoderEndpoint,
+            onProgress: run.onProgress,
+          }),
+        )
+        .then(resolve);
     });
   }
 

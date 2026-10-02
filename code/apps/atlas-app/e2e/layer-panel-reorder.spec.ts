@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * LayerPanel smoke — sidebar tab rendering + LayerPanel body.
  *

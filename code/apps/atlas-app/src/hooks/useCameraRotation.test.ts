@@ -14,7 +14,7 @@ import { renderHook, cleanup, act } from "@testing-library/react";
 import { FakeMercatorMap } from "./__tests__/fakeMercatorMap";
 import { useCameraRotation } from "./useCameraRotation";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 /**
  * A FakeMercatorMap that emits `rotate` the way MapLibre does, so the hook's

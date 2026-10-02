@@ -33,7 +33,6 @@ describe("compileLayer — expressions (A6)", () => {
     const spec = compileLayer("dl:x", style, "fill");
 
     expect(spec.type).toBe("fill");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
     expect(paint["fill-color"]).toEqual([
       "match",
@@ -60,7 +59,6 @@ describe("compileLayer — expressions (A6)", () => {
     };
 
     const spec = compileLayer("dl:y", style, "fill");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
 
     expect(paint["fill-color"]).toBe("#abcdef");
@@ -83,7 +81,6 @@ describe("compileLayer — expressions (A6)", () => {
     };
 
     const spec = compileLayer("dl:z", style, "fill");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
 
     expect(paint["fill-color"]).toEqual([
@@ -117,14 +114,12 @@ describe("compileLayer — expressions (A6)", () => {
       },
     };
     const spec = compileLayer("dl:empty", style, "circle");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((spec as any).paint["circle-color"]).toBe("#dddddd");
   });
 
   it("preserves the literal-color path when expression is absent", () => {
     const style: LayerStyle = { fillColor: "#ff0000", opacity: 0.5 };
     const spec = compileLayer("dl:lit", style, "fill");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
 
     expect(paint["fill-color"]).toBe("#ff0000");
@@ -142,7 +137,6 @@ describe("compileLayer — expressions (A6)", () => {
       },
     };
     const spec = compileLayer("dl:line", style, "line");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
 
     expect(spec.type).toBe("line");
@@ -170,7 +164,6 @@ describe("compileLayer — expressions (A6)", () => {
       },
     };
     const spec = compileLayer("dl:circ", style, "circle");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const paint = (spec as any).paint;
 
     expect(spec.type).toBe("circle");
@@ -221,7 +214,6 @@ describe("compilePaint — single source of paint truth", () => {
     "matches the paint block compileLayer emits for %s",
     (geometryType) => {
       const spec = compileLayer("dl:x", STYLE, geometryType);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(compilePaint(STYLE, geometryType)).toEqual((spec as any).paint);
     },
   );

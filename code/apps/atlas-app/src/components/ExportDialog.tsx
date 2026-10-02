@@ -16,7 +16,7 @@
  * the file contradicts ("vector" over a JPEG) or a row that cannot change.
  */
 
-import React, { useState } from "react";
+import { useState } from "react";
 
 import {
   PNG_PIXEL_RATIOS,

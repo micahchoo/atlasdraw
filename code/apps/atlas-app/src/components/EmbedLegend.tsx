@@ -8,7 +8,7 @@
 // zooms. A <details> element, open at first, so a reader on a small screen
 // can close it over the map.
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 

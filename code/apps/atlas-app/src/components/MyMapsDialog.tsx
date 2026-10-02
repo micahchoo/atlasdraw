@@ -11,13 +11,7 @@
 // inside it: Escape answers the question, not the dialog. A question still
 // open when the dialog goes is answered no, so the open waits for nothing.
 
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 

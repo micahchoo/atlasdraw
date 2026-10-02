@@ -3,12 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Phase 2 benchmark harness — pure parse/validate timings, no MapLibre runtime.",
+  "description": "Parse timings for @atlasdraw/data, and an A/B gate that times the merge base and the head on one runner.",
   "scripts": {
     "bench": "yarn run -T vitest run --config ./vitest.config.ts",
-    "ci-gate": "tsx ci-gate.ts",
-    "test:typecheck": "yarn run -T tsc -p .",
-    "rebaseline": "tsx rebaseline.ts"
+    "ab": "tsx ab.ts",
+    "test:typecheck": "yarn run -T tsc -p ."
   },
   "dependencies": {
     "@atlasdraw/data": "*"

@@ -317,7 +317,6 @@ export function createPersistenceStore(
           _remoteSaveFailed = false;
         } catch (err) {
           _remoteSaveFailed = true;
-          // eslint-disable-next-line no-console
           console.error(
             "[persistence] remoteSave failed (local IDB write succeeded)",
             err,
@@ -501,7 +500,6 @@ export function createPersistenceStore(
       const database = await db();
       await database.put(STORE, handle, handleKey(documentId));
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.warn("[persistence] could not retain file handle", err);
     }
   };
@@ -784,7 +782,6 @@ export function startAutoSave(
         result.kind === "saved" ? onSaved?.() : onConflict?.(result, doc, at),
       )
       .catch((err) => {
-        // eslint-disable-next-line no-console
         console.error("[persistence] auto-save failed", err);
         onSaveError?.(err);
       });

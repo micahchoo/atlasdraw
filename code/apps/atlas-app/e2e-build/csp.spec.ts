@@ -63,7 +63,7 @@ test.describe("content security policy", () => {
     await watchViolations(page);
     await answerOtherHosts(page);
     await skipOnboarding(page);
-    await page.goto("/");
+    await page.goto("./");
 
     const policy = await page
       .locator('meta[http-equiv="Content-Security-Policy"]')
@@ -73,12 +73,24 @@ test.describe("content security policy", () => {
     await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible();
     await expect(page.locator(".excalidraw canvas").first()).toBeVisible();
 
-    // Draw a rectangle with the keyboard tool and a drag.
-    await page.keyboard.press("r");
+    // Draw a rectangle: the toolbar's tool (its radio sits under the icon,
+    // so click the label) and a drag. A key press drew nothing here.
+    await page.getByTestId("toolbar-rectangle").locator("..").click();
     await page.mouse.move(500, 300);
     await page.mouse.down();
     await page.mouse.move(600, 380, { steps: 5 });
     await page.mouse.up();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const c = document.querySelector<HTMLCanvasElement>(
+            "canvas.excalidraw__canvas.static",
+          );
+          const d = c?.getContext("2d")?.getImageData(0, 0, c.width, c.height);
+          return d ? d.data.some((v, i) => i % 4 === 3 && v !== 0) : false;
+        }),
+      )
+      .toBe(true);
 
     // Import a layer: the parse runs in a module worker.
     await page.evaluate((text) => {
@@ -104,7 +116,7 @@ test.describe("content security policy", () => {
     await watchViolations(page);
     await answerOtherHosts(page);
     await skipOnboarding(page);
-    await page.goto("/");
+    await page.goto("./");
     await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible();
 
     // An inline script, and one from another host, as an HTML injection
@@ -140,7 +152,7 @@ test.describe("content security policy", () => {
     await page.route("**/api/**", (route) =>
       route.fulfill({ status: 404, body: "" }),
     );
-    await page.goto("/embed/abcdefghij_klmnop-qrs");
+    await page.goto("embed/abcdefghij_klmnop-qrs");
     await expect(page.locator("html")).toHaveAttribute("data-boot", "embed");
     expect(await violations(page)).toEqual([]);
   });
@@ -155,11 +167,11 @@ test.describe("frame-ancestors, sent by the server", () => {
   test("an embed may be framed by the allowlist; any other page only by itself", async ({
     request,
   }) => {
-    const embed = await request.get("/embed/abcdefghij_klmnop-qrs");
+    const embed = await request.get("embed/abcdefghij_klmnop-qrs");
     expect(embed.headers()["content-security-policy"]).toBe(
       "frame-ancestors https://news.example https://blog.example",
     );
-    for (const path of ["/", "/m/abcdefghij_klmnop-qrs"]) {
+    for (const path of ["./", "m/abcdefghij_klmnop-qrs"]) {
       const page = await request.get(path);
       expect(page.headers()["content-security-policy"]).toBe(
         "frame-ancestors 'self'",

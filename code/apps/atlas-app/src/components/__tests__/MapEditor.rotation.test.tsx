@@ -22,7 +22,7 @@ import { ToastProvider } from "../ToastProvider";
 
 import { createDocument, openDocument } from "../../state/document";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 // ---------------------------------------------------------------------------
 // Mocks (hoisted)
@@ -85,7 +85,6 @@ const mockFakeExcalidrawAPI = {
 };
 
 vi.mock("@atlasdraw/excalidraw", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactInner = require("react") as typeof import("react");
   const MainMenuStub = Object.assign(
     ({ children }: { children?: React.ReactNode }) =>

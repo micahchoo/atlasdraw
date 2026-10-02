@@ -16,7 +16,7 @@
 // buttons, and Escape closes it and gives the focus back to where it was. A
 // press anywhere outside it closes it.
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { attributeRows } from "../lib/featureHit";
 import { POPUP_ROWS, type OpenPopup } from "../hooks/useFeaturePopup";

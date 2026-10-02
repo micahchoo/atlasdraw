@@ -3,6 +3,12 @@
 // Development builds put the editor's handles on `window.__atlasdraw__` for
 // the Playwright specs and scripts/bench-world-coords.mjs. A production build
 // drops the whole effect: Vite replaces `import.meta.env.DEV` with false.
+//
+// VITE_E2E_HOOKS=1 is the one exception: a production build made for the
+// e2e suite (playwright.build.config.ts, hosted target) keeps the handles,
+// so the specs that read the session can run on built code. No published
+// build sets it; the Pages e2e builds as pages.yml does and checks that the
+// hook is absent.
 
 import { useEffect } from "react";
 
@@ -14,7 +20,7 @@ import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 import { seedShapes } from "../lib/devSeedShapes";
 
 import type { EditorSession } from "../session/EditorSession";
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export function useDevHandles(
   session: EditorSession,
@@ -23,7 +29,8 @@ export function useDevHandles(
   cameraBridge: CameraBridge | null,
 ): void {
   useEffect(() => {
-    if (!import.meta.env.DEV || !map || !api) {
+    const hooks = import.meta.env.DEV || import.meta.env.VITE_E2E_HOOKS === "1";
+    if (!hooks || !map || !api) {
       return;
     }
     const frame = () => session.store.getState().doc.snapshot().world;

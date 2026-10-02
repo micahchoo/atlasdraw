@@ -23,7 +23,7 @@ import {
   type PlaceSearchSource,
 } from "../services/placeSearch";
 
-import type maplibregl from "maplibre-gl";
+import type * as maplibregl from "maplibre-gl";
 
 export type { PlaceHit } from "../services/placeSearch";
 

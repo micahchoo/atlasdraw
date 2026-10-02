@@ -1,23 +1,49 @@
 import { describe, expect, it } from "vitest";
 
-import { compareToBaseline } from "./gate";
+import { compareRuns, relativeSpread } from "./gate";
 
-const run = (p95: number) => [{ label: "parse 10k points", p95_ms: p95 }];
+// Each list is one scenario's median time from each run, in ms.
+const steady = [10, 10.2, 9.9, 10.1, 10];
 
-describe("compareToBaseline", () => {
-  it("fails a scenario that got slower than the committed baseline allows", () => {
-    const [check] = compareToBaseline(run(10), run(13));
-    expect(check.pass).toBe(false);
+describe("compareRuns", () => {
+  it("fails a scenario whose head is clearly slower than its base", () => {
+    const [row] = compareRuns(
+      { "parse 10k": steady },
+      { "parse 10k": [13, 13.1, 12.9, 13.2, 13] },
+    );
+    expect(row.pass).toBe(false);
   });
 
-  it("passes a scenario within the slack", () => {
-    const [check] = compareToBaseline(run(10), run(11.9));
-    expect(check.pass).toBe(true);
+  it("passes the same code measured twice", () => {
+    const [row] = compareRuns(
+      { "parse 10k": steady },
+      { "parse 10k": [10.1, 9.8, 10.3, 10, 10.2] },
+    );
+    expect(row.pass).toBe(true);
   });
 
-  it("skips a scenario the baseline does not know", () => {
+  it("widens the limit when the runs are noisy, so noise is not a regression", () => {
+    const noisy = [8, 12, 10, 7, 13];
+    const [row] = compareRuns(
+      { "parse 10k": noisy },
+      { "parse 10k": [11, 12, 9, 14, 11.5] },
+    );
+    expect(row.limitMs).toBeGreaterThan(10 * 1.1);
+    expect(row.pass).toBe(true);
+  });
+
+  it("compares only scenarios both sides ran", () => {
     expect(
-      compareToBaseline(run(10), [{ label: "new scenario", p95_ms: 99 }]),
+      compareRuns({ old: steady }, { new: steady }).map((r) => r.label),
     ).toEqual([]);
+  });
+});
+
+describe("relativeSpread", () => {
+  it("is zero for identical runs and grows with the scatter", () => {
+    expect(relativeSpread([5, 5, 5])).toBe(0);
+    expect(relativeSpread([8, 12, 10, 7, 13])).toBeGreaterThan(
+      relativeSpread(steady),
+    );
   });
 });

@@ -178,7 +178,6 @@ describe("atlasdraw convert", () => {
   });
 
   it(".csv → .geojson parses lat/lng columns into Point features", async () => {
-    // eslint-disable-next-line no-useless-concat
     const csv = "id,name,lat,lng\n" + "1,alpha,0,0\n" + "2,beta,1,1\n";
     const inPath = path.join(tmpDir, "in.csv");
     const outPath = path.join(tmpDir, "out.geojson");
