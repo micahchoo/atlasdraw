@@ -48,7 +48,7 @@ help:
 	@echo "Atlasdraw — operator targets"
 	@echo ""
 	@echo "  up-minimal       Bring up sqlite-fs stack (web + storage)"
-	@echo "  up-full          Bring up production stack (web + storage + pg + minio + caddy)"
+	@echo "  up-full          Bring up production stack (web + storage + pg + caddy; your S3 bucket)"
 	@echo "  down-minimal     Stop minimal stack (volumes survive)"
 	@echo "  down-full        Stop full stack (volumes survive)"
 	@echo ""

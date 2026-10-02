@@ -17,7 +17,8 @@ import { logger } from "./logger";
 async function main(): Promise<void> {
   const config = loadConfig();
 
-  // Opt-in Sentry. No-op when SENTRY_DSN is unset; see ADR-0009. beforeSend
+  // Opt-in Sentry. No-op when SENTRY_DSN is unset or empty; see
+  // docs/architecture/adr/0009-error-capture.md. beforeSend
   // drops the Authorization header and the client address.
   if (config.SENTRY_DSN) {
     Sentry.init({

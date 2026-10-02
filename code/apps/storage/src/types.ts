@@ -10,7 +10,7 @@ export type { MapVersion, VersionPolicy } from "./versions";
 
 /**
  * Selects which adapter the storage server loads at startup.
- * - `postgres-minio`: full stack (Postgres for metadata, MinIO/S3 for blobs).
+ * - `postgres-minio`: full stack (Postgres for metadata, any S3-compatible bucket for blobs).
  * - `sqlite-fs`: minimal stack (SQLite for metadata, filesystem for blobs).
  */
 export type StorageMode = "postgres-minio" | "sqlite-fs";
