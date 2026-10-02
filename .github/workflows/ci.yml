@@ -77,15 +77,21 @@ jobs:
       # (docs/architecture/adr/0019-bring-your-own-s3.md). SeaweedFS needs an
       # identity file, which a `services:` container cannot mount, so it
       # starts here.
+      # Every test bucket takes 7 volumes. SeaweedFS sizes its volume count by
+      # free disk, which a runner has little of, so the limits are set here.
       - name: Start SeaweedFS S3
         run: |
           mkdir -p "$RUNNER_TEMP/s3"
           echo '{"identities":[{"name":"ci","credentials":[{"accessKey":"testkey","secretKey":"testsecret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > "$RUNNER_TEMP/s3/s3.json"
           docker run -d --name s3 -p 8333:8333 -v "$RUNNER_TEMP/s3/s3.json:/etc/seaweedfs/s3.json:ro" \
-            chrislusf/seaweedfs:3.97 server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0
+            chrislusf/seaweedfs:3.97 server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0 \
+            -master.volumeSizeLimitMB=4 -volume.max=5000
           for i in $(seq 1 60); do curl -s -o /dev/null localhost:8333 && exit 0; sleep 1; done
           docker logs s3; exit 1
       - run: yarn vitest run apps/storage
+      - name: SeaweedFS log
+        if: failure()
+        run: docker logs s3 2>&1 | tail -200
 
   bench:
     name: Bench, merge base vs head (report only)
