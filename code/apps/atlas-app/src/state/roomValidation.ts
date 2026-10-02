@@ -7,7 +7,8 @@
 //
 //   checkElement   an Excalidraw element: dropped when its id, type,
 //                  geometry or version is wrong; its style fields are
-//                  repaired to Excalidraw's defaults
+//                  repaired to Excalidraw's defaults, and a pin's details
+//                  to their valid fields (pinDetails.ts)
 //   checkFile      an image file of the drawing (type, data URL, size)
 //   checkOverlay   a layer entry (kind, id prefix dl:/rl:/tl:, fields, and
 //                  a data layer's style, by lib/layerStyle.ts)
@@ -55,6 +56,8 @@ import type { Camera, WorldFrameData } from "@atlasdraw/data";
 
 import { validateLayerStyle } from "../lib/layerStyle";
 import { validateTileTemplate } from "../lib/tileLayers";
+
+import { readPinDetails, withPinDetails } from "./pinDetails";
 
 import type { OverlayEntry } from "./document";
 
@@ -295,8 +298,24 @@ const elementOf = memo<ExcalidrawElement>((raw) => {
   }
   // Arrays and objects are new after a parse even when equal; the copy the
   // editor takes is made by the caller either way.
-  return parsed.data as unknown as ExcalidrawElement;
+  const el = parsed.data as unknown as ExcalidrawElement;
+  return el.customData && "pin" in el.customData
+    ? { ...el, customData: repairedPin(el.customData) }
+    : el;
 });
+
+/**
+ * customData with a pin's details cut to their valid fields: a script link,
+ * an over-long title or a field of the wrong type is dropped. Unchanged when
+ * every field is valid.
+ */
+function repairedPin(customData: Record<string, unknown>) {
+  const clean = readPinDetails(customData);
+  const same =
+    JSON.stringify(clean) === JSON.stringify(customData.pin) &&
+    Object.keys(clean).length > 0;
+  return same ? customData : withPinDetails(customData, clean);
+}
 
 /**
  * The element stored under `key`, repaired where a style field was wrong;
