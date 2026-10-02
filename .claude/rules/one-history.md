@@ -9,7 +9,7 @@ paths:
   - code/apps/atlas-app/src/state/myMaps.ts
   - code/apps/atlas-app/src/session/fileActions.ts
   - code/apps/atlas-app/src/hooks/usePersistenceWiring.ts
-  - code/apps/atlas-app/src/hooks/useConvertToDataLayer.ts
+  - code/apps/atlas-app/src/session/convertToLayer.ts
   - code/packages/excalidraw/history.ts
   - code/packages/excalidraw/actions/actionHistory.tsx
 tags: [history, undo, dirty, persistence]

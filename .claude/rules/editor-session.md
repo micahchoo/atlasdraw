@@ -26,7 +26,8 @@ module store.
   `commands/commands.ts`.
 - **Every menu item, palette entry and editor key is a `Command`** in
   `commands/commands.ts`. `EditorMenu`, the palette (`EditorDialogs`),
-  `useCommandKeys` and the shortcuts panel read that one list.
+  `useCommandKeys`, the shortcuts panel and the drawing's right-click menus
+  (`commands/contextMenus.ts`, `menus.md`) read that one list.
   `commands.test.ts` fails when two commands take one key, when a command
   takes a key the drawing keeps (`EDITOR_KEYS`), or when a menu entry is
   not registered. Add a key there, never in a component's own `keydown`.
