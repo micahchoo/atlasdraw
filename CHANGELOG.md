@@ -58,7 +58,12 @@ the new images. Then:
    Remove the `miniodata` volume only after the new bucket holds every
    object. A row whose blob is missing is a map that cannot open.
 
-6. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
+6. **Plan for server versions.** Migration `005_map_versions` starts every
+   map at revision 1, and the server then keeps up to `MAP_VERSIONS_KEPT`
+   (20) earlier copies of each map inside `MAX_TOTAL_BYTES`. Set
+   `MAP_VERSIONS_KEPT=0` first if the disk has no room.
+
+7. **Check the storage limits.** `MAX_TOTAL_BYTES` now defaults to 10 GiB,
    and each client address may make 60 new maps an hour
    (`MAX_NEW_MAPS_PER_IP`). `POST /maps` is open to anyone who reaches the
    API. The relay has its own caps with defaults
@@ -138,8 +143,17 @@ A script that calls the storage API must now keep the `write_key` from
 - **One read-only viewer** for `/m` (with a title and an "open a copy" link)
   and `/embed` (no chrome). It shows the basemap, data, raster and tile
   layers and the drawing at the saved camera.
-- **My maps**: the maps saved in this browser, to open or remove, and
-  **Restore from server backup**.
+- **My maps**: the maps saved in this browser, to open or remove.
+  **Back up my maps** writes them, with the keys of their server maps, to
+  one file; **Restore a backup** adds such a file to another browser. The
+  app asks the browser to keep its storage after the first save.
+- **Server versions** (ADR-0020). The server keeps earlier versions of each
+  map (`MAP_VERSIONS_KEPT`, 20; `MAP_VERSION_INTERVAL_MINUTES`, 10), counted
+  in `MAX_TOTAL_BYTES`. **File → Server versions…** restores one, as a new
+  version, or opens it as a copy. A share link can show "This version
+  only". A save names the version it replaces, so a browser no longer
+  overwrites another browser's newer save: the owner is asked. A map the
+  server refuses asks to **Save a new server copy**.
 - **Import KML, KMZ and GPX.** A file with mixed geometry becomes one layer
   per kind. `.json` GeoJSON is accepted.
 - **Measure** distance and area on the ellipsoid, and a readout of the

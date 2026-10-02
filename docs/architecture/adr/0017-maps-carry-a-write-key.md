@@ -3,6 +3,7 @@
 # ADR-0017: Maps Carry a Write Key; Share Links Last and Follow the Map
 
 - **Status:** Accepted. Implemented in roadmap wave W8 (2026-10-01).
+  Amended by ADR-0020 (points 3 and 5).
 - **Date:** 2026-10-01
 - **Supersedes:** the TTL in `code/decisions/0008-share-token-ttl.md` (7 days as built)
 - **Relates to:** ADR-0013 (self-host only), `SECURITY.md` rows 10–13
@@ -72,3 +73,19 @@ working until they expire.
   menu offers **Restore from server backup**, which reads `GET /maps/:id/blob`.
 - The Share dialog offers "Until you stop it", 7 days or 30 days, and
   **Stop sharing this link**.
+
+## Amended by ADR-0020 (2026-10-01)
+
+`docs/architecture/adr/0020-server-version-history.md` changes two points.
+
+- **Point 3:** a share token reads the latest bytes unless the owner freezes
+  it on one revision (`{"revision": n}`). A frozen link does not follow later
+  saves.
+- **Point 5:** the client keeps the revision it last saw beside the key, and
+  each save names it in `If-Match`. A save that another browser overtook is
+  refused (`412`) and the owner is asked.
+
+**Restore from server backup** is now **Server versions…**: the owner can go
+back to any kept version, not only the latest. "Losing the browser's storage
+loses write access" is no longer the only outcome: **Back up my maps** keeps
+the keys in a file the owner holds.

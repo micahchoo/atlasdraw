@@ -49,7 +49,7 @@ Every `VITE_*` variable is read once, through the schema in `src/config/app-conf
 | `pages` | No; shows a demo badge | No |
 | `hosted` | Yes, to `VITE_STORAGE_BASE_URL` | If `VITE_REALTIME_ENABLED=true` |
 
-Share links for large maps and "Restore from server backup" always use `VITE_STORAGE_BASE_URL` (empty: the same origin).
+Share links for large maps and "Server versions…" always use `VITE_STORAGE_BASE_URL` (empty: the same origin).
 
 The other variables are listed in `docs/self-host/README.md` at the repository root.
 
