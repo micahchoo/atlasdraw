@@ -70,6 +70,15 @@ import {
 } from "../lib/dataLayerExport";
 
 import { downloadBlob } from "../lib/download";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  DotsIcon,
+  EyeClosedIcon,
+  EyeIcon,
+  GripIcon,
+} from "../lib/icons";
 
 import { useAnnounce } from "./AriaAnnouncer";
 import { Button } from "./Button";
@@ -99,139 +108,6 @@ const FILTER_THRESHOLD = 10;
 /** Attribute-preview size: rows sampled, and columns that fit the panel width. */
 const ATTR_PREVIEW_ROWS = 3;
 const ATTR_PREVIEW_COLS = 4;
-
-// ---------------------------------------------------------------------------
-// Inline SVG icons — atlasdraw-ui-conventions §Icons:
-//   - currentColor stroke so hover/active state propagates from button color
-//   - sized via CSS (.icon class), not SVG attributes
-//   - aria-hidden on the SVG; text label or sr-only span on the button.
-// ---------------------------------------------------------------------------
-
-function IconEye() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-    </svg>
-  );
-}
-
-function IconEyeSlash() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-      <circle cx="8" cy="8" r="2" />
-      <line x1="2" y1="2" x2="14" y2="14" />
-    </svg>
-  );
-}
-
-function IconChevronUp() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3,10 8,5 13,10" />
-    </svg>
-  );
-}
-
-function IconChevronDown() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="3,6 8,11 13,6" />
-    </svg>
-  );
-}
-
-/** Disclosure caret: points right when collapsed, down when expanded. */
-function IconCaret({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {open ? (
-        <polyline points="3,6 8,11 13,6" />
-      ) : (
-        <polyline points="6,3 11,8 6,13" />
-      )}
-    </svg>
-  );
-}
-
-function IconDots() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="3.5" cy="8" r="1.3" />
-      <circle cx="8" cy="8" r="1.3" />
-      <circle cx="12.5" cy="8" r="1.3" />
-    </svg>
-  );
-}
-
-function IconGripVertical() {
-  return (
-    <svg
-      className={styles.icon}
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="5" cy="3" r="1.2" />
-      <circle cx="11" cy="3" r="1.2" />
-      <circle cx="5" cy="8" r="1.2" />
-      <circle cx="11" cy="8" r="1.2" />
-      <circle cx="5" cy="13" r="1.2" />
-      <circle cx="11" cy="13" r="1.2" />
-    </svg>
-  );
-}
 
 function joinClass(...names: Array<string | false | null | undefined>): string {
   return names.filter(Boolean).join(" ");
@@ -486,7 +362,7 @@ function SortableRow({
           draggable
           onDragStart={handleDragStart}
         >
-          <IconGripVertical />
+          <GripIcon className={styles.icon} />
         </span>
         {children}
         {/* Stacked as one 32px-tall control cluster rather than two 32px
@@ -506,7 +382,7 @@ function SortableRow({
               mutators.reorder(id, index - 1);
             }}
           >
-            <IconChevronUp />
+            <ChevronUpIcon className={styles.icon} />
           </button>
           <button
             type="button"
@@ -519,7 +395,7 @@ function SortableRow({
               mutators.reorder(id, index + 1);
             }}
           >
-            <IconChevronDown />
+            <ChevronDownIcon className={styles.icon} />
           </button>
         </div>
       </div>
@@ -869,7 +745,7 @@ function OverflowMenu({
           open ? close() : setOpen(true);
         }}
       >
-        <IconDots />
+        <DotsIcon className={styles.icon} />
       </Button>
       {open && (
         <div
@@ -1198,7 +1074,11 @@ function DataLayerCard({
             onToggleExpanded();
           }}
         >
-          <IconCaret open={expanded} />
+          {expanded ? (
+            <ChevronDownIcon className={styles.icon} />
+          ) : (
+            <ChevronRightIcon className={styles.icon} />
+          )}
         </button>
         <span
           aria-label="Data layer"
@@ -1230,7 +1110,11 @@ function DataLayerCard({
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
         </Button>
         <OverflowMenu
           entry={entry}
@@ -1306,7 +1190,11 @@ function AnnotationLayerRow({
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
         </Button>
         <span
           aria-label="Annotation"
@@ -1381,7 +1269,11 @@ function RasterLayerRow({
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
         </Button>
         <span
           aria-label="Image"
@@ -1475,7 +1367,11 @@ function TileLayerRow({
             setVisibility(id, !visible);
           }}
         >
-          {visible ? <IconEye /> : <IconEyeSlash />}
+          {visible ? (
+            <EyeIcon className={styles.icon} />
+          ) : (
+            <EyeClosedIcon className={styles.icon} />
+          )}
         </Button>
         <span
           aria-label="Tile layer"
