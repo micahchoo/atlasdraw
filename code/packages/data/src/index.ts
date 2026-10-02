@@ -87,10 +87,22 @@ export {
 } from "./csv";
 export type { CsvReadOptions, CsvImportStats } from "./csv";
 
-// FeatureCollection → the text of a GeoJSON or CSV file, for the
-// layer panel's "Export as …" items. The inverse of `parse` and `parseCSV`.
-export { toGeoJSONText, toCSV, toWKT, csvGeometryMode } from "./export";
-export type { CsvGeometryMode, GeoJSONTextOptions } from "./export";
+// FeatureCollection → the text of a GeoJSON, CSV, KML or GPX file, for the
+// layer panel's "Export as …" items. The inverse of `parse`, `parseCSV`,
+// `parseKML` and `parseGPX`.
+export {
+  toGeoJSONText,
+  toCSV,
+  toKML,
+  toGPX,
+  toWKT,
+  csvGeometryMode,
+} from "./export";
+export type {
+  CsvGeometryMode,
+  GeoJSONTextOptions,
+  XmlExportOptions,
+} from "./export";
 
 // Photon-compatible geocoder client + LRU cache. Operator-configured; no
 // default endpoint (docs/architecture/adr/0006-telemetry.md and

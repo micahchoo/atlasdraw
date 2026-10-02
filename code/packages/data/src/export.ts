@@ -1,15 +1,23 @@
 // SPDX-License-Identifier: MIT
 // packages/data/src/export.ts
-// FeatureCollection → the text of a GeoJSON or CSV file, for "Export as …".
+// FeatureCollection → the text of a GeoJSON, CSV, KML or GPX file, for
+// "Export as …".
 //
 // Pure module: FeatureCollection in, string out. The inverse of geojson.ts
-// `parse` and csv.ts `parseCSV`, and tested against them.
+// `parse`, csv.ts `parseCSV` and geoxml.ts `parseKML` / `parseGPX`, and
+// tested against them.
 //
-// Both writers round every coordinate to 7 decimals (about 1 cm on the
+// Every writer rounds every coordinate to 7 decimals (about 1 cm on the
 // ground). That removes float noise such as 10.299999999999999 and is far
 // below the accuracy of any source this app imports.
 
-import type { Feature, FeatureCollection, Geometry, Position } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  GeoJsonProperties,
+  Position,
+} from "geojson";
 
 const COORDINATE_DECIMALS = 7;
 
@@ -255,4 +263,351 @@ export function toCSV(fc: FeatureCollection): string {
     lines.push(cells.map(csvField).join(","));
   }
   return lines.map((line) => `${line}\r\n`).join("");
+}
+
+// ---------------------------------------------------------------------------
+// XML (KML and GPX)
+
+/**
+ * Characters that XML 1.0 cannot hold, not even as a character reference:
+ * most control characters, lone surrogates, U+FFFE and U+FFFF.
+ */
+const NOT_XML = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu;
+
+/**
+ * Text content: the five markup characters as entities, so `]]>` and `&`
+ * stay text. CR is a reference, because a parser turns a raw CR into LF.
+ * Characters XML cannot hold are left out.
+ */
+function xmlText(value: string): string {
+  return value
+    .replace(NOT_XML, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+    .replace(/\r/g, "&#13;");
+}
+
+/** An attribute value: as text, and tab and LF as references too. */
+function xmlAttr(value: string): string {
+  return xmlText(value).replace(/\n/g, "&#10;").replace(/\t/g, "&#9;");
+}
+
+/** `<tag>text</tag>`, or nothing when there is no text. */
+function element(tag: string, text: string | undefined): string {
+  return text === undefined ? "" : `<${tag}>${xmlText(text)}</${tag}>`;
+}
+
+const XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';
+
+export interface XmlExportOptions {
+  /** The document's name (KML `Document/name`, GPX `metadata/name`). */
+  name?: string;
+}
+
+// ---- KML --------------------------------------------------------------------
+
+/** The KML Schema type of a property, by the values it holds. */
+type KmlFieldType = "double" | "bool" | "string";
+
+/** The id of the one Schema a written KML file declares. */
+const KML_SCHEMA_ID = "properties";
+
+function kmlPosition(p: Position): string {
+  return p
+    .slice(0, 3)
+    .map((n) => String(round(n)))
+    .join(",");
+}
+
+function kmlCoordinates(positions: Position[]): string {
+  return `<coordinates>${positions.map(kmlPosition).join(" ")}</coordinates>`;
+}
+
+function kmlRing(ring: Position[]): string {
+  return `<LinearRing>${kmlCoordinates(ring)}</LinearRing>`;
+}
+
+function kmlPolygon(rings: Position[][]): string {
+  const [outer, ...inner] = rings;
+  if (!outer) {
+    return "";
+  }
+  return `<Polygon><outerBoundaryIs>${kmlRing(outer)}</outerBoundaryIs>${inner
+    .map((ring) => `<innerBoundaryIs>${kmlRing(ring)}</innerBoundaryIs>`)
+    .join("")}</Polygon>`;
+}
+
+function kmlGeometry(g: Geometry): string {
+  const multi = (parts: string[]) =>
+    `<MultiGeometry>${parts.join("")}</MultiGeometry>`;
+  switch (g.type) {
+    case "Point":
+      return `<Point>${kmlCoordinates([g.coordinates])}</Point>`;
+    case "LineString":
+      return `<LineString>${kmlCoordinates(g.coordinates)}</LineString>`;
+    case "Polygon":
+      return kmlPolygon(g.coordinates);
+    case "MultiPoint":
+      return multi(
+        g.coordinates.map((p) => `<Point>${kmlCoordinates([p])}</Point>`),
+      );
+    case "MultiLineString":
+      return multi(
+        g.coordinates.map(
+          (line) => `<LineString>${kmlCoordinates(line)}</LineString>`,
+        ),
+      );
+    case "MultiPolygon":
+      return multi(g.coordinates.map(kmlPolygon));
+    case "GeometryCollection":
+      return multi(g.geometries.map(kmlGeometry));
+  }
+}
+
+/**
+ * True when the property goes into the Placemark's own `<name>`: a text
+ * `name`. Every other property, a `name` that is not text included, goes
+ * into the ExtendedData.
+ */
+function isPlacemarkName(key: string, value: unknown): value is string {
+  return key === "name" && typeof value === "string";
+}
+
+/**
+ * Each ExtendedData key and its Schema type, in the order the keys are
+ * first seen. A key whose every value is a number is "double", whose every
+ * value is a boolean is "bool", and any other key is "string".
+ */
+function kmlFields(fc: FeatureCollection): Map<string, KmlFieldType> {
+  const fields = new Map<string, KmlFieldType>();
+  for (const f of fc.features) {
+    for (const [key, value] of Object.entries(f.properties ?? {})) {
+      if (value === null || value === undefined) {
+        continue;
+      }
+      if (isPlacemarkName(key, value)) {
+        continue;
+      }
+      const type: KmlFieldType =
+        typeof value === "number"
+          ? "double"
+          : typeof value === "boolean"
+          ? "bool"
+          : "string";
+      const held = fields.get(key);
+      fields.set(key, held === undefined || held === type ? type : "string");
+    }
+  }
+  return fields;
+}
+
+function kmlValue(value: unknown): string {
+  return typeof value === "string"
+    ? value
+    : typeof value === "number" || typeof value === "boolean"
+    ? String(value)
+    : JSON.stringify(value);
+}
+
+function kmlExtendedData(
+  properties: GeoJsonProperties,
+  fields: Map<string, KmlFieldType>,
+): string {
+  const data = Object.entries(properties ?? {})
+    .filter(([key, value]) => fields.has(key) && value != null)
+    .filter(([key, value]) => !isPlacemarkName(key, value))
+    .map(
+      ([key, value]) =>
+        `<SimpleData name="${xmlAttr(key)}">${xmlText(
+          kmlValue(value),
+        )}</SimpleData>`,
+    );
+  return data.length === 0
+    ? ""
+    : `<ExtendedData><SchemaData schemaUrl="#${KML_SCHEMA_ID}">${data.join(
+        "",
+      )}</SchemaData></ExtendedData>`;
+}
+
+/**
+ * The text of a KML 2.2 file for `fc`: one Placemark per feature, in order.
+ *
+ * A text `name` property is the Placemark's name. Every other property is
+ * ExtendedData under one Schema, which says which keys hold numbers and
+ * which hold booleans, so `parseKML` gives them back with their types. A
+ * key that holds mixed types is text; an object or array is JSON text. A
+ * null value is left out. A feature's `id` is the Placemark's id. Multi-part
+ * geometry is a MultiGeometry, which the importer joins back into one
+ * Multi* geometry per kind.
+ *
+ * Styles are not written: the layer's colours stay in the map.
+ */
+export function toKML(
+  fc: FeatureCollection,
+  opts: XmlExportOptions = {},
+): string {
+  const fields = kmlFields(fc);
+  const lines = [
+    XML_DECLARATION,
+    '<kml xmlns="http://www.opengis.net/kml/2.2">',
+    "<Document>",
+  ];
+  const name = opts.name?.trim();
+  if (name) {
+    lines.push(element("name", name));
+  }
+  if (fields.size > 0) {
+    lines.push(`<Schema name="${KML_SCHEMA_ID}" id="${KML_SCHEMA_ID}">`);
+    for (const [key, type] of fields) {
+      lines.push(`<SimpleField name="${xmlAttr(key)}" type="${type}"/>`);
+    }
+    lines.push("</Schema>");
+  }
+  for (const f of fc.features) {
+    const props = f.properties ?? {};
+    const id = f.id === undefined ? "" : ` id="${xmlAttr(String(f.id))}"`;
+    lines.push(
+      `<Placemark${id}>${
+        isPlacemarkName("name", props.name) ? element("name", props.name) : ""
+      }${kmlExtendedData(props, fields)}${
+        f.geometry ? kmlGeometry(f.geometry) : ""
+      }</Placemark>`,
+    );
+  }
+  lines.push("</Document>", "</kml>");
+  return `${lines.join("\n")}\n`;
+}
+
+// ---- GPX --------------------------------------------------------------------
+
+/** A property as GPX text, or undefined when it is not text. */
+function gpxString(props: GeoJsonProperties, key: string): string | undefined {
+  const value = props?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+/** `lat="…" lon="…"`, and the elevation element when there is a third value. */
+function gpxPoint(tag: string, p: Position, time?: string): string[] {
+  return [
+    `<${tag} lat="${round(p[1])}" lon="${round(p[0])}">`,
+    p.length > 2 ? element("ele", String(round(p[2]))) : "",
+    element("time", time),
+  ];
+}
+
+/** The times of a line's positions, from `coordinateProperties.times`. */
+function gpxTimes(
+  props: GeoJsonProperties,
+  segment: number,
+  segments: number,
+): unknown[] | undefined {
+  const times = (props?.coordinateProperties as { times?: unknown } | undefined)
+    ?.times;
+  if (!Array.isArray(times)) {
+    return undefined;
+  }
+  const these = segments > 1 ? times[segment] : times;
+  return Array.isArray(these) ? these : undefined;
+}
+
+function gpxLinePoints(
+  tag: "rtept" | "trkpt",
+  line: Position[],
+  times: unknown[] | undefined,
+): string {
+  const aligned = times?.length === line.length ? times : undefined;
+  return line
+    .map((p, i) => {
+      const time = aligned?.[i];
+      return [
+        ...gpxPoint(tag, p, typeof time === "string" ? time : undefined),
+        `</${tag}>`,
+      ].join("");
+    })
+    .join("");
+}
+
+/** The description fields, in the order GPX 1.1 puts them. */
+function gpxDescription(props: GeoJsonProperties): string {
+  return ["name", "cmt", "desc"]
+    .map((key) => element(key, gpxString(props, key)))
+    .join("");
+}
+
+/**
+ * The text of a GPX 1.1 file for `fc`.
+ *
+ * A Point or MultiPoint is a waypoint (`wpt`) per position. A line is a
+ * track (`trk`), or a route (`rte`) when its `_gpxType` property is "rte",
+ * which is how `parseGPX` marks a route. A MultiLineString is one track with
+ * a segment per line. Areas are not written: GPX cannot hold them.
+ *
+ * GPX has a place for a few properties only: `name`, `cmt`, `desc` and
+ * `type` on each item, `sym` and `time` on a waypoint, and a time per track
+ * point from `coordinateProperties.times`. Other properties are not
+ * written. A third coordinate is the elevation (`ele`). A layer read from
+ * GPX gives the same features back.
+ */
+export function toGPX(
+  fc: FeatureCollection,
+  opts: XmlExportOptions = {},
+): string {
+  const waypoints: string[] = [];
+  const routes: string[] = [];
+  const tracks: string[] = [];
+
+  for (const f of fc.features) {
+    const g = f.geometry;
+    const props = f.properties ?? {};
+    const type = element("type", gpxString(props, "type"));
+    if (g?.type === "Point" || g?.type === "MultiPoint") {
+      const positions = g.type === "Point" ? [g.coordinates] : g.coordinates;
+      for (const p of positions) {
+        waypoints.push(
+          [
+            ...gpxPoint("wpt", p, gpxString(props, "time")),
+            gpxDescription(props),
+            element("sym", gpxString(props, "sym")),
+            type,
+            "</wpt>",
+          ].join(""),
+        );
+      }
+    } else if (g?.type === "LineString" && props._gpxType === "rte") {
+      routes.push(
+        `<rte>${gpxDescription(props)}${type}${gpxLinePoints(
+          "rtept",
+          g.coordinates,
+          undefined,
+        )}</rte>`,
+      );
+    } else if (g?.type === "LineString" || g?.type === "MultiLineString") {
+      const lines = g.type === "LineString" ? [g.coordinates] : g.coordinates;
+      const segments = lines
+        .map(
+          (line, i) =>
+            `<trkseg>${gpxLinePoints(
+              "trkpt",
+              line,
+              gpxTimes(props, i, lines.length),
+            )}</trkseg>`,
+        )
+        .join("");
+      tracks.push(`<trk>${gpxDescription(props)}${type}${segments}</trk>`);
+    }
+  }
+
+  const name = opts.name?.trim();
+  return `${[
+    XML_DECLARATION,
+    '<gpx version="1.1" creator="Atlasdraw" xmlns="http://www.topografix.com/GPX/1/1">',
+    ...(name ? [`<metadata>${element("name", name)}</metadata>`] : []),
+    ...waypoints,
+    ...routes,
+    ...tracks,
+    "</gpx>",
+  ].join("\n")}\n`;
 }

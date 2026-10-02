@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Data-layer export: the bytes a user downloads from "Export as GeoJSON" and
-// "Export as CSV". Every test reads the produced text.
+// "Export as CSV", "Export as KML" and "Export as GPX". Every test reads the
+// produced text, and the round trips read it with the app's own importers.
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 import { parseCSV } from "./csv";
-import { csvGeometryMode, toCSV, toGeoJSONText } from "./export";
-import { parse } from "./geojson";
+import { csvGeometryMode, toCSV, toGPX, toGeoJSONText, toKML } from "./export";
+import { parse, splitByGeometryKind } from "./geojson";
+import { parseGPX, parseKML } from "./geoxml";
 
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 
@@ -372,5 +378,149 @@ describe("toCSV — a property named like a geometry column", () => {
       "Longitude (property)": 99,
       "latitude (property)": "n/a",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KML and GPX
+
+/** Text that breaks XML if it is written as it is. */
+const UNSAFE = "a < b & c > d \"q\" 's' ]]> end";
+
+const xmlBlob = (text: string) => new Blob([text], { type: "text/xml" });
+
+describe("toKML", () => {
+  const input = fc(
+    {
+      ...point(2.3522, 48.8566, {
+        name: "Well 4, north",
+        depth: 12.5,
+        count: 3,
+        open: true,
+        capped: false,
+        note: UNSAFE,
+      }),
+      id: "well-4",
+    },
+    feature(
+      {
+        type: "LineString",
+        coordinates: [
+          [0, 0, 10],
+          [1, 1, 20.5],
+        ],
+      },
+      { name: "Track" },
+    ),
+    feature(
+      {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 0],
+            [4, 0],
+            [4, 4],
+            [0, 0],
+          ],
+          [
+            [1, 1],
+            [2, 1],
+            [2, 2],
+            [1, 1],
+          ],
+        ],
+      },
+      { [UNSAFE]: "a key that is not a name" },
+    ),
+    feature(
+      {
+        type: "MultiPolygon",
+        coordinates: [
+          [
+            [
+              [10, 10],
+              [11, 10],
+              [11, 11],
+              [10, 10],
+            ],
+          ],
+          [
+            [
+              [20, 20],
+              [21, 20],
+              [21, 21],
+              [20, 20],
+            ],
+          ],
+        ],
+      },
+      { name: "Islands" },
+    ),
+  );
+
+  it("writes a layer that the KML importer reads back: same features, same property types", async () => {
+    const back = await parseKML(xmlBlob(toKML(input, { name: "Sites" })));
+    expect(back.droppedCount).toBe(0);
+    // The importer divides by kind and joins a MultiGeometry into a Multi*
+    // geometry, as it does for every KML file.
+    expect(splitByGeometryKind(back.fc)).toEqual(splitByGeometryKind(input));
+  });
+
+  it("escapes markup in names and values, so ]]> and & stay text", () => {
+    const text = toKML(fc(point(0, 0, { name: UNSAFE })), { name: UNSAFE });
+    expect(text).not.toContain("]]>");
+    expect(text).not.toContain(" & ");
+    expect(text).toContain("<name>a &lt; b &amp; c &gt; d");
+  });
+
+  it("leaves out a null value and characters XML cannot hold", async () => {
+    const back = await parseKML(
+      xmlBlob(toKML(fc(point(0, 0, { gone: null, bell: "ding\u0007!" })))),
+    );
+    expect(back.fc.features[0]!.properties).toEqual({ bell: "ding!" });
+  });
+});
+
+describe("toGPX", () => {
+  const fixture = (name: string) =>
+    fs.readFileSync(
+      path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "__fixtures__",
+        name,
+      ),
+      "utf8",
+    );
+
+  it("writes GPX data that the GPX importer reads back the same: waypoints, routes, tracks, times, elevation", async () => {
+    const first = await parseGPX(xmlBlob(fixture("hike.gpx")));
+    const back = await parseGPX(xmlBlob(toGPX(first.fc, { name: "Hike" })));
+    expect(back.fc).toEqual(first.fc);
+  });
+
+  it("escapes markup in names", async () => {
+    const text = toGPX(fc(point(1, 2, { name: UNSAFE })));
+    expect(text).not.toContain("]]>");
+    const back = await parseGPX(xmlBlob(text));
+    expect(back.fc.features[0]!.properties).toEqual({ name: UNSAFE });
+  });
+
+  it("writes only what GPX has a place for: no areas, no other properties", async () => {
+    const square = feature({
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 0],
+        ],
+      ],
+    });
+    const back = await parseGPX(
+      xmlBlob(toGPX(fc(square, point(1, 2, { name: "A", depth: 3 })))),
+    );
+    expect(back.fc.features).toEqual([point(1, 2, { name: "A" })]);
   });
 });
