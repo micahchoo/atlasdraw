@@ -302,6 +302,14 @@ describe("CameraBridge (properties)", () => {
               if (nextZoom < 2 || nextZoom > 22) {
                 continue;
               }
+              // A change inside the echo band (ECHO_ZOOM, ECHO_PIXELS) is
+              // float noise, and the bridge ignores it on purpose. No gesture
+              // makes one: a factor of 0.99999 once failed here by 0.005 px.
+              const movedPixels =
+                Math.max(Math.abs(step.dx), Math.abs(step.dy)) * v.zoom.value;
+              if (Math.abs(step.factor - 1) <= 1e-4 && movedPixels <= 1e-2) {
+                continue;
+              }
               scene.setViewport(
                 v.scrollX + step.dx,
                 v.scrollY + step.dy,
