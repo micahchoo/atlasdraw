@@ -12,7 +12,7 @@ Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 - **`classifyTool`** — maps an element back to the tool that produced it.
 - **`convert.ts`** — `drawingToFeatureCollection` / `annotationToFeatureCollection`: drawn elements to GeoJSON, through the document's world frame. GeoJSON export and convert-to-data-layer both use it.
 - **Measuring** — `measureStep` (the Measure tool's path as a pure state machine) and `formatLength` / `formatArea` / `unitSystemForLocale` (metric or imperial text, scaled to size).
-- **`registerTool` / `getTool` / `listTools`** — lookup-by-id, so a tool can arrive without a compile-time import. `PinTool` self-registers at module load; this is the seam plugin registration would use.
+- **`registerTool` / `getTool` / `listTools`** — lookup-by-id, so a tool can arrive without a compile-time import. `PinTool` self-registers at module load.
 
 ## Usage
 

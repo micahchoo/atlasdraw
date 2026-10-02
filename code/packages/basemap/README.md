@@ -10,7 +10,7 @@ Workspace-internal package (not published). Consumed by `apps/atlas-app`.
 - **`CameraBridge`** — drives Excalidraw's scroll and zoom from the map camera, and sends Excalidraw's own viewport changes back to the map (ADR-0015). A camera move writes no element.
 - **`BasemapRegistry`** — `BASEMAPS` and `getBasemap(id)`: Light and Dark (Protomaps, from the bundled PMTiles file), Bright (OpenFreeMap) and OSM (remote). `registerBasemap` / `listBasemaps` add and list entries at run time.
 - **PMTiles** — `registerPmtilesProtocol` for the bundled low-zoom world tiles used by self-host.
-- **Styles** — `buildStyle` / `resolveStyle` for basemap style resolution (including the remote-gated error path), and `compileLayer` / `compileLayers` / `defaultLayerStyle`, which compile a `LayerStyle` (categorical and graduated colour, labels from a property, a filter by property) into MapLibre layers.
+- **Styles** — `buildStyle` / `resolveStyle` for basemap style resolution (including the remote-gated error path), and `compileLayer` / `compileLayers` / `defaultLayerStyle`, which compile a `LayerStyle` (categorical and graduated colour, labels from a property, a filter by property) into MapLibre layers. A point layer compiles to points, clusters or a heatmap, and can size its points by a property; `compileSourceOptions` gives the GeoJSON source options that clusters need.
 - **Camera rotation** — `applyRotationPolicy` and its helpers: rotation gestures stay off unless the view has a way back to north.
 
 ## Usage
