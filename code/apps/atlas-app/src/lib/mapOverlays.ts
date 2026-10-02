@@ -31,7 +31,7 @@
 // band, rasters (georeferenced pictures) are above them, and data layers
 // above those.
 
-import { compileLayers } from "@atlasdraw/basemap";
+import { compileLayers, compileSourceOptions } from "@atlasdraw/basemap";
 
 import { rasterUrl } from "../state/rasterUrls";
 
@@ -60,6 +60,12 @@ export type OverlaySource =
       id: string;
       type: "geojson";
       data: FeatureCollection;
+      /**
+       * What the style asks of the source (compileSourceOptions): clusters,
+       * and then the filter. A change to them replaces the source; only a
+       * change to `data` is a setData.
+       */
+      options: ReturnType<typeof compileSourceOptions>;
       version: number;
     }
   | {
@@ -288,7 +294,7 @@ export function overlaySpec(
       });
       continue;
     }
-    const problem = styleProblem(entry.style);
+    const problem = styleProblem(entry.style, entry.geometryKind);
     if (problem) {
       rejected.push({ overlayId: entry.id, reason: problem });
       continue;
@@ -311,7 +317,13 @@ export function overlaySpec(
     }
     add(
       entry.id,
-      { id: entry.id, type: "geojson", data: fc, version: versionOf(fc) },
+      {
+        id: entry.id,
+        type: "geojson",
+        data: fc,
+        options: compileSourceOptions(entry.style, entry.geometryKind),
+        version: versionOf(fc),
+      },
       specs,
     );
   }
@@ -360,7 +372,7 @@ export interface MapOverlays {
 function sourceSpecOf(source: OverlaySource): SourceSpecification {
   switch (source.type) {
     case "geojson":
-      return { type: "geojson", data: source.data };
+      return { type: "geojson", data: source.data, ...source.options };
     case "image":
       return {
         type: "image",
@@ -464,7 +476,11 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
         const refreshed = new Set<string>();
         for (const [id, wanted] of wantedSources) {
           const held = sources.get(id);
-          if (!held || held.version === wanted.version) {
+          const sameOptions =
+            held?.type !== "geojson" ||
+            wanted.type !== "geojson" ||
+            sameValue(held.options, wanted.options);
+          if (!held || (held.version === wanted.version && sameOptions)) {
             continue;
           }
           const live = map.getSource(id) as {
@@ -473,6 +489,7 @@ export function createMapOverlays(map: StyleTarget): MapOverlays {
           if (
             held.type === "geojson" &&
             wanted.type === "geojson" &&
+            sameOptions &&
             typeof live?.setData === "function"
           ) {
             refreshed.add(id);

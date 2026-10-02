@@ -107,4 +107,69 @@ describe("style commands", () => {
     expect(result.ok).toBe(false);
     expect(roads(doc).style.strokeWidth).toBe(2);
   });
+
+  it("refuses clusters, a heatmap or a size on a line layer", () => {
+    const doc = withLayer();
+    for (const patch of [
+      { points: "clusters" as const },
+      { points: "heatmap" as const },
+      {
+        size: { property: "n", min: 0, max: 1, minRadius: 2, maxRadius: 9 },
+      },
+    ]) {
+      expect(doc.dispatch({ type: "restyle", id: "dl:roads", patch }).ok).toBe(
+        false,
+      );
+    }
+    expect(roads(doc).style).toEqual({ strokeColor: "#333", strokeWidth: 2 });
+  });
+
+  it("refuses a point display or a size the map cannot draw, from a room too", () => {
+    const doc = createDocument();
+    doc.dispatch({
+      type: "add-data-layer",
+      id: "dl:wells",
+      fc: {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            properties: { n: 3 },
+            geometry: { type: "Point", coordinates: [1, 2] },
+          },
+        ],
+      },
+      label: "Wells",
+      style: {},
+    });
+    const wells = () =>
+      doc
+        .snapshot()
+        .overlays.find((e) => e.id === "dl:wells") as DataLayerEntry;
+    expect(
+      doc.dispatch({
+        type: "restyle",
+        id: "dl:wells",
+        patch: {
+          size: { property: "n", min: 9, max: 1, minRadius: 2, maxRadius: 9 },
+        },
+      }).ok,
+    ).toBe(false);
+    expect(
+      doc.dispatch({
+        type: "replace-content",
+        title: "Shared",
+        overlays: [{ ...wells(), style: { points: "hexbins" as never } }],
+        featureCollections: doc.snapshot().featureCollections,
+        images: {},
+      }).ok,
+    ).toBe(false);
+    expect(
+      doc.dispatch({
+        type: "restyle",
+        id: "dl:wells",
+        patch: { points: "clusters" },
+      }),
+    ).toEqual({ ok: true });
+  });
 });

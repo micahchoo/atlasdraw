@@ -7,7 +7,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { labelLayerId, outlineLayerId } from "@atlasdraw/basemap";
+import {
+  clusterLayerId,
+  labelLayerId,
+  outlineLayerId,
+} from "@atlasdraw/basemap";
 import { geometryKindOf } from "@atlasdraw/data";
 
 import { createDocument } from "../state/document";
@@ -680,5 +684,54 @@ describe("overlaySpec: one malformed overlay never stops the others", () => {
       "dl:bad-filter",
       "dl:no-stops",
     ]);
+  });
+});
+
+describe("point displays: clusters and heatmap", () => {
+  function pointLayer() {
+    const map = basemap();
+    const overlays = createMapOverlays(asTarget(map));
+    const { d } = doc();
+    d.dispatch({
+      type: "add-data-layer",
+      id: "dl:a",
+      fc: POINTS,
+      label: "a",
+      style: STYLE,
+    });
+    overlays.apply(overlaySpec(d.snapshot()));
+    return { map, overlays, d };
+  }
+
+  /** MapLibre's GeoJSON source can swap its data; a cluster switch must not. */
+  function canSetData(map: FakeMapLibre) {
+    Object.assign(map.getSource("dl:a") as object, { setData: () => {} });
+  }
+
+  it("clusters in the source, and a switch back to points takes the clusters off", () => {
+    const { map, overlays, d } = pointLayer();
+    canSetData(map);
+
+    d.dispatch({ type: "restyle", id: "dl:a", patch: { points: "clusters" } });
+    overlays.apply(overlaySpec(d.snapshot()));
+    expect(map.getSource("dl:a")).toMatchObject({ cluster: true });
+    expect(map.draws(clusterLayerId("dl:a"))).toBe(false);
+    expect(map.getLayer(clusterLayerId("dl:a"))).toBeTruthy();
+    expect(map.errors).toEqual([]);
+
+    canSetData(map);
+    d.dispatch({ type: "restyle", id: "dl:a", patch: { points: "points" } });
+    overlays.apply(overlaySpec(d.snapshot()));
+    expect(map.getSource("dl:a")).not.toHaveProperty("cluster");
+    expect(map.getLayer(clusterLayerId("dl:a"))).toBeUndefined();
+    expect(map.draws("dl:a")).toBe(true);
+  });
+
+  it("draws a heatmap in place of the points", () => {
+    const { map, overlays, d } = pointLayer();
+    d.dispatch({ type: "restyle", id: "dl:a", patch: { points: "heatmap" } });
+    overlays.apply(overlaySpec(d.snapshot()));
+    expect(map.getLayer("dl:a")).toMatchObject({ type: "heatmap" });
+    expect(map.errors).toEqual([]);
   });
 });
