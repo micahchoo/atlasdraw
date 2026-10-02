@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # check-telemetry.sh — Fail CI if forbidden telemetry imports appear in OSS code.
-# Per ADR 0006: the embed SDK and user-facing apps must never call home.
-# Allowed exception: apps/storage with explicit opt-in comment on the same line.
+# Per docs/architecture/adr/0006-telemetry.md: the editor (apps/atlas-app) and
+# the relay (apps/realtime) must never call home. apps/storage is not scanned.
 #
-# Usage: bash scripts/check-telemetry.sh (run from repo root)
+# Usage: bash scripts/check-telemetry.sh (it runs from code/ itself)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

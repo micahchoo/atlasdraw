@@ -276,7 +276,7 @@ afterEach(() => {
     .forEach((el) => el.parentNode?.removeChild(el));
 });
 
-describe("MapEditor — 'Import…' menu action (ISSUES.md Direction 1)", () => {
+describe("MapEditor — 'Import…' menu action", () => {
   it("clicking Import… opens a native file picker, and picking a .geojson imports it", async () => {
     const registerSpy = vi.spyOn(currentDocument(), "dispatch");
     const { getByTestId } = render(

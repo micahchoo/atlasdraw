@@ -427,7 +427,7 @@ describe("usePersistenceWiring", () => {
     );
   });
 
-  it("calls documentNotify.error when the initial load() rejects (ISSUES.md Issue 7)", async () => {
+  it("calls documentNotify.error when the initial load() rejects", async () => {
     const store = makeFakeStore({
       load: vi.fn(async () => {
         throw new Error("IDB unavailable");
@@ -452,7 +452,7 @@ describe("usePersistenceWiring", () => {
     });
   });
 
-  it("notifies once on the ok->failed transition for remoteSave, not on every subsequent failure (ISSUES.md Issue 7)", () => {
+  it("notifies once on the ok->failed transition for remoteSave, not on every subsequent failure", () => {
     const store = makeFakeStore();
     vi.spyOn(persistenceModule, "createPersistenceStore").mockImplementation(
       (opts) => {

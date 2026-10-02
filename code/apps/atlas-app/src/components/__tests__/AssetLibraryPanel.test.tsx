@@ -122,7 +122,7 @@ describe("AssetLibraryPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("toasts an error when updateLibrary rejects, instead of only logging (ISSUES.md Issue 7)", async () => {
+  it("toasts an error when updateLibrary rejects, instead of only logging", async () => {
     const api = {
       updateLibrary: vi.fn().mockRejectedValue(new Error("malformed fixture")),
       toggleSidebar: vi.fn(),

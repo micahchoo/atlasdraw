@@ -9,10 +9,6 @@
 #   so a future contributor adding a new fixture can't ship non-MIT assets
 #   without CI failing."
 #
-# Original plan reference:
-#   docs/superpowers/plans/2026-05-03-atlasdraw-phase-6-v1-embeds-comments.md
-#   §Task 14b Step 4 — "Add CI license-scan guard"
-#
 # What this script enforces:
 #   For every `*.excalidrawlib` file under packages/data/fixtures/libraries/,
 #   there must be a sibling LICENSE file (named either `LICENSE.txt` for the
