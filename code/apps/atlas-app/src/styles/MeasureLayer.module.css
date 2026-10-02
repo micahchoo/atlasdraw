@@ -67,27 +67,3 @@
   color: var(--ad-ink-tertiary);
   white-space: nowrap;
 }
-
-.textButton,
-.unitsButton {
-  padding: 2px 8px;
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink-secondary);
-  font-family: var(--ad-font-sans);
-  font-size: var(--ad-text-sm);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.textButton:hover,
-.unitsButton:hover {
-  border-color: var(--ad-emphasis);
-  color: var(--ad-ink);
-}
-
-.textButton {
-  border-color: var(--ad-accent);
-  color: var(--ad-accent);
-}
