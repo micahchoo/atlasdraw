@@ -55,6 +55,7 @@ interface ShareRow {
   mode: string;
   expires_at: string | null;
   created_at: string;
+  revision: number | null;
 }
 
 const TEMP_SUFFIX = ".tmp";
@@ -86,6 +87,7 @@ function rowToShare(row: ShareRow): ShareToken {
     mode: "read",
     expires_at: row.expires_at,
     created_at: row.created_at,
+    revision: row.revision,
   };
 }
 
@@ -123,8 +125,8 @@ export function createSqliteFsAdapter(opts: {
     `DELETE FROM share_tokens WHERE map_id = ?`,
   );
   const insertShare = db.prepare(
-    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const selectShare = db.prepare(`SELECT * FROM share_tokens WHERE token = ?`);
   const deleteShare = db.prepare(
@@ -318,6 +320,30 @@ export function createSqliteFsAdapter(opts: {
       -row.byte_size - versions.reduce((n, v) => n + v.byte_size, 0),
     );
     return [row.blob_ref, ...versions.map((v) => v.blob_ref)];
+  });
+
+  /** Inserts the token if its map, and its revision when it names one, exist. */
+  const insertShareChecked = db.transaction((t: ShareToken): boolean => {
+    const row = selectMap.get(t.map_id) as MapRow | undefined;
+    if (!row) {
+      return false;
+    }
+    if (
+      t.revision !== null &&
+      t.revision !== row.revision &&
+      !selectVersion.get(t.map_id, t.revision)
+    ) {
+      return false;
+    }
+    insertShare.run(
+      t.token,
+      t.map_id,
+      t.mode,
+      t.expires_at,
+      t.created_at,
+      t.revision,
+    );
+    return true;
   });
 
   const sweepRows = db.transaction(
@@ -514,8 +540,8 @@ export function createSqliteFsAdapter(opts: {
       };
     },
 
-    async createShareToken(mapId, expiresAt) {
-      if (!ID_RE.test(mapId) || !selectMap.get(mapId)) {
+    async createShareToken(mapId, expiresAt, revision = null) {
+      if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
       const record: ShareToken = {
@@ -524,14 +550,11 @@ export function createSqliteFsAdapter(opts: {
         mode: "read",
         expires_at: expiresAt ? expiresAt.toISOString() : null,
         created_at: new Date().toISOString(),
+        revision,
       };
-      insertShare.run(
-        record.token,
-        record.map_id,
-        record.mode,
-        record.expires_at,
-        record.created_at,
-      );
+      if (!insertShareChecked.immediate(record)) {
+        throw new Error(`not found: ${mapId}`);
+      }
       return record;
     },
 

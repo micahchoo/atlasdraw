@@ -85,13 +85,23 @@ export interface MapService {
     writeKey: string,
     revision: number,
   ): Promise<Bytes | Forbidden | Missing>;
-  /** `expiresInDays` null: the token lives until it is revoked. */
+  /**
+   * `expiresInDays` null: the token lives until it is revoked. `revision`
+   * null: it reads the latest bytes; a number freezes it on that version.
+   * Missing when the map, or that revision, is not kept.
+   */
   share(
     id: string,
     writeKey: string,
     expiresInDays: number | null,
+    revision?: number | null,
   ): Promise<
-    | { kind: "shared"; token: string; expiresAt: string | null }
+    | {
+        kind: "shared";
+        token: string;
+        expiresAt: string | null;
+        revision: number | null;
+      }
     | Forbidden
     | Missing
   >;
@@ -270,7 +280,7 @@ export function createMapService(
       return blob ? { kind: "bytes", blob } : { kind: "missing" };
     },
 
-    async share(id, writeKey, expiresInDays) {
+    async share(id, writeKey, expiresInDays, revision = null) {
       const map = await owned(id, writeKey);
       if (refused(map)) {
         return map;
@@ -280,11 +290,12 @@ export function createMapService(
           ? null
           : new Date(now().getTime() + expiresInDays * DAY_MS);
       try {
-        const token = await store.createShareToken(id, expiresAt);
+        const token = await store.createShareToken(id, expiresAt, revision);
         return {
           kind: "shared",
           token: token.token,
           expiresAt: token.expires_at,
+          revision: token.revision,
         };
       } catch (err) {
         if (isNotFoundError(err)) {
@@ -306,7 +317,10 @@ export function createMapService(
         return { kind: "expired" };
       }
       // A token whose map or bytes are gone reads as expired: it worked once.
-      const blob = await store.getBlob(share.map_id);
+      const blob =
+        share.revision === null
+          ? await store.getBlob(share.map_id)
+          : await store.getVersionBlob(share.map_id, share.revision);
       return blob ? { kind: "bytes", blob } : { kind: "expired" };
     },
 

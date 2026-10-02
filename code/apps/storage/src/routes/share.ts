@@ -2,11 +2,14 @@
 //
 //   POST   /maps/:id/share          mint a read token        (write key)
 //   DELETE /maps/:id/share/:token   revoke it                (write key)
-//   GET    /share/:token/blob       the map's latest bytes   (token)
+//   GET    /share/:token/blob       the map's bytes          (token)
 //
 // A token reads the map's LATEST bytes, so a write to the map updates every
 // link and embed made from it. By default a token lives until it is revoked;
-// the body `{"expires_in_days": n}` gives it an expiry instead. Nothing a
+// the body `{"expires_in_days": n}` gives it an expiry instead. The body
+// `{"revision": n}` freezes the token on that revision: later writes do not
+// change what it reads, and the store keeps that version while the token
+// lives (docs/architecture/adr/0020-server-version-history.md). Nothing a
 // token holder can fetch carries the map id or the write key.
 
 import { ID_RE } from "../constants";
@@ -28,24 +31,44 @@ interface TokenParams {
 /** Ten years: longer than that, choose no expiry. */
 const MAX_EXPIRY_DAYS = 3650;
 
-/** The asked expiry: a whole number of days, null for none, or invalid. */
-function expiryOf(body: unknown): number | null | "invalid" {
-  if (body === undefined || body === null) {
+interface ShareRequest {
+  /** Whole days, or null for none. */
+  days: number | null;
+  /** The revision to freeze on, or null for the latest bytes. */
+  revision: number | null;
+}
+
+/** A whole number from `min` to `max`, null when absent, or invalid. */
+function wholeOf(
+  value: unknown,
+  min: number,
+  max: number,
+): number | null | "invalid" {
+  if (value === undefined || value === null) {
     return null;
+  }
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= min &&
+    value <= max
+    ? value
+    : "invalid";
+}
+
+/** The asked expiry and revision, or "invalid". */
+function shareRequestOf(body: unknown): ShareRequest | "invalid" {
+  if (body === undefined || body === null) {
+    return { days: null, revision: null };
   }
   if (typeof body !== "object" || Array.isArray(body) || isBlobBody(body)) {
     return "invalid";
   }
-  const days = (body as { expires_in_days?: unknown }).expires_in_days;
-  if (days === undefined || days === null) {
-    return null;
-  }
-  return typeof days === "number" &&
-    Number.isInteger(days) &&
-    days >= 1 &&
-    days <= MAX_EXPIRY_DAYS
-    ? days
-    : "invalid";
+  const asked = body as { expires_in_days?: unknown; revision?: unknown };
+  const days = wholeOf(asked.expires_in_days, 1, MAX_EXPIRY_DAYS);
+  const revision = wholeOf(asked.revision, 1, Number.MAX_SAFE_INTEGER);
+  return days === "invalid" || revision === "invalid"
+    ? "invalid"
+    : { days, revision };
 }
 
 export function registerShareRoutes(
@@ -64,13 +87,18 @@ export function registerShareRoutes(
       if (writeKey === null) {
         return reply;
       }
-      const days = expiryOf(request.body);
-      if (days === "invalid") {
+      const asked = shareRequestOf(request.body);
+      if (asked === "invalid") {
         return reply.code(400).send({
-          error: `expires_in_days must be a whole number from 1 to ${MAX_EXPIRY_DAYS}`,
+          error: `expires_in_days must be a whole number from 1 to ${MAX_EXPIRY_DAYS}, and revision a whole number from 1`,
         });
       }
-      const result = await service.share(id, writeKey, days);
+      const result = await service.share(
+        id,
+        writeKey,
+        asked.days,
+        asked.revision,
+      );
       if (result.kind !== "shared") {
         const refusal = REFUSAL[result.kind];
         return reply.code(refusal.status).send(refusal.body);
@@ -79,6 +107,7 @@ export function registerShareRoutes(
         token: result.token,
         url: `${publicUrl}/m/${result.token}`,
         expires_at: result.expiresAt,
+        revision: result.revision,
       });
     },
   );
@@ -117,8 +146,8 @@ export function registerShareRoutes(
       if (result.kind === "expired") {
         return reply.code(410).send({ error: "expired" });
       }
-      // no-cache: the bytes change on every save and a revoke ends the link,
-      // so a cache must ask again each time.
+      // no-cache: the bytes change on every save (unless the link is frozen)
+      // and a revoke ends the link, so a cache must ask again each time.
       return sendBlob(reply, result.blob, "no-cache");
     },
   );

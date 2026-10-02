@@ -72,6 +72,7 @@ interface ShareRow {
   mode: string;
   expires_at: Date | string | null;
   created_at: Date | string;
+  revision: number | string | null;
 }
 
 function isoize(v: Date | string): string {
@@ -116,6 +117,7 @@ function rowToShare(row: ShareRow): ShareToken {
     mode: "read",
     expires_at: row.expires_at === null ? null : isoize(row.expires_at),
     created_at: isoize(row.created_at),
+    revision: row.revision === null ? null : Number(row.revision),
   };
 }
 
@@ -623,27 +625,50 @@ export function createPostgresMinioAdapter(opts: {
       };
     },
 
-    async createShareToken(mapId, expiresAt) {
+    async createShareToken(mapId, expiresAt, revision = null) {
       if (!ID_RE.test(mapId)) {
         throw new Error(`not found: ${mapId}`);
       }
       await ensureSchema();
-      if (!(await selectMap(mapId))) {
-        throw new Error(`not found: ${mapId}`);
-      }
       const token = nanoid(21);
       const now = new Date();
-      await pool.query(
-        `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [token, mapId, "read", expiresAt, now],
-      );
+      // The map row is locked, so no write can prune the version between
+      // the check and the insert.
+      const made = await inTransaction(async (db) => {
+        const res = await db.query<{ revision: string }>(
+          `SELECT revision FROM maps WHERE id = $1 FOR UPDATE`,
+          [mapId],
+        );
+        const row = res.rows[0];
+        if (!row) {
+          return false;
+        }
+        if (revision !== null && revision !== Number(row.revision)) {
+          const kept = await db.query(
+            `SELECT 1 FROM map_versions WHERE map_id = $1 AND revision = $2`,
+            [mapId, revision],
+          );
+          if (kept.rowCount === 0) {
+            return false;
+          }
+        }
+        await db.query(
+          `INSERT INTO share_tokens (token, map_id, mode, expires_at, created_at, revision)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [token, mapId, "read", expiresAt, now, revision],
+        );
+        return true;
+      });
+      if (!made) {
+        throw new Error(`not found: ${mapId}`);
+      }
       return {
         token,
         map_id: mapId,
         mode: "read",
         expires_at: expiresAt ? expiresAt.toISOString() : null,
         created_at: now.toISOString(),
+        revision,
       };
     },
 
@@ -653,7 +678,7 @@ export function createPostgresMinioAdapter(opts: {
       }
       await ensureSchema();
       const res = await pool.query<ShareRow>(
-        `SELECT token, map_id, mode, expires_at, created_at
+        `SELECT token, map_id, mode, expires_at, created_at, revision
          FROM share_tokens WHERE token = $1`,
         [token],
       );

@@ -34,7 +34,8 @@ export interface MapRecord {
 
 /**
  * A read-only share token for one map. `expires_at` null means the token
- * lives until its owner revokes it.
+ * lives until its owner revokes it. `revision` null means it reads the
+ * map's latest bytes; a number freezes it on that version.
  */
 export interface ShareToken {
   token: string;
@@ -42,6 +43,7 @@ export interface ShareToken {
   mode: "read";
   expires_at: string | null;
   created_at: string;
+  revision: number | null;
 }
 
 /** What one sweep removed. */
@@ -137,8 +139,17 @@ export interface StorageClient {
     body: BlobBody,
     opts?: UpdateOptions,
   ): Promise<MapRecord>;
-  /** Rejects with `not found:` for an unknown map. */
-  createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;
+  /**
+   * Rejects with `not found:` for an unknown map, and for a `revision` the
+   * store does not keep (the current one or a kept version). The check and
+   * the insert are one transaction, so no write can prune the version
+   * between them.
+   */
+  createShareToken(
+    mapId: string,
+    expiresAt: Date | null,
+    revision?: number | null,
+  ): Promise<ShareToken>;
   resolveToken(token: string): Promise<ShareToken | null>;
   /** Deletes the token if it belongs to `mapId`. True if a row went. */
   deleteShareToken(mapId: string, token: string): Promise<boolean>;

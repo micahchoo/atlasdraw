@@ -405,6 +405,53 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       expect(await client.resolveToken(token.token)).toEqual(token);
     });
 
+    it("a token made for a revision keeps that version through later writes, even with no history", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      const frozen = await client.createShareToken(map.id, null, 1);
+
+      await client.updateMap(map.id, bodyOf("v2"));
+      await client.updateMap(map.id, bodyOf("v3"));
+
+      expect(frozen.revision).toBe(1);
+      expect((await client.resolveToken(frozen.token))?.revision).toBe(1);
+      expect(
+        (await client.listVersions(map.id))?.map((v) => v.revision),
+      ).toEqual([1]);
+      expect(await textOf(client.getVersionBlob(map.id, 1))).toBe("v1");
+      expect(await client.totalBytes()).toBe(4);
+    });
+
+    it("a version a token reads is never pruned and does not count toward keep", async () => {
+      const client = open();
+      const versions = { keep: 1, intervalMs: 0 };
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.createShareToken(map.id, null, 1);
+      for (const bytes of ["v2", "v3", "v4"]) {
+        await client.updateMap(map.id, bodyOf(bytes), { versions });
+      }
+
+      expect(
+        (await client.listVersions(map.id))?.map((v) => v.revision),
+      ).toEqual([3, 1]);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("createShareToken refuses a revision the store does not keep", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.updateMap(map.id, bodyOf("v2"));
+
+      await expect(client.createShareToken(map.id, null, 1)).rejects.toThrow(
+        /^not found:/,
+      );
+      await expect(client.createShareToken(map.id, null, 3)).rejects.toThrow(
+        /^not found:/,
+      );
+      expect((await client.createShareToken(map.id, null, 2)).revision).toBe(2);
+      expect((await client.createShareToken(map.id, null)).revision).toBeNull();
+    });
+
     it("createShareToken rejects an unknown map as not found", async () => {
       const client = open();
 
