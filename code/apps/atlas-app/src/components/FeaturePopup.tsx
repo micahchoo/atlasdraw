@@ -9,8 +9,14 @@
 // feature. The popup is a transient pop-over in the z-10 band (popups and
 // banners); it holds no state of its own except "show all".
 //
-// Keys and values are text nodes, never HTML: the properties come from files
-// the user did not write.
+// It also shows a pin's details (title, description, link, photo) in the
+// viewer and the embed: the same place-bound popup, with the same keyboard.
+//
+// Keys, values and a pin's fields are text nodes, never HTML: they come from
+// files the user did not write. A pin's link is shown only when it is http
+// or https, and opens in a new tab with no opener and no referrer. Its photo
+// is shown only from the drawing's own file (a data: URL), never from
+// another host.
 //
 // Keyboard: the popup takes the focus when it opens, Tab reaches its
 // buttons, and Escape closes it and gives the focus back to where it was. A
@@ -18,8 +24,13 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { attributeRows } from "../lib/featureHit";
-import { POPUP_ROWS, type OpenPopup } from "../hooks/useFeaturePopup";
+import { attributeRows, type FeatureHit } from "../lib/featureHit";
+import {
+  POPUP_ROWS,
+  type OpenPopup,
+  type PinHit,
+} from "../hooks/useFeaturePopup";
+import { safeLink } from "../state/pinDetails";
 
 import styles from "../styles/FeaturePopup.module.css";
 
@@ -35,11 +46,15 @@ export function FeaturePopup({ popup, onClose }: FeaturePopupProps) {
   // A new feature is a new popup: "show all" and the focus start again.
   return (
     <OpenFeaturePopup
-      key={`${popup.hit.overlayId} ${popup.lngLat.lng} ${popup.lngLat.lat}`}
+      key={`${hitId(popup.hit)} ${popup.lngLat.lng} ${popup.lngLat.lat}`}
       popup={popup}
       onClose={onClose}
     />
   );
+}
+
+function hitId(hit: FeatureHit | PinHit): string {
+  return "kind" in hit ? hit.id : hit.overlayId;
 }
 
 function OpenFeaturePopup({
@@ -52,9 +67,11 @@ function OpenFeaturePopup({
   const ref = useRef<HTMLDivElement>(null);
   const [showAll, setShowAll] = useState(false);
   const [flip, setFlip] = useState({ x: false, y: false });
-  const rows = attributeRows(popup.hit.properties);
+  const hit = popup.hit;
+  const rows = "kind" in hit ? [] : attributeRows(hit.properties);
   const shown = showAll ? rows : rows.slice(0, POPUP_ROWS);
-  const titleId = `feature-popup-title-${popup.hit.overlayId}`;
+  const titleId = `feature-popup-title-${hitId(hit)}`;
+  const title = "kind" in hit ? hit.details.title ?? "Pin" : hit.label;
 
   // Focus moves in on open and goes back on close.
   useEffect(() => {
@@ -121,7 +138,7 @@ function OpenFeaturePopup({
     >
       <div className={styles.header}>
         <span id={titleId} className={styles.title}>
-          {popup.hit.label}
+          {title}
         </span>
         <button
           type="button"
@@ -142,13 +159,15 @@ function OpenFeaturePopup({
           </svg>
         </button>
       </div>
-      {rows.length === 0 ? (
+      {"kind" in hit ? (
+        <PinBody pin={hit} />
+      ) : rows.length === 0 ? (
         <p className={styles.empty}>This feature has no attributes.</p>
       ) : (
         <div className={styles.scroll}>
           <table className={styles.table}>
             <caption className={styles.srOnly}>
-              {`Attributes of a feature in ${popup.hit.label}`}
+              {`Attributes of a feature in ${title}`}
             </caption>
             <tbody>
               {shown.map((row) => (
@@ -170,6 +189,40 @@ function OpenFeaturePopup({
         >
           {`Show all ${rows.length}`}
         </button>
+      )}
+    </div>
+  );
+}
+
+/** A pin's description, link and photo, below its title. */
+function PinBody({ pin }: { pin: PinHit }) {
+  const { description, link, title } = pin.details;
+  const href = link ? safeLink(link) : null;
+  const photo = pin.photoUrl?.startsWith("data:image/") ? pin.photoUrl : null;
+  if (!description && !href && !photo) {
+    return <p className={styles.empty}>This pin has no details.</p>;
+  }
+  return (
+    <div className={[styles.scroll, styles.pin].join(" ")}>
+      {photo && (
+        <img
+          className={styles.photo}
+          src={photo}
+          alt={title ?? "Photo of the pin"}
+          data-testid="pin-popup-photo"
+        />
+      )}
+      {description && <p className={styles.description}>{description}</p>}
+      {href && (
+        <a
+          className={styles.link}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="pin-popup-link"
+        >
+          {href}
+        </a>
       )}
     </div>
   );

@@ -14,6 +14,7 @@ import type { ExcalidrawElement } from "@atlasdraw/element/types";
 import {
   PIN_LIMITS,
   elementFileIds,
+  photoUrlOf,
   pinAt,
   readPinDetails,
   safeLink,
@@ -218,5 +219,21 @@ describe("the gate repairs a pin from a stranger", () => {
       tool: "pin",
       pin: details,
     });
+  });
+});
+
+describe("photoUrlOf", () => {
+  const PNG = "data:image/png;base64,AAAA";
+
+  it("is the data URL of the photo's file", () => {
+    expect(photoUrlOf({ photo: "f" }, { f: { dataURL: PNG } })).toBe(PNG);
+  });
+
+  it("is null for no photo, a missing file, or a URL that is not an image's data", () => {
+    expect(photoUrlOf({}, { f: { dataURL: PNG } })).toBeNull();
+    expect(photoUrlOf({ photo: "g" }, { f: { dataURL: PNG } })).toBeNull();
+    expect(
+      photoUrlOf({ photo: "f" }, { f: { dataURL: "https://x.example/p.png" } }),
+    ).toBeNull();
   });
 });

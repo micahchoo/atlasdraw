@@ -169,3 +169,15 @@ export function pinAt(
   }
   return null;
 }
+
+/**
+ * The data URL of a pin's photo, from the drawing's files; null when there
+ * is none or the file is not an image. Never a URL of another host.
+ */
+export function photoUrlOf(
+  details: PinDetails,
+  files: Readonly<Record<string, { dataURL?: unknown } | undefined>>,
+): string | null {
+  const url = details.photo ? files[details.photo]?.dataURL : undefined;
+  return typeof url === "string" && url.startsWith("data:image/") ? url : null;
+}
