@@ -1,45 +1,34 @@
 # Handoff: roadmap/2026-10 (2026-10-01)
 
-Branch `roadmap/2026-10` (worktree ../atlasdraw-roadmap) is pushed to origin.
-`main` is NOT updated. Pushing to main deploys Pages, and the permission
-classifier blocked it once; the user asked for a push to main after all waves
-and again after the repeat audit.
+## Where the branches are
 
-## Done and merged (each gated: typecheck, vitest, lint, prettier, falsifiable)
-W0 stop data loss + share-link write hole; W1 known-red tests; W2 CI gates,
-Dockerfiles, same-origin minimal stack, Postgres CI; W3 Document owner;
-W4 world coordinates (+W4b units, pinch, Ctrl+0); W5 single map-style writer;
-W6 collab on one Y.Doc per room (+W6b input validation, relay limits, names);
-W8 managed mode, SDK, fork extras deleted, write keys + lasting links;
-W9 KML/GPX, hi-DPI export, My maps, popups, tile layers, labels/filters,
-data-layer export, measure tool.
+- `roadmap/2026-10` (worktree `../atlasdraw-roadmap`) is at `10b60c6` and
+  is pushed to origin. It holds round 1 (waves W0 to W9) and round 2 (R0,
+  R2 to R8c).
+- `origin/main` is at `8600183`: round 1 and two CI fixes. Round 2 is not on
+  `main`. A push to `main` deploys GitHub Pages.
+- R9, the truth pass over docs, rules, ADRs and comments, is on `r9/truth`
+  (worktree `../atlasdraw-r9`). It is not merged and not pushed.
+- No commit names R1 (known-red tests). Check with the lead whether it ran.
 
-## In flight
-- W7a (worktree ../atlasdraw-w7a, branch w7a/shell): one viewer (/m shows a
-  map), routes.ts, config schema, backlog UI fixes. Agent may still be running;
-  merge w7a/shell when its gate is green.
+## Round 2, as merged
+
+R0 relay, storage and app hardening (`LIMITS` in `packages/protocol`); R2
+one gate for documents from outside the tab, and the content security
+policy; R3 one creation seam (`stampNewElements`); R4 one history, and
+"unsaved" derived from it; R5 one `MapView` for exports, and the responsive
+embed with a legend; R6 key scopes and one `Modal`; R7 the production-build
+e2e, ESLint 9, `maplibre-gl` 6.11, `vite` 7.3.6, the boot-size budget; R8a
+KML and GPX export, WKT in CSV, clusters, heatmap, the attribute table; R8b
+server versions (ADR-0020), `If-Match`, frozen links, backup and restore of
+maps with their write keys; R8c offline basemap labels, the blocked-tile
+message, pin details.
 
 ## Left
-1. W7b: EditorSession + command registry (menu, palette, keys, shortcuts list).
-2. W8 docs/comment pass: delete history-narration comments, fix false ones,
-   docs/ADRs naming removed modules (avoid .agents/: another session deletes it).
-3. Full chromium e2e on the merged branch; then push roadmap to main.
-4. Repeat the whole exercise (7 subsystem audits + blind + product gaps,
-   synthesis artifact https://claude.ai/artifact/BX3BF2F1MG75X2U7WWyJNT, new
-   roadmap), execute it, push to main again.
 
-Backlog of found defects: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/lead/backlog.md
-Audit reports: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/audit-*.md, research-08-product-gaps.md
-Lead gate: /tmp/claude-1000/-mnt-Ghar-2TA-DevStuff-atlasdraw/245f6bc3-9bc2-431b-bf89-f0e9e96a98f3/scratchpad/lead/roadmap-gate.sh "<msg>" [vitest paths]
-
-## Update (late 2026-10-01)
-- Round 1 complete and pushed to main (8cb4bde, then 1597929). Pages deploy is
-  SKIPPED because CI on main is red: run 36910532844 failed in "Typecheck,
-  lint, format, unit tests" (step `yarn test:app`; cause not yet read — check
-  `gh run view 36910532844 --log-failed`) and in "Self-host images build and
-  run" (not yet read). Bench is report-only now. Browser and Postgres jobs pass.
-- Round 2: survey https://claude.ai/artifact/3SB9hydxNcedcCj3UPrwxV.
-  R0a (relay) merged into roadmap/2026-10. R0b (storage/deploy, worktree
-  ../atlasdraw-r0b) and R0c (app/fork, ../atlasdraw-r0c) agents may still be
-  running; merge their branches r0/storage and r0/app when green.
-- Then: R1 known-red tests, R2..R9 per the survey; push main again at the end.
+1. Merge `r9/truth` into `roadmap/2026-10`.
+2. Run the chromium e2e and the production-build e2e
+   (`playwright.build.config.ts`, hosted and `E2E_TARGET=pages`) on the
+   merged branch.
+3. Push `roadmap/2026-10` to `main`.
+4. The defects that R9 found and did not fix are in its report.
