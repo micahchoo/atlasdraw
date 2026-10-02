@@ -1,19 +1,80 @@
+import { execFileSync } from "child_process";
+import { mkdtempSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+
 import { defineConfig } from "@playwright/test";
 
 /**
- * Specs that need the production build, not the dev server: the content
- * security policy is written into index.html by the build only
- * (src/lib/contentSecurityPolicy.ts). This config builds the app as a
- * hosted build with rooms, serves dist/ with `vite preview`, and runs
- * e2e-build/ in chromium.
+ * The e2e suite for what ships: a production build, served the way it is
+ * deployed, in chromium. e2e-build/ drives the app through its UI only; a
+ * production build has no development hook (window.__atlasdraw__).
+ *
+ *   E2E_TARGET=hosted  (default) a hosted build with rooms and storage,
+ *                      served by `vite preview` at /
+ *   E2E_TARGET=pages   the GitHub Pages build (pages.yml), served by
+ *                      e2e-build/serve-pages.mjs at /atlasdraw/, with the
+ *                      404.html fallback Pages uses for deep links
  *
  *   E2E_BUILD_PORT=5316 npx playwright test --config=playwright.build.config.ts
+ *   E2E_TARGET=pages npx playwright test --config=playwright.build.config.ts
+ *
+ * The hosted target also starts the storage server (SQLite and files, in a
+ * fresh temporary folder); `vite preview` serves it at /api, as nginx does.
  *
  * E2E_BUILD_URL runs the same specs against a server you started, such as
  * the nginx image serving dist/; then nothing is built here.
  */
+const TARGET = process.env.E2E_TARGET === "pages" ? "pages" : "hosted";
 const PORT = Number(process.env.E2E_BUILD_PORT ?? 5316);
-const URL = process.env.E2E_BUILD_URL ?? `http://localhost:${PORT}`;
+const URL =
+  process.env.E2E_BUILD_URL ??
+  `http://localhost:${PORT}${TARGET === "pages" ? "/atlasdraw/" : "/"}`;
+
+/** A port no process listens on now, from the OS. */
+function freePort(): number {
+  return Number(
+    execFileSync(process.execPath, [
+      "-e",
+      "const s=require('net').createServer().listen(0,()=>{console.log(s.address().port);s.close()})",
+    ])
+      .toString()
+      .trim(),
+  );
+}
+
+// Workers load this file again; the first load's values stand.
+const STORAGE_PORT = Number(
+  (process.env.E2E_STORAGE_PORT ??= String(freePort())),
+);
+const STORAGE_DIR = (process.env.E2E_STORAGE_DIR ??= mkdtempSync(
+  join(tmpdir(), "atlasdraw-storage-"),
+));
+
+const BUILDS = {
+  hosted: {
+    env: {
+      VITE_BUILD_TARGET: "hosted",
+      VITE_STORAGE_BASE_URL: "/api",
+      VITE_REALTIME_ENABLED: "true",
+      // vite.config.ts: preview serves the storage server at /api.
+      PREVIEW_API_PROXY: `http://localhost:${STORAGE_PORT}`,
+    },
+    serve: `yarn workspace @atlasdraw/atlas-app preview --port ${PORT} --strictPort`,
+  },
+  // The same variables as .github/workflows/pages.yml.
+  pages: {
+    env: {
+      VITE_BUILD_TARGET: "pages",
+      VITE_PMTILES_PATH: "/atlasdraw/data/world-low-zoom.pmtiles",
+    },
+    serve: `node e2e-build/serve-pages.mjs dist ${PORT}`,
+  },
+} as const;
+
+// The specs read the target to know what the build promises (embeds are on
+// in the hosted build, off on Pages). Workers inherit it.
+process.env.E2E_TARGET = TARGET;
 
 export default defineConfig({
   testDir: "./e2e-build",
@@ -21,26 +82,47 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
-  reporter: [["list"]],
+  // One retry on CI, so one slow boot does not fail the build (and block
+  // the Pages deploy); the trace of the failed try is kept.
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
   use: {
     baseURL: URL,
     headless: true,
     viewport: { width: 1280, height: 800 },
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  projects: [{ name: `chromium-${TARGET}`, use: { browserName: "chromium" } }],
   webServer: process.env.E2E_BUILD_URL
     ? undefined
-    : {
-        command: `yarn workspace @atlasdraw/atlas-app build && yarn workspace @atlasdraw/atlas-app preview --port ${PORT} --strictPort`,
-        env: {
-          VITE_BUILD_TARGET: "hosted",
-          VITE_STORAGE_BASE_URL: "/api",
-          VITE_REALTIME_ENABLED: "true",
+    : [
+        ...(TARGET === "hosted"
+          ? [
+              {
+                command:
+                  "yarn workspace @atlasdraw/storage build && yarn workspace @atlasdraw/storage start",
+                env: {
+                  STORAGE_MODE: "sqlite-fs",
+                  DATA_DIR: STORAGE_DIR,
+                  PORT: String(STORAGE_PORT),
+                },
+                url: `http://localhost:${STORAGE_PORT}/health`,
+                timeout: 120_000,
+                reuseExistingServer: false,
+                stdout: "ignore" as const,
+                stderr: "pipe" as const,
+              },
+            ]
+          : []),
+        {
+          command: `yarn workspace @atlasdraw/atlas-app build && ${BUILDS[TARGET].serve}`,
+          env: BUILDS[TARGET].env,
+          url: URL,
+          timeout: 300_000,
+          reuseExistingServer: false,
+          stdout: "ignore",
+          stderr: "pipe",
         },
-        url: URL,
-        timeout: 300_000,
-        reuseExistingServer: false,
-        stdout: "ignore",
-        stderr: "pipe",
-      },
+      ],
 });
