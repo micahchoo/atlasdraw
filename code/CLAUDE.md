@@ -40,7 +40,7 @@ yarn workspace @atlasdraw/atlas-app e2e      # Playwright, chromium
 ### Packages
 
 - `packageManager: yarn@4.15.0`. In CI, `corepack enable` runs before `setup-node`'s yarn cache step.
-- One scope: everything internal is `@atlasdraw/*` (ADR 0010). The only `@excalidraw/*` names left are real npm dependencies (`eslint-config`, `prettier-config`, `laser-pointer`, `random-username`). Never rename them.
+- One scope: everything internal is `@atlasdraw/*` (`decisions/0010-own-the-fork.md`). The only `@excalidraw/*` names left are real npm dependencies (`eslint-config`, `prettier-config`, `laser-pointer`, `random-username`). Never rename them.
 - The fork packages build with esbuild (`scripts/buildPackage.js`); the editor builds with Vite. The editor reads the fork's built types, so `yarn test:typecheck` runs `build:types` first.
 - TypeScript is strict everywhere. Atlas-owned code also has `noUnusedLocals` and `noUnusedParameters` (`packages/tsconfig.base.json`); the five fork packages turn them off (183 findings in upstream code). Unused code is a type error, not a lint rule.
 

@@ -32,7 +32,7 @@ drawing's undo and redo keys and buttons to the history.
 
 - **Never add a dirty flag.** An edit is a step. A thing that needs a save
   but is no edit (a new map, an opened file, a copy of a shared map, a
-  server backup) calls `persistence.forceSave()` after it opens.
+  server version) calls `persistence.forceSave()` after it opens.
 - **A new `DocumentCommand` needs a case in `inverseOf`.** The switch is
   exhaustive, so the compiler asks. A layer command's inverse is
   `put-layer` with the entry and payload from the state before, which keeps

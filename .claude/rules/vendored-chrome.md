@@ -8,10 +8,10 @@ priority: high
 source: hand-written
 ---
 
-# Vendored chrome: incremental ownership (ADR 0010)
+# Vendored chrome: incremental ownership
 
 The forked Excalidraw packages are fully owned — there is no upstream merge
-to protect (ADR 0010). The `!important` override layer in
+to protect (`code/decisions/0010-own-the-fork.md`). The `!important` override layer in
 `apps/atlas-app/src/styles/excalidraw-theme.css` predates that decision and
 is now a legacy mechanism, not a rule to follow.
 
