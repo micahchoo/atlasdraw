@@ -57,7 +57,8 @@ Open <http://localhost:3000>.
      expires.
    - A larger map goes to your storage server, and the link reads it there.
      That link lasts until you choose **Stop sharing this link**, unless you
-     chose a 7- or 30-day expiry. It always shows your latest save.
+     chose a 7- or 30-day expiry. It shows each new save, or, if you choose
+     **This version only**, the map as it is now.
    - The dialog also gives an `<iframe>` snippet that embeds the map.
 3. **Open another map.** Main menu → **My maps…** lists the maps saved in
    this browser.
@@ -114,17 +115,18 @@ file does not pass them, so the server's defaults apply; add one to the
 
 The editor reads `VITE_*` variables when it is built, not when it runs. A
 wrong value stops the editor at start with the name of the variable. The
-Docker image takes five of them as build arguments: `VITE_BUILD_TARGET`,
-`VITE_STORAGE_BASE_URL`, `VITE_PMTILES_PATH`, `VITE_REALTIME_ENABLED` and
-`VITE_REALTIME_WS_URL`. For the others, write them into
+Docker image takes seven of them as build arguments: `VITE_BUILD_TARGET`,
+`VITE_STORAGE_BASE_URL`, `VITE_PMTILES_PATH`, `VITE_REALTIME_ENABLED`,
+`VITE_REALTIME_WS_URL`, `VITE_GEOCODER_ENDPOINT` and `VITE_CSP_CONNECT_SRC`.
+`code/apps/atlas-app/.env.example` lists every variable. For the others,
+write them into
 `code/apps/atlas-app/.env.production.local` (git ignores it) before you build.
 Vite reads that file during the image build.
 
-| Variable                     | Default     | Effect                                                   |
-| ---------------------------- | ----------- | -------------------------------------------------------- |
-| `VITE_ALLOW_REMOTE_BASEMAPS` | `true`      | `false` removes "Bright", "OSM" and the USGS tile preset |
-| `VITE_GEOCODER_ENDPOINT`     | empty (off) | A Photon server for CSV address columns                  |
-| `VITE_EMBED_ENABLED`         | `true`      | `false` makes `/embed` open the editor                   |
+| Variable                     | Default | Effect                                                   |
+| ---------------------------- | ------- | -------------------------------------------------------- |
+| `VITE_ALLOW_REMOTE_BASEMAPS` | `true`  | `false` removes "Bright", "OSM" and the USGS tile preset |
+| `VITE_EMBED_ENABLED`         | `true`  | `false` makes `/embed` open the editor                   |
 
 ## What the browser fetches from other servers
 
@@ -133,7 +135,8 @@ The editor sends no telemetry. These requests leave your server:
 - **The "Bright" and "OSM" basemaps**, when a user picks one. Turn them off
   with `VITE_ALLOW_REMOTE_BASEMAPS=false`.
 - **Tile layers** that a user adds (next section).
-- **The geocoder**, only if you set `VITE_GEOCODER_ENDPOINT`.
+- **The geocoder** (place search and CSV address columns), only if you set
+  `VITE_GEOCODER_ENDPOINT`. Without it, place search reads a bundled index.
 
 ## Aerial imagery and other tile layers
 
@@ -208,8 +211,8 @@ but could not reach `/api`. Check that the `storage` container is healthy:
 browser's key".** The server refused the map this browser saves to: it was
 deleted, or the key in this browser does not open it. The editor does not
 make a new server map by itself, because links you shared would stay on the
-old version. Your changes are in the browser. A new server copy gets new
-links.
+old version. Your changes are in the browser. The message offers **Save a
+new server copy**; the copy gets new links.
 
 **The build fails on `better-sqlite3`.** The storage image needs Python and
 C++ build tools for this native module. The Dockerfile installs them; if you

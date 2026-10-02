@@ -16,22 +16,24 @@ pins.
 
 - **Drawing on a map.** Freehand, shapes, arrows, text and pins. A drawing is
   stored in world coordinates, so it does not drift when the map moves.
-- **Your data.** Import GeoJSON, CSV, Shapefile (zip), KML, KMZ, GPX and
-  GeoTIFF. Style a layer by a property, label it, filter it, and click a
-  feature to see its attributes. Add raster tiles from an XYZ URL.
+- **Your data.** Import GeoJSON, CSV (with lat/lon or WKT columns),
+  Shapefile (zip), KML, KMZ, GPX and GeoTIFF. Style a layer by a property,
+  show points as clusters or a heatmap, label and filter a layer, and read
+  its attribute table. Add raster tiles from an XYZ URL.
 - **Measure.** Distance, area and radius, on the ellipsoid.
 - **Share and embed.** A read-only link or an `<iframe>` embed. A server link
-  lasts until you stop it, and it shows your latest save.
+  lasts until you stop it. It shows your latest save, or one version that
+  you choose. The server keeps earlier versions of each map.
 - **Edit together.** Live rooms with cursors, names and comments. The relay
   keeps a room between sessions.
-- **Open files.** Export PNG (1x, 2x, 3x), PDF, GeoJSON, CSV and the
-  `.atlasdraw` bundle (zipped JSON and GeoJSON).
+- **Open files.** Export PNG (1x, 2x, 3x), PDF, GeoJSON, CSV, KML, GPX and
+  the `.atlasdraw` bundle (zipped JSON and GeoJSON).
 - **Self-host.** No telemetry. The default basemap is a file on your own
   server.
 
 ## Quick start
 
-The code is a Yarn 4 workspace in [`code/`](code/). Use Node 20.
+The code is a Yarn 4 workspace in [`code/`](code/). Use Node 22 (`.nvmrc`).
 
 ```bash
 cd code
@@ -71,7 +73,7 @@ servers. The self-host guide tells you how to turn these off.
 | Map             | `code/packages/basemap`                                | MapLibre host, basemaps, camera bridge, layer styles |
 | Tools           | `code/packages/tools`                                  | The pin tool, the measure session, unit text         |
 | Data            | `code/packages/data`                                   | `.atlasdraw` read and write, importers, exporters    |
-| Protocol        | `code/packages/protocol`                               | Room links and the comment schema                    |
+| Protocol        | `code/packages/protocol`                               | Room links, the comment schema, every size limit     |
 | Storage server  | `code/apps/storage`                                    | Fastify HTTP API: maps, write keys, share links      |
 | Relay           | `code/apps/realtime`                                   | One Y.Doc per room over y-websocket, saved to SQLite |
 | CLI             | `code/packages/cli`                                    | `lint` and `convert`. Frozen (ADR-0016)              |
@@ -92,7 +94,7 @@ atlasdraw/
 │   ├── decisions/           # ADR 0001–0010: fork, licence, early design
 │   └── LICENSING.md
 ├── docs/
-│   ├── architecture/adr/    # ADR 0013 and later: product decisions
+│   ├── architecture/adr/    # ADR 0006 and later: product decisions
 │   ├── self-host/           # operator guides
 │   ├── performance/
 │   └── security/
@@ -112,13 +114,13 @@ point, and how to port a security fix, are in [`VENDOR.md`](VENDOR.md).
 | --------------- | --------------------------------------------- |
 | UI              | React 19                                      |
 | Drawing         | Excalidraw fork (`@atlasdraw/excalidraw`)     |
-| Map             | `maplibre-gl` 4, PMTiles                      |
+| Map             | `maplibre-gl` 6, PMTiles                      |
 | Live rooms      | `yjs`, `y-websocket`                          |
 | State           | `zustand`                                     |
 | Local saves     | IndexedDB (`idb`)                             |
 | Schemas         | `zod`                                         |
 | PDF             | `pdf-lib`                                     |
-| Build and tests | Vite 5, Vitest 3, Playwright                  |
+| Build and tests | Vite 7, Vitest 3, Playwright                  |
 | Storage server  | Fastify; SQLite and files, or Postgres and S3 |
 | Relay           | `ws`, `y-protocols`, `better-sqlite3`         |
 
@@ -131,7 +133,7 @@ yarn start                                # editor dev server, port 5174
 yarn build                                # production build of the editor
 yarn test:typecheck                       # TypeScript, all workspaces
 yarn test --watch=false                   # Vitest, all workspaces
-yarn test:all                             # typecheck, lint, prettier, vitest
+yarn test:all                             # typecheck, lint, prettier, test scan, vitest
 yarn workspace @atlasdraw/atlas-app e2e   # Playwright, chromium
 ```
 
@@ -147,11 +149,11 @@ of the same numbers, so cite an ADR by its file path.
 Atlasdraw uses three open-source licences. The full table is
 [`code/LICENSING.md`](code/LICENSING.md).
 
-| Component                                         | Licence        |
-| ------------------------------------------------- | -------------- |
-| `apps/atlas-app`, `apps/realtime`, `apps/storage` | AGPL-3.0-only  |
-| `packages/{cli,geo,data,protocol}`                | MIT            |
-| `packages/{basemap,tools}`                        | MPL-2.0        |
+| Component                                                   | Licence        |
+| ----------------------------------------------------------- | -------------- |
+| `apps/atlas-app`, `apps/realtime`, `apps/storage`           | AGPL-3.0-only  |
+| `packages/{cli,geo,data,protocol}`                          | MIT            |
+| `packages/{basemap,tools}`                                  | MPL-2.0        |
 | The fork: `packages/{excalidraw,element,math,common,utils}` | MIT (upstream) |
 
 Licence files: [`code/LICENSE-AGPL`](code/LICENSE-AGPL),
@@ -164,7 +166,7 @@ Licence files: [`code/LICENSE-AGPL`](code/LICENSE-AGPL),
 - [`PRD.md`](PRD.md) — product requirements, and what has shipped
 - [`PRFAQ.md`](PRFAQ.md) — the read-only map embed
 - [`atlasdraw-tech-spec.md`](atlasdraw-tech-spec.md) — the first engineering
-  spec. ADR-0015 replaces its coordinate model.
+  spec, kept as history. The code and the ADRs replace it.
 - [`SECURITY.md`](SECURITY.md) — trust-boundary findings and their fixes
 - [`VENDOR.md`](VENDOR.md) — the Excalidraw fork point
 - [`CHANGELOG.md`](CHANGELOG.md) — release history

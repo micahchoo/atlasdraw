@@ -124,6 +124,32 @@ A script that calls the storage API must now keep the `write_key` from
   per-IP rate limit (rows 11, 13). Relay: total stored bytes, new rooms per IP per hour,
   connections per IP, connections per room, message and room size, and room
   expiry (row 14).
+- **The relay survives a bad frame.** A frame over `MAX_MESSAGE_BYTES`, or
+  text that is not UTF-8, closes that socket only. Before, it ended the
+  process. An update that would take a room past `MAX_ROOM_BYTES` is refused
+  (4413) before it is applied.
+- **The storage server streams map bytes both ways.** A body needs
+  `Content-Length` and is refused past `MAX_MAP_BYTES` before a byte is read.
+  A stalled connection closes after `IDLE_TIMEOUT_MS`; a request must arrive
+  in `REQUEST_TIMEOUT_MS`. One address may have `MAX_CONCURRENT_PER_IP`
+  requests open (rows 19 to 21).
+- **A content security policy.** The build writes it into `index.html`.
+  Scripts come only from the page's origin. The page connects to its own
+  origin, the built-in basemaps, and the configured storage, relay and
+  geocoder; `VITE_CSP_CONNECT_SRC` adds tile servers. `/embed` may be framed
+  by the sites in `EMBED_FRAME_ANCESTORS`; any other page only by its own
+  origin.
+- **One gate for every document from outside the tab.** A file, a share
+  link, a server copy and the browser's saved copy pass the same record
+  checks as a room. A bad element, layer or file is dropped, and the editor
+  says how many. A style the map cannot draw is reset to the default. A
+  zip that expands past its cap, a file over a size cap, or a document
+  without its world frame is refused.
+- **No live web pages in a drawing.** `iframe` and `embeddable` elements are
+  dropped from every input. A pasted URL is text. A dropped `.excalidraw`
+  file opens as a new map; it no longer replaces the open drawing.
+- **Dependencies:** `maplibre-gl` 6.11 (a critical advisory against 4.7),
+  `@xmldom/xmldom` 0.8.15, `fastify` 5.12.5, `vite` 7.3.6.
 
 ### Added
 
@@ -174,7 +200,31 @@ A script that calls the storage API must now keep the `write_key` from
   `TRUST_PROXY`.
 - **CI gates**: typecheck, ESLint, Prettier, a check that every test can
   fail, Vitest, the storage adapter against a real Postgres, a benchmark
-  regression gate and chromium end-to-end tests.
+  regression gate and chromium end-to-end tests. A production-build suite
+  serves the hosted and the Pages builds as they deploy, and fails on a
+  console error or a policy violation. CI fails a route over its boot-size
+  budget.
+- **Export a data layer as KML, or GPX** for points and lines.
+- **CSV import reads a WKT geometry column.** A cell that does not parse is
+  dropped and counted.
+- **Points as clusters or a heatmap, and sized by a property.**
+- **An attribute table** for a data layer, from its menu: search, sort, and
+  zoom to a feature.
+- **Pin details.** A pin can hold a title, a description, a link and a
+  photo. The viewer and the embed show them on a click.
+- **Offline basemap labels.** The Light and Dark basemaps draw labels and
+  icons from glyphs and sprites the build bundles, so they need no other
+  host. `make -f infra/Makefile basemap-region` cuts an extract with
+  streets for `infra/docker-compose.basemap.yml`.
+- **A responsive embed.** The Share dialog's snippet fills the width at
+  16:10, or takes a fixed height. `legend=1` shows a legend of the layers
+  in view; `view=fit` or `view=saved` chooses where the embed starts. An
+  unlocked embed needs Ctrl or Cmd to zoom with the wheel, so the host page
+  still scrolls.
+- **One tab per map.** A tab that opens a map another tab holds asks to take
+  it over or to open it read-only. A save based on an older copy never
+  replaces a newer one; the editor asks.
+- **The crash screen saves the open map** and says whether the save worked.
 
 ### Changed
 
@@ -209,6 +259,25 @@ A script that calls the storage API must now keep the `write_key` from
   editing keys to explain.
 - **The page frame painted before the app loads** is the editor's collar,
   or the viewer's head bar, so the page does not change shape at mount.
+- **One undo history** for the drawing and the document (layers, styles,
+  comments). "Unsaved" is the history's position against the last save, so
+  opening a map no longer marks it unsaved. Convert-to-layer is one step.
+- **Every dialog is one Modal.** It takes focus, keeps Tab inside, closes on
+  Escape and gives focus back. A key goes to one place: the newest dialog,
+  then the active tool, then the commands. Tab leaves the canvas unless the
+  selection can be converted. Toasts are read out.
+- **A turned map exports as it shows.** The PNG and the PDF turn the drawing
+  with the map, and the viewer and the embed print the map's credits.
+- **A hidden element stays hidden** in select all, export and copy.
+- **While the map is turned, paste and arrow-key nudges are off**, as
+  drawing with the pointer already was.
+- **Import refuses data in metres** that it cannot convert, and names the
+  fix. Data in a declared Web Mercator CRS is converted. Every format splits
+  mixed geometry into one layer per kind. A data file imports up to 50 MiB
+  (was 256); a GeoTIFF up to 256 MiB.
+- **A tile host the security policy blocks is refused** in the tile-layer
+  form, which names the host and `VITE_CSP_CONNECT_SRC`.
+- **A room link pasted into an open tab joins the room.**
 
 ### Removed
 
@@ -226,7 +295,8 @@ A script that calls the storage API must now keep the `write_key` from
 - **Upstream Excalidraw features that mean nothing on a map**: the frame,
   embeddable, laser and magic-frame tools, Mermaid and text-to-diagram, every
   locale except English, and the upstream image export and `.excalidraw`
-  save. Old documents with those element types still load (`VENDOR.md`).
+  save. Old documents with those element types still open; their `iframe`
+  and `embeddable` elements are dropped and counted (`VENDOR.md`).
 - **The `ShareView` component.** `/m` uses the same viewer as `/embed`.
 - **"Edit style" (Maputnik) and `VITE_MAPUTNIK_URL`.** The dialog sent
   Maputnik a `/styles/…` URL that no server serves, and Maputnik could not
