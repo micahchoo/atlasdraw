@@ -57,25 +57,6 @@
   font-weight: 600;
 }
 
-.close {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  border-radius: var(--ad-radius-sm);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.close:hover {
-  background: var(--ad-surface-inset);
-}
-
 .icon {
   width: 1rem;
   height: 1rem;
@@ -119,20 +100,10 @@
   color: var(--ad-ink-tertiary);
 }
 
+/* Placement only; the look is Button's. */
 .showAll {
-  margin: 4px 8px 8px;
-  padding: 4px 8px;
+  margin: var(--ad-space-1) var(--ad-space-2) var(--ad-space-2);
   align-self: flex-start;
-  border: 1px solid var(--ad-emphasis);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink);
-  font-size: var(--ad-text-sm);
-  cursor: pointer;
-}
-
-.showAll:hover {
-  background: var(--ad-surface-inset);
 }
 
 .srOnly {

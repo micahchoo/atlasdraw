@@ -181,27 +181,6 @@
   box-shadow: var(--ad-shadow-tracing);
 }
 
-.drawBlockedReset {
-  font-family: inherit;
-  font-size: var(--ad-text-xs);
-  padding: 2px var(--ad-space-2);
-  color: var(--ad-ink-inverse);
-  background: var(--ad-accent);
-  border: 1px solid var(--ad-accent);
-  border-radius: var(--ad-radius-sm);
-  cursor: pointer;
-}
-
-.drawBlockedReset:hover {
-  background: var(--ad-accent-hover);
-  border-color: var(--ad-accent-hover);
-}
-
-.drawBlockedReset:focus-visible {
-  outline: 2px solid var(--ad-focus-ring);
-  outline-offset: 2px;
-}
-
 /* Collab-room parse-error banner — centered pill at the top of the plate,
  * --ad-z-overlay (hints and banners, see tokens.css). All colors resolve
  * from the --ad-danger token with a consistent #d64045 fallback; the tinted
