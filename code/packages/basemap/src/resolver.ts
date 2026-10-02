@@ -44,6 +44,12 @@ export interface ResolveStyleOptions {
    * (e.g. `import.meta.env.VITE_PMTILES_PATH` in a Vite-built app).
    */
   pmtilesPath: string;
+  /**
+   * Path/URL of the folder with the bundled label glyphs and sprites, on the
+   * app's own origin (atlas-app serves `public/basemap/`). Substituted for
+   * `__BASEMAP_ASSETS__`. Ignored when the basemap is `requiresRemote: true`.
+   */
+  assetsPath: string;
 }
 
 /**
@@ -52,7 +58,8 @@ export interface ResolveStyleOptions {
  *   - Throws if the basemap id is unknown.
  *   - Throws BasemapRemoteGatedError if the basemap requires remote tiles
  *     and the caller has not opted in.
- *   - Delegates `__PMTILES_PATH__` substitution to buildStyle.
+ *   - Delegates `__PMTILES_PATH__` and `__BASEMAP_ASSETS__` substitution to
+ *     buildStyle.
  */
 export async function resolveStyle(
   id: BasemapConfig["id"],
@@ -65,5 +72,8 @@ export async function resolveStyle(
   if (config.requiresRemote && !opts.allowRemote) {
     throw new BasemapRemoteGatedError(id);
   }
-  return buildStyle(config, { pmtilesPath: opts.pmtilesPath });
+  return buildStyle(config, {
+    pmtilesPath: opts.pmtilesPath,
+    assetsPath: opts.assetsPath,
+  });
 }

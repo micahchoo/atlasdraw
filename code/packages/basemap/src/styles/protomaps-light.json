@@ -7,7 +7,8 @@
       "url": "pmtiles://__PMTILES_PATH__"
     }
   },
-  "glyphs": "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "__BASEMAP_ASSETS__/fonts/{fontstack}/{range}.pbf",
+  "sprite": "__BASEMAP_ASSETS__/sprites/v4/light",
   "layers": [
     {
       "id": "background",

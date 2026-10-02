@@ -35,10 +35,11 @@ export function useBasemapStyle(
     const apply = async () => {
       let style;
       try {
-        const pmtilesPath = getAppConfig().pmtilesPath;
+        const { pmtilesPath, basemapAssetsPath } = getAppConfig();
         style = await resolveStyle(activeBasemapId, {
           allowRemote,
           pmtilesPath,
+          assetsPath: basemapAssetsPath,
         });
       } catch (err) {
         if (err instanceof BasemapRemoteGatedError) {

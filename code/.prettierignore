@@ -19,6 +19,9 @@ coverage
 # lines each — which buries any real change in them and gains nothing.
 # FU-8: without this, `yarn test:other` can never pass.
 packages/basemap/src/styles/*.json
+# The offline basemaps' sprites, copied verbatim by
+# apps/atlas-app/scripts/vendor-basemap-assets.sh.
+apps/atlas-app/public/basemap/
 
 # `yarn test:app` rewrites these with a fresh `runAt` on every run, so they are
 # perpetually dirty and never worth formatting.

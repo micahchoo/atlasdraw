@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 // SPDX-License-Identifier: MPL-2.0
 // Loads a vendored MapLibre style JSON for a given BasemapConfig and (for
-// pmtiles-backed basemaps) substitutes the `__PMTILES_PATH__` token with the
-// caller-provided path. A config whose styleFile is not in ./styles/ gets a
-// minimal valid placeholder style.
+// pmtiles-backed basemaps) substitutes two tokens with caller-provided paths:
+// `__PMTILES_PATH__` (the tile archive) and `__BASEMAP_ASSETS__` (the folder
+// that holds the bundled `fonts/` and `sprites/`). A config whose styleFile
+// is not in ./styles/ gets a minimal valid placeholder style.
 
 import type maplibregl from "maplibre-gl";
 
@@ -16,9 +17,16 @@ export interface BuildStyleOptions {
    * config has `requiresRemote: true`.
    */
   pmtilesPath?: string;
+  /**
+   * Path/URL of the folder that holds the bundled label glyphs (`fonts/`) and
+   * sprites (`sprites/`). Substituted wherever `__BASEMAP_ASSETS__` appears.
+   * Ignored when the basemap config has `requiresRemote: true`.
+   */
+  assetsPath?: string;
 }
 
 const PMTILES_TOKEN = "__PMTILES_PATH__";
+const ASSETS_TOKEN = "__BASEMAP_ASSETS__";
 
 /**
  * Build a MapLibre style spec for the given basemap. Loads the vendored style
@@ -46,11 +54,17 @@ export async function buildStyle(
     raw = placeholderStyle();
   }
 
-  // Substitute pmtiles token only for self-hosted (non-remote) basemaps.
-  if (!config.requiresRemote && opts.pmtilesPath) {
-    const serialized = JSON.stringify(raw);
-    const replaced = serialized.split(PMTILES_TOKEN).join(opts.pmtilesPath);
-    raw = JSON.parse(replaced);
+  // Substitute the tokens only for self-hosted (non-remote) basemaps.
+  if (!config.requiresRemote) {
+    let serialized = JSON.stringify(raw);
+    if (opts.pmtilesPath) {
+      serialized = serialized.split(PMTILES_TOKEN).join(opts.pmtilesPath);
+    }
+    if (opts.assetsPath !== undefined) {
+      const folder = opts.assetsPath.replace(/\/+$/, "");
+      serialized = serialized.split(ASSETS_TOKEN).join(folder);
+    }
+    raw = JSON.parse(serialized);
   }
 
   return raw as maplibregl.StyleSpecification;

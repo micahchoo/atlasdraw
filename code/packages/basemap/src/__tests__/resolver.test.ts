@@ -9,6 +9,7 @@ describe("resolveStyle — remote gate", () => {
       resolveStyle("openfreemap-bright", {
         allowRemote: false,
         pmtilesPath: "unused.pmtiles",
+        assetsPath: "/basemap",
       }),
     ).rejects.toBeInstanceOf(BasemapRemoteGatedError);
   });
@@ -19,6 +20,7 @@ describe("resolveStyle — remote gate", () => {
       await resolveStyle("openfreemap-bright", {
         allowRemote: false,
         pmtilesPath: "unused.pmtiles",
+        assetsPath: "/basemap",
       });
     } catch (err) {
       caught = err;
@@ -33,6 +35,7 @@ describe("resolveStyle — remote gate", () => {
     const style = await resolveStyle("openfreemap-bright", {
       allowRemote: true,
       pmtilesPath: "unused.pmtiles",
+      assetsPath: "/basemap",
     });
     expect(style).toMatchObject({
       version: 8,
@@ -45,6 +48,7 @@ describe("resolveStyle — remote gate", () => {
     const style = await resolveStyle("protomaps-light", {
       allowRemote: false,
       pmtilesPath: "x.pmtiles",
+      assetsPath: "/basemap",
     });
     const serialized = JSON.stringify(style);
     expect(serialized).toContain("x.pmtiles");
@@ -58,6 +62,7 @@ describe("resolveStyle — unknown ids", () => {
       resolveStyle("not-a-real-id" as never, {
         allowRemote: true,
         pmtilesPath: "unused.pmtiles",
+        assetsPath: "/basemap",
       }),
     ).rejects.toThrow(/Unknown basemap id/);
   });
