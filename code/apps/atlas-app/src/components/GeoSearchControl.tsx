@@ -8,8 +8,8 @@
 // Styling note (atlasdraw-ui-conventions): the BUTTON renders inside the
 // `.excalidraw` scope, so it uses Excalidraw CSS vars to match the native tool
 // buttons. The POPOVER is portaled to document.body (to escape the toolbar's
-// clipping/stacking), so it lives OUTSIDE that scope and uses the atlas hex
-// palette. z-index 100 reuses the existing "context menu / popover" band.
+// clipping/stacking), so it lives OUTSIDE that scope and uses the --ad-*
+// tokens. z-index is --ad-z-popover (tokens.css).
 
 import {
   useCallback,

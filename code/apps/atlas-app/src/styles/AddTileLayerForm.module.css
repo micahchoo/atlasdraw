@@ -1,5 +1,5 @@
 /* AddTileLayerForm — inline in the layer panel's Tile layers section. Normal
- * flow, no z-index. Panel body text sizes (12px / 11px). */
+ * flow, no z-index. Panel body text sizes (--ad-text-sm / --ad-text-xs). */
 
 .form {
   display: flex;
@@ -10,7 +10,7 @@
 }
 
 .label {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--text-primary-color, var(--ad-ink));
 }
@@ -19,10 +19,10 @@
   min-width: 0;
   padding: 3px 6px;
   border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .input[aria-invalid="true"] {
@@ -31,13 +31,13 @@
 
 .hint {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
 }
 
 .error {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-danger, #c92a2a);
 }
 
@@ -47,7 +47,7 @@
   border: none;
   background: transparent;
   color: var(--ad-accent);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   text-align: left;
   text-decoration: underline;
   cursor: pointer;
@@ -63,10 +63,10 @@
 .button {
   padding: 3px 10px;
   border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   cursor: pointer;
 }
