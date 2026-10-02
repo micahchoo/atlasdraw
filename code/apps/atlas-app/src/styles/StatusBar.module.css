@@ -11,7 +11,7 @@
   padding: 0 var(--ad-space-3);
   box-sizing: border-box;
   font-family: var(--ad-font-mono);
-  font-size: 10.5px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-secondary);
   pointer-events: none;
   user-select: none;
@@ -23,14 +23,14 @@
 
 .label {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }
 
 .value {
   font-family: var(--ad-font-mono);
-  font-size: 10.5px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-secondary);
   tab-size: 4;
@@ -60,7 +60,7 @@
   display: flex;
   height: 5px;
   border: 1px solid var(--ad-ink);
-  border-radius: 1px;
+  border-radius: var(--ad-radius-xs);
   overflow: hidden;
 }
 
@@ -82,7 +82,7 @@
 
 .attrib {
   font-family: var(--ad-font-sans);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   color: var(--ad-ink-tertiary);
   white-space: nowrap;
 }
