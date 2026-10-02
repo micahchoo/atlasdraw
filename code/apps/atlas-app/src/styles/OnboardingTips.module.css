@@ -54,29 +54,3 @@
   display: flex;
   gap: var(--ad-space-1);
 }
-
-.btn {
-  padding: 4px var(--ad-space-3);
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-md);
-  background: var(--ad-surface-raised);
-  font-family: var(--ad-font-sans);
-  font-size: var(--ad-text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  color: var(--ad-ink);
-}
-
-.btn:hover {
-  background: var(--ad-surface-inset);
-}
-
-.btnPrimary {
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-  border-color: var(--ad-accent);
-}
-
-.btnPrimary:hover {
-  background: var(--ad-accent-hover);
-}

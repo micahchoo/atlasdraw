@@ -53,23 +53,3 @@
   max-height: 160px;
   overflow-y: auto;
 }
-
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px var(--ad-space-4);
-  border: 1px solid var(--ad-accent);
-  border-radius: var(--ad-radius-md);
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-  font-family: var(--ad-font-sans);
-  font-size: var(--ad-text-md);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.button:hover {
-  background: var(--ad-accent-hover);
-  border-color: var(--ad-accent-hover);
-}

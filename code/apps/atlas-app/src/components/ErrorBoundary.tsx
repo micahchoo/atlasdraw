@@ -18,6 +18,8 @@ import { dismissBootShell } from "../bootShell";
 import { lastSave } from "../state/lastSave";
 import styles from "../styles/ErrorBoundary.module.css";
 
+import { Button } from "./Button";
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -98,14 +100,13 @@ export class ErrorBoundary extends Component<
                 {error.stack?.split("\n").slice(1, 8).join("\n") ?? ""}
               </pre>
             )}
-            <button
-              type="button"
-              className={styles.button}
+            <Button
+              variant="primary"
               onClick={this.handleReload}
               data-testid="error-boundary-reload"
             >
               Reload Atlasdraw
-            </button>
+            </Button>
           </div>
         </div>
       );
