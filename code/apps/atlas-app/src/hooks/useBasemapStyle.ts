@@ -41,7 +41,9 @@ export function useBasemapStyle(
         style = await resolveStyle(activeBasemapId, {
           allowRemote,
           pmtilesPath,
-          assetsPath: basemapAssetsPath,
+          // MapLibre refuses a relative sprite URL ("must be absolute") and
+          // then draws no icons, so the folder is resolved against the page.
+          assetsPath: new URL(basemapAssetsPath, window.location.href).href,
         });
       } catch (err) {
         if (err instanceof BasemapRemoteGatedError) {

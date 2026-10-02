@@ -8,13 +8,14 @@
 # Source: protomaps/basemaps-assets at one pinned commit. To update, change
 # COMMIT, run this script, and commit public/basemap/.
 #
-#   fonts/    the three Noto Sans stacks that protomaps-themes-base names,
+#   fonts/    the four Noto Sans stacks that protomaps-themes-base names
+#             (Devanagari only inside text-field's format expressions),
 #             all 256 ranges each (MapLibre fails a tile's labels when one
 #             range is missing), and OFL.txt, their licence
 #   sprites/  sprite set v4 (light, dark; 1x and 2x), the icons
 #             protomaps-themes-base 4 draws. MIT, from tangrams/icons.
 #
-# Measured 2026-10-01: 11.1 MB on disk, 6.0 MB gzip. A session fetches only
+# Measured 2026-10-01: 11.3 MB on disk, 6.4 MB gzip. A session fetches only
 # the ranges its labels use.
 #
 # Usage, from code/apps/atlas-app:  scripts/vendor-basemap-assets.sh
@@ -22,7 +23,8 @@ set -euo pipefail
 
 REPO=https://github.com/protomaps/basemaps-assets.git
 COMMIT=028c18f713baecad011301ff7a69acc39bcc2ae7
-STACKS=("Noto Sans Regular" "Noto Sans Medium" "Noto Sans Italic")
+STACKS=("Noto Sans Regular" "Noto Sans Medium" "Noto Sans Italic"
+  "Noto Sans Devanagari Regular v1")
 SPRITES=(light dark)
 
 here=$(cd "$(dirname "$0")/.." && pwd)

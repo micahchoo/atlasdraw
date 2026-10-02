@@ -46,6 +46,26 @@ function fontStacks(value: unknown, out: Set<string>): Set<string> {
   return out;
 }
 
+/**
+ * Every font stack a layout names: the `text-font` property, and the
+ * `text-font` option of a `format` expression inside `text-field`, which is
+ * where the themes pick a font per script.
+ */
+function textFonts(value: unknown, out: Set<string>): Set<string> {
+  if (Array.isArray(value)) {
+    value.forEach((v) => textFonts(v, out));
+  } else if (value && typeof value === "object") {
+    for (const [key, v] of Object.entries(value)) {
+      if (key === "text-font") {
+        fontStacks(v, out);
+      } else {
+        textFonts(v, out);
+      }
+    }
+  }
+  return out;
+}
+
 describe("bundled basemap assets", () => {
   it("the offline styles use them", () => {
     expect(offlineStyles.map((s) => s.file).sort()).toEqual([
@@ -59,7 +79,7 @@ describe("bundled basemap assets", () => {
     (_file, style) => {
       const stacks = new Set<string>();
       for (const layer of style.layers) {
-        fontStacks(layer.layout?.["text-font"], stacks);
+        textFonts(layer.layout, stacks);
       }
       expect(stacks.size).toBeGreaterThan(0);
       for (const stack of stacks) {

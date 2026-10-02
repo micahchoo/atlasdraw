@@ -26,13 +26,18 @@ map drew roads and water and no name, and only the console said why.
   `__BASEMAP_ASSETS__` (`style-builder.ts`). The caller passes
   `pmtilesPath` and `assetsPath` from `app-config.ts`; both are under the
   base path. `packages/basemap/src/__tests__/offline-basemaps.test.ts`
-  fails on any URL with a host.
+  fails on any URL with a host. `useBasemapStyle` resolves `assetsPath`
+  against the page before it reaches the style: MapLibre 6 refuses a
+  relative sprite URL ("must be absolute") and draws no icons. Only the
+  production-build e2e sees this, because it fails on a console error.
 - **Every font stack a style names is bundled, all 256 ranges.** MapLibre
-  fails all labels of a tile when one range does not load. A new stack (a
-  theme change, a new `text-font`) goes into
+  fails all labels of a tile when one range does not load. A stack can
+  hide in `text-field`: the themes pick "Noto Sans Devanagari Regular v1"
+  per script through a `format` expression's `text-font` option. A new stack
+  (a theme change, a new `text-font`) goes into
   `scripts/vendor-basemap-assets.sh` and `public/basemap/` in the same
-  change. `lib/__tests__/basemapAssets.test.ts` checks the stacks and
-  sprite sheets against the files.
+  change. `lib/__tests__/basemapAssets.test.ts` walks every `text-font` in
+  a layout and checks the stacks and sprite sheets against the files.
 - **Regenerate the styles with `node scripts/build-styles.mjs`**, never by
   hand. It refetches "Bright" verbatim; check its diff.
 - **The CSP follows the styles.** `contentSecurityPolicy.ts#styleOrigins`
