@@ -26,6 +26,7 @@ import {
   type GeoJsonExportOptions,
 } from "../lib/dataLayerExport";
 import { downloadBlob } from "../lib/download";
+import { fitMapToLayer } from "../lib/fitMapToContent";
 import { saveMap } from "../session/fileActions";
 import { useSession, useView } from "../session/SessionContext";
 import { annotationRows } from "../state/annotations";
@@ -54,6 +55,9 @@ const SettingsDialog = lazy(() =>
 );
 const ExportDialog = lazy(() =>
   import("./ExportDialog").then((m) => ({ default: m.ExportDialog })),
+);
+const AttributeTable = lazy(() =>
+  import("./AttributeTable").then((m) => ({ default: m.AttributeTable })),
 );
 
 export interface EditorDialogsProps {
@@ -209,6 +213,27 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
               captureView={capture}
               renderImage={mapImage}
               getLegendEntries={legend}
+            />
+          </Suspense>
+        );
+      case "attribute-table":
+        return (
+          <Suspense fallback={null}>
+            <AttributeTable
+              layerId={dialog.layerId}
+              onClose={close}
+              // The dialog covers the map, so a zoom closes it to show the
+              // feature.
+              onZoom={(feature) => {
+                if (
+                  fitMapToLayer(map, {
+                    type: "FeatureCollection",
+                    features: [feature],
+                  })
+                ) {
+                  close();
+                }
+              }}
             />
           </Suspense>
         );

@@ -1,0 +1,154 @@
+/* AttributeTable — a data layer's features, read-only, in the dialog slot.
+ * z:100 (context menu band), as KeyboardShortcuts. Uses --ad-* tokens. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.panel {
+  width: min(880px, calc(100vw - 32px));
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ad-surface-raised);
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-lg);
+  box-shadow: var(--ad-shadow-raised);
+  overflow: hidden;
+  font-family: var(--ad-font-sans);
+  color: var(--ad-ink);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ad-space-2);
+  padding: var(--ad-space-3) var(--ad-space-4);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close,
+.zoom {
+  padding: 2px 8px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.close:hover,
+.zoom:hover {
+  background: var(--ad-surface-inset);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-space-3);
+  padding: var(--ad-space-2) var(--ad-space-4);
+  border-bottom: 1px solid var(--ad-hairline);
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--ad-rule);
+  border-radius: var(--ad-radius-sm);
+  background: var(--ad-surface-raised);
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 13px;
+}
+
+.count {
+  font-size: 11px;
+  color: var(--ad-ink-tertiary);
+}
+
+.scroll {
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.th {
+  position: sticky;
+  top: 0;
+  background: var(--ad-surface-raised);
+  border-bottom: 1px solid var(--ad-rule);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sort {
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--ad-ink);
+  font-family: var(--ad-font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort:hover {
+  background: var(--ad-surface-inset);
+}
+
+.arrow {
+  margin-left: 4px;
+  font-size: 9px;
+}
+
+.tr:nth-child(even) {
+  background: var(--ad-surface-inset);
+}
+
+.td {
+  max-width: 240px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--ad-hairline);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

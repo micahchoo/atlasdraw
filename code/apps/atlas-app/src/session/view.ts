@@ -62,6 +62,8 @@ export type SimpleDialog =
 export type Dialog =
   | { kind: SimpleDialog }
   | { kind: "export"; format: ExportFormat }
+  /** One data layer's features, read-only (components/AttributeTable). */
+  | { kind: "attribute-table"; layerId: string }
   | ({ kind: "confirm"; answer(yes: boolean): void } & Question);
 
 export const SHEET_PANEL_WIDTH_KEY = "atlasdraw:sheet-panel:width";
