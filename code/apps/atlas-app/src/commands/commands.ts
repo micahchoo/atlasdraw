@@ -21,7 +21,7 @@ import type { ZoomAction } from "@atlasdraw/excalidraw/types";
 
 import { zoomActionOnMap } from "../hooks/useCameraBridge";
 import { pickFile } from "../lib/pickFile";
-import { openMap, restoreBackup, saveMap } from "../session/fileActions";
+import { openMap, saveMap } from "../session/fileActions";
 
 import { keyLabels, keyText, type KeyBinding } from "./keys";
 
@@ -116,12 +116,12 @@ export const COMMANDS: readonly Command[] = [
     run: (s) => s.view.getState().openDialog({ kind: "my-maps" }),
   },
   {
-    id: "file.restore-backup",
-    label: "Restore from server backup",
+    id: "file.server-versions",
+    label: "Server versions…",
     group: "File",
-    keywords: ["server", "backup", "restore"],
+    keywords: ["server", "backup", "restore", "history", "revision"],
     available: (s) => hasDrawing(s) && s.view.getState().backupAvailable,
-    run: (s) => void restoreBackup(s),
+    run: (s) => s.view.getState().openDialog({ kind: "server-versions" }),
   },
   {
     id: "file.import",
@@ -345,7 +345,7 @@ export const MAIN_MENU: readonly string[] = [
   "file.open",
   "file.save",
   "file.my-maps",
-  "file.restore-backup",
+  "file.server-versions",
   "file.import",
   "file.export",
   "file.share",

@@ -39,6 +39,7 @@ import { ReturnFocusContext } from "./Modal";
 import { MyMapsDialog } from "./MyMapsDialog";
 import { OnboardingTips } from "./OnboardingTips";
 import { QuickActions, type QuickAction } from "./QuickActions";
+import { ServerVersionsDialog } from "./ServerVersionsDialog";
 import { ShareDialog } from "./ShareDialog";
 
 import type { LayerLegendEntry } from "../lib/print-pdf";
@@ -224,6 +225,18 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
             notify={session.notify}
             onClose={close}
             server={getAppConfig().enableBackendPersistence ? storage : null}
+          />
+        ) : null;
+      case "server-versions":
+        return api ? (
+          <ServerVersionsDialog
+            excalidrawAPI={api}
+            map={map}
+            persistence={session.persistence}
+            history={session.history}
+            notify={session.notify}
+            client={storage}
+            onClose={close}
           />
         ) : null;
       case "share":

@@ -18,9 +18,6 @@ import {
   toFile,
 } from "../state/documentIO";
 import { admit } from "../state/documentGate";
-import { restoreServerBackup } from "../state/myMaps";
-import { getAppConfig } from "../config/app-config";
-import { createHttpStorageClient } from "../services/createHttpStorageClient";
 
 import type { EditorSession, Notify } from "./EditorSession";
 
@@ -205,31 +202,4 @@ async function openInPlace(
       "Couldn't open the file — it doesn't look like a valid .atlasdraw or .excalidraw document",
     );
   }
-}
-
-/**
- * Replace the open map with the copy the server holds of it, after a yes.
- * The restored map is saved again, so both copies agree.
- */
-export async function restoreBackup(s: EditorSession): Promise<void> {
-  const { api, map } = s.view.getState();
-  if (!api) {
-    return;
-  }
-  await restoreServerBackup({
-    api,
-    map,
-    persistence: s.persistence,
-    history: s.history,
-    notify: s.notify,
-    client: createHttpStorageClient({
-      baseUrl: getAppConfig().storageBaseUrl ?? "",
-    }),
-    confirm: () =>
-      s.view.getState().ask({
-        title: "Restore from server backup?",
-        body: "The server copy of this map replaces the map you see. Changes that are not on the server are lost.",
-        confirmLabel: "Restore",
-      }),
-  });
 }

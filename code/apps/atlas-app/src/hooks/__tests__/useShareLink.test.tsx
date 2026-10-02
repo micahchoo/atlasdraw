@@ -103,21 +103,36 @@ function makeMockClient(opts: { fail?: boolean } = {}): HttpStorageClient & {
         created_at: "2026-05-10T00:00:00.000Z",
         updated_at: "2026-05-10T00:00:00.000Z",
         byte_size: 42,
+        revision: 1,
       },
       writeKey: "write-key",
     };
   });
   const createShareTokenSpy = vi.fn(
-    async (_id: string, _key: string, days: number | null) => ({
+    async (
+      _id: string,
+      _key: string,
+      days: number | null,
+      revision: number | null = null,
+    ) => ({
       token: "tokentokentokentokenA",
       expiresAt: days === null ? null : "2026-05-17T00:00:00.000Z",
+      revision,
     }),
   );
   const revokeShareTokenSpy = vi.fn(async () => {});
   return {
     createMap: createMapSpy,
-    updateMap: vi.fn(),
+    updateMap: vi.fn(async () => ({
+      id: "abcdefghij1234567890K",
+      created_at: "",
+      updated_at: "",
+      byte_size: 1,
+      revision: 2,
+    })),
     readMap: vi.fn(),
+    listVersions: vi.fn(),
+    readVersion: vi.fn(),
     createShareToken: createShareTokenSpy,
     revokeShareToken: revokeShareTokenSpy,
     deleteMap: vi.fn(async () => {}),
@@ -131,7 +146,10 @@ function makeMockClient(opts: { fail?: boolean } = {}): HttpStorageClient & {
 interface Captured {
   mode: string | null;
   error: string | null;
-  generate: (expiresInDays?: number | null) => Promise<ShareLink | null>;
+  generate: (
+    expiresInDays?: number | null,
+    options?: { frozen?: boolean },
+  ) => Promise<ShareLink | null>;
   revoke: (token: string) => Promise<boolean>;
 }
 
@@ -155,6 +173,7 @@ async function share(
   d: AtlasdrawDocument,
   client: HttpStorageClient,
   expiresInDays: number | null = null,
+  options: { frozen?: boolean } = {},
 ): Promise<{
   url: string | null;
   link: ShareLink | null;
@@ -172,7 +191,7 @@ async function share(
   );
   let link: ShareLink | null = null;
   await act(async () => {
-    link = await captured!.generate(expiresInDays);
+    link = await captured!.generate(expiresInDays, options);
   });
   const got = link as ShareLink | null;
   return { url: got?.url ?? null, link: got, captured: () => captured! };
@@ -266,6 +285,21 @@ describe("useShareLink", () => {
 
     expect(lasting.link?.expiresAt).toBeNull();
     expect(week.link?.expiresAt).toBe("2026-05-17T00:00:00.000Z");
+  });
+
+  it("a link frozen on this version goes to the server, however small, on the revision just saved", async () => {
+    const client = makeMockClient();
+
+    const frozen = await share(doc(), client, null, { frozen: true });
+
+    expect(frozen.link?.mode).toBe("upload");
+    expect(frozen.link?.frozen).toBe(true);
+    expect(client.createShareTokenSpy).toHaveBeenCalledWith(
+      "abcdefghij1234567890K",
+      "write-key",
+      null,
+      1,
+    );
   });
 
   it("revoke ends an uploaded link", async () => {

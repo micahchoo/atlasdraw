@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createHttpStorageClient,
+  MapChangedError,
   ShareExpiredError,
   StorageHttpError,
   type MapRecord,
@@ -19,6 +20,7 @@ const SAMPLE_MAP: MapRecord = {
   created_at: "2026-05-10T00:00:00.000Z",
   updated_at: "2026-05-10T00:00:00.000Z",
   byte_size: 8,
+  revision: 1,
 };
 const KEY = "k".repeat(43);
 const TOKEN = "tokentokentokentokenA";
@@ -90,18 +92,124 @@ describe("createHttpStorageClient", () => {
     expect((err as StorageHttpError).status).toBe(403);
   });
 
-  it("readMap GETs the owner's backup with the write key", async () => {
+  it("updateMap names the revision it replaces, and asks for a checkpoint", async () => {
+    const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
+      expect(url).toBe(`/maps/${SAMPLE_MAP.id}?checkpoint=1`);
+      expect(headersOf(init)["If-Match"]).toBe('"4"');
+      return jsonResponse(200, { ...SAMPLE_MAP, revision: 5 });
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    const record = await client.updateMap(SAMPLE_MAP.id, KEY, new Blob(["x"]), {
+      ifRevision: 4,
+      checkpoint: true,
+    });
+
+    expect(record.revision).toBe(5);
+  });
+
+  it("updateMap sends no If-Match when it knows no revision", async () => {
+    const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
+      expect(url).toBe(`/maps/${SAMPLE_MAP.id}`);
+      expect(headersOf(init)["If-Match"]).toBeUndefined();
+      return jsonResponse(200, SAMPLE_MAP);
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    await client.updateMap(SAMPLE_MAP.id, KEY, new Blob(["x"]));
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updateMap throws MapChangedError with the server's revision on 412", async () => {
+    const fetchSpy = vi.fn(async () =>
+      jsonResponse(412, { error: "changed", revision: 9 }),
+    ) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    const err = await client
+      .updateMap(SAMPLE_MAP.id, KEY, new Blob(["x"]), { ifRevision: 4 })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(MapChangedError);
+    expect((err as MapChangedError).status).toBe(412);
+    expect((err as MapChangedError).revision).toBe(9);
+  });
+
+  it("readMap GETs the owner's backup with the write key, and its revision", async () => {
     const bytes = new Uint8Array([1, 2, 3]);
     const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
       expect(url).toBe(`/maps/${SAMPLE_MAP.id}/blob`);
       expect(headersOf(init).Authorization).toBe(`Bearer ${KEY}`);
-      return new Response(bytes, { status: 200 });
+      return new Response(bytes, { status: 200, headers: { ETag: '"3"' } });
     }) as unknown as typeof fetch;
     const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
 
     const back = await client.readMap(SAMPLE_MAP.id, KEY);
 
-    expect(new Uint8Array(back)).toEqual(bytes);
+    expect(new Uint8Array(back.bytes)).toEqual(bytes);
+    expect(back.revision).toBe(3);
+  });
+
+  it("listVersions GETs the map's revisions with the write key", async () => {
+    const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
+      expect(url).toBe(`/maps/${SAMPLE_MAP.id}/versions`);
+      expect(headersOf(init).Authorization).toBe(`Bearer ${KEY}`);
+      return jsonResponse(200, {
+        current: 3,
+        versions: [
+          { revision: 3, saved_at: "2026-10-01T10:00:00.000Z", byte_size: 9 },
+          { revision: 1, saved_at: "2026-10-01T09:00:00.000Z", byte_size: 8 },
+        ],
+      });
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    const history = await client.listVersions(SAMPLE_MAP.id, KEY);
+
+    expect(history).toEqual({
+      current: 3,
+      versions: [
+        { revision: 3, savedAt: "2026-10-01T10:00:00.000Z", byteSize: 9 },
+        { revision: 1, savedAt: "2026-10-01T09:00:00.000Z", byteSize: 8 },
+      ],
+    });
+  });
+
+  it("readVersion GETs one revision's bytes with the write key", async () => {
+    const fetchSpy = vi.fn(async (url: unknown, init: unknown) => {
+      expect(url).toBe(`/maps/${SAMPLE_MAP.id}/versions/2/blob`);
+      expect(headersOf(init).Authorization).toBe(`Bearer ${KEY}`);
+      return new Response(new Uint8Array([2]), {
+        status: 200,
+        headers: { ETag: '"2"' },
+      });
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    const back = await client.readVersion(SAMPLE_MAP.id, KEY, 2);
+
+    expect(new Uint8Array(back.bytes)).toEqual(new Uint8Array([2]));
+    expect(back.revision).toBe(2);
+  });
+
+  it("createShareToken freezes a link on a revision", async () => {
+    const fetchSpy = vi.fn(async (_url: unknown, init: unknown) => {
+      expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+        revision: 4,
+      });
+      return jsonResponse(201, {
+        token: TOKEN,
+        url: `/m/${TOKEN}`,
+        expires_at: null,
+        revision: 4,
+      });
+    }) as unknown as typeof fetch;
+    const client = createHttpStorageClient({ baseUrl: "", fetch: fetchSpy });
+
+    const link = await client.createShareToken(SAMPLE_MAP.id, KEY, null, 4);
+
+    expect(link).toEqual({ token: TOKEN, expiresAt: null, revision: 4 });
   });
 
   it("createShareToken sends the key and no body for a lasting link", async () => {
@@ -121,6 +229,7 @@ describe("createHttpStorageClient", () => {
     expect(await client.createShareToken(SAMPLE_MAP.id, KEY, null)).toEqual({
       token: TOKEN,
       expiresAt: null,
+      revision: null,
     });
   });
 

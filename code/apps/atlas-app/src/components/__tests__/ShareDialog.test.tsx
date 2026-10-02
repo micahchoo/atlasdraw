@@ -63,15 +63,30 @@ function stubClient(): HttpStorageClient {
         created_at: "",
         updated_at: "",
         byte_size: 1,
+        revision: 1,
       },
       writeKey: "write-key",
     })),
-    updateMap: vi.fn(),
+    updateMap: vi.fn(async () => ({
+      id: "abcdefghij1234567890K",
+      created_at: "",
+      updated_at: "",
+      byte_size: 1,
+      revision: 2,
+    })),
     readMap: vi.fn(),
+    listVersions: vi.fn(),
+    readVersion: vi.fn(),
     createShareToken: vi.fn(
-      async (_id: string, _key: string, days: number | null) => ({
+      async (
+        _id: string,
+        _key: string,
+        days: number | null,
+        revision: number | null = null,
+      ) => ({
         token: "tokentokentokentokenA",
         expiresAt: days === null ? null : "2026-05-17T00:00:00.000Z",
+        revision,
       }),
     ),
     revokeShareToken: vi.fn(async () => {}),
@@ -293,6 +308,37 @@ describe("ShareDialog", () => {
     expect(screen.getByTestId("share-dialog-mode-hint").textContent).toMatch(
       /stops working/i,
     );
+  });
+
+  it("a link frozen on this version goes to the server and says later saves do not change it", async () => {
+    const client = stubClient();
+    render(
+      <ShareDialog
+        onCloseRequest={() => {}}
+        getDoc={() => tinyDoc()}
+        client={client}
+        startRoom={stubStartRoom()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("share-dialog-shows"), {
+      target: { value: "frozen" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("share-dialog-pick-readonly"));
+    });
+
+    await screen.findByTestId("share-dialog-url");
+    expect(client.createShareToken).toHaveBeenCalledWith(
+      "abcdefghij1234567890K",
+      "write-key",
+      null,
+      1,
+    );
+    expect(screen.getByTestId("share-dialog-mode-hint").textContent).toMatch(
+      /later saves do not change it/i,
+    );
+    expect(screen.queryByTestId("share-dialog-revoke")).not.toBeNull();
   });
 
   it("a small map with an expiry gets a link that expires, not a hash link", async () => {
