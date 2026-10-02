@@ -30,7 +30,7 @@ import { ID_RE } from "../constants";
 import { migratePostgres } from "../db/migrate";
 import { WRITE_KEYS_MIGRATION } from "../db/migrations";
 import { measured } from "../lib/body";
-import { storageFull } from "../lib/errors";
+import { RevisionConflictError, storageFull } from "../lib/errors";
 import { logger } from "../logger";
 
 import type { PoolClient } from "pg";
@@ -59,6 +59,7 @@ interface MapRow {
   blob_ref: string;
   byte_size: number | string;
   write_key_hash: string | null;
+  revision: number | string;
 }
 
 interface ShareRow {
@@ -84,6 +85,7 @@ function rowToMap(row: MapRow): MapRecord {
         ? parseInt(row.byte_size, 10)
         : row.byte_size,
     write_key_hash: row.write_key_hash,
+    revision: Number(row.revision),
   };
 }
 
@@ -133,7 +135,11 @@ export function createPostgresMinioAdapter(opts: {
     forcePathStyle: opts.blobForcePathStyle ?? true,
   });
 
-  let bucketReady = false;
+  // One setup at a time: concurrent first writes must not each send
+  // CreateBucket. Some servers (SeaweedFS) answer the second one with
+  // BucketAlreadyExists, which reads as "another account owns it". A setup
+  // that fails is forgotten, so the next call tries again.
+  let bucketReady: Promise<void> | null = null;
 
   // The schema setup runs once per process. A setup that fails (Postgres not
   // up yet at a cold start) is forgotten, so the next call tries again.
@@ -178,13 +184,16 @@ export function createPostgresMinioAdapter(opts: {
         }
       }
     }
-    bucketReady = true;
   }
 
-  async function ensureBucket(): Promise<void> {
+  function ensureBucket(): Promise<void> {
     if (!bucketReady) {
-      await headOrCreateBucket();
+      bucketReady = headOrCreateBucket().catch((err: unknown) => {
+        bucketReady = null;
+        throw err;
+      });
     }
+    return bucketReady;
   }
 
   /** Streams `body` to `key`; exactly `body.size` bytes or a rejection. */
@@ -226,7 +235,7 @@ export function createPostgresMinioAdapter(opts: {
   }
 
   const MAP_COLUMNS =
-    "id, created_at, updated_at, blob_ref, byte_size, write_key_hash";
+    "id, created_at, updated_at, blob_ref, byte_size, write_key_hash, revision";
 
   async function selectMap(id: string): Promise<MapRow | undefined> {
     const res = await pool.query<MapRow>(
@@ -372,7 +381,7 @@ export function createPostgresMinioAdapter(opts: {
       try {
         await inTransaction(async (db) => {
           await db.query(
-            `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO maps (${MAP_COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, 1)`,
             [id, now, now, written.ref, body.size, writeKeyHash],
           );
           await db.query(
@@ -395,6 +404,7 @@ export function createPostgresMinioAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         write_key_hash: writeKeyHash,
+        revision: 1,
       };
     },
 
@@ -416,8 +426,13 @@ export function createPostgresMinioAdapter(opts: {
       if (!existing) {
         throw new Error(`not found: ${id}`);
       }
+      const known = rowToMap(existing);
+      // Refused before a byte is read; checked again in the swap.
+      if (opts.ifRevision !== undefined && known.revision !== opts.ifRevision) {
+        throw new RevisionConflictError(known.revision);
+      }
       const cap = opts.maxTotalBytes ?? 0;
-      const growth = Math.max(0, body.size - rowToMap(existing).byte_size);
+      const growth = Math.max(0, body.size - known.byte_size);
       const written = await writeReserved(id, body, growth, cap);
       if (!written) {
         throw storageFull();
@@ -425,7 +440,8 @@ export function createPostgresMinioAdapter(opts: {
       const now = new Date();
       let swap:
         | { kind: "swapped"; old: MapRecord }
-        | { kind: "missing" | "full" };
+        | { kind: "missing" | "full" }
+        | { kind: "conflict"; revision: number };
       try {
         swap = await inTransaction(async (db) => {
           await db.query(`DELETE FROM storage_reservations WHERE id = $1`, [
@@ -440,6 +456,12 @@ export function createPostgresMinioAdapter(opts: {
             return { kind: "missing" as const };
           }
           const old = rowToMap(row);
+          if (
+            opts.ifRevision !== undefined &&
+            old.revision !== opts.ifRevision
+          ) {
+            return { kind: "conflict" as const, revision: old.revision };
+          }
           const delta = body.size - old.byte_size;
           if (cap > 0 && delta > growth) {
             const { counted, inFlight } = await usage(db);
@@ -448,7 +470,9 @@ export function createPostgresMinioAdapter(opts: {
             }
           }
           await db.query(
-            `UPDATE maps SET blob_ref = $1, byte_size = $2, updated_at = $3 WHERE id = $4`,
+            `UPDATE maps SET blob_ref = $1, byte_size = $2, updated_at = $3,
+               revision = revision + 1
+             WHERE id = $4`,
             [written.ref, body.size, now, id],
           );
           await db.query(
@@ -466,6 +490,8 @@ export function createPostgresMinioAdapter(opts: {
         await deleteBlob(written.ref).catch(() => undefined);
         throw swap.kind === "full"
           ? storageFull()
+          : swap.kind === "conflict"
+          ? new RevisionConflictError(swap.revision)
           : new Error(`not found: ${id}`);
       }
       // The orphan sweep removes it if this delete fails.
@@ -477,6 +503,7 @@ export function createPostgresMinioAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         updated_at: now.toISOString(),
+        revision: swap.old.revision + 1,
       };
     },
 
@@ -636,9 +663,11 @@ export function createPostgresMinioAdapter(opts: {
         if (!(body instanceof Readable)) {
           return null;
         }
+        const map = rowToMap(row);
         return {
           stream: body,
-          size: res.ContentLength ?? rowToMap(row).byte_size,
+          size: res.ContentLength ?? map.byte_size,
+          revision: map.revision,
         };
       } catch (err: unknown) {
         const name = (err as { name?: string })?.name ?? "";

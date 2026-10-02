@@ -25,7 +25,7 @@ import { ID_RE } from "../constants";
 import { migrateSqlite } from "../db/migrate";
 import { WRITE_KEYS_MIGRATION } from "../db/migrations";
 import { measured } from "../lib/body";
-import { storageFull } from "../lib/errors";
+import { RevisionConflictError, storageFull } from "../lib/errors";
 
 import type {
   BlobBody,
@@ -41,6 +41,7 @@ interface MapRow {
   blob_ref: string;
   byte_size: number;
   write_key_hash: string | null;
+  revision: number;
 }
 
 interface ShareRow {
@@ -109,7 +110,8 @@ export function createSqliteFsAdapter(opts: {
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
   const pointMap = db.prepare(
-    `UPDATE maps SET blob_ref = ?, byte_size = ?, updated_at = ? WHERE id = ?`,
+    `UPDATE maps SET blob_ref = ?, byte_size = ?, updated_at = ?, revision = ?
+     WHERE id = ?`,
   );
   const deleteMapRow = db.prepare(`DELETE FROM maps WHERE id = ?`);
   const deleteMapShares = db.prepare(
@@ -184,11 +186,13 @@ export function createSqliteFsAdapter(opts: {
   type Swap =
     | { kind: "swapped"; old: MapRow }
     | { kind: "missing" }
-    | { kind: "full" };
+    | { kind: "full" }
+    | { kind: "conflict"; revision: number };
 
   /**
-   * Points the map at its new blob, if the map still exists and the size
-   * change still fits. `growth` is what the reservation holds.
+   * Points the map at its new blob, if the map still exists, is still at
+   * `ifRevision` when one is named, and the size change still fits.
+   * `growth` is what the reservation holds.
    */
   const commitSwap = db.transaction(
     (
@@ -199,17 +203,21 @@ export function createSqliteFsAdapter(opts: {
       reservation: string,
       growth: number,
       cap: number,
+      ifRevision: number | undefined,
     ): Swap => {
       deleteReservation.run(reservation);
       const row = selectMap.get(id) as MapRow | undefined;
       if (!row) {
         return { kind: "missing" };
       }
+      if (ifRevision !== undefined && row.revision !== ifRevision) {
+        return { kind: "conflict", revision: row.revision };
+      }
       const delta = size - row.byte_size;
       if (cap > 0 && delta > growth && counted() + inFlight() + delta > cap) {
         return { kind: "full" };
       }
-      pointMap.run(ref, size, at, id);
+      pointMap.run(ref, size, at, row.revision + 1, id);
       addUsage.run(delta);
       return { kind: "swapped", old: row };
     },
@@ -311,6 +319,7 @@ export function createSqliteFsAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         write_key_hash: writeKeyHash,
+        revision: 1,
       };
       try {
         commitCreate.immediate(row, written.reservation);
@@ -338,6 +347,13 @@ export function createSqliteFsAdapter(opts: {
       if (!existing) {
         throw new Error(`not found: ${id}`);
       }
+      // Refused before a byte is read; checked again in the swap.
+      if (
+        opts.ifRevision !== undefined &&
+        existing.revision !== opts.ifRevision
+      ) {
+        throw new RevisionConflictError(existing.revision);
+      }
       const cap = opts.maxTotalBytes ?? 0;
       const growth = Math.max(0, body.size - existing.byte_size);
       const written = await writeReserved(id, body, growth, cap);
@@ -353,11 +369,14 @@ export function createSqliteFsAdapter(opts: {
         written.reservation,
         growth,
         cap,
+        opts.ifRevision,
       );
       if (swap.kind !== "swapped") {
         await fsp.rm(blobPath(written.ref), { force: true });
         throw swap.kind === "full"
           ? storageFull()
+          : swap.kind === "conflict"
+          ? new RevisionConflictError(swap.revision)
           : new Error(`not found: ${id}`);
       }
       // A reader that opened the old file keeps reading it.
@@ -367,6 +386,7 @@ export function createSqliteFsAdapter(opts: {
         blob_ref: written.ref,
         byte_size: body.size,
         updated_at: now,
+        revision: swap.old.revision + 1,
       };
     },
 
@@ -428,7 +448,11 @@ export function createSqliteFsAdapter(opts: {
       // destroyed.
       try {
         const { size } = await handle.stat();
-        return { stream: handle.createReadStream(), size };
+        return {
+          stream: handle.createReadStream(),
+          size,
+          revision: row.revision,
+        };
       } catch (err) {
         await handle.close();
         throw err;

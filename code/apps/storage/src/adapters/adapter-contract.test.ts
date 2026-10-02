@@ -190,6 +190,52 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       expect(await textOf(client.getBlob(created.id))).toBe("v-two");
     });
 
+    it("a map starts at revision 1, and each write counts one more", async () => {
+      const client = open();
+      const created = await client.createMap(bodyOf("v1"), HASH);
+
+      const second = await client.updateMap(created.id, bodyOf("v2"));
+      const third = await client.updateMap(created.id, bodyOf("v3"));
+
+      expect(created.revision).toBe(1);
+      expect(second.revision).toBe(2);
+      expect(third.revision).toBe(3);
+      expect((await client.getMap(created.id))?.revision).toBe(3);
+      expect((await client.getBlob(created.id))?.revision).toBe(3);
+    });
+
+    it("a write that names another revision is refused, and stores nothing", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.updateMap(map.id, bodyOf("v2"));
+
+      const stale = client.updateMap(map.id, bodyOf("stale"), {
+        ifRevision: 1,
+      });
+
+      await expect(stale).rejects.toThrow(/^revision conflict/);
+      await expect(stale).rejects.toMatchObject({ revision: 2 });
+      expect(await textOf(client.getBlob(map.id))).toBe("v2");
+      expect(await client.totalBytes()).toBe(2);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("of two writes from one revision, the second to finish is refused", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      const slow = heldBody(64 * 1024);
+
+      const late = client.updateMap(map.id, slow.body, { ifRevision: 1 });
+      await tick();
+      await client.updateMap(map.id, bodyOf("first"), { ifRevision: 1 });
+      slow.finish();
+
+      await expect(late).rejects.toThrow(/^revision conflict/);
+      expect(await textOf(client.getBlob(map.id))).toBe("first");
+      expect(await client.totalBytes()).toBe(5);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
     it("updateMap rejects an unknown id as not found", async () => {
       const client = open();
 

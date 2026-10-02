@@ -166,6 +166,41 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    // Server version history
+    // (docs/architecture/adr/0020-server-version-history.md). A map counts
+    // its saves in `revision`; a write may name the revision it replaces.
+    // map_versions keeps earlier bytes, counted in storage_usage like the
+    // map's own. A share token with a revision reads that version and no
+    // later one. Every map stored before this starts at revision 1.
+    name: "005_map_versions",
+    sqlite: (db) =>
+      db.exec(`
+        ALTER TABLE maps ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE share_tokens ADD COLUMN revision INTEGER;
+        CREATE TABLE map_versions (
+          map_id TEXT NOT NULL,
+          revision INTEGER NOT NULL,
+          blob_ref TEXT NOT NULL,
+          byte_size INTEGER NOT NULL,
+          saved_at TEXT NOT NULL,
+          PRIMARY KEY (map_id, revision),
+          FOREIGN KEY (map_id) REFERENCES maps(id)
+        );
+      `),
+    postgres: `
+      ALTER TABLE maps ADD COLUMN revision BIGINT NOT NULL DEFAULT 1;
+      ALTER TABLE share_tokens ADD COLUMN revision BIGINT;
+      CREATE TABLE map_versions (
+        map_id TEXT NOT NULL REFERENCES maps(id),
+        revision BIGINT NOT NULL,
+        blob_ref TEXT NOT NULL,
+        byte_size BIGINT NOT NULL,
+        saved_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        PRIMARY KEY (map_id, revision)
+      );
+    `,
+  },
 ];
 
 /** The migration that gave maps write keys; the legacy grace counts from it. */

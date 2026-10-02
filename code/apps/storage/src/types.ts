@@ -25,6 +25,8 @@ export interface MapRecord {
   blob_ref: string;
   byte_size: number;
   write_key_hash: string | null;
+  /** 1 when the map is made; one more with each write. */
+  revision: number;
 }
 
 /**
@@ -71,6 +73,17 @@ export interface WriteOptions {
   maxTotalBytes?: number;
 }
 
+export interface UpdateOptions extends WriteOptions {
+  /**
+   * The revision the writer read. When the map is at another revision, the
+   * write rejects with `revisionConflict` (lib/errors.ts) and stores
+   * nothing. Checked again in the transaction that swaps the bytes, so of
+   * two writes from one revision only the first to finish lands. Absent:
+   * no check.
+   */
+  ifRevision?: number;
+}
+
 /**
  * Bytes on their way into the store: a stream and its announced length. The
  * adapter stores exactly `size` bytes or nothing: a stream that ends early or
@@ -85,6 +98,8 @@ export interface BlobBody {
 export interface BlobRead {
   stream: Readable;
   size: number;
+  /** The revision these bytes are. */
+  revision: number;
 }
 
 /**
@@ -103,13 +118,15 @@ export interface StorageClient {
   ): Promise<MapRecord>;
   getMap(id: string): Promise<MapRecord | null>;
   /**
-   * Replaces the bytes. Rejects with `not found:` for an unknown id, also
-   * when the map is deleted while the bytes arrive; the new blob is removed.
+   * Replaces the bytes and counts one more revision. Rejects with `not
+   * found:` for an unknown id, also when the map is deleted while the bytes
+   * arrive, and with `revisionConflict` when `ifRevision` does not match;
+   * the new blob is removed.
    */
   updateMap(
     id: string,
     body: BlobBody,
-    opts?: WriteOptions,
+    opts?: UpdateOptions,
   ): Promise<MapRecord>;
   /** Rejects with `not found:` for an unknown map. */
   createShareToken(mapId: string, expiresAt: Date | null): Promise<ShareToken>;

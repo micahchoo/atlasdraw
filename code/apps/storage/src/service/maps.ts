@@ -9,7 +9,11 @@
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { isFullError, isNotFoundError } from "../lib/errors";
+import {
+  isFullError,
+  isNotFoundError,
+  isRevisionConflict,
+} from "../lib/errors";
 
 import type {
   BlobBody,
@@ -25,12 +29,20 @@ export interface PublicMap {
   created_at: string;
   updated_at: string;
   byte_size: number;
+  revision: number;
 }
 
 export type Forbidden = { kind: "forbidden" };
 export type Missing = { kind: "missing" };
 export type Full = { kind: "full" };
 export type Bytes = { kind: "bytes"; blob: BlobRead };
+/** The write named a revision the map is no longer at. */
+export type Conflict = { kind: "conflict"; revision: number };
+
+export interface WriteRequest {
+  /** The revision the writer read (If-Match). Absent: no check. */
+  ifRevision?: number;
+}
 
 export interface MapService {
   create(
@@ -40,7 +52,10 @@ export interface MapService {
     id: string,
     writeKey: string,
     body: BlobBody,
-  ): Promise<{ kind: "saved"; map: PublicMap } | Forbidden | Missing | Full>;
+    request?: WriteRequest,
+  ): Promise<
+    { kind: "saved"; map: PublicMap } | Forbidden | Missing | Full | Conflict
+  >;
   /** The owner's backup: the map's latest bytes. */
   read(id: string, writeKey: string): Promise<Bytes | Forbidden | Missing>;
   /** `expiresInDays` null: the token lives until it is revoked. */
@@ -102,6 +117,7 @@ function publicMap(map: MapRecord): PublicMap {
     created_at: map.created_at,
     updated_at: map.updated_at,
     byte_size: map.byte_size,
+    revision: map.revision,
   };
 }
 
@@ -147,7 +163,7 @@ export function createMapService(
       }
     },
 
-    async write(id, writeKey, body) {
+    async write(id, writeKey, body, request = {}) {
       const map = await owned(id, writeKey);
       if (refused(map)) {
         return map;
@@ -155,11 +171,19 @@ export function createMapService(
       try {
         return {
           kind: "saved",
-          map: publicMap(await store.updateMap(id, body, cap)),
+          map: publicMap(
+            await store.updateMap(id, body, {
+              ...cap,
+              ifRevision: request.ifRevision,
+            }),
+          ),
         };
       } catch (err) {
         if (isNotFoundError(err)) {
           return { kind: "missing" };
+        }
+        if (isRevisionConflict(err)) {
+          return { kind: "conflict", revision: err.revision };
         }
         if (isFullError(err)) {
           return { kind: "full" };
