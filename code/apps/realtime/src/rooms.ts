@@ -336,7 +336,9 @@ export function registerRoomServer(
       for (const conn of room.conns.keys()) {
         send(conn, message);
       }
-      if (!room.saveTimer) {
+      // close() saved every room. A change still in flight after it is lost
+      // with its socket: a timer armed now would reach a closed store.
+      if (!room.saveTimer && !closed) {
         room.saveTimer = setTimeout(() => save(room), saveDelayMs);
       }
     });

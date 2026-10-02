@@ -342,6 +342,37 @@ describe("room server", () => {
       connections: 1,
     });
   });
+
+  it("touches the store no more once it is closed, though a change was in flight", async () => {
+    const inner = memoryStore();
+    let shut = false;
+    const late: string[] = [];
+    const touch = (name: string): void => {
+      if (shut) {
+        late.push(name);
+      }
+    };
+    const store: RoomStore = {
+      load: (room) => (touch("load"), inner.load(room)),
+      verifierOf: (room) => (touch("verifierOf"), inner.verifierOf(room)),
+      save: (room, stored) => (touch("save"), inner.save(room, stored)),
+      bytesOf: (room) => (touch("bytesOf"), inner.bytesOf(room)),
+      totalBytes: () => (touch("totalBytes"), inner.totalBytes()),
+      sweep: (cutoff, keep) => (touch("sweep"), inner.sweep(cutoff, keep)),
+      close: () => inner.close(),
+    };
+    const relay = await startRelay(store);
+    const a = connect(relay, randomUUID(), token());
+    await until("A is synced", () => a.provider.synced);
+
+    // The edit is sent now and arrives after close(), as on a real shutdown.
+    a.doc.getMap("meta").set("title", "in flight");
+    relay.rooms.close();
+    shut = true;
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(late).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
