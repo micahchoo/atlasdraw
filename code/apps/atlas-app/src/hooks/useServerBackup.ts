@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// Whether "Restore from server backup" is offered: when the build saves to a
-// server and this browser holds a server map for the open document. The
-// answer goes to the session view (`backupAvailable`), where the command
-// reads it; session/fileActions.ts#restoreBackup does the restore.
+// Whether "Server versions…" is offered: when the build saves to a server
+// and this browser holds a server map for the open document. The answer goes
+// to the session view (`backupAvailable`), where the command reads it.
+// ServerVersionsDialog lists the versions; state/myMaps.ts#restoreServerVersion
+// and #openServerVersionCopy open one.
 
 import { useEffect } from "react";
 

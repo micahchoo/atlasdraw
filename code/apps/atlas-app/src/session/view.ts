@@ -124,7 +124,7 @@ export interface ViewState {
   returnFocus: Element | null;
   /** The canvas colour chosen in the drawing's menu, shown behind the map. */
   mapBackground: string;
-  /** True when this browser holds a server backup of the open map. */
+  /** True when this browser holds a server map for the open map ("Server versions…"). */
   backupAvailable: boolean;
   /**
    * Import one data file into the open map. The editor's import pipeline

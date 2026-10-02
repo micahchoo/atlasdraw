@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// "Restore from server backup" is offered only when the build saves to a
-// server and this browser holds a server map for the open document.
+// "Server versions…" is offered only when the build saves to a server and
+// this browser holds a server map for the open document.
 
 import "fake-indexeddb/auto";
 import { openDB } from "idb";

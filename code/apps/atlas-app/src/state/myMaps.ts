@@ -125,7 +125,7 @@ export async function openSavedMap(
 
 /**
  * Save the map that was just opened: it is new to this browser (a blank
- * map, a server backup). Opening is no edit, so the history does not ask
+ * map, a server version). Opening is no edit, so the history does not ask
  * for this save.
  */
 async function saveOpened(ctx: MapActionContext): Promise<void> {
