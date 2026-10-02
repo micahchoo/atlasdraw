@@ -327,6 +327,25 @@ describe("admit: what is dropped and counted", () => {
     expect(droppedMessage(result)).toMatch(/2 images/);
   });
 
+  it("keeps the file of a pin's photo, as it keeps an image's", async () => {
+    const files = new Map<string, Blob>([
+      ["photo", new Blob([PNG_BYTES])],
+      ["orphan", new Blob([PNG_BYTES])],
+    ]);
+    const pin = element("pin-1", {
+      type: "ellipse",
+      customData: { tool: "pin", pin: { title: "Well", photo: "photo" } },
+    });
+    const result = admitted(
+      await admit(
+        await bytesOf(document({ scene: [pin] as never, files })),
+        "file",
+      ),
+    );
+    expect(Array.from(result.doc.files.keys())).toEqual(["photo"]);
+    expect(result.dropped.files).toBe(0);
+  });
+
   it("resets a data layer's style that the map cannot draw, and keeps the layer", async () => {
     const result = admitted(
       await admit(

@@ -56,6 +56,7 @@ import {
 } from "./document";
 
 import { droppedMessage, type Admitted } from "./documentGate";
+import { elementFileIds } from "./pinDetails";
 import { sceneOf } from "./scene";
 import { sceneSignature } from "./sceneSignature";
 
@@ -179,13 +180,8 @@ export function toFile(
     .sort((a, b) => a.order - b.order)
     .map(manifestTileLayer);
 
-  const used = new Set<string>();
-  for (const el of elements) {
-    const fileId = (el as { fileId?: string | null }).fileId;
-    if (fileId && !el.isDeleted) {
-      used.add(fileId);
-    }
-  }
+  // The files a live element uses: an image's, a pin's photo.
+  const used = new Set(elements.flatMap(elementFileIds));
   for (const [id, file] of Object.entries(doc.scene.files())) {
     if (!used.has(id) || files.has(id)) {
       continue;

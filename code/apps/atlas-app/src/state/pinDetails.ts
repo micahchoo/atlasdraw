@@ -101,9 +101,24 @@ export function withPinDetails(
   return Object.keys(clean).length > 0 ? { ...rest, pin: clean } : rest;
 }
 
+/**
+ * The fields of an element these functions read. A saved scene element
+ * (`@atlasdraw/data` SceneElement) has them as `unknown`.
+ */
+interface ElementLike {
+  readonly type: string;
+  readonly isDeleted?: unknown;
+  readonly customData?: unknown;
+  readonly fileId?: unknown;
+}
+
 /** True for an element the pin tool made. */
-export function isPin(el: Pick<ExcalidrawElement, "type" | "customData">) {
-  return el.type === "ellipse" && el.customData?.tool === "pin";
+export function isPin(el: ElementLike): boolean {
+  return (
+    el.type === "ellipse" &&
+    isRecord(el.customData) &&
+    el.customData.tool === "pin"
+  );
 }
 
 /**
@@ -111,14 +126,13 @@ export function isPin(el: Pick<ExcalidrawElement, "type" | "customData">) {
  * that keeps, saves or sends the drawing's files asks this, so a photo is
  * never dropped as unused.
  */
-export function elementFileIds(el: ExcalidrawElement): string[] {
-  if (el.isDeleted) {
+export function elementFileIds(el: ElementLike): string[] {
+  if (el.isDeleted === true) {
     return [];
   }
   const ids: string[] = [];
-  const fileId = (el as { fileId?: unknown }).fileId;
-  if (typeof fileId === "string" && fileId !== "") {
-    ids.push(fileId);
+  if (typeof el.fileId === "string" && el.fileId !== "") {
+    ids.push(el.fileId);
   }
   if (isPin(el)) {
     const photo = readPinDetails(el.customData).photo;

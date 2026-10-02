@@ -191,6 +191,22 @@ describe("toFile", () => {
     ]);
   });
 
+  it("writes the file of a pin's photo", () => {
+    const fx = makeFakeExcalidraw([
+      {
+        ...geoRect("pin"),
+        type: "ellipse",
+        customData: { tool: "pin", pin: { photo: "photo-1" } },
+      },
+    ]);
+    fx.api.addFiles([
+      { id: "photo-1", mimeType: "image/png", dataURL: PNG, created: 0 },
+    ] as never);
+    const doc = withLayers(createDocument({}, sceneOf(fx.api)));
+
+    expect(toFile(doc).files.has("photo-1")).toBe(true);
+  });
+
   it("keeps updatedAt when nothing changed, and moves it when something did", () => {
     const fx = makeFakeExcalidraw([geoRect("rect-1")]);
     const doc = createDocument(
