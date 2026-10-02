@@ -64,8 +64,8 @@ import { useOverlayOutcome } from "../hooks/useMapOverlays";
 import styles from "../styles/LayerPanel.module.css";
 
 import {
-  csvMenuLabel,
   dataLayerFile,
+  exportChoices,
   type DataExportFormat,
 } from "../lib/dataLayerExport";
 
@@ -301,6 +301,8 @@ type LayerActions = {
   zoomTo: (id: string) => void;
   /** Save a data layer as a file. Other kinds have no vector data. */
   exportData: (id: string, format: DataExportFormat) => void;
+  /** Open a data layer's attribute table. */
+  showTable: (id: string) => void;
 };
 
 /** A row in any section: a document layer, or an annotation from the scene. */
@@ -676,13 +678,16 @@ function OverflowMenu({
    * future kind without bounds doesn't inherit the item by accident.
    */
   /**
-   * Read only while the menu is open: deciding it walks every feature, and
+   * Read only while the menu is open: the CSV label walks every feature, and
    * every card renders this component.
    */
-  const csvLabel =
+  const exports =
     open && entry.kind === "data"
-      ? csvMenuLabel(currentDocument().snapshot().featureCollections[entry.id])
-      : "";
+      ? exportChoices(
+          entry,
+          currentDocument().snapshot().featureCollections[entry.id],
+        )
+      : [];
 
   const canZoom =
     entry.kind === "data" ||
@@ -731,6 +736,20 @@ function OverflowMenu({
               },
             ]
           : []),
+        ...(entry.kind === "data"
+          ? [
+              {
+                key: "table",
+                testid: `layer-table-${entry.id}`,
+                label: "Show attribute table",
+                danger: false,
+                onSelect: () => {
+                  close();
+                  actions.showTable(entry.id);
+                },
+              },
+            ]
+          : []),
         {
           key: "rename",
           testid: `layer-rename-${entry.id}`,
@@ -743,30 +762,16 @@ function OverflowMenu({
         },
         // Only a data layer has features to write. A raster is a
         // picture and a tile layer stays on its server, so neither is offered.
-        ...(entry.kind === "data"
-          ? [
-              {
-                key: "export-geojson",
-                testid: `layer-export-geojson-${entry.id}`,
-                label: "Export as GeoJSON",
-                danger: false,
-                onSelect: () => {
-                  close();
-                  actions.exportData(entry.id, "geojson");
-                },
-              },
-              {
-                key: "export-csv",
-                testid: `layer-export-csv-${entry.id}`,
-                label: csvLabel,
-                danger: false,
-                onSelect: () => {
-                  close();
-                  actions.exportData(entry.id, "csv");
-                },
-              },
-            ]
-          : []),
+        ...exports.map(({ format, label }) => ({
+          key: `export-${format}`,
+          testid: `layer-export-${format}-${entry.id}`,
+          label,
+          danger: false,
+          onSelect: () => {
+            close();
+            actions.exportData(entry.id, format);
+          },
+        })),
         {
           key: "delete",
           testid: `layer-delete-${entry.id}`,
@@ -1760,6 +1765,10 @@ export function LayerPanel() {
   };
 
   const actions: LayerActions = {
+    showTable: (id) =>
+      session.view
+        .getState()
+        .openDialog({ kind: "attribute-table", layerId: id }),
     exportData: (id, format) => {
       const file = dataLayerFile(currentDocument().snapshot(), id, format);
       if (file) {

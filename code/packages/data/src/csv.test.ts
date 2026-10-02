@@ -10,8 +10,10 @@ import {
   CSV_HEURISTIC_THRESHOLD_SMALL_DATASET,
   parseCSV,
 } from "./csv.js";
+import { toCSV } from "./export.js";
 
 import type { CsvImportStats } from "./csv.js";
+import type { FeatureCollection } from "geojson";
 
 const csvBlob = (text: string): Blob => new Blob([text], { type: "text/csv" });
 
@@ -357,5 +359,88 @@ describe("parseCSV — coordinates in metres", () => {
       code: "PROJECTED_COORDINATES",
       message: expect.stringMatching(/metres.*EPSG:4326/s),
     });
+  });
+});
+
+describe("parseCSV — a column of Well-Known Text", () => {
+  it("reads the geometry from a column named wkt, geometry or the_geom, in any case", async () => {
+    for (const header of ["wkt", "Geometry", "THE_GEOM"]) {
+      const fc = await parseCSV(
+        csvBlob(`name,${header}\nA,"LINESTRING (0 0, 1 1)"\nB,POINT (2 3)`),
+      );
+      expect(fc.features).toEqual([
+        {
+          type: "Feature",
+          properties: { name: "A" },
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [0, 0],
+              [1, 1],
+            ],
+          },
+        },
+        {
+          type: "Feature",
+          properties: { name: "B" },
+          geometry: { type: "Point", coordinates: [2, 3] },
+        },
+      ]);
+    }
+  });
+
+  it("skips a row whose text is not a geometry, and counts it", async () => {
+    const stats: CsvImportStats[] = [];
+    const fc = await parseCSV(
+      csvBlob(
+        'wkt,n\nPOINT (1 2),1\nPOINT (oops),2\n,3\n"POLYGON ((0 0, 1 0, 1 1))",4',
+      ),
+      { onStats: (s) => stats.push(s) },
+    );
+    expect(fc.features.map((f) => f.properties)).toEqual([{ n: 1 }]);
+    expect(stats).toEqual([{ read: 4, emitted: 1, dropped: 3 }]);
+  });
+
+  it("refuses a file whose geometry column holds no geometry at all", async () => {
+    await expect(
+      parseCSV(csvBlob("geometry,n\nnot wkt,1\nPOINT (),2")),
+    ).rejects.toMatchObject({ code: "NO_VALID_WKT" });
+  });
+
+  it("reads back what the CSV export writes for lines and areas", async () => {
+    const input: FeatureCollection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { ref: "A1", lanes: 2 },
+          geometry: {
+            type: "MultiLineString",
+            coordinates: [
+              [
+                [0, 0],
+                [1, 1],
+              ],
+              [
+                [2, 2],
+                [3, 3],
+              ],
+            ],
+          },
+        },
+        {
+          type: "Feature",
+          properties: { ref: "B2", lanes: 4 },
+          geometry: {
+            type: "LineString",
+            coordinates: [
+              [5, 5],
+              [6, 7.25],
+            ],
+          },
+        },
+      ],
+    };
+    expect(await parseCSV(csvBlob(toCSV(input)))).toEqual(input);
   });
 });

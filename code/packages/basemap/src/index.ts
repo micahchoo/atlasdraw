@@ -17,6 +17,8 @@ export type {
   FilterStyle,
   LabelStyle,
   LayerStyle,
+  PointDisplay,
+  SizeStyle,
   StyleExpression,
 } from "./style";
 export {
@@ -32,6 +34,12 @@ export {
   labelProblem,
   LABEL_SIZE_MAX,
   LABEL_SIZE_MIN,
+  clusterCountLayerId,
+  clusterLayerId,
+  compileSourceOptions,
+  pointProblem,
+  POINT_RADIUS_MAX,
+  POINT_RADIUS_MIN,
 } from "./style-compiler";
 export type {
   CompiledPaint,

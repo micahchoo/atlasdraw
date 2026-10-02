@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// The files written for imported data layers: one layer as GeoJSON or CSV
-// (the layer panel's ⋯ menu), and all data layers added to the drawn-shape
+// The files written for imported data layers: one layer as GeoJSON, CSV,
+// KML or GPX (the layer panel's ⋯ menu), and all data layers added to the drawn-shape
 // GeoJSON (the Export dialog's "Include imported data layers").
 //
 // Only data layers have features. A raster is a picture and a tile layer
 // stays on its server, so neither can be written as vector data, and the
 // panel does not offer it.
 
-import { csvGeometryMode, toCSV, toGeoJSONText } from "@atlasdraw/data";
+import {
+  csvGeometryMode,
+  toCSV,
+  toGPX,
+  toGeoJSONText,
+  toKML,
+} from "@atlasdraw/data";
 
 import { safeFileName } from "./safeFileName";
 
-import type { DocumentState } from "../state/document";
+import type { DataLayerEntry, DocumentState } from "../state/document";
 import type { FeatureCollection } from "geojson";
 
-export type DataExportFormat = "geojson" | "csv";
+export type DataExportFormat = "geojson" | "csv" | "kml" | "gpx";
 
 export interface ExportFile {
   fileName: string;
@@ -24,9 +30,41 @@ export interface ExportFile {
   text: string;
 }
 
+/** One "Export as …" item of a data layer's menu. */
+export interface ExportChoice {
+  format: DataExportFormat;
+  label: string;
+}
+
+/**
+ * The formats a data layer can be written as, in menu order. GPX holds
+ * waypoints and tracks only, so an area layer is not offered it. The CSV
+ * label says when lines or areas go out as WKT, so the user does not expect
+ * longitude and latitude columns.
+ */
+export function exportChoices(
+  entry: Pick<DataLayerEntry, "geometryKind">,
+  fc: FeatureCollection | undefined,
+): ExportChoice[] {
+  return [
+    { format: "geojson", label: "Export as GeoJSON" },
+    {
+      format: "csv",
+      label:
+        !fc || csvGeometryMode(fc) === "point"
+          ? "Export as CSV"
+          : "Export as CSV (geometry as WKT)",
+    },
+    { format: "kml", label: "Export as KML" },
+    ...(entry.geometryKind === "fill"
+      ? []
+      : [{ format: "gpx" as const, label: "Export as GPX" }]),
+  ];
+}
+
 /**
  * The file for one data layer, named after its label. Null when `id` is not
- * a data layer of `state`.
+ * a data layer of `state`, or the layer cannot be written as `format`.
  */
 export function dataLayerFile(
   state: DocumentState,
@@ -35,27 +73,36 @@ export function dataLayerFile(
 ): ExportFile | null {
   const entry = state.overlays.find((e) => e.id === id);
   const fc = state.featureCollections[id];
-  if (entry?.kind !== "data" || !fc) {
+  if (
+    entry?.kind !== "data" ||
+    !fc ||
+    !exportChoices(entry, fc).some((c) => c.format === format)
+  ) {
     return null;
   }
   const stem = safeFileName(entry.label);
-  return format === "geojson"
-    ? {
+  switch (format) {
+    case "geojson":
+      return {
         fileName: `${stem}.geojson`,
         type: "application/geo+json",
         text: toGeoJSONText(fc, { name: entry.label }),
-      }
-    : { fileName: `${stem}.csv`, type: "text/csv", text: toCSV(fc) };
-}
-
-/**
- * The menu text for the CSV export. It says when lines or areas go out as
- * WKT, so the user does not expect longitude and latitude columns.
- */
-export function csvMenuLabel(fc: FeatureCollection | undefined): string {
-  return !fc || csvGeometryMode(fc) === "point"
-    ? "Export as CSV"
-    : "Export as CSV (geometry as WKT)";
+      };
+    case "csv":
+      return { fileName: `${stem}.csv`, type: "text/csv", text: toCSV(fc) };
+    case "kml":
+      return {
+        fileName: `${stem}.kml`,
+        type: "application/vnd.google-earth.kml+xml",
+        text: toKML(fc, { name: entry.label }),
+      };
+    case "gpx":
+      return {
+        fileName: `${stem}.gpx`,
+        type: "application/gpx+xml",
+        text: toGPX(fc, { name: entry.label }),
+      };
+  }
 }
 
 /**

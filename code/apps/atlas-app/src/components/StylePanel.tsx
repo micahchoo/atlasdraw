@@ -22,12 +22,19 @@
 
 import { useMemo, useState } from "react";
 
-import { LABEL_SIZE_MAX, LABEL_SIZE_MIN } from "@atlasdraw/basemap";
+import {
+  LABEL_SIZE_MAX,
+  LABEL_SIZE_MIN,
+  POINT_RADIUS_MAX,
+  POINT_RADIUS_MIN,
+} from "@atlasdraw/basemap";
 
 import type {
   FilterOp,
   FilterStyle,
   LabelStyle,
+  PointDisplay,
+  SizeStyle,
   StyleExpression,
 } from "@atlasdraw/basemap";
 
@@ -227,6 +234,19 @@ export function StylePanel({ layerId }: StylePanelProps) {
           />
         )}
       </div>
+      {entry.geometryKind === "circle" && (
+        <PointsSection
+          entry={entry}
+          numericProps={numericProps}
+          valuesOf={(prop: string) =>
+            (fc?.features ?? [])
+              .map((f) => f.properties?.[prop])
+              .filter((v): v is number => typeof v === "number")
+          }
+          onDisplay={(points) => restyle({ points })}
+          onSize={(size) => restyle({ size })}
+        />
+      )}
       <LabelSection
         entry={entry}
         allProps={allProps}
@@ -243,6 +263,145 @@ export function StylePanel({ layerId }: StylePanelProps) {
         </p>
       )}
     </div>
+  );
+}
+
+// ---- points -----------------------------------------------------------------
+
+const POINT_DISPLAYS: ReadonlyArray<{ value: PointDisplay; label: string }> = [
+  { value: "points", label: "Points" },
+  { value: "clusters", label: "Clusters" },
+  { value: "heatmap", label: "Heatmap" },
+];
+
+const DEFAULT_MIN_RADIUS = 3;
+const DEFAULT_MAX_RADIUS = 15;
+
+/**
+ * A point layer only: show each point, clusters or a heatmap, and size the
+ * points by a number property. The display applies when it changes, like a
+ * choice in a menu. The size applies on Apply, with the smallest and
+ * largest value of the property in the layer as its range.
+ */
+function PointsSection({
+  entry,
+  numericProps,
+  valuesOf,
+  onDisplay,
+  onSize,
+}: {
+  entry: DataLayerEntry;
+  numericProps: string[];
+  valuesOf: (prop: string) => number[];
+  onDisplay: (points: PointDisplay) => void;
+  onSize: (size: SizeStyle | undefined) => void;
+}) {
+  const existing = entry.style.size;
+  const [property, setProperty] = useState(
+    existing?.property ?? numericProps[0] ?? "",
+  );
+  const [minRadius, setMinRadius] = useState(
+    existing?.minRadius ?? DEFAULT_MIN_RADIUS,
+  );
+  const [maxRadius, setMaxRadius] = useState(
+    existing?.maxRadius ?? DEFAULT_MAX_RADIUS,
+  );
+
+  const apply = () => {
+    const values = valuesOf(property);
+    // A loop, not Math.min(...values): a spread of 50k numbers can overflow
+    // the call stack.
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of values) {
+      min = v < min ? v : min;
+      max = v > max ? v : max;
+    }
+    onSize({ property, min, max, minRadius, maxRadius });
+  };
+
+  return (
+    <section
+      className={styles.section}
+      aria-label="Points"
+      data-testid="style-points"
+    >
+      <h5 className={styles.sectionHeading}>Points</h5>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Show as</span>
+        <select
+          value={entry.style.points ?? "points"}
+          data-testid="points-display"
+          onChange={(e) => onDisplay(e.target.value as PointDisplay)}
+        >
+          {POINT_DISPLAYS.map((d) => (
+            <option key={d.value} value={d.value}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className={styles.note}>Size the points by a number property.</p>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Property</span>
+        <select
+          value={property}
+          data-testid="size-property"
+          onChange={(e) => setProperty(e.target.value)}
+        >
+          {numericProps.length === 0 && (
+            <option value="">(no numeric properties)</option>
+          )}
+          {numericProps.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Smallest</span>
+        <input
+          type="number"
+          min={POINT_RADIUS_MIN}
+          max={POINT_RADIUS_MAX}
+          value={minRadius}
+          data-testid="size-min-radius"
+          onChange={(e) => setMinRadius(Number(e.target.value))}
+        />
+      </label>
+      <label className={styles.field}>
+        <span className={styles.fieldLabel}>Largest</span>
+        <input
+          type="number"
+          min={POINT_RADIUS_MIN}
+          max={POINT_RADIUS_MAX}
+          value={maxRadius}
+          data-testid="size-max-radius"
+          onChange={(e) => setMaxRadius(Number(e.target.value))}
+        />
+      </label>
+      <div className={styles.sectionActions}>
+        {existing && (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            data-testid="size-remove"
+            onClick={() => onSize(undefined)}
+          >
+            Remove size
+          </button>
+        )}
+        <button
+          type="button"
+          className={styles.applyBtn}
+          data-testid="size-apply"
+          onClick={apply}
+        >
+          Apply
+        </button>
+      </div>
+    </section>
   );
 }
 

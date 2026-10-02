@@ -73,7 +73,12 @@ export interface AttributeRow {
   value: string;
 }
 
-function asText(value: unknown): string {
+/**
+ * A property value as the user reads it: text as it is, a number or boolean
+ * as JavaScript prints it, an object or array as JSON, nothing as "". The
+ * popup and the attribute table both use it.
+ */
+export function attributeText(value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
@@ -96,6 +101,6 @@ export function attributeRows(
 ): AttributeRow[] {
   return Object.entries(properties ?? {}).map(([key, value]) => ({
     key,
-    value: asText(value),
+    value: attributeText(value),
   }));
 }

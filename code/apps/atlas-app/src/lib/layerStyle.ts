@@ -14,6 +14,7 @@ import {
   compileLayers,
   filterProblem,
   labelProblem,
+  pointProblem,
   type LayerStyle,
 } from "@atlasdraw/basemap";
 
@@ -86,10 +87,14 @@ function messageOf(err: unknown): string {
 }
 
 /**
- * Why a style's label or filter cannot be applied, or null. A value of the
- * wrong shape (a style from a file or a peer) is a problem, not a throw.
+ * Why a style's label, filter, point display or point size cannot be
+ * applied to a layer of `geometryKind`, or null. A value of the wrong shape
+ * (a style from a file or a peer) is a problem, not a throw.
  */
-export function styleProblem(style: unknown): string | null {
+export function styleProblem(
+  style: unknown,
+  geometryKind: AtlasGeometryKind,
+): string | null {
   if (typeof style !== "object" || style === null || Array.isArray(style)) {
     return "The style is not a set of style fields.";
   }
@@ -97,7 +102,8 @@ export function styleProblem(style: unknown): string | null {
   try {
     return (
       (filter ? filterProblem(filter) : null) ??
-      (label ? labelProblem(label) : null)
+      (label ? labelProblem(label) : null) ??
+      pointProblem(style as LayerStyle, geometryKind)
     );
   } catch (err) {
     return `The style cannot be read: ${messageOf(err)}`;
@@ -114,7 +120,7 @@ export function validateLayerStyle(
   style: unknown,
   geometryKind: AtlasGeometryKind,
 ): string[] {
-  const problem = styleProblem(style);
+  const problem = styleProblem(style, geometryKind);
   if (problem) {
     return [problem];
   }

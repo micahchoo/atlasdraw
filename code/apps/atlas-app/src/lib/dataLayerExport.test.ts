@@ -3,11 +3,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createDocument } from "../state/document";
+import { parseGPX, parseKML } from "@atlasdraw/data";
+
+import { createDocument, type DataLayerEntry } from "../state/document";
 
 import {
-  csvMenuLabel,
   dataLayerFile,
+  exportChoices,
   geoJsonExportFile,
   withDataLayers,
 } from "./dataLayerExport";
@@ -41,6 +43,9 @@ const roads: FeatureCollection = {
     },
   ],
 };
+
+/** A file's text as the parsers read it; jsdom's Blob has no `text()`. */
+const asBlob = (text: string) => ({ text: async () => text } as Blob);
 
 function docWithLayers() {
   const doc = createDocument();
@@ -95,16 +100,51 @@ describe("dataLayerFile", () => {
     );
   });
 
+  it("writes KML and GPX that the importers read back", async () => {
+    const kml = dataLayerFile(docWithLayers(), "dl:cafes", "kml")!;
+    expect(kml.fileName).toBe("Caf_s_ 2026_10.kml");
+    expect(kml.type).toBe("application/vnd.google-earth.kml+xml");
+    expect((await parseKML(asBlob(kml.text))).fc.features).toEqual(
+      cafes.features,
+    );
+
+    const gpx = dataLayerFile(docWithLayers(), "dl:roads", "gpx")!;
+    expect(gpx.fileName).toBe("Roads.gpx");
+    expect(gpx.type).toBe("application/gpx+xml");
+    expect((await parseGPX(asBlob(gpx.text))).fc.features[0]!.geometry).toEqual(
+      roads.features[0]!.geometry,
+    );
+  });
+
   it("gives nothing for a layer that is not a data layer", () => {
     expect(dataLayerFile(docWithLayers(), "tl:osm", "geojson")).toBeNull();
     expect(dataLayerFile(docWithLayers(), "dl:gone", "csv")).toBeNull();
   });
 });
 
-describe("csvMenuLabel", () => {
-  it("says when the geometry goes out as WKT", () => {
-    expect(csvMenuLabel(cafes)).toBe("Export as CSV");
-    expect(csvMenuLabel(roads)).toBe("Export as CSV (geometry as WKT)");
+describe("exportChoices", () => {
+  const entry = (geometryKind: DataLayerEntry["geometryKind"]) =>
+    ({ kind: "data", geometryKind } as DataLayerEntry);
+
+  it("offers GPX for points and lines, never for areas", () => {
+    expect(exportChoices(entry("circle"), cafes).map((c) => c.format)).toEqual([
+      "geojson",
+      "csv",
+      "kml",
+      "gpx",
+    ]);
+    expect(exportChoices(entry("fill"), roads).map((c) => c.format)).toEqual([
+      "geojson",
+      "csv",
+      "kml",
+    ]);
+  });
+
+  it("says when the CSV geometry goes out as WKT", () => {
+    const csv = (fc: FeatureCollection) =>
+      exportChoices(entry("line"), fc).find((c) => c.format === "csv")?.label;
+    expect(csv(cafes)).toBe("Export as CSV");
+    expect(csv(roads)).toBe("Export as CSV (geometry as WKT)");
   });
 });
 

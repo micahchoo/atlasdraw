@@ -51,6 +51,27 @@ export interface FilterStyle {
   value: string;
 }
 
+/**
+ * How a point layer draws: each point, clusters of nearby points with their
+ * count, or a heatmap of point density. Lines and areas draw "points" only.
+ */
+export type PointDisplay = "points" | "clusters" | "heatmap";
+
+/**
+ * A point's radius from a number property: `min` and below draw at
+ * `minRadius` pixels, `max` and above at `maxRadius`, and values between are
+ * linear. Data-blind like a graduated colour: the caller reads `min` and
+ * `max` off the data. A feature whose value is not a number keeps the plain
+ * radius.
+ */
+export interface SizeStyle {
+  property: string;
+  min: number;
+  max: number;
+  minRadius: number;
+  maxRadius: number;
+}
+
 export interface LayerStyle {
   fillColor?: string;
   strokeColor?: string;
@@ -62,4 +83,7 @@ export interface LayerStyle {
   // Absent means no labels and no filter.
   label?: LabelStyle;
   filter?: FilterStyle;
+  // Point layers only. Absent means "points" at the plain radius.
+  points?: PointDisplay;
+  size?: SizeStyle;
 }

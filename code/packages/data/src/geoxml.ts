@@ -7,6 +7,7 @@
 //   - XML parse with the global DOMParser, and errors that tell the user
 //     what to fix;
 //   - KML folders flattened, with the folder path in a `folder` property;
+//   - KML bool fields read as the KML spec says ("false" and "0" are false);
 //   - a count of features that cannot show on the map (no geometry, or a
 //     KML GroundOverlay, which is an image);
 //   - KMZ extraction with JSZip.
@@ -127,9 +128,37 @@ export async function parseKMZ(blob: Blob): Promise<GeoXmlImport> {
 function parseKmlText(text: string, format: "KML" | "KMZ"): GeoXmlImport {
   const doc = parseXml(text, format);
   requireRoot(doc, "KML", format);
+  readBoolFieldsAsKml(doc);
   const features: F[] = [];
   flattenFolders(kmlWithFolders(doc).children, [], features);
   return keepDrawable(features, format);
+}
+
+/** KML's text for a false bool: "false" or "0" (KML 2.2, xsd:boolean). */
+const KML_FALSE = /^\s*(false|0)\s*$/;
+
+/**
+ * togeojson reads a `bool` SimpleField with `Boolean(text)`, so "false" and
+ * "0" become true. It reads empty text as false. Empty the text of every
+ * false value of a bool field before togeojson reads the document.
+ */
+function readBoolFieldsAsKml(doc: Document): void {
+  const boolFields = new Set(
+    Array.from(doc.getElementsByTagName("SimpleField"))
+      .filter((field) => field.getAttribute("type") === "bool")
+      .map((field) => field.getAttribute("name") ?? ""),
+  );
+  if (boolFields.size === 0) {
+    return;
+  }
+  for (const data of Array.from(doc.getElementsByTagName("SimpleData"))) {
+    if (
+      boolFields.has(data.getAttribute("name") ?? "") &&
+      KML_FALSE.test(data.textContent ?? "")
+    ) {
+      data.textContent = "";
+    }
+  }
 }
 
 function flattenFolders(

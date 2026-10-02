@@ -5,10 +5,11 @@
 // decodes and encodes a PNG. It touches no DOM, no map and no document, so
 // it runs in a Web Worker (import.worker.ts); importClient.ts runs it there.
 //
-// GeoJSON, CSV and zipped shapefiles give one layer and must hold one
-// geometry kind. KML, KMZ and GPX usually mix kinds (a GPX file has
-// waypoints and tracks), so they give one layer per kind, named
-// "<file> — areas", "<file> — lines" and "<file> — points".
+// A file gives one layer per geometry kind. A file of one kind gives one
+// layer, named after the file. A file that mixes kinds (a GPX file with
+// waypoints and tracks, a CSV whose WKT column holds points and lines)
+// gives layers named "<file> — areas", "<file> — lines" and
+// "<file> — points".
 //
 // Every failure becomes a sentence for the user. The worker boundary cannot
 // carry error classes, and the sentence is what the caller needs.
