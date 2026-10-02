@@ -11,11 +11,11 @@
 // trip for no new information. This mirrors `SheetRail`, which is likewise an
 // app-side control over a fork surface.
 //
-// Z-index 10 (toolbar/banner band, see MapEditor.module.css's ladder). The
-// sidebar's own `--zIndex-ui-library: 120` is private to `.excalidrawLayer`,
-// which is `position: absolute; z-index: 1` and therefore a stacking context —
-// so the sidebar resolves at 1 in the band this handle competes in, and 10 is
-// enough to sit over its edge. Same reasoning as SheetRail's tooltip.
+// Z-index --ad-z-overlay (tokens.css). The sidebar's own
+// `--zIndex-ui-library: 120` is private to `.excalidrawLayer`, which is
+// `position: absolute` with a z-index (--ad-z-drawing) and therefore a
+// stacking context — so the sidebar resolves at --ad-z-drawing in the band
+// this handle competes in, and --ad-z-overlay is enough to sit over its edge. Same reasoning as SheetRail's tooltip.
 //
 // Accessibility: a focusable `role="separator"` window splitter — the ARIA
 // pattern for exactly this control. It carries an accessible name,

@@ -73,7 +73,7 @@
 
 .iconFallback {
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 600;
   line-height: 1;
 }
@@ -85,19 +85,19 @@
   top: 50%;
   /* Opens leftward, i.e. over the map plate — and over the right sidebar when
    * it is open. Both the sidebar (--zIndex-ui-library: 120) and the collar
-   * legend (4) live inside .excalidrawLayer, which is `position: absolute;
-   * z-index: 1` and therefore a stacking context: their high z-indices are
-   * private to it and cap at 1 in the shared context this tooltip resolves
-   * against (nothing between .slot and <body> is a stacking context). So the
-   * band that matters is the ladder's toolbar/banner band, 10 — the same one
+   * legend (4) live inside .excalidrawLayer, which is `position: absolute`
+   * with a z-index and therefore a stacking context: their high z-indices are
+   * private to it and cap at --ad-z-drawing in the shared context this
+   * tooltip resolves against (nothing between .slot and <body> is a stacking
+   * context). So the band that matters is --ad-z-overlay — the same one
    * .collabRoomError uses to sit over plate content. Verified topmost with the
    * sidebar closed, docked, and undocked. */
   right: calc(100% + var(--ad-space-1));
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   transform: translateY(-50%);
   padding: var(--ad-space-1) var(--ad-space-compact);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   white-space: nowrap;
   color: var(--ad-ink);
