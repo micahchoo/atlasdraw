@@ -36,7 +36,7 @@
 .heading {
   margin: 0;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   color: var(--text-primary-color, var(--ad-ink));
 }
@@ -74,18 +74,18 @@
 .threadsCount {
   margin-left: auto;
   font-family: var(--ad-font-mono);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   font-weight: 400;
   padding: 1px 5px;
   color: var(--ad-ink-inverse);
   background: var(--ad-accent);
-  border-radius: 7px;
+  border-radius: var(--ad-radius-pill);
 }
 
 .empty {
   margin: 0;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }
@@ -133,7 +133,7 @@
   padding: 2px;
   cursor: grab;
   color: var(--ad-ink-tertiary);
-  border-radius: 3px;
+  border-radius: var(--ad-radius-xs);
   flex-shrink: 0;
 }
 
@@ -170,7 +170,7 @@
  * Needs its own background — rows are transparent over the sidebar's — and its
  * own z-index, or the card body it is pinned above paints over it. A ⋯ menu
  * that opens downward from the row above must clear this header, so `.menu`
- * sits at 3 (e2e/layer-menu-stacking.spec.ts). The negative-margin/padding
+ * sits one step over it (e2e/layer-menu-stacking.spec.ts). The negative-margin/padding
  * pair makes the pinned strip span the row's full width instead of leaving a
  * transparent gutter where `.row`'s padding is.
  *
@@ -181,7 +181,7 @@
 .rowTopSticky {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: var(--ad-z-pinned);
   margin: calc(-1 * var(--row-pad-y)) calc(-1 * var(--row-pad-x)) 0;
   padding: var(--row-pad-y) var(--row-pad-x);
   background: var(--sidebar-bg-color, var(--ad-surface));
@@ -211,7 +211,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   color: var(--text-primary-color, var(--ad-ink));
 }
@@ -248,7 +248,7 @@
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 /* --- filter (appears at >= 10 data layers) --------------------------------- */
@@ -265,7 +265,7 @@
   background: var(--ad-surface-inset);
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .filterInput:focus-visible {
@@ -287,8 +287,8 @@
   position: absolute;
   top: 100%;
   right: 0;
-  /* Above a pinned row header (2) when this row is not pinned itself. */
-  z-index: 3;
+  /* Above a pinned row header when this row is not pinned itself. */
+  z-index: calc(var(--ad-z-pinned) + var(--ad-z-raised));
   min-width: 140px;
   display: flex;
   flex-direction: column;
@@ -306,7 +306,7 @@
   background: transparent;
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -328,14 +328,14 @@
   margin: 0;
   padding: var(--ad-space-1) var(--ad-space-2);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-secondary);
 }
 
 .featureCount {
   flex-shrink: 0;
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--ad-ink-tertiary);
@@ -389,8 +389,8 @@
   display: inline-block;
   min-width: 16px;
   padding: 0 4px;
-  border-radius: 3px;
-  font-size: 10px;
+  border-radius: var(--ad-radius-xs);
+  font-size: var(--ad-text-2xs);
   font-weight: 700;
   text-align: center;
 }
@@ -423,7 +423,7 @@
   height: var(--default-button-size, 2rem);
   padding: 0;
   border: 1px solid var(--default-border-color, var(--ad-rule));
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--island-bg-color, var(--ad-surface-raised));
   color: var(--text-primary-color, var(--ad-ink));
   cursor: pointer;
@@ -470,7 +470,7 @@
 .detailHeading {
   margin: var(--ad-space-3) 0 var(--ad-space-1);
   font-family: var(--ad-font-sans);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   font-weight: 600;
   color: var(--ad-ink-tertiary);
   text-transform: uppercase;
@@ -493,7 +493,7 @@
 }
 
 .metaLabel {
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   font-weight: 600;
   color: var(--ad-ink-tertiary);
   text-transform: uppercase;
@@ -502,7 +502,7 @@
 
 .metaValue {
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-secondary);
 }
@@ -520,7 +520,7 @@
   background: var(--ad-surface-raised);
   color: var(--ad-ink-secondary);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   cursor: pointer;
 }
@@ -540,7 +540,7 @@
 .attrTable table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
 }
 
 .attrTable th {
@@ -567,7 +567,7 @@
 .attrHint {
   margin-top: var(--ad-space-1);
   font-family: var(--ad-font-sans);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   color: var(--ad-ink-tertiary);
 }
 
@@ -579,7 +579,7 @@
 
 .styleRefused {
   margin: 6px 0 0;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   line-height: 1.4;
   color: var(--ad-danger);
   overflow-wrap: anywhere;
@@ -593,7 +593,7 @@
 }
 
 .styleGridLabel {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--text-primary-color, var(--ad-ink));
 }
@@ -628,10 +628,10 @@
   min-width: 0;
   padding: 4px 6px;
   border: 1px solid var(--ad-rule, #dee2e6);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised, #ffffff);
   color: var(--ad-ink, #212529);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   text-align: left;
   cursor: pointer;
 }
@@ -675,10 +675,10 @@
   gap: 6px;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: transparent;
   color: var(--ad-ink, #212529);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   text-align: left;
   cursor: pointer;
 }

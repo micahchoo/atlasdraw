@@ -34,7 +34,7 @@
   background: transparent;
   color: var(--ad-ink-secondary);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -70,7 +70,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .fieldLabel {
@@ -83,7 +83,7 @@
   height: 1.5rem;
   padding: 0;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   cursor: pointer;
 }
 
@@ -93,8 +93,8 @@
   flex: 1;
   padding: 2px 6px;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--ad-radius-sm);
+  font-size: var(--ad-text-sm);
   font-family: inherit;
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
@@ -118,8 +118,8 @@
   flex: 1;
   padding: 2px 6px;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--ad-radius-sm);
+  font-size: var(--ad-text-sm);
 }
 
 .stopRow input[type="color"] {
@@ -127,7 +127,7 @@
   height: 1.5rem;
   padding: 0;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
 }
 
 .stopRow button {
@@ -135,10 +135,10 @@
   height: 1.5rem;
   padding: 0;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 .stopRow button:hover {
@@ -159,7 +159,7 @@
   min-width: 60px;
   padding: 0;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   cursor: pointer;
 }
 
@@ -185,15 +185,15 @@
   align-items: flex-end;
   justify-content: center;
   padding: 2px;
-  border-radius: 2px;
+  border-radius: var(--ad-radius-xs);
 }
 
 .previewLabel {
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   background: var(--ad-veil);
   color: var(--ad-ink);
   padding: 0 2px;
-  border-radius: 2px;
+  border-radius: var(--ad-radius-xs);
 }
 
 /* --- buttons -------------------------------------------------------------- */
@@ -201,10 +201,10 @@
 .applyBtn {
   padding: 6px 12px;
   border: 1px solid var(--ad-accent);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-accent);
   color: var(--ad-ink-inverse);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -217,10 +217,10 @@
 .secondaryBtn {
   padding: 4px 8px;
   border: 1px solid var(--ad-rule);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   cursor: pointer;
 }
 
@@ -232,7 +232,7 @@
 
 .error {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   line-height: 1.4;
   color: var(--ad-danger);
   overflow-wrap: anywhere;
@@ -253,7 +253,7 @@
 
 .sectionHeading {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   color: var(--ad-ink);
 }
@@ -266,7 +266,7 @@
 
 .note {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   line-height: 1.4;
   color: var(--ad-ink-secondary);
 }

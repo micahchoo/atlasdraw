@@ -56,6 +56,53 @@ describe("design tokens", () => {
     expect(literals).toEqual([]);
   });
 
+  it("no CSS module sets a font size, z-index or radius that is not a token", () => {
+    // Before 2026-10-02 the modules held 13 font sizes, 11 z-index values and
+    // 8 radii as literals; the z-index ladder lived only in comments.
+    // 0, 50% and keywords stay: they are not a choice on a scale.
+    const SCALED =
+      /^\s*(font-size|z-index|border(?:-[a-z]+)*-radius)\s*:\s*([^;]+);/;
+    const literals = readdirSync(STYLES)
+      .filter((f) => f.endsWith(".module.css"))
+      .flatMap((f) =>
+        withoutVars(readFileSync(path.join(STYLES, f), "utf8"))
+          .split("\n")
+          .filter((line) => {
+            const value = SCALED.exec(line)?.[2];
+            return (
+              value !== undefined && /\d/.test(value.replace(/\b0\b|50%/g, ""))
+            );
+          })
+          .map((line) => `${f}: ${line.trim()}`),
+      );
+    expect(literals).toEqual([]);
+  });
+
+  it("every token a CSS module reads is defined", () => {
+    // A misspelt token is not an error in CSS: `z-index: var(--ad-z-overlya)`
+    // computes to `auto` and the surface drops under the map.
+    // --ad-sheet-panel-inset is set at run time on the collar shell.
+    const defined = new Set([
+      ...properties(
+        readFileSync(path.join(STYLES, "tokens.css"), "utf8"),
+      ).keys(),
+      "--ad-sheet-panel-inset",
+    ]);
+    const undefinedTokens = readdirSync(STYLES)
+      .filter((f) => f.endsWith(".module.css"))
+      .flatMap((f) =>
+        [
+          ...readFileSync(path.join(STYLES, f), "utf8").matchAll(
+            /var\((--ad-[a-z0-9-]+)/g,
+          ),
+        ]
+          .map((m) => m[1]!)
+          .filter((name) => !defined.has(name))
+          .map((name) => `${f}: ${name}`),
+      );
+    expect(undefinedTokens).toEqual([]);
+  });
+
   it("every colour token has a dark value", () => {
     const css = readFileSync(path.join(STYLES, "tokens.css"), "utf8");
     const light = properties(block(css, ":root"));
