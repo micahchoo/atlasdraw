@@ -17,6 +17,7 @@ The Atlasdraw relay. It holds one Y.Doc per room and syncs it to every connectio
 | `MAX_CONNECTIONS_PER_IP` | `64` | Open connections from one client address (4429). `0`: no limit |
 | `ROOM_EXPIRY_DAYS` | `90` | Delete a room nobody was in for this many days. `0`: never |
 | `ROOM_SWEEP_INTERVAL_MS` | `3600000` | How often the expiry sweep runs. It also runs at start |
+| `LOG_LEVEL` | `info` | The pino log level |
 | `TRUST_PROXY` | `false` | Read the client address from `X-Forwarded-For`: `true`, `false` or the number of proxies in front. Set `1` behind one reverse proxy |
 
 The two size defaults come from `@atlasdraw/protocol` `ROOM_SIZE`, which the editor also reads: it seeds a room in messages under the cap and refuses a map over it. Set either lower and the editor lets users make what this relay refuses (the relay warns at start). `yarn build` bundles the protocol into `dist/index.js` (`build.mjs`).

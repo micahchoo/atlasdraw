@@ -114,8 +114,8 @@ The web image bundles everything the "Light" and "Dark" basemaps draw with:
 
 - `world-low-zoom.pmtiles` (43 MB): the world to zoom 5. It has country,
   region and city names, and no streets.
-- The label glyphs (three Noto Sans stacks, all 256 ranges, 11.1 MB on
-  disk) and the icon sprites, in `/basemap/`. They are copies of
+- The label glyphs (four Noto Sans stacks, Devanagari among them, all 256
+  ranges, 11.5 MB) and the icon sprites, in `/basemap/`. They are copies of
   `protomaps/basemaps-assets` at one pinned commit
   (`code/apps/atlas-app/scripts/vendor-basemap-assets.sh`).
 
@@ -349,7 +349,7 @@ explicit migration steps.
   (ADR-0020). The owner opens them with **File → Server versions…** and can
   restore one or open it as a copy. Only the write key reads them.
 - **Storage capacity.** An average atlasdraw document is 30–500 KB
-  compressed; basemap pmtiles (43 MB) and its glyphs (11 MB) are baked
+  compressed; basemap pmtiles (43 MB) and its glyphs (11.5 MB) are baked
   into the web image, not the volume. 10 GB of bucket space holds ~30–100k maps. A map with a write
   key is never deleted by the server, because its owner may come back.
   Each document has one server map; sharing again updates it.
@@ -585,4 +585,4 @@ binds to the host's 80/443.
 - **[Error capture (ADR-0009)](../architecture/adr/0009-error-capture.md)**
   — opt-in Sentry path and its PII scrubbing.
 
-License: [AGPL-3.0-only](../../LICENSE).
+License: [AGPL-3.0-only](../../code/LICENSE-AGPL).

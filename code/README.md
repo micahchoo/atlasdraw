@@ -9,7 +9,7 @@ This folder is the Atlasdraw code: a Yarn 4 workspace with three apps and eleven
 - `apps/realtime/` — the relay for live rooms.
 - `packages/geo/`, `packages/basemap/`, `packages/tools/`, `packages/data/`, `packages/protocol/`, `packages/cli/` — the Atlasdraw packages.
 - `packages/excalidraw/`, `packages/element/`, `packages/math/`, `packages/common/`, `packages/utils/` — the Excalidraw fork. Atlasdraw owns it; nothing syncs from upstream (`decisions/0010-own-the-fork.md`).
-- `bench/` — performance benchmarks and the CI regression gate.
+- `bench/` — parse timings for `packages/data`, and an A/B gate that CI runs as a report only.
 - `decisions/` — ADR 0001–0010 and the early research notes.
 
 ## Quick start

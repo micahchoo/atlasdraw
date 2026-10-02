@@ -2,7 +2,7 @@
 
 ## Set up
 
-Use Node 20 (`../.nvmrc`). From this folder:
+Use Node 22 (`../.nvmrc`). From this folder:
 
 ```bash
 corepack enable

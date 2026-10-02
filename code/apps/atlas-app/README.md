@@ -51,7 +51,7 @@ Every `VITE_*` variable is read once, through the schema in `src/config/app-conf
 
 Share links for large maps and "Server versions…" always use `VITE_STORAGE_BASE_URL` (empty: the same origin).
 
-The other variables are listed in `docs/self-host/README.md` at the repository root.
+`.env.example` lists every variable with its default.
 
 ## Where things are
 
