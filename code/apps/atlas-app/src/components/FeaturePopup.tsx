@@ -208,7 +208,7 @@ function PinBody({ pin }: { pin: PinHit }) {
         <img
           className={styles.photo}
           src={photo}
-          alt={title ?? "Photo of the pin"}
+          alt={title ?? "Pin"}
           data-testid="pin-popup-photo"
         />
       )}

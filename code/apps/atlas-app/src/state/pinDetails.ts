@@ -14,9 +14,18 @@
 // text nodes only. A link is kept only when it is http or https
 // (`safeLink`), and the page shows it with rel="noopener noreferrer".
 //
-// Pure: the gate's node tests load it.
+// The editor writes details with `setPinDetails`: one step of the drawing's
+// own history, so Ctrl+Z takes it back like a move or a recolor.
+//
+// No DOM: the gate's node tests load it.
 
+import { CaptureUpdateAction, newElementWith } from "@atlasdraw/element";
 import { sceneUnitsPerPixel, toScene, type WorldFrame } from "@atlasdraw/geo";
+
+import type {
+  BinaryFileData,
+  ExcalidrawImperativeAPI,
+} from "@atlasdraw/excalidraw/types";
 
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
@@ -180,4 +189,67 @@ export function photoUrlOf(
 ): string | null {
   const url = details.photo ? files[details.photo]?.dataURL : undefined;
   return typeof url === "string" && url.startsWith("data:image/") ? url : null;
+}
+
+/** The selected element when it is one pin; null otherwise. */
+export function selectedPin(
+  api: Pick<ExcalidrawImperativeAPI, "getAppState" | "getSceneElements">,
+): ExcalidrawElement | null {
+  const selected = api.getAppState().selectedElementIds;
+  const ids = Object.keys(selected).filter((id) => selected[id]);
+  if (ids.length !== 1) {
+    return null;
+  }
+  const el = api.getSceneElements().find((e) => e.id === ids[0]);
+  return el && isPin(el) ? el : null;
+}
+
+/** A photo the user picked, before it is a file of the drawing. */
+export interface PinPhoto {
+  mimeType: string;
+  dataURL: string;
+}
+
+/**
+ * Write `details` onto the pin `pinId`, as one step of the drawing's
+ * history. A new `photo` is added as a file of the drawing and named on the
+ * pin. Nothing happens when `pinId` is no live pin.
+ */
+export function setPinDetails(
+  api: Pick<
+    ExcalidrawImperativeAPI,
+    "getSceneElementsIncludingDeleted" | "updateScene" | "addFiles"
+  >,
+  pinId: string,
+  details: PinDetails,
+  photo?: PinPhoto,
+): void {
+  const all = api.getSceneElementsIncludingDeleted();
+  const target = all.find((e) => e.id === pinId);
+  if (!target || target.isDeleted || !isPin(target)) {
+    return;
+  }
+  let next = details;
+  if (photo) {
+    const id = `pin-photo-${crypto.randomUUID()}`;
+    api.addFiles([
+      {
+        id,
+        mimeType: photo.mimeType,
+        dataURL: photo.dataURL,
+        created: Date.now(),
+      } as unknown as BinaryFileData,
+    ]);
+    next = { ...details, photo: id };
+  }
+  api.updateScene({
+    elements: all.map((e) =>
+      e.id === pinId
+        ? newElementWith(e, {
+            customData: withPinDetails(e.customData, next),
+          })
+        : e,
+    ),
+    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  });
 }

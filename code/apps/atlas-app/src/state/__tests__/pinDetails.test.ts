@@ -18,9 +18,13 @@ import {
   pinAt,
   readPinDetails,
   safeLink,
+  selectedPin,
+  setPinDetails,
   withPinDetails,
 } from "../pinDetails";
 import { checkElement } from "../roomValidation";
+
+import { makeFakeExcalidraw } from "./fixtures/documentWorld";
 
 // The links an attacker writes. The rule against script URLs is for code
 // that follows them; these are refused.
@@ -133,6 +137,7 @@ function pin(
     y: c.y - d / 2,
     width: d,
     height: d,
+    version: 1,
     isDeleted: false,
     customData: { tool: "pin", ...extra },
   } as unknown as ExcalidrawElement;
@@ -235,5 +240,89 @@ describe("photoUrlOf", () => {
     expect(
       photoUrlOf({ photo: "f" }, { f: { dataURL: "https://x.example/p.png" } }),
     ).toBeNull();
+  });
+});
+
+describe("selectedPin", () => {
+  const fx = () =>
+    makeFakeExcalidraw([
+      pin("p", 13.4, 52.5, 12) as never,
+      { ...pin("e", 13.4, 52.5, 12), customData: {} } as never,
+    ]);
+
+  it("is the pin when it is the one selected element", () => {
+    const { api } = fx();
+    api.updateScene({ appState: { selectedElementIds: { p: true } } as never });
+    expect(selectedPin(api)?.id).toBe("p");
+  });
+
+  it("is null for no selection, two elements, or an ellipse that is no pin", () => {
+    const { api } = fx();
+    expect(selectedPin(api)).toBeNull();
+    api.updateScene({
+      appState: { selectedElementIds: { p: true, e: true } } as never,
+    });
+    expect(selectedPin(api)).toBeNull();
+    api.updateScene({ appState: { selectedElementIds: { e: true } } as never });
+    expect(selectedPin(api)).toBeNull();
+  });
+});
+
+describe("setPinDetails", () => {
+  const PNG = "data:image/png;base64,AAAA";
+
+  function setup() {
+    const fx = makeFakeExcalidraw([
+      pin("p", 13.4, 52.5, 12, { atlas: { unit: 2 } }) as never,
+    ]);
+    const captured: unknown[] = [];
+    const update = fx.api.updateScene.bind(fx.api);
+    fx.api.updateScene = ((o: { captureUpdate?: unknown }) => {
+      captured.push(o.captureUpdate);
+      update(o as never);
+    }) as typeof fx.api.updateScene;
+    return { ...fx, captured };
+  }
+
+  it("writes the details as one undoable step, with a new version", () => {
+    const { api, all, captured } = setup();
+    const before = all()[0] as unknown as { version: number };
+    setPinDetails(api, "p", { title: "Well", link: "https://example.org/" });
+
+    const el = all()[0] as unknown as {
+      version: number;
+      customData: Record<string, unknown>;
+    };
+    expect(el.customData).toEqual({
+      tool: "pin",
+      atlas: { unit: 2 },
+      pin: { title: "Well", link: "https://example.org/" },
+    });
+    expect(el.version).toBeGreaterThan(before.version);
+    expect(captured).toEqual(["IMMEDIATELY"]);
+  });
+
+  it("adds the photo as a drawing file and names it on the pin", () => {
+    const { api, all } = setup();
+    setPinDetails(
+      api,
+      "p",
+      { title: "Well" },
+      { mimeType: "image/png", dataURL: PNG },
+    );
+
+    const photo = readPinDetails(
+      (all()[0] as unknown as { customData: unknown }).customData,
+    ).photo;
+    expect(photo).toBeTruthy();
+    expect(photoUrlOf({ photo }, api.getFiles())).toBe(PNG);
+  });
+
+  it("does nothing for an id that is no pin", () => {
+    const { api, all, captured } = setup();
+    const before = all();
+    setPinDetails(api, "nope", { title: "Well" });
+    expect(all()).toBe(before);
+    expect(captured).toEqual([]);
   });
 });
