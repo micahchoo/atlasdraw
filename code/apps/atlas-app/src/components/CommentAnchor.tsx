@@ -21,6 +21,8 @@ import React, { useEffect, useState } from "react";
 
 import { normalizeAnchor } from "@atlasdraw/protocol";
 
+import { CommentIcon } from "../lib/icons";
+
 import styles from "../styles/CommentAnchor.module.css";
 
 import type { Comment } from "../state/comments";
@@ -96,18 +98,7 @@ export function CommentAnchor(props: CommentAnchorProps): React.JSX.Element {
         onClick={() => setOpen((v) => !v)}
         data-testid={`comment-anchor-button-${comment.id}`}
       >
-        <svg
-          className={styles.icon}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M2 3h12v8H6l-3 3v-3H2z" />
-        </svg>
+        <CommentIcon className={styles.icon} strokeWidth={2} />
       </button>
 
       {open && (

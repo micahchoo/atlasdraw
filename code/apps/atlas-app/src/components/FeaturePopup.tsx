@@ -25,6 +25,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { attributeRows, type FeatureHit } from "../lib/featureHit";
+import { CloseIcon } from "../lib/icons";
 import {
   POPUP_ROWS,
   type OpenPopup,
@@ -148,16 +149,7 @@ function OpenFeaturePopup({
           data-testid="feature-popup-close"
           onClick={onClose}
         >
-          <svg
-            className={styles.icon}
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
+          <CloseIcon className={styles.icon} />
         </Button>
       </div>
       {"kind" in hit ? (
