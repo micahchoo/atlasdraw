@@ -1,6 +1,7 @@
 # PR-FAQ — Read-only map embed
 
-Working-backwards spec for DIVERGENCES.md **D1**. Written from the
+Working-backwards spec for DIVERGENCES.md **D1** (a deleted ledger, like
+the `ledgers/` files below; `git log` holds them). Written from the
 `pr-faq interview` convergence loop (ledger: `ledgers/PRFAQ-EMBED.md`),
 2026-07-05. This document is a spec, not code. Building is gated — see
 DIVERGENCES.md §Gate and the Feasible FAQ below.
@@ -19,23 +20,25 @@ the code does on 2026-10-01.
 
 - The `/embed` route, for a map in the link (`/embed#v2:…`) and a map on the
   server (`/embed/<token>`). It shows the basemap, the data, raster and tile
-  layers, and the drawing, at the saved camera. `/m` is the same viewer with a
+  layers, the drawing, and the map's credits. `/m` is the same viewer with a
   title and a link that opens a copy in the editor. `ShareView` is deleted.
-- An **Embed** section in the Share dialog that copies an `<iframe>` snippet.
-- `?lock=1` fixes the camera and turns off feature popups. Without it, a click
-  on a feature shows its attributes.
-- `EMBED_FRAME_ANCESTORS` in the Caddyfile, default `*` (ADR-0012).
+- An **Embed** section in the Share dialog that copies an `<iframe>` snippet:
+  full width in a 16:10 box, or a fixed height.
+- URL options (`code/apps/atlas-app/src/lib/embed.ts`): `lock=1` fixes the
+  camera and turns off feature popups; `legend=1` shows a legend of the
+  layers in view; `view=fit` (the default for `/embed`) fits the content,
+  and `view=saved` opens at the saved camera. An unlocked embed uses
+  cooperative gestures, so it does not take the page's scroll.
+- `EMBED_FRAME_ANCESTORS`, default `*`, sent by the `web` container's nginx
+  on `/embed/*` only (ADR-0012, "As built").
 - Embeds last. A server link lives until its owner stops it (a 7- or 30-day
-  expiry is optional), and it shows the map's latest save, so an edit reaches
-  every embed (`docs/architecture/adr/0017-maps-carry-a-write-key.md`). A link
-  that carries the map in the URL never expires.
+  expiry is optional). It shows each new save, so an edit reaches every
+  embed, or one version the owner froze
+  (`docs/architecture/adr/0020-server-version-history.md`). A link that
+  carries the map in the URL never expires.
 
-**Not shipped:** the `legend` and `attribution` parameters, the script-tag
-option, the SRI hash and the PNG fallback. The embed shows no legend.
-
-**Known gap:** `infra/docker-compose.yml` does not pass
-`EMBED_FRAME_ANCESTORS` from `.env` to the `caddy` container, so the default
-`*` applies until an operator adds it to that service's `environment`.
+**Not shipped:** the script-tag option, the SRI hash and the PNG fallback.
+The embed shows a turned map north-up.
 
 ---
 
@@ -44,11 +47,11 @@ option, the SRI hash and the PNG fallback. The embed shows no legend.
 **Atlasdraw maps now embed anywhere — one `<iframe>`, no per-pageview bill.**
 
 Until today, finishing a map in Atlasdraw meant the last mile happened
-*outside* the app. You'd export a flat 2× PNG and drop the image into your CMS
+_outside_ the app. You'd export a flat 2× PNG and drop the image into your CMS
 — losing the pan, the layers, the crispness — or paste a share link that
 opened the whole editor, chrome and all, in your reader's face. The one thing
-the product promised at the top of its own vision — *"a map as easy to embed
-as a Google Doc"* — was the one thing you couldn't do.
+the product promised at the top of its own vision — _"a map as easy to embed
+as a Google Doc"_ — was the one thing you couldn't do.
 
 Now you can. Open any shared map, click **Embed**, and copy a two-line
 `<iframe>` snippet. Paste it into your CMS, your docs site, your blog. Your
@@ -62,7 +65,7 @@ embed views are free, uncounted, forever.
 
 For Priya, the data journalist who ships two to four map stories a month, this
 closes the loop the tool was built to close: import a CSV, draw the story,
-share a draft, and *publish* — all in Atlasdraw, all in an afternoon.
+share a draft, and _publish_ — all in Atlasdraw, all in an afternoon.
 
 ---
 
@@ -72,7 +75,7 @@ share a draft, and *publish* — all in Atlasdraw, all in an afternoon.
   regional newsroom, ships 2–4 map stories a month, needs a responsive map in
   her CMS without ArcGIS/Mapbox billing surprises.
 - **Struggling moment:** she has a finished map and a deadline, and no way to
-  put it on the web *as a map*. Today's workaround is a static 2× PNG export —
+  put it on the web _as a map_. Today's workaround is a static 2× PNG export —
   the exact "screenshot of QGIS anti-pattern" the PRD rails against (§2, §49)
   — or a raw share link that opens the full editor chrome instead of a clean
   embed. Evidence: PRD §4 JTBD #3, §8 Flow 3; README "out of scope for 1.0";
@@ -99,9 +102,9 @@ share a draft, and *publish* — all in Atlasdraw, all in an afternoon.
 ### Valuable? (is this worth a customer's attention)
 
 Yes, and the evidence is the product's own foundations. Embedding is wedge
-point **(f)** in PRD §6 — "the only tool that is *all* of (a)…(f)… The
+point **(f)** in PRD §6 — "the only tool that is _all_ of (a)…(f)… The
 intersection is empty. That's the product." It is the closing third of the
-three dominant JTBDs (§4 #3, *present-and-embed*). It is the entire second
+three dominant JTBDs (§4 #3, _present-and-embed_). It is the entire second
 half of Persona A's reason to adopt. The current behaviour — export a dead
 PNG — is a workaround the PRD explicitly names as an anti-pattern, which is
 demand written in behaviour rather than in a feature request.
@@ -112,18 +115,18 @@ demand written in behaviour rather than in a feature request.
 map appears — pan-crisp, legend and all — where a flat screenshot used to be.
 
 **Time-to-aha:** seconds. The snippet is copy-button-adjacent to the share
-link Priya already generates in **ShareDialog**; we add an *Embed* section
+link Priya already generates in **ShareDialog**; we add an _Embed_ section
 beside it. Configuration is plain URL params (`?legend=0&attribution=br&lock=1`)
 — discoverable, no API, no docs-deep-dive. Graceful PNG fallback means the
-embed still shows *something* even in a CMS that strips scripts.
+embed still shows _something_ even in a CMS that strips scripts.
 
 ### Feasible? (blast radius, and the load-bearing belief)
 
 > **⚠ PROBE CORRECTION (2026-07-05, `ledgers/PROBE-embed.md`).** This section's
 > "~90% built / reuse ShareView" claim was **falsified by the probe.** ShareView
-> renders *annotations on opaque white*, not a map — it drops `manifest.basemap`
+> renders _annotations on opaque white_, not a map — it drops `manifest.basemap`
 > and `manifest.camera` and has no CoordinateSync (verified in source and
-> in-browser). A read-only *map* embed must add the whole MapLibre stack
+> in-browser). A read-only _map_ embed must add the whole MapLibre stack
 > (MapCanvas + basemap resolution + camera + transparent background +
 > CoordinateSync + geo-anchor rehydration) — most of MapEditor's hard parts.
 > The cross-origin/framing risk below **is** confirmed surmountable. Net:
@@ -140,14 +143,14 @@ Originally believed small because the wedge was thought ~90% built:
   ShareView with a hand-rolled path detector.
 - **What's actually new (the two-week scope):**
   1. A new `/embed/<token>` (and `/embed#v1:<encoded>`) route → a thin
-     `EmbedView` that wraps ShareView's render with *all* outer app chrome
+     `EmbedView` that wraps ShareView's render with _all_ outer app chrome
      stripped and reads chrome/camera-lock config from URL params.
   2. Camera lock to the saved manifest bounds (disable pan/zoom when
      `lock=1`); responsive auto-fit to the iframe box.
   3. An **Embed** section in `ShareDialog` that generates the `<iframe>`
      snippet (width/height/`loading="lazy"`) from the active share token.
   4. **Iframe-safe serving:** the embed route must send
-     `Content-Security-Policy: frame-ancestors …` and must *not* send
+     `Content-Security-Policy: frame-ancestors …` and must _not_ send
      `X-Frame-Options: DENY`. New operator env var `EMBED_FRAME_ANCESTORS`
      (default `*`), threaded through the storage token-resolution response and
      the infra Caddy config. New ADR records the trade-off.
@@ -161,7 +164,7 @@ Originally believed small because the wedge was thought ~90% built:
 
 **The load-bearing belief (carried forward as the probe's kill criterion,
 immovable):** that ShareView renders correctly inside a **cross-origin
-iframe** *without* a postMessage/host-API handshake to function. If it turns
+iframe** _without_ a postMessage/host-API handshake to function. If it turns
 out the read-only canvas can't run embedded without that handshake — the very
 thing Q-P6-1 cut — then the cut was right to treat them as one piece, and this
 dies. The `thin-slice probe` (DIVERGENCES.md D1) exists to settle exactly
@@ -192,7 +195,7 @@ allowlist posture and its ADR.
   needed to close JTBD #3.
 - **Embed-view metering, and PRD §10's "25,000 unique embed views" success
   metric.** Dropped in favour of zero-telemetry purity (operator choice this
-  interview). *This revises a PRD metric* — flagged here rather than silently.
+  interview). _This revises a PRD metric_ — flagged here rather than silently.
   If the project ever wants embed reach as a KPI, it needs a privacy-preserving
   measure that doesn't violate ADR-0006, which is its own decision.
 - **Same-origin-default and per-share-allowlist framing postures.** Rejected

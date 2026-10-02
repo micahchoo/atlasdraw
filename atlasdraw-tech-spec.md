@@ -7,8 +7,9 @@
 
 This document is the engineering counterpart to the PRD. It assumes you've read the PRD and now need to know — concretely — what to build, in what order, where the seams are, and what the data shapes look like. It is mid-level: deep enough to choose libraries and design module boundaries, shallow enough to leave room for engineering judgment in the small.
 
-> **Note (2026-10-01).** This is the first plan, kept as written. Three of its
-> core designs were replaced. Read these before you trust a section here:
+> **Note (2026-10-01).** This is the first plan, kept as written, as history.
+> The code and the ADRs replaced many of its designs. Read these before you
+> trust a section here:
 >
 > - §0 and §3 (coordinate sync, `customData.geo`, re-projection on every
 >   camera move): elements are stored in world coordinates and a camera move
@@ -19,6 +20,14 @@ This document is the engineering counterpart to the PRD. It assumes you've read 
 >   `docs/architecture/adr/0018-rooms-persist-in-relay-sqlite.md`.
 > - §10 (`config.toml`): nothing reads it. The apps read environment
 >   variables; `docs/self-host/` lists them.
+> - §4.5 and §7 (`packages/sdk`, the `AtlasdrawAPI`, the plugin sandbox):
+>   deleted. A map embeds through the `/embed` route and its URL options.
+>   `docs/architecture/adr/0016-sdk-removed-cli-deferred.md`.
+> - §2, §5 and §10 (MinIO in the stack, a hosted mode): the full stack runs
+>   no object store; the operator brings an S3 bucket
+>   (`docs/architecture/adr/0019-bring-your-own-s3.md`). Atlasdraw is
+>   self-host only (`docs/architecture/adr/0013-self-host-only.md`).
+> - §2 and §4 (Maputnik): removed. The Layers panel chooses the basemap.
 >
 > The drawing tools in §4 were deleted except the pin; the native Excalidraw
 > toolbar draws on the map.
