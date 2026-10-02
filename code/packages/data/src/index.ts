@@ -87,6 +87,10 @@ export {
 } from "./csv";
 export type { CsvReadOptions, CsvImportStats } from "./csv";
 
+// Well-Known Text → GeoJSON geometry; the CSV reader uses it for a WKT
+// column.
+export { parseWKT } from "./wkt";
+
 // FeatureCollection → the text of a GeoJSON, CSV, KML or GPX file, for the
 // layer panel's "Export as …" items. The inverse of `parse`, `parseCSV`,
 // `parseKML` and `parseGPX`.

@@ -4,7 +4,13 @@
 //
 // Pure module. Text-in / FeatureCollection-out, no Yjs / MapLibre / Excalidraw.
 //
-// Detection strategy (in order, "first found wins"):
+// Geometry from a column of Well-Known Text: a column named wkt, geometry or
+// the_geom (case-insensitive) holds the geometry of each row, and no
+// lat/lng detection runs. That is the column the CSV export writes for
+// lines and areas (export.ts `toCSV`). A row whose text is not a geometry
+// is dropped and counted, like a row with no coordinates.
+//
+// Otherwise, detection strategy (in order, "first found wins"):
 //   1. Header-name match — column named lat/latitude/y wins as lat, lng/lon/
 //      long/longitude/x wins as lng. Case-insensitive. Name-based detection
 //      is authoritative: a column named "lat" is the lat column even if
@@ -37,6 +43,8 @@
 // makes no network call.
 
 import Papa from "papaparse";
+
+import { parseWKT } from "./wkt.js";
 
 import type { Feature, FeatureCollection } from "geojson";
 
@@ -91,10 +99,12 @@ export const CSV_HEURISTIC_THRESHOLD_SMALL_DATASET = 1.0;
 const LAT_NAME_RE = /^(lat|latitude|y)$/i;
 const LNG_NAME_RE = /^(lng|lon|long|longitude|x)$/i;
 const ADDRESS_NAME_RE = /^(address|location|street|addr)$/i;
+const WKT_NAME_RE = /^(wkt|geometry|the_geom)$/i;
 
 type CSVErrorCode =
   | "EMPTY_FILE"
   | "NO_COORD_COLUMNS"
+  | "NO_VALID_WKT"
   | "PARSE_FAILED"
   | "PROJECTED_COORDINATES";
 
@@ -139,6 +149,11 @@ export async function parseCSV(
   const rows = parsed.data ?? [];
   if (rows.length === 0) {
     throw new CSVParseError("EMPTY_FILE", "CSV has a header but no data rows.");
+  }
+
+  const wktCol = headers.find((h) => WKT_NAME_RE.test(h.trim()));
+  if (wktCol !== undefined) {
+    return readWktRows(headers, rows, wktCol, opts);
   }
 
   // Detection order matters: lng has the wider [-180, 180] range and would
@@ -280,6 +295,50 @@ export async function parseCSV(
     dropped: rows.length - features.length,
   });
 
+  return { type: "FeatureCollection", features };
+}
+
+/**
+ * One feature per row whose `wktCol` cell is a geometry; the other columns
+ * are its properties. A row whose cell is not a geometry is dropped and
+ * counted. A file with no geometry in the column at all is refused.
+ */
+function readWktRows(
+  headers: string[],
+  rows: Row[],
+  wktCol: string,
+  opts: CsvReadOptions | undefined,
+): FeatureCollection {
+  const numberColumns = numericColumns(headers, rows);
+  const features: Feature[] = [];
+  for (const row of rows) {
+    const cell = row[wktCol];
+    const geometry = typeof cell === "string" ? parseWKT(cell) : null;
+    if (!geometry) {
+      continue;
+    }
+    const properties: Record<string, unknown> = {};
+    for (const key of headers) {
+      if (key !== wktCol) {
+        properties[key] = numberColumns.has(key)
+          ? toFiniteNumber(row[key])
+          : row[key];
+      }
+    }
+    features.push({ type: "Feature", geometry, properties });
+  }
+  if (features.length === 0) {
+    throw new CSVParseError(
+      "NO_VALID_WKT",
+      `No row of the column "${wktCol}" holds a geometry in Well-Known ` +
+        "Text, for example POINT (30 10) or LINESTRING (30 10, 10 30).",
+    );
+  }
+  opts?.onStats?.({
+    read: rows.length,
+    emitted: features.length,
+    dropped: rows.length - features.length,
+  });
   return { type: "FeatureCollection", features };
 }
 
