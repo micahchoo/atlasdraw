@@ -1,10 +1,10 @@
-/* ConfirmDialog — an in-page question. z:100, the same band as the
+/* ConfirmDialog — an in-page question. --ad-z-dialog, as the
  * ExportDialog scrim. Uses --ad-* design tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,14 +23,14 @@
 
 .title {
   margin: 0 0 var(--ad-space-2);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 600;
   color: var(--ad-ink);
 }
 
 .body {
   margin: 0 0 var(--ad-space-4);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 400;
   color: var(--ad-ink-secondary);
 }
@@ -47,7 +47,7 @@
   border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 600;
   cursor: pointer;
 }
@@ -87,7 +87,7 @@
   align-items: flex-start;
   gap: var(--ad-space-2);
   margin: 0 0 var(--ad-space-4);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   color: var(--ad-ink);
 }
 

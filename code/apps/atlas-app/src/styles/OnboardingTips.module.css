@@ -1,16 +1,17 @@
-/* OnboardingTips — first-run tooltip walkthrough. z:100.
+/* OnboardingTips — first-run tooltip walkthrough. The scrim is --ad-z-dialog;
+ * a tip is one step over it.
  * Uses --ad-* design tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   background: var(--ad-scrim);
 }
 
 .tip {
   position: fixed;
-  z-index: 101;
+  z-index: calc(var(--ad-z-dialog) + var(--ad-z-raised));
   width: 260px;
   padding: var(--ad-space-4);
   background: var(--ad-surface-raised);
@@ -22,7 +23,7 @@
 .title {
   margin: 0 0 var(--ad-space-1);
   font-family: var(--ad-font-sans);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 600;
   color: var(--ad-ink);
 }
@@ -30,7 +31,7 @@
 .body {
   margin: 0 0 var(--ad-space-3);
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 400;
   color: var(--ad-ink-secondary);
   line-height: 1.5;
@@ -44,7 +45,7 @@
 
 .steps {
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }
@@ -60,7 +61,7 @@
   border-radius: var(--ad-radius-md);
   background: var(--ad-surface-raised);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 500;
   cursor: pointer;
   color: var(--ad-ink);
