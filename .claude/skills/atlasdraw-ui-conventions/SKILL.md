@@ -189,61 +189,19 @@ widgets.
 
 ## Icons
 
-**Atlas-app has no icon library.** Excalidraw uses inline SVG with `currentColor`.
-Follow the same pattern for any new atlas-side icons.
+**Import icons from `src/lib/icons.tsx`.** Do not write an inline `<svg>`
+icon in a component; `lib/__tests__/icons.test.tsx` refuses one.
 
-### Rules
-
-- **Inline SVG only** — no `<img>`, no CSS `background-image`, no icon font, no emoji in buttons
-- **Use `currentColor`** — stroke and fill should inherit from the parent's `color`, so hover/active state color changes propagate automatically
-- **Size via CSS** — set `width` and `height` on the `svg` element from the parent's class, not as SVG attributes
-- **No hardcoded fill colors** — `fill="currentColor"` or `fill="none" stroke="currentColor"`
-- **16px default, 20px large** — matches Excalidraw's `--default-icon-size: 1rem` / `--lg-icon-size: 1rem`
-
-### SVG template
-
-```tsx
-/* in ComponentName.module.css */
-.icon {
-  width: 1rem;   /* 16px */
-  height: 1rem;
-  flex-shrink: 0;
-}
-```
-
-```tsx
-<button type="button" className={styles.iconButton}>
-  <svg
-    className={styles.icon}
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    aria-hidden="true"
-  >
-    <path d="..." />
-  </svg>
-  <span className={styles.srOnly}>Accessible label</span>
-</button>
-```
-
-```css
-/* visually hidden but screen-reader visible */
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
-}
-```
-
-For icon buttons that also have a visible text label, omit `srOnly` — the text
-is the accessible label. Don't double-label with both visible text and `aria-label`.
+- Every icon is a component: `<SearchIcon className={styles.icon} />`.
+- 24×24 viewBox, `currentColor`, `aria-hidden`. Size it in CSS (16px is
+  `var(--default-icon-size, 1rem)`).
+- Where the app sits beside Excalidraw's chrome, `lib/icons` re-exports
+  Excalidraw's own icon (`PinIcon`, `SearchIcon`, `CloseIcon`, `EyeIcon`,
+  `DotsIcon`, the chevrons). A new icon that Excalidraw has: re-export it
+  there. One it lacks: draw it there, tabler style, with `drawn(...)`.
+- An icon-only button is `<Button variant="ghost-icon" aria-label="…">`.
+- Map drawings (remote cursors, the measured path, the compass dial) are
+  not icons and stay where they are drawn.
 
 ---
 
@@ -442,7 +400,7 @@ says what paints above and below it.
 | New CSS module | `code/apps/atlas-app/src/styles/MyComponent.module.css` |
 | New hook | `code/apps/atlas-app/src/hooks/useMyHook.ts` |
 | Sidebar tab body | A function component returning **body markup only** — no `<Sidebar>` wrapper. Mount via `excalidrawAPI.registerSidebarTab({ name, label, content: <Body/> })` from inside a `useEffect` keyed on `excalidrawAPI`; return the unsubscribe. Open via `excalidrawAPI.toggleSidebar({ name: DEFAULT_SIDEBAR.name, tab: <name> })`. **Never** render `<Sidebar name="...">` directly — that creates a parallel sidebar with no public trigger button. |
-| SVG icon | Inline in component; no separate icon file |
+| Icon | `src/lib/icons.tsx` (re-export Excalidraw's, or draw it there) |
 
 ---
 
@@ -502,7 +460,7 @@ Neither check can see a weak assertion that does run. That one is on you.
 - [ ] **Colors:** `--ad-*` tokens; no new hex values
 - [ ] **Scales:** colours, font sizes, radii and z-index are `--ad-*` tokens (`tokens.test.ts` enforces it)
 - [ ] **Buttons:** `components/Button.tsx`, no new button class
-- [ ] **Icons:** inline SVG, `currentColor`, `aria-hidden="true"`, `width`/`height` from CSS
+- [ ] **Icons:** from `lib/icons.tsx`, sized in CSS
 - [ ] **Text:** correct size/weight for the role
 - [ ] **`type="button"`** on every `<button>`
 - [ ] **`aria-pressed`** on toggles
