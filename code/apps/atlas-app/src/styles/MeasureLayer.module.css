@@ -1,12 +1,12 @@
 /* MeasureLayer — the Measure tool's overlay and path, and the values it puts
- * in the tool-options bar. The overlay is in the atlas-tool band (z 5, see
- * .atlasToolOverlay in MapEditor.module.css); the bar is ToolOptionsBar's
- * (z 10). No new band. */
+ * in the tool-options bar. The overlay is in the atlas-tool band
+ * (--ad-z-tool-overlay, as .atlasToolOverlay); the bar is ToolOptionsBar's
+ * (--ad-z-overlay). No new band. */
 
 .overlay {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: var(--ad-z-tool-overlay);
   pointer-events: auto;
   cursor: crosshair;
   touch-action: none;
@@ -47,7 +47,7 @@
 
 .value {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--ad-ink);
@@ -62,7 +62,7 @@
 
 .hint {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
   white-space: nowrap;
@@ -76,7 +76,7 @@
   background: var(--ad-surface-raised);
   color: var(--ad-ink-secondary);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   white-space: nowrap;
   cursor: pointer;
 }

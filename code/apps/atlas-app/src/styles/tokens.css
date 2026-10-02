@@ -1,8 +1,9 @@
 /* Atlasdraw Design Tokens.
  *
- * Every colour on an app surface comes from here; styles/__tests__/
- * tokens.test.ts refuses a colour literal in a CSS module. Prefix --ad-
- * (atlasdraw) avoids collisions with Excalidraw's --color-* namespace.
+ * Every colour, font size, radius and z-index on an app surface comes from
+ * here; styles/__tests__/tokens.test.ts refuses a literal in a CSS module.
+ * Prefix --ad- (atlasdraw) avoids collisions with Excalidraw's --color-*
+ * namespace.
  *
  * Two themes. `:root` is light. `:root[data-ad-theme="dark"]` redefines every
  * colour token; hooks/useThemeAttribute.ts sets the attribute from
@@ -77,15 +78,55 @@
 
   /* Radius -------------------------------------------------------------------- */
 
-  --ad-radius-sm: 4px;
-  --ad-radius-md: 6px;
-  --ad-radius-lg: 10px;
+  --ad-radius-xs: 2px; /* a key cap, a swatch, a badge in a row */
+  --ad-radius-sm: 4px; /* a button, an input, a chip */
+  --ad-radius-md: 6px; /* a popover, a toast, a card in a panel */
+  --ad-radius-lg: 10px; /* a dialog */
+  --ad-radius-pill: 999px; /* a count badge: round ends at any width */
 
   /* Typography ---------------------------------------------------------------- */
 
   --ad-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
   --ad-font-mono: ui-monospace, "Cascadia Code", "Fira Code", "JetBrains Mono",
     monospace;
+
+  /* Type scale. Seven steps, each one a size the UI already used many times.
+   * 9px, 9.5px and 10.5px were one-off variants of a neighbour and now use it;
+   * 15px became 16px. */
+  --ad-text-2xs: 10px; /* marginalia: collar ticks, counts, key caps */
+  --ad-text-xs: 11px; /* metadata, hints, captions, the status bar */
+  --ad-text-sm: 12px; /* panel body text, form controls */
+  --ad-text-md: 13px; /* menu items, banners, dialog body */
+  --ad-text-lg: 14px; /* a primary button, a panel heading */
+  --ad-text-xl: 16px; /* a dialog title */
+  --ad-text-2xl: 20px; /* a page message title, a large glyph */
+
+  /* Z-index ladder. These are the stacking bands of the editor root
+   * (MapEditor.module.css .root) and of <body>, where fixed and portaled
+   * surfaces paint. A z-index inside a component's own stacking context
+   * does not reach this ladder; it uses the local steps below.
+   *
+   * Excalidraw's collar legend (.App-collar-legend, LayerUI.scss in the fork)
+   * paints at 4 inside the drawing layer's own stacking context, so it is not
+   * on this ladder. */
+  --ad-z-map: 0; /* MapLibre */
+  --ad-z-drawing: 1; /* Excalidraw, with its toolbar and sidebar inside */
+  --ad-z-cursor: 2; /* the room's cursors */
+  --ad-z-legend: 3; /* the map's legend and credit in the embed */
+  --ad-z-tool-overlay: 5; /* an atlas tool's capture layer, measure lines */
+  --ad-z-neatline: 6; /* the collar's inner neatline, printed over the map */
+  --ad-z-overlay: 10; /* hints, banners, popups, presence, compass, handles */
+  --ad-z-toast: 50; /* the toasts and their live regions */
+  /* A popover portaled to <body>, and a dialog's scrim. One band: the later
+   * one in the DOM paints on top. */
+  --ad-z-popover: 100;
+  --ad-z-dialog: 100;
+
+  /* Local steps, inside a component's own stacking context. Combine them
+   * with calc() to say "one over that": calc(var(--ad-z-pinned) +
+   * var(--ad-z-raised)) is a menu that opens over a pinned header. */
+  --ad-z-raised: 1; /* over the content of the same context */
+  --ad-z-pinned: 2; /* a sticky header over the rows that scroll under it */
 
   /* Shadows — whisper-quiet, used only on raised surfaces --------------------- */
 

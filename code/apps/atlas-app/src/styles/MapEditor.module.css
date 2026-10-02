@@ -1,33 +1,25 @@
-/* MapEditor layout — four stacked layers inside a relative container.
+/* MapEditor layout — stacked layers inside a relative container.
  *
  * .root            — sizing root; fills whatever container App.tsx provides.
- * .mapLayer        — MapLibre GL canvas; bottom of stack (z-index 0).
- * .excalidrawLayer — Excalidraw canvas; sits on top, pointer-events disabled
- *                    by default (z-index 1). MapEditor applies
- *                    .excalidrawLayerActive to re-enable pointer-events when
- *                    drawing mode is active (useToolState).
- * CursorOverlay    — (owned by CursorOverlay.tsx) SVG layer at z-index 2,
- *                    between Excalidraw and atlas tool overlay.
+ * .mapLayer        — MapLibre GL canvas; bottom of the stack.
+ * .excalidrawLayer — Excalidraw canvas over the map. pointer-events are off
+ *                    by default. MapEditor applies .excalidrawLayerActive to
+ *                    turn them on when drawing mode is active (useToolState).
  * .fullSize        — utility; applied to <MapCanvas> so it fills .mapLayer.
  *
- * Room presence:
- *   z-index 2  — CursorOverlay SVG (pointer-events: none, cursor dots)
- *   z-index 10 — PresenceList sidebar widget (absolute, top-right)
- *                Same band as toolbar buttons — different screen region.
- *   z-index 10 — .handle (SheetPanelResizer.module.css): the sheet panel's
- *                left-edge drag handle. Same band, again a distinct region.
- *                It must sit over the right sidebar, whose internal
- *                --zIndex-ui-library (120) is private to .excalidrawLayer's
- *                stacking context and so resolves at 1 out here.
+ * The z-index ladder is the --ad-z-* tokens in tokens.css. Each band is named
+ * by its role there; this file and every other module read the tokens, and
+ * styles/__tests__/tokens.test.ts refuses a literal z-index. To add a band,
+ * add a token between two others and say what paints above and below it.
  *
- * Collar shell additions (classes live outside this file but share the ladder
- * — recorded here because MapEditor.module.css is the ladder's canonical home,
- * see .claude/skills/atlasdraw-ui-conventions/SKILL.md):
- *   z-index 4  — .App-collar-legend (packages/excalidraw/components/
- *                LayerUI.scss): collar-mode selection legend over the plate,
- *                below the atlas tool overlay (5) so tool capture still wins.
- *   z-index 6  — .plate::after (CollarShell.module.css): the printed inner
- *                double-neatline rule, above the map but below chrome (10).
+ * Two facts the tokens cannot show:
+ * - .excalidrawLayer is `position: absolute` with a z-index, so it is a
+ *   stacking context. Excalidraw's own high z-indices (the sidebar's
+ *   --zIndex-ui-library is 120) stay inside it and resolve at
+ *   --ad-z-drawing out here. A control that must paint over the sidebar
+ *   (the sheet-panel handle, the rail tooltip) needs only --ad-z-overlay.
+ * - The fork's .App-collar-legend (packages/excalidraw/components/
+ *   LayerUI.scss) paints at 4, inside that same stacking context.
  */
 
 .root {
@@ -58,7 +50,7 @@
   position: absolute;
   inset: 0;
   right: var(--ad-sheet-panel-inset, 0px);
-  z-index: 0;
+  z-index: var(--ad-z-map);
 }
 
 /* Collar shell: pull the basemap into the vellum world. CSS filter only —
@@ -70,7 +62,7 @@
 .excalidrawLayer {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: var(--ad-z-drawing);
   pointer-events: none;
 }
 
@@ -101,14 +93,14 @@
 /* --- Atlas-tool overlay -----------------------------------------------------
  *
  * .atlasToolOverlay  — full-bleed div mounted only when an atlas-tool is active.
- *                      Sits above .excalidrawLayer (z-index 5) so its pointerdown
- *                      handler runs first; cursor is set inline from tool.cursor.
+ *                      At --ad-z-tool-overlay, above .excalidrawLayer, so its
+ *                      pointerdown handler runs first; cursor is set inline from tool.cursor.
  */
 
 .atlasToolOverlay {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: var(--ad-z-tool-overlay);
   pointer-events: auto;
   /* No background — the map and Excalidraw show through. */
 }
@@ -128,7 +120,7 @@
 }
 
 /* Mode hint — bottom-centre of the plate, out of the way of the collar and of
- * the point being annotated. Same toolbar/banner band (10) as
+ * the point being annotated. Same band (--ad-z-overlay) as
  * .collabRoomError, which it deliberately mirrors: both are transient
  * one-line statements about editor state. */
 .commentModeHint {
@@ -136,13 +128,13 @@
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   display: flex;
   align-items: center;
   gap: var(--ad-space-1);
   padding: var(--ad-space-1) var(--ad-space-3);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink);
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-rule);
@@ -153,7 +145,7 @@
 
 .commentModeHintKey {
   font-family: var(--ad-font-mono);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   padding: 1px 4px;
   color: var(--ad-ink-secondary);
   background: var(--ad-surface-inset);
@@ -174,14 +166,14 @@
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   display: flex;
   align-items: center;
   gap: var(--ad-space-2);
   padding: var(--ad-space-1) var(--ad-space-2) var(--ad-space-1)
     var(--ad-space-3);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-ink);
   background: var(--ad-surface-raised);
   border: 1px solid var(--ad-rule);
@@ -191,7 +183,7 @@
 
 .drawBlockedReset {
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   padding: 2px var(--ad-space-2);
   color: var(--ad-ink-inverse);
   background: var(--ad-accent);
@@ -211,7 +203,7 @@
 }
 
 /* Collab-room parse-error banner — centered pill at the top of the plate,
- * z-index 10 (toolbar/banners band, see ladder above). All colors resolve
+ * --ad-z-overlay (hints and banners, see tokens.css). All colors resolve
  * from the --ad-danger token with a consistent #d64045 fallback; the tinted
  * background is a low-alpha mix (color-mix already used for the border). */
 .collabRoomError {
@@ -219,10 +211,10 @@
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: var(--ad-z-overlay);
   padding: 6px 12px;
-  border-radius: var(--ad-radius-md, 6px);
-  font-size: 13px;
+  border-radius: var(--ad-radius-md);
+  font-size: var(--ad-text-md);
   color: var(--ad-danger, #d64045);
   background: color-mix(in srgb, var(--ad-danger, #d64045) 8%, transparent);
   border: 1px solid

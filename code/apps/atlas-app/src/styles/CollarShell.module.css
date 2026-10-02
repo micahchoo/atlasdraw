@@ -18,7 +18,7 @@
   background: var(--ad-surface);
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
 }
 
 /* --- head bar (wordmark · sheet name · search · menu) ------------------- */
@@ -33,7 +33,7 @@
 }
 
 .wordmark {
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 600;
   letter-spacing: 0.14em;
   color: var(--ad-ink-secondary);
@@ -59,7 +59,7 @@
   background: none;
   color: inherit;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 600;
   line-height: 1.2;
   cursor: text;
@@ -85,7 +85,7 @@
   background: var(--ad-surface-inset);
   color: var(--ad-ink);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -121,16 +121,16 @@
 .toolHint {
   flex: none;
   color: var(--ad-ink-tertiary);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   user-select: none;
 }
 
 .toolHint kbd {
   font-family: var(--ad-font-mono);
-  font-size: 10px;
+  font-size: var(--ad-text-2xs);
   padding: 1px 4px;
   border: 1px solid var(--ad-rule);
-  border-radius: 3px;
+  border-radius: var(--ad-radius-xs);
   background: var(--ad-surface-raised);
 }
 
@@ -167,16 +167,16 @@
   border: 1.5px solid var(--ad-neatline);
 }
 
-/* Inner rule of the double neatline. z-index 6: paints above the map,
- * Excalidraw canvas (1) and the atlas tool overlay (5), below the toolbar
- * band (10) — pointer-events: none, decoration only (print, not chrome). */
+/* Inner rule of the double neatline. --ad-z-neatline: paints over the map,
+ * the Excalidraw canvas and the atlas tool overlay, under --ad-z-overlay.
+ * pointer-events: none, decoration only (print, not chrome). */
 .plate::after {
   content: "";
   position: absolute;
   inset: 2px;
   pointer-events: none;
   border: 0.5px solid var(--ad-neatline);
-  z-index: 6;
+  z-index: var(--ad-z-neatline);
 }
 
 /* --- sheet-panel icon rail (right frame column) -------------------------- */
