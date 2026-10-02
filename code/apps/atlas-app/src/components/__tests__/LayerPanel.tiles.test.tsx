@@ -53,6 +53,27 @@ describe("Add tile layer", () => {
     expect(tiles()).toEqual([]);
   });
 
+  it("refuses a host the page's security policy blocks, and names the setting", () => {
+    const meta = document.createElement("meta");
+    meta.httpEquiv = "Content-Security-Policy";
+    meta.content = "default-src 'self'; connect-src 'self' data: blob:";
+    document.head.appendChild(meta);
+    try {
+      openForm();
+      fireEvent.change(screen.getByTestId("tile-url"), {
+        target: { value: URL_T },
+      });
+      fireEvent.click(screen.getByTestId("tile-add-submit"));
+
+      const error = screen.getByTestId("tile-add-error").textContent;
+      expect(error).toContain("https://tiles.example.org");
+      expect(error).toContain("VITE_CSP_CONNECT_SRC");
+      expect(tiles()).toEqual([]);
+    } finally {
+      meta.remove();
+    }
+  });
+
   it("adds a tile layer with its name, credit and opacity", () => {
     openForm();
     fireEvent.change(screen.getByTestId("tile-url"), {

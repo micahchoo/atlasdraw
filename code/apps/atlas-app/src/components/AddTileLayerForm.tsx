@@ -7,7 +7,9 @@
 // other forms. No modal: the form has four fields.
 //
 // The form checks the URL template (lib/tileLayers#validateTileTemplate)
-// before it adds anything, and shows the reason when it refuses one. The
+// before it adds anything, and shows the reason when it refuses one. It also
+// refuses a server the page's content security policy blocks: MapLibre
+// reports no error for a blocked tile, so the layer would stay blank. The
 // editor ships no tile URL and no key. The one preset is the USGS aerial
 // imagery of the United States: public domain, no key, and a clear credit.
 // It only fills in the form; nothing calls the USGS server until the user
@@ -17,10 +19,23 @@
 import React, { useId, useState } from "react";
 
 import { getAppConfig } from "../config/app-config";
-import { USGS_IMAGERY, validateTileTemplate } from "../lib/tileLayers";
+import {
+  USGS_IMAGERY,
+  blockedTileOrigin,
+  validateTileTemplate,
+} from "../lib/tileLayers";
 import { dispatch } from "../state/document";
 
 import styles from "../styles/AddTileLayerForm.module.css";
+
+/** The policy the production build writes into index.html, if any. */
+function pagePolicy(): string | null {
+  return (
+    document
+      .querySelector('meta[http-equiv="Content-Security-Policy"]')
+      ?.getAttribute("content") ?? null
+  );
+}
 
 /** The name a layer gets when the user gives none: its server. */
 function hostOf(url: string): string {
@@ -45,6 +60,18 @@ export function AddTileLayerForm({ onDone }: { onDone: () => void }) {
     const check = validateTileTemplate(url);
     if (!check.ok) {
       setError(check.reason);
+      return;
+    }
+    const blocked = blockedTileOrigin(
+      check.url,
+      pagePolicy(),
+      window.location.origin,
+    );
+    if (blocked) {
+      setError(
+        `This site's security policy blocks ${blocked}, so its tiles cannot load. ` +
+          `Ask the site's operator to add ${blocked} to VITE_CSP_CONNECT_SRC.`,
+      );
       return;
     }
     dispatch({
