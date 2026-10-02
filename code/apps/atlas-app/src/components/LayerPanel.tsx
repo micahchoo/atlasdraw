@@ -72,6 +72,7 @@ import {
 import { downloadBlob } from "../lib/download";
 
 import { useAnnounce } from "./AriaAnnouncer";
+import { Button } from "./Button";
 import { CommentsPanelHost } from "./CommentsPanelHost";
 import { StylePanel } from "./StylePanel";
 import { AddTileLayerForm } from "./AddTileLayerForm";
@@ -856,10 +857,9 @@ function OverflowMenu({
 
   return (
     <div className={styles.menuWrap} ref={wrapRef}>
-      <button
-        type="button"
+      <Button
         ref={triggerRef}
-        className={styles.iconButton}
+        variant="ghost-icon"
         aria-label={`Actions for ${entry.label}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -870,7 +870,7 @@ function OverflowMenu({
         }}
       >
         <IconDots />
-      </button>
+      </Button>
       {open && (
         <div
           role="menu"
@@ -1158,22 +1158,20 @@ function DataLayerCard({
             <AttributePreview entry={entry} fc={fc} />
 
             <div className={styles.detailActions}>
-              <button
-                type="button"
-                className={styles.detailBtn}
+              <Button
+                size="sm"
                 data-testid={`layer-zoom-inline-${id}`}
                 onClick={() => actions.zoomTo(id)}
               >
                 Zoom to layer
-              </button>
-              <button
-                type="button"
-                className={styles.detailBtn}
+              </Button>
+              <Button
+                size="sm"
                 data-testid={`layer-rename-inline-${id}`}
                 onClick={() => setRenaming(true)}
               >
                 Rename
-              </button>
+              </Button>
             </div>
           </div>
         ) : null
@@ -1222,14 +1220,10 @@ function DataLayerCard({
         >
           {featureCount}
         </span>
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -1237,7 +1231,7 @@ function DataLayerCard({
           }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+        </Button>
         <OverflowMenu
           entry={entry}
           actions={actions}
@@ -1302,14 +1296,10 @@ function AnnotationLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? "Hide annotation" : "Show annotation"}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -1317,7 +1307,7 @@ function AnnotationLayerRow({
           }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+        </Button>
         <span
           aria-label="Annotation"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1381,14 +1371,10 @@ function RasterLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? "Hide image" : "Show image"}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -1396,7 +1382,7 @@ function RasterLayerRow({
           }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+        </Button>
         <span
           aria-label="Image"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1479,14 +1465,10 @@ function TileLayerRow({
         )}
         onClick={onSelect}
       >
-        <button
-          type="button"
-          className={joinClass(
-            styles.iconButton,
-            visible && styles.iconButtonPressed,
-          )}
+        <Button
+          variant="ghost-icon"
           aria-label={visible ? `Hide ${label}` : `Show ${label}`}
-          aria-pressed={visible}
+          pressed={visible}
           data-testid={`layer-visibility-${id}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -1494,7 +1476,7 @@ function TileLayerRow({
           }}
         >
           {visible ? <IconEye /> : <IconEyeSlash />}
-        </button>
+        </Button>
         <span
           aria-label="Tile layer"
           className={joinClass(styles.kindBadge, styles.kindBadgeAnnotation)}
@@ -1557,14 +1539,13 @@ function TileLayersSection({
         <AddTileLayerForm onDone={() => setAdding(false)} />
       ) : (
         <div className={styles.tileAddRow}>
-          <button
-            type="button"
-            className={styles.detailBtn}
+          <Button
+            size="sm"
             data-testid="tile-add-open"
             onClick={() => setAdding(true)}
           >
             Add tile layer…
-          </button>
+          </Button>
         </div>
       )}
     </section>

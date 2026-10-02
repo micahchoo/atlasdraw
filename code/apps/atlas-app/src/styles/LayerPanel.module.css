@@ -411,43 +411,6 @@
   color: var(--ad-ink-inverse);
 }
 
-/* Icon button — atlasdraw-ui-conventions §Buttons type 2 (32px square).
- * width/height fall through to the Excalidraw `--default-button-size` token
- * inside the .excalidraw scope; the literal is a defensive fallback so the
- * button still renders if mounted outside that scope (storybook, isolates). */
-.iconButton {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: var(--default-button-size, 2rem);
-  height: var(--default-button-size, 2rem);
-  padding: 0;
-  border: 1px solid var(--default-border-color, var(--ad-rule));
-  border-radius: var(--ad-radius-sm);
-  background: var(--island-bg-color, var(--ad-surface-raised));
-  color: var(--text-primary-color, var(--ad-ink));
-  cursor: pointer;
-}
-
-.iconButton:hover {
-  background: var(--button-hover-bg, var(--ad-surface-inset));
-}
-
-.iconButton:disabled {
-  color: var(--ad-ink-tertiary);
-  cursor: not-allowed;
-}
-
-.iconButtonPressed {
-  background: var(--ad-accent);
-  color: var(--ad-ink-inverse);
-  border-color: var(--ad-accent);
-}
-
-.iconButtonPressed:hover {
-  background: var(--ad-accent-hover);
-}
-
 /* --- Data layer detail accordion ------------------------------------------ */
 
 /* `scroll-margin-top` clears the pinned header: when Tab moves focus to a
@@ -511,24 +474,6 @@
   display: flex;
   gap: var(--ad-space-1);
   margin-top: var(--ad-space-2);
-}
-
-.detailBtn {
-  padding: 2px var(--ad-space-2);
-  border: 1px solid var(--ad-rule);
-  border-radius: var(--ad-radius-sm);
-  background: var(--ad-surface-raised);
-  color: var(--ad-ink-secondary);
-  font-family: var(--ad-font-sans);
-  font-size: var(--ad-text-xs);
-  font-weight: 400;
-  cursor: pointer;
-}
-
-.detailBtn:hover {
-  border-color: var(--ad-accent);
-  color: var(--ad-accent);
-  background: var(--ad-accent-subtle);
 }
 
 /* Attribute table preview */
