@@ -288,3 +288,23 @@ test("a layer row: a right-click and Shift+F10 open its ⋯ menu", async ({
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("attribute-table-count")).toBeVisible();
 });
+
+test("Escape closes the right-click menu, and a dialog opened over it closes it too", async ({
+  page,
+}) => {
+  await openEditor(page);
+  const menu = page.locator(".context-menu");
+
+  await page.mouse.click(300, 400, { button: "right" });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+
+  await page.mouse.click(300, 400, { button: "right" });
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.type("Export");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(menu).toHaveCount(0);
+});

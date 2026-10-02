@@ -165,4 +165,26 @@ describe("registered context-menu items", () => {
       expect(listed(name)).toBe(null);
     }
   });
+
+  // Upstream closes the menu only on a pointer press outside it. Over a map
+  // the menu is a main surface, so the keyboard must close it too, and a
+  // dialog opened on top (from the palette) must not leave it standing.
+  it("Escape closes the menu", async () => {
+    await editor();
+    rightClickCanvas();
+    const menu = UI.queryContextMenu()!;
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(UI.queryContextMenu()).toBe(null);
+  });
+
+  it("focus leaving the menu closes it", async () => {
+    await editor();
+    rightClickCanvas();
+    const menu = UI.queryContextMenu()!;
+    const elsewhere = document.createElement("input");
+    document.body.appendChild(elsewhere);
+    fireEvent.focusOut(menu, { relatedTarget: elsewhere });
+    expect(UI.queryContextMenu()).toBe(null);
+    elsewhere.remove();
+  });
 });

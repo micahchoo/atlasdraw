@@ -52,82 +52,104 @@ export const ContextMenu = React.memo(
       return acc;
     }, []);
 
+    // Atlasdraw: upstream closes the menu only on a pointer press outside it.
+    // Escape closes it too, and so does focus leaving it, which is what a
+    // dialog opened on top (from the command palette) does. React events
+    // bubble through this wrapper; `display: contents` keeps it out of layout.
     return (
-      <Popover
-        onCloseRequest={() => {
-          onClose();
+      <div
+        style={{ display: "contents" }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            onClose();
+          }
         }}
-        top={top}
-        left={left}
-        fitInViewport={true}
-        offsetLeft={appState.offsetLeft}
-        offsetTop={appState.offsetTop}
-        viewportWidth={appState.width}
-        viewportHeight={appState.height}
-        className="context-menu-popover"
+        onBlur={(event) => {
+          const next = event.relatedTarget;
+          if (next instanceof Node && !event.currentTarget.contains(next)) {
+            onClose();
+          }
+        }}
       >
-        <ul
-          className="context-menu"
-          onContextMenu={(event) => event.preventDefault()}
+        <Popover
+          onCloseRequest={() => {
+            onClose();
+          }}
+          top={top}
+          left={left}
+          fitInViewport={true}
+          offsetLeft={appState.offsetLeft}
+          offsetTop={appState.offsetTop}
+          viewportWidth={appState.width}
+          viewportHeight={appState.height}
+          className="context-menu-popover"
         >
-          {filteredItems.map((item, idx) => {
-            if (item === CONTEXT_MENU_SEPARATOR) {
-              // Atlasdraw: no separator at either end. The host's items
-              // follow one, and the predicates may hide every one of them.
-              if (
-                !filteredItems[idx - 1] ||
-                filteredItems[idx - 1] === CONTEXT_MENU_SEPARATOR ||
-                filteredItems
-                  .slice(idx + 1)
-                  .every((next) => next === CONTEXT_MENU_SEPARATOR)
-              ) {
-                return null;
+          <ul
+            className="context-menu"
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            {filteredItems.map((item, idx) => {
+              if (item === CONTEXT_MENU_SEPARATOR) {
+                // Atlasdraw: no separator at either end. The host's items
+                // follow one, and the predicates may hide every one of them.
+                if (
+                  !filteredItems[idx - 1] ||
+                  filteredItems[idx - 1] === CONTEXT_MENU_SEPARATOR ||
+                  filteredItems
+                    .slice(idx + 1)
+                    .every((next) => next === CONTEXT_MENU_SEPARATOR)
+                ) {
+                  return null;
+                }
+                return <hr key={idx} className="context-menu-item-separator" />;
               }
-              return <hr key={idx} className="context-menu-item-separator" />;
-            }
 
-            const actionName = item.name;
-            let label = "";
-            if (item.label) {
-              label = menuItemLabel(
-                typeof item.label === "function"
-                  ? item.label(elements, appState, actionManager.app)
-                  : item.label,
-              );
-            }
+              const actionName = item.name;
+              let label = "";
+              if (item.label) {
+                label = menuItemLabel(
+                  typeof item.label === "function"
+                    ? item.label(elements, appState, actionManager.app)
+                    : item.label,
+                );
+              }
 
-            return (
-              <li
-                key={idx}
-                data-testid={actionName}
-                onClick={() => {
-                  // we need update state before executing the action in case
-                  // the action uses the appState it's being passed (that still
-                  // contains a defined contextMenu) to return the next state.
-                  onClose(() => {
-                    actionManager.executeAction(item, "contextMenu");
-                  });
-                }}
-              >
-                <button
-                  type="button"
-                  className={clsx("context-menu-item", {
-                    dangerous: actionName === "deleteSelectedElements",
-                    checkmark: item.checked?.(appState),
-                  })}
+              return (
+                <li
+                  key={idx}
+                  data-testid={actionName}
+                  onClick={() => {
+                    // we need update state before executing the action in case
+                    // the action uses the appState it's being passed (that still
+                    // contains a defined contextMenu) to return the next state.
+                    onClose(() => {
+                      actionManager.executeAction(item, "contextMenu");
+                    });
+                  }}
                 >
-                  <div className="context-menu-item__label">{label}</div>
-                  <kbd className="context-menu-item__shortcut">
-                    {actionName
-                      ? getShortcutFromShortcutName(actionName as ShortcutName)
-                      : ""}
-                  </kbd>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Popover>
+                  <button
+                    type="button"
+                    className={clsx("context-menu-item", {
+                      dangerous: actionName === "deleteSelectedElements",
+                      checkmark: item.checked?.(appState),
+                    })}
+                  >
+                    <div className="context-menu-item__label">{label}</div>
+                    <kbd className="context-menu-item__shortcut">
+                      {actionName
+                        ? getShortcutFromShortcutName(
+                            actionName as ShortcutName,
+                          )
+                        : ""}
+                    </kbd>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Popover>
+      </div>
     );
   },
 );

@@ -290,6 +290,11 @@
   /* Above a pinned row header when this row is not pinned itself. */
   z-index: calc(var(--ad-z-pinned) + var(--ad-z-raised));
   min-width: 140px;
+  /* The containing block is the 24px ⋯ wrapper, so a shrink-to-fit width
+   * fell to min-width and wrapped "Show attribute table" onto two lines.
+   * The cap keeps a growing-leftward menu inside a 260px panel. */
+  width: max-content;
+  max-width: 15rem;
   display: flex;
   flex-direction: column;
   padding: var(--ad-space-1);
