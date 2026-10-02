@@ -60,7 +60,8 @@ describe("contentSecurityPolicy", () => {
       expect(connect).toContain(origin);
     }
     expect(connect).toContain("https://tile.openstreetmap.org");
-    expect(connect).toContain("https://protomaps.github.io");
+    // The offline basemaps' glyphs and sprites are the app's own files.
+    expect(connect).not.toContain("https://protomaps.github.io");
     expect(connect).not.toContain("https:");
     expect(connect).not.toContain("*");
   });

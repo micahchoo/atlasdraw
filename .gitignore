@@ -69,3 +69,7 @@ hypotheses.jsonl
 
 # deps-index runtime data (pending/resolved JSON; the rule.md is tracked)
 .claude/.deps-index/
+
+# Basemap extracts made by `make -f infra/Makefile basemap-*`. Gigabytes;
+# the stack mounts them (infra/docker-compose.basemap.yml), git never holds them.
+infra/data/

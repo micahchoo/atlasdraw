@@ -146,3 +146,31 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+/* A pin's details: photo, description, link. */
+.pin {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.photo {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.description {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  color: #1971c2;
+  overflow-wrap: anywhere;
+}

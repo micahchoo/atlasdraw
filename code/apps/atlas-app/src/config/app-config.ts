@@ -60,6 +60,12 @@ export type AppConfig = {
   embedEnabled: boolean;
   /** The URL of the offline basemap archive. */
   pmtilesPath: string;
+  /**
+   * The folder of the offline basemaps' label glyphs and sprites
+   * (public/basemap/), under the base path. Not configurable: a self-host
+   * build serves them itself, so a label never needs another host.
+   */
+  basemapAssetsPath: string;
   appVersion: string;
   gitHash: string;
 };
@@ -104,6 +110,7 @@ export function loadAppConfig(env: Env = import.meta.env): AppConfig {
     pmtilesPath:
       e.VITE_PMTILES_PATH ??
       `${normalizeBase(e.BASE_URL)}data/world-low-zoom.pmtiles`,
+    basemapAssetsPath: `${normalizeBase(e.BASE_URL)}basemap`,
     appVersion: e.VITE_APP_VERSION,
     gitHash: e.VITE_GIT_HASH,
   };

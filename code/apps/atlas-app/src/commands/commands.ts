@@ -22,6 +22,7 @@ import type { ZoomAction } from "@atlasdraw/excalidraw/types";
 import { zoomActionOnMap } from "../hooks/useCameraBridge";
 import { pickFile } from "../lib/pickFile";
 import { openMap, restoreBackup, saveMap } from "../session/fileActions";
+import { selectedPin } from "../state/pinDetails";
 
 import { keyLabels, keyText, type KeyBinding } from "./keys";
 
@@ -194,6 +195,23 @@ export const COMMANDS: readonly Command[] = [
     run: (s) => {
       const { atlasTool, setAtlasTool } = s.view.getState();
       setAtlasTool(atlasTool?.id === PinTool.id ? null : PinTool);
+    },
+  },
+  {
+    id: "tools.pin-details",
+    label: "Edit pin details…",
+    group: "Tools",
+    keywords: ["pin", "title", "description", "link", "photo", "note"],
+    available: (s) => {
+      const api = s.view.getState().api;
+      return api !== null && selectedPin(api) !== null;
+    },
+    run: (s) => {
+      const api = s.view.getState().api;
+      const pin = api ? selectedPin(api) : null;
+      if (pin) {
+        s.view.getState().openDialog({ kind: "pin-details", pinId: pin.id });
+      }
     },
   },
   {

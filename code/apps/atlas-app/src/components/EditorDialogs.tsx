@@ -39,6 +39,7 @@ import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { ReturnFocusContext } from "./Modal";
 import { MyMapsDialog } from "./MyMapsDialog";
 import { OnboardingTips } from "./OnboardingTips";
+import { PinDetailsDialog } from "./PinDetailsDialog";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { ShareDialog } from "./ShareDialog";
 
@@ -237,6 +238,10 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
             />
           </Suspense>
         );
+      case "pin-details":
+        return api ? (
+          <PinDetailsDialog api={api} pinId={dialog.pinId} onClose={close} />
+        ) : null;
       case "asset-library":
         return <AssetLibraryPanel excalidrawAPI={api} onCloseRequest={close} />;
       case "my-maps":

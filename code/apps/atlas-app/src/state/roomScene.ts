@@ -28,6 +28,7 @@ import type {
 } from "@atlasdraw/excalidraw";
 import type { ExcalidrawElement } from "@atlasdraw/element/types";
 
+import { elementFileIds } from "./pinDetails";
 import {
   checkElement,
   checkFile,
@@ -115,8 +116,8 @@ export function writeScene(
     if (!held || wins(el, held)) {
       changed.push(el);
     }
-    const fileId = (el as { fileId?: string | null }).fileId;
-    if (fileId && !el.isDeleted) {
+    // An image's file and a pin's photo go to the room with the element.
+    for (const fileId of elementFileIds(el)) {
       used.add(fileId);
     }
   }

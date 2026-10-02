@@ -70,8 +70,15 @@ describe("loadAppConfig", () => {
     expect(cfg.showDemoBadge).toBe(false);
     expect(cfg.embedEnabled).toBe(true);
     expect(cfg.pmtilesPath).toBe("/data/world-low-zoom.pmtiles");
+    expect(cfg.basemapAssetsPath).toBe("/basemap");
     expect(cfg.appVersion).toBe("unknown");
     expect(cfg.gitHash).toBe("unknown");
+  });
+
+  it("serves the basemap glyphs and sprites under the base path", () => {
+    expect(loadAppConfig({ BASE_URL: "/atlasdraw/" }).basemapAssetsPath).toBe(
+      "/atlasdraw/basemap",
+    );
   });
 
   it("ignores env keys it does not know", () => {

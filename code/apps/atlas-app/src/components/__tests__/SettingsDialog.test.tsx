@@ -21,6 +21,7 @@ const BASE_CONFIG: AppConfig = {
   allowRemoteBasemaps: false,
   embedEnabled: true,
   pmtilesPath: "/data/world-low-zoom.pmtiles",
+  basemapAssetsPath: "/basemap",
   appVersion: "unknown",
   gitHash: "unknown",
 };

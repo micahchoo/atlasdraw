@@ -21,8 +21,10 @@ A Docker Compose stack with two services:
 One Docker volume, `atlas-storage-data`, holds the SQLite database
 (`atlas.db`) and the saved maps (`blobs/<id>.atlasdraw`).
 
-The basemap file (`world-low-zoom.pmtiles`, about 43 MB) is inside the web
-image, so nothing downloads at run time. The minimal stack has no relay, so
+The basemap file (`world-low-zoom.pmtiles`, about 43 MB) and its label
+fonts are inside the web image, so nothing downloads at run time. For a
+basemap with streets, see "Basemap: offline, with streets" in
+[`production.md`](production.md). The minimal stack has no relay, so
 the Share dialog offers no live rooms.
 
 ## Prerequisites
@@ -128,8 +130,6 @@ Vite reads that file during the image build.
 
 The editor sends no telemetry. These requests leave your server:
 
-- **Label fonts of the default basemaps.** The Light and Dark styles load
-  their glyphs from `protomaps.github.io`. There is no setting for this yet.
 - **The "Bright" and "OSM" basemaps**, when a user picks one. Turn them off
   with `VITE_ALLOW_REMOTE_BASEMAPS=false`.
 - **Tile layers** that a user adds (next section).

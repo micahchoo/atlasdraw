@@ -5,6 +5,8 @@
 //
 //   validateTileTemplate(text)    the template the editor accepts, or the
 //                                 reason it refuses it
+//   blockedTileOrigin(url, …)     the tile server's origin when the page's
+//                                 content security policy refuses it
 //
 // A tile layer's credit is printed by every surface that shows the map
 // (lib/mapView#mapCredits).
@@ -56,6 +58,57 @@ export function validateTileTemplate(text: string): TileTemplateCheck {
     return { ok: false, reason: "The URL must contain {z}, {x} and {y}." };
   }
   return { ok: true, url };
+}
+
+/** The sources of one directive of a policy, or null when it is absent. */
+function directiveSources(policy: string, name: string): string[] | null {
+  for (const part of policy.split(";")) {
+    const [directive, ...sources] = part.trim().split(/\s+/);
+    if (directive?.toLowerCase() === name) {
+      return sources;
+    }
+  }
+  return null;
+}
+
+/**
+ * The origin of the tile server when the page's content security policy
+ * refuses it; null when the map may fetch from it, or when the page has no
+ * policy (the dev server). MapLibre fetches raster tiles, so connect-src
+ * decides, or default-src when connect-src is absent.
+ *
+ * A refused tile is no error MapLibre reports: the layer stays blank. The
+ * production policy lists only exact origins (lib/contentSecurityPolicy.ts),
+ * so this reads exact origins, 'self', scheme sources and `*`.
+ */
+export function blockedTileOrigin(
+  url: string,
+  policy: string | null,
+  pageOrigin: string,
+): string | null {
+  if (!policy) {
+    return null;
+  }
+  let target: URL;
+  try {
+    target = new URL(url.replace(/\{[a-z]\}/g, "0"));
+  } catch {
+    return null;
+  }
+  const sources =
+    directiveSources(policy, "connect-src") ??
+    directiveSources(policy, "default-src");
+  if (!sources) {
+    return null;
+  }
+  const allowed = sources.some(
+    (source) =>
+      source === "*" ||
+      source === target.protocol ||
+      (source === "'self'" && target.origin === pageOrigin) ||
+      source.replace(/\/$/, "") === target.origin,
+  );
+  return allowed ? null : target.origin;
 }
 
 /**

@@ -6,8 +6,12 @@
 //   - protomaps-dark.json       (self-hosted pmtiles, via protomaps-themes-base)
 //   - openfreemap-bright.json   (remote tiles, fetched verbatim from openfreemap.org)
 //
-// The protomaps styles embed `__PMTILES_PATH__` in the source URL; style-builder.ts
-// substitutes the caller-provided pmtiles path at runtime. The openfreemap style
+// The protomaps styles embed `__PMTILES_PATH__` in the source URL and
+// `__BASEMAP_ASSETS__` in the glyph and sprite URLs; style-builder.ts
+// substitutes the caller's paths at runtime. The glyphs and sprites are the
+// files of protomaps/basemaps-assets, bundled in atlas-app/public/basemap/
+// (atlas-app/scripts/vendor-basemap-assets.sh), so these styles make no
+// third-party request. The openfreemap style
 // keeps remote tile URLs intact and is gated by `requiresRemote: true` in
 // BasemapRegistry (no substitution).
 //
@@ -27,8 +31,10 @@ const STYLES_DIR = join(__dirname, "..", "src", "styles");
 
 const PMTILES_TOKEN = "__PMTILES_PATH__";
 const PROTOMAPS_SOURCE_NAME = "protomaps";
-const GLYPHS_URL =
-  "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
+const ASSETS_TOKEN = "__BASEMAP_ASSETS__";
+const GLYPHS_URL = `${ASSETS_TOKEN}/fonts/{fontstack}/{range}.pbf`;
+// protomaps-themes-base 4 draws the icons of sprite set v4.
+const SPRITE_URL = (flavor) => `${ASSETS_TOKEN}/sprites/v4/${flavor}`;
 const OPENFREEMAP_BRIGHT_URL = "https://tiles.openfreemap.org/styles/bright";
 
 /** Build a Protomaps style for the given flavor ('light' | 'dark'). */
@@ -48,6 +54,7 @@ function buildProtomapsStyle(flavor) {
       },
     },
     glyphs: GLYPHS_URL,
+    sprite: SPRITE_URL(flavor),
     layers,
   };
 }

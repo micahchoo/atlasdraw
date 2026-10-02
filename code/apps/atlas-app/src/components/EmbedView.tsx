@@ -16,10 +16,10 @@
 // attribute popup; legend=1 shows a legend; view=fit|saved says where the
 // camera opens. An /embed fits its content by default; /m opens at the saved
 // view. Unlocked, the map uses cooperative gestures (useEmbedCamera), so it
-// never takes the page's scroll, and a click on a feature shows its
-// attributes (FeaturePopup).
+// never takes the page's scroll, and a click on a pin shows its details and
+// a click on a feature its attributes (FeaturePopup).
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MapCanvas, type MapCanvasInitialView } from "@atlasdraw/basemap";
 import { Excalidraw } from "@atlasdraw/excalidraw";
 
@@ -35,6 +35,7 @@ import { useMapOverlays } from "../hooks/useMapOverlays";
 import {
   useFeaturePopup,
   usePopupOnClick,
+  type PinHit,
   type PopupMap,
 } from "../hooks/useFeaturePopup";
 import { creditText, documentCredits } from "../lib/mapView";
@@ -44,7 +45,9 @@ import {
   type EmbedOptions,
   type ViewerChrome,
 } from "../lib/embed";
+import { currentDocument } from "../state/document";
 import { fromFile, loadDocument } from "../state/documentIO";
+import { pinAt, photoUrlOf, readPinDetails } from "../state/pinDetails";
 
 import { getAppConfig } from "../config/app-config";
 import { buildRoute, type SharedMap } from "../routes";
@@ -200,10 +203,35 @@ const EmbedCanvas: React.FC<{
   // Draw the open document's data and raster layers on the map.
   useMapOverlays(map);
 
-  // A click on a feature shows its attributes, unless the embed is locked.
+  // A click on a pin shows its details, and on a feature its attributes,
+  // unless the embed is locked.
   const popupMap = map as unknown as PopupMap | null;
   const featurePopup = useFeaturePopup(popupMap);
-  usePopupOnClick(popupMap, !options.lock, featurePopup);
+  const pinHit = useCallback(
+    (lngLat: { lng: number; lat: number }): PinHit | null => {
+      if (!api || !map) {
+        return null;
+      }
+      const el = pinAt(
+        api.getSceneElements(),
+        currentDocument().snapshot().world,
+        lngLat,
+        map.getZoom(),
+      );
+      if (!el) {
+        return null;
+      }
+      const details = readPinDetails(el.customData);
+      return {
+        kind: "pin",
+        id: el.id,
+        details,
+        photoUrl: photoUrlOf(details, api.getFiles()),
+      };
+    },
+    [api, map],
+  );
+  usePopupOnClick(popupMap, !options.lock, featurePopup, pinHit);
 
   // Open the document the way the editor opens a file (documentIO): its
   // layers, rasters and drawing. One loader, so the embed shows what the

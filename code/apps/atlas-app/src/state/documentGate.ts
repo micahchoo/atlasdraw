@@ -52,6 +52,7 @@ import type { WorldFrameData } from "@atlasdraw/data";
 import { validateLayerStyle } from "../lib/layerStyle";
 import { validateTileTemplate } from "../lib/tileLayers";
 
+import { elementFileIds } from "./pinDetails";
 import {
   checkElement,
   checkFeatures,
@@ -400,15 +401,10 @@ async function admitContent(
     tileLayers.push({ ...entry, url: check.url });
   }
 
-  // Drawing files: only those a kept element uses; a file nothing uses is
-  // not written at the next save either, so it is not counted.
-  const used = new Set<string>();
-  for (const el of scene) {
-    const fileId = (el as { fileId?: unknown }).fileId;
-    if (typeof fileId === "string" && !el.isDeleted) {
-      used.add(fileId);
-    }
-  }
+  // Drawing files: only those a kept element uses (an image, a pin's
+  // photo); a file nothing uses is not written at the next save either, so
+  // it is not counted.
+  const used = new Set(scene.flatMap(elementFileIds));
   for (const fileId of used) {
     const blob = file.files.get(fileId);
     if (!blob || keptFiles.has(fileId)) {

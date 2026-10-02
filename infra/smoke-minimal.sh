@@ -19,6 +19,12 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 curl -fsS -o /dev/null "$base/"
+# Offline basemap: a label glyph range and the sprite come from this origin,
+# and the archive answers a range request (MapLibre reads it by ranges).
+curl -fsS -o /dev/null "$base/basemap/fonts/Noto%20Sans%20Regular/0-255.pbf"
+curl -fsS -o /dev/null "$base/basemap/sprites/v4/light.json"
+test "$(curl -sS -o /dev/null -w '%{http_code}' -r 0-126 \
+  "$base/data/world-low-zoom.pmtiles")" = 206
 curl -fsS "$base/api/health"
 created=$(curl -fsS -X POST -H 'content-type: application/octet-stream' \
   --data-binary 'smoke' "$base/api/maps")

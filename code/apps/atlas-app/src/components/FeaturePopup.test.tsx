@@ -25,6 +25,7 @@ import {
   POPUP_ROWS,
   useFeaturePopup,
   usePopupOnClick,
+  type PinHit,
   type PopupMap,
 } from "../hooks/useFeaturePopup";
 
@@ -80,7 +81,11 @@ class ClickMap extends FakeMapLibre {
 
 const WELLS = "dl:wells";
 
-function setup(properties: Record<string, unknown>, enabled = true) {
+function setup(
+  properties: Record<string, unknown>,
+  enabled = true,
+  pinAt?: (lngLat: { lng: number; lat: number }) => PinHit | null,
+) {
   const doc = createDocument();
   doc.dispatch({
     type: "add-data-layer",
@@ -107,7 +112,7 @@ function setup(properties: Record<string, unknown>, enabled = true) {
 
   function Host() {
     const popup = useFeaturePopup(map as unknown as PopupMap);
-    usePopupOnClick(map as unknown as PopupMap, enabled, popup);
+    usePopupOnClick(map as unknown as PopupMap, enabled, popup, pinAt);
     return (
       <div>
         <button type="button" data-testid="elsewhere">
@@ -224,6 +229,79 @@ describe("FeaturePopup", () => {
   it("opens nothing where clicks are turned off (a locked embed)", () => {
     const { map } = setup({ name: "Well 4" }, false);
     map.clickAt(40, -30);
+    expect(popupEl()).toBeNull();
+  });
+});
+
+describe("a pin's details", () => {
+  const PHOTO = "data:image/png;base64,iVBORw0KGgo=";
+  const pin: PinHit = {
+    kind: "pin",
+    id: "pin-1",
+    details: {
+      title: "<b>Well</b>",
+      description: "Dug 1902.\n<script>alert(1)</script>",
+      link: "https://example.org/well",
+    },
+    photoUrl: PHOTO,
+  };
+  /** The pin is at (40, -30), over the well feature. */
+  const at = (p: PinHit) => (ll: { lng: number; lat: number }) =>
+    ll.lng === 40 && ll.lat === -30 ? p : null;
+
+  it("a click on a pin shows its details, before a feature under it", () => {
+    const { map } = setup({ name: "Well 4" }, true, at(pin));
+    map.clickAt(40, -30);
+
+    const popup = popupEl()!;
+    expect(popup.textContent).toContain("<b>Well</b>");
+    expect(popup.querySelector("b")).toBeNull();
+    expect(popup.querySelector("script")).toBeNull();
+    expect(popup.textContent).toContain("<script>alert(1)</script>");
+    expect(popup.querySelector("tbody")).toBeNull();
+  });
+
+  it("opens its link in a new tab with no opener and no referrer", () => {
+    const { map } = setup({}, true, at(pin));
+    map.clickAt(40, -30);
+
+    const a = popupEl()!.querySelector("a")!;
+    expect(a.getAttribute("href")).toBe("https://example.org/well");
+    expect(a.getAttribute("target")).toBe("_blank");
+    expect(a.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("shows no link that is not http or https, and no remote photo", () => {
+    const bad: PinHit = {
+      ...pin,
+      details: { title: "Well", link: "javascript:alert(1)" },
+      photoUrl: "https://tracker.example.org/x.png",
+    };
+    const { map } = setup({}, true, at(bad));
+    map.clickAt(40, -30);
+
+    expect(popupEl()!.querySelector("a")).toBeNull();
+    expect(popupEl()!.querySelector("img")).toBeNull();
+  });
+
+  it("shows the photo from the drawing's own file", () => {
+    const { map } = setup({}, true, at(pin));
+    map.clickAt(40, -30);
+
+    const img = popupEl()!.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe(PHOTO);
+    expect(img.getAttribute("alt")).toBe("<b>Well</b>");
+  });
+
+  it("names an untitled pin, and a locked embed opens nothing", () => {
+    const untitled: PinHit = { ...pin, details: {}, photoUrl: null };
+    const { map } = setup({}, true, at(untitled));
+    map.clickAt(40, -30);
+    expect(popupEl()!.textContent).toContain("Pin");
+    cleanup();
+
+    const locked = setup({}, false, at(pin));
+    locked.map.clickAt(40, -30);
     expect(popupEl()).toBeNull();
   });
 });

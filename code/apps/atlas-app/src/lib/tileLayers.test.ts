@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { validateTileTemplate } from "./tileLayers";
+import { blockedTileOrigin, validateTileTemplate } from "./tileLayers";
 
 describe("validateTileTemplate", () => {
   it("accepts an https template with {z}, {x} and {y}", () => {
@@ -58,5 +58,53 @@ describe("validateTileTemplate", () => {
         reason: "Type a web address that starts with https://.",
       });
     }
+  });
+});
+
+describe("blockedTileOrigin", () => {
+  const PAGE = "https://atlas.example.org";
+  const POLICY =
+    "default-src 'self'; img-src 'self' data:; " +
+    "connect-src 'self' data: blob: https://tiles.example.net";
+
+  it("is null when the page has no policy (a dev server)", () => {
+    expect(
+      blockedTileOrigin("https://t.example.com/{z}/{x}/{y}.png", null, PAGE),
+    ).toBeNull();
+  });
+
+  it("is null for a host connect-src lists, and for the page's own origin", () => {
+    expect(
+      blockedTileOrigin("https://tiles.example.net/{z}/{x}/{y}", POLICY, PAGE),
+    ).toBeNull();
+    expect(
+      blockedTileOrigin(`${PAGE}/tiles/{z}/{x}/{y}.png`, POLICY, PAGE),
+    ).toBeNull();
+  });
+
+  it("names the origin of a host connect-src does not list", () => {
+    expect(
+      blockedTileOrigin(
+        "https://t.example.com:8443/{z}/{x}/{y}.png",
+        POLICY,
+        PAGE,
+      ),
+    ).toBe("https://t.example.com:8443");
+  });
+
+  it("falls back to default-src when connect-src is absent", () => {
+    expect(
+      blockedTileOrigin(
+        "https://t.example.com/{z}/{x}/{y}.png",
+        "default-src 'self'",
+        PAGE,
+      ),
+    ).toBe("https://t.example.com");
+  });
+
+  it("honours a scheme source and a wildcard", () => {
+    const url = "https://t.example.com/{z}/{x}/{y}.png";
+    expect(blockedTileOrigin(url, "connect-src https:", PAGE)).toBeNull();
+    expect(blockedTileOrigin(url, "connect-src *", PAGE)).toBeNull();
   });
 });

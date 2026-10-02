@@ -7,10 +7,12 @@
 // it describes. `show` and `close` are stable, so a map "click" handler can
 // hold them.
 //
-// usePopupOnClick — a map click opens the popup for the topmost data layer
-// under the pointer and closes it on empty map. The editor does not use it:
-// its own click handler also selects the layer, and calls show/close. The
-// embed uses it, and turns it off for a locked embed (?lock=1).
+// usePopupOnClick — a map click opens the popup for the pin under the
+// pointer, else for the topmost data layer, and closes it on empty map. A
+// pin is drawn above every layer, so it wins. The editor does not use it:
+// its own click handler also selects the layer, and calls show/close, and a
+// pin's details are edited there (PinDetailsDialog). The viewer and embed
+// use it, and turn it off for a locked embed (?lock=1).
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -20,6 +22,8 @@ import {
   type QueryTarget,
 } from "../lib/featureHit";
 import { currentDocument } from "../state/document";
+
+import type { PinDetails } from "../state/pinDetails";
 
 /** How many rows the popup shows before "Show all". */
 export const POPUP_ROWS = 8;
@@ -35,9 +39,18 @@ export interface PopupMap extends QueryTarget {
   off(type: "move" | "click", listener: MapEventListener): unknown;
 }
 
+/** A pin a click opened: its details and its photo's data URL. */
+export interface PinHit {
+  kind: "pin";
+  id: string;
+  details: PinDetails;
+  /** A `data:image/…` URL of the drawing's own file, or null. */
+  photoUrl: string | null;
+}
+
 /** An open popup: what it shows, and where on screen its anchor is now. */
 export interface OpenPopup {
-  hit: FeatureHit;
+  hit: FeatureHit | PinHit;
   lngLat: LngLat;
   x: number;
   y: number;
@@ -45,7 +58,7 @@ export interface OpenPopup {
 
 export interface FeaturePopupControl {
   popup: OpenPopup | null;
-  show(hit: FeatureHit, lngLat: LngLat): void;
+  show(hit: FeatureHit | PinHit, lngLat: LngLat): void;
   close(): void;
 }
 
@@ -53,7 +66,7 @@ export function useFeaturePopup(map: PopupMap | null): FeaturePopupControl {
   const [popup, setPopup] = useState<OpenPopup | null>(null);
 
   const show = useCallback(
-    (hit: FeatureHit, lngLat: LngLat) => {
+    (hit: FeatureHit | PinHit, lngLat: LngLat) => {
       if (!map) {
         return;
       }
@@ -93,6 +106,8 @@ export function usePopupOnClick(
   map: PopupMap | null,
   enabled: boolean,
   { show, close }: Pick<FeaturePopupControl, "show" | "close">,
+  /** The pin at a place, or null. Absent: the map shows no pins. */
+  pinAt?: (lngLat: LngLat) => PinHit | null,
 ): void {
   useEffect(() => {
     if (!map || !enabled) {
@@ -102,6 +117,11 @@ export function usePopupOnClick(
       point: { x: number; y: number };
       lngLat: LngLat;
     }) => {
+      const pin = pinAt?.(e.lngLat);
+      if (pin) {
+        show(pin, e.lngLat);
+        return;
+      }
       const hit = featureAt(
         map,
         currentDocument().snapshot().overlays,
@@ -117,5 +137,5 @@ export function usePopupOnClick(
     return () => {
       map.off("click", onClick as MapEventListener);
     };
-  }, [map, enabled, show, close]);
+  }, [map, enabled, show, close, pinAt]);
 }

@@ -1,0 +1,29 @@
+# Atlasdraw — a basemap with streets, from a pmtiles file you supply.
+#
+# The web image bundles world-low-zoom.pmtiles: the world to zoom 5, no
+# streets. This override serves your own Protomaps extract in its place.
+# Add it to either stack:
+#
+#   make -f infra/Makefile basemap-region BBOX='13.0,52.3,13.8,52.7'
+#   docker compose -f infra/docker-compose.minimal.yml \
+#     -f infra/docker-compose.basemap.yml up -d --build
+#
+# The file stays on the host. It is never copied into the image or the git
+# tree. nginx reads it as uid 101, so it must be world-readable.
+# The label glyphs and sprites are in the image already (public/basemap/),
+# so the browser makes no request to another host.
+#
+# A new build is necessary (--build): the path is a build argument. The new
+# name also makes browsers fetch the new file, not ranges of the old one
+# they keep for 30 days.
+#
+# BASEMAP_PMTILES: the file on the host. Default: what basemap-region
+# writes. A relative path starts from this folder (infra/).
+
+services:
+  web:
+    build:
+      args:
+        VITE_PMTILES_PATH: /data/basemap.pmtiles
+    volumes:
+      - ${BASEMAP_PMTILES:-./data/region.pmtiles}:/usr/share/nginx/html/data/basemap.pmtiles:ro

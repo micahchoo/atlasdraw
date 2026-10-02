@@ -108,6 +108,68 @@ server's default when `.env` does not set it. `EMBED_FRAME_ANCESTORS`
 page reach tile servers besides the built-in basemaps; the page's content
 security policy refuses every other host.
 
+## Basemap: offline, with streets
+
+The web image bundles everything the "Light" and "Dark" basemaps draw with:
+
+- `world-low-zoom.pmtiles` (43 MB): the world to zoom 5. It has country,
+  region and city names, and no streets.
+- The label glyphs (three Noto Sans stacks, all 256 ranges, 11.1 MB on
+  disk) and the icon sprites, in `/basemap/`. They are copies of
+  `protomaps/basemaps-assets` at one pinned commit
+  (`code/apps/atlas-app/scripts/vendor-basemap-assets.sh`).
+
+So these two basemaps make no request to another host. A test proves it in
+a browser that refuses every other host
+(`code/apps/atlas-app/e2e/offline-basemap.spec.ts`).
+
+To show streets, extract the area you need from the Protomaps planet build
+and serve it in place of the world file:
+
+1. Install the pmtiles CLI: `go install github.com/protomaps/go-pmtiles@latest`,
+   or a release binary from <https://github.com/protomaps/go-pmtiles/releases>.
+2. Extract your area. The CLI reads only the tiles inside the box, by range
+   requests; it does not download the planet.
+
+   ```bash
+   make -f infra/Makefile basemap-region BBOX='13.0,52.3,13.8,52.7'
+   ```
+
+   `BBOX` is `west,south,east,north` in degrees. `MAXZOOM` (default 15) is
+   the deepest zoom; the map enlarges zoom 15 beyond that. The file goes to
+   `infra/data/region.pmtiles`, which git ignores. Measured on 2026-10-01:
+   central Berlin (0.05 by 0.03 degrees) to zoom 15 is 4.6 MB and takes 2
+   seconds. A city is tens of MB; a country is 1–10 GB.
+
+3. Start the stack with the basemap override. It mounts the file
+   read-only and builds the app to read `/data/basemap.pmtiles`:
+
+   ```bash
+   docker compose --env-file .env -f infra/docker-compose.yml \
+     -f infra/docker-compose.basemap.yml up -d --build
+   ```
+
+   The override works with the minimal stack too. Set `BASEMAP_PMTILES` to
+   use a file in another place. The file must be world-readable: nginx
+   reads it as uid 101.
+
+An extract holds only its box. Outside the box the map shows the
+background color, at every zoom. Make the box cover every area your users
+map.
+
+"Bright" and "OSM" are remote basemaps: their tiles, glyphs and sprite come
+from their own servers. Set `VITE_ALLOW_REMOTE_BASEMAPS=false` to remove
+them. Then the editor makes no third-party request until a user adds a tile
+layer.
+
+### A tile server that the policy blocks
+
+The page's content security policy lets the map reach only this origin, the
+remote basemaps and the hosts in `VITE_CSP_CONNECT_SRC`. When a user adds a
+tile layer from another host, the form refuses it and names the host and
+the variable to set. Without this message the layer would stay blank, and
+only the browser console would say why.
+
 ## Bring it up
 
 ```bash
@@ -276,8 +338,8 @@ explicit migration steps.
   link never gives it. There is no key recovery: if a browser loses its
   storage, its next save makes a new map.
 - **Storage capacity.** An average atlasdraw document is 30–500 KB
-  compressed; basemap pmtiles (43 MB) is baked into the web image, not
-  the volume. 10 GB of bucket space holds ~30–100k maps. A map with a write
+  compressed; basemap pmtiles (43 MB) and its glyphs (11 MB) are baked
+  into the web image, not the volume. 10 GB of bucket space holds ~30–100k maps. A map with a write
   key is never deleted by the server, because its owner may come back.
   Each document has one server map; sharing again updates it.
 

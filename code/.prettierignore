@@ -26,6 +26,9 @@ packages/excalidraw/subset/woff2/woff2-bindings.ts
 # lines each — which buries any real change in them and gains nothing.
 # FU-8: without this, `yarn test:other` can never pass.
 packages/basemap/src/styles/*.json
+# The offline basemaps' sprites, copied verbatim by
+# apps/atlas-app/scripts/vendor-basemap-assets.sh.
+apps/atlas-app/public/basemap/
 
 # Bench output. `yarn workspace @atlasdraw/bench bench` and `ab` write it to
 # results/current/, which git ignores; nothing in it is source.
