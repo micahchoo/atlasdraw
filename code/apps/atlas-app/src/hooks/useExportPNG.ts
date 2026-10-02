@@ -2,12 +2,10 @@
 // Composite PNG export callback.
 import { useCallback } from "react";
 
-import { getBasemap } from "@atlasdraw/basemap";
-
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
 
 import { exportPNG, type PngPixelRatio } from "../lib/export";
-import { creditLine } from "../lib/tileLayers";
+import { captureView } from "../lib/mapView";
 import { currentDocument } from "../state/document";
 
 import type * as maplibregl from "maplibre-gl";
@@ -20,8 +18,8 @@ export interface ExportPNGNotify {
  * Returns a callback that downloads a PNG of the view at `pixelRatio`
  * (default 2: the quick action has no size picker). The name carries the
  * size, `atlasdraw-<time>@3x.png`, so files of one view are told apart.
- * The PNG carries the credit line (basemap and visible tile layers), read
- * at export time like the image.
+ * The view, its bearing and its credits included, is captured at export
+ * time (lib/mapView#captureView), so the PNG shows the map of that moment.
  */
 export function useExportPNG(
   map: maplibregl.Map | null,
@@ -36,15 +34,10 @@ export function useExportPNG(
       }
       void (async () => {
         try {
-          const state = currentDocument().snapshot();
-          const credit = creditLine(
-            getBasemap(state.basemap)?.attribution,
-            state.overlays,
-          );
-          const blob = await exportPNG(map, excalidrawAPI, {
+          const view = captureView(map, currentDocument().snapshot());
+          const blob = await exportPNG(map, excalidrawAPI, view, {
             pixelRatio,
             backgroundColor,
-            credit,
           });
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");

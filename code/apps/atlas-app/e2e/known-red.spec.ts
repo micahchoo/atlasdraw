@@ -75,8 +75,9 @@ test.describe("known-red", () => {
     });
   });
 
-  // The document saves the live camera.
-  test("an embed opens on the saved camera", async ({ page }) => {
+  // An embed fits its content on load (lib/embed.ts); embed.spec.ts covers
+  // the fit and view=saved.
+  test("an embed shows the drawing", async ({ page }) => {
     const url = await shareLinkWithRectangle(page);
     const hash = url.slice(url.indexOf("#"));
 

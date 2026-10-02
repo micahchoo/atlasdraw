@@ -15,8 +15,9 @@ const credit = () => screen.getByTestId("status-bar-attribution").textContent;
 
 describe("StatusBar credit", () => {
   it("adds a tile layer's credit, and drops it when the layer is hidden", () => {
-    render(<StatusBar map={null} attribution="© OpenStreetMap" />);
-    expect(credit()).toBe("© OpenStreetMap");
+    currentDocument().dispatch({ type: "set-basemap", id: "osm-standard" });
+    render(<StatusBar map={null} />);
+    expect(credit()).toBe("© OpenStreetMap contributors");
 
     act(() =>
       currentDocument().dispatch({
@@ -27,7 +28,7 @@ describe("StatusBar credit", () => {
         attribution: "© Example Aerials",
       }),
     );
-    expect(credit()).toBe("© OpenStreetMap · © Example Aerials");
+    expect(credit()).toBe("© OpenStreetMap contributors · © Example Aerials");
 
     act(() =>
       currentDocument().dispatch({
@@ -36,6 +37,19 @@ describe("StatusBar credit", () => {
         visible: false,
       }),
     );
-    expect(credit()).toBe("© OpenStreetMap");
+    expect(credit()).toBe("© OpenStreetMap contributors");
+  });
+
+  it("follows the basemap the document chooses", () => {
+    currentDocument().dispatch({ type: "set-basemap", id: "protomaps-dark" });
+    render(<StatusBar map={null} />);
+    expect(credit()).toBe("© Protomaps © OpenStreetMap");
+    act(() =>
+      currentDocument().dispatch({
+        type: "set-basemap",
+        id: "openfreemap-bright",
+      }),
+    );
+    expect(credit()).toBe("© OpenFreeMap © OpenMapTiles © OpenStreetMap");
   });
 });

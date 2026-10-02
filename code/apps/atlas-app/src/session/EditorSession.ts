@@ -14,6 +14,9 @@
 //              build has no rooms
 //   view       the editor's view state (session/view.ts)
 //   persistence the autosave's state (state/persistenceState.ts)
+//   history    the one undo history, over the document and the drawing;
+//              its position against the last save is "unsaved"
+//              (session/history.ts)
 //   keys       who hears a key: the dialogs, the tools, then the commands
 //              (commands/keyScopes.ts)
 //   notify     where an action tells the user how it went (the toasts)
@@ -25,6 +28,7 @@ import {
 
 import { createKeyScopes, type KeyScopes } from "../commands/keyScopes";
 
+import { createHistory, type EditorHistory } from "./history";
 import { createViewStore, type ViewStore } from "./view";
 
 import type { DocumentStore } from "../state/document";
@@ -54,6 +58,7 @@ export interface EditorSession {
   readonly notify: Notify;
   readonly view: ViewStore;
   readonly persistence: PersistenceStateStore;
+  readonly history: EditorHistory;
   readonly keys: KeyScopes;
 }
 
@@ -65,6 +70,7 @@ export function createSession(deps: SessionDeps): EditorSession {
     notify: deps.notify,
     view: createViewStore({ map: deps.map }),
     persistence: createPersistenceState(),
+    history: createHistory(),
     keys: createKeyScopes(),
   };
 }

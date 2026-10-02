@@ -17,6 +17,7 @@ import {
   useDocumentStore,
 } from "../state/document";
 import { editorScene } from "../state/scene";
+import { followDocumentHistory } from "../state/documentUndo";
 import { makeFakeExcalidraw } from "../state/__tests__/fixtures/documentWorld";
 
 import {
@@ -237,6 +238,22 @@ describe("what a command does", () => {
     for (const id of ["file.save", "file.open", "edit.clear", "view.layers"]) {
       expect(commandById(id)!.available(s), id).toBe(false);
     }
+  });
+
+  it("Undo and Redo, from the menu and the palette, step the one history", () => {
+    const { s } = session();
+    const stop = followDocumentHistory(useDocumentStore, s.history);
+    const doc = () => useDocumentStore.getState().doc;
+    doc().dispatch({ type: "rename-document", title: "Rivers" });
+
+    expect(MAIN_MENU).toEqual(
+      expect.arrayContaining(["edit.undo", "edit.redo"]),
+    );
+    run(s, "edit.undo");
+    expect(doc().snapshot().title).not.toBe("Rivers");
+    run(s, "edit.redo");
+    expect(doc().snapshot().title).toBe("Rivers");
+    stop();
   });
 
   it("Clear the drawing asks first; No keeps every shape", async () => {

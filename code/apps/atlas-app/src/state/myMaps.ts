@@ -5,7 +5,7 @@
 // MyMapsDialog shows them and calls these.
 //
 // The open map is kept before another one replaces it: its pending changes
-// are saved to its own slot first. The user is asked only when that save
+// (the history is dirty) are saved to its own slot first. The user is asked only when that save
 // fails and the map holds work that is not in a file (hasUnsavedWork), since
 // only then does the switch lose anything.
 
@@ -34,6 +34,7 @@ import { isNewerBuildError } from "./persistence";
 import { deleteServerMap, restoreFromServer } from "./remoteMapIdCache";
 
 import type { PersistenceStateStore } from "./persistenceState";
+import type { History } from "../session/history";
 import type { StorageClient } from "../services/createHttpStorageClient";
 import type * as maplibregl from "maplibre-gl";
 
@@ -41,6 +42,8 @@ export interface MapActionContext {
   api: ExcalidrawImperativeAPI;
   /** The editor's autosave: the maps saved in this browser. */
   persistence: PersistenceStateStore;
+  /** The editor's history: whether the open map has unsaved changes. */
+  history: Pick<History, "dirty">;
   /** The editor's map: a new map starts where it looks, an opened one moves it. */
   map?: (CameraSource & Pick<maplibregl.Map, "jumpTo">) | null;
   notify?: { success: (msg: string) => void; error: (msg: string) => void };
@@ -57,7 +60,7 @@ export interface MapActionContext {
  */
 async function keepOpenMap(ctx: MapActionContext): Promise<boolean> {
   const persistence = ctx.persistence.getState();
-  if (!persistence.persistenceStore?.isDirty()) {
+  if (!persistence.persistenceStore || !ctx.history.dirty) {
     return true;
   }
   try {
@@ -113,6 +116,20 @@ export async function openSavedMap(
         : "This map is damaged and cannot open.",
     );
     return false;
+  }
+}
+
+/**
+ * Save the map that was just opened: it is new to this browser (a blank
+ * map, a server backup). Opening is no edit, so the history does not ask
+ * for this save.
+ */
+async function saveOpened(ctx: MapActionContext): Promise<void> {
+  try {
+    await ctx.persistence.getState().forceSave();
+  } catch (err) {
+    console.warn("[atlasdraw] could not save the opened map", err);
+    ctx.notify?.error("Couldn't save the map in this browser.");
   }
 }
 
@@ -209,7 +226,7 @@ export async function startNewMap(ctx: MapActionContext): Promise<boolean> {
   if (!opened) {
     return false;
   }
-  ctx.persistence.getState().markDirty();
+  await saveOpened(ctx);
   return true;
 }
 
@@ -248,7 +265,7 @@ export async function deleteSavedMap(
     if (!opened) {
       return;
     }
-    ctx.persistence.getState().markDirty();
+    await saveOpened(ctx);
   }
   try {
     await store.remove(id);
@@ -307,7 +324,7 @@ export async function restoreServerBackup(ctx: RestoreContext): Promise<void> {
   if (!opened) {
     return;
   }
-  ctx.persistence.getState().markDirty();
+  await saveOpened(ctx);
   ctx.notify?.success(
     `Restored "${decoded.doc.manifest.title}" from the server backup`,
   );

@@ -39,6 +39,8 @@ export interface MyMapsDialogProps {
   map?: MapActionContext["map"];
   /** The editor's autosave, which holds the maps. */
   persistence: MapActionContext["persistence"];
+  /** The editor's history: whether the open map has unsaved changes. */
+  history: MapActionContext["history"];
   notify: MapActionContext["notify"];
   onClose: () => void;
   /** The clock the relative times are read against. */
@@ -56,6 +58,7 @@ export function MyMapsDialog({
   excalidrawAPI,
   map = null,
   persistence,
+  history,
   notify,
   onClose,
   now = Date.now,
@@ -74,11 +77,11 @@ export function MyMapsDialog({
       return;
     }
     // The open map's latest changes belong in the list.
-    if (store.isDirty()) {
+    if (history.dirty) {
       await state.forceSave().catch(() => undefined);
     }
     setMaps(await store.list());
-  }, [persistence]);
+  }, [persistence, history]);
 
   useEffect(() => {
     void refresh();
@@ -103,6 +106,7 @@ export function MyMapsDialog({
     api: excalidrawAPI,
     map,
     persistence,
+    history,
     notify,
     confirmLoss: () =>
       new Promise<boolean>((resolve) =>

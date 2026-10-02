@@ -12,14 +12,14 @@
 
 import React, { Suspense, lazy, useCallback, useMemo } from "react";
 
-import { getBasemap } from "@atlasdraw/basemap";
 import { drawingToFeatureCollection } from "@atlasdraw/tools";
 
 import { getAppConfig } from "../config/app-config";
 import { paletteCommands, shortcutRows } from "../commands/commands";
 import { keyText } from "../commands/keys";
 import { useExportPNG } from "../hooks/useExportPNG";
-import { exportCompositeDataURL, measureView } from "../lib/export";
+import { exportCompositeDataURL } from "../lib/export";
+import { captureView, type MapView } from "../lib/mapView";
 import { exportLegendEntries } from "../lib/legend";
 import {
   geoJsonExportFile,
@@ -30,7 +30,6 @@ import { saveMap } from "../session/fileActions";
 import { useSession, useView } from "../session/SessionContext";
 import { annotationRows } from "../state/annotations";
 import { liveCamera, toFile } from "../state/documentIO";
-import { useDocument } from "../state/document";
 import { createHttpStorageClient } from "../services/createHttpStorageClient";
 
 import { AssetLibraryPanel } from "./AssetLibraryPanel";
@@ -73,8 +72,6 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
   const background = useView((s) => s.mapBackground);
   const close = useView((s) => s.closeDialog);
   const returnFocus = useView((s) => s.returnFocus);
-  const basemap = useDocument((s) => s.basemap);
-  const attribution = getBasemap(basemap)?.attribution;
 
   const storage = useMemo(
     () =>
@@ -104,17 +101,28 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
     [api, session],
   );
 
+  // The live map as one value: camera, bearing, size, frame and credits.
+  const capture = useCallback(
+    (): MapView | null =>
+      map ? captureView(map, session.store.getState().doc.snapshot()) : null,
+    [map, session],
+  );
+
   // The PDF's picture is the same composite the PNG export makes, so the two
   // formats agree about what an export holds. The map's own canvas has no
-  // drawn shapes on it.
+  // drawn shapes on it. The page prints the credit as text, so the image
+  // carries none.
   const mapImage = useCallback(
-    async (pixelRatio: number): Promise<string | null> =>
-      map && api
-        ? exportCompositeDataURL(map, api, {
-            pixelRatio,
-            backgroundColor: background,
-          })
-        : null,
+    async (view: MapView, pixelRatio: number): Promise<string> => {
+      if (!map || !api) {
+        throw new Error("The map is not ready. Try again in a moment.");
+      }
+      return exportCompositeDataURL(map, api, view, {
+        pixelRatio,
+        backgroundColor: background,
+        credit: false,
+      });
+    },
     [map, api, background],
   );
 
@@ -198,13 +206,9 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
               onExportPNG={exportPNG}
               onExportGeoJSON={exportGeoJSON}
               onExportAtlasdraw={() => void saveMap(session, session.notify)}
-              getView={() => (map ? measureView(map) : null)}
-              getMapImageDataUrl={mapImage}
-              // The PDF's north arrow: the screen angle of geographic east,
-              // the angle the drawing layer is turned by.
-              getCameraRotationDeg={() => (map ? -map.getBearing() : 0)}
+              captureView={capture}
+              renderImage={mapImage}
               getLegendEntries={legend}
-              attribution={attribution}
             />
           </Suspense>
         );
@@ -216,6 +220,7 @@ export function EditorDialogs({ startRoom }: EditorDialogsProps) {
             excalidrawAPI={api}
             map={map}
             persistence={session.persistence}
+            history={session.history}
             notify={session.notify}
             onClose={close}
             server={getAppConfig().enableBackendPersistence ? storage : null}

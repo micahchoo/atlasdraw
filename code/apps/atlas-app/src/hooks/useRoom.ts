@@ -52,6 +52,7 @@ import { setDisplayName, type Identity } from "../state/identity";
 import { editorOf } from "../state/roomScene";
 
 import type { ViewStore } from "../session/view";
+import type { History } from "../session/history";
 import type { PersistenceStateStore } from "../state/persistenceState";
 import type * as maplibregl from "maplibre-gl";
 
@@ -92,16 +93,18 @@ export function useRoom(
   map: maplibregl.Map | null,
   /**
    * The session's room transport (null: this editor has no rooms), its
-   * autosave state, which a room waits for, and its view, which asks before
-   * a link moves the editor from one room to another.
+   * autosave state, which a room waits for, its history, which says
+   * whether the user's own map has unsaved changes, and its view, which
+   * asks before a link moves the editor from one room to another.
    */
   session: {
     transport: RoomTransport | null;
     persistence: PersistenceStateStore;
+    history: Pick<History, "dirty">;
     view: ViewStore;
   },
 ): RoomSession {
-  const { transport, persistence, view } = session;
+  const { transport, persistence, history, view } = session;
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<RoomStatus | null>(null);
   const [reason, setReason] = useState<string | null>(null);
@@ -216,7 +219,7 @@ export function useRoom(
         return;
       }
       // Write the user's unsaved changes before their map leaves the editor.
-      if (own.isDirty) {
+      if (history.dirty) {
         void own.forceSave();
       }
       previous = {
@@ -281,7 +284,7 @@ export function useRoom(
       setReason(null);
       setEntered(false);
     };
-  }, [room, api, persistence]);
+  }, [room, api, persistence, history]);
 
   // Presence: the camera after each move, the pointer while over the map.
   useEffect(() => {

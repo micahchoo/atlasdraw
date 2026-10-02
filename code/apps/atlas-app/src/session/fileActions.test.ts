@@ -50,10 +50,8 @@ function fakeDisk(session: EditorSession) {
       }
       return disk.next;
     },
-    markDirty: () => {},
-    isDirty: () => false,
   } as unknown as PersistenceStore;
-  session.persistence.setState({ persistenceStore: store, isDirty: true });
+  session.persistence.setState({ persistenceStore: store });
   return disk;
 }
 
@@ -97,7 +95,7 @@ describe("saveMap", () => {
     expect(file.manifest.title).toBe("Field notes");
     expect(file.manifest.camera.center).toEqual([2.35, 48.85]);
     expect(file.manifest.camera.zoom).toBe(9);
-    expect(session.persistence.getState().isDirty).toBe(false);
+    expect(hasUnsavedWork(currentDocument())).toBe(false);
     expect(n.success).toHaveBeenCalledWith("Map saved as .atlasdraw");
   });
 
@@ -267,8 +265,8 @@ describe("openSceneFile: a scene file dropped on the canvas", () => {
   it("saves the open map's pending changes before the new map replaces it", async () => {
     const { session } = editorSession();
     fakeDisk(session);
-    const store = session.persistence.getState().persistenceStore!;
-    (store as { isDirty: () => boolean }).isDirty = () => true;
+    // An edit: the open map has changes the autosave has not written.
+    session.history.record({ undo: () => {}, redo: () => {} });
     const kept: string[] = [];
     session.persistence.getState().setForceSave(async () => {
       kept.push(currentDocument().id);

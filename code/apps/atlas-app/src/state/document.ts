@@ -233,6 +233,17 @@ export type DocumentCommand =
   | { type: "set-opacity"; id: string; opacity: number }
   | { type: "remove-layer"; id: string }
   /**
+   * Hold `entry` as it is, at its `order` within its kind: in place of the
+   * entry with its id, or added. `fc` or `image` is its payload. An undo
+   * puts a layer back with it (state/documentUndo.ts).
+   */
+  | {
+      type: "put-layer";
+      entry: OverlayEntry;
+      fc?: FeatureCollection;
+      image?: Blob;
+    }
+  /**
    * Take this title and these layers and payloads as a whole. An entry or
    * payload equal by identity to the one held stays as it is. A room uses
    * it to apply what its collaborators changed.
@@ -253,6 +264,19 @@ export type DispatchResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
 
+/**
+ * Who gave a command: the user in this tab, or a collaborator whose change
+ * a room applies. Only a local command is an undo step.
+ */
+export type CommandOrigin = "local" | "remote";
+
+/** A command that changed the document, and the state it changed. */
+export interface AppliedCommand {
+  readonly command: DocumentCommand;
+  readonly before: DocumentState;
+  readonly origin: CommandOrigin;
+}
+
 /** What a document is created from: its state, and its comments. */
 export type DocumentInit = Partial<DocumentState> & {
   comments?: readonly Comment[];
@@ -261,7 +285,11 @@ export type DocumentInit = Partial<DocumentState> & {
 export interface Document {
   /** Fixed at creation. */
   readonly id: string;
-  /** The drawing this document is saved with. */
+  /**
+   * The drawing this document is saved with. While the document is open it
+   * is the editor's drawing; once another document opens, it is the drawing
+   * as it was then (`openDocument`), never the drawing of the other one.
+   */
   readonly scene: SceneAccess;
   /** The comments. A change to them raises the revision. */
   readonly comments: CommentsLayer;
@@ -273,8 +301,13 @@ export interface Document {
    * cannot draw is refused (lib/layerStyle.ts#validateLayerStyle), whoever
    * sends it.
    */
-  dispatch(command: DocumentCommand): DispatchResult;
+  dispatch(command: DocumentCommand, origin?: CommandOrigin): DispatchResult;
   subscribe(listener: () => void): () => void;
+  /**
+   * Hear each command that changed the document, after the change. A
+   * command that changed nothing, or was refused, is not heard.
+   */
+  onCommand(listener: (applied: AppliedCommand) => void): () => void;
   /**
    * Record the current content key as the saved baseline without moving
    * updatedAt. A load calls this once the loaded content is in place.
@@ -395,6 +428,13 @@ function styleRefusal(
             entry.geometryKind,
           )
         : null;
+    }
+    case "put-layer": {
+      const { entry } = command;
+      const held = state.overlays.find((e) => e.id === entry.id);
+      return entry.kind !== "data" || held === entry
+        ? null
+        : styleProblemOf(entry.style, entry.geometryKind);
     }
     case "replace-content": {
       const held = new Map(state.overlays.map((e) => [e.id, e]));
@@ -591,6 +631,58 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
         images,
       };
     }
+    case "put-layer": {
+      const { entry } = command;
+      const prefix = { data: "dl:", raster: "rl:", tile: "tl:" }[entry.kind];
+      if (!entry.id.startsWith(prefix)) {
+        throw new Error(
+          `${entry.kind} layer id must start with ${prefix} prefix (received "${entry.id}")`,
+        );
+      }
+      const others = state.overlays.filter((e) => e.id !== entry.id);
+      // Before the entry that holds its order in its kind, or after the
+      // last entry of its kind, or at the end.
+      let at = others.length;
+      let seen = 0;
+      for (let i = 0; i < others.length; i++) {
+        if (others[i].kind !== entry.kind) {
+          continue;
+        }
+        if (seen === entry.order) {
+          at = i;
+          break;
+        }
+        seen++;
+        at = i + 1;
+      }
+      const placed = others.slice();
+      placed.splice(at, 0, entry);
+      const overlays = reindex(placed);
+      const featureCollections =
+        command.fc && state.featureCollections[entry.id] !== command.fc
+          ? { ...state.featureCollections, [entry.id]: command.fc }
+          : state.featureCollections;
+      const images =
+        command.image && state.images[entry.id] !== command.image
+          ? { ...state.images, [entry.id]: command.image }
+          : state.images;
+      const sameOverlays =
+        overlays.length === state.overlays.length &&
+        overlays.every((e, i) => e === state.overlays[i]);
+      if (
+        sameOverlays &&
+        featureCollections === state.featureCollections &&
+        images === state.images
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        overlays: sameOverlays ? state.overlays : overlays,
+        featureCollections,
+        images,
+      };
+    }
     case "remove-layer": {
       if (!state.overlays.some((e) => e.id === command.id)) {
         return state;
@@ -604,6 +696,16 @@ function reduce(state: DocumentState, command: DocumentCommand): DocumentState {
     }
   }
 }
+
+/**
+ * How `openDocument` holds a document's scene: the live drawing while the
+ * document is open, a copy of it while another is.
+ */
+interface SceneHold {
+  freeze(): void;
+  thaw(): void;
+}
+const sceneHolds = new WeakMap<Document, SceneHold>();
 
 /**
  * A new document. Its comments live in `commentsDoc` when one is given (a
@@ -636,6 +738,7 @@ export function createDocument(
   let revision = 0;
   let lastKey: string | null = null;
   const listeners = new Set<() => void>();
+  const commandListeners = new Set<(applied: AppliedCommand) => void>();
 
   const notify = (): void => {
     for (const listener of Array.from(listeners)) {
@@ -654,19 +757,29 @@ export function createDocument(
     notify();
   });
 
-  return {
+  let frozen: {
+    elements: ReturnType<SceneAccess["elements"]>;
+    files: ReturnType<SceneAccess["files"]>;
+  } | null = null;
+  const ownScene: SceneAccess = {
+    elements: () => frozen?.elements ?? scene.elements(),
+    files: () => frozen?.files ?? scene.files(),
+  };
+
+  const created: Document = {
     id: state.id,
-    scene,
+    scene: ownScene,
     comments,
     get revision() {
       return revision;
     },
     snapshot: () => state,
-    dispatch: (command) => {
+    dispatch: (command, origin = "local") => {
       const refusal = styleRefusal(state, command);
       if (refusal) {
         return { ok: false, reason: refusal };
       }
+      const before = state;
       const next = reduce(state, command);
       if (next === state) {
         return { ok: true };
@@ -674,12 +787,21 @@ export function createDocument(
       state = next;
       revision += 1;
       notify();
+      for (const listener of Array.from(commandListeners)) {
+        listener({ command, before, origin });
+      }
       return { ok: true };
     },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+      };
+    },
+    onCommand: (listener) => {
+      commandListeners.add(listener);
+      return () => {
+        commandListeners.delete(listener);
       };
     },
     settle: (contentKey) => {
@@ -698,6 +820,18 @@ export function createDocument(
       return state.updatedAt;
     },
   };
+  sceneHolds.set(created, {
+    freeze: () => {
+      frozen ??= {
+        elements: [...scene.elements()],
+        files: { ...scene.files() },
+      };
+    },
+    thaw: () => {
+      frozen = null;
+    },
+  });
+  return created;
 }
 
 // ---------------------------------------------------------------------------
@@ -724,7 +858,16 @@ export function currentDocument(): Document {
   return useDocumentStore.getState().doc;
 }
 
+/**
+ * Open `doc` in the editor. The document it replaces keeps the drawing it
+ * had: the editor is about to show another.
+ */
 export function openDocument(doc: Document): void {
+  const before = currentDocument();
+  if (before !== doc) {
+    sceneHolds.get(before)?.freeze();
+    sceneHolds.get(doc)?.thaw();
+  }
   useDocumentStore.setState({ doc });
 }
 

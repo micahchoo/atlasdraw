@@ -87,10 +87,23 @@ export class HistoryChangedEvent {
   ) {}
 }
 
+/**
+ * Atlasdraw addition: what changed in the history. A host that keeps its own
+ * order of undo steps (atlas-app session/history.ts) mirrors the drawing's
+ * stacks from these. `elements` is false for an entry that changes only the
+ * app state (a selection): such an entry does not clear the redo stack.
+ */
+export type HistoryChange =
+  | { kind: "record"; elements: boolean }
+  | { kind: "undo" | "redo" | "clear" | "clear-redo" };
+
 export class History {
   public readonly onHistoryChangedEmitter = new Emitter<
     [HistoryChangedEvent]
   >();
+
+  /** Atlasdraw addition: every change to the stacks (`HistoryChange`). */
+  public readonly onChangeEmitter = new Emitter<[HistoryChange]>();
 
   public readonly undoStack: HistoryDelta[] = [];
   public readonly redoStack: HistoryDelta[] = [];
@@ -108,6 +121,22 @@ export class History {
   public clear() {
     this.undoStack.length = 0;
     this.redoStack.length = 0;
+    this.onChangeEmitter.trigger({ kind: "clear" });
+  }
+
+  /**
+   * Atlasdraw addition: drop the redo entries. A host calls it when an edit
+   * that is not the drawing's makes them unreachable.
+   */
+  public clearRedo() {
+    if (this.redoStack.length === 0) {
+      return;
+    }
+    this.redoStack.length = 0;
+    this.onHistoryChangedEmitter.trigger(
+      new HistoryChangedEvent(this.isUndoStackEmpty, this.isRedoStackEmpty),
+    );
+    this.onChangeEmitter.trigger({ kind: "clear-redo" });
   }
 
   /**
@@ -124,7 +153,8 @@ export class History {
 
     this.undoStack.push(historyDelta);
 
-    if (!historyDelta.elements.isEmpty()) {
+    const elements = !historyDelta.elements.isEmpty();
+    if (elements) {
       // don't reset redo stack on local appState changes,
       // as a simple click (unselect) could lead to losing all the redo entries
       // only reset on non empty elements changes!
@@ -134,24 +164,33 @@ export class History {
     this.onHistoryChangedEmitter.trigger(
       new HistoryChangedEvent(this.isUndoStackEmpty, this.isRedoStackEmpty),
     );
+    this.onChangeEmitter.trigger({ kind: "record", elements });
   }
 
   public undo(elements: SceneElementsMap, appState: AppState) {
-    return this.perform(
-      elements,
-      appState,
-      () => History.pop(this.undoStack),
-      (entry: HistoryDelta) => History.push(this.redoStack, entry),
-    );
+    try {
+      return this.perform(
+        elements,
+        appState,
+        () => History.pop(this.undoStack),
+        (entry: HistoryDelta) => History.push(this.redoStack, entry),
+      );
+    } finally {
+      this.onChangeEmitter.trigger({ kind: "undo" });
+    }
   }
 
   public redo(elements: SceneElementsMap, appState: AppState) {
-    return this.perform(
-      elements,
-      appState,
-      () => History.pop(this.redoStack),
-      (entry: HistoryDelta) => History.push(this.undoStack, entry),
-    );
+    try {
+      return this.perform(
+        elements,
+        appState,
+        () => History.pop(this.redoStack),
+        (entry: HistoryDelta) => History.push(this.undoStack, entry),
+      );
+    } finally {
+      this.onChangeEmitter.trigger({ kind: "redo" });
+    }
   }
 
   private perform(

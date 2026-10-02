@@ -48,12 +48,15 @@ export function conflictQuestion(conflict: Conflict): Question {
 /**
  * Answer a Conflict from a save of `file`. "Keep both", and Escape, open
  * the map as a copy with a new id and save that; nothing is lost.
+ * `saved` hears that `file` replaced the newer copy: the history marks the
+ * position the file was read at.
  */
 export async function answerConflict(
   s: OwnershipSession,
   store: OwnershipStore,
   conflict: Conflict,
   file: AtlasdrawDocument,
+  saved: () => void = () => {},
 ): Promise<void> {
   const replace = await s.view.getState().ask(conflictQuestion(conflict));
   if (replace) {
@@ -63,7 +66,9 @@ export async function answerConflict(
       s.notify.error(
         "The map changed again in another tab. Nothing was replaced.",
       );
+      return;
     }
+    saved();
     return;
   }
   const { api, map } = s.view.getState();

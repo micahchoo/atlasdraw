@@ -77,6 +77,9 @@ scrollX / scrollY / zoom from each map `move`. Keep these true:
   the pointer (CSS) and the keyboard (the fork's `placementBlocked` prop
   stops paste and arrow-key nudges). Hit tests that must work turned go
   through `map.unproject` and the frame, not Excalidraw's viewport math.
+  A surface that draws the map outside the live DOM (PNG, PDF) does not
+  know the turn by itself: it reads a `MapView` (`lib/mapView.ts`), whose
+  `renderDrawing` makes the same turn (`map-view.md`).
 
 Scene numbers reach 2^31. Upstream had 1e6 limits (elbow arrows,
 `newElement`); they are `MAX_SCENE_EXTENT` now. Chromium clamps canvas

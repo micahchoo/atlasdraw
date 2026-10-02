@@ -16,6 +16,11 @@
 // The size test is on the encoded bytes. Nothing is left out to make a
 // document fit: a document that does not fit and cannot be uploaded gets an
 // error message and no link.
+//
+// An expiry is honoured for every size. A hash link holds the map itself,
+// so nothing can end it: when the owner chooses an expiry, the link is an
+// upload link, however small the map. A hash link is made only for "until
+// you stop it", and the dialog says that it never expires.
 
 import { useCallback, useState } from "react";
 
@@ -48,7 +53,10 @@ export interface UseShareLinkState {
   isSharing: boolean;
   error: string | null;
   mode: ShareMode | null;
-  /** `expiresInDays` applies to an upload link only; null: no expiry. */
+  /**
+   * `expiresInDays` null: a link that lasts. A number makes an upload link
+   * whatever the size, because only the server can end a link.
+   */
   generate: (expiresInDays?: number | null) => Promise<ShareLink | null>;
   /** End an upload link. False if the server could not. */
   revoke: (token: string) => Promise<boolean>;
@@ -102,7 +110,7 @@ export function useShareLink(opts: UseShareLinkOptions): UseShareLinkState {
         const doc = getDoc();
         const bytes = await blobToUint8Array(await write(doc));
 
-        if (bytes.byteLength <= HASH_BYTE_LIMIT) {
+        if (expiresInDays === null && bytes.byteLength <= HASH_BYTE_LIMIT) {
           setMode("hash");
           return {
             url: routeUrl({
@@ -132,7 +140,9 @@ export function useShareLink(opts: UseShareLinkOptions): UseShareLinkState {
         } catch (err) {
           const reason = err instanceof Error ? ` (${err.message})` : "";
           setError(
-            `This map is too large for a link on its own, and the server could not store it${reason}. Try again, or save the file and send it.`,
+            bytes.byteLength <= HASH_BYTE_LIMIT
+              ? `A link that expires is kept on the server, and the server could not store it${reason}. Try again, or choose "Until you stop it" for a link that holds the map itself.`
+              : `This map is too large for a link on its own, and the server could not store it${reason}. Try again, or save the file and send it.`,
           );
           return null;
         }

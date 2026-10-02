@@ -249,9 +249,15 @@ export function encode(
  */
 const fileKeys = new WeakMap<Document, string>();
 
-/** Record that the document, as it is now, is in a file. */
-export function markSavedToFile(doc: Document): void {
-  fileKeys.set(doc, contentKey(doc));
+/**
+ * Record that the document is in a file: as it is now, or as it was when
+ * `key` (its contentKey) was read, for a write that took time.
+ */
+export function markSavedToFile(
+  doc: Document,
+  key: string = contentKey(doc),
+): void {
+  fileKeys.set(doc, key);
 }
 
 /**

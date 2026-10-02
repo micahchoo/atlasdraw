@@ -8,9 +8,14 @@ import {
   createDocument,
   DEFAULT_BASEMAP_ID,
   DEFAULT_DOCUMENT_TITLE,
+  openDocument,
   type Document,
   type RasterCorners,
 } from "../document";
+import { toFile } from "../documentIO";
+import { sceneOf } from "../scene";
+
+import { makeFakeExcalidraw } from "./fixtures/documentWorld";
 
 import type { FeatureCollection } from "geojson";
 
@@ -510,5 +515,35 @@ describe("replace-content", () => {
 
     expect(doc.snapshot()).toBe(before);
     expect(doc.revision).toBe(0);
+  });
+});
+
+describe("a document's scene is its own", () => {
+  it("a document that is no longer open keeps the drawing it had", () => {
+    const fx = makeFakeExcalidraw([{ id: "own", type: "rectangle" }]);
+    const own = createDocument({ title: "Mine" }, sceneOf(fx.api));
+    openDocument(own);
+
+    // A room (or another map) opens, and the editor shows its drawing.
+    openDocument(createDocument({ title: "Room" }, sceneOf(fx.api)));
+    fx.setElements([{ id: "theirs", type: "ellipse" }]);
+
+    expect(own.scene.elements().map((e) => e.id)).toEqual(["own"]);
+    expect(toFile(own).scene.map((e) => e.id)).toEqual(["own"]);
+  });
+
+  it("opened again, it reads the editor's drawing again", () => {
+    const fx = makeFakeExcalidraw([{ id: "own", type: "rectangle" }]);
+    const own = createDocument({}, sceneOf(fx.api));
+    openDocument(own);
+    openDocument(createDocument({}, sceneOf(fx.api)));
+
+    openDocument(own);
+    fx.setElements([
+      { id: "own", type: "rectangle" },
+      { id: "new", type: "ellipse" },
+    ]);
+
+    expect(own.scene.elements().map((e) => e.id)).toEqual(["own", "new"]);
   });
 });

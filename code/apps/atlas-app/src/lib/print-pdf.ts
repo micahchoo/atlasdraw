@@ -29,6 +29,8 @@ import {
   type PDFPage,
 } from "pdf-lib";
 
+import { creditText, groundResolution, type MapView } from "./mapView";
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -56,8 +58,8 @@ export interface PrintView {
   /** CSS px. */
   height: number;
   /**
-   * Ground metres per CSS px at the centre of the view, measured off the live
-   * projection (`measureView` in lib/export.ts). Mercator scale changes with
+   * Ground metres per CSS px at the centre of the view
+   * (`groundResolution` in lib/mapView.ts). Mercator scale changes with
    * latitude, so the bar is true at the centre of the map.
    */
   metersPerPixel: number;
@@ -94,6 +96,26 @@ export interface PrintOptions extends PageSpec {
    * Omitted or 0 prints the arrow pointing up — correct for a north-up export.
    */
   cameraRotationDeg?: number;
+}
+
+/**
+ * The parts of a print that come from the view: the frame's size, the scale
+ * bar's ground resolution, the north arrow's turn and the credit. Read from
+ * the same MapView the image is rendered for, so the page cannot describe
+ * another moment than the picture shows.
+ */
+export function printViewOf(
+  view: MapView,
+): Pick<PrintOptions, "view" | "cameraRotationDeg" | "attribution"> {
+  return {
+    view: {
+      width: view.size.width,
+      height: view.size.height,
+      metersPerPixel: groundResolution(view),
+    },
+    cameraRotationDeg: -view.bearing,
+    attribution: creditText(view.credits),
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -35,8 +35,8 @@ export function useDevHandles(
       cameraBridge,
       seed: (n: number) => seedShapes(map, api, n, frame()),
       frame,
-      isDirty: () => session.persistence.getState().isDirty,
-      clearDirty: () => session.persistence.getState().clearDirty(),
+      isDirty: () => session.history.dirty,
+      clearDirty: () => session.history.markSaved(),
       toLngLat,
       toScene,
     };

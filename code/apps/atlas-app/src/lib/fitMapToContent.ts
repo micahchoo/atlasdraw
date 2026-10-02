@@ -155,6 +155,7 @@ function onGlobe(box: LngLatBox): boolean {
 export function fitMapToBox(
   map: FitBoundsSurface | null,
   box: LngLatBox,
+  opts: { animate?: boolean } = {},
 ): boolean {
   if (!map || !onGlobe(box)) {
     return false;
@@ -168,7 +169,8 @@ export function fitMapToBox(
       {
         padding: FIT_PADDING,
         maxZoom: FIT_MAX_ZOOM,
-        duration: FIT_DURATION_MS,
+        // A view that opens on the box jumps there; a user's "zoom to" glides.
+        duration: opts.animate === false ? 0 : FIT_DURATION_MS,
       },
     );
     return true;

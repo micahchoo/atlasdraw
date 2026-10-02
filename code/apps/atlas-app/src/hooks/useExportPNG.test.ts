@@ -20,6 +20,16 @@ vi.mock("../lib/export", () => ({
 
 const FAKE_BLOB = {} as Blob;
 
+/** A live map turned 30°: the export captures its view at export time. */
+function liveMap(): maplibregl.Map {
+  return {
+    getCenter: () => ({ lng: 88.6, lat: 29.3 }),
+    getZoom: () => 9,
+    getBearing: () => 30,
+    getCanvas: () => ({ clientWidth: 800, clientHeight: 600 }),
+  } as unknown as maplibregl.Map;
+}
+
 const notify = { error: vi.fn() };
 
 beforeEach(() => {
@@ -60,7 +70,7 @@ describe("useExportPNG", () => {
   });
 
   it("exports, downloads via a synthetic anchor, and revokes the object URL", async () => {
-    const map = {} as maplibregl.Map;
+    const map = liveMap();
     const api = {} as ExcalidrawImperativeAPI;
     const clickSpy = vi.fn();
     const anchor = { click: clickSpy, href: "", download: "" };
@@ -80,12 +90,17 @@ describe("useExportPNG", () => {
     result.current(3);
     await vi.waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
 
-    expect(exportPNGMock).toHaveBeenCalledWith(map, api, {
-      pixelRatio: 3,
-      backgroundColor: "#123456",
-      // The basemap's credit, read at export time.
-      credit: expect.stringContaining("OpenStreetMap"),
-    });
+    expect(exportPNGMock).toHaveBeenCalledWith(
+      map,
+      api,
+      // The view, bearing and credits included, read at export time.
+      expect.objectContaining({
+        bearing: 30,
+        size: { width: 800, height: 600 },
+        credits: [expect.stringContaining("OpenStreetMap")],
+      }),
+      { pixelRatio: 3, backgroundColor: "#123456" },
+    );
     // The file name says the size, so 1x and 3x files are told apart.
     expect(anchor.download).toMatch(/^atlasdraw-\d+@3x\.png$/);
     expect(URL.createObjectURL).toHaveBeenCalledWith(FAKE_BLOB);
@@ -94,7 +109,7 @@ describe("useExportPNG", () => {
   });
 
   it("toasts with the error message when exportPNG rejects with an Error", async () => {
-    const map = {} as maplibregl.Map;
+    const map = liveMap();
     const api = {} as ExcalidrawImperativeAPI;
     exportPNGMock.mockRejectedValue(new Error("canvas too large"));
     const realCreateElement = document.createElement.bind(document);
@@ -115,7 +130,7 @@ describe("useExportPNG", () => {
   });
 
   it("toasts with a stringified value when exportPNG rejects with a non-Error", async () => {
-    const map = {} as maplibregl.Map;
+    const map = liveMap();
     const api = {} as ExcalidrawImperativeAPI;
     exportPNGMock.mockRejectedValue("weird rejection");
 

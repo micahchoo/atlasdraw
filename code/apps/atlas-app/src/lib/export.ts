@@ -10,11 +10,16 @@
 // Do not draw the screen's map canvas (1x on a 1x screen) and the drawings
 // (1x) into a 2x canvas through ctx.scale(2): both layers are upscaled, and
 // the "2x" export is a stretched screenshot.
+//
+// Every layer reads one MapView (lib/mapView.ts), captured once by the
+// caller: the map is drawn at its camera and bearing, the drawing is turned
+// by the same bearing, and the credit is its credits.
 
-import { exportToCanvas } from "@atlasdraw/excalidraw";
 import * as maplibregl from "maplibre-gl";
 
 import type { ExcalidrawImperativeAPI } from "@atlasdraw/excalidraw";
+
+import { creditText, renderDrawing, type MapView } from "./mapView";
 
 /** The PNG sizes the dialog offers, as multiples of the view. */
 export const PNG_PIXEL_RATIOS = [1, 2, 3] as const;
@@ -27,9 +32,10 @@ export interface RenderedMap {
   dispose: () => void;
 }
 
-/** Draw `map`'s current view at `pixelRatio`. */
+/** Draw `view` with `map`'s style at `pixelRatio`. */
 export type MapRenderer = (
   map: maplibregl.Map,
+  view: MapView,
   pixelRatio: number,
 ) => Promise<RenderedMap>;
 
@@ -40,12 +46,12 @@ export type ExportOpts = {
   /** Test seam. Default `renderMapOffscreen`. */
   renderMap?: MapRenderer;
   /**
-   * The credit line (basemap and tile layers), printed in the bottom-right
-   * corner over a pale box. A PNG leaves the app, so the credit the map's
-   * providers ask for must travel inside it. The PDF prints the credit as
-   * page text instead, so its composite passes none.
+   * Print the view's credits in the bottom-right corner over a pale box.
+   * Default true: a PNG leaves the app, so the credit the map's providers
+   * ask for must travel inside it. The PDF prints the credit as page text
+   * instead, so its composite passes false.
    */
-  credit?: string;
+  credit?: boolean;
 };
 
 export type CompositeImageOpts = ExportOpts & {
@@ -70,12 +76,6 @@ export function exportSize(
   };
 }
 
-/** The live view's CSS size. Not the canvas size, which is CSS x DPR. */
-function viewSize(map: maplibregl.Map): { width: number; height: number } {
-  const canvas = map.getCanvas();
-  return { width: canvas.clientWidth, height: canvas.clientHeight };
-}
-
 /** Longest the offscreen map may take to load tiles, glyphs and sprites. */
 const OFFSCREEN_TIMEOUT_MS = 30_000;
 
@@ -90,15 +90,16 @@ const OFFSCREEN_TIMEOUT_MS = 30_000;
  * cap, its events and its screen are left alone.
  *
  * The hidden map gets the live style (`getStyle()` serialises GeoJSON source
- * data too) and the live camera, and is read on `idle`: every tile, glyph and
+ * data too) and the view's camera, bearing included, and is read on `idle`: every tile, glyph and
  * sprite loaded and no fade running (fadeDuration 0). If the GPU limit still
  * makes the canvas smaller, the compositor sees the size and refuses.
  */
 export async function renderMapOffscreen(
   map: maplibregl.Map,
+  view: MapView,
   pixelRatio: number,
 ): Promise<RenderedMap> {
-  const { width, height } = viewSize(map);
+  const { width, height } = view.size;
   const container = document.createElement("div");
   container.setAttribute("aria-hidden", "true");
   Object.assign(container.style, {
@@ -115,10 +116,9 @@ export async function renderMapOffscreen(
   const offscreen = new maplibregl.Map({
     container,
     style: map.getStyle(),
-    center: map.getCenter(),
-    zoom: map.getZoom(),
-    bearing: map.getBearing(),
-    pitch: map.getPitch(),
+    center: view.center,
+    zoom: view.zoom,
+    bearing: view.bearing,
     minZoom: map.getMinZoom(),
     maxZoom: map.getMaxZoom(),
     renderWorldCopies: map.getRenderWorldCopies(),
@@ -186,13 +186,13 @@ function assertSize(
 export async function compositeMapScene(
   map: maplibregl.Map,
   excalidrawAPI: ExcalidrawImperativeAPI,
+  view: MapView,
   opts: ExportOpts = {},
 ): Promise<OffscreenCanvas> {
   const pixelRatio = opts.pixelRatio ?? 2;
   const backgroundColor = opts.backgroundColor ?? "transparent";
   const renderMap = opts.renderMap ?? renderMapOffscreen;
-  const view = viewSize(map);
-  const size = exportSize(view, pixelRatio);
+  const size = exportSize(view.size, pixelRatio);
 
   const offscreen = new OffscreenCanvas(size.width, size.height);
   const ctx = offscreen.getContext("2d");
@@ -210,7 +210,7 @@ export async function compositeMapScene(
   }
 
   // Layer 1: MapLibre (basemap + data layers), drawn 1:1.
-  const rendered = await renderMap(map, pixelRatio);
+  const rendered = await renderMap(map, view, pixelRatio);
   try {
     assertSize("map", rendered.canvas, size);
     ctx.drawImage(rendered.canvas, 0, 0);
@@ -218,28 +218,23 @@ export async function compositeMapScene(
     rendered.dispose();
   }
 
-  // Layer 2: Excalidraw at the live viewport (so zoom and scroll match the
-  // map), rendered at the same ratio and drawn 1:1.
-  const appState = excalidrawAPI.getAppState();
-  const drawings = await exportToCanvas({
-    elements: excalidrawAPI.getSceneElements(),
-    appState: { ...appState, exportBackground: false },
-    files: excalidrawAPI.getFiles(),
-    viewport: {
-      width: view.width,
-      height: view.height,
-      scrollX: appState.scrollX,
-      scrollY: appState.scrollY,
-      zoom: appState.zoom,
+  // Layer 2: the drawing for the same view, turned by its bearing, rendered
+  // at the same ratio and drawn 1:1.
+  const drawings = await renderDrawing(
+    view,
+    {
+      elements: excalidrawAPI.getSceneElements(),
+      files: excalidrawAPI.getFiles(),
+      appState: excalidrawAPI.getAppState(),
     },
-    getDimensions: () => ({ ...size, scale: pixelRatio }),
-  });
+    pixelRatio,
+  );
   assertSize("drawing layer", drawings, size);
   ctx.drawImage(drawings, 0, 0);
 
-  // Layer 3 (optional): the credit line.
-  const credit = opts.credit?.trim();
-  if (credit) {
+  // Layer 3: the credits, unless the caller prints them elsewhere.
+  const credit = creditText(view.credits);
+  if (opts.credit !== false && credit) {
     drawCredit(ctx, credit, size, pixelRatio);
   }
 
@@ -277,9 +272,10 @@ function drawCredit(
 export async function exportPNG(
   map: maplibregl.Map,
   excalidrawAPI: ExcalidrawImperativeAPI,
+  view: MapView,
   opts: ExportOpts = {},
 ): Promise<Blob> {
-  const offscreen = await compositeMapScene(map, excalidrawAPI, opts);
+  const offscreen = await compositeMapScene(map, excalidrawAPI, view, opts);
   return offscreen.convertToBlob({ type: "image/png" });
 }
 
@@ -306,52 +302,12 @@ function blobToDataURL(blob: Blob): Promise<string> {
 export async function exportCompositeDataURL(
   map: maplibregl.Map,
   excalidrawAPI: ExcalidrawImperativeAPI,
+  view: MapView,
   opts: CompositeImageOpts = {},
 ): Promise<string> {
   const type = opts.type ?? "image/jpeg";
   const quality = opts.quality ?? 0.92;
-  const offscreen = await compositeMapScene(map, excalidrawAPI, opts);
+  const offscreen = await compositeMapScene(map, excalidrawAPI, view, opts);
   const blob = await offscreen.convertToBlob({ type, quality });
   return blobToDataURL(blob);
-}
-
-/** Mean Earth radius (IUGG), metres. */
-const EARTH_RADIUS_M = 6371008.8;
-
-function haversineMeters(
-  a: { lng: number; lat: number },
-  b: { lng: number; lat: number },
-): number {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad;
-  const dLng = (b.lng - a.lng) * rad;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
-}
-
-/**
- * The view's CSS size and its ground resolution at the centre, for the PDF
- * scale bar. Measured off the live projection: the ground distance between
- * two screen points 100 px apart across the centre. That needs no knowledge
- * of MapLibre's tile size or zoom convention, and Web Mercator is conformal,
- * so the screen direction does not matter on a rotated map.
- */
-export function measureView(map: maplibregl.Map): {
-  width: number;
-  height: number;
-  metersPerPixel: number;
-} {
-  const { width, height } = viewSize(map);
-  const cx = width / 2;
-  const cy = height / 2;
-  const half = 50;
-  const a = map.unproject([cx - half, cy]);
-  const b = map.unproject([cx + half, cy]);
-  return {
-    width,
-    height,
-    metersPerPixel: haversineMeters(a, b) / (half * 2),
-  };
 }

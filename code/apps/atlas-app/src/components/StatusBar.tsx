@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 
-import { creditLine } from "../lib/tileLayers";
+import { creditText, documentCredits, metersPerPixel } from "../lib/mapView";
 import { useDocument } from "../state/document";
 import styles from "../styles/StatusBar.module.css";
 
@@ -33,16 +33,6 @@ function fmtLat(lat: number): string {
 
 function fmtZoom(zoom: number): string {
   return zoom.toFixed(1);
-}
-
-/** Web-Mercator meters per CSS pixel at the given latitude/zoom. */
-/** Equator length in metres, WGS84. */
-const EQUATOR_M = 40075016.686;
-/** MapLibre's zoom counts 512-px tiles (not the 256-px tiles of raster web maps). */
-const TILE_PX = 512;
-
-export function metersPerPixel(lat: number, zoom: number): number {
-  return ((EQUATOR_M / TILE_PX) * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
 }
 
 /** Pick a round scale-bar length that renders between 64 and 150 px.
@@ -83,16 +73,6 @@ interface StatusBarProps {
   map: maplibregl.Map | null;
   /** Persistence dirty flag — true when there are unsaved changes. */
   dirty?: boolean;
-  /**
-   * Data credit for the active basemap, printed in the marginalia. Derived by
-   * MapEditor from the basemap definition (BasemapConfig.attribution) so the
-   * credit matches what's actually rendered — the app ships a Protomaps vector
-   * basemap, not raster OSM. Falls back to a conservative OSM-only credit
-   * (never wrong, since all bundled basemaps derive from OSM data) when the
-   * active basemap can't be resolved. The credit of each visible tile layer
-   * in the open document follows it (lib/tileLayers#creditLine).
-   */
-  attribution?: string;
 }
 
 interface Readout {
@@ -105,11 +85,10 @@ interface Readout {
 
 // ---------------------------------------------------------------------------
 
-export function StatusBar({
-  map,
-  dirty = false,
-  attribution = "© OpenStreetMap",
-}: StatusBarProps) {
+export function StatusBar({ map, dirty = false }: StatusBarProps) {
+  // The credits of the open document: its basemap's, then each visible tile
+  // layer's (lib/mapView#documentCredits, one rule for every surface).
+  const basemap = useDocument((s) => s.basemap);
   const overlays = useDocument((s) => s.overlays);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [online, setOnline] = useState(
@@ -195,7 +174,7 @@ export function StatusBar({
       <span className={styles.spacer} />
 
       <span className={styles.attrib} data-testid="status-bar-attribution">
-        {creditLine(attribution, overlays)}
+        {creditText(documentCredits({ basemap, overlays }))}
       </span>
 
       {readout && (

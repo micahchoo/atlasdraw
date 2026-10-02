@@ -15,6 +15,7 @@ import {
   startAutoSave,
   type PersistenceStore,
 } from "../state/persistence";
+import { createHistory, type EditorHistory } from "../session/history";
 
 // ---------------------------------------------------------------------------
 // Fixture
@@ -76,42 +77,6 @@ describe("createPersistenceStore — IDB", () => {
   it("load() returns null on empty DB", async () => {
     const loaded = await store.load();
     expect(loaded).toBeNull();
-  });
-
-  it("onDirty(cb) fires after markDirty()", () => {
-    const cb = vi.fn();
-    const unsub = store.onDirty(cb);
-    expect(cb).not.toHaveBeenCalled();
-    store.markDirty();
-    expect(cb).toHaveBeenCalledTimes(1);
-    store.markDirty();
-    expect(cb).toHaveBeenCalledTimes(2);
-    unsub();
-    store.markDirty();
-    expect(cb).toHaveBeenCalledTimes(2); // unsubscribed.
-  });
-
-  it("dirty flag stays true if markDirty arrives during in-flight save", async () => {
-    const doc = makeDoc();
-    store.markDirty();
-    expect(store.isDirty()).toBe(true);
-
-    // Start the save without awaiting; immediately bump dirtySeq via
-    // markDirty(). Because markDirty is synchronous and save's first await
-    // runs on the microtask queue, the markDirty lands before the put
-    // resolves — exercising the snapshot-guard race window.
-    const savePromise = store.save(doc);
-    store.markDirty();
-    await savePromise;
-
-    expect(store.isDirty()).toBe(true);
-  });
-
-  it("save() clears dirty when no race occurs", async () => {
-    const doc = makeDoc();
-    store.markDirty();
-    await store.save(doc);
-    expect(store.isDirty()).toBe(false);
   });
 });
 
@@ -227,7 +192,7 @@ describe("createPersistenceStore — remoteSave callback (T13)", () => {
     await store.close();
   });
 
-  it("swallows remoteSave failures — save() resolves and dirty clears", async () => {
+  it("swallows remoteSave failures — save() resolves", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const remoteSave = vi.fn(async () => {
       throw new Error("network down");
@@ -237,13 +202,11 @@ describe("createPersistenceStore — remoteSave callback (T13)", () => {
       remoteSave,
     });
     const doc = makeDoc();
-    store.markDirty();
     // The promise must NOT reject.
     await expect(store.save(doc)).resolves.toEqual({
       kind: "saved",
       revision: 1,
     });
-    expect(store.isDirty()).toBe(false);
     expect(remoteSave).toHaveBeenCalledTimes(1);
     expect(errSpy).toHaveBeenCalledWith(
       expect.stringContaining("remoteSave failed"),
@@ -259,17 +222,21 @@ describe("createPersistenceStore — remoteSave callback (T13)", () => {
 // startAutoSave — debounce + ceiling
 // ---------------------------------------------------------------------------
 
-describe("startAutoSave — debounce + ceiling", () => {
+describe("startAutoSave — driven by the history", () => {
   let store: PersistenceStore;
   let saveSpy: ReturnType<typeof vi.fn>;
+  let history: EditorHistory;
+  /** One more document step: an edit. */
+  const edit = () => history.record({ undo: () => {}, redo: () => {} });
 
   beforeEach(() => {
     vi.useFakeTimers();
     store = createPersistenceStore({ dbName: freshDb() });
     // Replace `save` with a spy so we can count calls without exercising
     // IDB inside the timer-based tests (we already test the IDB path above).
-    saveSpy = vi.fn(() => Promise.resolve());
+    saveSpy = vi.fn(() => Promise.resolve({ kind: "saved", revision: 1 }));
     store.save = saveSpy as unknown as typeof store.save;
+    history = createHistory();
   });
 
   afterEach(async () => {
@@ -277,56 +244,121 @@ describe("startAutoSave — debounce + ceiling", () => {
     await store.close();
   });
 
-  it("three rapid markDirty() within 100ms → exactly one save() call after debounce", async () => {
+  it("three rapid edits within 100ms → exactly one save() call after debounce", async () => {
     const doc = makeDoc();
-    const dispose = startAutoSave(store, () => doc, 5000, 30000);
+    const autosave = startAutoSave(store, history, () => doc, {
+      intervalMs: 5000,
+      maxFlushMs: 30000,
+    });
 
-    store.markDirty();
+    edit();
     await vi.advanceTimersByTimeAsync(30);
-    store.markDirty();
+    edit();
     await vi.advanceTimersByTimeAsync(30);
-    store.markDirty();
+    edit();
 
     // Before the debounce window elapses, no save.
     await vi.advanceTimersByTimeAsync(100);
     expect(saveSpy).not.toHaveBeenCalled();
 
-    // After 5s from the *last* markDirty, exactly one flush.
+    // After 5s from the *last* edit, exactly one flush.
     await vi.advanceTimersByTimeAsync(5000);
     expect(saveSpy).toHaveBeenCalledTimes(1);
+    expect(history.dirty).toBe(false);
 
-    dispose();
+    autosave.stop();
   });
 
   it("ceiling timer fires when continuous edits keep resetting the debounce", async () => {
     const doc = makeDoc();
     const intervalMs = 5000;
     const maxFlushMs = 30000;
-    const dispose = startAutoSave(store, () => doc, intervalMs, maxFlushMs);
+    const autosave = startAutoSave(store, history, () => doc, {
+      intervalMs,
+      maxFlushMs,
+    });
 
     // Edit every 1s for 31s. Each edit resets the debounce to 5s, so the
     // debounce alone would never fire. The ceiling MUST force a flush.
     let elapsed = 0;
     while (elapsed < maxFlushMs + 1000) {
-      store.markDirty();
+      edit();
       await vi.advanceTimersByTimeAsync(1000);
       elapsed += 1000;
     }
 
     expect(saveSpy).toHaveBeenCalledTimes(1);
-    dispose();
+    autosave.stop();
   });
 
-  it("dispose() cancels pending timers — no save fires after dispose", async () => {
+  it("stop() cancels pending timers — no save fires after stop", async () => {
     const doc = makeDoc();
-    const dispose = startAutoSave(store, () => doc, 5000, 30000);
+    const autosave = startAutoSave(store, history, () => doc);
 
-    store.markDirty();
+    edit();
     await vi.advanceTimersByTimeAsync(1000);
-    dispose();
+    autosave.stop();
     await vi.advanceTimersByTimeAsync(60000);
 
     expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("an edit made while a save runs stays dirty", async () => {
+    let finish: (r: unknown) => void = () => {};
+    saveSpy.mockImplementation(() => new Promise((r) => (finish = r)));
+    const autosave = startAutoSave(store, history, () => makeDoc());
+
+    edit();
+    const saving = autosave.saveNow();
+    edit();
+    finish({ kind: "saved", revision: 1 });
+    await saving;
+
+    expect(history.dirty).toBe(true);
+    autosave.stop();
+  });
+
+  it("undo back to the saved position saves nothing", async () => {
+    const autosave = startAutoSave(store, history, () => makeDoc());
+
+    edit();
+    history.undo();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(history.dirty).toBe(false);
+    expect(saveSpy).not.toHaveBeenCalled();
+    autosave.stop();
+  });
+
+  it("nothing to save here (a room): no save, and the history stays dirty", async () => {
+    const onSaved = vi.fn();
+    const autosave = startAutoSave(store, history, () => null, { onSaved });
+
+    edit();
+    await vi.advanceTimersByTimeAsync(60000);
+
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(history.dirty).toBe(true);
+    autosave.stop();
+  });
+
+  it("a conflict leaves the history dirty and goes to onConflict", async () => {
+    const conflict = {
+      kind: "conflict",
+      stored: { revision: 3, updatedAt: "2026-06-01T00:00:00.000Z" },
+    };
+    saveSpy.mockResolvedValue(conflict);
+    const onConflict = vi.fn();
+    const doc = makeDoc();
+    const autosave = startAutoSave(store, history, () => doc, { onConflict });
+
+    edit();
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(onConflict).toHaveBeenCalledWith(conflict, doc, expect.anything());
+    expect(history.dirty).toBe(true);
+    autosave.stop();
   });
 });
 
@@ -472,7 +504,6 @@ describe("createPersistenceStore — the stored copy is never replaced by an old
 
     // A store that never read the slot: an opened file of the same map.
     const other = createPersistenceStore({ dbName, remoteSave });
-    other.markDirty();
     const result = await other.save(makeDoc(OLDER));
 
     expect(result).toEqual({
@@ -480,7 +511,6 @@ describe("createPersistenceStore — the stored copy is never replaced by an old
       stored: { revision: 1, updatedAt: NEWER },
     });
     expect(remoteSave).not.toHaveBeenCalled();
-    expect(other.isDirty()).toBe(true);
     expect((await other.load())?.manifest.title).toBe("Week of edits");
     await other.close();
   });

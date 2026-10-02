@@ -5,12 +5,16 @@
 
 import { describe, it, expect } from "vitest";
 
+import { documentFrame } from "@atlasdraw/geo";
+
+import { groundResolution, type MapView } from "../mapView";
 import {
   PRINT_DPI,
   exportPDF,
   northArrowGeometry,
   pageDimensions,
   printPixelRatio,
+  printViewOf,
   scaleBar,
   scaleRatioLabel,
   scaleUnitsForLocale,
@@ -336,5 +340,29 @@ describe("northArrowGeometry", () => {
       await exportPDF(printOptions({ cameraRotationDeg: 47 })),
     );
     expect(pdf.pages[0].texts).toContain("N");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The page reads the one MapView the image was rendered for.
+// ---------------------------------------------------------------------------
+
+describe("printViewOf", () => {
+  it("takes the size, scale, north and credit from the view", () => {
+    const view: MapView = {
+      center: { lng: 0, lat: 60 },
+      zoom: 3,
+      bearing: 30,
+      size: { width: 1440, height: 720 },
+      frame: documentFrame(0, 60),
+      credits: ["© OpenStreetMap", "© Example Aerials"],
+    };
+    const parts = printViewOf(view);
+    expect(parts.view.width).toBe(1440);
+    expect(parts.view.height).toBe(720);
+    expect(parts.view.metersPerPixel).toBeCloseTo(groundResolution(view), 9);
+    // East runs -bearing on screen; the drawing layer turns by the same.
+    expect(parts.cameraRotationDeg).toBe(-30);
+    expect(parts.attribution).toBe("© OpenStreetMap · © Example Aerials");
   });
 });

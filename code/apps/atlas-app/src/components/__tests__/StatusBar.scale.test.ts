@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { metersPerPixel } from "../StatusBar";
+import { metersPerPixel } from "../../lib/mapView";
 
 // MapLibre's zoom counts 512-px tiles: at zoom 0 the whole equator
 // (40,075,016.686 m) spans 512 px.

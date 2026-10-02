@@ -33,6 +33,7 @@ import {
   createPersistenceState,
   type PersistenceStateStore,
 } from "../../state/persistenceState";
+import { createHistory, type EditorHistory } from "../../session/history";
 import {
   makeFakeExcalidraw,
   type FakeExcalidraw,
@@ -74,10 +75,12 @@ let store: PersistenceStore;
 let fx: FakeExcalidraw;
 /** The editor's autosave state; a new one for every case. */
 let persistence: PersistenceStateStore;
+let history: EditorHistory;
 
 beforeEach(() => {
   store = createPersistenceStore({ dbName: `my-maps-ui-${++n}` });
   persistence = createPersistenceState();
+  history = createHistory();
   persistence.getState().setPersistenceStore(store);
   persistence.getState().setForceSave(async () => {
     await store.save(toFile(currentDocument()));
@@ -99,6 +102,7 @@ function renderDialog(server: StorageClient | null = null) {
     <MyMapsDialog
       excalidrawAPI={fx.api}
       persistence={persistence}
+      history={history}
       notify={notify}
       onClose={onClose}
       now={() => NOW}
@@ -307,7 +311,8 @@ describe("MyMapsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "New map" }));
 
     await waitFor(() => expect(currentDocument().id).not.toBe(before));
-    expect(onClose).toHaveBeenCalled();
+    // The new map is saved first, then the dialog closes.
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   it("closes on Escape", async () => {
@@ -323,7 +328,7 @@ describe("MyMapsDialog", () => {
     fx.setElements([{ id: "drawn", type: "ellipse" }]);
     openDocument(createDocument({ title: "Fresh work" }, sceneOf(fx.api)));
     const fresh = currentDocument().id;
-    persistence.getState().markDirty();
+    history.record({ undo: () => {}, redo: () => {} });
     persistence.getState().setForceSave(async () => {
       throw new Error("quota");
     });
@@ -348,7 +353,7 @@ describe("MyMapsDialog", () => {
   it("lists the open map's latest changes", async () => {
     fx.setElements([{ id: "drawn", type: "ellipse" }]);
     openDocument(createDocument({ title: "Fresh work" }, sceneOf(fx.api)));
-    persistence.getState().markDirty();
+    history.record({ undo: () => {}, redo: () => {} });
     renderDialog();
 
     expect(await screen.findByText("Fresh work")).toBeTruthy();

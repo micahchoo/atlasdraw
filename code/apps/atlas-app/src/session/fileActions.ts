@@ -8,6 +8,7 @@
 import type { AtlasdrawDocument, Camera } from "@atlasdraw/data";
 
 import {
+  contentKey,
   documentFromExcalidrawJson,
   documentFromExcalidrawScene,
   hasUnsavedWork,
@@ -43,9 +44,12 @@ export async function saveMap(
   }
   try {
     const doc = s.store.getState().doc;
+    // What goes into the file is the content now, not after the picker:
+    // an edit made while it is open is not in the file.
+    const key = contentKey(doc);
     await store.saveToDisk(toFile(doc, undefined, liveCamera(map)));
-    markSavedToFile(doc);
-    s.persistence.getState().clearDirty();
+    markSavedToFile(doc, key);
+    // The file is not the browser's copy: the history stays as it is.
     notify?.success("Map saved as .atlasdraw");
   } catch (err) {
     if (isPickerCancel(err)) {
@@ -165,9 +169,8 @@ async function openInPlace(
     // The open map's last edits may still wait for the autosave delay. Keep
     // them in its own slot before the new map takes the editor; a failure
     // throws, and nothing opens.
-    const persistence = s.persistence.getState();
-    if (persistence.persistenceStore?.isDirty()) {
-      await persistence.forceSave();
+    if (s.history.dirty) {
+      await s.persistence.getState().forceSave();
     }
     const opened = await loadDocument(admitted, api, {
       map,
@@ -177,15 +180,14 @@ async function openInPlace(
       return;
     }
     markSavedToFile(opened);
-    // The opened file becomes the autosaved map.
-    s.persistence.getState().markDirty();
     const n = loaded.manifest.layers.length;
     notify?.success(
       `Opened "${loaded.manifest.title}" — ${n} layer${n === 1 ? "" : "s"}`,
     );
-    // Save now, not after the autosave delay: when this browser holds a
-    // newer copy of the same map, the user is asked while the open is fresh
-    // (session/mapOwnership.ts).
+    // The opened file becomes the autosaved map. Opening is no edit, so the
+    // history does not ask for this save; save now, not after a delay: when
+    // this browser holds a newer copy of the same map, the user is asked
+    // while the open is fresh (session/mapOwnership.ts).
     void s.persistence
       .getState()
       .forceSave()
@@ -216,6 +218,7 @@ export async function restoreBackup(s: EditorSession): Promise<void> {
     api,
     map,
     persistence: s.persistence,
+    history: s.history,
     notify: s.notify,
     client: createHttpStorageClient({
       baseUrl: getAppConfig().storageBaseUrl ?? "",
