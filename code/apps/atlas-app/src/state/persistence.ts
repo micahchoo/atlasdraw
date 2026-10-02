@@ -188,8 +188,11 @@ export interface CreatePersistenceStoreOptions {
    * `remoteSaveFailed()` to true and fire `onRemoteSaveFailed` if configured.
    */
   remoteSave?: (blob: Blob, documentId: string) => Promise<void>;
-  /** Callback when remoteSave fails (IDB ok, server not). */
-  onRemoteSaveFailed?: () => void;
+  /**
+   * Callback when remoteSave fails (IDB ok, server not), with the error and
+   * the bytes and document it was for, so the owner can answer a refusal.
+   */
+  onRemoteSaveFailed?: (err: unknown, blob: Blob, documentId: string) => void;
   /** Where this tab keeps its own last-opened map; null for none. */
   tabStorage?: Pick<Storage, "getItem" | "setItem"> | null;
   /** Web Locks for one tab per map; the browser's by default. */
@@ -322,7 +325,7 @@ export function createPersistenceStore(
             "[persistence] remoteSave failed (local IDB write succeeded)",
             err,
           );
-          options.onRemoteSaveFailed?.();
+          options.onRemoteSaveFailed?.(err, blob, doc.manifest.id);
         }
       }
       return result;

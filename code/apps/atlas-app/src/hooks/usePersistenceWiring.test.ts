@@ -24,6 +24,7 @@ import * as shareModule from "../state/loadShareDocument";
 import { savedDocument } from "../state/__tests__/fixtures/documentWorld";
 
 import * as appConfigModule from "../config/app-config";
+import * as remoteModule from "../state/remoteMapIdCache";
 
 import { usePersistenceWiring } from "./usePersistenceWiring";
 
@@ -479,6 +480,88 @@ describe("usePersistenceWiring", () => {
       "Couldn't sync to the server — your changes are saved locally but not backed up",
     );
     expect(session.persistence.getState().remoteSaveFailed).toBe(true);
+  });
+
+  describe("a server that refuses the map, or holds a newer save", () => {
+    type Failed = (err: unknown, blob: Blob, documentId: string) => void;
+
+    function failedHandler(): Failed {
+      vi.spyOn(appConfigModule, "getAppConfig").mockReturnValue({
+        ...BASE_CONFIG,
+        enableBackendPersistence: true,
+        storageBaseUrl: "",
+      });
+      const store = makeFakeStore();
+      let failed: Failed | undefined;
+      vi.spyOn(persistenceModule, "createPersistenceStore").mockImplementation(
+        (opts) => {
+          failed = opts?.onRemoteSaveFailed as Failed;
+          return store;
+        },
+      );
+      vi.spyOn(persistenceModule, "startAutoSave").mockReturnValue(
+        fakeAutoSave(),
+      );
+      renderHook(() =>
+        usePersistenceWiring(session, fakeExcalidrawAPI, { error: vi.fn() }),
+      );
+      return failed!;
+    }
+
+    function question() {
+      const dialog = session.view.getState().dialog;
+      expect(dialog?.kind).toBe("confirm");
+      return dialog as Extract<typeof dialog, { kind: "confirm" }> & {
+        confirmLabel: string;
+      };
+    }
+
+    it("a refused map asks once, and a yes saves a new server copy", async () => {
+      const copy = vi
+        .spyOn(remoteModule, "saveAsNewServerCopy")
+        .mockResolvedValue();
+      const failed = failedHandler();
+      const blob = new Blob(["map"]);
+
+      failed(new remoteModule.ServerMapRefusedError(401), blob, "doc-1");
+      failed(new remoteModule.ServerMapRefusedError(401), blob, "doc-1");
+      const asked = question();
+      expect(asked.confirmLabel).toBe("Save a new server copy");
+      asked.answer(true);
+
+      await waitFor(() => expect(copy).toHaveBeenCalledTimes(1));
+      expect(copy.mock.calls[0]!.slice(1)).toEqual([blob, "doc-1"]);
+    });
+
+    it("a refused map saves nothing new after a no", async () => {
+      const copy = vi
+        .spyOn(remoteModule, "saveAsNewServerCopy")
+        .mockResolvedValue();
+      const failed = failedHandler();
+
+      failed(new remoteModule.ServerMapRefusedError(404), new Blob(), "doc-1");
+      question().answer(false);
+      await Promise.resolve();
+
+      expect(copy).not.toHaveBeenCalled();
+      expect(session.view.getState().dialog).toBeNull();
+    });
+
+    it("a newer save from another browser asks, and a yes saves this browser's map over it", async () => {
+      const replace = vi
+        .spyOn(remoteModule, "replaceServerVersion")
+        .mockResolvedValue();
+      const failed = failedHandler();
+      const blob = new Blob(["mine"]);
+
+      failed(new remoteModule.ServerMapChangedError(7), blob, "doc-1");
+      const asked = question();
+      expect(asked.confirmLabel).toBe("Save my version");
+      asked.answer(true);
+
+      await waitFor(() => expect(replace).toHaveBeenCalledTimes(1));
+      expect(replace.mock.calls[0]!.slice(1)).toEqual([blob, "doc-1"]);
+    });
   });
 
   it("disposes the store and clears it from the session on unmount", async () => {

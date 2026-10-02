@@ -461,6 +461,21 @@ describe("server versions", () => {
     expect(listVersions).not.toHaveBeenCalled();
   });
 
+  it("restoring a version after another browser saved is the owner's answer: it saves over that revision", async () => {
+    const { client, updateMap } = fakeClient();
+    const save = buildRemoteSaveCallback(client);
+    await save(bytes(), A);
+    updateMap.mockRejectedValueOnce(new MapChangedError(5));
+    await expect(save(bytes(), A)).rejects.toThrow(ServerMapChangedError);
+
+    await saveRestoredVersion(client, bytes(), A);
+    await save(bytes(), A);
+
+    expect(updateMap.mock.calls.slice(1).map((c) => c[3]?.ifRevision)).toEqual([
+      5, 2,
+    ]);
+  });
+
   it("a restored version is a new revision that keeps the one it replaces", async () => {
     const { client, updateMap } = fakeClient();
     await buildRemoteSaveCallback(client)(bytes(), A);

@@ -459,6 +459,8 @@ export function readServerVersion(
 /**
  * Save an older version's bytes as the map's new revision. The server keeps
  * the revision it replaces, so a restore never loses the map it replaced.
+ * A restore is the owner's choice, so it also answers a pending 412: it
+ * saves over the other browser's revision.
  */
 export function saveRestoredVersion(
   client: StorageClient,
@@ -466,6 +468,11 @@ export function saveRestoredVersion(
   documentId: string,
 ): Promise<void> {
   return serial(documentId, async () => {
-    await push(client, bytes, documentId, true);
+    const known = await load(documentId);
+    if (known?.changed === undefined) {
+      await push(client, bytes, documentId, true);
+      return;
+    }
+    await send(client, bytes, documentId, known, known.changed, true);
   });
 }
