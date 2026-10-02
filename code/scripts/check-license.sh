@@ -2,7 +2,7 @@
 # check-license.sh — Fail CI if any workspace package.json has wrong or missing license.
 # Per ADR 0002 (license split): AGPL-3.0-only for apps/root, MIT for CLI/libraries/vendored, MPL-2.0 for basemap/tools.
 #
-# Usage: run from repo root — bash scripts/check-license.sh
+# Usage: bash scripts/check-license.sh (it runs from code/ itself)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +31,7 @@ CHECKED=0
 
 for pkg_path in "${!EXPECTED_LICENSE[@]}"; do
   if [ ! -f "${pkg_path}" ]; then
-    # Package doesn't exist yet (e.g. apps/storage not landed) — skip silently
+    # A package missing from the tree is skipped
     continue
   fi
 

@@ -18,7 +18,7 @@ This folder contains:
 
 ## Adding a new ADR
 
-1. Pick the next sequential number (don't reuse).
+1. A product decision goes in `docs/architecture/adr/` at the repository root, not here. Pick the next number of the series it joins (don't reuse).
 2. Write the ADR using the standard template (Status / Context / Decision / Consequences / References).
 3. Mark prior ADRs as `Superseded by NNNN` if applicable.
 4. Update this README's table of contents (if we add one).

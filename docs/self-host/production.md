@@ -89,7 +89,7 @@ Optional:
   to preserve the
   [zero-call-home posture](../architecture/adr/0006-telemetry.md).
   Operators who set this must document the third-party data processor in
-  their privacy notice — see ADR-0009.
+  their privacy notice — see the same ADR.
 - `POSTGRES_USER`, `POSTGRES_DB` — defaults are `atlasdraw`. Override if
   you need to match existing infra.
 - `BLOB_BUCKET`, `BLOB_REGION` — the bucket and its region (defaults
@@ -485,7 +485,8 @@ TLS. For production exposure, also consider:
   this (no `ports:` declaration → only reachable on the compose
   network). Don't add a public port mapping.
 - **Set `SENTRY_DSN` only to an instance you control.** Sentry's hosted
-  service is a third-party data processor; ADR-0009 documents the
+  service is a third-party data processor;
+  `docs/architecture/adr/0009-error-capture.md` documents the
   scrubbing applied (`Authorization` headers, request IPs stripped).
 - **Rotate the bucket key and `POSTGRES_PASSWORD` periodically.**
   Currently a manual operation (edit `.env`, then run the `up -d` command
