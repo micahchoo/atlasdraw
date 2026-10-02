@@ -30,7 +30,7 @@ persistence specifically.
   wrong `package.json`.
 - **Yarn 4 via Corepack.** `code/package.json` pins
   `"packageManager": "yarn@4.15.0"`; run `corepack enable` once. CI uses
-  Node 20 (`.nvmrc`); Node 24 also works.
+  Node 22 (`.nvmrc`); Node 24 also works.
 - **Don't assume the port.** `vite.config.ts` asks for 5174, but Vite falls
   back to the next free port with only a one-line log ("Port 5174 is in use,
   trying another one..."). Other projects on a shared dev machine often hold
