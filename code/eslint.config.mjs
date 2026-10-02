@@ -23,6 +23,7 @@ export default tseslint.config(
       "**/dev-dist/",
       "**/coverage/",
       "packages/excalidraw/types/",
+      "bench/results/",
       "apps/*/test-results/",
       "apps/*/playwright-report/",
     ],

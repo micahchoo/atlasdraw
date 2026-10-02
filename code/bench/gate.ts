@@ -1,49 +1,68 @@
 // SPDX-License-Identifier: MIT
 // The bench regression rule, as a pure function so it can be tested.
+//
+// It compares two sets of runs made on the SAME machine in the same job:
+// the merge base and the head (ab.ts). A committed baseline timed on another
+// machine says nothing about a regression; that gate failed 2 runs in 3 on
+// an unchanged tree (audit 2, F4).
 
-export interface ScenarioResult {
-  label: string;
-  p95_ms: number;
-}
+/** Scenario label -> its median time, in ms, from each run. */
+export type Runs = Record<string, readonly number[]>;
 
-export interface GateCheck {
+export interface RunCheck {
   label: string;
-  p95_ms: number;
-  limit_ms: number;
+  baseMs: number;
+  headMs: number;
+  limitMs: number;
   pass: boolean;
 }
 
-/** A run may be this much slower than the baseline before it fails. */
-export const SLACK = 1.2;
+/** The head may always be this much slower than the base. */
+export const MIN_SLACK = 0.1;
+/** ... and this many times the measured relative spread, if that is wider. */
+export const NOISE_FACTOR = 3;
 
-// The 50k scenario has no 50k baseline; it is held to the 10k baseline
-// scaled up. Observed 50k/10k is ~6.3x (allocation pressure); 8x leaves
-// headroom without being loose.
-const SCALED: Record<string, { from: string; factor: number }> = {
-  "parse + requireHomogeneousGeometry 50k points": {
-    from: "parse + requireHomogeneousGeometry 10k points",
-    factor: 8,
-  },
-};
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
 
 /**
- * Compare a fresh run against the COMMITTED baseline. A scenario the
- * baseline does not cover is skipped, not passed.
+ * The scatter of a set of runs, relative to their median: the median
+ * absolute deviation, scaled (x1.4826) to match a standard deviation for
+ * normal noise. One slow run moves it little, unlike a standard deviation.
  */
-export function compareToBaseline(
-  baseline: readonly ScenarioResult[],
-  current: readonly ScenarioResult[],
-): GateCheck[] {
-  const base = new Map(baseline.map((s) => [s.label, s.p95_ms]));
-  const checks: GateCheck[] = [];
-  for (const { label, p95_ms } of current) {
-    const scaled = SCALED[label];
-    const reference = scaled ? base.get(scaled.from) : base.get(label);
-    if (reference === undefined) {
+export function relativeSpread(values: readonly number[]): number {
+  const m = median(values);
+  if (m === 0) {
+    return 0;
+  }
+  const mad = median(values.map((v) => Math.abs(v - m)));
+  return (1.4826 * mad) / m;
+}
+
+/**
+ * For each scenario both sides ran: fail when the head's median is above
+ * base * (1 + slack), where slack is MIN_SLACK or NOISE_FACTOR times the
+ * wider of the two spreads, whichever is larger.
+ */
+export function compareRuns(base: Runs, head: Runs): RunCheck[] {
+  const checks: RunCheck[] = [];
+  for (const [label, headRuns] of Object.entries(head)) {
+    const baseRuns = base[label];
+    if (!baseRuns) {
       continue;
     }
-    const limit_ms = reference * (scaled?.factor ?? 1) * SLACK;
-    checks.push({ label, p95_ms, limit_ms, pass: p95_ms <= limit_ms });
+    const baseMs = median(baseRuns);
+    const headMs = median(headRuns);
+    const slack = Math.max(
+      MIN_SLACK,
+      NOISE_FACTOR *
+        Math.max(relativeSpread(baseRuns), relativeSpread(headRuns)),
+    );
+    const limitMs = baseMs * (1 + slack);
+    checks.push({ label, baseMs, headMs, limitMs, pass: headMs <= limitMs });
   }
   return checks;
 }
