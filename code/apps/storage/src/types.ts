@@ -4,6 +4,9 @@
 // stores rows and bytes.
 
 import type { Readable } from "node:stream";
+import type { MapVersion, VersionPolicy } from "./versions";
+
+export type { MapVersion, VersionPolicy } from "./versions";
 
 /**
  * Selects which adapter the storage server loads at startup.
@@ -82,6 +85,12 @@ export interface UpdateOptions extends WriteOptions {
    * no check.
    */
   ifRevision?: number;
+  /** Which replaced bytes stay as versions (versions.ts). Default: none. */
+  versions?: VersionPolicy;
+  /** Keep the replaced bytes as a version whatever the policy says. */
+  checkpoint?: boolean;
+  /** The time of the write. Default: now. */
+  at?: Date;
 }
 
 /**
@@ -138,9 +147,16 @@ export interface StorageClient {
    * or a row whose blob is gone. The caller must consume or destroy it.
    */
   getBlob(id: string): Promise<BlobRead | null>;
+  /** The map's kept versions, newest first; null for an unknown map. */
+  listVersions(id: string): Promise<MapVersion[] | null>;
   /**
-   * Deletes the map, its share tokens and its bytes. False when no map has
-   * the id.
+   * The bytes of one revision: a kept version, or the map's own bytes when
+   * `revision` is its current one. Null when the store has neither.
+   */
+  getVersionBlob(id: string, revision: number): Promise<BlobRead | null>;
+  /**
+   * Deletes the map, its share tokens, its versions and all their bytes.
+   * False when no map has the id.
    */
   deleteMap(id: string): Promise<boolean>;
   /** The sum of `byte_size` over every stored map (a counter, not a scan). */

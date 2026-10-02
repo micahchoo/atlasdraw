@@ -116,6 +116,7 @@ interface Store {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 /** Sweep options that delete every keyless map and every orphan at once. */
 const NO_GRACE = { legacyGraceMs: 0, orphanGraceMs: 0 };
 
@@ -233,6 +234,110 @@ function describeContract(name: string, makeStore: () => Promise<Store>) {
       await expect(late).rejects.toThrow(/^revision conflict/);
       expect(await textOf(client.getBlob(map.id))).toBe("first");
       expect(await client.totalBytes()).toBe(5);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("with no version policy, a write keeps no earlier bytes", async () => {
+      const client = open();
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.updateMap(map.id, bodyOf("v-2"));
+
+      expect(await client.listVersions(map.id)).toEqual([]);
+      expect(await client.getVersionBlob(map.id, 1)).toBeNull();
+      expect(await client.totalBytes()).toBe(3);
+      expect(await client.listVersions(UNKNOWN_ID)).toBeNull();
+    });
+
+    it("keeps the replaced revisions, newest first, up to `keep`", async () => {
+      const client = open();
+      const policy = { versions: { keep: 2, intervalMs: 0 } };
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      for (const bytes of ["v2", "v3", "v4!"]) {
+        await client.updateMap(map.id, bodyOf(bytes), policy);
+      }
+
+      const versions = await client.listVersions(map.id);
+
+      expect(versions?.map((v) => v.revision)).toEqual([3, 2]);
+      expect(versions?.map((v) => v.byte_size)).toEqual([2, 2]);
+      expect(await textOf(client.getVersionBlob(map.id, 3))).toBe("v3");
+      expect(await textOf(client.getVersionBlob(map.id, 4))).toBe("v4!");
+      expect((await client.getVersionBlob(map.id, 2))?.revision).toBe(2);
+      expect(await client.getVersionBlob(map.id, 1)).toBeNull();
+      expect(await client.totalBytes()).toBe(7);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+      expect(await textOf(client.getVersionBlob(map.id, 2))).toBe("v2");
+    });
+
+    it("keeps a save that stood for the interval, or came an interval after the last one kept", async () => {
+      const client = open();
+      const versions = { keep: 10, intervalMs: 10 * MINUTE_MS };
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      const t0 = Date.parse(map.updated_at);
+      const write = (bytes: string, minutes: number) =>
+        client.updateMap(map.id, bodyOf(bytes), {
+          versions,
+          at: new Date(t0 + minutes * MINUTE_MS),
+        });
+
+      await write("v2", 1); // v1 is the first: kept
+      await write("v3", 2); // v2 stood 1 min, 1 min after v1: replaced
+      await write("v4", 30); // v3 stood 28 min: kept
+      await write("v5", 31); // v4 came 28 min after v3: kept
+
+      const kept = await client.listVersions(map.id);
+      expect(kept?.map((v) => v.revision)).toEqual([4, 3, 1]);
+      expect(kept?.[0]?.saved_at).toBe(
+        new Date(t0 + 30 * MINUTE_MS).toISOString(),
+      );
+      expect(await client.totalBytes()).toBe(8);
+      expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
+    });
+
+    it("a checkpoint keeps the replaced bytes whatever the interval", async () => {
+      const client = open();
+      const versions = { keep: 10, intervalMs: 60 * MINUTE_MS };
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.updateMap(map.id, bodyOf("v2"), { versions });
+      await client.updateMap(map.id, bodyOf("v3"), { versions });
+
+      await client.updateMap(map.id, bodyOf("v4"), {
+        versions,
+        checkpoint: true,
+      });
+
+      expect(
+        (await client.listVersions(map.id))?.map((v) => v.revision),
+      ).toEqual([3, 1]);
+    });
+
+    it("counts kept versions against the cap", async () => {
+      const client = open();
+      const opts = { maxTotalBytes: 10, versions: { keep: 5, intervalMs: 0 } };
+      const map = await client.createMap(bodyOf("12345"), HASH, opts);
+      await client.updateMap(map.id, bodyOf("1234"), opts);
+
+      await expect(
+        client.updateMap(map.id, bodyOf("12"), opts),
+      ).rejects.toThrow(/storage full/);
+
+      expect(await client.totalBytes()).toBe(9);
+      expect(await textOf(client.getBlob(map.id))).toBe("1234");
+      expect(
+        (await client.listVersions(map.id))?.map((v) => v.revision),
+      ).toEqual([1]);
+    });
+
+    it("deleteMap removes the versions and their bytes", async () => {
+      const client = open();
+      const versions = { keep: 5, intervalMs: 0 };
+      const map = await client.createMap(bodyOf("v1"), HASH);
+      await client.updateMap(map.id, bodyOf("v2"), { versions });
+
+      expect(await client.deleteMap(map.id)).toBe(true);
+
+      expect(await client.getVersionBlob(map.id, 1)).toBeNull();
+      expect(await client.totalBytes()).toBe(0);
       expect((await client.sweep(new Date(), NO_GRACE)).orphans).toBe(0);
     });
 
