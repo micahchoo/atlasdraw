@@ -292,6 +292,19 @@ describe("data layer card — attribute preview", () => {
 });
 
 describe("data layer card — the three missing actions", () => {
+  it("the ⋯ menu opens the layer's attribute table in the dialog slot", () => {
+    const id = seedParcels();
+    const session = testSession();
+    render(withSession(<LayerPanel />, session));
+    fireEvent.click(screen.getByTestId(`layer-menu-${id}`));
+    fireEvent.click(screen.getByTestId(`layer-table-${id}`));
+
+    expect(session.view.getState().dialog).toEqual({
+      kind: "attribute-table",
+      layerId: id,
+    });
+  });
+
   it("zoom to layer fits the map to the layer's own bbox", () => {
     const id = seedParcels();
     const fitBounds = vi.fn();
@@ -454,7 +467,7 @@ describe("data layer card — the three missing actions", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(
       within(screen.getByRole("menu")).getAllByRole("menuitem"),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
   });
 
   it("Escape closes the ⋯ menu and returns focus to its trigger", () => {
@@ -476,6 +489,7 @@ describe("data layer card — the three missing actions", () => {
   describe("⋯ menu keyboard navigation", () => {
     const items = (id: string) => [
       `layer-zoom-${id}`,
+      `layer-table-${id}`,
       `layer-rename-${id}`,
       `layer-export-geojson-${id}`,
       `layer-export-csv-${id}`,

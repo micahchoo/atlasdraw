@@ -301,6 +301,8 @@ type LayerActions = {
   zoomTo: (id: string) => void;
   /** Save a data layer as a file. Other kinds have no vector data. */
   exportData: (id: string, format: DataExportFormat) => void;
+  /** Open a data layer's attribute table. */
+  showTable: (id: string) => void;
 };
 
 /** A row in any section: a document layer, or an annotation from the scene. */
@@ -730,6 +732,20 @@ function OverflowMenu({
                 onSelect: () => {
                   close();
                   actions.zoomTo(entry.id);
+                },
+              },
+            ]
+          : []),
+        ...(entry.kind === "data"
+          ? [
+              {
+                key: "table",
+                testid: `layer-table-${entry.id}`,
+                label: "Show attribute table",
+                danger: false,
+                onSelect: () => {
+                  close();
+                  actions.showTable(entry.id);
                 },
               },
             ]
@@ -1749,6 +1765,10 @@ export function LayerPanel() {
   };
 
   const actions: LayerActions = {
+    showTable: (id) =>
+      session.view
+        .getState()
+        .openDialog({ kind: "attribute-table", layerId: id }),
     exportData: (id, format) => {
       const file = dataLayerFile(currentDocument().snapshot(), id, format);
       if (file) {
