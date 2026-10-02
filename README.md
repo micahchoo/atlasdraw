@@ -54,9 +54,10 @@ Two Docker Compose stacks are in [`infra/`](infra/):
 First run: [`docs/self-host/README.md`](docs/self-host/README.md).
 Production: [`docs/self-host/production.md`](docs/self-host/production.md).
 
-The browser can call other servers. The default basemap loads its label
-fonts from `protomaps.github.io`. The "Bright" and "OSM" basemaps and the
-tile layers that a user adds load from their own servers. The self-host guide tells you how to turn these off.
+The default basemaps ("Light" and "Dark") make no request to another
+server: the tiles, label fonts and icons are in the image. The "Bright" and
+"OSM" basemaps and the tile layers that a user adds load from their own
+servers. The self-host guide tells you how to turn these off.
 
 ## Architecture
 
