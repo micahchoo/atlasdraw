@@ -14,7 +14,7 @@ ADRs only. An ADR that a later one reverses keeps its text and gets a dated
 note at the top.
 
 Open follow-up work is in `.agents/docs/SHEET_PANEL_FOLLOWUPS.md`.
-`ISSUES.md`, `DEADWOOD.md` and the root `docs/superpowers/plans/` are deleted;
+`ISSUES.md`, `DEADWOOD.md` and every `docs/superpowers/plans/` are deleted;
 `git log` holds them. The research notes in `code/decisions/` still cite those
 plans, as history.
 
