@@ -1,10 +1,10 @@
-/* MyMapsDialog — the list of saved maps. z:100, the same band as the
+/* MyMapsDialog — the list of saved maps. --ad-z-dialog, as the
  * ExportDialog and ConfirmDialog scrims. Uses --ad-* design tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34,7 +34,7 @@
 
 .title {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 600;
   color: var(--ad-ink);
 }
@@ -49,7 +49,7 @@
   border: none;
   background: transparent;
   color: var(--ad-ink-tertiary);
-  font-size: 16px;
+  font-size: var(--ad-text-xl);
   cursor: pointer;
   border-radius: var(--ad-radius-sm);
 }
@@ -68,7 +68,7 @@
 .empty {
   margin: 0;
   padding: var(--ad-space-4);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   color: var(--ad-ink-secondary);
 }
 
@@ -102,7 +102,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 400;
   color: var(--ad-ink);
 }
@@ -110,7 +110,7 @@
 .detail {
   display: flex;
   gap: var(--ad-space-2);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
 }
 
@@ -130,10 +130,10 @@
 .button {
   padding: 4px 10px;
   border: 1px solid var(--ad-emphasis);
-  border-radius: 4px;
+  border-radius: var(--ad-radius-sm);
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 600;
   cursor: pointer;
 }

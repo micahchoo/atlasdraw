@@ -1,10 +1,10 @@
-/* QuickActions — Cmd+K command palette. z:100.
+/* QuickActions — Cmd+K command palette. --ad-z-dialog.
  * Same surface treatment as KeyboardShortcuts. Uses --ad-* tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -34,7 +34,7 @@
 
 .prompt {
   font-family: var(--ad-font-mono);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 500;
   color: var(--ad-accent);
   flex-shrink: 0;
@@ -46,7 +46,7 @@
   outline: none;
   background: transparent;
   font-family: var(--ad-font-sans);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 400;
   color: var(--ad-ink);
 }
@@ -68,7 +68,7 @@
 .categoryTitle {
   padding: var(--ad-space-2) 0 4px;
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 600;
   color: var(--ad-ink-tertiary);
   text-transform: uppercase;
@@ -96,14 +96,14 @@
 
 .itemLabel {
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   font-weight: 400;
   color: var(--ad-ink);
 }
 
 .itemHint {
   font-family: var(--ad-font-mono);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }
@@ -112,7 +112,7 @@
   padding: var(--ad-space-4);
   text-align: center;
   font-family: var(--ad-font-sans);
-  font-size: 13px;
+  font-size: var(--ad-text-md);
   color: var(--ad-ink-tertiary);
 }
 
@@ -120,7 +120,7 @@
   padding: var(--ad-space-2) var(--ad-space-4);
   border-top: 1px solid var(--ad-hairline);
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
   display: flex;

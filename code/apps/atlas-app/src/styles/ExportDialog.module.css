@@ -1,10 +1,10 @@
-/* ExportDialog — unified export surface. z:100.
+/* ExportDialog — unified export surface. --ad-z-dialog.
  * Uses --ad-* design tokens. */
 
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--ad-z-dialog);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -33,7 +33,7 @@
 
 .title {
   font-family: var(--ad-font-sans);
-  font-size: 14px;
+  font-size: var(--ad-text-lg);
   font-weight: 600;
   color: var(--ad-ink);
 }
@@ -48,7 +48,7 @@
   border: none;
   background: transparent;
   color: var(--ad-ink-tertiary);
-  font-size: 16px;
+  font-size: var(--ad-text-xl);
   cursor: pointer;
   border-radius: var(--ad-radius-sm);
 }
@@ -88,19 +88,19 @@
 }
 
 .formatIcon {
-  font-size: 20px;
+  font-size: var(--ad-text-2xl);
 }
 
 .formatLabel {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   color: var(--ad-ink);
 }
 
 .formatHint {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   font-weight: 400;
   color: var(--ad-ink-tertiary);
 }
@@ -121,14 +121,14 @@
 
 .settingLabel {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   color: var(--ad-ink);
 }
 
 .settingControl {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   padding: 2px 4px;
   border: 1px solid var(--ad-rule);
   border-radius: var(--ad-radius-sm);
@@ -138,7 +138,7 @@
 
 .settingHint {
   font-family: var(--ad-font-sans);
-  font-size: 11px;
+  font-size: var(--ad-text-xs);
   color: var(--ad-ink-tertiary);
   margin-top: 2px;
 }
@@ -158,7 +158,7 @@
   background: var(--ad-surface-raised);
   color: var(--ad-ink);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 400;
   cursor: pointer;
 }
@@ -174,7 +174,7 @@
   background: var(--ad-accent);
   color: var(--ad-ink-inverse);
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   font-weight: 600;
   cursor: pointer;
 }
@@ -187,7 +187,7 @@
 
 .settingInput {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   padding: 4px 6px;
   border: 1px solid var(--ad-rule);
   border-radius: var(--ad-radius-sm);
@@ -198,7 +198,7 @@
 
 .errorText {
   font-family: var(--ad-font-sans);
-  font-size: 12px;
+  font-size: var(--ad-text-sm);
   color: var(--ad-danger, #c92a2a);
   padding: var(--ad-space-1) 0;
 }
