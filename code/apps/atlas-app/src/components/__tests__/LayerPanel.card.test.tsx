@@ -454,7 +454,7 @@ describe("data layer card — the three missing actions", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(
       within(screen.getByRole("menu")).getAllByRole("menuitem"),
-    ).toHaveLength(5);
+    ).toHaveLength(6);
   });
 
   it("Escape closes the ⋯ menu and returns focus to its trigger", () => {
@@ -479,6 +479,7 @@ describe("data layer card — the three missing actions", () => {
       `layer-rename-${id}`,
       `layer-export-geojson-${id}`,
       `layer-export-csv-${id}`,
+      `layer-export-kml-${id}`,
       `layer-delete-${id}`,
     ];
     const last = (id: string) => items(id)[items(id).length - 1];
@@ -532,7 +533,12 @@ describe("data layer card — the three missing actions", () => {
       const tabIndices = items(id).map((t) =>
         screen.getByTestId(t).getAttribute("tabindex"),
       );
-      expect(tabIndices).toEqual(["0", "-1", "-1", "-1", "-1"]);
+      expect(tabIndices).toEqual([
+        "0",
+        ...items(id)
+          .slice(1)
+          .map(() => "-1"),
+      ]);
     });
 
     // The confirm step replaces the item list. Focus has to follow it or the

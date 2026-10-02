@@ -64,8 +64,8 @@ import { useOverlayOutcome } from "../hooks/useMapOverlays";
 import styles from "../styles/LayerPanel.module.css";
 
 import {
-  csvMenuLabel,
   dataLayerFile,
+  exportChoices,
   type DataExportFormat,
 } from "../lib/dataLayerExport";
 
@@ -676,13 +676,16 @@ function OverflowMenu({
    * future kind without bounds doesn't inherit the item by accident.
    */
   /**
-   * Read only while the menu is open: deciding it walks every feature, and
+   * Read only while the menu is open: the CSV label walks every feature, and
    * every card renders this component.
    */
-  const csvLabel =
+  const exports =
     open && entry.kind === "data"
-      ? csvMenuLabel(currentDocument().snapshot().featureCollections[entry.id])
-      : "";
+      ? exportChoices(
+          entry,
+          currentDocument().snapshot().featureCollections[entry.id],
+        )
+      : [];
 
   const canZoom =
     entry.kind === "data" ||
@@ -743,30 +746,16 @@ function OverflowMenu({
         },
         // Only a data layer has features to write. A raster is a
         // picture and a tile layer stays on its server, so neither is offered.
-        ...(entry.kind === "data"
-          ? [
-              {
-                key: "export-geojson",
-                testid: `layer-export-geojson-${entry.id}`,
-                label: "Export as GeoJSON",
-                danger: false,
-                onSelect: () => {
-                  close();
-                  actions.exportData(entry.id, "geojson");
-                },
-              },
-              {
-                key: "export-csv",
-                testid: `layer-export-csv-${entry.id}`,
-                label: csvLabel,
-                danger: false,
-                onSelect: () => {
-                  close();
-                  actions.exportData(entry.id, "csv");
-                },
-              },
-            ]
-          : []),
+        ...exports.map(({ format, label }) => ({
+          key: `export-${format}`,
+          testid: `layer-export-${format}-${entry.id}`,
+          label,
+          danger: false,
+          onSelect: () => {
+            close();
+            actions.exportData(entry.id, format);
+          },
+        })),
         {
           key: "delete",
           testid: `layer-delete-${entry.id}`,
