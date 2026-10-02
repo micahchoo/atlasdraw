@@ -14,6 +14,7 @@ import React, { useId } from "react";
 
 import styles from "../styles/ConfirmDialog.module.css";
 
+import { Button } from "./Button";
 import { Modal } from "./Modal";
 
 export interface ConfirmDialogProps {
@@ -73,29 +74,21 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </label>
       )}
       <div className={styles.actions}>
-        <button
-          type="button"
-          className={styles.button}
+        <Button
           onClick={onCancel}
           data-testid="confirm-dialog-cancel"
           autoFocus
         >
           {cancelLabel}
-        </button>
-        <button
-          type="button"
-          className={[
-            styles.button,
-            tone === "destructive"
-              ? styles.buttonDestructive
-              : styles.buttonPrimary,
-          ].join(" ")}
+        </Button>
+        <Button
+          variant={tone === "destructive" ? "destructive" : "primary"}
           onClick={onConfirm}
           data-testid="confirm-dialog-confirm"
           data-tone={tone}
         >
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   );
